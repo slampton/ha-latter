@@ -1,17 +1,32 @@
 /**
- * Encapsulated Reactive Store for Latter Studio (`StudioStore`).
+ * Encapsulated Reactive Store for Latter Studio (`StudioStore`, `D-023`, `D-062`, `D-064`, `D-065`).
  *
- * Key invariants:
- * - Zero `window.*` globals: each `<latter-studio>` element owns its `StudioStore` controller.
- * - Snapshot-isolated pending edits: `stageDeviceSetting` captures `targetSubentryId` at input time,
- *   so switching Devices or routes flushes pending edits strictly to Device A (`previousSubentryId`)
- *   before loading Device B, and rolls back cleanly on error even if the input retains focus.
- * - Streams `ble_survey_delta` over the WebSocket subscription without 1.5s full-state polling.
- * - Requests `include_logs: true` ONLY when System -> Tools -> System & Device Logs is open.
+ * Architecture:
+ * - Zero `window.*` globals and zero 1-line pass-through wrappers (`A-15` / `Q10`).
+ * - Namespaced domain controllers: `store.entity`, `store.groups`, `store.tools`.
+ * - Event-first `latter/system/subscribe` bootstrap (`STUDIO_REV = 34`), section-hash preservation,
+ *   `"ready"` reconnect resync, exponential backoff (`2s -> 5s -> 15s -> 60s`), and `subentry_id`
+ *   payload isolation (`deviceLoading` guard).
+ * - Isolated local 1 Hz `liveClockNowMs` interval active strictly on `Device -> Overview` when a
+ *   timer or stopwatch is running (`F-01`, `B-17`).
  */
 
-import { formatWsError, StudioWsClient } from "../api/ws-client.js";
-import { DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS, VIEW_TITLES } from "../constants.js";
+import {
+  formatWsError,
+  isStudioRevMismatchError,
+  StudioWsClient,
+} from "../api/ws-client.js";
+import {
+  DEVICE_VIEW_SLUGS,
+  SYSTEM_VIEW_SLUGS,
+  VIEW_TITLE_KEYS,
+} from "../constants.js";
+import {
+  type StudioTranslationKey,
+  t,
+  tPrefLabel,
+  tPrefOption,
+} from "../i18n/index.js";
 import type { ReactiveController, ReactiveControllerHost } from "../lib/lit.js";
 import type {
   AreaPresenceRow,
@@ -19,132 +34,66 @@ import type {
   BleSurveyDeltaEvent,
   BleSurveyRow,
   ConfigurableAppId,
-  DevicePrefItem,
+  DeviceCapabilities,
   DeviceViewId,
   DiscoveredBleCandidate,
-  EspHomeEntityItem,
+  HassConnection,
   HassRoute,
   HomeAssistant,
-  SharedControlItem,
-  ShortcutItem,
   StudioScope,
   StudioStatePayload,
   StudioViewId,
   SystemConfig,
-  SystemDeviceEntry,
   SystemViewId,
 } from "../types.js";
 import { navigateHaPath } from "../utils/format.js";
 import {
-  adoptLatterDeviceOp,
-  checkSystemUpdatesOp,
-  clearInternalLogsOp,
-  clearSecurityPinOp,
-  confirmAddBleModalOp,
-  confirmRemoveDeviceOp,
-  confirmResetDeviceOp,
-  copyLogsToClipboardOp,
-  downloadDeviceDiagnosticsOp,
-  exportBackupOp,
-  formatVisibleLogsOp,
-  openColorWheelModalOp,
-  quickAdoptBleCandidateOp,
-  restoreFromUploadedFileOp,
-  rotateSigningKeyOp,
-  saveColorWheelSelectionOp,
-  saveSecurityPinOp,
-  selectBleCandidateInModalOp,
-  sendAnnouncementOp,
-} from "./dialogs-tools-ops.js";
-import {
-  addRemoteGroupRowOp,
-  addStringListRowOp,
-  moveStringListRowOp,
-  addVolumeOverrideRowOp,
-  applyDeviceCustomColorOp,
-  commitEntityChange,
-  deleteCustomPaletteOp,
-  deleteWallpaperOp,
   type DevicePendingBucket,
-  executeEntityActionOp,
-  flushDeviceBucketOp,
-  flushSystemSettingsOp,
-  getDockItemsOp,
-  getEnabledActivitySourcesOp,
-  getEnabledAreaCategoriesOp,
-  getEnabledGamesItemsOp,
-  getEnabledHomeCategoriesOp,
-  getEnabledToolsItemsOp,
-  getPinnedItemsOp,
-  moveAreaCategoryTokenOp,
-  moveGameItemTokenOp,
-  moveHomeCategoryTokenOp,
-  moveShortcutItemOp,
-  moveToolItemTokenOp,
-  openShortcutModalOp,
+  EntityController,
+  isCatalogItemSupported,
+  isProtectedNativeDockItem,
   overlayDevicePrefsOnSections,
   overlayPendingBlankListSlots,
   overlayPendingEntityStates,
-  PENDING_ENTITY_STATES,
   type PendingEntityEntry,
-  previewCameraOp,
-  removeRemoteGroupRowOp,
-  removeShortcutItemOp,
-  removeStringListRowOp,
-  removeVolumeOverrideRowOp,
-  resetDockItemsToDefaultOp,
-  runDeviceActionOp,
-  saveShortcutModalOp,
-  selectWallpaperSourceOp,
-  setAllWallpaperFavoritesOp,
-  setWallpaperRotationOp,
-  stageDeviceSettingOp,
-  stageSystemSettingOp,
   type StringListKey,
-  testDoorbellSpeakerOp,
-  toggleActivitySourceOp,
-  toggleAreaCategoryTokenOp,
-  toggleGameItemTokenOp,
-  toggleHomeCategoryTokenOp,
-  toggleNativeDockAppOp,
-  toggleRemoteInGroupOp,
-  toggleToolItemTokenOp,
-  toggleWallpaperFavOp,
-  updateRemoteGroupFieldOp,
-  updateStringListRowOp,
-  updateVolumeOverrideRowOp,
-  uploadWallpaperOp,
-} from "./entity-config-ops.js";
+  type TokenListKey,
+  type TokenListOps,
+} from "./entity-controller.js";
+import { type BatchPillState, GroupsController } from "./groups-controller.js";
 import {
-  applyBatchCopyFromDeviceOp,
-  applyBatchDeviceSettingOp,
-  bulkColorOp,
-  bulkNumberOp,
-  bulkPillsToggleOp,
-  bulkSelectOp,
-  bulkToggleOp,
-  captureBleAreaSignatureOp,
-  clearBleAreaSignatureOp,
-  confirmSaveDeviceAsGroupOp,
-  copyDeviceToGroupBaselineOp,
-  createDeviceGroupOp,
-  deleteDeviceGroupOp,
-  filteredControlTargetsOp,
-  getActiveSurveyDeviceOp,
-  resolvedBatchTargetIdOp,
-  setAreaFusionOp,
-  setBleScannerOffsetOp,
-  updateGroupBaselineOp,
-  updateGroupScopeOp,
-} from "./groups-presence-ops.js";
+  type ConfirmModalState,
+  emptyConfirmModalState,
+  type OpenConfirmOptions,
+  ToolsController,
+} from "./tools-controller.js";
 
-export { commitEntityChange, overlayPendingEntityStates, PENDING_ENTITY_STATES, type PendingEntityEntry };
+export {
+  type BatchPillState,
+  type ConfirmModalState,
+  type DevicePendingBucket,
+  EntityController,
+  GroupsController,
+  isCatalogItemSupported,
+  isProtectedNativeDockItem,
+  type OpenConfirmOptions,
+  overlayDevicePrefsOnSections,
+  overlayPendingEntityStates,
+  type PendingEntityEntry,
+  type StringListKey,
+  type TokenListKey,
+  type TokenListOps,
+  ToolsController,
+};
+
+const RECONNECT_BACKOFF_MS: ReadonlyArray<number> = [2_000, 5_000, 15_000, 60_000];
+const INFO_TOAST_DURATION_MS = 3_500;
 
 interface PendingDomRevert {
   controlIds: Record<string, string | boolean>;
 }
 
-function slugToView<T extends string>(map: Record<T, string>, slug: string): T | null {
+function slugToView<T extends string>(map: Readonly<Record<T, string>>, slug: string): T | null {
   const cleaned = String(slug || "").trim().toLowerCase();
   for (const [viewId, s] of Object.entries(map) as Array<[T, string]>) {
     if (s === cleaned) return viewId;
@@ -152,25 +101,71 @@ function slugToView<T extends string>(map: Record<T, string>, slug: string): T |
   return null;
 }
 
+/**
+ * Shared capability predicate used by BOTH sidebar navigation and payload capability redirect (`B-06`, `E-14`).
+ * Never redirects or hides a tab when capability flags are `undefined` (not yet loaded).
+ */
+export function deviceHasView(
+  viewId: DeviceViewId,
+  caps?: DeviceCapabilities,
+  kind?: string,
+): boolean {
+  if (
+    viewId === "select_device_prompt" ||
+    viewId === "discovered_devices" ||
+    viewId === "dashboard" ||
+    viewId === "presence" ||
+    viewId === "tools"
+  ) {
+    return true;
+  }
+  if (kind === "ble_tag") return false;
+  if (!caps) return true;
+  if (viewId === "display" || viewId === "interface") {
+    return caps.has_display !== false;
+  }
+  if (viewId === "audio_voice") {
+    return !(caps.has_audio === false && caps.has_voice === false);
+  }
+  if (viewId === "power") {
+    return caps.has_power !== false;
+  }
+  return true;
+}
+
 export class StudioStore implements ReactiveController {
   readonly host: ReactiveControllerHost & HTMLElement;
   readonly ws: StudioWsClient;
 
-  // Core navigation & lifecycle state (D-001: starts on Devices landing list)
+  // Namespaced domain controllers (`Q10`)
+  readonly entity: EntityController;
+  readonly groups: GroupsController;
+  readonly tools: ToolsController;
+
+  // Core navigation & lifecycle state (`D-001`: starts on Devices landing list)
   currentScope: StudioScope = "device";
   currentViewId: StudioViewId = "select_device_prompt";
   activeSubentryId = "";
   deviceSelected = false;
+  deviceLoading = false;
 
   state: StudioStatePayload | null = null;
   loading = true;
   loadError = "";
   studioRevMismatch = false;
 
-  // Toast feedback
+  // Live regions & toast feedback (`D-01`, `D-02`)
   toastMessage = "";
   toastIsError = false;
+  politeAnnouncement = "";
+  assertiveAnnouncement = "";
+  private politeSeq = 0;
+  private assertiveSeq = 0;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Local 1 Hz clock tick strictly for active Device Overview timer/stopwatch (`F-01`, `B-17`)
+  liveClockNowMs = Date.now();
+  private liveClockTimer: ReturnType<typeof setInterval> | null = null;
 
   // Upload state (`XMLHttpRequest` multipart <= 15 MB)
   uploadScope: StudioScope | null = null;
@@ -189,6 +184,7 @@ export class StudioStore implements ReactiveController {
   discoveredBleSort: "name" | "rssi" | "area" = "name";
   discoveredBlePaused = false;
   discoveredBleFrozenSnapshot: DiscoveredBleCandidate[] | null = null;
+  discoveredIgnoredOpen = false;
   readonly discoveredBlePersonDrafts = new Map<string, string>();
   readonly discoveredLatterGroupDrafts = new Map<string, string>();
   readonly discoveredLatterPersonDrafts = new Map<string, string>();
@@ -209,7 +205,7 @@ export class StudioStore implements ReactiveController {
   activeCameraPreviewEntity = "";
   cameraPreviewUrl = "";
 
-  // System Device Groups & Batch Controls UI state
+  // System Device Groups & Staged Batch Controls UI state (`Q6`)
   newGroupFormOpen = false;
   newGroupName = "";
   newGroupDesc = "";
@@ -222,6 +218,7 @@ export class StudioStore implements ReactiveController {
   batchCategoryFilter = "all";
   batchCopySourceSubentryId = "";
   readonly openBatchCategories = new Set<string>();
+  readonly batchDraft = new Map<string, unknown>();
 
   // System BLE & Area Presence UI state
   bleSurveySubentryId = "";
@@ -251,6 +248,7 @@ export class StudioStore implements ReactiveController {
   logFilter = "all";
 
   // Modal states
+  confirmModal: ConfirmModalState = emptyConfirmModalState();
   removeModal = { open: false, subentryId: "", title: "", busy: false };
   resetModal = { open: false, deviceSettings: true, latterOptions: true, busy: false };
   addBleModal = {
@@ -259,6 +257,7 @@ export class StudioStore implements ReactiveController {
     name: "",
     address: "",
     assignedPerson: "",
+    bleCategory: "auto",
     busy: false,
   };
   colorWheelModal = {
@@ -267,6 +266,7 @@ export class StudioStore implements ReactiveController {
     hex: "",
     name: "",
     busy: false,
+    painted: false,
   };
   saveGroupModal = {
     open: false,
@@ -304,7 +304,7 @@ export class StudioStore implements ReactiveController {
   private scrollGen = 0;
   private handoffArming = false;
 
-  // Snapshot-isolated pending settings queues (shared with `state/*-ops.ts`)
+  // Snapshot-isolated pending settings queues & per-Device config_rev tracker
   pendingSystemPatch: Record<string, unknown> = {};
   pendingSystemPrevious: Record<string, unknown> = {};
   systemSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -319,25 +319,143 @@ export class StudioStore implements ReactiveController {
   };
   readonly pendingDeviceBuckets = new Map<string, DevicePendingBucket>();
   readonly pendingEntityStates = new Map<string, PendingEntityEntry>();
+  private readonly deviceConfigRevs = new Map<string, number>();
 
-  // Subscription management
+  // Subscription & reconnect state
   private subGen = 0;
+  private stateReqSeq = 0;
+  private lastAppliedReqSeq = 0;
   private wsUnsub: (() => void) | null = null;
   private subscribedKey = "";
-  private fallbackPollTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempt = 0;
+  private boundConnection: HassConnection | null = null;
   private routeApplying = false;
+
+  private readonly onConnectionReady = (): void => {
+    if (this.studioRevMismatch || !this.host.isConnected) return;
+    this.reconnectAttempt = 0;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    void this.ensureSubscription(true);
+  };
 
   constructor(host: ReactiveControllerHost & HTMLElement) {
     this.host = host;
     this.ws = new StudioWsClient(() => {
-      this.studioRevMismatch = true;
-      this.host.requestUpdate();
+      this.handleStudioRevMismatch();
     });
+    this.entity = new EntityController(this);
+    this.groups = new GroupsController(this);
+    this.tools = new ToolsController(this);
   }
 
+  // ---------- Convenience i18n & Confirm Shortcuts ----------
+
+  get localeOverlay(): Readonly<Record<string, string>> | null {
+    const raw = this.state?.locale_strings;
+    return raw && typeof raw === "object" ? raw : null;
+  }
+
+  t(key: StudioTranslationKey, vars?: Readonly<Record<string, string | number>>): string {
+    return t(key, vars, this.localeOverlay);
+  }
+
+  tPrefLabel(key: string, fallback?: string): string {
+    return tPrefLabel(key, fallback, this.localeOverlay);
+  }
+
+  tPrefOption(prefKey: string, opt: string): string {
+    return tPrefOption(prefKey, opt, this.localeOverlay);
+  }
+
+  openConfirm(opts: OpenConfirmOptions): void {
+    this.tools.openConfirm(opts);
+  }
+
+  closeConfirm(): void {
+    this.tools.closeConfirm();
+  }
+
+  async runConfirmedAction(): Promise<void> {
+    await this.tools.runConfirmedAction();
+  }
+
+  // ---------- Config Revision & Live Clock Helpers ----------
+
+  getKnownDeviceConfigRev(subentryId: string): number {
+    if (this.state?.subentry_id === subentryId && this.state.device_config_rev > 0) {
+      return this.state.device_config_rev;
+    }
+    return this.deviceConfigRevs.get(subentryId) ?? 0;
+  }
+
+  recordKnownDeviceConfigRev(subentryId: string, rev: number): void {
+    if (subentryId && rev > 0) {
+      this.deviceConfigRevs.set(subentryId, rev);
+    }
+  }
+
+  activeTimerRemainingSec(): number {
+    const live = this.state?.live;
+    if (!live) return 0;
+    if (live.timer_running && live.timer_ends_at) {
+      const endsMs = Date.parse(live.timer_ends_at);
+      if (Number.isFinite(endsMs)) {
+        return Math.max(0, Math.ceil((endsMs - this.liveClockNowMs) / 1000));
+      }
+    }
+    return Math.max(0, Math.round(Number(live.timer_remaining_sec || 0)));
+  }
+
+  activeStopwatchElapsedSec(): number {
+    const live = this.state?.live;
+    if (!live) return 0;
+    if (live.stopwatch_running && live.stopwatch_started_at) {
+      const startedMs = Date.parse(live.stopwatch_started_at);
+      if (Number.isFinite(startedMs)) {
+        return Math.max(0, Math.floor((this.liveClockNowMs - startedMs) / 1000));
+      }
+    }
+    return Math.max(0, Math.round(Number(live.stopwatch_elapsed_sec || 0)));
+  }
+
+  private syncLiveClockTimer(): void {
+    const live = this.state?.live;
+    const shouldTick =
+      this.host.isConnected &&
+      this.currentScope === "device" &&
+      this.deviceSelected &&
+      !this.deviceLoading &&
+      this.currentViewId === "dashboard" &&
+      Boolean(
+        (live?.timer_running && live.timer_ends_at) ||
+          (live?.stopwatch_running && live.stopwatch_started_at),
+      );
+
+    if (shouldTick) {
+      this.liveClockNowMs = Date.now();
+      if (this.liveClockTimer === null) {
+        this.liveClockTimer = setInterval(() => {
+          this.liveClockNowMs = Date.now();
+          this.host.requestUpdate();
+        }, 1000);
+      }
+    } else if (this.liveClockTimer !== null) {
+      clearInterval(this.liveClockTimer);
+      this.liveClockTimer = null;
+    }
+  }
+
+  // ---------- Controller Lifecycle ----------
+
   hostConnected(): void {
-    if (this.ws.hass) {
-      void this.ensureSubscription(true);
+    this.syncConnectionListener();
+    this.syncLiveClockTimer();
+    if (this.ws.hass && !this.studioRevMismatch) {
+      void this.ensureSubscription(false);
     }
   }
 
@@ -346,11 +464,16 @@ export class StudioStore implements ReactiveController {
       clearTimeout(this.toastTimer);
       this.toastTimer = null;
     }
-    if (this.fallbackPollTimer) {
-      clearTimeout(this.fallbackPollTimer);
-      this.fallbackPollTimer = null;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
-    void this.flushAllPendingSettings();
+    if (this.liveClockTimer !== null) {
+      clearInterval(this.liveClockTimer);
+      this.liveClockTimer = null;
+    }
+    this.detachConnectionListener();
+    void this.entity.flushAllPendingSettings();
     this.teardownSubscription();
   }
 
@@ -390,7 +513,10 @@ export class StudioStore implements ReactiveController {
         }).then(() => {
           if (myGen !== this.scrollGen || !this.handoffTargetIds.has(cardId)) return;
           if (typeof target.focus === "function") {
-            if (typeof target.hasAttribute === "function" && !target.hasAttribute("tabindex")) {
+            if (
+              typeof target.hasAttribute === "function" &&
+              !target.hasAttribute("tabindex")
+            ) {
               target.setAttribute?.("tabindex", "-1");
             }
             try {
@@ -403,6 +529,15 @@ export class StudioStore implements ReactiveController {
       }
     }
     this.handoffArming = false;
+  }
+
+  mergeDomRevert(controlIds: Record<string, string | boolean>): void {
+    this.pendingDomRevert = {
+      controlIds: {
+        ...(this.pendingDomRevert?.controlIds || {}),
+        ...controlIds,
+      },
+    };
   }
 
   private scrollIntoViewAsync(
@@ -435,6 +570,8 @@ export class StudioStore implements ReactiveController {
     });
   }
 
+  // ---------- Handoff Highlighting & Focus ----------
+
   isHandoffTarget(targetId: string): boolean {
     return Boolean(targetId) && this.handoffTargetIds.has(targetId);
   }
@@ -448,7 +585,12 @@ export class StudioStore implements ReactiveController {
   private applySectionHandoff(scrollId = "", highlightIds?: readonly string[]): void {
     const cleanScroll = String(scrollId || "").trim();
     this.pendingScrollCardId = cleanScroll;
-    const ids = highlightIds && highlightIds.length > 0 ? highlightIds : cleanScroll ? [cleanScroll] : [];
+    const ids =
+      highlightIds && highlightIds.length > 0
+        ? highlightIds
+        : cleanScroll
+          ? [cleanScroll]
+          : [];
     for (const rawId of ids) {
       const id = String(rawId || "").trim();
       if (id) this.handoffTargetIds.add(id);
@@ -486,11 +628,48 @@ export class StudioStore implements ReactiveController {
     this.host.requestUpdate();
   }
 
+  // ---------- Home Assistant Connection & Live Announcements ----------
+
+  private syncConnectionListener(): void {
+    const nextConn = this.host.isConnected ? (this.ws.hass?.connection ?? null) : null;
+    if (this.boundConnection === nextConn) return;
+    this.detachConnectionListener();
+    if (nextConn && typeof nextConn.addEventListener === "function") {
+      nextConn.addEventListener("ready", this.onConnectionReady);
+      this.boundConnection = nextConn;
+    }
+  }
+
+  private detachConnectionListener(): void {
+    if (this.boundConnection && typeof this.boundConnection.removeEventListener === "function") {
+      try {
+        this.boundConnection.removeEventListener("ready", this.onConnectionReady);
+      } catch {
+        // Ignore teardown errors on closed sockets.
+      }
+    }
+    this.boundConnection = null;
+  }
+
+  private handleStudioRevMismatch(): void {
+    this.studioRevMismatch = true;
+    this.loading = false;
+    this.deviceLoading = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.teardownSubscription();
+    this.host.requestUpdate();
+  }
+
   setHass(hass: HomeAssistant | null): void {
-    const firstHass = !this.ws.hass && Boolean(hass);
+    const prevConn = this.ws.hass?.connection ?? null;
     this.ws.setHass(hass);
-    if (firstHass && this.host.isConnected) {
-      void this.ensureSubscription(true);
+    this.syncConnectionListener();
+    const connChanged = Boolean(hass?.connection && hass.connection !== prevConn);
+    if (connChanged && this.host.isConnected && !this.studioRevMismatch) {
+      void this.ensureSubscription(false);
     }
   }
 
@@ -502,23 +681,63 @@ export class StudioStore implements ReactiveController {
     globalThis.location.reload();
   }
 
+  announcePolite(message: string): void {
+    const clean = String(message || "").trim();
+    if (!clean) return;
+    this.politeSeq += 1;
+    this.politeAnnouncement = this.politeSeq % 2 === 0 ? `${clean}\u200B` : clean;
+    this.host.requestUpdate();
+  }
+
+  announceAssertive(message: string): void {
+    const clean = String(message || "").trim();
+    if (!clean) return;
+    this.assertiveSeq += 1;
+    this.assertiveAnnouncement = this.assertiveSeq % 2 === 0 ? `${clean}\u200B` : clean;
+    this.host.requestUpdate();
+  }
+
   showToast(message: string, isError = false): void {
-    this.toastMessage = String(message || "");
+    const clean = String(message || "");
+    this.toastMessage = clean;
     this.toastIsError = isError;
-    if (this.toastTimer) clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => {
-      this.toastMessage = "";
-      this.host.requestUpdate();
-    }, isError ? 5000 : 3000);
+    if (this.toastTimer) {
+      clearTimeout(this.toastTimer);
+      this.toastTimer = null;
+    }
+    if (isError) {
+      this.announceAssertive(clean);
+    } else {
+      this.announcePolite(clean);
+      this.toastTimer = setTimeout(() => {
+        this.toastMessage = "";
+        this.host.requestUpdate();
+      }, INFO_TOAST_DURATION_MS);
+    }
+    this.host.requestUpdate();
+  }
+
+  dismissToast(): void {
+    if (this.toastTimer) {
+      clearTimeout(this.toastTimer);
+      this.toastTimer = null;
+    }
+    this.toastMessage = "";
+    this.toastIsError = false;
     this.host.requestUpdate();
   }
 
   shouldIncludeLogs(): boolean {
-    return this.currentScope === "system" && this.currentViewId === "system_tools" && this.logsOpen;
+    return (
+      this.currentScope === "system" &&
+      this.currentViewId === "system_tools" &&
+      this.logsOpen
+    );
   }
 
   get pageTitle(): string {
-    return VIEW_TITLES[this.currentViewId] || "Managed Devices";
+    const key = VIEW_TITLE_KEYS[this.currentViewId] || "view.select_device_prompt";
+    return this.t(key);
   }
 
   get pageSubtitle(): string {
@@ -526,18 +745,91 @@ export class StudioStore implements ReactiveController {
       this.currentScope === "device" &&
       this.deviceSelected &&
       this.currentViewId !== "select_device_prompt" &&
-      this.currentViewId !== "discovered_devices" &&
-      this.state?.title
+      this.currentViewId !== "discovered_devices"
     ) {
-      return this.state.title;
+      if (this.state?.subentry_id === this.activeSubentryId && this.state.title) {
+        return this.state.title;
+      }
+      const entry = this.state?.system_devices?.find(
+        (d) => d.subentry_id === this.activeSubentryId,
+      );
+      return entry?.title || "";
     }
     return "";
   }
 
-  // ---------- Routing & Navigation ----------
+  get hasConfiguredSecurityPin(): boolean {
+    return Boolean(
+      this.state?.config?.has_security_pin ??
+        this.state?.live?.has_security_pin ??
+        this.state?.has_security_pin,
+    );
+  }
+
+  deviceHasView(viewId: DeviceViewId): boolean {
+    if (this.state?.subentry_id !== this.activeSubentryId) {
+      const entry = this.state?.system_devices?.find(
+        (d) => d.subentry_id === this.activeSubentryId,
+      );
+      if (entry?.kind === "ble_tag") {
+        return deviceHasView(viewId, undefined, "ble_tag");
+      }
+      return deviceHasView(viewId, undefined, undefined);
+    }
+    return deviceHasView(viewId, this.state?.capabilities, this.state?.config?.kind);
+  }
+
+  // ---------- Unified Active Device Transition & Routing ----------
+
+  /**
+   * Single transition helper clearing Device-scoped drafts/modals and flushing (or discarding)
+   * pending edits across `applyRoute`, `switchSystemDevice`, and removal/invalid redirects (`B-07`, `B-24`).
+   */
+  onActiveDeviceChanged(
+    prevId: string,
+    nextId: string,
+    options?: { discardPrevPending?: boolean },
+  ): void {
+    const cleanPrev = String(prevId || "").trim();
+    const cleanNext = String(nextId || "").trim();
+
+    if (cleanPrev && cleanPrev !== cleanNext) {
+      if (options?.discardPrevPending) {
+        this.entity.discardDeviceBucket(cleanPrev);
+      } else {
+        void this.entity.flushDeviceBucket(cleanPrev);
+      }
+    }
+
+    if (cleanPrev !== cleanNext) {
+      this.devicePinDraft = "";
+      this.worldClockNewLabel = "";
+      this.worldClockNewZone = "";
+      this.overviewAlarmsOpen = false;
+      this.selectedDeviceWallpaperFile = null;
+      this.appConfigModal = { open: false, app: null };
+      this.shortcutModal = { ...this.shortcutModal, open: false };
+      this.saveGroupModal = { ...this.saveGroupModal, open: false, busy: false };
+      this.resetModal = { ...this.resetModal, open: false, busy: false };
+      this.removeModal = { ...this.removeModal, open: false, busy: false };
+      this.returnToPinnedModal = false;
+      this.clearHandoffTargets();
+    }
+
+    this.activeSubentryId = cleanNext;
+    this.deviceSelected = Boolean(cleanNext);
+    this.deviceLoading = Boolean(cleanNext && this.state?.subentry_id !== cleanNext);
+    this.syncLiveClockTimer();
+  }
 
   applyRoute(route: HassRoute | null | undefined): void {
-    const rawPath = String(route?.path || "");
+    let rawPath = String(route?.path ?? "");
+    if (!rawPath && !route && typeof globalThis.location?.pathname === "string") {
+      const locPath = globalThis.location.pathname;
+      if (locPath.startsWith("/latter/")) {
+        rawPath = locPath.slice("/latter/".length);
+      }
+    }
     const parts = rawPath
       .split("/")
       .filter(Boolean)
@@ -555,16 +847,12 @@ export class StudioStore implements ReactiveController {
     this.routeApplying = true;
     try {
       if (parts[0] === "devices" && parts[1]?.toLowerCase() === "discovered") {
-        if (this.activeSubentryId) {
-          void this.flushDeviceBucket(this.activeSubentryId);
-        }
+        this.onActiveDeviceChanged(prevSubId, "");
         if (prevScope !== "device" || prevViewId !== "discovered_devices") {
           this.clearHandoffTargets();
         }
-        this.deviceSelected = false;
         this.currentScope = "device";
         this.currentViewId = "discovered_devices";
-        this.host.requestUpdate();
       } else if (parts[0] === "devices" && parts[1]) {
         const nextSubId = parts[1];
         if (
@@ -572,32 +860,25 @@ export class StudioStore implements ReactiveController {
           Array.isArray(this.state.system_devices) &&
           !this.state.system_devices.some((d) => d.subentry_id === nextSubId)
         ) {
-          this.redirectInvalidDeviceRoute();
+          this.redirectInvalidDeviceRoute(nextSubId);
           return;
         }
-        const viewId = slugToView(DEVICE_VIEW_SLUGS, parts[2] || "overview") || "dashboard";
-        const subChanged = prevSubId !== nextSubId;
-        if (prevSubId && subChanged) {
-          void this.flushDeviceBucket(prevSubId);
-          this.overviewAlarmsOpen = false;
-          this.appConfigModal = { open: false, app: null };
-          this.returnToPinnedModal = false;
-        }
-        if (prevScope !== "device" || prevViewId !== viewId || subChanged) {
+        const requestedView = slugToView(DEVICE_VIEW_SLUGS, parts[2] || "overview") || "dashboard";
+        this.onActiveDeviceChanged(prevSubId, nextSubId);
+        const validView = this.deviceHasView(requestedView) ? requestedView : "dashboard";
+        if (prevScope !== "device" || prevViewId !== validView || prevSubId !== nextSubId) {
           this.clearHandoffTargets();
         }
-        this.activeSubentryId = nextSubId;
-        this.deviceSelected = true;
         this.currentScope = "device";
-        this.currentViewId = viewId;
-        this.host.requestUpdate();
-        if (subChanged && this.ws.hass) {
-          void this.ensureSubscription(true);
+        this.currentViewId = validView;
+        if (validView !== requestedView) {
+          navigateHaPath(
+            `/latter/devices/${encodeURIComponent(nextSubId)}/${DEVICE_VIEW_SLUGS[validView]}`,
+            true,
+          );
         }
       } else if (parts[0] === "system") {
-        if (this.activeSubentryId) {
-          void this.flushDeviceBucket(this.activeSubentryId);
-        }
+        this.onActiveDeviceChanged(prevSubId, "");
         const viewId = slugToView(SYSTEM_VIEW_SLUGS, parts[1] || "overview") || "system_overview";
         if (prevScope !== "system" || prevViewId !== viewId) {
           this.clearHandoffTargets();
@@ -606,46 +887,46 @@ export class StudioStore implements ReactiveController {
         }
         this.currentScope = "system";
         this.currentViewId = viewId;
-        this.host.requestUpdate();
-        if (this.ws.hass && this.shouldIncludeLogs()) {
-          void this.refreshState({ includeLogs: true });
+        if (viewId === "area_tracking") {
+          this.ensureDefaultSurveyDevice();
         }
       } else {
-        if (this.activeSubentryId) {
-          void this.flushDeviceBucket(this.activeSubentryId);
-        }
+        this.onActiveDeviceChanged(prevSubId, "");
         if (prevScope !== "device" || prevViewId !== "select_device_prompt") {
           this.clearHandoffTargets();
         }
-        this.deviceSelected = false;
         this.currentScope = "device";
         this.currentViewId = "select_device_prompt";
-        this.host.requestUpdate();
       }
+      this.syncLiveClockTimer();
+      this.host.requestUpdate();
     } finally {
       this.routeApplying = false;
     }
+
+    if (this.host.isConnected && this.ws.hass && !this.studioRevMismatch) {
+      void this.ensureSubscription(false);
+    }
   }
 
-  private redirectInvalidDeviceRoute(): void {
-    const invalidId = this.activeSubentryId;
-    this.activeSubentryId = "";
-    this.deviceSelected = false;
-    this.currentScope = "system";
-    this.currentViewId = "system_overview";
-    navigateHaPath("/latter/system/overview", true);
-    if (invalidId) {
-      this.showToast("Requested Device was not found; showing System Overview.", false);
+  redirectInvalidDeviceRoute(invalidId?: string): void {
+    const dropId = invalidId ?? this.activeSubentryId;
+    this.onActiveDeviceChanged(dropId, "", { discardPrevPending: true });
+    this.currentScope = "device";
+    this.currentViewId = "select_device_prompt";
+    navigateHaPath("/latter/devices", true);
+    if (dropId) {
+      this.showToast(this.t("sync.device_not_found"), false);
     }
     this.host.requestUpdate();
-    if (this.ws.hass) {
-      void this.ensureSubscription(true);
+    if (this.host.isConnected && this.ws.hass && !this.studioRevMismatch) {
+      void this.ensureSubscription(false);
     }
   }
 
   syncUrl(replace = false): void {
     if (this.routeApplying) return;
-    let targetPath = "/latter";
+    let targetPath = "/latter/devices";
     if (this.currentScope === "system") {
       const slug = SYSTEM_VIEW_SLUGS[this.currentViewId as SystemViewId] || "overview";
       targetPath = `/latter/system/${slug}`;
@@ -658,11 +939,12 @@ export class StudioStore implements ReactiveController {
     ) {
       const slug =
         DEVICE_VIEW_SLUGS[
-          this.currentViewId as Exclude<DeviceViewId, "select_device_prompt" | "discovered_devices">
+          this.currentViewId as Exclude<
+            DeviceViewId,
+            "select_device_prompt" | "discovered_devices"
+          >
         ] || "overview";
       targetPath = `/latter/devices/${encodeURIComponent(this.activeSubentryId)}/${slug}`;
-    } else {
-      targetPath = "/latter/devices";
     }
     if (globalThis.location?.pathname !== targetPath) {
       navigateHaPath(targetPath, replace);
@@ -670,28 +952,26 @@ export class StudioStore implements ReactiveController {
   }
 
   openDevicesLanding(): void {
-    if (this.activeSubentryId) {
-      void this.flushDeviceBucket(this.activeSubentryId);
-    }
+    this.onActiveDeviceChanged(this.activeSubentryId, "");
     this.clearHandoffTargets();
-    this.deviceSelected = false;
     this.currentScope = "device";
     this.currentViewId = "select_device_prompt";
+    this.syncLiveClockTimer();
     this.syncUrl();
     this.host.requestUpdate();
+    void this.ensureSubscription(false);
   }
 
   openDiscoveredDevices(cardId = ""): void {
-    if (this.activeSubentryId) {
-      void this.flushDeviceBucket(this.activeSubentryId);
-    }
+    this.onActiveDeviceChanged(this.activeSubentryId, "");
     this.clearHandoffTargets();
-    this.deviceSelected = false;
     this.currentScope = "device";
     this.currentViewId = "discovered_devices";
+    this.syncLiveClockTimer();
     this.syncUrl();
     this.host.requestUpdate();
     this.applySectionHandoff(cardId);
+    void this.ensureSubscription(false);
   }
 
   openDevicesWithCategory(category: string): void {
@@ -701,9 +981,9 @@ export class StudioStore implements ReactiveController {
 
   setScope(scope: StudioScope, explicitViewId?: StudioViewId): void {
     if (scope === "device" && this.currentScope !== "device") {
-      void this.flushSystemSettings();
-    } else if (scope === "system" && this.activeSubentryId) {
-      void this.flushDeviceBucket(this.activeSubentryId);
+      void this.entity.flushSystemSettings();
+    } else if (scope === "system") {
+      this.onActiveDeviceChanged(this.activeSubentryId, "");
     }
     this.clearHandoffTargets();
     this.currentScope = scope;
@@ -712,13 +992,16 @@ export class StudioStore implements ReactiveController {
     } else if (scope === "system") {
       this.currentViewId = "system_overview";
     } else {
-      this.currentViewId = this.deviceSelected && this.activeSubentryId ? "dashboard" : "select_device_prompt";
+      this.currentViewId =
+        this.deviceSelected && this.activeSubentryId ? "dashboard" : "select_device_prompt";
     }
+    if (this.currentViewId === "area_tracking") {
+      this.ensureDefaultSurveyDevice();
+    }
+    this.syncLiveClockTimer();
     this.syncUrl();
     this.host.requestUpdate();
-    if (this.shouldIncludeLogs()) {
-      void this.refreshState({ includeLogs: true });
-    }
+    void this.ensureSubscription(false);
   }
 
   switchView(viewId: StudioViewId): void {
@@ -732,16 +1015,18 @@ export class StudioStore implements ReactiveController {
     }
     this.clearHandoffTargets();
     const isSys = Object.prototype.hasOwnProperty.call(SYSTEM_VIEW_SLUGS, viewId);
+    if (isSys) {
+      this.onActiveDeviceChanged(this.activeSubentryId, "");
+    }
     this.currentScope = isSys ? "system" : "device";
     this.currentViewId = viewId;
-    this.syncUrl();
-    this.host.requestUpdate();
     if (viewId === "area_tracking") {
       this.ensureDefaultSurveyDevice();
-      void this.ensureSubscription(false);
-    } else if (this.shouldIncludeLogs()) {
-      void this.refreshState({ includeLogs: true });
     }
+    this.syncLiveClockTimer();
+    this.syncUrl();
+    this.host.requestUpdate();
+    void this.ensureSubscription(false);
   }
 
   openSystemSection(
@@ -772,41 +1057,34 @@ export class StudioStore implements ReactiveController {
     this.openSystemSection("system_sync");
   }
 
-  async switchSystemDevice(nextSubentryId: string, targetView: DeviceViewId = "dashboard"): Promise<void> {
+  async switchSystemDevice(
+    nextSubentryId: string,
+    targetView: DeviceViewId = "dashboard",
+  ): Promise<void> {
     const cleanNext = String(nextSubentryId || "").trim();
     if (!cleanNext) return;
-    const prevSubId = this.activeSubentryId;
-    if (prevSubId && prevSubId !== cleanNext) {
-      await this.flushDeviceBucket(prevSubId);
-    }
-    this.clearHandoffTargets();
-    this.activeSubentryId = cleanNext;
-    this.deviceSelected = true;
+    this.onActiveDeviceChanged(this.activeSubentryId, cleanNext);
     this.currentScope = "device";
-    this.currentViewId =
+    const desired =
       targetView === "select_device_prompt" || targetView === "discovered_devices"
         ? "dashboard"
         : targetView;
-    if (prevSubId !== cleanNext) {
-      this.overviewAlarmsOpen = false;
-    }
-    this.devicePinDraft = "";
-    this.worldClockNewLabel = "";
-    this.worldClockNewZone = "";
-    this.appConfigModal = { open: false, app: null };
-    this.returnToPinnedModal = false;
+    this.currentViewId = this.deviceHasView(desired) ? desired : "dashboard";
+    this.syncLiveClockTimer();
     this.syncUrl();
     this.host.requestUpdate();
-    await this.ensureSubscription(true);
+    await this.ensureSubscription(false);
   }
 
   openHaPage(path: string): void {
     navigateHaPath(path, false);
   }
 
-  openDeviceInHa(): void {
+  openDeviceInHa(preferLatterEntry = false): void {
     const links = this.state?.links;
-    const devId = links?.esphome_device_id || links?.latter_device_id || "";
+    const devId = preferLatterEntry
+      ? links?.latter_device_id || links?.esphome_device_id || ""
+      : links?.esphome_device_id || links?.latter_device_id || "";
     if (devId) {
       this.openHaPage(`/config/devices/device/${encodeURIComponent(devId)}`);
     } else {
@@ -815,10 +1093,12 @@ export class StudioStore implements ReactiveController {
   }
 
   toggleParentHaSidebar(): void {
-    this.host.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
+    this.host.dispatchEvent(
+      new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }),
+    );
   }
 
-  // ---------- Subscription & State Ingestion ----------
+  // ---------- Subscription, Backoff & State Ingestion ----------
 
   teardownSubscription(): void {
     this.subGen += 1;
@@ -833,44 +1113,49 @@ export class StudioStore implements ReactiveController {
     this.subscribedKey = "";
   }
 
-  private desiredSubscriptionKey(): string {
-    const sub = this.activeSubentryId || "";
+  desiredSubscriptionKey(): string {
+    const sub = this.deviceSelected ? this.activeSubentryId || "" : "";
     const survey =
-      this.currentScope === "system" && this.currentViewId === "area_tracking" && this.bleLiveStreamActive
+      this.currentScope === "system" &&
+      this.currentViewId === "area_tracking" &&
+      this.bleLiveStreamActive
         ? this.bleSurveySubentryId || ""
         : "";
-    return `${sub}|${survey}`;
+    const logs = this.shouldIncludeLogs() ? "1" : "0";
+    return `${sub}|${survey}|${logs}`;
   }
 
-  async ensureSubscription(forceRefresh = false): Promise<void> {
-    if (!this.ws.hass?.connection) return;
+  async ensureSubscription(forceResubscribe = false): Promise<void> {
+    if (this.studioRevMismatch || !this.ws.hass?.connection) return;
     const nextKey = this.desiredSubscriptionKey();
-    if (!forceRefresh && this.wsUnsub && this.subscribedKey === nextKey) {
+    if (!forceResubscribe && this.wsUnsub && this.subscribedKey === nextKey) {
       return;
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
     this.teardownSubscription();
     const myGen = ++this.subGen;
-    const targetSubId = this.activeSubentryId || null;
+    const targetSubId = this.deviceSelected ? this.activeSubentryId || null : null;
     const surveyId =
-      this.currentScope === "system" && this.currentViewId === "area_tracking" && this.bleLiveStreamActive
+      this.currentScope === "system" &&
+      this.currentViewId === "area_tracking" &&
+      this.bleLiveStreamActive
         ? this.bleSurveySubentryId || null
         : null;
-
-    if (forceRefresh || !this.state) {
-      await this.refreshState({ includeLogs: this.shouldIncludeLogs() });
-    }
-    if (myGen !== this.subGen) return;
+    const includeLogs = this.shouldIncludeLogs();
 
     try {
       const unsub = await this.ws.subscribe(
         {
           subentryId: targetSubId,
           surveySubentryId: surveyId,
-          includeLogs: this.shouldIncludeLogs(),
+          includeLogs,
         },
         (eventPayload) => {
           if (myGen !== this.subGen || !eventPayload) return;
-          this.handleSubscriptionEvent(eventPayload);
+          this.handleSubscriptionEvent(eventPayload, includeLogs);
         },
       );
       if (myGen !== this.subGen) {
@@ -883,65 +1168,74 @@ export class StudioStore implements ReactiveController {
       }
       this.wsUnsub = unsub;
       this.subscribedKey = nextKey;
-    } catch {
-      if (this.fallbackPollTimer) clearTimeout(this.fallbackPollTimer);
-      this.fallbackPollTimer = setTimeout(() => {
-        if (this.host.isConnected) {
+      this.reconnectAttempt = 0;
+    } catch (err) {
+      if (isStudioRevMismatchError(err) || this.studioRevMismatch) {
+        this.handleStudioRevMismatch();
+        return;
+      }
+      if (!this.state) {
+        this.loading = false;
+        this.loadError = formatWsError(err, "Latter Studio could not connect.");
+        this.host.requestUpdate();
+      }
+      const delay =
+        RECONNECT_BACKOFF_MS[
+          Math.min(this.reconnectAttempt, RECONNECT_BACKOFF_MS.length - 1)
+        ];
+      this.reconnectAttempt += 1;
+      if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        if (this.host.isConnected && !this.studioRevMismatch) {
           void this.ensureSubscription(true);
         }
-      }, 10000);
+      }, delay);
     }
   }
 
   async refreshState(options?: { includeLogs?: boolean }): Promise<void> {
-    if (!this.ws.hass) return;
-    const targetSubId = this.activeSubentryId || null;
+    if (this.studioRevMismatch || !this.ws.hass) return;
+    const reqSeq = ++this.stateReqSeq;
+    const targetSubId = this.deviceSelected ? this.activeSubentryId || null : null;
     const includeLogs = options?.includeLogs ?? this.shouldIncludeLogs();
     try {
       const payload = await this.ws.getState({
         subentryId: targetSubId,
         includeLogs,
       });
-      if (payload) {
-        this.loadError = "";
-        this.loading = false;
-        this.ingestPayload(payload, includeLogs);
+      if (reqSeq < this.lastAppliedReqSeq) return;
+      this.lastAppliedReqSeq = reqSeq;
+      this.loadError = "";
+      this.loading = false;
+      this.ingestPayload(payload, includeLogs);
+      if (!this.wsUnsub && this.host.isConnected && !this.studioRevMismatch) {
+        void this.ensureSubscription(false);
       }
     } catch (err) {
+      if (isStudioRevMismatchError(err) || this.studioRevMismatch) {
+        this.handleStudioRevMismatch();
+        return;
+      }
+      if (reqSeq < this.lastAppliedReqSeq) return;
       this.loading = false;
       this.loadError = formatWsError(err, "Latter Studio could not load.");
       this.host.requestUpdate();
     }
   }
 
-  private handleSubscriptionEvent(raw: unknown): void {
+  private handleSubscriptionEvent(raw: unknown, subscribedWithLogs: boolean): void {
     if (!raw || typeof raw !== "object") return;
     const rec = raw as Record<string, unknown>;
-    const isBleDelta =
-      rec.type === "ble_survey_delta" ||
-      rec.event === "ble_survey_delta" ||
-      (!("system_devices" in rec) &&
-        ("ble_survey_rows" in rec ||
-          "ble_area_signatures" in rec ||
-          "ble_packets_seen" in rec ||
-          "area_presence_grid" in rec));
-
-    if (isBleDelta) {
+    if (rec.type === "ble_survey_delta") {
       this.applyBleSurveyDelta(rec as unknown as BleSurveyDeltaEvent);
       return;
     }
 
     const payload = raw as StudioStatePayload;
-    if (
-      this.activeSubentryId &&
-      payload.subentry_id &&
-      payload.subentry_id !== this.activeSubentryId
-    ) {
-      return;
-    }
     this.loading = false;
     this.loadError = "";
-    this.ingestPayload(payload, false);
+    this.ingestPayload(payload, subscribedWithLogs);
   }
 
   applyBleSurveyDelta(delta: BleSurveyDeltaEvent): void {
@@ -956,9 +1250,12 @@ export class StudioStore implements ReactiveController {
         updated = true;
       }
       if (Array.isArray(delta.area_presence_grid) && this.state.live) {
-        this.state.live = {
-          ...this.state.live,
-          area_presence_grid: delta.area_presence_grid as AreaPresenceRow[],
+        this.state = {
+          ...this.state,
+          live: {
+            ...this.state.live,
+            area_presence_grid: delta.area_presence_grid as AreaPresenceRow[],
+          },
         };
         updated = true;
       }
@@ -967,140 +1264,282 @@ export class StudioStore implements ReactiveController {
       }
       return;
     }
-    const targetId = String(delta.subentry_id || this.bleSurveySubentryId || this.state.subentry_id || "");
+
+    const targetId = String(
+      delta.subentry_id || this.bleSurveySubentryId || this.state.subentry_id || "",
+    );
+    let nextDevices = this.state.system_devices;
+    let nextLive = this.state.live;
     if (Array.isArray(delta.ble_survey_rows)) {
       const nextRows: BleSurveyRow[] = delta.ble_survey_rows;
       const winRow = nextRows.find((r) => r.is_winner);
-      if (Array.isArray(this.state.system_devices) && targetId) {
-        this.state.system_devices = this.state.system_devices.map((dev) => {
+      if (Array.isArray(nextDevices) && targetId) {
+        nextDevices = nextDevices.map((dev) => {
           if (dev.subentry_id !== targetId) return dev;
           return {
             ...dev,
             ble_survey_rows: nextRows,
             ble_packets_seen:
-              typeof delta.ble_packets_seen === "number" ? delta.ble_packets_seen : dev.ble_packets_seen,
+              typeof delta.ble_packets_seen === "number"
+                ? delta.ble_packets_seen
+                : dev.ble_packets_seen,
             active_area_name: winRow?.area_name || dev.active_area_name,
           };
         });
       }
-      if (this.state.subentry_id === targetId && this.state.live && typeof delta.ble_closest_proxy === "string") {
-        this.state.live = {
-          ...this.state.live,
+      if (
+        this.state.subentry_id === targetId &&
+        nextLive &&
+        typeof delta.ble_closest_proxy === "string"
+      ) {
+        nextLive = {
+          ...nextLive,
           ble_closest_proxy: delta.ble_closest_proxy,
         };
       }
     }
-    if (Array.isArray(delta.ble_area_signatures)) {
-      this.state = {
-        ...this.state,
-        ble_area_signatures: delta.ble_area_signatures as BleAreaSignatureSummary[],
-      };
-    }
-    if (Array.isArray(delta.area_presence_grid) && this.state.live) {
-      this.state.live = {
-        ...this.state.live,
+    if (Array.isArray(delta.area_presence_grid) && nextLive) {
+      nextLive = {
+        ...nextLive,
         area_presence_grid: delta.area_presence_grid as AreaPresenceRow[],
       };
     }
+    this.state = {
+      ...this.state,
+      system_devices: nextDevices,
+      ble_area_signatures: Array.isArray(delta.ble_area_signatures)
+        ? (delta.ble_area_signatures as BleAreaSignatureSummary[])
+        : this.state.ble_area_signatures,
+      live: nextLive,
+    };
     this.host.requestUpdate();
   }
 
-  ingestPayload(incoming: StudioStatePayload, logsWereRequested: boolean): void {
-    const prevCatalog = this.state?.catalog;
-    const prevLogs = this.state?.internal_logs;
-    const prevSysConfig = this.state?.system_config;
+  private mergeFrozenBleRows(
+    devices: StudioStatePayload["system_devices"],
+  ): StudioStatePayload["system_devices"] {
+    if (this.bleLiveStreamActive || !Array.isArray(devices)) return devices;
+    return devices.map((dev) => {
+      if (!dev.subentry_id) return dev;
+      const frozen = this.bleSurveyFrozen.get(dev.subentry_id);
+      if (frozen) {
+        return {
+          ...dev,
+          ble_survey_rows: frozen.rows.map((r) => ({ ...r })),
+          ble_packets_seen: frozen.packetsSeen,
+          active_area_name: frozen.activeAreaName,
+        };
+      }
+      this.bleSurveyFrozen.set(dev.subentry_id, {
+        rows: (dev.ble_survey_rows || []).map((r) => ({ ...r })),
+        packetsSeen: dev.ble_packets_seen ?? 0,
+        activeAreaName: dev.active_area_name || "",
+      });
+      return dev;
+    });
+  }
 
+  ingestPayload(incoming: StudioStatePayload, logsWereRequested: boolean): void {
+    const prev = this.state;
+    const prevSysConfig = prev?.system_config;
+
+    // Resolve section-hash omitted fields (`#10`)
+    const mergedCatalog = incoming.catalog ?? prev?.catalog;
+    const mergedPrefSpecs = incoming.pref_specs ?? prev?.pref_specs;
+    const mergedWorldClockZones = incoming.world_clock_zones ?? prev?.world_clock_zones;
+    const mergedSystemWallpapers =
+      incoming.system_wallpapers ?? prev?.system_wallpapers ?? [];
+    const mergedBleSignatures =
+      incoming.ble_area_signatures ?? prev?.ble_area_signatures;
+    const mergedDiscoveredBle =
+      incoming.discovered_ble_devices !== undefined
+        ? this.stabilizeDiscoveredBle(
+            incoming.discovered_ble_devices,
+            incoming.system_devices,
+          )
+        : prev?.discovered_ble_devices ?? [];
+    const mergedLogs =
+      logsWereRequested ||
+      (Array.isArray(incoming.internal_logs) && incoming.internal_logs.length > 0)
+        ? incoming.internal_logs || []
+        : prev?.internal_logs || [];
+    const mergedSystemDevices = this.mergeFrozenBleRows(incoming.system_devices);
+
+    if (incoming.subentry_id && incoming.device_config_rev > 0) {
+      this.recordKnownDeviceConfigRev(incoming.subentry_id, incoming.device_config_rev);
+    }
+
+    // Active Device missing from `system_devices` -> discard pending edits & redirect to `/latter/devices` (`B-19`, `B-24`)
     if (
       this.deviceSelected &&
       this.activeSubentryId &&
-      Array.isArray(incoming.system_devices) &&
-      !incoming.system_devices.some((d) => d.subentry_id === this.activeSubentryId)
+      Array.isArray(mergedSystemDevices) &&
+      !mergedSystemDevices.some((d) => d.subentry_id === this.activeSubentryId)
     ) {
-      const redirected: StudioStatePayload = {
+      const sysOnly: StudioStatePayload = {
         ...incoming,
-        catalog: incoming.catalog ?? prevCatalog,
-        internal_logs: logsWereRequested || incoming.internal_logs?.length ? incoming.internal_logs : prevLogs || [],
+        system_devices: mergedSystemDevices,
+        discovered_ble_devices: mergedDiscoveredBle,
+        system_wallpapers: mergedSystemWallpapers,
+        ble_area_signatures: mergedBleSignatures,
+        catalog: mergedCatalog,
+        pref_specs: mergedPrefSpecs,
+        world_clock_zones: mergedWorldClockZones,
+        internal_logs: mergedLogs,
+        device_prefs: incoming.device_prefs || [],
       };
-      overlayPendingBlankListSlots(this, redirected, prevSysConfig);
-      this.state = redirected;
-      this.redirectInvalidDeviceRoute();
+      const effSysPatch = this.entity.getEffectiveSystemPatch();
+      if (Object.keys(effSysPatch).length > 0 && sysOnly.system_config) {
+        sysOnly.system_config = {
+          ...sysOnly.system_config,
+          ...(effSysPatch as Partial<SystemConfig>),
+        };
+      }
+      overlayPendingBlankListSlots(this, sysOnly, prevSysConfig);
+      this.state = sysOnly;
+      this.redirectInvalidDeviceRoute(this.activeSubentryId);
       return;
     }
 
+    // Cross-Device payload guard (`B-01`, `B-02`, `R-2`):
+    // When a Device is selected, never clobber Device-specific sections with a mismatched `subentry_id` payload.
+    if (
+      this.deviceSelected &&
+      this.activeSubentryId &&
+      incoming.subentry_id !== this.activeSubentryId
+    ) {
+      const keepPrevDevice = prev && prev.subentry_id === this.activeSubentryId;
+      const sysMerged: StudioStatePayload = {
+        ...(keepPrevDevice ? prev : incoming),
+        version: incoming.version,
+        studio_rev: incoming.studio_rev ?? prev?.studio_rev,
+        system_config_rev: incoming.system_config_rev,
+        system_info: incoming.system_info ?? prev?.system_info,
+        locale_strings: incoming.locale_strings ?? prev?.locale_strings,
+        internal_logs: mergedLogs,
+        system_devices: mergedSystemDevices,
+        issues: incoming.issues,
+        ble_proxy_count: incoming.ble_proxy_count,
+        ble_area_signatures: mergedBleSignatures,
+        discovered_latter_devices: incoming.discovered_latter_devices,
+        ignored_latter_devices:
+          incoming.ignored_latter_devices ?? prev?.ignored_latter_devices,
+        discovered_ble_devices: mergedDiscoveredBle,
+        system_controls: incoming.system_controls,
+        device_groups: incoming.device_groups,
+        system_config: incoming.system_config,
+        has_security_pin: incoming.has_security_pin,
+        system_wallpapers: mergedSystemWallpapers,
+        doorbells: incoming.doorbells,
+        catalog: mergedCatalog,
+        pref_specs: mergedPrefSpecs,
+        world_clock_zones: mergedWorldClockZones,
+        // Preserve active Device fields if already loaded, else clean empty placeholders while `deviceLoading` stays true
+        subentry_id: keepPrevDevice ? prev.subentry_id : "",
+        title: keepPrevDevice ? prev.title : "",
+        device_config_rev: keepPrevDevice ? prev.device_config_rev : 0,
+        capabilities: keepPrevDevice ? prev.capabilities : {},
+        config: keepPrevDevice ? prev.config : {},
+        device_prefs: keepPrevDevice ? prev.device_prefs : [],
+        quick_actions: keepPrevDevice ? prev.quick_actions : [],
+        speaker_volume: keepPrevDevice ? prev.speaker_volume : null,
+        esphome: keepPrevDevice ? prev.esphome : { device: {}, sections: [] },
+        wallpapers: keepPrevDevice ? prev.wallpapers : [],
+        links: keepPrevDevice ? prev.links : undefined,
+        live: keepPrevDevice
+          ? {
+              ...prev.live,
+              area_presence_grid:
+                incoming.live?.area_presence_grid ?? prev.live.area_presence_grid,
+            }
+          : { area_presence_grid: incoming.live?.area_presence_grid },
+      };
+
+      const effSysPatch = this.entity.getEffectiveSystemPatch();
+      if (Object.keys(effSysPatch).length > 0 && sysMerged.system_config) {
+        sysMerged.system_config = {
+          ...sysMerged.system_config,
+          ...(effSysPatch as Partial<SystemConfig>),
+        };
+      }
+      overlayPendingBlankListSlots(this, sysMerged, prevSysConfig);
+
+      this.deviceLoading = !keepPrevDevice;
+      this.state = sysMerged;
+      this.ensureDefaultSurveyDevice();
+      this.ensureDefaultDoorbellTester();
+      this.ensureValidBatchTargetFilter();
+      this.syncLiveClockTimer();
+      this.host.requestUpdate();
+      if (!keepPrevDevice && this.host.isConnected && this.ws.hass && !this.studioRevMismatch) {
+        void this.ensureSubscription(false);
+      }
+      return;
+    }
+
+    // Matching payload (either System/list view or matching `activeSubentryId`)
+    this.deviceLoading = false;
     const merged: StudioStatePayload = {
       ...incoming,
-      discovered_ble_devices: this.stabilizeDiscoveredBle(incoming),
-      catalog: incoming.catalog ?? prevCatalog,
-      internal_logs:
-        logsWereRequested || (Array.isArray(incoming.internal_logs) && incoming.internal_logs.length > 0)
-          ? incoming.internal_logs || []
-          : prevLogs || [],
+      system_devices: mergedSystemDevices,
+      discovered_ble_devices: mergedDiscoveredBle,
+      system_wallpapers: mergedSystemWallpapers,
+      ble_area_signatures: mergedBleSignatures,
+      catalog: mergedCatalog,
+      pref_specs: mergedPrefSpecs,
+      world_clock_zones: mergedWorldClockZones,
+      internal_logs: mergedLogs,
+      device_prefs: incoming.device_prefs || [],
     };
 
-    if (!this.bleLiveStreamActive && Array.isArray(merged.system_devices)) {
-      const frozenMap = this.ensureBleSurveyFrozenMap();
-      merged.system_devices = merged.system_devices.map((dev) => {
-        if (!dev.subentry_id) return dev;
-        const frozen = frozenMap.get(dev.subentry_id);
-        if (frozen) {
-          return {
-            ...dev,
-            ble_survey_rows: frozen.rows.map((r) => ({ ...r })),
-            ble_packets_seen: frozen.packetsSeen,
-            active_area_name: frozen.activeAreaName,
-          };
-        }
-        frozenMap.set(dev.subentry_id, {
-          rows: (dev.ble_survey_rows || []).map((r) => ({ ...r })),
-          packetsSeen: dev.ble_packets_seen ?? 0,
-          activeAreaName: dev.active_area_name || "",
-        });
-        return dev;
-      });
-    }
-
-    if (Object.keys(this.pendingSystemPatch).length > 0 && merged.system_config) {
+    const effSysPatch = this.entity.getEffectiveSystemPatch();
+    if (Object.keys(effSysPatch).length > 0 && merged.system_config) {
       merged.system_config = {
         ...merged.system_config,
-        ...(this.pendingSystemPatch as Partial<SystemConfig>),
+        ...(effSysPatch as Partial<SystemConfig>),
       };
     }
-
     overlayPendingBlankListSlots(this, merged, prevSysConfig);
 
-    const devBucket = merged.subentry_id ? this.pendingDeviceBuckets.get(merged.subentry_id) : undefined;
-    if (devBucket && merged.config) {
-      overlayDevicePrefsOnSections(merged, devBucket.patch);
+    if (merged.subentry_id) {
+      const effDevPatch = this.entity.getEffectiveDevicePatch(merged.subentry_id);
+      if (Object.keys(effDevPatch).length > 0 && merged.config) {
+        overlayDevicePrefsOnSections(merged, effDevPatch);
+      }
     }
 
     overlayPendingEntityStates(merged, this.pendingEntityStates);
 
-    if (this.currentScope === "device" && this.deviceSelected && merged.subentry_id === this.activeSubentryId) {
-      const caps = merged.capabilities || {};
-      const isBleTag = merged.config?.kind === "ble_tag";
-      if (
-        ((this.currentViewId === "display" || this.currentViewId === "interface") &&
-          (isBleTag || !caps.has_display)) ||
-        (this.currentViewId === "audio_voice" && (isBleTag || (!caps.has_audio && !caps.has_voice))) ||
-        (this.currentViewId === "power" && (isBleTag || !caps.has_power))
-      ) {
-        this.currentViewId = "dashboard";
-        this.syncUrl(true);
-      }
+    if (
+      this.currentScope === "device" &&
+      this.deviceSelected &&
+      merged.subentry_id === this.activeSubentryId &&
+      !deviceHasView(
+        this.currentViewId as DeviceViewId,
+        merged.capabilities,
+        merged.config?.kind,
+      )
+    ) {
+      this.currentViewId = "dashboard";
+      this.syncUrl(true);
     }
 
     this.state = merged;
     this.ensureDefaultSurveyDevice();
     this.ensureDefaultDoorbellTester();
     this.ensureValidBatchTargetFilter();
+    this.syncLiveClockTimer();
     this.host.requestUpdate();
   }
 
-  private stabilizeDiscoveredBle(incoming: StudioStatePayload): DiscoveredBleCandidate[] {
+  private stabilizeDiscoveredBle(
+    candidates: readonly DiscoveredBleCandidate[],
+    systemDevices: StudioStatePayload["system_devices"],
+  ): DiscoveredBleCandidate[] {
     const RETENTION_MS = 90_000;
     const now = Date.now();
     const onboardedSlugs = new Set(
-      (incoming.system_devices || [])
+      (systemDevices || [])
         .map((d) => String(d.device_slug || "").trim().toLowerCase())
         .filter(Boolean),
     );
@@ -1110,13 +1549,16 @@ export class StudioStore implements ReactiveController {
       )
         .trim()
         .toLowerCase();
-      if (now - entry.lastSeenMs > RETENTION_MS || (candSlug && onboardedSlugs.has(candSlug))) {
+      if (
+        now - entry.lastSeenMs > RETENTION_MS ||
+        (candSlug && onboardedSlugs.has(candSlug))
+      ) {
         this.discoveredBleSeenCache.delete(addrKey);
       }
     }
     const extraNoKey: DiscoveredBleCandidate[] = [];
-    for (const c of incoming.discovered_ble_devices || []) {
-      const addrKey = String(c.target_address || c.address || "").trim().toLowerCase();
+    for (const c of candidates) {
+      const addrKey = String(c.target_address || "").trim().toLowerCase();
       if (addrKey) {
         this.discoveredBleSeenCache.set(addrKey, { candidate: c, lastSeenMs: now });
       } else {
@@ -1147,7 +1589,7 @@ export class StudioStore implements ReactiveController {
     this.discoveredBlePersonDrafts.delete(addrKey);
     if (this.discoveredBleFrozenSnapshot) {
       this.discoveredBleFrozenSnapshot = this.discoveredBleFrozenSnapshot.filter(
-        (c) => String(c.target_address || c.address || "").trim().toLowerCase() !== addrKey,
+        (c) => String(c.target_address || "").trim().toLowerCase() !== addrKey,
       );
     }
   }
@@ -1155,7 +1597,10 @@ export class StudioStore implements ReactiveController {
   private ensureDefaultSurveyDevice(): void {
     const devs = this.state?.system_devices || [];
     const bleDevs = devs.filter((d) => d.ble_tracked || d.kind === "ble_tag");
-    if (this.bleSurveySubentryId && bleDevs.some((d) => d.subentry_id === this.bleSurveySubentryId)) {
+    if (
+      this.bleSurveySubentryId &&
+      bleDevs.some((d) => d.subentry_id === this.bleSurveySubentryId)
+    ) {
       return;
     }
     const current = bleDevs.find((d) => d.subentry_id === this.activeSubentryId);
@@ -1164,7 +1609,10 @@ export class StudioStore implements ReactiveController {
 
   private ensureDefaultDoorbellTester(): void {
     const devs = (this.state?.system_devices || []).filter((d) => d.kind !== "ble_tag");
-    if (this.doorbellTestSubentryId && devs.some((d) => d.subentry_id === this.doorbellTestSubentryId)) {
+    if (
+      this.doorbellTestSubentryId &&
+      devs.some((d) => d.subentry_id === this.doorbellTestSubentryId)
+    ) {
       return;
     }
     this.doorbellTestSubentryId = devs[0]?.subentry_id || "";
@@ -1173,687 +1621,11 @@ export class StudioStore implements ReactiveController {
   private ensureValidBatchTargetFilter(): void {
     if (!this.batchTargetFilter.startsWith("group:")) return;
     const gid = this.batchTargetFilter.slice(6);
+    if (gid === "custom") return;
     const groups = this.state?.device_groups || [];
-    const devs = (this.state?.system_devices || []).filter((d) => d.kind !== "ble_tag");
-    const hasGroupWithMembers =
-      groups.some((g) => g.id === gid) && devs.some((d) => d.device_group === gid);
-    if (!hasGroupWithMembers) {
+    if (!groups.some((g) => g.id === gid)) {
       this.batchTargetFilter = "all";
+      this.groups.resetBatchDraft();
     }
-  }
-
-  // ---------- Delegated Domain Operations ----------
-
-  stageDeviceSetting(
-    key: string,
-    value: unknown,
-    controlDomId?: string,
-    debounceMs?: number,
-  ): void {
-    stageDeviceSettingOp(this, key, value, controlDomId, debounceMs);
-  }
-
-  async runDeviceAction(action: string, toastMessage?: string): Promise<boolean> {
-    return runDeviceActionOp(this, action, toastMessage);
-  }
-
-  async flushDeviceBucket(targetSubentryId: string): Promise<void> {
-    await flushDeviceBucketOp(this, targetSubentryId);
-  }
-
-  stageSystemSetting(key: keyof SystemConfig, value: unknown, controlDomId?: string): void {
-    stageSystemSettingOp(this, key, value, controlDomId);
-  }
-
-  async flushSystemSettings(): Promise<void> {
-    await flushSystemSettingsOp(this);
-  }
-
-  async flushAllPendingSettings(): Promise<void> {
-    const tasks: Array<Promise<void>> = [];
-    if (Object.keys(this.pendingSystemPatch).length > 0) {
-      tasks.push(this.flushSystemSettings());
-    }
-    for (const subId of Array.from(this.pendingDeviceBuckets.keys())) {
-      tasks.push(this.flushDeviceBucket(subId));
-    }
-    await Promise.allSettled(tasks);
-  }
-
-  getPref(key: string): DevicePrefItem | undefined {
-    return (this.state?.device_prefs || []).find((p) => p.key === key);
-  }
-
-  getPrefs(keys?: readonly string[]): DevicePrefItem[] {
-    const all = this.state?.device_prefs || [];
-    if (!keys || keys.length === 0) return all;
-    const keySet = new Set(keys);
-    return all.filter((p) => keySet.has(p.key));
-  }
-
-  getSectionItems(sectionId: string): EspHomeEntityItem[] {
-    const sec = (this.state?.esphome?.sections || []).find((s) => s.id === sectionId);
-    return sec?.items || [];
-  }
-
-  async executeEntityAction(
-    entityId: string,
-    optimisticState: string | undefined,
-    body: Record<string, unknown>,
-    errorPrefix: string,
-  ): Promise<boolean> {
-    return executeEntityActionOp(this, entityId, optimisticState, body, errorPrefix);
-  }
-
-  async espAction(
-    entityId: string,
-    action: string,
-    optimisticState?: string,
-    toastMessage?: string,
-  ): Promise<boolean> {
-    const ok = await commitEntityChange(this, entityId, optimisticState, { action }, "Device action failed");
-    if (ok && toastMessage) {
-      this.showToast(toastMessage);
-    }
-    return ok;
-  }
-
-  async espSelect(entityId: string, option: string): Promise<void> {
-    await commitEntityChange(this, entityId, option, { option }, "Could not update option");
-  }
-
-  async espNumber(entityId: string, level: number): Promise<void> {
-    if (!Number.isFinite(level)) return;
-    await commitEntityChange(this, entityId, String(level), { level }, "Could not update level");
-  }
-
-  async triggerHeaderFirmwareUpdate(): Promise<void> {
-    const updEntity = this.state?.live?.fw_update_entity || "";
-    if (!updEntity) return;
-    if (await this.espAction(updEntity, "install")) {
-      this.showToast("Firmware update started");
-    }
-  }
-
-  getDockItems(): ShortcutItem[] {
-    return getDockItemsOp(this);
-  }
-
-  getPinnedItems(): ShortcutItem[] {
-    return getPinnedItemsOp(this);
-  }
-
-  moveShortcutItem(
-    listKey: "dock_items" | "pinned_items",
-    idx: number,
-    delta: -1 | 1,
-  ): void {
-    moveShortcutItemOp(this, listKey, idx, delta);
-  }
-
-  removeShortcutItem(listKey: "dock_items" | "pinned_items", idx: number): void {
-    removeShortcutItemOp(this, listKey, idx);
-  }
-
-  resetDockItemsToDefault(): void {
-    resetDockItemsToDefaultOp(this);
-  }
-
-  toggleNativeDockApp(routeToken: string, enabled: boolean): void {
-    toggleNativeDockAppOp(this, routeToken, enabled);
-  }
-
-  openAppConfigModal(app: ConfigurableAppId): void {
-    this.returnToPinnedModal = false;
-    if (this.shortcutModal.open) {
-      this.shortcutModal = { ...this.shortcutModal, open: false };
-    }
-    this.appConfigModal = { open: true, app };
-    this.host.requestUpdate();
-  }
-
-  closeAppConfigModal(): void {
-    this.appConfigModal = { open: false, app: null };
-    this.host.requestUpdate();
-  }
-
-  openShortcutModal(
-    listKey: "dock_items" | "pinned_items",
-    editIndex: number | null = null,
-  ): void {
-    openShortcutModalOp(this, listKey, editIndex);
-  }
-
-  closeShortcutModal(): void {
-    const reopenPinned = this.returnToPinnedModal;
-    this.returnToPinnedModal = false;
-    this.shortcutModal = { ...this.shortcutModal, open: false };
-    if (reopenPinned) {
-      this.appConfigModal = { open: true, app: "pinned" };
-    }
-    this.host.requestUpdate();
-  }
-
-  saveShortcutModal(): void {
-    saveShortcutModalOp(this);
-  }
-
-  getEnabledAreaCategories(): string[] {
-    return getEnabledAreaCategoriesOp(this);
-  }
-
-  toggleAreaCategoryToken(token: string): void {
-    toggleAreaCategoryTokenOp(this, token);
-  }
-
-  moveAreaCategoryToken(token: string, delta: -1 | 1): void {
-    moveAreaCategoryTokenOp(this, token, delta);
-  }
-
-  getEnabledHomeCategories(): string[] {
-    return getEnabledHomeCategoriesOp(this);
-  }
-
-  toggleHomeCategoryToken(token: string): void {
-    toggleHomeCategoryTokenOp(this, token);
-  }
-
-  moveHomeCategoryToken(token: string, delta: -1 | 1): void {
-    moveHomeCategoryTokenOp(this, token, delta);
-  }
-
-  getEnabledToolsItems(): string[] {
-    return getEnabledToolsItemsOp(this);
-  }
-
-  toggleToolItemToken(token: string): void {
-    toggleToolItemTokenOp(this, token);
-  }
-
-  moveToolItemToken(token: string, delta: -1 | 1): void {
-    moveToolItemTokenOp(this, token, delta);
-  }
-
-  getEnabledGamesItems(): string[] {
-    return getEnabledGamesItemsOp(this);
-  }
-
-  toggleGameItemToken(token: string): void {
-    toggleGameItemTokenOp(this, token);
-  }
-
-  moveGameItemToken(token: string, delta: -1 | 1): void {
-    moveGameItemTokenOp(this, token, delta);
-  }
-
-  getEnabledActivitySources(): string[] {
-    return getEnabledActivitySourcesOp(this);
-  }
-
-  toggleActivitySource(sourceId: string): void {
-    toggleActivitySourceOp(this, sourceId);
-  }
-
-  applyDeviceCustomColor(hex: string, switchColorProfile = true): void {
-    applyDeviceCustomColorOp(this, hex, switchColorProfile);
-  }
-
-  openColorWheelModal(targetScope: StudioScope): void {
-    openColorWheelModalOp(this, targetScope);
-  }
-
-  closeColorWheelModal(): void {
-    this.colorWheelModal = { ...this.colorWheelModal, open: false, busy: false };
-    this.host.requestUpdate();
-  }
-
-  async saveColorWheelSelection(): Promise<void> {
-    await saveColorWheelSelectionOp(this);
-  }
-
-  deleteCustomPalette(hex: string): void {
-    deleteCustomPaletteOp(this, hex);
-  }
-
-  async uploadWallpaper(scope: StudioScope): Promise<void> {
-    await uploadWallpaperOp(this, scope);
-  }
-
-  async selectWallpaperSource(sourceId: string): Promise<void> {
-    await selectWallpaperSourceOp(this, sourceId);
-  }
-
-  async setWallpaperRotation(minutes: number): Promise<void> {
-    await setWallpaperRotationOp(this, minutes);
-  }
-
-  async toggleWallpaperFav(sourceId: string): Promise<void> {
-    await toggleWallpaperFavOp(this, sourceId);
-  }
-
-  async setAllWallpaperFavorites(sourceIds: readonly string[]): Promise<void> {
-    await setAllWallpaperFavoritesOp(this, sourceIds);
-  }
-
-  async deleteWallpaper(scope: StudioScope, sourceId: string): Promise<void> {
-    await deleteWallpaperOp(this, scope, sourceId);
-  }
-
-  get hasConfiguredSecurityPin(): boolean {
-    return Boolean(
-      this.state?.config?.has_security_pin ??
-        this.state?.live?.has_security_pin ??
-        this.state?.has_security_pin,
-    );
-  }
-
-  async saveSecurityPin(fromScope: StudioScope): Promise<void> {
-    await saveSecurityPinOp(this, fromScope);
-  }
-
-  async clearSecurityPin(fromScope: StudioScope): Promise<void> {
-    await clearSecurityPinOp(this, fromScope);
-  }
-
-  async rotateSigningKey(): Promise<void> {
-    await rotateSigningKeyOp(this);
-  }
-
-  async downloadDeviceDiagnostics(): Promise<void> {
-    await downloadDeviceDiagnosticsOp(this);
-  }
-
-  openRemoveDeviceModal(subentryId: string, title: string): void {
-    if (!subentryId) return;
-    this.removeModal = { open: true, subentryId, title: title || "Device", busy: false };
-    this.host.requestUpdate();
-  }
-
-  closeRemoveDeviceModal(): void {
-    this.removeModal = { ...this.removeModal, open: false, busy: false };
-    this.host.requestUpdate();
-  }
-
-  async confirmRemoveDevice(): Promise<void> {
-    await confirmRemoveDeviceOp(this);
-  }
-
-  openResetDeviceModal(): void {
-    if (!this.activeSubentryId) return;
-    const isBleTag = this.state?.config?.kind === "ble_tag";
-    this.resetModal = {
-      open: true,
-      deviceSettings: !isBleTag,
-      latterOptions: true,
-      busy: false,
-    };
-    this.host.requestUpdate();
-  }
-
-  closeResetDeviceModal(): void {
-    this.resetModal = { ...this.resetModal, open: false, busy: false };
-    this.host.requestUpdate();
-  }
-
-  async confirmResetDevice(): Promise<void> {
-    await confirmResetDeviceOp(this);
-  }
-
-  openAddBleModal(prefill?: { name?: string; address?: string }): void {
-    this.addBleModal = {
-      open: true,
-      candidateAddr: prefill?.address || "",
-      name: prefill?.name || "",
-      address: prefill?.address || "",
-      assignedPerson: "",
-      busy: false,
-    };
-    this.host.requestUpdate();
-  }
-
-  closeAddBleModal(): void {
-    this.addBleModal = { ...this.addBleModal, open: false, busy: false };
-    this.host.requestUpdate();
-  }
-
-  selectBleCandidateInModal(addr: string): void {
-    selectBleCandidateInModalOp(this, addr);
-  }
-
-  async adoptLatterDevice(
-    esphomeDeviceId: string,
-    title: string,
-    deviceGroup = "auto",
-    assignedPerson = "",
-  ): Promise<void> {
-    await adoptLatterDeviceOp(this, esphomeDeviceId, title, deviceGroup, assignedPerson);
-  }
-
-  async quickAdoptBleCandidate(title: string, targetAddress: string, assignedPerson = ""): Promise<void> {
-    await quickAdoptBleCandidateOp(this, title, targetAddress, assignedPerson);
-  }
-
-  async confirmAddBleModal(): Promise<void> {
-    await confirmAddBleModalOp(this);
-  }
-
-  async checkSystemUpdates(): Promise<void> {
-    await checkSystemUpdatesOp(this);
-  }
-
-  updateStringListRow(
-    key: StringListKey,
-    index: number,
-    value: string,
-  ): void {
-    updateStringListRowOp(this, key, index, value);
-  }
-
-  addStringListRow(
-    key: StringListKey,
-    defaultEntity = "",
-    maxLen = 10,
-  ): void {
-    addStringListRowOp(this, key, defaultEntity, maxLen);
-  }
-
-  removeStringListRow(key: StringListKey, index: number): void {
-    removeStringListRowOp(this, key, index);
-  }
-
-  moveStringListRow(key: StringListKey, index: number, direction: -1 | 1): void {
-    moveStringListRowOp(this, key, index, direction);
-  }
-
-  addVolumeOverrideRow(): void {
-    addVolumeOverrideRowOp(this);
-  }
-
-  updateVolumeOverrideRow(index: number, field: "speaker" | "target", value: string): void {
-    updateVolumeOverrideRowOp(this, index, field, value);
-  }
-
-  removeVolumeOverrideRow(index: number): void {
-    removeVolumeOverrideRowOp(this, index);
-  }
-
-  addRemoteGroupRow(): void {
-    addRemoteGroupRowOp(this);
-  }
-
-  updateRemoteGroupField(groupId: string, field: "name" | "area_id", value: string): void {
-    updateRemoteGroupFieldOp(this, groupId, field, value);
-  }
-
-  toggleRemoteInGroup(groupId: string, remoteEntity: string): void {
-    toggleRemoteInGroupOp(this, groupId, remoteEntity);
-  }
-
-  removeRemoteGroupRow(groupId: string): void {
-    removeRemoteGroupRowOp(this, groupId);
-  }
-
-  async previewCamera(cameraEntity: string, bustCache = false): Promise<void> {
-    await previewCameraOp(this, cameraEntity, bustCache);
-  }
-
-  closeCameraPreview(): void {
-    this.activeCameraPreviewEntity = "";
-    this.cameraPreviewUrl = "";
-    this.host.requestUpdate();
-  }
-
-  async testDoorbellSpeaker(): Promise<void> {
-    await testDoorbellSpeakerOp(this);
-  }
-
-  openSaveGroupModal(): void {
-    if (!this.activeSubentryId) return;
-    const devTitle = this.state?.title || "";
-    this.saveGroupModal = {
-      open: true,
-      subentryId: this.activeSubentryId,
-      name: "",
-      description: devTitle ? `Saved from ${devTitle}` : "",
-      includeDisplay: false,
-      includeInterface: false,
-      busy: false,
-    };
-    this.host.requestUpdate();
-  }
-
-  closeSaveGroupModal(): void {
-    this.saveGroupModal = { ...this.saveGroupModal, open: false, busy: false };
-    this.host.requestUpdate();
-  }
-
-  async confirmSaveGroupModal(): Promise<void> {
-    await confirmSaveDeviceAsGroupOp(this);
-  }
-
-  toggleNewGroupForm(open?: boolean): void {
-    const nextOpen = open !== undefined ? Boolean(open) : !this.newGroupFormOpen;
-    this.newGroupFormOpen = nextOpen;
-    if (!nextOpen) {
-      this.newGroupName = "";
-      this.newGroupDesc = "";
-      this.newGroupSourceSubentryId = "";
-      this.newGroupIncludeDisplay = false;
-      this.newGroupIncludeInterface = false;
-    }
-    this.host.requestUpdate();
-    if (nextOpen && typeof globalThis.requestAnimationFrame === "function") {
-      globalThis.requestAnimationFrame(() => {
-        const root =
-          (this.host as unknown as { renderRoot?: ShadowRoot }).renderRoot ||
-          this.host.shadowRoot;
-        const inputEl = root?.getElementById("new-group-name") as HTMLInputElement | null;
-        if (inputEl && typeof inputEl.focus === "function") {
-          try {
-            inputEl.focus({ preventScroll: true });
-          } catch {
-            inputEl.focus();
-          }
-        }
-      });
-    }
-  }
-
-  async createDeviceGroup(): Promise<void> {
-    await createDeviceGroupOp(this);
-  }
-
-  async deleteDeviceGroup(groupId: string): Promise<void> {
-    await deleteDeviceGroupOp(this, groupId);
-  }
-
-  async updateGroupBaseline(groupId: string, patch: Record<string, unknown>): Promise<void> {
-    await updateGroupBaselineOp(this, groupId, patch);
-  }
-
-  async updateGroupScope(
-    groupId: string,
-    scope: { include_display?: boolean; include_interface?: boolean },
-  ): Promise<void> {
-    await updateGroupScopeOp(this, groupId, scope);
-  }
-
-  async copyDeviceToGroupBaseline(
-    groupId: string,
-    sourceSubentryId: string,
-    copyKeys?: string[],
-  ): Promise<void> {
-    await copyDeviceToGroupBaselineOp(this, groupId, sourceSubentryId, copyKeys);
-  }
-
-  resolvedBatchTargetId(): string {
-    return resolvedBatchTargetIdOp(this);
-  }
-
-  async applyBatchDeviceSetting(patch: Record<string, unknown>): Promise<void> {
-    await applyBatchDeviceSettingOp(this, patch);
-  }
-
-  async applyBatchCopyFromDevice(sourceSubentryId: string, copyKeys: string[]): Promise<void> {
-    await applyBatchCopyFromDeviceOp(this, sourceSubentryId, copyKeys);
-  }
-
-  filteredControlTargets(ctrl: SharedControlItem): string[] {
-    return filteredControlTargetsOp(this, ctrl);
-  }
-
-  async bulkToggle(ctrl: SharedControlItem, turnOn: boolean): Promise<void> {
-    await bulkToggleOp(this, ctrl, turnOn);
-  }
-
-  async bulkSelect(ctrl: SharedControlItem, option: string): Promise<void> {
-    await bulkSelectOp(this, ctrl, option);
-  }
-
-  async bulkNumber(ctrl: SharedControlItem, level: number): Promise<void> {
-    await bulkNumberOp(this, ctrl, level);
-  }
-
-  async bulkColor(ctrl: SharedControlItem, hex: string): Promise<void> {
-    await bulkColorOp(this, ctrl, hex);
-  }
-
-  async bulkPillsToggle(
-    ctrl: SharedControlItem,
-    token: string,
-    currentCsv: string,
-  ): Promise<void> {
-    await bulkPillsToggleOp(this, ctrl, token, currentCsv);
-  }
-
-  private ensureBleSurveyFrozenMap(): Map<
-    string,
-    { rows: BleSurveyRow[]; packetsSeen: number; activeAreaName: string }
-  > {
-    if (!this.bleSurveyFrozen) {
-      (
-        this as {
-          bleSurveyFrozen: Map<
-            string,
-            { rows: BleSurveyRow[]; packetsSeen: number; activeAreaName: string }
-          >;
-        }
-      ).bleSurveyFrozen = new Map();
-    }
-    return this.bleSurveyFrozen;
-  }
-
-  selectBleSurveyDevice(subentryId: string): void {
-    this.bleSurveySubentryId = subentryId;
-    this.host.requestUpdate();
-    void this.ensureSubscription(false);
-  }
-
-  selectBleCalibrateArea(areaId: string, fromAreaCard = false): void {
-    this.bleCalibrateAreaId = String(areaId || "");
-    if (fromAreaCard) {
-      this.handoffTargetIds.clear();
-      this.bleCalibrateHandoffActive = true;
-    }
-    this.host.requestUpdate();
-    if (fromAreaCard && typeof globalThis.requestAnimationFrame === "function") {
-      globalThis.requestAnimationFrame(() => {
-        const root =
-          (this.host as unknown as { renderRoot?: ShadowRoot }).renderRoot ||
-          this.host.shadowRoot;
-        const cardEl =
-          root?.getElementById("card-ble-calibration") ||
-          root?.getElementById("ble-calibrate-target-box");
-        if (cardEl && typeof cardEl.scrollIntoView === "function") {
-          cardEl.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-        const selectEl = root?.getElementById("ble-calibrate-area-select") as HTMLSelectElement | null;
-        if (selectEl && typeof selectEl.focus === "function") {
-          try {
-            selectEl.focus({ preventScroll: true });
-          } catch {
-            selectEl.focus();
-          }
-        }
-      });
-    }
-  }
-
-  toggleBleLiveStream(enabled: boolean): void {
-    const frozenMap = this.ensureBleSurveyFrozenMap();
-    if (!enabled) {
-      frozenMap.clear();
-      for (const dev of this.state?.system_devices || []) {
-        if (!dev.subentry_id) continue;
-        frozenMap.set(dev.subentry_id, {
-          rows: (dev.ble_survey_rows || []).map((r) => ({ ...r })),
-          packetsSeen: dev.ble_packets_seen ?? 0,
-          activeAreaName: dev.active_area_name || "",
-        });
-      }
-      this.bleLiveStreamActive = false;
-      this.host.requestUpdate();
-      void this.ensureSubscription(false);
-      return;
-    }
-    frozenMap.clear();
-    this.bleLiveStreamActive = true;
-    this.host.requestUpdate();
-    void this.ensureSubscription(true);
-  }
-
-  getActiveSurveyDevice(): SystemDeviceEntry | undefined {
-    return getActiveSurveyDeviceOp(this);
-  }
-
-  async setBleScannerOffset(scannerSource: string, offsetDb: number): Promise<void> {
-    await setBleScannerOffsetOp(this, scannerSource, offsetDb);
-  }
-
-  async captureBleAreaSignature(areaId: string): Promise<void> {
-    await captureBleAreaSignatureOp(this, areaId);
-  }
-
-  async clearBleAreaSignature(areaId: string): Promise<void> {
-    await clearBleAreaSignatureOp(this, areaId);
-  }
-
-  async setAreaFusion(
-    areaId: string,
-    update: { mode?: string; threshold_pct?: number; sensors?: string[] },
-  ): Promise<void> {
-    await setAreaFusionOp(this, areaId, update);
-  }
-
-  async sendAnnouncement(): Promise<void> {
-    await sendAnnouncementOp(this);
-  }
-
-  async exportBackup(explicitSubentryId?: string): Promise<void> {
-    await exportBackupOp(this, explicitSubentryId);
-  }
-
-  async restoreFromUploadedFile(): Promise<void> {
-    await restoreFromUploadedFileOp(this);
-  }
-
-  onToggleLogsDetails(open: boolean): void {
-    this.logsOpen = open;
-    this.host.requestUpdate();
-    if (open) {
-      void this.refreshState({ includeLogs: true });
-    }
-  }
-
-  formatVisibleLogs(): string {
-    return formatVisibleLogsOp(this);
-  }
-
-  async copyLogsToClipboard(): Promise<void> {
-    await copyLogsToClipboardOp(this);
-  }
-
-  async clearInternalLogs(): Promise<void> {
-    await clearInternalLogsOp(this);
   }
 }

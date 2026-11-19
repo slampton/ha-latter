@@ -1,5 +1,7 @@
 /**
- * System Media & Remotes View (`remotes`): Remote Controls, Volume Overrides & Remote Control Groups.
+ * System Media & Remotes View (`remotes`, `D-026`, `D-042`, `D-064`):
+ * - Remote controls with pointer/keyboard reordering (`reorderStringListRows("remotes_list", ...)`)
+ * - Speaker volume overrides & Area-bound Remote control groups (`focusSafe` group names)
  */
 
 import {
@@ -8,7 +10,7 @@ import {
   renderSelectOptions,
   renderTrashIconButton,
 } from "../components/controls.js";
-import { html, type TemplateResult } from "../lib/lit.js";
+import { focusSafe, html, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 
 export function renderSystemRemotesView(store: StudioStore): TemplateResult {
@@ -33,39 +35,46 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
     <div class="columns">
       <div class="column">
         ${renderCard({
-          title: "Remote Controls",
-          subtitle: "Up to 10 TV, streamer, or receiver entities controlled from the Remote screen.",
+          title: store.t("card.remote_controls"),
+          subtitle: store.t("remotes.controls_subtitle"),
           headerActions: html`<button
             type="button"
-            @click=${() => store.addStringListRow("remotes_list", "", 10)}
+            @click=${() => store.entity.addStringListRow("remotes_list", "", 10)}
             class="btn btn-secondary btn-compact"
           >
-            Add Remote
+            ${store.t("remotes.add_remote")}
           </button>`,
           body: renderEntitySlotList({
             id: "remotes-list",
             items: remotes,
             choices: cat.remotes,
-            emptyOptionLabel: "— Choose a remote or media player —",
-            emptyStateText: "No remote controls configured yet.",
-            selectAriaLabel: "Remote or media player",
-            removeAriaLabel: "Remove remote",
-            slotLabel: (idx) => (idx === 0 ? "Slot 1 (Primary Power Target)" : `Slot ${idx + 1}`),
-            onChange: (idx, val) => store.updateStringListRow("remotes_list", idx, val),
-            onRemove: (idx) => store.removeStringListRow("remotes_list", idx),
+            emptyOptionLabel: store.t("remotes.choose_remote"),
+            emptyStateText: store.t("remotes.empty_remotes"),
+            selectAriaLabel: store.t("remotes.remote_aria"),
+            removeAriaLabel: store.t("remotes.remove_remote"),
+            useCombobox: (cat.remotes?.length ?? 0) > 8,
+            host: store.host,
+            slotLabel: (idx) =>
+              idx === 0
+                ? store.t("remotes.slot_primary")
+                : store.t("remotes.slot_n", { index: idx + 1 }),
+            onReorder: (fromIdx, toIdx) =>
+              store.entity.reorderStringListRows("remotes_list", fromIdx, toIdx),
+            onChange: (idx, val) => store.entity.updateStringListRow("remotes_list", idx, val),
+            onRemove: (idx) => store.entity.removeStringListRow("remotes_list", idx),
           }),
         })}
 
         ${renderCard({
           id: "card-volume-overrides",
-          title: "Speaker Volume Overrides",
-          subtitle: "Redirects volume buttons when audio plays through an external AVR or soundbar.",
+          title: store.t("card.volume_overrides"),
+          subtitle: store.t("remotes.overrides_subtitle"),
           headerActions: html`<button
             type="button"
-            @click=${() => store.addVolumeOverrideRow()}
+            @click=${() => store.entity.addVolumeOverrideRow()}
             class="btn btn-secondary btn-compact"
           >
-            Add Override
+            ${store.t("remotes.add_override")}
           </button>`,
           body: html`<div id="volume-overrides-list" class="stack">
             ${volOverrides.length
@@ -73,27 +82,31 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
                   (vo, idx) => html`<div class="list-row">
                     <div class="list-row-main">
                       <div class="stacked-field">
-                        <span class="field-label">When Audio Plays On</span>
+                        <span class="field-label">${store.t("remotes.when_playing_on")}</span>
                         <select
-                          aria-label="Speaker"
+                          aria-label=${store.t("remotes.speaker_aria")}
                           .value=${vo.speaker}
                           @change=${(ev: Event) =>
-                            store.updateVolumeOverrideRow(
+                            store.entity.updateVolumeOverrideRow(
                               idx,
                               "speaker",
                               (ev.currentTarget as HTMLSelectElement).value,
                             )}
                         >
-                          ${renderSelectOptions(speakerChoices, vo.speaker, "— Choose a speaker —")}
+                          ${renderSelectOptions(
+                            speakerChoices,
+                            vo.speaker,
+                            store.t("remotes.choose_speaker"),
+                          )}
                         </select>
                       </div>
                       <div class="stacked-field">
-                        <span class="field-label">Change the Volume On</span>
+                        <span class="field-label">${store.t("remotes.change_volume_on")}</span>
                         <select
-                          aria-label="Volume target"
+                          aria-label=${store.t("remotes.volume_target_aria")}
                           .value=${vo.target}
                           @change=${(ev: Event) =>
-                            store.updateVolumeOverrideRow(
+                            store.entity.updateVolumeOverrideRow(
                               idx,
                               "target",
                               (ev.currentTarget as HTMLSelectElement).value,
@@ -102,17 +115,17 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
                           ${renderSelectOptions(
                             targetChoices,
                             vo.target,
-                            "— Choose a volume target —",
+                            store.t("remotes.choose_volume_target"),
                           )}
                         </select>
                       </div>
                     </div>
-                    ${renderTrashIconButton("Remove volume override", () =>
-                      store.removeVolumeOverrideRow(idx),
+                    ${renderTrashIconButton(store.t("remotes.remove_override_aria"), () =>
+                      store.entity.removeVolumeOverrideRow(idx),
                     )}
                   </div>`,
                 )
-              : html`<p class="empty-state">No volume overrides configured.</p>`}
+              : html`<p class="empty-state">${store.t("remotes.empty_overrides")}</p>`}
           </div>`,
         })}
       </div>
@@ -120,15 +133,15 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
       <div class="column">
         ${renderCard({
           id: "card-remote-groups",
-          handoffActive: Boolean(store.isHandoffTarget?.("card-remote-groups")),
-          title: "Remote Control Groups",
-          subtitle: "Bind sets of remotes to Home Assistant Areas or specific Devices.",
+          handoffActive: store.isHandoffTarget("card-remote-groups"),
+          title: store.t("card.remote_groups"),
+          subtitle: store.t("remotes.groups_subtitle"),
           headerActions: html`<button
             type="button"
-            @click=${() => store.addRemoteGroupRow()}
+            @click=${() => store.entity.addRemoteGroupRow()}
             class="btn btn-secondary btn-compact"
           >
-            Add Group
+            ${store.t("remotes.add_group")}
           </button>`,
           body: html`<div id="remote-groups-list" class="stack">
             ${remoteGroups.length
@@ -137,19 +150,21 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
                   const pool = selectedRems
                     .filter((id) => inventoryIds.includes(id))
                     .concat(inventoryIds.filter((id) => !selectedRems.includes(id)));
+                  const nameId = `rg-name-${grp.id}`;
+                  const areaId = `rg-area-${grp.id}`;
 
                   return html`<div class="list-block">
                     <div class="list-row-head">
                       <div class="list-row-main">
                         <div class="stacked-field">
-                          <label>Group Name</label>
+                          <label for=${nameId}>${store.t("remotes.group_name")}</label>
                           <input
                             type="text"
-                            aria-label="Group name"
-                            placeholder="e.g. Living Area TV"
-                            .value=${grp.name || ""}
+                            id=${nameId}
+                            placeholder=${store.t("remotes.group_name_placeholder")}
+                            .value=${focusSafe(grp.name || "")}
                             @change=${(ev: Event) =>
-                              store.updateRemoteGroupField(
+                              store.entity.updateRemoteGroupField(
                                 grp.id,
                                 "name",
                                 (ev.currentTarget as HTMLInputElement).value,
@@ -157,18 +172,19 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
                           />
                         </div>
                         <div class="stacked-field">
-                          <label>Loads in Area</label>
+                          <label for=${areaId}>${store.t("remotes.loads_in_area")}</label>
                           <select
-                            aria-label="Area"
+                            id=${areaId}
+                            aria-label=${store.t("remotes.area_aria")}
                             .value=${grp.area_id || ""}
                             @change=${(ev: Event) =>
-                              store.updateRemoteGroupField(
+                              store.entity.updateRemoteGroupField(
                                 grp.id,
                                 "area_id",
                                 (ev.currentTarget as HTMLSelectElement).value,
                               )}
                           >
-                            <option value="">No Area (assign to Devices only)</option>
+                            <option value="">${store.t("remotes.no_area_option")}</option>
                             ${areas.map(
                               (a) =>
                                 html`<option value=${a.id} ?selected=${a.id === grp.area_id}>
@@ -178,37 +194,48 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
                           </select>
                         </div>
                       </div>
-                      ${renderTrashIconButton(`Delete remote group ${grp.name || ""}`, () =>
-                        store.removeRemoteGroupRow(grp.id),
+                      ${renderTrashIconButton(
+                        store.t("remotes.delete_group_aria", { name: grp.name || grp.id }),
+                        () => store.entity.removeRemoteGroupRow(grp.id),
                       )}
                     </div>
                     <div class="stacked-field">
-                      <span id=${`rg-remotes-${gIdx}`} class="field-label">Remote Controls</span>
+                      <span id=${`rg-remotes-${gIdx}`} class="field-label">
+                        ${store.t("remotes.group_remotes_label")}
+                      </span>
                       <div role="group" aria-labelledby=${`rg-remotes-${gIdx}`} class="pill-list">
                         ${pool.length
                           ? pool.map((entId) => {
                               const pos = selectedRems.indexOf(entId);
                               const isEn = pos >= 0;
-                              const badge = isEn
+                              const lbl = friendlyRemoteLabel(entId);
+                              const text = isEn
                                 ? pos === 0
-                                  ? "★ Primary: "
-                                  : `#${pos + 1}: `
-                                : "+ ";
-                              return html`<button
-                                type="button"
-                                aria-pressed=${String(isEn)}
-                                @click=${() => store.toggleRemoteInGroup(grp.id, entId)}
-                                class="pill ${isEn ? "enabled" : ""}"
-                              >
-                                ${badge}${friendlyRemoteLabel(entId)}
-                              </button>`;
+                                  ? store.t("remotes.primary_badge", { name: lbl })
+                                  : store.t("remotes.numbered_badge", {
+                                      index: pos + 1,
+                                      name: lbl,
+                                    })
+                                : store.t("remotes.add_badge", { name: lbl });
+                              return html`<span class="pill ${isEn ? "enabled" : ""}">
+                                <button
+                                  type="button"
+                                  aria-pressed=${isEn ? "true" : "false"}
+                                  @click=${() => store.entity.toggleRemoteInGroup(grp.id, entId)}
+                                  class="pill-toggle"
+                                >
+                                  ${text}
+                                </button>
+                              </span>`;
                             })
-                          : html`<span class="help-text">Add remote controls first.</span>`}
+                          : html`<span class="help-text">
+                              ${store.t("remotes.add_remotes_first")}
+                            </span>`}
                       </div>
                     </div>
                   </div>`;
                 })
-              : html`<p class="empty-state">No remote groups yet.</p>`}
+              : html`<p class="empty-state">${store.t("remotes.empty_groups")}</p>`}
           </div>`,
         })}
       </div>

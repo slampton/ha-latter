@@ -1,5 +1,6 @@
 /**
- * Active-View-Only Router (`D-023`, `D-026`): Renders ONLY the currently active Studio view.
+ * Active-View-Only Router (`D-023`, `D-026`, `E-14`):
+ * Renders ONLY the currently active Studio view and gates Device routes via `store.deviceHasView`.
  */
 
 import type { TemplateResult } from "../lib/lit.js";
@@ -39,27 +40,40 @@ export function renderActiveView(store: StudioStore): TemplateResult {
     }
   }
 
-  if (store.currentViewId === "discovered_devices") {
+  const viewId = store.currentViewId;
+  if (viewId === "discovered_devices") {
     return renderDevicesDiscoveredView(store);
   }
 
-  if (!store.deviceSelected || store.currentViewId === "select_device_prompt") {
+  if (!store.deviceSelected || viewId === "select_device_prompt") {
     return renderDevicesListView(store);
   }
 
-  switch (store.currentViewId) {
+  switch (viewId) {
     case "display":
-      return renderDeviceDisplayView(store);
+      return store.deviceHasView("display")
+        ? renderDeviceDisplayView(store)
+        : renderDeviceOverviewView(store);
     case "interface":
-      return renderDeviceInterfaceView(store);
+      return store.deviceHasView("interface")
+        ? renderDeviceInterfaceView(store)
+        : renderDeviceOverviewView(store);
     case "audio_voice":
-      return renderDeviceAudioView(store);
+      return store.deviceHasView("audio_voice")
+        ? renderDeviceAudioView(store)
+        : renderDeviceOverviewView(store);
     case "power":
-      return renderDevicePowerView(store);
+      return store.deviceHasView("power")
+        ? renderDevicePowerView(store)
+        : renderDeviceOverviewView(store);
     case "presence":
-      return renderDevicePresenceView(store);
+      return store.deviceHasView("presence")
+        ? renderDevicePresenceView(store)
+        : renderDeviceOverviewView(store);
     case "tools":
-      return renderDeviceToolsView(store);
+      return store.deviceHasView("tools")
+        ? renderDeviceToolsView(store)
+        : renderDeviceOverviewView(store);
     case "dashboard":
     default:
       return renderDeviceOverviewView(store);

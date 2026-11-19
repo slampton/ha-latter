@@ -660,7 +660,7 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     assert coord.current_stopwatch_elapsed_sec == 37
     assert coord.current_timer_remaining_sec == 67
 
-    # Stopwatch running alone keeps 1 Hz `_unsub_timer_tick` active even when countdown timer is idle!
+    # Stopwatch running alone uses `stopwatch_started_at` UTC ISO anchor for local Studio ticking without a 1 Hz HA timer tick (`D-065`)!
     await async_dispatch_bound_rpc(
         hass,
         coord,
@@ -675,7 +675,9 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
             "stopwatch_elapsed_sec": 37,
         },
     )
-    assert coord._unsub_timer_tick is not None
+    assert coord._unsub_timer_tick is None
+    assert coord.stopwatch_started_at_utc != ""
+    assert coord.timer_ends_at_utc == ""
 
     # 3) Contextual `device_action` commands: `dismiss_ringing`, `cancel_timer`, `reset_stopwatch`
     hass.services.calls.clear()
@@ -709,8 +711,7 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     assert coord.timer_paused is False
     assert coord.current_timer_remaining_sec == 0
     assert conn.results[-1][1]["live"]["timer_remaining_sec"] == 0
-    # Stopwatch is still running, so 1 Hz tick remains active until reset_stopwatch!
-    assert coord._unsub_timer_tick is not None
+    assert coord._unsub_timer_tick is None
 
     await _call_ws(
         hass,
@@ -727,6 +728,7 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     assert coord.stopwatch_paused is False
     assert coord.current_stopwatch_elapsed_sec == 0
     assert conn.results[-1][1]["live"]["stopwatch_elapsed_sec"] == 0
+    assert conn.results[-1][1]["live"]["stopwatch_started_at"] == ""
     assert coord._unsub_timer_tick is None
 
     sent_cmds = [

@@ -9,7 +9,7 @@ Latter discovers devices from Home Assistant's device and service registries, no
 2. **The device registers at least one Latter action.** Look in **Developer Tools → Actions** for `esphome.<name>_latter_ping`, `esphome.<name>_latter_push_v3`, or `esphome.<name>_latter_set_slots`. If none of them are there, the device isn't running Latter firmware.
 3. **A rescan has run.** Latter rescans 5 seconds after any device-registry change, and when ESPHome registers a new action. Reloading the ESPHome integration triggers a rescan.
 
-You can also add the device by hand: **Settings → Devices & Services → Add Integration → Latter**.
+You can also create the Latter System hub by hand (**Settings → Devices & Services → Add Integration → Latter**, leaving **Initial ESPHome Device (optional)** blank if you want standalone BLE presence). Once the Latter hub is installed, click **Configure** on the Latter integration card (or **Latter** in the sidebar) and adopt additional displays or Bluetooth trackers under **Devices → Discovered**—and expand **Ignored (`<N>`)** on **Discovered devices** if a previously ignored ESPHome node isn't listed.
 
 **The device shows up, but Music, Area, and Remote screens stay empty or taps do nothing**
 
@@ -18,9 +18,13 @@ Latter communicates over Zero-Privilege RPC—you do **not** need *"Allow the de
 2. **The diagnostic `System: RPC Outbox` entity is enabled** on the ESPHome device (`sensor.<node>_system_rpc_outbox`). Latter listens to that entity for every tap and browse request from the device.
 3. **Both `ha-latter` and `esphome-latter-core` are on `v3.0.0` or newer**, so `esphome.<node>_latter_push_v3` is registered under **Developer Tools → Actions**.
 
-**I renamed the device and want to know if anything needs updating**
+**Studio shows "Device is offline or hibernating" and Quick actions are disabled**
 
-Renaming a device in Home Assistant works immediately—nothing breaks and there is **no `device_slug` YAML substitution** to keep in sync. Latter resolves both inbound `latter_push_v3` actions and outbound `System: RPC Outbox` frames directly from the bound `esphome_device_id` (falling back to MAC address if the ESPHome entry was re-created). If you flashed new hardware and Home Assistant created a brand-new ESPHome device entry, open **Settings → Devices & Services → Latter**, choose the Device, and run **Reconfigure or Replace Hardware** to bind the new ESPHome device.
+Battery handhelds and wearables enter deep-sleep hibernation after their **Battery hibernate timeout** to conserve power. While offline or hibernating, Studio disables live **Quick actions** (such as Find My Device or Restart Device), **but every setting you edit in Studio saves immediately in Home Assistant and pushes automatically the moment the Device wakes or reconnects**. To inspect the underlying Home Assistant device entry or raw ESPHome entities, click **Open in Home Assistant** or **Open in ESPHome** in the **Overview → Quick actions** or **Tools → Diagnostics** footer.
+
+**I renamed the device or replaced physical hardware**
+
+Renaming a device in Home Assistant works immediately—nothing breaks and there is **no `device_slug` YAML substitution** to keep in sync. Latter resolves both inbound `latter_push_v3` actions and outbound `System: RPC Outbox` frames directly from the bound `esphome_device_id` (falling back to MAC address if the ESPHome entry was re-created). If you flashed replacement hardware and Home Assistant created a brand-new ESPHome device entry, open **Settings → Devices & Services → Latter**, click **⋮ → Reconfigure** (**Reconfigure or Replace Hardware**) on that Device subentry, and select the new ESPHome device to rebind it in place while keeping all Studio shortcuts, settings, and Area assignments.
 
 ---
 
@@ -44,7 +48,7 @@ Latter serves images from Home Assistant's numeric LAN IP, because ESP32 firmwar
 
 **The device keeps choosing the neighboring area**
 
-Calibrate it. Stand in the area that should win and click **Calibrate Current Area**. → [Calibrating](presence.md#calibrating)
+Calibrate it. Stand in the Area that should win, open **Studio → System → BLE & Area presence → Walk-around BLE calibration**, and click **Calibrate Area**. → [Calibrating & capturing signatures](presence.md#calibrating--capturing-signatures)
 
 **A phone isn't tracked**
 
@@ -97,4 +101,4 @@ Start one update at a time: ESPHome Device Builder runs simultaneous uploads in 
 
 ## Getting help
 
-When you [open an issue](https://github.com/slampton/ha-latter/issues), attach the integration's diagnostics: **Settings → Devices & Services → Latter → ⋮ → Download diagnostics**. Latter automatically redacts URL `sig=` signatures, Protocol v3 `payload` blobs, calendar titles and locations, and MAC dictionary keys, though you should still review the file (for example, LAN IP addresses) before posting it publicly.
+When you [open an issue](https://github.com/slampton/ha-latter/issues), open **Studio → System → Tools → Support & diagnostics** and click **Download System diagnostics** (or **Device → Tools → Diagnostics → Download diagnostics** for a single Device; also available via **Settings → Devices & Services → Latter → ⋮ → Download diagnostics**) and **Copy version summary** to paste your exact Home Assistant, Latter integration, minimum firmware SDK, and Studio contract versions. Latter automatically redacts URL `sig=` signatures, Protocol v3 `payload` blobs, security PINs/hashes, BLE UUIDs/addresses, calendar titles and locations, and MAC dictionary keys, though you should still review the file (for example, LAN IP addresses) before posting it publicly.

@@ -1,4 +1,4 @@
-"""Integration tests for LatterConfigFlow, LatterDeviceSubentryFlow, LatterBleTagSubentryFlow, and OptionsFlow."""
+"""Integration tests for LatterConfigFlow (including 0-display hub setup), LatterDeviceSubentryFlow, and LatterBleTagSubentryFlow."""
 
 from __future__ import annotations
 
@@ -11,21 +11,42 @@ from custom_components.latter.config_flow import (
     LatterBleTagSubentryFlow,
     LatterConfigFlow,
     LatterDeviceSubentryFlow,
-    LatterOptionsFlowHandler,
     ble_tag_option_defaults,
     device_option_defaults,
 )
 from custom_components.latter.const import (
-    CONF_ALARM_ENTITY,
+    CONF_ASSIGNED_PERSON,
     CONF_BLE_TARGET_ADDRESS,
     CONF_DEVICE_GROUP,
+    CONF_DEVICE_SLUG,
     CONF_ESPHOME_DEVICE_ID,
     CONF_NATIVE_BLE_TRACKING,
-    CONF_WEATHER_ENTITY,
     DOMAIN,
     SUBENTRY_BLE_TAG,
     SUBENTRY_DEVICE,
 )
+
+
+async def test_zero_display_standalone_hub_onboarding(hass: Any) -> None:
+    """Verify D-060 0-display standalone hub creation (`async_step_user({})` -> `subentries=[]`) and retired hub OptionsFlow/Reconfigure."""
+    hass.states.async_set("weather.home", "sunny", {})
+    hass.states.async_set("alarm_control_panel.home_alarm", "armed_home", {})
+
+    flow = LatterConfigFlow()
+    flow.hass = hass
+    form = await flow.async_step_user()
+    assert form["type"] == "form"
+    assert form["step_id"] == "user"
+
+    hub_only = await flow.async_step_user({})
+    assert hub_only["type"] == "create_entry"
+    assert hub_only["title"] == "Latter"
+    assert hub_only["data"] == {}
+    assert hub_only["subentries"] == []
+
+    # D-060: Duplicate 2-field OptionsFlow & hub Reconfigure are retired in favor of `config_panel_domain=DOMAIN`
+    assert not hasattr(LatterConfigFlow, "async_step_reconfigure")
+    assert "async_get_options_flow" not in LatterConfigFlow.__dict__
 
 
 async def test_hub_config_flow_user_discovery_and_single_instance(
@@ -112,25 +133,10 @@ async def test_hub_config_flow_user_discovery_and_single_instance(
     assert (
         await second.async_step_integration_discovery({CONF_ESPHOME_DEVICE_ID: dev.id})
     )["reason"] == "already_configured"
-
-    # Reconfigure & OptionsFlow update global weather/alarm entities
-    reconf = LatterConfigFlow()
-    reconf.hass = hass
-    reconf.context = {"entry_id": entry.entry_id}
-    assert (await reconf.async_step_reconfigure())["type"] == "form"
-    reconf_done = await reconf.async_step_reconfigure(
-        {CONF_WEATHER_ENTITY: "weather.home", CONF_ALARM_ENTITY: "alarm_control_panel.home_alarm"}
-    )
-    assert reconf_done["reason"] == "reconfigure_successful"
-
-    opt_flow = LatterConfigFlow.async_get_options_flow(entry)
-    assert isinstance(opt_flow, LatterOptionsFlowHandler)
-    opt_flow.hass = hass
-    opt_flow.config_entry = entry
-    assert (await opt_flow.async_step_init())["type"] == "form"
-    opt_done = await opt_flow.async_step_init({CONF_WEATHER_ENTITY: "weather.home"})
-    assert opt_done["type"] == "create_entry"
-    assert SUBENTRY_DEVICE in LatterConfigFlow.async_get_supported_subentry_types(entry)
+    assert set(LatterConfigFlow.async_get_supported_subentry_types(entry)) == {
+        SUBENTRY_DEVICE,
+        SUBENTRY_BLE_TAG,
+    }
 
 
 async def test_device_and_ble_tag_subentry_flows_and_hardware_replacement(
@@ -223,6 +229,51 @@ async def test_device_and_ble_tag_subentry_flows_and_hardware_replacement(
         {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: "AA:11:22:33:44:55"}
     )
     assert dup_tag["reason"] == "already_configured"
+
+    # Add second BLE tag so duplicate check during BLE tag reconfigure can be verified
+    hass.config_entries.async_add_subentry(
+        entry,
+        ConfigSubentry(
+            data=ble_tag_option_defaults("Keys Tag", "BB:22:33:44:55:66"),
+            subentry_type=SUBENTRY_BLE_TAG,
+            title="Keys Tag",
+            unique_id="latter_ble_keys_tag",
+            subentry_id="sub_keys",
+        ),
+    )
+
+    # BLE Tag Subentry Reconfigure (`D-060`): preserves `device_slug` while updating title, target address & person
+    reconf_tag = LatterBleTagSubentryFlow()
+    reconf_tag.hass = hass
+    reconf_tag._entry = entry
+    reconf_tag._subentry = entry.subentries["sub_backpack"]
+    reconf_tag_form = await reconf_tag.async_step_reconfigure()
+    assert reconf_tag_form["type"] == "form"
+    assert reconf_tag_form["step_id"] == "reconfigure"
+
+    inc_reconf = await reconf_tag.async_step_reconfigure(
+        {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: ""}
+    )
+    assert inc_reconf["errors"]["base"] == "ble_tag_incomplete"
+
+    dup_reconf = await reconf_tag.async_step_reconfigure(
+        {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: "BB:22:33:44:55:66"}
+    )
+    assert dup_reconf["reason"] == "already_configured"
+
+    ok_reconf = await reconf_tag.async_step_reconfigure(
+        {
+            "name": "Travel Backpack",
+            CONF_BLE_TARGET_ADDRESS: "CC:33:44:55:66:77",
+            CONF_ASSIGNED_PERSON: "person.alex",
+        }
+    )
+    assert ok_reconf["reason"] == "reconfigure_successful"
+    updated_tag_sub = entry.subentries["sub_backpack"]
+    assert updated_tag_sub.title == "Travel Backpack"
+    assert updated_tag_sub.data[CONF_DEVICE_SLUG] == "backpack_tag"
+    assert updated_tag_sub.data[CONF_BLE_TARGET_ADDRESS] == "CC:33:44:55:66:77"
+    assert updated_tag_sub.data[CONF_ASSIGNED_PERSON] == "person.alex"
 
     # Pure option default helpers
     assert device_option_defaults(hass, dev2, {"w": 466, "h": 466, "wearable": 1})[CONF_DEVICE_GROUP] == "wearables"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Iterable
 from datetime import datetime, timedelta
 import secrets
@@ -31,6 +32,7 @@ from homeassistant.helpers.storage import Store
 from .const import (
     CALENDAR_REFRESH_INTERVAL_MINUTES,
     CONF_CALENDAR_ENTITIES,
+    CONF_SYSTEM_CONFIG_REV,
     CONF_WEATHER_ENTITY,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
@@ -671,6 +673,27 @@ def iter_coordinators(hass: HomeAssistant) -> list[LatterCoordinator]:
     return sorted(coords, key=lambda c: c.device_slug)
 
 
+def get_system_config_lock(hass: HomeAssistant) -> asyncio.Lock:
+    """Return the domain-level `asyncio.Lock` guarding System config read-modify-write."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    lock = domain_data.get("_system_config_lock")
+    if not isinstance(lock, asyncio.Lock):
+        lock = asyncio.Lock()
+        domain_data["_system_config_lock"] = lock
+    return lock
+
+
+def get_system_config_rev(hass: HomeAssistant) -> int:
+    """Return the monotonic System config revision (`>= 1`)."""
+    raw_cfg = (hass.data.get(DOMAIN) or {}).get(DATA_GLOBAL_CONFIG)
+    if not isinstance(raw_cfg, dict):
+        return 1
+    try:
+        return max(1, int(raw_cfg.get(CONF_SYSTEM_CONFIG_REV) or 1))
+    except (TypeError, ValueError):
+        return 1
+
+
 async def async_save_and_broadcast_global_config(
     hass: HomeAssistant, updates: dict[str, Any]
 ) -> dict[str, Any]:
@@ -681,6 +704,9 @@ async def async_save_and_broadcast_global_config(
         return global_cfg
     changed_keys = {k for k, v in updates.items() if global_cfg.get(k) != v}
     global_cfg.update(updates)
+    if changed_keys:
+        cur_rev = get_system_config_rev(hass)
+        global_cfg[CONF_SYSTEM_CONFIG_REV] = cur_rev + 1
     store = domain_data.get(DATA_GLOBAL_STORE)
     if store is not None:
         await store.async_save(global_cfg)

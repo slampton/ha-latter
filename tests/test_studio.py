@@ -6,7 +6,6 @@ import ast
 import itertools
 import json
 from pathlib import Path
-import re
 import tempfile
 import unittest
 
@@ -63,8 +62,11 @@ class TestPayloadDiet(unittest.TestCase):
 
     def test_doorbell_detail_is_rendered(self) -> None:
         payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
+        cmds_src = (LATTER_DIR / "studio" / "commands.py").read_text(encoding="utf-8")
         self.assertIn('"doorbells": _build_doorbells(', payload_src)
-        for field in ("camera_name", "preview_url", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
+        self.assertNotIn('"preview_url":', payload_src)
+        self.assertIn('"mint_camera_preview_url"', cmds_src)
+        for field in ("camera_name", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
             self.assertIn(f'"{field}":', payload_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn(".doorbells", js)
@@ -77,14 +79,16 @@ class TestPayloadDiet(unittest.TestCase):
 
     def test_status_card_renders_its_fields(self) -> None:
         payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
+        en_json = json.loads((LATTER_DIR / "studio" / "locales" / "en.json").read_text(encoding="utf-8"))
         self.assertIn('"sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),', payload_src)
         self.assertNotIn("_build_now_playing", payload_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn('id="diag-sdk-rev">${live.sdk_rev || "—"}', js)
+        self.assertEqual(en_json["card.status"], "Status")
+        self.assertEqual(js.count('store.t("card.status")'), 2)
+        self.assertIn('id="diag-sdk-rev"', js)
         self.assertIn('class="status-tiles"', js)
-        self.assertEqual(js.count('<h3 class="card-title">Status</h3>'), 2)
-        self.assertIn("@container (max-width: 420px)", js)
-        self.assertIn("@container (max-width: 260px)", js)
+        self.assertRegex(js, r"@container\s*\(max-width:\s*420px\)")
+        self.assertRegex(js, r"@container\s*\(max-width:\s*260px\)")
         self.assertNotIn("status-assignments", js)
         for gone in (
             'class="stat-grid"',
@@ -98,33 +102,36 @@ class TestPayloadDiet(unittest.TestCase):
 
 
 class TestViewLayout(unittest.TestCase):
-    """D-014: every view is two independent column stacks; no auto-placing grid."""
+    """D-014 & D-061: every view is two independent column stacks with HA Sentence-case titles."""
 
     def test_view_names_are_unqualified(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        titles = js[js.index("const VIEW_TITLES"):js.index("};", js.index("const VIEW_TITLES"))]
-        names = re.findall(r':\s*"([^"]+)"', titles)
-        self.assertIn("Overview", names)
+        en_json = json.loads((LATTER_DIR / "studio" / "locales" / "en.json").read_text(encoding="utf-8"))
+        names = [
+            v for k, v in en_json.items() if k.startswith("view.")
+        ]
+        self.assertEqual(names.count("Overview"), 2)
         self.assertEqual(names.count("Tools"), 2)
-        self.assertEqual(names.count("BLE & Area Presence"), 1)
+        self.assertEqual(names.count("BLE & Area presence"), 1)
         for short_dev_title in ("Display", "Interface", "Audio", "Power", "Presence"):
             self.assertIn(short_dev_title, names)
         self.assertNotIn("Display & Home", names)
         self.assertNotIn("Audio & Voice", names)
         self.assertNotIn("Power & Battery", names)
         self.assertNotIn("Settings", names)
-        self.assertIn("Device Groups", names)
-        self.assertIn("Managed Devices", names)
-        self.assertIn("Discovered Devices", names)
+        self.assertIn("Device groups", names)
+        self.assertIn("Managed devices", names)
+        self.assertIn("Discovered devices", names)
         self.assertNotIn("All Devices", names)
         for name in names:
             self.assertFalse(name.startswith("System "), name)
-            if name != "Device Groups":
+            if name != "Device groups":
                 self.assertFalse(name.startswith("Device "), name)
         self.assertNotRegex(js, r"<span>(System|Device) (Overview|Settings)</span>")
 
     def test_information_architecture(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        en_json = json.loads((LATTER_DIR / "studio" / "locales" / "en.json").read_text(encoding="utf-8"))
         self.assertIn('dashboard: "overview"', js)
         self.assertIn('display: "display"', js)
         self.assertIn('interface: "interface"', js)
@@ -135,95 +142,74 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("set_device_remote_group", js)
         self.assertNotIn("assignDeviceRemoteGroup", js)
         self.assertEqual(js.count('class="nav-badge"'), 2)
-        self.assertIn("<span>Managed</span>", js)
-        self.assertIn("<span>Discovered</span>", js)
-        self.assertIn("<span>&larr; Managed</span>", js)
+        self.assertIn('href="/latter/devices"', js)
+        self.assertIn('href="/latter/devices/discovered"', js)
+        self.assertEqual(en_json["nav.managed"], "Managed")
+        self.assertEqual(en_json["nav.discovered"], "Discovered")
+        self.assertEqual(en_json["nav.back_managed"], "← Managed")
         self.assertNotIn("<span>&larr; All Devices</span>", js)
 
         def section(view: str) -> str:
             start = js.index(f'<section id="view-{view}"')
             return js[start:js.index("</section>", start)]
 
-        managed_list = section("select_device_prompt")
         discovered_view = section("discovered_devices")
         area_tracking_view = section("area_tracking")
-        self.assertNotIn("Add Device", managed_list)
-        self.assertNotIn("Add BLE Tag", managed_list)
-        self.assertIn('title: "Latter Devices"', discovered_view)
-        self.assertIn('title: "Bluetooth Devices"', discovered_view)
+        self.assertIn('id: "card-discovered-latter"', discovered_view)
+        self.assertIn('id: "card-discovered-ble"', discovered_view)
         self.assertLess(
-            discovered_view.index('title: "Latter Devices"'),
-            discovered_view.index('title: "Bluetooth Devices"'),
+            discovered_view.index('id: "card-discovered-latter"'),
+            discovered_view.index('id: "card-discovered-ble"'),
         )
-        self.assertIn("Open Integration", discovered_view)
-        self.assertIn("Add BLE Tag", discovered_view)
         self.assertIn('id="latter-adopt-table-box"', discovered_view)
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
-        for tracker_tok in ("companion app", "private ble", "ibeacon", "bthome", "tile", "itag", "ruuvitag", "eddystone"):
-            self.assertIn(f'"{tracker_tok}"', js)
-        self.assertIn("AA:BB:CC:DD:EE:FF, iBeacon UUID, or tracker entity", js)
-        self.assertEqual(latter_const.STUDIO_REV, 33)
-        self.assertIn("const STUDIO_REV = 33;", js)
+        self.assertIn("c.is_tracker", js)
+        self.assertNotIn("TRACKER_KIND_TOKENS", js)
+        self.assertIn("ignoreDiscoveredDevice", discovered_view)
+        self.assertIn("unignoreDiscoveredDevice", discovered_view)
+        self.assertEqual(latter_const.STUDIO_REV, 34)
+        self.assertIn("STUDIO_REV = 34", js)
         self.assertIn(".card.handoff-active", js)
         self.assertIn(".area-presence-box.handoff-active", js)
         self.assertIn(".calibrate-target-box.handoff-active", js)
-        self.assertNotIn("border: 2px solid var(--studio-warning);", js)
-        self.assertIn('{ id: "phone", label: "Phones" }', js)
-        self.assertIn('{ id: "ble_tag", label: "BLE Tags" }', js)
+        self.assertNotIn("border:2px solid var(--studio-warning)", js)
         self.assertIn("cfg-home_date_tap_action", js)
         self.assertIn("cfg-calendar_lookahead_days", js)
         self.assertIn("cfg-calendar_week_start", js)
         self.assertNotIn("tools:calendar", js)
-        self.assertNotIn("power_profile", js)
         self.assertNotIn("Power Profile", js)
         self.assertNotIn("fusion-area", js)
         self.assertNotIn("d.has_ble ||", js)
         self.assertNotIn(".area-presence-box.occupied", js)
         self.assertNotIn('? " occupied"', area_tracking_view)
         self.assertNotIn('id="ble-proxy-trim-drawer"', js)
-        self.assertNotIn("<summary>Proxy Antenna Trim</summary>", js)
         self.assertNotIn("proxyTrimOpen", js)
-        self.assertGreaterEqual(js.count('d.ble_tracked || d.kind === "ble_tag"'), 4)
+        self.assertGreaterEqual(js.count('d.ble_tracked || d.kind === "ble_tag"'), 2)
         self.assertNotIn("Discovered Bluetooth Devices", area_tracking_view)
         self.assertNotIn('id="ble-adopt-table-box"', area_tracking_view)
-        self.assertNotIn("Per-Area BLE Signal Calibration", area_tracking_view)
-        self.assertNotIn("Calibrate Current Area", area_tracking_view)
-        for retired_card_title in (
-            "Live Area Presence & Sensor Fusion",
-            "Live Area Presence &amp; Sensor Fusion",
-            "Fusion Settings",
-            "Spatial Engine Settings",
-            "Per-Scanner BLE Calibration",
-            "Multi-Scanner Area Signatures",
-        ):
-            self.assertNotIn(retired_card_title, area_tracking_view)
         self.assertNotIn("d.has_ble", area_tracking_view)
         for expected_snippet in (
             'id: "card-area-presence"',
-            'title: "Area Presence & Sensors"',
+            'store.t("card.area_presence_sensors")',
             "area-presence-box",
             'class="area-box-title"',
             'class="area-box-badges"',
-            "<summary>Sensor &amp; Threshold Settings</summary>",
             'id: "card-ble-calibration"',
-            'title: "Walk-Around BLE Calibration"',
+            'store.t("card.ble_calibration")',
             'id="ble-calibrate-target-box"',
             "calibrate-target-box",
             "handoff-active",
             'id="ble-calibrate-handoff-banner"',
-            'label: "Carried Device"',
             'id="ble-survey-device-picker"',
-            'label: "Standing In Area"',
             'id="ble-calibrate-area-select"',
             'id="btn-capture-area-signature"',
-            "Calibrate Area",
-            '<div class="subsection-title">Nearby Bluetooth Proxies</div>',
             "proxy-trim-details",
-            "<summary>Antenna Trim</summary>",
             'id="card-advanced-ble-settings"',
-            '<h3 class="card-title">Advanced BLE Settings</h3>',
+            'store.t("card.advanced_ble")',
         ):
             self.assertIn(expected_snippet, area_tracking_view)
+        self.assertEqual(en_json["card.area_presence_sensors"], "Area presence & sensors")
+        self.assertEqual(en_json["card.ble_calibration"], "Walk-around BLE calibration")
         self.assertLess(
             area_tracking_view.index('class="area-box-head"'),
             area_tracking_view.index('class="area-box-badges"'),
@@ -232,9 +218,6 @@ class TestViewLayout(unittest.TestCase):
             area_tracking_view.index('class="area-box-actions"'),
             area_tracking_view.index('class="area-box-badges"'),
         )
-        signal_row_idx = area_tracking_view.index('class="signal-row')
-        self.assertIn("<summary>Antenna Trim</summary>", area_tracking_view[signal_row_idx:])
-        self.assertEqual(area_tracking_view.count("btn-primary"), 1)
         adv_ble_order = (
             "sys-ble_away_timeout_s",
             "sys-ble_max_radius_m",
@@ -254,17 +237,13 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn('id="card-advanced-ble-settings"', area_col_1)
         self.assertIn('id: "card-ble-calibration"', area_col_2)
         self.assertIn('id="card-advanced-ble-settings"', area_col_2)
-        adv_close_idx = area_col_2.index(
-            "</details>", area_col_2.index('id="card-advanced-ble-settings"')
-        ) + len("</details>")
-        self.assertRegex(area_col_2[adv_close_idx:], r"^\s*</div>\s*</div>\s*$")
         for earlier_id, later_id in itertools.pairwise(adv_ble_order):
             self.assertLess(
                 area_tracking_view.index(f'id="{earlier_id}"'),
                 area_tracking_view.index(f'id="{later_id}"'),
             )
 
-        tools, sys_tools, groups, overview, display_view, interface_view, remotes_view, shared_entities = (
+        tools, sys_tools, groups_sec, overview, display_view, interface_view, remotes_view, shared_entities = (
             section("tools"),
             section("system_tools"),
             section("system_sync"),
@@ -274,103 +253,82 @@ class TestViewLayout(unittest.TestCase):
             section("remotes"),
             section("shared_entities"),
         )
-        for title in ("Diagnostics", "Replace Hardware", "Danger Zone"):
-            self.assertIn(f'<h3 class="card-title">{title}</h3>', tools)
-        self.assertIn("<span>Model</span>", tools)
+        for key in ("card.diagnostics", "card.replace_hardware", "card.danger_zone"):
+            self.assertIn(f'store.t("{key}")', tools)
         self.assertIn('id="diag-node-name"', tools)
         self.assertIn('id="diag-sdk-rev"', tools)
-        self.assertIn("<summary>Developer &amp; Telemetry</summary>", tools)
-        self.assertIn("Open in ESPHome", tools)
+        self.assertIn('store.t("card.developer_telemetry")', tools)
+        self.assertIn('id="btn-tools-open-in-ha"', tools)
+        self.assertEqual(en_json["action.open_in_ha"], "Open in Home Assistant")
         self.assertNotIn("All Entities", js)
         self.assertNotIn("entitySearchQuery", js)
-        for title in ("Notifications &amp; Announcements", "Backup &amp; Restore", "System &amp; Device Logs"):
-            self.assertIn(f'<h3 class="card-title">{title}</h3>', sys_tools)
-        for title in ("Home Hub &amp; Weather", "Calendars", "Cameras &amp; Doorbell Audio", "Custom Colors", "Wallpapers"):
-            self.assertIn(f'<h3 class="card-title">{title}</h3>', shared_entities)
-        self.assertNotIn("Whole-Home Entities", shared_entities)
-        self.assertNotIn("Garage or Gate", shared_entities)
-        self.assertIn('class="hub-domain-box"', shared_entities)
-        for domain_title in ("Thermostat Zones", "Door Locks", "Garage Doors", "Robot Vacuums"):
-            self.assertIn(domain_title, js)
-        display_order = (
-            "Home Screen",
-            "Screensavers",
-            "Voice Assistant",
-            "Brightness",
-            "Clock",
-            "Colors",
-            "Wallpapers",
-            "Media Player",
-        )
-        for title in display_order:
-            self.assertIn(f'<h3 class="card-title">{title}</h3>', display_view)
-        for earlier, later in itertools.pairwise(display_order):
-            self.assertLess(
-                display_view.index(f'<h3 class="card-title">{earlier}</h3>'),
-                display_view.index(f'<h3 class="card-title">{later}</h3>'),
-            )
-        self.assertNotIn("Brightness &amp; Theme", js)
-        self.assertNotIn("Brightness & Theme", js)
-        for title in ("Home Screen", "App Dock", "Single-App Mode Active"):
-            self.assertIn(f'<h3 class="card-title">{title}</h3>', interface_view)
-        for retired_iface_title in (
-            "Activity Card",
-            "Home Controls",
-            "Pinned App",
-            "Area Controls",
-            "Media Player",
-            "Remote Controls",
-            "Time",
+        for key in (
+            "card.notifications_announcements",
+            "card.backup_restore",
+            "card.system_device_logs",
+            "card.support_diagnostics",
         ):
-            self.assertNotIn(f'<h3 class="card-title">{retired_iface_title}</h3>', interface_view)
+            self.assertIn(f'store.t("{key}")', sys_tools)
+        self.assertIn('id: "card-support-diagnostics"', sys_tools)
+        for key in (
+            "card.home_hub_weather",
+            "card.calendars",
+            "card.cameras_doorbell",
+            "card.custom_colors",
+            "card.wallpapers",
+        ):
+            self.assertIn(f'store.t("{key}")', shared_entities)
+        self.assertIn('class="hub-domain-box"', shared_entities)
+        display_key_order = (
+            'store.t("card.home_screen_appearance")',
+            'store.t("card.screensaver")',
+            'store.t("dev_display.card_voice_assistant")',
+            'store.t("card.brightness")',
+            'store.t("card.clock")',
+            'store.t("card.colors")',
+            'store.t("card.wallpapers")',
+            'store.t("card.music_appearance")',
+        )
+        for snippet in display_key_order:
+            self.assertIn(snippet, display_view)
+        for earlier, later in itertools.pairwise(display_key_order):
+            self.assertLess(display_view.index(earlier), display_view.index(later))
+        self.assertEqual(en_json["card.home_screen_appearance"], "Home screen appearance")
+        self.assertEqual(en_json["card.music_appearance"], "Music appearance")
+        self.assertIn('store.t("card.home_screen")', interface_view)
+        self.assertIn('store.t("card.app_dock")', interface_view)
+        self.assertIn('id: "card-single-app-mode"', interface_view)
         self.assertIn('id="dock-shortcuts-container"', interface_view)
         self.assertIn('id="dock-hidden-native-apps"', interface_view)
         self.assertIn('id="btn-configure-start-screen"', interface_view)
         self.assertIn('id="btn-configure-locked-app"', interface_view)
         self.assertIn('id="latter-app-config-modal"', js)
-        self.assertIn('id="home-categories-pills"', js)
-        self.assertIn('id="area-categories-pills"', js)
-        self.assertIn('id="tools-items-pills"', js)
-        self.assertIn('id="games-items-pills"', js)
-        self.assertNotIn("<summary>Library Sorting</summary>", js)
+        self.assertIn('id: "home-categories-pills"', js)
+        self.assertIn('id: "area-categories-pills"', js)
+        self.assertIn('id: "tools-items-pills"', js)
+        self.assertIn('id: "games-items-pills"', js)
         for retired_music_pref in (
             'id: "media-player-shortcuts"',
             "show_speaker_shortcut",
             "show_library_shortcut",
-            "Show Speaker Shortcut",
-            "Show Library Shortcut",
         ):
             self.assertNotIn(retired_music_pref, js)
         self.assertIn('id: "cfg-device_remote_group"', js)
-        self.assertIn("Manage Remote Groups", js)
         audio_view = section("audio_voice")
-        for title in ("Voice Assistant &amp; Wake Word", "Sound &amp; Playback"):
-            self.assertIn(f'<h3 class="card-title">{title}</h3>', audio_view)
-        self.assertNotIn("Library Sorting", audio_view)
-        for title in ("Remote Controls", "Speaker Volume Overrides", "Remote Control Groups"):
-            self.assertIn(f'title: "{title}"', remotes_view)
-        self.assertNotIn("Device Assignments", remotes_view)
+        self.assertIn('store.t("dev_audio.card_sound_playback")', audio_view)
+        for key in ("card.remote_controls", "card.volume_overrides", "card.remote_groups"):
+            self.assertIn(f'store.t("{key}")', remotes_view)
         self.assertNotIn('id="device-remote-assignments-list"', remotes_view)
-        self.assertNotIn("Export Settings", js)
-        self.assertNotIn("Restore From File", js)
-        self.assertIn('title: "Device Groups"', groups)
-        self.assertIn('id="btn-open-create-group"', groups)
-        self.assertIn('id="create-group-form"', groups)
-        self.assertNotIn("defaultOpen: true", groups)
-        self.assertIn('title: "Batch Controls"', groups)
-        self.assertIn("group-box-", groups)
-        self.assertIn("renderGroupBaselineDrawer(store, g, latterDevices)", groups)
-        self.assertIn("<summary>Baseline Settings</summary>", js)
+        self.assertIn('id: "card-device-groups"', groups_sec)
+        self.assertIn('id="btn-open-create-group"', groups_sec)
+        self.assertIn('id="create-group-form"', groups_sec)
+        self.assertIn('id="group-box-custom"', groups_sec)
+        self.assertIn('id="btn-batch-reset"', js)
+        self.assertIn('id="btn-batch-apply"', js)
         self.assertIn('id="latter-save-group-modal"', js)
         for retired_group_ui in (
             "batch-latter-behavior-list",
             "group_sync_status",
-            "Seed Baseline From Device",
-            "Group Controls & Baseline",
-            "Group Controls &amp; Baseline",
-            "Reset to Group",
-            "Sync Group",
-            "Screenless Devices",
             "Portable Carry",
             "Tabletop Dock",
             "trait:roaming",
@@ -378,47 +336,33 @@ class TestViewLayout(unittest.TestCase):
         ):
             self.assertNotIn(retired_group_ui, js)
         self.assertIn('"pocket_carry"', js)
-        self.assertIn("Include Display Settings", js)
-        self.assertIn("Include Interface & Shortcuts", js)
-        self.assertNotIn("Configuration Profiles", js)
-        self.assertNotIn("dash-power-profile-select", overview)
-        self.assertNotIn("quick-profile-select", overview)
-        self.assertNotIn("Saved Custom Colors", display_view)
-        self.assertNotIn("Add a color…", js)
-        self.assertNotIn("Custom Color Library", sys_tools)
         self.assertIn('"btn-upload-wp"', js)
         self.assertIn('"btn-upload-sys-wp"', js)
         self.assertIn('id="st-status-chip"', overview)
         self.assertIn('class="status-tiles"', overview)
         self.assertIn('id: "card-device-assignments"', overview)
-        self.assertIn('label: "Device Group"', overview)
-        self.assertIn('label: "Remote Control Group"', overview)
-        self.assertIn('store.switchView("tools")', overview)
         self.assertIn('id="btn-configure-remote-group"', overview)
-        self.assertIn('store.openAppConfigModal("remote")', overview)
-        self.assertIn("renderQuickActionGrid(store, quickActionButtons)", overview)
+        self.assertIn("renderQuickActionGrid(", overview)
         self.assertIn('id="cfg-device_group"', overview)
         overview_cols = overview.split('<div class="column">')
         self.assertEqual(len(overview_cols), 3)
         overview_col_1, overview_col_2 = overview_cols[1], overview_cols[2]
         self.assertIn('id="st-status-chip"', overview_col_1)
-        self.assertIn("renderQuickActionGrid(store, quickActionButtons)", overview_col_1)
+        self.assertIn("renderQuickActionGrid(", overview_col_1)
         self.assertNotIn('id: "card-device-assignments"', overview_col_1)
         self.assertIn('id: "card-device-assignments"', overview_col_2)
         self.assertIn('id: "card-device-timers-alarms"', overview_col_2)
-        self.assertIn('title: "Timers & Alarms"', overview_col_2)
         self.assertIn('id="overview-ringing-alert"', overview_col_2)
         self.assertIn('id="btn-dismiss-ringing"', overview_col_2)
         self.assertIn('id="btn-cancel-timer"', overview_col_2)
         self.assertIn('id="btn-reset-stopwatch"', overview_col_2)
         self.assertIn('id="overview-alarms-drawer"', overview_col_2)
         self.assertIn('id="overview-alarms"', overview_col_2)
-        self.assertNotIn("renderQuickActionGrid(store, quickActionButtons)", overview_col_2)
+        self.assertNotIn("renderQuickActionGrid(", overview_col_2)
         self.assertLess(
             overview.index('id="cfg-device_group"'),
             overview.index('id: "cfg-assigned_person"'),
         )
-        self.assertIn('label: "Device Category"', overview)
         self.assertIn('id="cfg-ble_category"', overview)
         self.assertLess(
             overview.index('id="cfg-ble_category"'),
@@ -428,21 +372,17 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="btn-save-custom-group"', overview)
         self.assertIn('id="btn-manage-groups"', overview)
         self.assertIn('id="btn-open-in-ha"', overview)
-        self.assertIn("Open in ESPHome", overview)
-        self.assertNotIn("Open in Home Assistant", overview)
-        self.assertIn("Download Backup", overview)
         self.assertLess(
             overview.index('id: "card-device-status"'),
             overview.index('id: "card-device-quick-actions"'),
         )
         self.assertLess(
             overview.index('id: "card-device-quick-actions"'),
-            overview.index('id="btn-open-in-ha"'),
+            overview.rindex('id="btn-open-in-ha"'),
         )
 
         sys_overview = section("system_overview")
         self.assertNotIn("Configured Items", sys_overview)
-        self.assertNotIn("No issues.", sys_overview)
         for sys_ov_snippet in (
             'id="sys-issues-banner"',
             'id="sys-discovered-banner"',
@@ -453,23 +393,18 @@ class TestViewLayout(unittest.TestCase):
             'id="sys-tile-roaming"',
             'id="sys-tile-release"',
             'id: "card-area-deployment"',
-            'title: "Area Deployment"',
             'id: "card-system-capabilities"',
-            'title: "System Capabilities"',
             'id="cap-home-hub"',
             'id="cap-cameras-calendars"',
             'id="cap-media-remotes"',
             'id="cap-device-groups"',
             'id="cap-colors-wallpapers"',
             'id="cap-perimeter-security"',
-            "Open Repairs",
-            "Check Firmware Updates",
         ):
             self.assertIn(sys_ov_snippet, sys_overview)
         presence_view = section("presence")
         self.assertIn('id="cfg-ble_target_address"', presence_view)
         self.assertIn('id="cfg-ble_ref_power"', presence_view)
-        self.assertIn("Reference Power (1 Meter)", presence_view)
         self.assertIn('id="ble-companion-power-tip"', presence_view)
         for gone in ("In Home Assistant</h3>", "Location &amp; BLE</h3>", 'id="cfg-device_slug"', 'id="st-group"'):
             self.assertNotIn(gone, js)
@@ -504,19 +439,18 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("cfg-default_page_size", js)
         disp_fn_start = js.index("function renderDeviceDisplayView(")
         disp_view = js[disp_fn_start:js.index("</section>", disp_fn_start)]
-        self.assertIn('<h3 class="card-title">Home Screen</h3>', disp_view)
-        self.assertIn('id="embedded-home"', disp_view)
+        self.assertIn('store.t("card.home_screen_appearance")', disp_view)
         self.assertIn('id: "weather-celestial-bodies"', disp_view)
-        self.assertIn('label: "Sun & Moon"', disp_view)
+        self.assertIn('id: "weather-celestial-pills"', disp_view)
         self.assertIn("renderCelestialRow()", disp_view[disp_view.index('<section id="view-display"'):])
         start = js.index('<section id="view-interface"')
         view = js[start:js.index("</section>", start)]
-        self.assertIn('<h3 class="card-title">Home Screen</h3>', view)
-        self.assertIn('<h3 class="card-title">App Dock</h3>', view)
+        self.assertIn('store.t("card.home_screen")', view)
+        self.assertIn('store.t("card.app_dock")', view)
         self.assertIn('id="dock-shortcuts-container"', view)
         self.assertIn('id="dock-hidden-native-apps"', view)
-        self.assertIn('id="pinned-shortcuts-container"', js)
-        self.assertIn('id="area-categories-pills"', js)
+        self.assertIn('id: "pinned-shortcuts-container"', js)
+        self.assertIn('id: "area-categories-pills"', js)
         self.assertNotIn('id="embedded-area-ui"', view)
         self.assertNotIn('id="embedded-home"', view)
 
@@ -571,9 +505,9 @@ class TestViewLayout(unittest.TestCase):
     def test_native_popups_follow_ha_dark_mode(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn('this.toggleAttribute("dark",', js)
-        self.assertIn("color-scheme: light;", js)
+        self.assertRegex(js, r"color-scheme:\s*light")
         self.assertIn(":host([dark])", js)
-        self.assertIn("background-color: var(--studio-popup-bg); color: var(--studio-text);", js)
+        self.assertRegex(js, r"background-color:\s*var\(--studio-popup-bg\);\s*color:\s*var\(--studio-text\)")
 
     def test_columns_everywhere(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
@@ -633,20 +567,20 @@ class TestActivityCard(unittest.TestCase):
 
     def test_studio_rows(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        start = js.index('<section id="view-interface"')
-        view = js[start:js.index("</section>", start)]
+        fn_start = js.index("function renderDeviceInterfaceView(")
+        view = js[js.index('<section id="view-interface"', fn_start):js.index("</section>", fn_start)]
         self.assertNotIn('<h3 class="card-title">Activity Card</h3>', view)
         self.assertLess(
-            view.index('<h3 class="card-title">Home Screen</h3>'),
-            view.index('id="cfg-activity_card"'),
+            view.index('store.t("card.home_screen")'),
+            view.index('id: "cfg-activity_card"'),
         )
         self.assertLess(
-            view.index('id="cfg-activity_card"'),
-            view.index('<h3 class="card-title">App Dock</h3>'),
+            view.index('id: "cfg-activity_card"'),
+            view.index('store.t("card.app_dock")'),
         )
-        self.assertIn(">Show the Activity Card</label>", view)
-        self.assertIn("ACTIVITY_SOURCES_CATALOG.map(", view)
-        self.assertIn("store.toggleActivitySource(", view)
+        self.assertIn('id: "activity-sources-pills"', view)
+        self.assertIn("store.entity.toggleActivitySource(", view)
+        self.assertIn("store.entity.reorderActivitySources(", view)
         for label in ("Calendar", "Music Queue", "Stopwatch", "Alarms", "Timers"):
             self.assertIn(f'label: "{label}"', js)
 
@@ -743,14 +677,16 @@ class TestIssueAttribution(unittest.TestCase):
 
     def test_kinds_match_the_repair_translations(self) -> None:
         strings = json.loads((LATTER_DIR / "strings.json").read_text(encoding="utf-8"))
+        en_json = json.loads((LATTER_DIR / "studio" / "locales" / "en.json").read_text(encoding="utf-8"))
         self.assertTrue(set(issue_ids.DEVICE_ISSUE_KINDS) <= set(strings["issues"]))
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        self.assertIn("localizeRepairIssue", js)
         for kind in issue_ids.DEVICE_ISSUE_KINDS:
-            self.assertRegex(js, rf"\b{kind}:\s*", f"Studio has no message for the {kind} repair")
+            self.assertIn(f"issue.{kind}", en_json, f"Studio locale catalog missing issue.{kind}")
 
 
 class TestPanelCacheBuster(unittest.TestCase):
-    """The panel module URL's ?v= follows the JS content, so a changed Studio never loads from cache."""
+    """The panel module URL's ?v= follows the JS content, with cache_headers=True and config_panel_domain=DOMAIN."""
 
     def test_digest_follows_content(self) -> None:
         js = LATTER_DIR / "frontend" / "latter-studio.js"
@@ -765,7 +701,10 @@ class TestPanelCacheBuster(unittest.TestCase):
         panel_src = (LATTER_DIR / "studio" / "__init__.py").read_text(encoding="utf-8")
         self.assertIn('latter-studio.js?v={js_digest}"', panel_src)
         self.assertIn("def content_digest(", panel_src)
-        self.assertIn('domain_data.pop("_studio_js_digest", None)', panel_src)
+        self.assertIn("cache_headers=True,", panel_src)
+        self.assertIn("config_panel_domain=DOMAIN,", panel_src)
+        self.assertIn('domain_data.pop("_registered_panel_url", None)', panel_src)
+        self.assertNotIn("_studio_js_digest", panel_src)
 
 
 def _const_tables() -> tuple[dict[str, str], tuple[str, ...]]:
@@ -827,14 +766,14 @@ class TestSaveScopes(unittest.TestCase):
             }
         )
         self.assertEqual(out["camera_entities"], [f"camera.c{i}" for i in range(10)])
-        self.assertEqual(out["camera_entity"], "camera.c0")
+        self.assertNotIn("camera_entity", out)
         self.assertEqual(out["volume_overrides"], [{"speaker": "media_player.a", "target": "number.b"}])
         self.assertEqual(out["doorbell_noise_reduction"], "strong")
         self.assertEqual(out["custom_palettes"], [{"name": "#00FF88", "hex": "#00FF88"}])
         self.assertEqual(out["remote_groups"], [{"id": "rg_1", "name": "rg_1", "area_id": "", "remotes": ["remote.tv"]}])
         self.assertEqual(settings.clean_system_settings({"custom_palettes": []}), {"custom_palettes": []})
         self.assertEqual(
-            settings.clean_system_settings({"camera_entities": []}), {"camera_entities": [], "camera_entity": ""}
+            settings.clean_system_settings({"camera_entities": []}), {"camera_entities": []}
         )
         ble_sys = settings.clean_system_settings(
             {
@@ -965,7 +904,7 @@ class TestSaveScopes(unittest.TestCase):
                 settings.clean_announcement(bad, slugs)
 
     def test_system_view_reads_without_a_device(self) -> None:
-        view = settings.system_settings_view({"camera_entity": "camera.door", "weather_entity": "weather.home"})
+        view = settings.system_settings_view({"camera_entities": ["camera.door"], "weather_entity": "weather.home"})
         self.assertEqual(view["camera_entities"], ["camera.door"])
         self.assertEqual(view["weather_entity"], "weather.home")
         self.assertEqual(view["alarm_entity"], "")

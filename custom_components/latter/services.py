@@ -164,7 +164,7 @@ _ALARM_ACTION_ALIASES: dict[str, str] = {
 }
 
 
-def _enforce_perimeter_security_policy(
+async def _async_enforce_perimeter_security_policy(
     hass: HomeAssistant,
     coord: LatterCoordinator,
     entity_id: str,
@@ -227,10 +227,13 @@ def _enforce_perimeter_security_policy(
                         translation_key="security_pin_invalid",
                     )
                 return
-            allowed, err_key = check_perimeter_action_allowed(
-                eff_policy,
-                provided_code=provided_code,
-                stored_pin_hash=coord.security_pin_hash or None,
+            stored_alarm_hash = coord.security_pin_hash or None
+            allowed, err_key = await hass.async_add_executor_job(
+                lambda: check_perimeter_action_allowed(
+                    eff_policy,
+                    provided_code=provided_code,
+                    stored_pin_hash=stored_alarm_hash,
+                )
             )
             if not allowed:
                 raise ServiceValidationError(
@@ -272,10 +275,13 @@ def _enforce_perimeter_security_policy(
         return
 
     stored_hash = coord.security_pin_hash or None
-    allowed, err_key = check_perimeter_action_allowed(
-        coord.security_pin_policy,
-        provided_code=provided_code,
-        stored_pin_hash=stored_hash,
+    eff_pol = coord.security_pin_policy
+    allowed, err_key = await hass.async_add_executor_job(
+        lambda: check_perimeter_action_allowed(
+            eff_pol,
+            provided_code=provided_code,
+            stored_pin_hash=stored_hash,
+        )
     )
     if not allowed:
         raise ServiceValidationError(
@@ -822,7 +828,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     level = int(f_lvl)
             raw_code = data.get("code")
             code = str(raw_code).strip() or None if raw_code is not None else None
-            _enforce_perimeter_security_policy(
+            await _async_enforce_perimeter_security_policy(
                 hass,
                 coord,
                 entity_id,
@@ -1641,7 +1647,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 },
             )
 
-        _enforce_perimeter_security_policy(
+        await _async_enforce_perimeter_security_policy(
             hass,
             coord,
             entity_id=entity_id,

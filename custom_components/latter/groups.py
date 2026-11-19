@@ -874,7 +874,7 @@ def get_device_groups(hass: HomeAssistant) -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         gid = str(item.get("id") or "").strip()
-        if not gid or gid in (DEFAULT_DEVICE_GROUP, "unassigned"):
+        if not gid or gid == DEFAULT_DEVICE_GROUP:
             continue
         if item.get("builtin") is True and gid not in _BUILTIN_GROUPS_BY_ID:
             continue
@@ -912,7 +912,7 @@ def device_matches_group_baseline(
         if group_id is not None
         else (dev_data.get("device_group") or getattr(coordinator, "_raw_device_group", "") or DEFAULT_DEVICE_GROUP)
     ).strip()
-    if not grp_id or grp_id in (DEFAULT_DEVICE_GROUP, "unassigned"):
+    if not grp_id or grp_id == DEFAULT_DEVICE_GROUP:
         return False
     group_list = groups if groups is not None else get_device_groups(hass)
     grp = next((g for g in group_list if g.get("id") == grp_id), None)
@@ -961,7 +961,7 @@ def resolve_effective_device_group(
         else (getattr(coordinator, "device_data", {}) or {})
     )
     raw_grp = str(dev_data.get("device_group") or DEFAULT_DEVICE_GROUP).strip()
-    if not raw_grp or raw_grp in (DEFAULT_DEVICE_GROUP, "unassigned"):
+    if not raw_grp or raw_grp == DEFAULT_DEVICE_GROUP:
         return DEFAULT_DEVICE_GROUP
     if raw_grp in ("pocket_carry", "handhelds", "wearables") and not bool(
         getattr(coordinator, "has_display", True)
@@ -1061,9 +1061,13 @@ async def async_apply_group_baseline_to_coordinators(
                 cur_v = str(getattr(coord, "wallpaper_source", cur_v) or "").strip()
             if not _same_control_val(cur_v, want_v) or k not in cur_data:
                 updates[k] = want_v
-        cleaned = clean_device_settings(updates, current=cur_data) if updates else {}
+        cleaned = (
+            clean_device_settings(updates, current=cur_data, is_round_display=is_round)
+            if updates
+            else {}
+        )
         merged = {**cur_data, **(cleaned or updates)}
-        if grp_id and grp_id not in (DEFAULT_DEVICE_GROUP, "unassigned"):
+        if grp_id and grp_id != DEFAULT_DEVICE_GROUP:
             merged["device_group"] = grp_id
         wp_override = CONF_WALLPAPER_SOURCE in cleaned
         if merged != cur_data or wp_override:

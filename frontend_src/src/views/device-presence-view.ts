@@ -1,26 +1,37 @@
 /**
- * Device BLE & Area Presence View (`presence`, D-032 / D-036):
- * Static Assigned Area vs. BLE Roaming, Fallback Area, and BLE Identity.
+ * Device BLE & Area Presence View (`presence`, `D-003`, `D-032`, `D-036`, `D-066`, `Q8`):
+ * Static Assigned Area vs. BLE Roaming, Fallback Area, and BLE identity (hidden when Static).
  */
 
 import {
   renderCard,
-  renderNativeControlRow,
   renderPrefControlRow,
   renderSelectRow,
   renderSwitchRow,
 } from "../components/controls.js";
-import { html, nothing, type TemplateResult } from "../lib/lit.js";
+import { focusSafe, html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import { fmtNumber } from "../utils/format.js";
+import { renderDeviceEntityRow, renderDeviceOfflineBanner } from "./device-overview-view.js";
 
 export function renderDevicePresenceView(store: StudioStore): TemplateResult {
   const data = store.state;
   const cfg = data?.config || {};
   const isBleOnly = cfg.kind === "ble_tag";
   const bleTracking = isBleOnly || Boolean(cfg.native_ble_tracking);
-  const detectedRefPower = data?.live?.ble_detected_ref_power ?? -59;
-  const refPowerPlaceholder = `Auto (${fmtNumber(detectedRefPower, store.hass, 0)} dBm)`;
+
+  // Strict `D-003` unknown gating: never substitute a fake `-59 dBm` reading when unknown (`E-03`)
+  const rawDetectedRef = data?.live?.ble_detected_ref_power;
+  const hasDetectedRefPower =
+    rawDetectedRef !== null &&
+    rawDetectedRef !== undefined &&
+    Number.isFinite(Number(rawDetectedRef));
+  const refPowerPlaceholder = hasDetectedRefPower
+    ? store.t("dev_presence.ref_power_placeholder_detected", {
+        dbm: fmtNumber(Number(rawDetectedRef), store.hass, 0),
+      })
+    : store.t("common.auto");
+
   const refPowerValue =
     cfg.ble_ref_power !== null && cfg.ble_ref_power !== undefined
       ? String(cfg.ble_ref_power)
@@ -34,26 +45,27 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
     Boolean(txStatus) &&
     (txPowerNorm === "ultralow" || txPowerNorm === "low" || advModeNorm === "lowpower");
 
-  const bleBeaconPref = store.getPref("ble_beacon_mode");
-  const bleAreaItems = store
+  const bleBeaconPref = store.entity.getPref("ble_beacon_mode");
+  const bleAreaItems = store.entity
     .getSectionItems("area")
     .filter((it) => !it.pref_key && it.key !== "ble_beacon_mode");
 
   return html`<section id="view-presence">
+    ${renderDeviceOfflineBanner(store)}
+
     <div class="columns">
       <div class="column">
         ${renderCard({
-          title: "Area Tracking",
+          title: store.t("dev_presence.card_area_tracking"),
           contentClass: "settings-list",
           body: html`${!isBleOnly
               ? renderSwitchRow({
                   id: "cfg-native_ble_tracking",
-                  label: "Track the Area with BLE Proxies",
-                  description:
-                    "Uses Home Assistant Area-assigned Bluetooth proxies to locate this Device automatically. Turn off to pin it to one assigned Area.",
+                  label: store.t("dev_presence.track_ble_label"),
+                  description: store.t("dev_presence.track_ble_desc"),
                   checked: Boolean(cfg.native_ble_tracking),
                   onChange: (checked) =>
-                    store.stageDeviceSetting(
+                    store.entity.stageDeviceSetting(
                       "native_ble_tracking",
                       checked,
                       "cfg-native_ble_tracking",
@@ -64,12 +76,11 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
               ? html`${!isBleOnly
                     ? renderSwitchRow({
                         id: "cfg-ble_auto_switch",
-                        label: "Auto-Switch Active Area",
-                        description:
-                          "Switches the Device's active Area controls automatically when BLE detects a move.",
+                        label: store.tPrefLabel("ble_auto_switch"),
+                        description: store.t("dev_presence.auto_switch_desc"),
                         checked: Boolean(cfg.ble_auto_switch),
                         onChange: (checked) =>
-                          store.stageDeviceSetting(
+                          store.entity.stageDeviceSetting(
                             "ble_auto_switch",
                             checked,
                             "cfg-ble_auto_switch",
@@ -78,119 +89,136 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
                     : nothing}
                   ${renderSelectRow({
                     id: "cfg-default_area",
-                    label: "Fallback Area",
-                    description:
-                      "Default Home Assistant Area when no Bluetooth proxy is in range.",
+                    label: store.t("dev_presence.fallback_area_label"),
+                    description: store.t("dev_presence.fallback_area_desc"),
                     value: cfg.default_area,
                     choices: data?.catalog?.areas,
-                    emptyOptionLabel: "— Automatic (ESPHome Area) —",
+                    emptyOptionLabel: store.t("dev_presence.fallback_area_auto"),
                     onChange: (val) =>
-                      store.stageDeviceSetting(
+                      store.entity.stageDeviceSetting(
                         "default_area",
                         val,
                         "cfg-default_area",
                       ),
                   })}
                   ${bleBeaconPref ? renderPrefControlRow(store, bleBeaconPref) : nothing}
-                  ${bleAreaItems.map((it) => renderNativeControlRow(store, it))}`
+                  ${bleAreaItems.map((it) => renderDeviceEntityRow(store, it))}`
               : renderSelectRow({
                   id: "cfg-default_area",
-                  label: "Assigned Area",
-                  description:
-                    "Pins this Device's Area controls and Home Assistant Device Area to one location.",
+                  label: store.t("dev_presence.assigned_area_label"),
+                  description: store.t("dev_presence.assigned_area_desc"),
                   value: cfg.default_area,
                   choices: data?.catalog?.areas,
-                  emptyOptionLabel: "— Unassigned —",
+                  emptyOptionLabel: store.t("dev_overview.unassigned_option"),
                   onChange: (val) =>
-                    store.stageDeviceSetting(
-                      "default_area",
-                      val,
-                      "cfg-default_area",
-                    ),
+                    store.entity.stageDeviceSetting("default_area", val, "cfg-default_area"),
                 })}`,
         })}
       </div>
 
       <div class="column">
-        ${renderCard({
-          id: "card-ble-identity",
-          handoffActive: Boolean(store.isHandoffTarget?.("card-ble-identity")),
-          title: "BLE Identity",
-          contentClass: "stack",
-          body: html`<div class="stacked-field">
-              <label for="cfg-ble_target_address">BLE Target Address or Entity</label>
-              <input
-                type="text"
-                id="cfg-ble_target_address"
-                placeholder="AA:BB:CC:DD:EE:FF or device_tracker.phone_ble"
-                .value=${String(cfg.ble_target_address || "")}
-                @change=${(ev: Event) =>
-                  store.stageDeviceSetting(
-                    "ble_target_address",
-                    (ev.currentTarget as HTMLInputElement).value.trim(),
-                    "cfg-ble_target_address",
-                  )}
-              />
-              <span class="help-text">
-                Leave blank on Latter displays to track their built-in BLE beacon MAC automatically.
-              </span>
-            </div>
-            <div class="stacked-field">
-              <label for="cfg-ble_ref_power">Reference Power (1 Meter)</label>
-              <input
-                type="number"
-                id="cfg-ble_ref_power"
-                min="-90"
-                max="-30"
-                step="1"
-                placeholder=${refPowerPlaceholder}
-                .value=${refPowerValue}
-                @change=${(ev: Event) => {
-                  const raw = (ev.currentTarget as HTMLInputElement).value.trim();
-                  if (raw === "") {
-                    store.stageDeviceSetting("ble_ref_power", null, "cfg-ble_ref_power");
-                    return;
-                  }
-                  const num = Number(raw);
-                  if (Number.isFinite(num)) {
-                    store.stageDeviceSetting("ble_ref_power", Math.round(num), "cfg-ble_ref_power");
-                  }
-                }}
-              />
-              <span class="help-text">
-                Leave blank to use auto-detected beacon power in dBm, or enter -90 to -30 dBm to calibrate this Device.
-              </span>
-            </div>
-            ${showCompanionPowerTip
-              ? html`<div id="ble-companion-power-tip" class="alert">
-                  <div class="alert-body">
-                    <strong>Companion App Low-Power Beacon Detected</strong>
-                    <span>
-                      This phone is advertising at <code>${txPowerRaw || "default"}</code> power${advModeRaw
-                        ? html` (<code>${advModeRaw}</code> mode)`
-                        : nothing}. Latter automatically compensates its 1 m reference power (${fmtNumber(detectedRefPower, store.hass, 0)} dBm), and setting <strong>Transmit Power</strong> to <strong>Medium</strong> or <strong>High</strong> and <strong>Advertise Mode</strong> to <strong>Balanced</strong> in the Home Assistant Companion App improves multi-Area accuracy through walls.
-                    </span>
-                  </div>
-                </div>`
-              : nothing}
-            ${!isBleOnly
-              ? html`<div class="stacked-field">
-                  <label for="cfg-ble_beacon_uuid">iBeacon UUID</label>
+        ${bleTracking
+          ? renderCard({
+              id: "card-ble-identity",
+              handoffActive: store.isHandoffTarget("card-ble-identity"),
+              title: store.t("dev_presence.card_ble_identity"),
+              contentClass: "stack",
+              body: html`<div class="stacked-field">
+                  <label for="cfg-ble_target_address">
+                    ${store.t("dev_presence.target_addr_label")}
+                  </label>
                   <input
                     type="text"
-                    id="cfg-ble_beacon_uuid"
-                    placeholder="Generated automatically per System"
-                    .value=${String(cfg.ble_beacon_uuid || "")}
+                    id="cfg-ble_target_address"
+                    placeholder=${store.t("dev_presence.target_addr_placeholder")}
+                    .value=${focusSafe(String(cfg.ble_target_address || ""))}
                     @change=${(ev: Event) =>
-                      store.stageDeviceSetting(
-                        "ble_beacon_uuid",
+                      store.entity.stageDeviceSetting(
+                        "ble_target_address",
                         (ev.currentTarget as HTMLInputElement).value.trim(),
-                        "cfg-ble_beacon_uuid",
+                        "cfg-ble_target_address",
                       )}
                   />
-                </div>`
-              : nothing}`,
-        })}
+                  <span class="help-text">${store.t("dev_presence.target_addr_help")}</span>
+                </div>
+                <div class="stacked-field">
+                  <label for="cfg-ble_ref_power">
+                    ${store.t("dev_presence.ref_power_label")}
+                  </label>
+                  <input
+                    type="number"
+                    id="cfg-ble_ref_power"
+                    min="-90"
+                    max="-30"
+                    step="1"
+                    placeholder=${refPowerPlaceholder}
+                    .value=${focusSafe(refPowerValue)}
+                    @change=${(ev: Event) => {
+                      const raw = (ev.currentTarget as HTMLInputElement).value.trim();
+                      if (raw === "") {
+                        store.entity.stageDeviceSetting(
+                          "ble_ref_power",
+                          null,
+                          "cfg-ble_ref_power",
+                        );
+                        return;
+                      }
+                      const num = Number(raw);
+                      if (Number.isFinite(num)) {
+                        store.entity.stageDeviceSetting(
+                          "ble_ref_power",
+                          Math.round(num),
+                          "cfg-ble_ref_power",
+                        );
+                      }
+                    }}
+                  />
+                  <span class="help-text">${store.t("dev_presence.ref_power_help")}</span>
+                </div>
+                ${showCompanionPowerTip
+                  ? html`<div id="ble-companion-power-tip" class="alert">
+                      <div class="alert-body">
+                        <strong>${store.t("dev_presence.companion_low_title")}</strong>
+                        <span>
+                          ${store.t("dev_presence.companion_low_body", {
+                            txPower:
+                              txPowerRaw || store.t("dev_presence.companion_default_power"),
+                            modeSuffix: advModeRaw
+                              ? store.t("dev_presence.companion_mode_suffix", {
+                                  mode: advModeRaw,
+                                })
+                              : "",
+                            refSuffix: hasDetectedRefPower
+                              ? store.t("dev_presence.companion_ref_suffix", {
+                                  dbm: fmtNumber(Number(rawDetectedRef), store.hass, 0),
+                                })
+                              : "",
+                          })}
+                        </span>
+                      </div>
+                    </div>`
+                  : nothing}
+                ${!isBleOnly
+                  ? html`<div class="stacked-field">
+                      <label for="cfg-ble_beacon_uuid">
+                        ${store.t("dev_presence.ibeacon_uuid_label")}
+                      </label>
+                      <input
+                        type="text"
+                        id="cfg-ble_beacon_uuid"
+                        placeholder=${store.t("dev_presence.ibeacon_uuid_placeholder")}
+                        .value=${focusSafe(String(cfg.ble_beacon_uuid || ""))}
+                        @change=${(ev: Event) =>
+                          store.entity.stageDeviceSetting(
+                            "ble_beacon_uuid",
+                            (ev.currentTarget as HTMLInputElement).value.trim(),
+                            "cfg-ble_beacon_uuid",
+                          )}
+                      />
+                    </div>`
+                  : nothing}`,
+            })
+          : nothing}
       </div>
     </div>
   </section>`;

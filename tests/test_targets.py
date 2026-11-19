@@ -139,8 +139,7 @@ class RetiredNamesGuard(unittest.TestCase):
         self.assertEqual(hits, [], "retired target names:\n" + "\n".join(hits))
 
     def test_no_retired_external_presence_entity(self) -> None:
-        retired_key = "presence" + "_entity"
-        retired_cat = "presence" + "_sensors"
+        retired_re = re.compile(r"\b(?:presence" + r"_entity|presence" + r"_sensors)\b")
         roots = [LATTER_DIR, REPO_ROOT / "docs", REPO_ROOT / "README.md"]
         hits: list[str] = []
         for root in roots:
@@ -149,7 +148,7 @@ class RetiredNamesGuard(unittest.TestCase):
                 if path.suffix not in (".py", ".js", ".yaml", ".json", ".md") or "__pycache__" in path.parts:
                     continue
                 txt = path.read_text(encoding="utf-8")
-                if retired_key in txt or retired_cat in txt:
+                if retired_re.search(txt):
                     hits.append(str(path.relative_to(REPO_ROOT)))
         self.assertEqual(hits, [], "retired external presence references: " + ", ".join(hits))
 

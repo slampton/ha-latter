@@ -2,7 +2,7 @@
 
 Latter tracks which Area each Device is in using the Bluetooth proxies across your System. It then puts that Area to work: moving a roaming Device's Home Assistant Area so Assist targets where you stand, scoping Area Controls, handing off active media, and routing occupied-Area notifications and intercom broadcasts.
 
-<!-- MEDIA: docs/media/presence-survey.png — Studio → BLE & Area Presence with Area Presence & Sensors and Walk-Around BLE Calibration. -->
+![Latter Studio — BLE & Area presence and Walk-around BLE calibration](media/studio-ble-presence.png)
 
 ---
 

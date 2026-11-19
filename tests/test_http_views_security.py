@@ -243,8 +243,21 @@ async def test_hmac_rotation_and_wallpaper_upload_and_proxy_views(
     )
     assert r_422.status == 422
 
-    # Valid device-scoped upload (200)
+    # Unknown subentry_id on device-scoped upload returns 404
     jpeg_raw = _make_jpeg_bytes(120, 120)
+    r_404_unknown = await upload_view.post(
+        _MultipartRequest(
+            is_admin=True,
+            parts=[
+                _MultipartPart("scope", text_val="device"),
+                _MultipartPart("subentry_id", text_val="sub_unknown_ghost"),
+                _MultipartPart("file", file_bytes=jpeg_raw, filename="ghost.jpg"),
+            ],
+        )
+    )
+    assert r_404_unknown.status == 404
+
+    # Valid device-scoped upload (200)
     r_200_dev = await upload_view.post(
         _MultipartRequest(
             is_admin=True,
@@ -306,9 +319,9 @@ async def test_hmac_rotation_and_wallpaper_upload_and_proxy_views(
     with Image.open(io.BytesIO(r_wp_720_default.body)) as img_720_def:
         assert img_720_def.size == (720, 720)
 
-    # Delete uploaded wallpaper
-    assert delete_uploaded_wallpaper(hass2, coord.device_slug, uploaded_src) is True
-    await async_refresh_wallpaper_cache(hass2, coord.device_slug)
+    # Delete uploaded wallpaper (canonical System signature without device_slug)
+    assert delete_uploaded_wallpaper(hass2, uploaded_src) is True
+    await async_refresh_wallpaper_cache(hass2)
     assert await async_unload_entry(hass2, entry) is True
 
 

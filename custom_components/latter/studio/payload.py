@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from datetime import UTC, datetime
+import json
+from pathlib import Path
 import re
 from typing import Any
-from urllib.parse import quote
 
+import homeassistant.const as ha_const
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import (
     area_registry as ar,
@@ -51,17 +54,23 @@ from ..const import (
     DEFAULT_DEVICE_GROUP,
     DOMAIN,
     INTEGRATION_VERSION,
+    MIN_FIRMWARE_SDK_REV,
     STUDIO_REV,
 )
 from ..coordinator import LatterCoordinator
 from ..groups import (
-     coordinator_supports_pref,
+    coordinator_supports_pref,
     get_device_groups,
     get_esphome_device_entities,
     present_section_ids,
     resolve_behavior_key_value,
 )
-from ..hub import get_area_state_index, get_latter_system, iter_coordinators
+from ..hub import (
+    get_area_state_index,
+    get_latter_system,
+    get_system_config_rev,
+    iter_coordinators,
+)
 from ..identity import esphome_service
 from ..media import ma_player_entities
 from ..media_browse import is_music_assistant_player
@@ -86,7 +95,9 @@ from .settings import (
     GAMES_ITEMS_CATALOG,
     HOME_CATEGORIES_CATALOG,
     TOOLS_ITEMS_CATALOG,
+    WORLD_CLOCK_ZONES,
     find_by_subentry_id,
+    humanize_device_model_label,
     resolve_device_pref_value,
     system_settings_view,
 )
@@ -96,9 +107,60 @@ __all__ = [
     "STUDIO_BULK_CONTROL_DOMAINS",
     "build_studio_state_payload",
     "is_coordinator_online_for_studio",
+    "load_studio_locales_sync",
     "log_studio_event",
+    "resolve_studio_locale_strings",
     "resolve_target_coordinator",
 ]
+
+_LOCALE_OVERLAYS_CACHE: dict[str, dict[str, str]] = {}
+_LOCALES_LOADED: bool = False
+
+
+def load_studio_locales_sync() -> dict[str, dict[str, str]]:
+    """Load optional `<lang>.json` Studio translation overlays from `studio/locales/` (executor)."""
+    global _LOCALES_LOADED
+    locales_dir = Path(__file__).resolve().parent / "locales"
+    loaded: dict[str, dict[str, str]] = {}
+    if locales_dir.is_dir():
+        for path in sorted(locales_dir.glob("*.json")):
+            code = path.stem.strip().lower().replace("_", "-")
+            if not code or code == "en":
+                continue
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(raw, dict):
+                loaded[code] = {
+                    str(k): str(v)
+                    for k, v in raw.items()
+                    if isinstance(k, str) and isinstance(v, str)
+                }
+    _LOCALE_OVERLAYS_CACHE.clear()
+    _LOCALE_OVERLAYS_CACHE.update(loaded)
+    _LOCALES_LOADED = True
+    return loaded
+
+
+def resolve_studio_locale_strings(hass: HomeAssistant) -> dict[str, str]:
+    """Return cached non-English Studio translation strings for `hass.config.language`, or `{}`."""
+    lang = (
+        str(getattr(getattr(hass, "config", None), "language", "") or "en")
+        .strip()
+        .lower()
+        .replace("_", "-")
+    )
+    if not lang or lang == "en" or lang.startswith("en-"):
+        return {}
+    if not _LOCALES_LOADED:
+        load_studio_locales_sync()
+    exact = _LOCALE_OVERLAYS_CACHE.get(lang)
+    if exact is not None:
+        return dict(exact)
+    base = lang.split("-", 1)[0]
+    fallback = _LOCALE_OVERLAYS_CACHE.get(base)
+    return dict(fallback) if fallback is not None else {}
 
 MAX_INTERNAL_LOGS = 150
 STUDIO_BULK_CONTROL_DOMAINS: frozenset[str] = frozenset({"select", "switch", "number"})
@@ -606,7 +668,7 @@ def _build_system_shared_controls(
             sid = str(wp.get("id") or "").strip()
             if sid and sid not in wp_labels:
                 wp_opts.append(sid)
-                wp_labels[sid] = str(wp.get("label") or sid)
+                wp_labels[sid] = str(wp.get("name") or wp.get("label") or sid)
         controls.append(
             {
                 "key": "display:select:wallpaper",
@@ -868,21 +930,6 @@ def _build_system_shared_controls(
     )
 
 
-def _camera_preview_url(
-    coordinator: LatterCoordinator | None, cam_entity: str
-) -> str:
-    """Return a signed 320x180 square snapshot URL for `cam_entity`, or '' when no Device can sign it."""
-    if coordinator is None or not cam_entity:
-        return ""
-    cam_sig = coordinator.sign_payload_resource(
-        f"camera:{cam_entity}|320|180|square"
-    )
-    return (
-        f"/api/latter/camera/{coordinator.device_slug}"
-        f"?entity_id={quote(cam_entity, safe='')}&w=320&h=180&shape=square&sig={cam_sig}"
-    )
-
-
 def _is_garage_cover_state(state_obj: Any) -> bool:
     """Return True strictly for garage door `cover.*` entities (excluding blinds, curtains, gates, and interior doors)."""
     dev_class = str(state_obj.attributes.get("device_class") or "").strip().lower()
@@ -1024,17 +1071,9 @@ def _build_entity_catalog(
     calendars_list: list[dict[str, str]] = []
     persons_list: list[dict[str, str]] = []
 
-    coords = all_coords if all_coords is not None else iter_coordinators(hass)
-    sig_coord = coordinator or next(
-        (c for c in coords if not c.is_ble_tag), coords[0] if coords else None
-    )
-    allowed_cams_set: set[str] = set()
+    _ = all_coords
     local_spk_id = ""
     local_ma_id = ""
-    if sig_coord is not None:
-        allowed_cams_set = set(sig_coord.camera_entities)
-        if sig_coord.camera_entity:
-            allowed_cams_set.add(sig_coord.camera_entity)
     if coordinator is not None:
         local_spk_id = coordinator.local_speaker
         local_ma_id = coordinator.local_ma_speaker
@@ -1091,10 +1130,7 @@ def _build_entity_catalog(
         elif domain == "alarm_control_panel":
             alarms_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
         elif domain == "camera":
-            cam_item: dict[str, Any] = dict(item)
-            if sig_coord is not None and ent_id in allowed_cams_set:
-                cam_item["preview_url"] = _camera_preview_url(sig_coord, ent_id)
-            cameras_list.append(cam_item)
+            cameras_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
         elif domain == "climate":
             climates_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
         elif domain == "lock":
@@ -1231,9 +1267,6 @@ def _build_doorbells(
     hass: HomeAssistant, coords: list[LatterCoordinator], cameras: list[str]
 ) -> list[dict[str, Any]]:
     """Return each System camera's doorbell ring entity (if one was found) and who is talking on it."""
-    sig_coord = next(
-        (c for c in coords if not c.is_ble_tag), coords[0] if coords else None
-    )
     ring_for_cam: dict[str, str] = {}
     for coord in coords:
         for ring_ent, cam in coord.doorbell_ring_map.items():
@@ -1254,7 +1287,6 @@ def _build_doorbells(
             {
                 "camera_entity": cam,
                 "camera_name": str((cam_st.attributes.get("friendly_name") if cam_st else "") or cam),
-                "preview_url": _camera_preview_url(sig_coord, cam),
                 "ring_entity": ring_ent,
                 "ring_name": str((ring_st.attributes.get("friendly_name") if ring_st else "") or ring_ent),
                 "ring_state": str(ring_st.state) if ring_known else "",
@@ -1276,6 +1308,7 @@ def _build_system_section(
     *,
     all_coords: list[LatterCoordinator] | None = None,
     include_logs: bool = False,
+    skip_sections: Collection[str] = (),
 ) -> dict[str, Any]:
     """Build the System-scoped part of the Studio payload (no Device needed)."""
     area_reg = ar.async_get(hass)
@@ -1360,22 +1393,12 @@ def _build_system_section(
             and (
                 c_has_native_svc
                 or c.device_entity("update", "_project_firmware") is not None
-                or "latter" in raw_model.lower()
             )
         )
-        c_w = int(c_manifest.get("w") or 0)
-        c_h = int(c_manifest.get("h") or 0)
-        c_board = str(c_manifest.get("board") or "").strip()
         if c.is_ble_tag:
             c_model_label = describe_ble_target_model(hass, c.ble_target_address)
-        elif c_w > 0 and c_h > 0:
-            c_model_label = (
-                f"{raw_model} ({c_w}x{c_h})"
-                if raw_model
-                else f"Latter display ({c_w}x{c_h}{f' {c_board}' if c_board else ''})"
-            )
         else:
-            c_model_label = raw_model
+            c_model_label = humanize_device_model_label(raw_model, c_manifest)
 
         static_area_id = (
             str(c.get_opt(CONF_DEFAULT_AREA) or "").strip()
@@ -1402,8 +1425,20 @@ def _build_system_section(
         c_is_online = is_coordinator_online_for_studio(hass, c)
         c_away = c.is_device_away()
         if a_obj is not None:
+            c_area_id = static_area_id
             c_area_label = a_obj.name
         elif c.native_ble_tracking_enabled or c.is_ble_tag:
+            roaming_aid = (
+                str(c._ble_tracker.current_area_id or "").strip()
+                if c.is_ble_tag and c._ble_tracker is not None
+                else str(c.active_area_id or "").strip()
+            )
+            roaming_area_obj = (
+                area_reg.async_get_area(roaming_aid)
+                if roaming_aid and not c_away
+                else None
+            )
+            c_area_id = roaming_aid if roaming_area_obj is not None else ""
             if (
                 not c_away
                 and (not c.is_ble_tag or c_is_online)
@@ -1413,20 +1448,29 @@ def _build_system_section(
             else:
                 c_area_label = "Roaming"
         else:
+            c_area_id = ""
             c_area_label = ""
 
         if c.is_ble_tag:
-            c_status_label = (
-                "Online"
-                if c_is_online
-                else ("Away" if c_away else "Scanning")
-            )
+            if c_is_online:
+                c_status_code = "online"
+                c_status_label = "Online"
+            elif c_away:
+                c_status_code = "away"
+                c_status_label = "Away"
+            else:
+                c_status_code = "scanning"
+                c_status_label = "Scanning"
         else:
-            c_status_label = (
-                "Update available"
-                if c_has_update
-                else ("Online" if c_is_online else "Offline")
-            )
+            if c_has_update:
+                c_status_code = "update"
+                c_status_label = "Update available"
+            elif c_is_online:
+                c_status_code = "online"
+                c_status_label = "Online"
+            else:
+                c_status_code = "offline"
+                c_status_label = "Offline"
 
         system_devices.append(
             {
@@ -1439,13 +1483,16 @@ def _build_system_section(
                     else c.device_title
                 ),
                 "model_label": c_model_label,
+                "area_id": c_area_id,
                 "has_assigned_area": c_has_assigned_area,
                 "area_label": c_area_label,
+                "status_code": c_status_code,
                 "status_label": c_status_label,
                 "is_online": c_is_online,
                 "kind": "ble_tag" if c.is_ble_tag else "device",
                 "ble_category": c_ble_cat,
                 "has_display": c.has_display,
+                "has_battery": c.has_battery,
                 "is_roaming": c.is_roaming_device,
                 "device_group": c_grp,
                 "device_remote_group": c.device_remote_group,
@@ -1483,32 +1530,41 @@ def _build_system_section(
     raw_global_cfg = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
     system_view = system_settings_view(raw_global_cfg)
     onboarded_slugs = {c.device_slug for c in coords}
-    sig_coord = next((c for c in coords if c.subentry_id == current_subentry_id), None) or (
-        coords[0] if coords else None
-    )
     sys_obj = get_latter_system(hass)
     sign_fn = (
-        sig_coord.sign_payload_resource
-        if sig_coord is not None
-        else (sys_obj.url_signer.sign_payload_resource if sys_obj is not None else None)
-    )
-    system_wallpapers = list_wallpaper_catalog(
-        hass,
-        sig_coord.device_slug if sig_coord is not None else "system",
-        "",
-        [],
-        sign_resource=sign_fn,
-        display_shape="square",
+        sys_obj.url_signer.sign_payload_resource if sys_obj is not None else None
     )
 
-    return {
+    section: dict[str, Any] = {
         "internal_logs": internal_logs,
+        "system_info": {
+            "ha_version": str(
+                getattr(ha_const, "__version__", "")
+                or getattr(getattr(hass, "config", None), "version", "")
+                or ""
+            ),
+            "integration_version": INTEGRATION_VERSION,
+            "min_firmware_sdk_rev": MIN_FIRMWARE_SDK_REV,
+            "studio_rev": STUDIO_REV,
+        },
+        "locale_strings": resolve_studio_locale_strings(hass),
         "system_devices": system_devices,
         "issues": _build_issues(hass, coords),
         "ble_proxy_count": count_area_ble_proxies(hass),
-        "ble_area_signatures": get_area_signatures_summary(hass),
         "discovered_latter_devices": get_discovered_latter_devices(hass),
-        "discovered_ble_devices": get_discovered_ble_candidates(
+        "ignored_latter_devices": get_discovered_latter_devices(
+            hass, only_ignored=True
+        ),
+        "system_controls": _build_system_shared_controls(hass, coords),
+        "device_groups": device_groups,
+        "system_config": system_view,
+        "has_security_pin": bool(raw_global_cfg.get(CONF_SECURITY_PIN_HASH)),
+        "doorbells": _build_doorbells(hass, coords, system_view["camera_entities"]),
+    }
+    if "ble_area_signatures" not in skip_sections:
+        section["ble_area_signatures"] = get_area_signatures_summary(hass)
+    if "discovered_ble_devices" not in skip_sections:
+        section["discovered_ble_devices"] = get_discovered_ble_candidates(
             hass,
             onboarded_slugs,
             {
@@ -1516,14 +1572,39 @@ def _build_system_section(
                 for c in coords
                 if c.ble_target_address
             },
-        ),
-        "system_controls": _build_system_shared_controls(hass, coords),
-        "device_groups": device_groups,
-        "system_config": system_view,
-        "has_security_pin": bool(raw_global_cfg.get(CONF_SECURITY_PIN_HASH)),
-        "system_wallpapers": system_wallpapers,
-        "doorbells": _build_doorbells(hass, coords, system_view["camera_entities"]),
-    }
+        )
+    if "system_wallpapers" not in skip_sections:
+        section["system_wallpapers"] = list_wallpaper_catalog(
+            hass,
+            "system",
+            "",
+            [],
+            sign_resource=sign_fn,
+            display_shape="square",
+        )
+    return section
+
+
+def _build_pref_specs_catalog() -> list[dict[str, Any]]:
+    """Serialize canonical `DevicePrefSpec` metadata for Studio runtime consumers."""
+    return [
+        {
+            "key": spec.key,
+            "label": spec.label,
+            "domain": spec.domain,
+            "default": spec.default,
+            "section": spec.section,
+            "esphome_section": spec.esphome_section,
+            "group_tier": spec.group_tier,
+            "options": list(spec.options),
+            "min": spec.min_val,
+            "max": spec.max_val,
+            "step": spec.step,
+            "unit": spec.unit,
+            "capability": spec.capability,
+        }
+        for spec in DEVICE_PREF_SPECS
+    ]
 
 
 def build_studio_state_payload(
@@ -1532,25 +1613,34 @@ def build_studio_state_payload(
     *,
     include_catalog: bool = True,
     include_logs: bool = False,
+    skip_sections: Collection[str] = (),
 ) -> dict[str, Any]:
     """Build the Studio payload: the System part always, plus the Device part when a Device is targeted."""
     all_coords = iter_coordinators(hass)
     base: dict[str, Any] = {
+        "type": "state",
         "subentry_id": coordinator.subentry_id if coordinator is not None else "",
         "title": coordinator.device_title if coordinator is not None else "",
         "version": INTEGRATION_VERSION,
         "studio_rev": STUDIO_REV,
+        "system_config_rev": get_system_config_rev(hass),
+        "device_config_rev": (
+            coordinator.device_config_rev if coordinator is not None else 0
+        ),
         **_build_system_section(
             hass,
             coordinator.subentry_id if coordinator is not None else "",
             all_coords=all_coords,
             include_logs=include_logs,
+            skip_sections=skip_sections,
         ),
     }
     if include_catalog:
         base["catalog"] = _build_entity_catalog(
             hass, coordinator, all_coords=all_coords
         )
+        base["pref_specs"] = _build_pref_specs_catalog()
+        base["world_clock_zones"] = list(WORLD_CLOCK_ZONES)
     presence_grid = get_all_areas_presence_summary(hass)
     if coordinator is None:
         return {
@@ -1591,6 +1681,7 @@ def build_studio_state_payload(
         "has_display": coordinator.has_display,
         "has_imu": coordinator.has_imu,
         "is_round": coordinator.is_round_display,
+        "has_battery": coordinator.has_battery,
         "has_power": ("sleep" in sec_ids) or ("battery" in sec_ids),
         "has_voice": not coordinator.is_ble_tag and (coordinator.has_mic or ("voice" in sec_ids)),
         "has_audio": (
@@ -1743,6 +1834,7 @@ def build_studio_state_payload(
             "fw_update_available": any(it.get("state") == "on" for it in update_items),
             "effective_security_pin_policy": coordinator.security_pin_policy,
             "has_security_pin": coordinator.has_security_pin,
+            "is_ble_sleep_expected": bool(coordinator.is_ble_sleep_expected()),
             **(
                 {}
                 if coordinator.is_ble_tag
@@ -1752,10 +1844,20 @@ def build_studio_state_payload(
                     "timer_remaining_sec": int(
                         coordinator.current_timer_remaining_sec
                     ),
+                    "timer_ends_at": (
+                        coordinator.timer_ends_at_utc
+                        if coordinator.timer_running
+                        else ""
+                    ),
                     "stopwatch_running": bool(coordinator.stopwatch_running),
                     "stopwatch_paused": bool(coordinator.stopwatch_paused),
                     "stopwatch_elapsed_sec": int(
                         coordinator.current_stopwatch_elapsed_sec
+                    ),
+                    "stopwatch_started_at": (
+                        coordinator.stopwatch_started_at_utc
+                        if coordinator.stopwatch_running
+                        else ""
                     ),
                     "alarm_ringing": bool(coordinator.alarm_ringing),
                 }

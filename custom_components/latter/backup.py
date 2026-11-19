@@ -35,6 +35,7 @@ from .const import (
     CONF_SECURITY_PIN_POLICY,
     CONF_SITE_ID,
     CONF_SYNC_DEVICE_AREA,
+    CONF_SYSTEM_CONFIG_REV,
     CONF_TOOLS_ITEMS,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
@@ -46,8 +47,21 @@ from .const import (
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
 )
-from .hub import get_latter_system, iter_coordinators
-from .studio.settings import DEVICE_PREF_SPECS, resolve_device_pref_value
+from .hub import (
+    get_latter_system,
+    get_system_config_lock,
+    get_system_config_rev,
+    iter_coordinators,
+)
+from .studio.settings import (
+    DEVICE_PREF_SPECS,
+    DEVICE_SETTING_KEYS,
+    SYSTEM_SETTING_KEYS,
+    SettingsScopeError,
+    clean_device_settings,
+    clean_system_settings,
+    resolve_device_pref_value,
+)
 
 DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_DEVICE_SLUG,
@@ -217,13 +231,36 @@ async def _async_apply_device_snapshot_to_coordinator(
         incoming_cfg[CONF_DEVICE_SLUG] = coord.device_slug
 
     merged: dict[str, Any] = dict(coord.device_data)
-    for k in DEVICE_CONFIG_EXPORT_KEYS:
-        if k in incoming_cfg and incoming_cfg[k] is not None:
-            merged[k] = incoming_cfg[k]
-        elif k == CONF_BLE_REF_POWER and k in incoming_cfg and incoming_cfg[k] is None:
-            merged.pop(CONF_BLE_REF_POWER, None)
+    cleanable: dict[str, Any] = {
+        k: incoming_cfg[k]
+        for k in DEVICE_SETTING_KEYS
+        if k in incoming_cfg and incoming_cfg[k] is not None
+    }
+    if cleanable:
+        try:
+            sanitized = clean_device_settings(
+                cleanable,
+                current=merged,
+                is_round_display=bool(getattr(coord, "is_round_display", True)),
+            )
+        except SettingsScopeError as err:
+            raise ValueError(str(err)) from err
+        merged.update(sanitized)
+    if CONF_BLE_REF_POWER in incoming_cfg and incoming_cfg[CONF_BLE_REF_POWER] is None:
+        merged.pop(CONF_BLE_REF_POWER, None)
+    if isinstance(incoming_cfg.get(CONF_WALLPAPER_FAVORITES), list):
+        merged[CONF_WALLPAPER_FAVORITES] = [
+            str(x).strip()[:128]
+            for x in incoming_cfg[CONF_WALLPAPER_FAVORITES][:50]
+            if str(x or "").strip()
+        ]
+    if CONF_SITE_ID in incoming_cfg and incoming_cfg[CONF_SITE_ID] is not None:
+        merged[CONF_SITE_ID] = str(incoming_cfg[CONF_SITE_ID]).strip()[:64]
+    if preserve_slug:
+        merged[CONF_DEVICE_SLUG] = coord.device_slug
 
-    coord.update_device_config(merged)
+    async with coord.config_lock:
+        coord.update_device_config(merged)
     sync_ble = getattr(coord, "_sync_ble_tracker", None)
     if callable(sync_ble):
         sync_ble()
@@ -255,19 +292,36 @@ async def async_restore_backup_bundle(
     if scope == "system":
         global_cfg_in = bundle.get("global_config")
         if isinstance(global_cfg_in, dict):
-            domain_data = hass.data.setdefault(DOMAIN, {})
-            global_cfg: dict[str, Any] = domain_data.setdefault(DATA_GLOBAL_CONFIG, {})
-            for k in GLOBAL_CONFIG_KEYS:
-                if k == CONF_SECURITY_PIN_HASH:
-                    continue
-                if k in global_cfg_in:
-                    global_cfg[k] = global_cfg_in[k]
-            sys_obj = get_latter_system(hass)
-            if sys_obj is not None:
-                sys_obj.config = global_cfg
-            store = domain_data.get(DATA_GLOBAL_STORE)
-            if store is not None:
-                await store.async_save(global_cfg)
+            sys_cleanable = {
+                k: global_cfg_in[k]
+                for k in SYSTEM_SETTING_KEYS
+                if k in global_cfg_in and global_cfg_in[k] is not None
+            }
+            try:
+                sanitized_sys = (
+                    clean_system_settings(sys_cleanable) if sys_cleanable else {}
+                )
+            except SettingsScopeError as err:
+                raise ValueError(str(err)) from err
+            async with get_system_config_lock(hass):
+                domain_data = hass.data.setdefault(DOMAIN, {})
+                global_cfg: dict[str, Any] = domain_data.setdefault(
+                    DATA_GLOBAL_CONFIG, {}
+                )
+                for k in GLOBAL_CONFIG_KEYS:
+                    if k == CONF_SECURITY_PIN_HASH:
+                        continue
+                    if k in sanitized_sys:
+                        global_cfg[k] = sanitized_sys[k]
+                    elif k not in SYSTEM_SETTING_KEYS and k in global_cfg_in:
+                        global_cfg[k] = global_cfg_in[k]
+                global_cfg[CONF_SYSTEM_CONFIG_REV] = get_system_config_rev(hass) + 1
+                sys_obj = get_latter_system(hass)
+                if sys_obj is not None:
+                    sys_obj.config = global_cfg
+                store = domain_data.get(DATA_GLOBAL_STORE)
+                if store is not None:
+                    await store.async_save(global_cfg)
 
         devices_map = bundle.get("devices") or {}
         if isinstance(devices_map, dict):

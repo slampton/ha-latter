@@ -1,26 +1,47 @@
 /**
- * `<latter-studio>` Custom Element — Modular TypeScript + Lit Architecture (`D-023`).
+ * `<latter-studio>` Custom Element — Modular TypeScript + Vendored `lit-html` Shell (`D-023`, `D-061`, `D-062`).
  *
- * - Zero global `window` property bindings; state is owned per element by `StudioStore`.
- * - Active-view-only rendering via `renderActiveView(this.store)`.
- * - Full WAI-ARIA `tablist` / roving arrow-key focus on Scope tabs and `aria-current="page"` on sidebar nav.
- * - Dedicated reload banner when `studio_rev_mismatch` is signaled after an HACS update.
+ * - Zero `window.*` property bindings; state is owned per element by `StudioStore`.
+ * - `_applyRoute()` runs before `super.connectedCallback()` so `hostConnected` subscribes once (`B-01`).
+ * - Sidebar `<a href="/latter/...">` links with `aria-current="page"` and SPA click interception (`D-22`).
+ * - Promoted `<h1>` `#unified-page-title`, persistent polite/assertive live regions, sticky error toast (`D-01`),
+ *   `.loading-state` skeleton during `store.deviceLoading` (`B-02`), and shared `renderConfirmDialog` (`Q5`).
  */
 
+import { renderConfirmDialog, syncDialogElement } from "./components/controls.js";
 import { renderStudioDialogs, syncStudioDialogs } from "./components/dialogs.js";
+import { DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS } from "./constants.js";
+import type { StudioTranslationKey } from "./i18n/index.js";
 import { html, LitElement, nothing, type TemplateResult } from "./lib/lit.js";
 import { StudioStore } from "./state/store.js";
 import { STUDIO_STYLES } from "./styles/tokens.js";
 import type { DeviceViewId, HassRoute, HomeAssistant, SystemViewId } from "./types.js";
 import { renderActiveView } from "./views/index.js";
 
-const SYSTEM_NAV_ITEMS: ReadonlyArray<{ viewId: SystemViewId; label: string }> = [
-  { viewId: "system_overview", label: "Overview" },
-  { viewId: "shared_entities", label: "Shared Entities" },
-  { viewId: "remotes", label: "Media & Remotes" },
-  { viewId: "system_sync", label: "Device Groups" },
-  { viewId: "area_tracking", label: "BLE & Area Presence" },
-  { viewId: "system_tools", label: "Tools" },
+const SYSTEM_NAV_ITEMS: ReadonlyArray<{
+  viewId: SystemViewId;
+  labelKey: StudioTranslationKey;
+}> = [
+  { viewId: "system_overview", labelKey: "view.system_overview" },
+  { viewId: "shared_entities", labelKey: "view.shared_entities" },
+  { viewId: "remotes", labelKey: "view.remotes" },
+  { viewId: "system_sync", labelKey: "view.system_sync" },
+  { viewId: "area_tracking", labelKey: "view.area_tracking" },
+  { viewId: "system_tools", labelKey: "view.system_tools" },
+];
+
+const DEVICE_NAV_ITEMS: ReadonlyArray<{
+  viewId: Exclude<DeviceViewId, "select_device_prompt" | "discovered_devices">;
+  labelKey: StudioTranslationKey;
+  id?: string;
+}> = [
+  { viewId: "dashboard", labelKey: "view.dashboard" },
+  { viewId: "display", labelKey: "view.display", id: "nav-btn-display" },
+  { viewId: "interface", labelKey: "view.interface", id: "nav-btn-interface" },
+  { viewId: "audio_voice", labelKey: "view.audio_voice", id: "nav-btn-audio_voice" },
+  { viewId: "power", labelKey: "view.power", id: "nav-btn-power" },
+  { viewId: "presence", labelKey: "view.presence" },
+  { viewId: "tools", labelKey: "view.tools" },
 ];
 
 export class LatterStudio extends LitElement {
@@ -32,6 +53,7 @@ export class LatterStudio extends LitElement {
   private _route: HassRoute | null = null;
   private _panel: Record<string, unknown> | null = null;
   private _routeInitialized = false;
+  private _lastRouteHeadingKey = "";
 
   constructor() {
     super();
@@ -40,15 +62,21 @@ export class LatterStudio extends LitElement {
   }
 
   override connectedCallback(): void {
-    super.connectedCallback();
     if (!this._routeInitialized) {
       this._routeInitialized = true;
       this._applyRoute();
     }
+    super.connectedCallback();
+  }
+
+  private _syncShowMenu(h: HomeAssistant | null): void {
+    const show = this._narrow || h?.dockedSidebar === "always_hidden";
+    this.toggleAttribute("show-menu", show);
   }
 
   set hass(h: HomeAssistant | null) {
-    this.toggleAttribute("dark", Boolean(h?.themes?.darkMode ?? h?.selectedTheme?.dark));
+    this.toggleAttribute("dark", Boolean(h?.themes?.darkMode));
+    this._syncShowMenu(h);
     this.store.setHass(h);
   }
 
@@ -61,7 +89,7 @@ export class LatterStudio extends LitElement {
     if (this._narrow === next) return;
     this._narrow = next;
     this.toggleAttribute("narrow", next);
-    this.requestUpdate();
+    this._syncShowMenu(this.store.hass);
   }
 
   get narrow(): boolean {
@@ -92,6 +120,21 @@ export class LatterStudio extends LitElement {
     this.store.applyRoute(this._route);
   }
 
+  private _onNavLinkClick(ev: MouseEvent, navigate: () => void): void {
+    if (
+      ev.defaultPrevented ||
+      ev.button !== 0 ||
+      ev.metaKey ||
+      ev.ctrlKey ||
+      ev.shiftKey ||
+      ev.altKey
+    ) {
+      return;
+    }
+    ev.preventDefault();
+    navigate();
+  }
+
   private _onRootKeyDown(ev: KeyboardEvent): void {
     if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.key === "Escape" || ev.key === "Tab") {
       return;
@@ -102,6 +145,32 @@ export class LatterStudio extends LitElement {
     const tag = inner.tagName.toUpperCase();
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
       ev.stopPropagation();
+    }
+  }
+
+  private _onMainFocusOut(ev: FocusEvent): void {
+    const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+    const target = (path[0] ?? ev.target) as Element | null;
+    if (!target || typeof target.tagName !== "string") return;
+    if (target.getAttribute("role") === "combobox") return;
+    const tag = target.tagName.toUpperCase();
+    if (tag === "TEXTAREA") {
+      void this.store.entity.flushAllPendingSettings();
+      return;
+    }
+    if (tag === "INPUT") {
+      const type = String((target as HTMLInputElement).type || "text").toLowerCase();
+      if (
+        type === "text" ||
+        type === "number" ||
+        type === "search" ||
+        type === "password" ||
+        type === "tel" ||
+        type === "url" ||
+        type === "email"
+      ) {
+        void this.store.entity.flushAllPendingSettings();
+      }
     }
   }
 
@@ -138,54 +207,64 @@ export class LatterStudio extends LitElement {
 
   protected override updated(): void {
     syncStudioDialogs(this.renderRoot, this.store);
+    const confirmDlg = this.renderRoot.getElementById(
+      "latter-confirm-modal",
+    ) as HTMLDialogElement | null;
+    syncDialogElement(confirmDlg, this.store.confirmModal.open);
+
+    const routeKey = `${this.store.currentScope}|${this.store.currentViewId}|${this.store.activeSubentryId}`;
+    if (this._lastRouteHeadingKey && this._lastRouteHeadingKey !== routeKey) {
+      const titleText = this.store.pageSubtitle
+        ? `${this.store.pageTitle} — ${this.store.pageSubtitle}`
+        : this.store.pageTitle;
+      this.store.announcePolite(titleText);
+      const activeEl = this.renderRoot.activeElement as HTMLElement | null;
+      if (activeEl && activeEl.classList?.contains("nav-btn")) {
+        const headingEl = this.renderRoot.getElementById(
+          "unified-page-title",
+        ) as HTMLElement | null;
+        headingEl?.focus?.({ preventScroll: true });
+      }
+    }
+    this._lastRouteHeadingKey = routeKey;
   }
 
   private _renderDeviceNav(): TemplateResult {
-    const data = this.store.state;
-    const caps = data?.capabilities || {};
-    const isBleOnly = data?.config?.kind === "ble_tag";
+    const subId = this.store.activeSubentryId;
+    const encodedSub = encodeURIComponent(subId);
+    const devTitle = this.store.pageSubtitle || this.store.t("common.unknown");
+    const items = DEVICE_NAV_ITEMS.filter((item) => this.store.deviceHasView(item.viewId));
 
-    const items: Array<{
-      viewId: Exclude<DeviceViewId, "select_device_prompt" | "discovered_devices">;
-      label: string;
-      id?: string;
-    }> = [{ viewId: "dashboard", label: "Overview" }];
-    if (!isBleOnly && caps.has_display !== false) {
-      items.push({ viewId: "display", label: "Display", id: "nav-btn-display" });
-      items.push({ viewId: "interface", label: "Interface", id: "nav-btn-interface" });
-    }
-    if (!isBleOnly && (caps.has_audio !== false || caps.has_voice !== false)) {
-      items.push({ viewId: "audio_voice", label: "Audio", id: "nav-btn-audio_voice" });
-    }
-    if (!isBleOnly && caps.has_power) {
-      items.push({ viewId: "power", label: "Power", id: "nav-btn-power" });
-    }
-    items.push({ viewId: "presence", label: "Presence" });
-    items.push({ viewId: "tools", label: "Tools" });
-
-    return html`<nav id="nav-scope-device" aria-label="Device pages" class="nav-list">
-      <button
-        type="button"
-        @click=${() => this.store.openDevicesLanding()}
+    return html`<nav
+      id="nav-scope-device"
+      aria-label=${this.store.t("nav.device_pages_label")}
+      class="nav-list"
+    >
+      <a
+        href="/latter/devices"
+        @click=${(ev: MouseEvent) =>
+          this._onNavLinkClick(ev, () => this.store.openDevicesLanding())}
         class="nav-btn nav-back-btn"
       >
-        <span>&larr; Managed</span>
-      </button>
+        <span>${this.store.t("nav.back_managed")}</span>
+      </a>
       <div id="nav-selected-device-label" class="nav-device-title">
-        ${data?.title || "—"}
+        ${devTitle}
       </div>
       ${items.map((item) => {
         const active = this.store.currentViewId === item.viewId;
-        return html`<button
-          type="button"
+        const slug = DEVICE_VIEW_SLUGS[item.viewId];
+        return html`<a
+          href="/latter/devices/${encodedSub}/${slug}"
           id=${item.id || nothing}
           data-view=${item.viewId}
           aria-current=${active ? "page" : nothing}
-          @click=${() => this.store.switchView(item.viewId)}
+          @click=${(ev: MouseEvent) =>
+            this._onNavLinkClick(ev, () => this.store.switchView(item.viewId))}
           class="nav-btn ${active ? "active" : ""}"
         >
-          <span>${item.label}</span>
-        </button>`;
+          <span>${this.store.t(item.labelKey)}</span>
+        </a>`;
       })}
     </nav>`;
   }
@@ -203,7 +282,7 @@ export class LatterStudio extends LitElement {
     const discoveredActive = isDeviceScope && this.store.currentViewId === "discovered_devices";
 
     return html`<aside class="sidebar">
-      <div role="tablist" aria-label="Scope" class="scope-tabs">
+      <div role="tablist" aria-label=${this.store.t("nav.scope_label")} class="scope-tabs">
         <button
           type="button"
           id="tab-scope-device"
@@ -214,7 +293,7 @@ export class LatterStudio extends LitElement {
           @keydown=${(ev: KeyboardEvent) => this._onScopeTabKeyDown(ev)}
           class="scope-tab ${isDeviceScope ? "active" : ""}"
         >
-          Devices
+          ${this.store.t("nav.devices")}
         </button>
         <button
           type="button"
@@ -226,80 +305,123 @@ export class LatterStudio extends LitElement {
           @keydown=${(ev: KeyboardEvent) => this._onScopeTabKeyDown(ev)}
           class="scope-tab ${!isDeviceScope ? "active" : ""}"
         >
-          System
+          ${this.store.t("nav.system")}
         </button>
       </div>
 
       ${!isDeviceScope
-        ? html`<nav id="nav-scope-system" aria-label="System pages" class="nav-list">
+        ? html`<nav
+            id="nav-scope-system"
+            aria-label=${this.store.t("nav.system_pages_label")}
+            class="nav-list"
+          >
             ${SYSTEM_NAV_ITEMS.map((item) => {
               const active = this.store.currentViewId === item.viewId;
-              return html`<button
-                type="button"
+              const slug = SYSTEM_VIEW_SLUGS[item.viewId];
+              return html`<a
+                href="/latter/system/${slug}"
                 data-view=${item.viewId}
                 aria-current=${active ? "page" : nothing}
-                @click=${() => this.store.switchView(item.viewId)}
+                @click=${(ev: MouseEvent) =>
+                  this._onNavLinkClick(ev, () => this.store.switchView(item.viewId))}
                 class="nav-btn ${active ? "active" : ""}"
               >
-                <span>${item.label}</span>
-              </button>`;
+                <span>${this.store.t(item.labelKey)}</span>
+              </a>`;
             })}
           </nav>`
         : !isDeviceListScope
           ? this._renderDeviceNav()
-          : html`<nav id="nav-scope-devices-list" aria-label="Devices" class="nav-list">
-              <button
-                type="button"
+          : html`<nav
+              id="nav-scope-devices-list"
+              aria-label=${this.store.t("nav.devices_list_label")}
+              class="nav-list"
+            >
+              <a
+                href="/latter/devices"
                 data-view="select_device_prompt"
                 aria-current=${managedActive ? "page" : nothing}
-                @click=${() => this.store.openDevicesLanding()}
+                @click=${(ev: MouseEvent) =>
+                  this._onNavLinkClick(ev, () => this.store.openDevicesLanding())}
                 class="nav-btn ${managedActive ? "active" : ""}"
               >
-                <span>Managed</span>
-                <span id="nav-system-count" class="nav-badge">${this.store.state ? String(deviceCount) : "—"}</span>
-              </button>
-              <button
-                type="button"
+                <span>${this.store.t("nav.managed")}</span>
+                <span id="nav-system-count" class="nav-badge">
+                  ${this.store.state ? String(deviceCount) : this.store.t("common.unknown")}
+                </span>
+              </a>
+              <a
+                href="/latter/devices/discovered"
                 data-view="discovered_devices"
                 aria-current=${discoveredActive ? "page" : nothing}
-                @click=${() => this.store.openDiscoveredDevices()}
+                @click=${(ev: MouseEvent) =>
+                  this._onNavLinkClick(ev, () => this.store.openDiscoveredDevices())}
                 class="nav-btn ${discoveredActive ? "active" : ""}"
               >
-                <span>Discovered</span>
+                <span>${this.store.t("nav.discovered")}</span>
                 ${discoveredLatterCount > 0
-                  ? html`<span id="nav-discovered-count" class="nav-badge">${String(discoveredLatterCount)}</span>`
+                  ? html`<span id="nav-discovered-count" class="nav-badge">
+                      ${String(discoveredLatterCount)}
+                    </span>`
                   : nothing}
-              </button>
+              </a>
             </nav>`}
     </aside>`;
   }
 
   protected override render(): TemplateResult {
     const data = this.store.state;
-    const isInitialLoading = this.store.loading && !data && !this.store.loadError && !this.store.studioRevMismatch;
+    const isInitialLoading =
+      this.store.loading && !data && !this.store.loadError && !this.store.studioRevMismatch;
+    const isDevicePendingPayload =
+      !isInitialLoading &&
+      this.store.currentScope === "device" &&
+      this.store.deviceSelected &&
+      this.store.deviceLoading;
     const showHeaderUpdate =
       this.store.currentScope === "device" &&
       this.store.deviceSelected &&
+      !this.store.deviceLoading &&
       this.store.currentViewId !== "select_device_prompt" &&
       this.store.currentViewId !== "discovered_devices" &&
       Boolean(data?.live?.fw_update_available && data?.live?.fw_update_entity);
 
     const subtitle = this.store.pageSubtitle;
+    const cm = this.store.confirmModal;
 
     return html`<div
       id="studio-root"
       @keydown=${(ev: KeyboardEvent) => this._onRootKeyDown(ev)}
       class="studio-root ${isInitialLoading ? "is-loading" : ""}"
     >
+      <div
+        id="studio-live-polite"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        class="sr-only"
+      >
+        ${this.store.politeAnnouncement}
+      </div>
+      <div
+        id="studio-live-assertive"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+        class="sr-only"
+      >
+        ${this.store.assertiveAnnouncement}
+      </div>
+
       ${this.store.studioRevMismatch
         ? html`<div role="status" class="studio-rev-banner">
-            <span>Latter Studio was updated — Reload Page</span>
+            <span>${this.store.t("shell.rev_updated_banner")}</span>
             <button
               type="button"
               @click=${() => this.store.reloadPage()}
               class="btn btn-primary btn-compact"
             >
-              Reload Page
+              ${this.store.t("shell.reload_page")}
             </button>
           </div>`
         : nothing}
@@ -308,7 +430,7 @@ export class LatterStudio extends LitElement {
         <div class="titlebar-brand">
           <button
             type="button"
-            aria-label="Toggle the Home Assistant sidebar"
+            aria-label=${this.store.t("shell.toggle_ha_sidebar")}
             @click=${() => this.store.toggleParentHaSidebar()}
             class="btn-icon ha-menu-btn"
           >
@@ -316,17 +438,17 @@ export class LatterStudio extends LitElement {
               <path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z" />
             </svg>
           </button>
-          <span class="titlebar-title">Latter</span>
+          <span class="titlebar-title">${this.store.t("shell.title")}</span>
         </div>
         <div class="titlebar-actions">
           ${showHeaderUpdate
             ? html`<button
                 type="button"
                 id="hdr-update-pill"
-                @click=${() => void this.store.triggerHeaderFirmwareUpdate()}
+                @click=${() => void this.store.entity.triggerHeaderFirmwareUpdate()}
                 class="btn btn-secondary btn-compact"
               >
-                Install Update
+                ${this.store.t("shell.install_update")}
               </button>`
             : nothing}
         </div>
@@ -338,17 +460,17 @@ export class LatterStudio extends LitElement {
         <main
           class="main-area"
           @focusin=${(ev: FocusEvent) => this.store.onMainFocusIn(ev)}
-          @focusout=${() => void this.store.flushAllPendingSettings()}
+          @focusout=${(ev: FocusEvent) => this._onMainFocusOut(ev)}
         >
           <div class="content-wrap">
-            <h2 id="unified-page-title" class="page-title">
+            <h1 id="unified-page-title" tabindex="-1" class="page-title">
               <span>${this.store.pageTitle}</span>
               ${subtitle ? html`<span class="page-subtitle">${subtitle}</span>` : nothing}
-            </h2>
+            </h1>
 
             ${isInitialLoading
               ? html`<div id="studio-loading" role="status" class="loading-state">
-                  Loading Latter…
+                  ${this.store.t("shell.loading")}
                 </div>`
               : nothing}
 
@@ -360,25 +482,56 @@ export class LatterStudio extends LitElement {
                     @click=${() => void this.store.refreshState()}
                     class="btn btn-secondary btn-compact"
                   >
-                    Retry
+                    ${this.store.t("shell.retry")}
                   </button>
                 </div>`
               : nothing}
 
-            ${data ? renderActiveView(this.store) : nothing}
+            ${isDevicePendingPayload
+              ? html`<div id="studio-device-loading" role="status" class="loading-state">
+                  ${this.store.t("shell.loading_device")}
+                </div>`
+              : data
+                ? renderActiveView(this.store)
+                : nothing}
           </div>
         </main>
       </div>
 
       ${renderStudioDialogs(this.store)}
+      ${renderConfirmDialog({
+        id: "latter-confirm-modal",
+        open: cm.open,
+        title: cm.title,
+        consequence: cm.consequence,
+        blastRadiusCount: cm.blastRadiusCount,
+        blastRadiusLabel: cm.blastRadiusLabel || undefined,
+        confirmLabel: cm.confirmLabel || this.store.t("action.confirm"),
+        cancelLabel: cm.cancelLabel || this.store.t("action.cancel"),
+        danger: cm.danger,
+        busy: cm.busy,
+        confirmButtonId: "btn-confirm-modal-accept",
+        onConfirm: () => void this.store.runConfirmedAction(),
+        onCancel: () => this.store.closeConfirm(),
+        onDownloadBackupFirst: cm.onDownloadBackupFirst
+          ? () => void cm.onDownloadBackupFirst?.()
+          : null,
+        overlay: this.store.localeOverlay,
+      })}
 
       ${this.store.toastMessage
-        ? html`<div
-            role="status"
-            aria-live="polite"
-            class="toast ${this.store.toastIsError ? "error" : ""}"
-          >
-            ${this.store.toastMessage}
+        ? html`<div class="toast ${this.store.toastIsError ? "error" : ""}">
+            <span>${this.store.toastMessage}</span>
+            ${this.store.toastIsError
+              ? html`<button
+                  type="button"
+                  aria-label=${this.store.t("shell.dismiss_toast")}
+                  @click=${() => this.store.dismissToast()}
+                  class="btn btn-text btn-compact"
+                >
+                  ${this.store.t("action.dismiss")}
+                </button>`
+              : nothing}
           </div>`
         : nothing}
     </div>`;

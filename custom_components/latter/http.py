@@ -897,8 +897,9 @@ class LatterWallpaperUploadView(HomeAssistantView):
     async def post(self, request: web.Request) -> web.Response:
         """Handle admin multipart/form-data upload (`file` <= 15 MB, optional `device_slug` / `subentry_id`)."""
         from .coordinator import resolve_coordinator
-        from .hub import get_latter_system
+        from .hub import get_latter_system, iter_coordinators
         from .presence import get_ble_fabric
+        from .studio.settings import find_by_subentry_id
 
         user = request.get("hass_user")
         if user is None or not getattr(user, "is_admin", False):
@@ -917,9 +918,8 @@ class LatterWallpaperUploadView(HomeAssistantView):
             )
 
         upload_scope = ""
-        target_slug = normalize_device_slug(
-            str(request.query.get("device_slug") or "system")
-        )
+        explicit_device_slug = str(request.query.get("device_slug") or "").strip()
+        target_slug = normalize_device_slug(explicit_device_slug or "system")
         subentry_id = str(request.query.get("subentry_id") or "").strip()
         filename = "wallpaper.jpg"
         raw_bytes: bytes | None = None
@@ -942,6 +942,7 @@ class LatterWallpaperUploadView(HomeAssistantView):
             elif field_name == "device_slug":
                 val = (await part.text()).strip()
                 if val:
+                    explicit_device_slug = val
                     target_slug = normalize_device_slug(val)
             elif field_name == "subentry_id":
                 val = (await part.text()).strip()
@@ -974,13 +975,21 @@ class LatterWallpaperUploadView(HomeAssistantView):
         if upload_scope == "system":
             target_slug = "system"
         elif subentry_id:
-            coord = resolve_coordinator(self.hass, subentry_id)
-            if coord is not None:
-                target_slug = coord.device_slug
-        elif target_slug != "system":
+            coord = find_by_subentry_id(iter_coordinators(self.hass), subentry_id)
+            if coord is None:
+                return web.json_response(
+                    {"error": f"Unknown subentry_id: {subentry_id}"},
+                    status=HTTPStatus.NOT_FOUND,
+                )
+            target_slug = coord.device_slug
+        elif explicit_device_slug and target_slug != "system":
             coord = resolve_coordinator(self.hass, target_slug)
-            if coord is not None:
-                target_slug = coord.device_slug
+            if coord is None:
+                return web.json_response(
+                    {"error": f"Unknown device_slug: {target_slug}"},
+                    status=HTTPStatus.NOT_FOUND,
+                )
+            target_slug = coord.device_slug
 
         try:
             source_id, out_filename = await self.hass.async_add_executor_job(
@@ -999,18 +1008,13 @@ class LatterWallpaperUploadView(HomeAssistantView):
 
         sys_obj = get_latter_system(self.hass)
         sys_signer = (
-            coord.sign_payload_resource
-            if coord is not None
-            else (
-                sys_obj.url_signer.sign_payload_resource
-                if sys_obj is not None
-                else None
-            )
+            sys_obj.url_signer.sign_payload_resource
+            if sys_obj is not None
+            else None
         )
-        sys_slug = coord.device_slug if coord is not None else "system"
         system_wallpapers = list_wallpaper_catalog(
             self.hass,
-            sys_slug,
+            "system",
             "",
             [],
             sign_resource=sys_signer,
@@ -1018,18 +1022,19 @@ class LatterWallpaperUploadView(HomeAssistantView):
         )
 
         if coord is not None:
-            favs = list(coord.wallpaper_favorites)
-            if source_id not in favs:
-                favs.append(source_id)
-            merged = {
-                **coord.device_data,
-                CONF_WALLPAPER_SOURCE: source_id,
-                CONF_WALLPAPER_FAVORITES: favs,
-            }
-            coord.current_wallpaper = source_id
-            coord._configured_wallpaper_source = source_id
-            coord._schedule_persist_runtime_state()
-            coord.update_device_config(merged)
+            async with coord.config_lock:
+                favs = list(coord.wallpaper_favorites)
+                if source_id not in favs:
+                    favs.append(source_id)
+                merged = {
+                    **coord.device_data,
+                    CONF_WALLPAPER_SOURCE: source_id,
+                    CONF_WALLPAPER_FAVORITES: favs,
+                }
+                coord.current_wallpaper = source_id
+                coord._configured_wallpaper_source = source_id
+                coord._schedule_persist_runtime_state()
+                coord.update_device_config(merged)
             coord._bind_wallpaper_cycle_timer()
             coord.async_notify_listeners()
             wallpapers = list_wallpaper_catalog(
@@ -1260,39 +1265,64 @@ class LatterCameraSnapshotView(HomeAssistantView):
     async def get(self, request: web.Request, target_device: str) -> web.Response:
         """Handle GET /api/latter/camera/{target_device}?entity_id=camera.front_door&w=466&h=466&shape=circle"""
         from .coordinator import resolve_coordinator
+        from .hub import get_latter_system
 
         coordinator = resolve_coordinator(self.hass, target_device)
-        if coordinator is None:
+        if coordinator is not None:
+            cam_entity = str(
+                request.query.get("entity_id") or coordinator.camera_entity or ""
+            ).strip()
+            if not cam_entity or not cam_entity.startswith("camera."):
+                return web.Response(
+                    status=HTTPStatus.NOT_FOUND, text="No camera entity specified"
+                )
+            width, height, is_circle, shape_str = _parse_render_params(
+                request,
+                coordinator,
+                default_circle=(coordinator.display_shape == "circle"),
+            )
+            if not coordinator.verify_resource(
+                f"camera:{cam_entity}|{width}|{height}|{shape_str}",
+                sig=request.query.get("sig"),
+            ):
+                return web.Response(
+                    status=HTTPStatus.FORBIDDEN, text="Invalid signature"
+                )
+            if cam_entity not in set(coordinator.camera_entities):
+                return web.Response(
+                    status=HTTPStatus.NOT_FOUND, text="Camera entity not in allow-list"
+                )
+        elif normalize_device_slug(target_device) == "system":
+            sys_obj = get_latter_system(self.hass)
+            if sys_obj is None:
+                return web.Response(
+                    status=HTTPStatus.NOT_FOUND, text="Latter System not initialized"
+                )
+            cam_entity = str(request.query.get("entity_id") or "").strip()
+            if not cam_entity or not cam_entity.startswith("camera."):
+                return web.Response(
+                    status=HTTPStatus.NOT_FOUND, text="No camera entity specified"
+                )
+            width, height, is_circle, shape_str = _parse_dimensions_and_shape(
+                request,
+                320,
+                180,
+                default_circle=False,
+            )
+            if not sys_obj.url_signer.verify_resource(
+                f"camera:{cam_entity}|{width}|{height}|{shape_str}",
+                sig=request.query.get("sig"),
+            ):
+                return web.Response(
+                    status=HTTPStatus.FORBIDDEN, text="Invalid signature"
+                )
+            if self.hass.states.get(cam_entity) is None:
+                return web.Response(
+                    status=HTTPStatus.NOT_FOUND, text="Camera entity not found"
+                )
+        else:
             return web.Response(
                 status=HTTPStatus.NOT_FOUND, text="Unknown target device"
-            )
-
-        cam_entity = str(
-            request.query.get("entity_id") or coordinator.camera_entity or ""
-        ).strip()
-        if not cam_entity or not cam_entity.startswith("camera."):
-            return web.Response(
-                status=HTTPStatus.NOT_FOUND, text="No camera entity specified"
-            )
-
-        width, height, is_circle, shape_str = _parse_render_params(
-            request,
-            coordinator,
-            default_circle=(coordinator.display_shape == "circle"),
-        )
-
-        if not coordinator.verify_resource(
-            f"camera:{cam_entity}|{width}|{height}|{shape_str}",
-            sig=request.query.get("sig"),
-        ):
-            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
-
-        allowed_cams = set(coordinator.camera_entities)
-        if coordinator.camera_entity:
-            allowed_cams.add(coordinator.camera_entity)
-        if cam_entity not in allowed_cams:
-            return web.Response(
-                status=HTTPStatus.NOT_FOUND, text="Camera entity not in allow-list"
             )
 
         rot_str = (request.query.get("rot") or "0").strip()
@@ -1373,8 +1403,6 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         fmt = "wav" if raw_fmt == "wav" else "flac"
 
         allowed_cams = set(coord.camera_entities)
-        if coord.camera_entity:
-            allowed_cams.add(coord.camera_entity)
         if coord.active_carousel_camera:
             allowed_cams.add(coord.active_carousel_camera)
         if cam_ent not in allowed_cams:

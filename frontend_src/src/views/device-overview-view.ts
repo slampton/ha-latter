@@ -1,10 +1,10 @@
 /**
- * Device Overview View (`dashboard`, D-029 / D-048 / D-049 / D-051 / D-053):
- * - Column 1: High-level Status card (header state pill + responsive 2x2 tonal metric tiles)
- *   followed by Quick Actions (immediate action tiles + live volume + Open in ESPHome & Download Backup footer links).
- * - Column 2: Unified Assignments card (Device Group with Custom / Save Custom Group / Manage Groups,
- *   Assigned Person, Remote Control Group modal launcher), Timers & Alarms card (live ringing Dismiss,
- *   Active Timer + Cancel Timer, Stopwatch + Reset Stopwatch, 3-slot 2-way Alarms), and spillover Sensors & Controls.
+ * Device Overview View (`dashboard`, `D-003`, `D-029`, `D-030`, `D-048`, `D-066`, `F-01`):
+ * - Shared `renderDeviceOfflineBanner`, `renderDeviceEntityRow` (`formatHaEntityState`), and `defaultLocaleTimeFormat`
+ * - Column 1: High-level Status card (`caps.has_battery` true unknowns & real `update.*` Firmware gating)
+ *   + Quick actions (`forceDisabled` offline gating, separated `.btn-danger` Restart row, `#btn-open-in-ha`)
+ * - Column 2: Assignments, Timers & alarms (1 Hz client countdown from `timer_ends_at` / `stopwatch_started_at`),
+ *   and spillover Sensors & controls.
  */
 
 import {
@@ -15,11 +15,13 @@ import {
   renderSettingsRow,
   renderSvgIcon,
 } from "../components/controls.js";
-import { ALARM_RECURRENCE_OPTIONS, DEFAULT_ALARMS_SUMMARY } from "../constants.js";
+import { DEFAULT_ALARMS_SUMMARY } from "../constants.js";
+import { formatHaEntityState, type StudioTranslationKey } from "../i18n/index.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import type { EspHomeEntityItem } from "../types.js";
+import type { EspHomeEntityItem, HomeAssistant } from "../types.js";
 import {
+  entityLabel,
   fmtDistance,
   fmtNumber,
   fmtPercent,
@@ -27,21 +29,174 @@ import {
   rssiToPercent,
 } from "../utils/format.js";
 
-const DEV_ICON_AREA = "M12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5M12,2A7,7 0 0,1 19,9C19,14.25 12,22 12,22C12,22 5,14.25 5,9A7,7 0 0,1 12,2M12,4A5,5 0 0,0 7,9C7,10 7,12 12,18.71C17,12 17,10 17,9A5,5 0 0,0 12,4Z";
-const DEV_ICON_BATTERY = "M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z";
-const DEV_ICON_PLUG = "M16,7V3H14V7H10V3H8V7H8C7,7 6,8 6,9V14.5L9.5,18V21H14.5V18L18,14.5V9C18,8 17,7 16,7M16,13.67L12.5,17.17V19H11.5V17.17L8,13.67V9H16V13.67Z";
-const DEV_ICON_RADAR = "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,10.84 21.79,9.69 21.39,8.61L19.79,10.21C19.93,10.8 20,11.4 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4C12.6,4 13.2,4.07 13.79,4.21L15.4,2.6C14.31,2.21 13.16,2 12,2M19,2A2,2 0 0,0 17,4A2,2 0 0,0 19,6A2,2 0 0,0 21,4A2,2 0 0,0 19,2M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12H16A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8V6M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z";
-const DEV_ICON_WIFI = "M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z";
-const DEV_ICON_BLUETOOTH = "M14.88,16.29L13,18.17V14.41M13,5.83L14.88,7.71L13,9.58M17.71,7.71L12,2H11V9.58L6.41,5L5,6.41L10.59,12L5,17.58L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71Z";
-const DEV_ICON_CHIP = "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
-const DEV_ICON_TAG = "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
+const DEV_ICON_AREA =
+  "M12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5M12,2A7,7 0 0,1 19,9C19,14.25 12,22 12,22C12,22 5,14.25 5,9A7,7 0 0,1 12,2M12,4A5,5 0 0,0 7,9C7,10 7,12 12,18.71C17,12 17,10 17,9A5,5 0 0,0 12,4Z";
+const DEV_ICON_BATTERY =
+  "M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z";
+const DEV_ICON_PLUG =
+  "M16,7V3H14V7H10V3H8V7H8C7,7 6,8 6,9V14.5L9.5,18V21H14.5V18L18,14.5V9C18,8 17,7 16,7M16,13.67L12.5,17.17V19H11.5V17.17L8,13.67V9H16V13.67Z";
+const DEV_ICON_RADAR =
+  "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,10.84 21.79,9.69 21.39,8.61L19.79,10.21C19.93,10.8 20,11.4 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4C12.6,4 13.2,4.07 13.79,4.21L15.4,2.6C14.31,2.21 13.16,2 12,2M19,2A2,2 0 0,0 17,4A2,2 0 0,0 19,6A2,2 0 0,0 21,4A2,2 0 0,0 19,2M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12H16A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8V6M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z";
+const DEV_ICON_WIFI =
+  "M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z";
+const DEV_ICON_BLUETOOTH =
+  "M14.88,16.29L13,18.17V14.41M13,5.83L14.88,7.71L13,9.58M17.71,7.71L12,2H11V9.58L6.41,5L5,6.41L10.59,12L5,17.58L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71Z";
+const DEV_ICON_CHIP =
+  "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
+const DEV_ICON_TAG =
+  "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
 
-function rssiQualityLabel(rssi: number | null): string {
-  if (rssi === null || !Number.isFinite(rssi)) return "No reading";
-  if (rssi >= -60) return "Excellent";
-  if (rssi >= -70) return "Good";
-  if (rssi >= -80) return "Fair";
-  return "Weak";
+export function defaultLocaleTimeFormat(
+  hass: HomeAssistant | null | undefined,
+): "24-Hour" | "12-Hour (AM/PM)" {
+  const tf = hass?.locale?.time_format;
+  if (tf === "24") return "24-Hour";
+  if (tf === "am_pm") return "12-Hour (AM/PM)";
+  try {
+    const lang = hass?.locale?.language || hass?.language || undefined;
+    const hour12 = new Intl.DateTimeFormat(lang, { hour: "numeric" }).resolvedOptions().hour12;
+    if (hour12 === false) return "24-Hour";
+  } catch {
+    // Fall back to 12-hour wire token when Intl options are unavailable.
+  }
+  return "12-Hour (AM/PM)";
+}
+
+/**
+ * Shared calm offline / sleeping banner rendered at the top of Device views (`Q8` / `E-04`).
+ */
+export function renderDeviceOfflineBanner(store: StudioStore): TemplateResult | typeof nothing {
+  const data = store.state;
+  const cfg = data?.config || {};
+  if (cfg.kind === "ble_tag") return nothing;
+  const curDevEntry =
+    (data?.system_devices || []).find((d) => d.subentry_id === store.activeSubentryId) ||
+    (data?.system_devices || []).find((d) => d.is_current);
+  if (curDevEntry?.is_online !== false) return nothing;
+  const sleepExpected = Boolean(data?.live?.is_ble_sleep_expected);
+  const titleKey: StudioTranslationKey = sleepExpected
+    ? "offline.device_sleeping_title"
+    : "offline.device_banner_title";
+  return html`<div
+    id="device-offline-banner"
+    role="region"
+    aria-label=${store.t(titleKey)}
+    class="alert offline-banner"
+  >
+    <div class="offline-banner-body">
+      <strong>${store.t(titleKey)}</strong>
+      <span>${store.t("offline.device_banner_body")}</span>
+    </div>
+    <span class="chip">
+      ${sleepExpected ? store.t("status.sleeping") : store.t("status.offline")}
+    </span>
+  </div>`;
+}
+
+/**
+ * Formats non-pref Home Assistant entity `select` options and sensor states via `formatHaEntityState` (`D-13`),
+ * while delegating preference-backed, switch, number, button, and update controls to `renderNativeControlRow`.
+ */
+export function renderDeviceEntityRow(
+  store: StudioStore,
+  item: EspHomeEntityItem,
+): TemplateResult {
+  if (
+    item.pref_key ||
+    item.domain === "switch" ||
+    item.domain === "number" ||
+    item.domain === "button" ||
+    item.domain === "update"
+  ) {
+    return renderNativeControlRow(store, item);
+  }
+
+  const label = entityLabel(item.name || item.entity_id);
+  const st = String(item.state ?? "");
+  const unavailable = st === "unavailable" || st === "unknown";
+
+  if (item.domain === "select") {
+    const opts = item.options || [];
+    const onChange = (ev: Event): void => {
+      void store.entity.espSelect(item.entity_id, (ev.currentTarget as HTMLSelectElement).value);
+    };
+    return renderSettingsRow({
+      label,
+      control: html`<select aria-label=${label} ?disabled=${unavailable} .value=${st} @change=${onChange}>
+        ${opts.map(
+          (opt) =>
+            html`<option value=${opt} ?selected=${opt === st}>
+              ${formatHaEntityState(store.hass, item.entity_id, opt)}
+            </option>`,
+        )}
+      </select>`,
+    });
+  }
+
+  const displayVal = unavailable
+    ? store.t("common.unknown")
+    : item.unit && Number.isFinite(Number(st))
+      ? `${fmtNumber(Number(st), store.hass)} ${item.unit}`
+      : formatHaEntityState(store.hass, item.entity_id, st);
+
+  return html`<div class="kv-row">
+    <span>${label}</span>
+    <strong>${displayVal}</strong>
+  </div>`;
+}
+
+function rssiQualityLabel(store: StudioStore, rssi: number | null): string {
+  if (rssi === null || !Number.isFinite(rssi)) return store.t("signal.no_reading");
+  if (rssi >= -60) return store.t("signal.excellent");
+  if (rssi >= -70) return store.t("signal.good");
+  if (rssi >= -80) return store.t("signal.fair");
+  return store.t("signal.weak");
+}
+
+function canonicalActionCommand(item: EspHomeEntityItem): string {
+  if (item.device_command) return item.device_command;
+  if (item.device_class === "identify") return "find_my";
+  if (item.device_class === "restart") return "restart";
+  const tail = (item.key || item.entity_id.split(".", 2)[1] || "").toLowerCase();
+  if (tail === "find_my" || tail.endsWith("_find_my_device") || tail.endsWith("_find_my")) {
+    return "find_my";
+  }
+  if (
+    tail === "trigger_va" ||
+    tail.endsWith("_trigger_voice_assistant") ||
+    tail.endsWith("_trigger_va")
+  ) {
+    return "trigger_va";
+  }
+  if (tail === "activate_screensaver" || tail.endsWith("_activate_screensaver")) {
+    return "activate_screensaver";
+  }
+  if (tail === "hibernate" || tail.endsWith("_hibernate_device") || tail.endsWith("_hibernate")) {
+    return "hibernate";
+  }
+  if (tail === "restart" || tail.endsWith("_restart_device") || tail.endsWith("_restart")) {
+    return "restart";
+  }
+  return "";
+}
+
+function localizedQuickActionLabel(
+  store: StudioStore,
+  cmd: string,
+  fallback: string,
+): string {
+  switch (cmd) {
+    case "find_my":
+      return store.t("dev_overview.qa_find_my");
+    case "trigger_va":
+      return store.t("dev_overview.qa_trigger_va");
+    case "activate_screensaver":
+      return store.t("dev_overview.qa_activate_screensaver");
+    case "restart":
+      return store.t("dev_overview.qa_restart");
+    default:
+      return entityLabel(fallback);
+  }
 }
 
 interface AlarmSlotView {
@@ -113,6 +268,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
   const curDevEntry =
     (data?.system_devices || []).find((d) => d.subentry_id === store.activeSubentryId) ||
     (data?.system_devices || []).find((d) => d.is_current);
+  const isOffline = !isBleOnly && curDevEntry?.is_online === false;
 
   const deviceIssues = (data?.issues || []).filter(
     (i) => i.subentry_id && i.subentry_id === store.activeSubentryId,
@@ -121,36 +277,49 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
     (i) => i.severity === "error" || i.severity === "critical",
   );
 
-  // Live Status calculations
+  // Live Status calculations (strict `D-003` unknowns)
   const winRow = (curDevEntry?.ble_survey_rows || []).find((r) => r.is_winner);
+  const hasBattery = Boolean(caps.has_battery || curDevEntry?.has_battery);
   const hasBatteryReading =
     !isBleOnly &&
+    hasBattery &&
     curDevEntry?.battery_level !== null &&
     curDevEntry?.battery_level !== undefined &&
     Number.isFinite(Number(curDevEntry.battery_level));
   const batPct = hasBatteryReading
     ? Math.max(0, Math.min(100, Math.round(Number(curDevEntry?.battery_level))))
     : 0;
+  const batSignalStyle = `--signal-pct:${batPct}%`;
   const batMeta = curDevEntry?.is_charging
-    ? "Charging"
+    ? store.t("status.charging")
     : curDevEntry?.is_usb_connected
-      ? "Plugged in"
-      : "On battery";
+      ? store.t("status.plugged_in")
+      : hasBatteryReading
+        ? store.t("status.on_battery")
+        : store.t("dev_overview.waiting_for_reading");
 
   let rssiVal: number | null = null;
   if (!isBleOnly && curDevEntry?.wifi_rssi !== null && curDevEntry?.wifi_rssi !== undefined) {
     rssiVal = Number(curDevEntry.wifi_rssi);
-  } else if (isBleOnly && winRow && winRow.effective_rssi !== null && winRow.effective_rssi !== undefined) {
+  } else if (
+    isBleOnly &&
+    winRow &&
+    winRow.effective_rssi !== null &&
+    winRow.effective_rssi !== undefined
+  ) {
     rssiVal = Number(winRow.effective_rssi);
   }
   const hasRssi = rssiVal !== null && Number.isFinite(rssiVal);
-  const rssiText = hasRssi ? `${fmtNumber(rssiVal, store.hass, 0)} dBm` : "—";
+  const rssiText = hasRssi
+    ? `${fmtNumber(rssiVal, store.hass, 0)} dBm`
+    : store.t("common.unknown");
   const rssiPct = hasRssi ? rssiToPercent(rssiVal) : 0;
+  const wifiSignalStyle = `--signal-pct:${rssiPct}%`;
 
   const hasAssignedArea = Boolean(curDevEntry?.has_assigned_area);
   const areaText = hasAssignedArea
-    ? curDevEntry?.area_label || live.active_area_name || "—"
-    : live.active_area_name || "—";
+    ? curDevEntry?.area_label || live.active_area_name || store.t("common.unknown")
+    : live.active_area_name || store.t("common.unknown");
 
   const effBleCat = String(cfg.effective_ble_category || curDevEntry?.ble_category || "ble_tag");
   const rawBleCat = String(cfg.ble_category || "auto").trim().toLowerCase();
@@ -161,7 +330,10 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
     Boolean(txStatus) && Boolean(txStateText) && txStateText.toLowerCase() !== "transmitting";
 
   const distSuffix =
-    live.ble_closest_proxy && winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
+    live.ble_closest_proxy &&
+    winRow &&
+    winRow.distance_m !== null &&
+    winRow.distance_m !== undefined
       ? ` (~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)})`
       : "";
   const showProxyMeta = Boolean(
@@ -169,97 +341,136 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
   );
   const areaMetaBase = isBleOnly
     ? effBleCat === "phone"
-      ? "Phone"
-      : "BLE tag"
+      ? store.t("status.phone")
+      : store.t("status.ble_tag")
     : hasAssignedArea
-      ? "Stationary"
-      : "Roaming";
+      ? store.t("status.stationary")
+      : store.t("status.roaming");
   const areaMeta = showProxyMeta
     ? `${areaMetaBase} • ${live.ble_closest_proxy}${distSuffix}`
     : areaMetaBase;
 
-  const rawSw = String(live.device_sw_version || esp?.device?.sw_version || "").replace(/^v/i, "");
-  const fwValue = rawSw ? `v${rawSw}` : "—";
+  const rawSw = String(live.device_sw_version || esp?.device?.sw_version || "").replace(
+    /^v/i,
+    "",
+  );
+  const fwValue = rawSw ? `v${rawSw}` : store.t("common.unknown");
+  const allUpdateEntities = (esp?.sections || []).flatMap((s) =>
+    (s.items || []).filter((it) => it.domain === "update"),
+  );
+  const fwEntityId = String(
+    live.fw_update_entity || allUpdateEntities[0]?.entity_id || "",
+  ).trim();
+  const fwEntityItem = fwEntityId
+    ? allUpdateEntities.find((it) => it.entity_id === fwEntityId)
+    : allUpdateEntities[0];
+  const fwEntityState = String(
+    fwEntityItem?.state ?? (fwEntityId ? store.hass?.states?.[fwEntityId]?.state : "") ?? "",
+  ).trim();
+  const hasAvailableUpdateEntity = Boolean(
+    fwEntityId && fwEntityState && fwEntityState !== "unavailable" && fwEntityState !== "unknown",
+  );
   const fwMeta = live.fw_update_available
-    ? "Update available"
-    : rawSw
-      ? "Up to date"
-      : "Not reported";
+    ? store.t("status.update")
+    : hasAvailableUpdateEntity
+      ? store.t("status.up_to_date")
+      : store.t("common.unknown");
 
   let statusChipClass = "chip";
   let statusDotClass = "status-dot";
-  let statusLabel = "—";
+  let statusLabel = store.t("common.unknown");
   if (isBleOnly) {
-    statusLabel = curDevEntry?.status_label || "—";
-    const detected =
-      Boolean(curDevEntry?.is_online) || statusLabel === "Online" || Boolean(winRow);
-    if (detected) {
+    if (curDevEntry?.status_code === "online" || Boolean(curDevEntry?.is_online) || Boolean(winRow)) {
       statusChipClass = "chip chip-success";
       statusDotClass = "status-dot online";
+      statusLabel = store.t("status.online");
+    } else if (curDevEntry?.status_code === "scanning") {
+      statusLabel = store.t("status.scanning");
+    } else if (curDevEntry?.status_code === "away") {
+      statusLabel = store.t("status.away");
+    } else if (curDevEntry?.status_label) {
+      statusLabel = curDevEntry.status_label;
     }
   } else if (curDevEntry?.is_online && live.fw_update_available) {
     statusChipClass = "chip chip-warning";
     statusDotClass = "status-dot update";
-    statusLabel = "Update available";
+    statusLabel = store.t("status.update");
   } else if (curDevEntry?.is_online) {
     statusChipClass = "chip chip-success";
     statusDotClass = "status-dot online";
-    statusLabel = "Online";
+    statusLabel = store.t("status.online");
   } else if (curDevEntry?.is_online === false) {
-    statusLabel = "Offline";
+    statusLabel = live.is_ble_sleep_expected
+      ? store.t("status.sleeping")
+      : store.t("status.offline");
   }
 
-  const sectionActionItems = store
+  // Canonical `data?.quick_actions` + deduplicated ESPHome action buttons (`C-19`, `R-8`)
+  const sectionActionItems = store.entity
     .getSectionItems("actions")
-    .concat(store.getSectionItems("overview"));
+    .concat(store.entity.getSectionItems("overview"));
   const sectionButtons = sectionActionItems.filter((it) => it.domain === "button");
-  const synthesizedButtons: EspHomeEntityItem[] = (data?.quick_actions || []).map((qa) => ({
-    entity_id: `cmd:${qa.key}`,
-    domain: "button",
-    name: qa.label,
-    state: qa.state,
-    device_command: qa.device_command,
-    device_class: qa.device_class,
-  }));
-  const hasRestartInSection = sectionButtons.some(
-    (b) => b.device_class === "restart" || (b.name || "").toLowerCase().includes("restart"),
+  const synthesizedButtons: EspHomeEntityItem[] = (data?.quick_actions || []).map((qa) => {
+    const cmd = qa.device_command || qa.key;
+    return {
+      entity_id: `cmd:${qa.key}`,
+      domain: "button",
+      name: localizedQuickActionLabel(store, cmd, qa.label),
+      state: qa.state,
+      key: qa.key,
+      device_command: qa.device_command,
+      device_class:
+        qa.device_class ||
+        (cmd === "find_my" ? "identify" : cmd === "restart" ? "restart" : undefined),
+    };
+  });
+  const synthesizedCmdSet = new Set(
+    synthesizedButtons.map((sb) => canonicalActionCommand(sb)).filter(Boolean),
   );
-  const quickActionButtons = sectionButtons.concat(
-    synthesizedButtons.filter((sb) => !(hasRestartInSection && sb.device_command === "restart")),
+  const extraSectionButtons = sectionButtons.filter((b) => {
+    const cmd = canonicalActionCommand(b);
+    return !cmd || !synthesizedCmdSet.has(cmd);
+  });
+  const allQuickActionButtons = synthesizedButtons.concat(extraSectionButtons);
+  const harmlessQuickButtons = allQuickActionButtons.filter(
+    (b) => canonicalActionCommand(b) !== "restart",
   );
+  const restartButton =
+    allQuickActionButtons.find((b) => canonicalActionCommand(b) === "restart") || null;
 
-  const otherQuickItems = sectionActionItems.filter((it) => it.domain !== "button");
+  const otherQuickItemsRaw = sectionActionItems.filter((it) => it.domain !== "button");
   if (
     data?.speaker_volume &&
-    !otherQuickItems.some((it) => it.entity_id === data.speaker_volume?.entity_id)
+    !otherQuickItemsRaw.some((it) => it.entity_id === data.speaker_volume?.entity_id)
   ) {
-    otherQuickItems.push(data.speaker_volume);
+    otherQuickItemsRaw.push(data.speaker_volume);
   }
-  const hasQuickControls = quickActionButtons.length > 0 || otherQuickItems.length > 0;
+  const otherQuickItems = isOffline
+    ? otherQuickItemsRaw.map((it) => ({ ...it, state: "unavailable" }))
+    : otherQuickItemsRaw;
+  const hasQuickControls =
+    harmlessQuickButtons.length > 0 || otherQuickItems.length > 0 || Boolean(restartButton);
   const showQuickActionsCard = !isBleOnly;
-  const otherSensorItems = store.getSectionItems("other");
+  const otherSensorItems = store.entity.getSectionItems("other");
 
   const groups = data?.device_groups || [];
   const rawGroupId = String(cfg.device_group || "custom").trim() || "custom";
   const curGroupId =
-    rawGroupId === "custom" || groups.some((g) => g.id === rawGroupId)
-      ? rawGroupId
-      : "custom";
+    rawGroupId === "custom" || groups.some((g) => g.id === rawGroupId) ? rawGroupId : "custom";
 
   const remoteGroups = data?.system_config?.remote_groups || [];
   const curRemoteMode =
     String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
     "area_auto";
-  let remoteSummary = "Follow Area";
+  let remoteSummary = store.t("dev_overview.remote_follow_area");
   if (curRemoteMode === "all") {
-    remoteSummary = "All System Remotes";
+    remoteSummary = store.t("dev_overview.remote_all_system");
   } else if (curRemoteMode.startsWith("group:")) {
     const gid = curRemoteMode.slice(6);
     remoteSummary = remoteGroups.find((g) => g.id === gid)?.name || gid;
   }
 
-  const alarmsSummaryPref =
-    typeof store.getPref === "function" ? store.getPref("alarms_summary") : undefined;
+  const alarmsSummaryPref = store.entity.getPref("alarms_summary");
   const alarmSlots = parseAlarmsSummary(
     alarmsSummaryPref?.value ?? cfg.alarms_summary ?? DEFAULT_ALARMS_SUMMARY,
   );
@@ -278,8 +489,24 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
       return;
     }
     next[idx] = merged;
-    store.stageDeviceSetting("alarms_summary", serializeAlarmsSummary(next), focusId);
+    store.entity.stageDeviceSetting("alarms_summary", serializeAlarmsSummary(next), focusId);
   };
+
+  // Live 1 Hz client countdown / stopwatch elapsed from `timer_ends_at` / `stopwatch_started_at` (`F-01`, `B-17`)
+  const nowMs = Number.isFinite(store.liveClockNowMs) ? store.liveClockNowMs : Date.now();
+  const timerEndsMs = live.timer_ends_at ? Date.parse(live.timer_ends_at) : Number.NaN;
+  const liveTimerRemainingSec =
+    live.timer_running && Number.isFinite(timerEndsMs)
+      ? Math.max(0, Math.ceil((timerEndsMs - nowMs) / 1000))
+      : Math.max(0, Math.round(Number(live.timer_remaining_sec || 0)));
+
+  const stopwatchStartedMs = live.stopwatch_started_at
+    ? Date.parse(live.stopwatch_started_at)
+    : Number.NaN;
+  const liveStopwatchElapsedSec =
+    live.stopwatch_running && Number.isFinite(stopwatchStartedMs)
+      ? Math.max(0, Math.floor((nowMs - stopwatchStartedMs) / 1000))
+      : Math.max(0, Math.round(Number(live.stopwatch_elapsed_sec || 0)));
 
   const timerActive = Boolean(live.timer_running || live.timer_paused);
   const stopwatchActive = Boolean(live.stopwatch_running || live.stopwatch_paused);
@@ -289,37 +516,75 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
     .sort((a, b) => a.time.localeCompare(b.time));
   const alarmsSummaryLabel =
     enabledAlarmSlots.length > 0
-      ? `${fmtNumber(enabledAlarmSlots.length, store.hass, 0)} Enabled • ${enabledAlarmSlots[0].time}`
-      : "All Off";
+      ? store.t("dev_overview.alarms_enabled_summary", {
+          count: fmtNumber(enabledAlarmSlots.length, store.hass, 0),
+          nextTime: enabledAlarmSlots[0].time,
+        })
+      : store.t("common.all_off");
   const alarmsSummaryChipClass = enabledAlarmSlots.length > 0 ? "chip chip-primary" : "chip";
 
-  const powerTileBody = hasBatteryReading
+  const alarmRecurrenceChoices: ReadonlyArray<{ value: number; label: string }> = [
+    { value: 0, label: store.t("dev_overview.alarm_rec_daily") },
+    { value: 1, label: store.t("dev_overview.alarm_rec_weekdays") },
+    { value: 2, label: store.t("dev_overview.alarm_rec_weekends") },
+    { value: 3, label: store.t("dev_overview.alarm_rec_once") },
+  ];
+
+  const powerTileBody = hasBattery
     ? html`<div class="status-tile-head">
           ${renderSvgIcon(DEV_ICON_BATTERY)}
-          <span>Battery</span>
+          <span>${store.t("dev_overview.tile_battery")}</span>
         </div>
-        <strong class="status-tile-value">${fmtPercent(curDevEntry?.battery_level, store.hass)}</strong>
+        <strong class="status-tile-value">
+          ${hasBatteryReading
+            ? fmtPercent(curDevEntry?.battery_level, store.hass)
+            : store.t("common.unknown")}
+        </strong>
         <span class="status-tile-meta">${batMeta}</span>
-        <div class="signal-track" aria-hidden="true">
-          <div
-            class="signal-fill${batPct <= 20 && !curDevEntry?.is_charging ? " low" : ""}"
-            style=${`--signal-pct:${batPct}%`}
-          ></div>
-        </div>`
+        ${hasBatteryReading
+          ? html`<div class="signal-track" aria-hidden="true">
+              <div
+                class="signal-fill${batPct <= 20 && !curDevEntry?.is_charging ? " low" : ""}"
+                style=${batSignalStyle}
+              ></div>
+            </div>`
+          : nothing}`
     : html`<div class="status-tile-head">
           ${renderSvgIcon(DEV_ICON_PLUG)}
-          <span>Power</span>
+          <span>${store.t("dev_overview.tile_power")}</span>
         </div>
-        <strong class="status-tile-value">Plugged in</strong>
-        <span class="status-tile-meta">${caps.has_power ? "Sleep & wake active" : "Always on"}</span>`;
+        <strong class="status-tile-value">${store.t("status.plugged_in")}</strong>
+        <span class="status-tile-meta">
+          ${caps.has_power
+            ? store.t("status.sleep_wake_active")
+            : store.t("status.always_on")}
+        </span>`;
+
+  const hasOpenInHa = Boolean(links.esphome_device_id || links.latter_device_id);
+
+  const onTriggerRestart = (): void => {
+    if (!restartButton) return;
+    const toastMsg = store.t("sync.restarting_device");
+    if (restartButton.device_command) {
+      void store.entity.runDeviceAction(restartButton.device_command, toastMsg);
+    } else {
+      void store.entity.espAction(restartButton.entity_id, "press", undefined, toastMsg);
+    }
+  };
 
   return html`<section id="view-dashboard" class="stack">
+    ${renderDeviceOfflineBanner(store)}
+
     ${deviceIssues.length
-      ? html`<div role="alert" class="alert ${hasErrorIssue ? "alert-error" : "alert-warning"}">
+      ? html`<div
+          role="region"
+          aria-label=${store.t("status.needs_attention")}
+          class="alert ${hasErrorIssue ? "alert-error" : "alert-warning"}"
+        >
           <div class="alert-body">
-            <strong>Needs Attention</strong>
+            <strong>${store.t("status.needs_attention")}</strong>
             <ul class="alert-list">
-              ${deviceIssues.map((iss) => html`<li>${issueMessage(iss)}</li>`)}
+              ${deviceIssues.map((iss) => html`<li>${issueMessage(iss, store.hass)}</li>`)}
             </ul>
           </div>
           <button
@@ -327,18 +592,21 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
             @click=${() => store.openHaPage("/config/repairs")}
             class="btn btn-secondary btn-compact"
           >
-            Open Repairs
+            ${store.t("action.open_repairs")}
           </button>
         </div>`
       : nothing}
 
     ${showTxOffBanner
-      ? html`<div id="ble-transmitter-off-banner" role="alert" class="alert alert-warning">
+      ? html`<div
+          id="ble-transmitter-off-banner"
+          role="region"
+          aria-label=${store.t("offline.ble_tx_off_title", { state: txStateText })}
+          class="alert alert-warning"
+        >
           <div class="alert-body">
-            <strong>BLE Transmitter Not Active (${txStateText})</strong>
-            <span>
-              Enable the BLE Transmitter sensor in the Home Assistant Companion App on this phone so Bluetooth proxies can detect its Area.
-            </span>
+            <strong>${store.t("offline.ble_tx_off_title", { state: txStateText })}</strong>
+            <span>${store.t("offline.ble_tx_off_body")}</span>
           </div>
         </div>`
       : nothing}
@@ -347,7 +615,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
       <div class="column">
         ${renderCard({
           id: "card-device-status",
-          heading: html`<h3 class="card-title">Status</h3>`,
+          heading: html`<h3 class="card-title">${store.t("card.status")}</h3>`,
           headerActions: html`<span id="st-status-chip" class=${statusChipClass}>
             <span class=${statusDotClass} aria-hidden="true"></span>${statusLabel}
           </span>`,
@@ -360,7 +628,11 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
             >
               <div class="status-tile-head">
                 ${renderSvgIcon(DEV_ICON_AREA)}
-                <span id="st-area-label">${hasAssignedArea ? "Area" : "Current Area"}</span>
+                <span id="st-area-label">
+                  ${hasAssignedArea
+                    ? store.t("dev_overview.tile_area")
+                    : store.t("dev_overview.tile_current_area")}
+                </span>
               </div>
               <strong class="status-tile-value">${areaText}</strong>
               <span class="status-tile-meta">${areaMeta}</span>
@@ -374,16 +646,18 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                 >
                   <div class="status-tile-head">
                     ${renderSvgIcon(DEV_ICON_RADAR)}
-                    <span>Closest Proxy</span>
+                    <span>${store.t("dev_overview.tile_closest_proxy")}</span>
                   </div>
-                  <strong class="status-tile-value">${live.ble_closest_proxy || "—"}</strong>
+                  <strong class="status-tile-value">
+                    ${live.ble_closest_proxy || store.t("common.unknown")}
+                  </strong>
                   <span class="status-tile-meta">
                     ${winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
                       ? `~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)}`
-                      : "BLE presence"}
+                      : store.t("dev_overview.ble_presence_meta")}
                   </span>
                 </button>`
-              : hasBatteryReading || caps.has_power
+              : store.deviceHasView("power")
                 ? html`<button
                     type="button"
                     @click=${() => store.switchView("power")}
@@ -398,22 +672,24 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
               @click=${() =>
                 isBleOnly
                   ? store.switchView("presence")
-                  : store.openDeviceSection
-                    ? store.openDeviceSection("tools", "card-device-diagnostics")
-                    : store.switchView("tools")}
+                  : store.openDeviceSection("tools", "card-device-diagnostics")}
               class="status-tile"
             >
               <div class="status-tile-head">
                 ${renderSvgIcon(isBleOnly ? DEV_ICON_BLUETOOTH : DEV_ICON_WIFI)}
-                <span id="st-wifi-label">${isBleOnly ? "BLE Signal" : "Wi-Fi Signal"}</span>
+                <span id="st-wifi-label">
+                  ${isBleOnly
+                    ? store.t("dev_overview.tile_ble_signal")
+                    : store.t("dev_overview.tile_wifi_signal")}
+                </span>
               </div>
               <strong class="status-tile-value">${rssiText}</strong>
-              <span class="status-tile-meta">${rssiQualityLabel(rssiVal)}</span>
+              <span class="status-tile-meta">${rssiQualityLabel(store, rssiVal)}</span>
               ${hasRssi
                 ? html`<div class="signal-track" aria-hidden="true">
                     <div
                       class="signal-fill${rssiVal !== null && rssiVal < -80 ? " low" : ""}"
-                      style=${`--signal-pct:${rssiPct}%`}
+                      style=${wifiSignalStyle}
                     ></div>
                   </div>`
                 : nothing}
@@ -422,74 +698,83 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
             ${isBleOnly
               ? html`<button
                   type="button"
-                  @click=${() =>
-                    store.openDeviceSection
-                      ? store.openDeviceSection("presence", "card-ble-identity")
-                      : store.switchView("presence")}
+                  @click=${() => store.openDeviceSection("presence", "card-ble-identity")}
                   class="status-tile"
                 >
                   <div class="status-tile-head">
                     ${renderSvgIcon(DEV_ICON_TAG)}
-                    <span>BLE Target</span>
+                    <span>${store.t("dev_overview.tile_ble_target")}</span>
                   </div>
                   <strong class="status-tile-value">
-                    <code>${cfg.ble_target_address || "—"}</code>
+                    <code>${cfg.ble_target_address || store.t("common.unknown")}</code>
                   </strong>
-                  <span class="status-tile-meta">Bluetooth address</span>
+                  <span class="status-tile-meta">
+                    ${store.t("dev_overview.ble_address_meta")}
+                  </span>
                 </button>`
               : html`<button
                   type="button"
-                  @click=${() =>
-                    store.openDeviceSection
-                      ? store.openDeviceSection("tools", "card-device-diagnostics")
-                      : store.switchView("tools")}
+                  @click=${() => store.openDeviceSection("tools", "card-device-diagnostics")}
                   class="status-tile"
                 >
                   <div class="status-tile-head">
                     ${renderSvgIcon(DEV_ICON_CHIP)}
-                    <span>Firmware</span>
+                    <span>${store.t("dev_overview.tile_firmware")}</span>
                   </div>
                   <strong class="status-tile-value">${fwValue}</strong>
                   <span class="status-tile-meta">${fwMeta}</span>
                 </button>`}
           </div>`,
-          footerActions: isBleOnly
-            ? html`<button
-                type="button"
-                @click=${() => void store.exportBackup(store.activeSubentryId)}
-                class="btn btn-text"
-              >
-                Download Backup
-              </button>`
-            : nothing,
+          footerActions:
+            isBleOnly && hasOpenInHa
+              ? html`<button
+                  type="button"
+                  id="btn-open-in-ha"
+                  @click=${() => store.openDeviceInHa(true)}
+                  class="btn btn-text"
+                >
+                  ${store.t("action.open_in_ha")}
+                </button>`
+              : nothing,
         })}
 
         ${showQuickActionsCard
           ? renderCard({
               id: "card-device-quick-actions",
-              title: "Quick Actions",
+              title: store.t("card.quick_actions"),
               contentClass: "settings-list",
               body: hasQuickControls
-                ? html`${renderQuickActionGrid(store, quickActionButtons)}
-                    ${otherQuickItems.map((it) => renderNativeControlRow(store, it))}`
-                : html`<p class="empty-state">No live actions reported by this Device.</p>`,
-              footerActions: html`${links.esphome_device_id
-                  ? html`<button
-                      type="button"
-                      id="btn-open-in-ha"
-                      @click=${() => store.openDeviceInHa()}
-                      class="btn btn-text"
-                    >
-                      Open in ESPHome
-                    </button>`
-                  : nothing}
-                <button
-                  type="button"
-                  @click=${() => void store.exportBackup(store.activeSubentryId)}
-                  class="btn btn-text"
-                >
-                  Download Backup
-                </button>`,
+                ? html`${renderQuickActionGrid(store, harmlessQuickButtons, isOffline)}
+                    ${otherQuickItems.map((it) => renderDeviceEntityRow(store, it))}
+                    ${restartButton
+                      ? renderSettingsRow({
+                          id: "row-restart-device",
+                          label: store.t("dev_overview.restart_device"),
+                          description: store.t("dev_overview.restart_device_desc"),
+                          control: html`<button
+                            type="button"
+                            id="btn-restart-device"
+                            data-entity-id=${restartButton.entity_id}
+                            ?disabled=${isOffline ||
+                            String(restartButton.state ?? "") === "unavailable"}
+                            @click=${onTriggerRestart}
+                            class="btn btn-danger btn-compact"
+                          >
+                            ${store.t("dev_overview.restart_btn")}
+                          </button>`,
+                        })
+                      : nothing}`
+                : html`<p class="empty-state">${store.t("dev_overview.empty_quick_actions")}</p>`,
+              footerActions: hasOpenInHa
+                ? html`<button
+                    type="button"
+                    id="btn-open-in-ha"
+                    @click=${() => store.openDeviceInHa()}
+                    class="btn btn-text"
+                  >
+                    ${store.t("action.open_in_ha")}
+                  </button>`
+                : nothing,
             })
           : nothing}
       </div>
@@ -497,28 +782,28 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
       <div class="column">
         ${renderCard({
           id: "card-device-assignments",
-          title: "Assignments",
+          title: store.t("card.assignments"),
           contentClass: "settings-list",
           body: html`${!isBleOnly
               ? renderSettingsRow({
-                  label: "Device Group",
+                  label: store.t("dev_overview.device_group_label"),
                   forId: "cfg-device_group",
                   description:
                     curGroupId === "custom"
-                      ? "Uses individual operational settings; save as a reusable group or pick an existing preset."
-                      : "Applies shared operational settings (power, wake word, brightness, BLE).",
+                      ? store.t("dev_overview.device_group_custom_desc")
+                      : store.t("dev_overview.device_group_preset_desc"),
                   control: html`<select
                       id="cfg-device_group"
                       .value=${curGroupId}
                       @change=${(ev: Event) =>
-                        store.stageDeviceSetting(
+                        store.entity.stageDeviceSetting(
                           "device_group",
                           (ev.currentTarget as HTMLSelectElement).value,
                           "cfg-device_group",
                         )}
                     >
                       <option value="custom" ?selected=${curGroupId === "custom"}>
-                        Custom
+                        ${store.t("common.custom")}
                       </option>
                       ${groups.map(
                         (g) =>
@@ -531,10 +816,10 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                       ? html`<button
                           type="button"
                           id="btn-save-custom-group"
-                          @click=${() => store.openSaveGroupModal()}
+                          @click=${() => store.groups.openSaveGroupModal()}
                           class="btn btn-secondary btn-compact"
                         >
-                          Save Custom Group
+                          ${store.t("action.save_custom_group")}
                         </button>`
                       : nothing}
                     <button
@@ -543,53 +828,65 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                       @click=${() => store.openManageGroups(curGroupId)}
                       class="btn btn-text btn-compact"
                     >
-                      Manage Groups
+                      ${store.t("action.manage_groups")}
                     </button>`,
                 })
               : renderSettingsRow({
-                  label: "Device Category",
+                  label: store.t("dev_overview.device_category_label"),
                   forId: "cfg-ble_category",
-                  description:
-                    "Classifies this Bluetooth Device under Phones or BLE Tags across Managed Devices.",
+                  description: store.t("dev_overview.device_category_desc"),
                   control: html`<select
                     id="cfg-ble_category"
                     .value=${curBleCat}
                     @change=${(ev: Event) =>
-                      store.stageDeviceSetting(
+                      store.entity.stageDeviceSetting(
                         "ble_category",
                         (ev.currentTarget as HTMLSelectElement).value,
                         "cfg-ble_category",
                       )}
                   >
                     <option value="auto" ?selected=${curBleCat === "auto"}>
-                      Auto (${effBleCat === "phone" ? "Phone" : "BLE Tag"})
+                      ${store.t("dev_overview.auto_category_option", {
+                        category:
+                          effBleCat === "phone"
+                            ? store.t("status.phone")
+                            : store.t("status.ble_tag"),
+                      })}
                     </option>
-                    <option value="phone" ?selected=${curBleCat === "phone"}>Phone</option>
-                    <option value="ble_tag" ?selected=${curBleCat === "ble_tag"}>BLE Tag</option>
+                    <option value="phone" ?selected=${curBleCat === "phone"}>
+                      ${store.t("status.phone")}
+                    </option>
+                    <option value="ble_tag" ?selected=${curBleCat === "ble_tag"}>
+                      ${store.t("status.ble_tag")}
+                    </option>
                   </select>`,
                 })}
             ${renderSelectRow({
               id: "cfg-assigned_person",
-              label: "Assigned Person",
-              description: "Links this Device's Area presence to a Home Assistant person entity.",
+              label: store.t("dev_overview.assigned_person_label"),
+              description: store.t("dev_overview.assigned_person_desc"),
               value: cfg.assigned_person,
               choices: data?.catalog?.persons,
-              emptyOptionLabel: "— Unassigned —",
+              emptyOptionLabel: store.t("dev_overview.unassigned_option"),
               onChange: (val) =>
-                store.stageDeviceSetting("assigned_person", val, "cfg-assigned_person"),
+                store.entity.stageDeviceSetting(
+                  "assigned_person",
+                  val,
+                  "cfg-assigned_person",
+                ),
             })}
             ${!isBleOnly && caps.has_display
               ? renderSettingsRow({
-                  label: "Remote Control Group",
-                  description: "Controls which TV and AV remotes appear in the Remote app.",
+                  label: store.t("dev_overview.remote_group_label"),
+                  description: store.t("dev_overview.remote_group_desc"),
                   control: html`<span class="chip">${remoteSummary}</span>
                     <button
                       type="button"
                       id="btn-configure-remote-group"
-                      @click=${() => store.openAppConfigModal("remote")}
+                      @click=${() => store.entity.openAppConfigModal("remote")}
                       class="btn btn-text btn-compact"
                     >
-                      Configure
+                      ${store.t("action.configure")}
                     </button>`,
                 })
               : nothing}`,
@@ -598,65 +895,84 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
         ${!isBleOnly && caps.has_display
           ? renderCard({
               id: "card-device-timers-alarms",
-              title: "Timers & Alarms",
+              title: store.t("card.timers_alarms"),
               body: html`${alarmRinging
                   ? html`<div id="overview-ringing-alert" role="alert" class="alert alert-warning">
-                      <span>An alarm or timer is ringing on this Device.</span>
+                      <span>${store.t("dev_overview.ringing_alert_text")}</span>
                       <button
                         type="button"
                         id="btn-dismiss-ringing"
                         @click=${() =>
-                          void store.runDeviceAction("dismiss_ringing", "Dismissed ringing alert")}
+                          void store.entity.runDeviceAction(
+                            "dismiss_ringing",
+                            store.t("dev_overview.dismissed_ringing_toast"),
+                          )}
                         class="btn btn-secondary btn-compact"
                       >
-                        Dismiss
+                        ${store.t("action.dismiss")}
                       </button>
                     </div>`
                   : nothing}
                 <div class="settings-list">
                   ${renderSettingsRow({
                     id: "overview-active-timer",
-                    label: "Active Timer",
-                    description: timerActive ? undefined : "No active timer",
+                    label: store.t("dev_overview.active_timer_label"),
+                    description: timerActive
+                      ? undefined
+                      : store.t("dev_overview.no_active_timer"),
                     control: timerActive
                       ? html`<span class="chip ${live.timer_running ? "chip-primary" : ""}">
-                            ${live.timer_running ? "Running" : "Paused"}
+                            ${live.timer_running
+                              ? store.t("dev_overview.running")
+                              : store.t("dev_overview.paused")}
                           </span>
                           <strong class="kv-value">
-                            ${formatClockDuration(live.timer_remaining_sec)}
+                            ${formatClockDuration(liveTimerRemainingSec)}
                           </strong>
                           <button
                             type="button"
                             id="btn-cancel-timer"
+                            ?disabled=${isOffline}
                             @click=${() =>
-                              void store.runDeviceAction("cancel_timer", "Cancelled timer")}
+                              void store.entity.runDeviceAction(
+                                "cancel_timer",
+                                store.t("dev_overview.cancelled_timer_toast"),
+                              )}
                             class="btn btn-secondary btn-compact"
                           >
-                            Cancel Timer
+                            ${store.t("dev_overview.cancel_timer")}
                           </button>`
-                      : html`<span class="kv-value">—</span>`,
+                      : html`<span class="kv-value">${store.t("common.unknown")}</span>`,
                   })}
                   ${renderSettingsRow({
                     id: "overview-stopwatch",
-                    label: "Stopwatch",
-                    description: stopwatchActive ? undefined : "Not running",
+                    label: store.t("dev_overview.stopwatch_label"),
+                    description: stopwatchActive
+                      ? undefined
+                      : store.t("dev_overview.not_running"),
                     control: stopwatchActive
                       ? html`<span class="chip ${live.stopwatch_running ? "chip-primary" : ""}">
-                            ${live.stopwatch_running ? "Running" : "Paused"}
+                            ${live.stopwatch_running
+                              ? store.t("dev_overview.running")
+                              : store.t("dev_overview.paused")}
                           </span>
                           <strong class="kv-value">
-                            ${formatClockDuration(live.stopwatch_elapsed_sec)}
+                            ${formatClockDuration(liveStopwatchElapsedSec)}
                           </strong>
                           <button
                             type="button"
                             id="btn-reset-stopwatch"
+                            ?disabled=${isOffline}
                             @click=${() =>
-                              void store.runDeviceAction("reset_stopwatch", "Reset stopwatch")}
+                              void store.entity.runDeviceAction(
+                                "reset_stopwatch",
+                                store.t("dev_overview.reset_stopwatch_toast"),
+                              )}
                             class="btn btn-secondary btn-compact"
                           >
-                            Reset Stopwatch
+                            ${store.t("dev_overview.reset_stopwatch")}
                           </button>`
-                      : html`<span class="kv-value">—</span>`,
+                      : html`<span class="kv-value">${store.t("common.unknown")}</span>`,
                   })}
                   <details
                     id="overview-alarms-drawer"
@@ -667,7 +983,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                     }}
                   >
                     <summary>
-                      <span class="row-label">Alarms</span>
+                      <span class="row-label">${store.t("dev_overview.alarms_label")}</span>
                       <span class="summary-row-end">
                         <span id="overview-alarms-chip" class=${alarmsSummaryChipClass}>
                           ${alarmsSummaryLabel}
@@ -676,10 +992,12 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                       </span>
                     </summary>
                     <div id="overview-alarms" class="card-content stack">
-                      <p class="row-description">
-                        Syncs 2-way with on-device alarm edits (1-minute precision).
-                      </p>
-                      <div class="stack" role="group" aria-label="Device alarms">
+                      <p class="row-description">${store.t("dev_overview.alarms_desc")}</p>
+                      <div
+                        class="stack"
+                        role="group"
+                        aria-label=${store.t("dev_overview.alarms_group_aria")}
+                      >
                         ${([0, 1, 2] as const).map((idx) => {
                           const slot = alarmSlots[idx];
                           const timeId = `cfg-alarm_${idx + 1}_time`;
@@ -688,7 +1006,9 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                           return html`<div class="list-row">
                             <div class="list-row-main">
                               <div class="stacked-field">
-                                <label for=${timeId}>Alarm ${idx + 1} Time</label>
+                                <label for=${timeId}>
+                                  ${store.t("dev_overview.alarm_time_label", { index: idx + 1 })}
+                                </label>
                                 <input
                                   type="time"
                                   id=${timeId}
@@ -696,12 +1016,18 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                                   .value=${slot.time}
                                   @change=${(ev: Event) => {
                                     const val = (ev.currentTarget as HTMLInputElement).value;
-                                    if (val) updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
+                                    if (val) {
+                                      updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
+                                    }
                                   }}
                                 />
                               </div>
                               <div class="stacked-field">
-                                <label for=${recId}>Alarm ${idx + 1} Schedule</label>
+                                <label for=${recId}>
+                                  ${store.t("dev_overview.alarm_schedule_label", {
+                                    index: idx + 1,
+                                  })}
+                                </label>
                                 <select
                                   id=${recId}
                                   .value=${String(slot.recurrence)}
@@ -716,7 +1042,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                                       recId,
                                     )}
                                 >
-                                  ${ALARM_RECURRENCE_OPTIONS.map(
+                                  ${alarmRecurrenceChoices.map(
                                     (opt) =>
                                       html`<option
                                         value=${String(opt.value)}
@@ -729,7 +1055,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                               </div>
                             </div>
                             <label for=${enId} class="inline-switch">
-                              <span>Enabled</span>
+                              <span>${store.t("common.enabled")}</span>
                               <input
                                 type="checkbox"
                                 id=${enId}
@@ -755,9 +1081,9 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
 
         ${otherSensorItems.length
           ? renderCard({
-              title: "Sensors & Controls",
+              title: store.t("card.sensors_controls"),
               contentClass: "settings-list",
-              body: otherSensorItems.map((it) => renderNativeControlRow(store, it)),
+              body: otherSensorItems.map((it) => renderDeviceEntityRow(store, it)),
             })
           : nothing}
       </div>

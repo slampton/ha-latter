@@ -52,7 +52,7 @@ jobs:
       - name: Verify static architecture, security, and Studio guardrails
         run: python tools/verify_ha.py
       - name: Install Studio frontend toolchain
-        run: npm --prefix frontend_src install --no-audit --no-fund --package-lock=false
+        run: npm --prefix frontend_src ci --no-audit --no-fund
       - name: Verify Studio TypeScript bundle parity
         run: npm --prefix frontend_src run check
       - name: Run ruff static analysis

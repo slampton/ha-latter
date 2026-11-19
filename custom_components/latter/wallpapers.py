@@ -211,27 +211,30 @@ def _all_cached_uploads() -> list[tuple[str, str]]:
     return out
 
 
+def wallpaper_snapshot_token() -> int:
+    """Return an O(1) identity token for the current immutable wallpaper snapshot."""
+    return id(_WALLPAPER_SNAPSHOT)
+
+
 async def async_refresh_wallpaper_cache(
-    hass: HomeAssistant, device_slug: str = "system"
+    hass: HomeAssistant,
 ) -> MappingProxyType[str, tuple[tuple[str, str], ...]]:
     """Populate the immutable uploaded wallpaper snapshot via awaited executor scan."""
-    _ = device_slug
     return await hass.async_add_executor_job(
         _scan_all_wallpapers_sync, get_wallpaper_root(hass)
     )
 
 
-def ordered_wallpaper_ids(device_slug: str = "system") -> list[str]:
+def ordered_wallpaper_ids() -> list[str]:
     """Return gallery wallpaper IDs in deterministic display order (presets, then shared uploads)."""
-    _ = device_slug
     return [p["id"] for p in BUILTIN_WALLPAPER_PRESETS] + [
         source_id for source_id, _ in _all_cached_uploads()
     ]
 
 
-def known_wallpaper_ids(device_slug: str = "system") -> set[str]:
+def known_wallpaper_ids() -> set[str]:
     """Return the wallpaper IDs a Device may select: the built-in presets and all shared uploads."""
-    return set(ordered_wallpaper_ids(device_slug))
+    return set(ordered_wallpaper_ids())
 
 
 def list_wallpaper_catalog(
@@ -335,11 +338,9 @@ def save_uploaded_wallpaper_bytes(
 
 def delete_uploaded_wallpaper(
     hass: HomeAssistant,
-    device_slug: str,
     source_id: str,
 ) -> bool:
     """Delete an uploaded wallpaper (`upload:<slug>/<file>`) from Latter's private storage."""
-    _ = device_slug
     parsed = parse_upload_source(source_id)
     if parsed is None:
         return False

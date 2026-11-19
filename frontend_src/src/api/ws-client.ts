@@ -1,42 +1,55 @@
 /**
- * Admin-gated WebSocket & Bearer-authenticated XHR multipart client for Latter Studio.
- * Enforces `studio_rev` on every read/mutation call and surfaces `studio_rev_mismatch`.
+ * Admin-gated WebSocket & Bearer-authenticated XHR multipart client for Latter Studio (`D-025`, `D-065`).
+ * - Sends mandatory `studio_rev: STUDIO_REV` (`34`) on all 9 WS endpoints
+ * - Enforces literal-union & runtime `SYSTEM_WS_COMMANDS` / `DEVICE_WS_COMMANDS` checks (`A-25`)
+ * - Applies per-command `Promise.race` timeouts (`15_000 ms` standard, `60_000 ms` import/reset/update) (`B-15`)
+ * - Supports on-demand 600 s `mint_camera_preview_url`, Discovered `ignore`/`unignore`, & `expected_config_rev`
  */
 
-import { MAX_WALLPAPER_UPLOAD_BYTES, STUDIO_REV } from "../constants.js";
+import { MAX_WALLPAPER_UPLOAD_BYTES } from "../constants.js";
+import {
+  DEVICE_WS_COMMANDS,
+  STUDIO_REV,
+  SYSTEM_WS_COMMANDS,
+} from "../protocol-schema.js";
 import type { HomeAssistant, StudioScope, StudioStatePayload, WallpaperItem } from "../types.js";
 
-export const SYSTEM_WS_COMMANDS = new Set([
-  "set_ble_scanner_offset",
-  "capture_ble_area_signature",
-  "clear_ble_area_signature",
-  "set_area_fusion",
-  "system_entity_action",
-  "send_announcement",
-  "check_system_updates",
-  "clear_internal_logs",
-  "remove_device",
-  "add_latter_device",
-  "add_ble_device",
-  "create_device_group",
-  "delete_device_group",
-  "update_group_baseline",
-  "apply_batch_device_setting",
-  "test_doorbell_speaker",
-  "delete_system_wallpaper",
-  "save_system_config",
-  "rotate_signing_key",
-  "set_security_pin",
-]);
+export { DEVICE_WS_COMMANDS, SYSTEM_WS_COMMANDS };
 
-export const DEVICE_WS_COMMANDS = new Set([
-  "esphome_entity_action",
-  "device_action",
-  "select_wallpaper",
-  "toggle_wallpaper_favorite",
-  "delete_wallpaper",
-  "save_device_config",
-]);
+export const WS_STANDARD_TIMEOUT_MS = 15_000;
+export const WS_LONG_TIMEOUT_MS = 60_000;
+
+export type SystemWsCommand =
+  | "set_ble_scanner_offset"
+  | "set_area_fusion"
+  | "capture_ble_area_signature"
+  | "clear_ble_area_signature"
+  | "system_entity_action"
+  | "send_announcement"
+  | "check_system_updates"
+  | "clear_internal_logs"
+  | "remove_device"
+  | "add_latter_device"
+  | "ignore_discovered_device"
+  | "unignore_discovered_device"
+  | "add_ble_device"
+  | "create_device_group"
+  | "delete_device_group"
+  | "update_group_baseline"
+  | "apply_batch_device_setting"
+  | "test_doorbell_speaker"
+  | "mint_camera_preview_url"
+  | "delete_wallpaper"
+  | "save_system_config"
+  | "rotate_signing_key"
+  | "set_security_pin";
+
+export type DeviceWsCommand =
+  | "esphome_entity_action"
+  | "device_action"
+  | "select_wallpaper"
+  | "toggle_wallpaper_favorite"
+  | "save_device_config";
 
 export interface WsErrorLike {
   code?: string;
@@ -46,7 +59,12 @@ export interface WsErrorLike {
 export function isStudioRevMismatchError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const code = String((err as WsErrorLike).code || "");
-  return code === "studio_rev_mismatch";
+  return code === "studio_rev_mismatch" || code === "version_mismatch";
+}
+
+export function isConflictError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  return String((err as WsErrorLike).code || "") === "conflict";
 }
 
 export function formatWsError(err: unknown, fallback = "Action failed"): string {
@@ -58,12 +76,36 @@ export function formatWsError(err: unknown, fallback = "Action failed"): string 
   return fallback;
 }
 
+export interface MintCameraPreviewResult {
+  camera_entity: string;
+  preview_url: string;
+  expires_in: number;
+}
+
 export interface UploadWallpaperResult {
   ok: boolean;
   filename?: string;
   source_id?: string;
   wallpapers?: WallpaperItem[];
   system_wallpapers?: WallpaperItem[];
+}
+
+function withWsTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new Error(
+          "Request timed out — check your Home Assistant connection and try again.",
+        ),
+      );
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+  });
 }
 
 export class StudioWsClient {
@@ -89,10 +131,13 @@ export class StudioWsClient {
     return this.hassRef;
   }
 
-  private async callWS<T>(msg: Record<string, unknown>): Promise<T> {
+  private async callWS<T>(
+    msg: Record<string, unknown>,
+    timeoutMs = WS_STANDARD_TIMEOUT_MS,
+  ): Promise<T> {
     const hass = this.requireHass();
     try {
-      return await hass.callWS<T>(msg);
+      return await withWsTimeout(hass.callWS<T>(msg), timeoutMs);
     } catch (err) {
       if (isStudioRevMismatchError(err)) {
         this.onRevMismatch();
@@ -104,17 +149,13 @@ export class StudioWsClient {
   async getState(options: {
     subentryId?: string | null;
     includeLogs?: boolean;
-  }): Promise<StudioStatePayload | null> {
-    const res = await this.callWS<StudioStatePayload | null>({
+  }): Promise<StudioStatePayload> {
+    return this.callWS<StudioStatePayload>({
       type: "latter/system/get_state",
       subentry_id: options.subentryId || null,
       include_logs: Boolean(options.includeLogs),
       studio_rev: STUDIO_REV,
     });
-    if (res === null) {
-      this.onRevMismatch();
-    }
-    return res;
   }
 
   async subscribe(
@@ -139,7 +180,10 @@ export class StudioWsClient {
       if (options.surveySubentryId) {
         msg.survey_subentry_id = options.surveySubentryId;
       }
-      return await hass.connection.subscribeMessage(onEvent, msg);
+      return await withWsTimeout(
+        hass.connection.subscribeMessage(onEvent, msg),
+        WS_STANDARD_TIMEOUT_MS,
+      );
     } catch (err) {
       if (isStudioRevMismatchError(err)) {
         this.onRevMismatch();
@@ -149,25 +193,43 @@ export class StudioWsClient {
   }
 
   async runSystemCommand(
-    cmd: string,
+    cmd: Exclude<SystemWsCommand, "mint_camera_preview_url">,
     payload: Record<string, unknown> = {},
     selectedSubentryId?: string | null,
   ): Promise<StudioStatePayload> {
     if (!SYSTEM_WS_COMMANDS.has(cmd)) {
       throw new Error(`Unknown System command: ${cmd}`);
     }
-    return this.callWS<StudioStatePayload>({
+    const timeoutMs =
+      cmd === "check_system_updates" ? WS_LONG_TIMEOUT_MS : WS_STANDARD_TIMEOUT_MS;
+    return this.callWS<StudioStatePayload>(
+      {
+        type: "latter/system/command",
+        command: cmd,
+        subentry_id: selectedSubentryId || null,
+        payload,
+        studio_rev: STUDIO_REV,
+      },
+      timeoutMs,
+    );
+  }
+
+  async mintCameraPreviewUrl(cameraEntity: string): Promise<MintCameraPreviewResult> {
+    if (!SYSTEM_WS_COMMANDS.has("mint_camera_preview_url")) {
+      throw new Error("mint_camera_preview_url is not registered in Studio protocol contract");
+    }
+    return this.callWS<MintCameraPreviewResult>({
       type: "latter/system/command",
-      command: cmd,
-      subentry_id: selectedSubentryId || null,
-      payload,
+      command: "mint_camera_preview_url",
+      subentry_id: null,
+      payload: { camera_entity: cameraEntity },
       studio_rev: STUDIO_REV,
     });
   }
 
   async runDeviceCommand(
     subentryId: string,
-    cmd: string,
+    cmd: DeviceWsCommand,
     payload: Record<string, unknown> = {},
   ): Promise<StudioStatePayload> {
     if (!DEVICE_WS_COMMANDS.has(cmd)) {
@@ -185,7 +247,10 @@ export class StudioWsClient {
     });
   }
 
-  async exportBackup(scope: StudioScope, subentryId?: string): Promise<{ bundle: Record<string, unknown> }> {
+  async exportBackup(
+    scope: StudioScope,
+    subentryId?: string,
+  ): Promise<{ bundle: Record<string, unknown> }> {
     if (scope === "device") {
       if (!subentryId) throw new Error("Choose a Device to export");
       return this.callWS<{ bundle: Record<string, unknown> }>({
@@ -210,19 +275,25 @@ export class StudioWsClient {
       if (!options.targetSubentryId) {
         throw new Error("Choose the Device to restore this backup onto");
       }
-      return this.callWS<StudioStatePayload>({
-        type: "latter/device/import",
-        subentry_id: options.targetSubentryId,
+      return this.callWS<StudioStatePayload>(
+        {
+          type: "latter/device/import",
+          subentry_id: options.targetSubentryId,
+          bundle: options.bundle,
+          studio_rev: STUDIO_REV,
+        },
+        WS_LONG_TIMEOUT_MS,
+      );
+    }
+    return this.callWS<StudioStatePayload>(
+      {
+        type: "latter/system/import",
+        subentry_id: options.selectedSubentryId || null,
         bundle: options.bundle,
         studio_rev: STUDIO_REV,
-      });
-    }
-    return this.callWS<StudioStatePayload>({
-      type: "latter/system/import",
-      subentry_id: options.selectedSubentryId || null,
-      bundle: options.bundle,
-      studio_rev: STUDIO_REV,
-    });
+      },
+      WS_LONG_TIMEOUT_MS,
+    );
   }
 
   async resetDevice(options: {
@@ -230,13 +301,16 @@ export class StudioWsClient {
     deviceSettings: boolean;
     latterOptions: boolean;
   }): Promise<StudioStatePayload> {
-    return this.callWS<StudioStatePayload>({
-      type: "latter/device/reset",
-      subentry_id: options.subentryId,
-      device_settings: options.deviceSettings,
-      latter_options: options.latterOptions,
-      studio_rev: STUDIO_REV,
-    });
+    return this.callWS<StudioStatePayload>(
+      {
+        type: "latter/device/reset",
+        subentry_id: options.subentryId,
+        device_settings: options.deviceSettings,
+        latter_options: options.latterOptions,
+        studio_rev: STUDIO_REV,
+      },
+      WS_LONG_TIMEOUT_MS,
+    );
   }
 
   async signHaPath(path: string, expires = 300): Promise<string> {
@@ -297,6 +371,7 @@ export class StudioWsClient {
         xhr.open("POST", UPLOAD_PATH, true);
         xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
         xhr.responseType = "json";
+        xhr.timeout = WS_LONG_TIMEOUT_MS;
         if (xhr.upload && options.onProgress) {
           xhr.upload.onprogress = (ev: ProgressEvent) => {
             if (ev.lengthComputable && ev.total > 0) {
@@ -313,6 +388,9 @@ export class StudioWsClient {
         };
         xhr.onerror = () => {
           reject(new Error("Network error while uploading wallpaper"));
+        };
+        xhr.ontimeout = () => {
+          reject(new Error("Wallpaper upload timed out"));
         };
         xhr.onabort = () => {
           reject(new Error("Wallpaper upload was canceled"));

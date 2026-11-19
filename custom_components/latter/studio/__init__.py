@@ -28,11 +28,10 @@ def content_digest(path: Path) -> str:
 async def async_register_studio_panel(hass: HomeAssistant) -> None:
     """Register Latter Studio static assets, admin WebSocket commands, and `panel_custom` sidebar panel."""
     from .commands import async_register_studio_ws_commands
-    from .payload import log_studio_event
+    from .payload import load_studio_locales_sync, log_studio_event
 
     domain_data = hass.data.setdefault(DOMAIN, {})
-    # Always recompute asset digests on setup/reload so HACS upgrades never serve stale cached JS.
-    domain_data.pop("_studio_js_digest", None)
+    await hass.async_add_executor_job(load_studio_locales_sync)
     prev_icon_url = domain_data.pop("_studio_icon_js_url", None)
     if prev_icon_url:
         try:
@@ -56,7 +55,7 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
                 StaticPathConfig(
                     versioned_prefix,
                     str(frontend_dir),
-                    cache_headers=False,
+                    cache_headers=True,
                 )
             ]
         )
@@ -81,14 +80,11 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
     js_digest = await hass.async_add_executor_job(
         content_digest, frontend_dir / "latter-studio.js"
     )
-    domain_data["_studio_js_digest"] = js_digest
     module_url = f"{versioned_prefix}/latter-studio.js?v={js_digest}"
-    panels = hass.data.get("frontend_panels", {})
-    if domain_data.get("_registered_panel_url") == module_url and "latter" in panels:
+    if domain_data.get("_registered_panel_url") == module_url:
         return
     try:
-        if "latter" in panels:
-            frontend.async_remove_panel(hass, "latter", warn_if_unknown=False)
+        frontend.async_remove_panel(hass, "latter", warn_if_unknown=False)
         await panel_custom.async_register_panel(
             hass,
             frontend_url_path="latter",
@@ -98,6 +94,7 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
             sidebar_icon=sidebar_icon,
             require_admin=True,
             embed_iframe=False,
+            config_panel_domain=DOMAIN,
         )
         domain_data["_registered_panel_url"] = module_url
         log_studio_event(
@@ -116,7 +113,6 @@ def async_unregister_studio_panel(hass: HomeAssistant) -> None:
     icon_url = None
     if isinstance(domain_data, dict):
         domain_data.pop("_registered_panel_url", None)
-        domain_data.pop("_studio_js_digest", None)
         icon_url = domain_data.pop("_studio_icon_js_url", None)
     try:
         frontend.async_remove_panel(hass, "latter", warn_if_unknown=False)

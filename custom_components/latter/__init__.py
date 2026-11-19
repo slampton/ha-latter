@@ -27,7 +27,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
-from .config_flow import _device_unique_id
+from .config_flow import _device_unique_id, get_ignored_discovered_device_ids
 from .const import (
     CONF_ESPHOME_DEVICE_ID,
     CONF_SYSTEM_BLE_UUID,
@@ -74,6 +74,7 @@ from .presence import _iter_devices
 from .repairs import async_delete_device_issues
 from .services import async_push_active_area_entities, async_setup_services
 from .studio import async_register_studio_panel, async_unregister_studio_panel
+from .studio.settings import warm_timezone_cache
 from .wallpapers import async_refresh_wallpaper_cache
 
 _LOGGER = logging.getLogger(__name__)
@@ -186,6 +187,8 @@ def _async_check_esphome_device_for_discovery(
     """Trigger a Latter discovery flow ONLY if no Latter hub entry exists yet and the ESPHome device implements the Latter contract."""
     if hass.config_entries.async_entries(DOMAIN):
         return
+    if device.id in get_ignored_discovered_device_ids(hass):
+        return
     if not is_esphome_device(hass, device):
         return
     if not is_latter_compatible_esphome_device(hass, device):
@@ -201,6 +204,10 @@ def _async_check_esphome_device_for_discovery(
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Latter domain, register services, and scan for Latter-compatible ESPHome devices."""
     domain_data = hass.data.setdefault(DOMAIN, {})
+    await hass.async_add_executor_job(
+        warm_timezone_cache,
+        [str(getattr(getattr(hass, "config", None), "time_zone", "") or "")],
+    )
     await _async_ensure_global_store(hass)
     await get_area_state_index(hass).async_start()
     await async_setup_services(hass)
@@ -298,6 +305,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:
     """Set up the Latter System hub entry and all configured Device subentries."""
     domain_data = hass.data.setdefault(DOMAIN, {})
+    await hass.async_add_executor_job(
+        warm_timezone_cache,
+        [str(getattr(getattr(hass, "config", None), "time_zone", "") or "")],
+    )
     await _async_ensure_global_store(hass)
     await get_area_state_index(hass).async_start()
     sys_obj = get_latter_system(hass)
@@ -305,7 +316,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         return False
 
     await sys_obj.url_signer.async_prime_lan_base_url()
-    await async_refresh_wallpaper_cache(hass, "system")
+    await async_refresh_wallpaper_cache(hass)
 
     if "views_registered" not in domain_data:
         domain_data["views_registered"] = True

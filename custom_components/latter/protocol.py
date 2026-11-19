@@ -15,7 +15,6 @@ from pathlib import Path
 import secrets
 from typing import Any
 import unicodedata
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .studio.settings import (
     ACTIVITY_SOURCE_KEYS,
@@ -42,6 +41,7 @@ from .studio.settings import (
     TOOLS_ITEMS_CATALOG,
     WORLD_CLOCK_CATALOG_MAP,
     default_dock_items,
+    get_cached_zoneinfo,
     normalize_activity_sources,
     normalize_alarms_summary,
     normalize_area_categories,
@@ -780,8 +780,8 @@ def format_tz_record(
         )
         city = sanitize_clock_label(city) or clean_iana
 
-    try:
-        tz = ZoneInfo(clean_iana)
+    tz = get_cached_zoneinfo(clean_iana)
+    if tz is not None:
         local_dt = now.astimezone(tz)
         off_td = local_dt.utcoffset() or timedelta(0)
         dst_td = local_dt.dst() or timedelta(0)
@@ -792,13 +792,12 @@ def format_tz_record(
             raw_abbr = str(cat_entry["dst_abbr" if is_dst else "std_abbr"])
         abbr = raw_abbr or _format_utc_offset_abbr(off_min)
         return f"{clean_iana}|{city}|{abbr}|{off_min}|{'1' if is_dst else '0'}"
-    except (ZoneInfoNotFoundError, ValueError):
-        if cat_entry is None:
-            return ""
-        is_dst = _catalog_dst_active(str(cat_entry["rule"]), int(cat_entry["std_off"]), now)
-        off_min = int(cat_entry["dst_off" if is_dst else "std_off"])
-        abbr = str(cat_entry["dst_abbr" if is_dst else "std_abbr"])
-        return f"{clean_iana}|{city}|{abbr}|{off_min}|{'1' if is_dst else '0'}"
+    if cat_entry is None:
+        return ""
+    is_dst = _catalog_dst_active(str(cat_entry["rule"]), int(cat_entry["std_off"]), now)
+    off_min = int(cat_entry["dst_off" if is_dst else "std_off"])
+    abbr = str(cat_entry["dst_abbr" if is_dst else "std_abbr"])
+    return f"{clean_iana}|{city}|{abbr}|{off_min}|{'1' if is_dst else '0'}"
 
 
 def build_time_zone_payloads(

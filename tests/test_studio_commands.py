@@ -38,8 +38,10 @@ async def _call_ws(
 async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify studio_rev mismatch rejects BOTH read (get_state, subscribe) and mutation WS commands."""
-    assert STUDIO_REV == 33
+    """Verify mandatory studio_rev=34 schema validation and studio_rev_mismatch on all 9 WS endpoints."""
+    import voluptuous as vol
+
+    assert STUDIO_REV == 34
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -58,6 +60,10 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
         ("latter/device/reset", {"subentry_id": coord.subentry_id, "studio_rev": 999}),
     ]
     for idx, (ws_type, extra) in enumerate(endpoints, start=1):
+        # Missing mandatory `studio_rev` must be rejected by Voluptuous schema
+        without_rev = {k: v for k, v in extra.items() if k != "studio_rev"}
+        with pytest.raises(vol.Invalid):
+            await _call_ws(hass, conn, idx + 100, ws_type, **without_rev)
         await _call_ws(hass, conn, idx, ws_type, **extra)
 
     assert conn.results == []
@@ -413,7 +419,22 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     assert coord.wallpaper_source == dev_wp_id
     await _dev_cmd("toggle_wallpaper_favorite", {"source_id": "preset:forest_mountains"})
     await _dev_cmd("select_wallpaper", {"source_id": "preset:forest_mountains"})
-    await _dev_cmd("delete_wallpaper", {"source_id": dev_wp_id})
+
+    # `delete_wallpaper` is canonical on System scope; calling it on Device scope fails with `wrong_scope`
+    msg_seq += 1
+    await _call_ws(
+        hass,
+        conn,
+        msg_seq,
+        "latter/device/command",
+        command="delete_wallpaper",
+        subentry_id=coord.subentry_id,
+        payload={"source_id": dev_wp_id},
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.errors[-1][1] == "wrong_scope"
+    conn.errors.clear()
+    await _sys_cmd("delete_wallpaper", {"source_id": dev_wp_id})
 
     # Wallpaper rotation state machine: Off -> bulk star -> enable rotation seeds active photo -> Turn Off resets both
     off_state = await _dev_cmd("select_wallpaper", {"source_id": ""})
@@ -687,14 +708,43 @@ async def test_discovered_latter_devices_and_add_latter_device_command(
     st = conn.results[-1][1]
     discovered = st["discovered_latter_devices"]
     assert len(discovered) == 1
-    assert discovered[0] == {
-        "esphome_device_id": unbound_dev.id,
-        "node_name": "kitchen_panel",
-        "title": "Kitchen Panel",
-        "model_label": "kitchen_panel-board (480x480)",
-        "area_name": "Kitchen",
-        "default_group": "wall_panels",
-    }
+    assert discovered[0]["esphome_device_id"] == unbound_dev.id
+    assert discovered[0]["node_name"] == "kitchen_panel"
+    assert discovered[0]["title"] == "Kitchen Panel"
+    assert "480" in discovered[0]["model_label"]
+    assert "kitchen_panel-board" not in discovered[0]["model_label"]
+    assert discovered[0]["area_name"] == "Kitchen"
+    assert discovered[0]["default_group"] == "wall_panels"
+
+    # Ignore / unignore discovered ESPHome Latter device (`D-066`)
+    await _call_ws(
+        hass,
+        conn,
+        2,
+        "latter/system/command",
+        command="ignore_discovered_device",
+        payload={"esphome_device_id": unbound_dev.id},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    st_ignored = conn.results[-1][1]
+    assert st_ignored["discovered_latter_devices"] == []
+    assert [d["esphome_device_id"] for d in st_ignored["ignored_latter_devices"]] == [unbound_dev.id]
+    assert unbound_dev.id in st_ignored["system_config"]["ignored_discovered_devices"]
+
+    await _call_ws(
+        hass,
+        conn,
+        3,
+        "latter/system/command",
+        command="unignore_discovered_device",
+        payload={"esphome_device_id": unbound_dev.id},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    st_unignored = conn.results[-1][1]
+    assert [d["esphome_device_id"] for d in st_unignored["discovered_latter_devices"]] == [unbound_dev.id]
+    assert st_unignored["ignored_latter_devices"] == []
 
     # 2) Validation checks: missing id, non-Latter ESPHome device, already-managed device, unknown group, unknown person
     bad_cases = [
@@ -857,3 +907,188 @@ async def test_multi_entity_home_hub_settings_and_strict_garage_cover_filtering(
     assert conn.errors and conn.errors[-1][0] == 3
 
     assert await async_unload_entry(hass, entry) is True
+
+
+@pytest.mark.asyncio
+async def test_v3_subscribe_diet_concurrency_and_on_demand_camera_preview(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify D-064/D-065 event-first subscribe, section-hash omit, 250 ms survey delta, isolated timer tick, config_rev concurrency, and 600 s camera preview signing."""
+    # 1) 0-display hub `mint_camera_preview_url` (600 s TTL) + zero `preview_url` on catalog cameras
+    hass.states.async_set("camera.front_door", "idle", {"friendly_name": "Front Door"})
+    entry0, _sys0, _coord0 = await setup_latter_hub(hass, with_device=False)
+    conn0 = websocket_api.ActiveConnection()
+
+    await _call_ws(hass, conn0, 1, "latter/system/get_state", studio_rev=STUDIO_REV)
+    st0 = conn0.results[-1][1]
+    assert st0["catalog"]["cameras"]
+    assert all("preview_url" not in c for c in st0["catalog"]["cameras"])
+
+    await _call_ws(
+        hass,
+        conn0,
+        2,
+        "latter/system/command",
+        command="mint_camera_preview_url",
+        payload={"camera_entity": "camera.front_door"},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn0.errors
+    minted = conn0.results[-1][1]
+    assert minted["camera_entity"] == "camera.front_door"
+    assert minted["expires_in"] == 600
+    assert minted["preview_url"].startswith("/api/latter/camera/system?")
+    assert await async_unload_entry(hass, entry0) is True
+
+    # 2) Event-first `subscribe`, section-hash omission, scoped 250 ms survey delta, isolated timer tick & `expected_config_rev`
+    hass2 = type(hass)(config_dir=hass.config.config_dir)
+    hass2.states.async_set("camera.porch", "idle", {"friendly_name": "Porch"})
+    entry, sys_obj, coord = await setup_latter_hub(hass2, with_device=True, with_ble_tag=True)
+    tag_coord = sys_obj.coordinators["sub_tag"]
+
+    conn = websocket_api.ActiveConnection()
+    await _call_ws(
+        hass2,
+        conn,
+        10,
+        "latter/system/subscribe",
+        subentry_id=coord.subentry_id,
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.results[-1] == (10, {"subscribed": True})
+    assert len(conn.messages) == 1
+    initial_evt = conn.messages[0]["event"]
+    assert initial_evt["type"] == "state"
+    assert "catalog" in initial_evt
+    assert "pref_specs" in initial_evt
+    assert "world_clock_zones" in initial_evt
+    assert "system_wallpapers" in initial_evt
+    assert "ble_area_signatures" in initial_evt
+
+    # Without `survey_subentry_id`, BLE survey deltas are NOT streamed on this subscription
+    fabric = get_ble_fabric(hass2)
+    conn.messages.clear()
+    fabric.emit_survey_delta(coord._ble_tracker)
+    assert [m for m in conn.messages if m["event"].get("type") == "ble_survey_delta"] == []
+
+    # Subsequent live state push omits catalog AND omits unchanged heavy hashed sections!
+    coord.async_update_listeners()
+    for delay, cb in list(hass2._timers):
+        if delay == 0.4:
+            cb(None)
+    await hass2.async_block_till_done()
+    state_pushes = [m["event"] for m in conn.messages if m["event"].get("type") == "state"]
+    assert len(state_pushes) >= 1
+    push_evt = state_pushes[-1]
+    for omitted_key in (
+        "catalog",
+        "pref_specs",
+        "world_clock_zones",
+        "discovered_ble_devices",
+        "system_wallpapers",
+        "ble_area_signatures",
+    ):
+        assert omitted_key not in push_evt
+
+    # Isolated 1 Hz `LatterTimerRemainingSensor` tick does NOT emit a Studio `type: "state"` push!
+    coord.handle_timer_alarm_state(
+        timer_running=True,
+        timer_paused=False,
+        remaining_sec=45,
+        ringing=False,
+    )
+    await hass2.async_block_till_done()
+    assert coord._unsub_timer_tick is not None
+    conn.messages.clear()
+    coord._notify_timer_tick_listeners()
+    await hass2.async_block_till_done()
+    assert conn.messages == []
+    coord.handle_timer_alarm_state(
+        timer_running=False,
+        timer_paused=False,
+        remaining_sec=0,
+        ringing=False,
+    )
+    conn.subscriptions.pop(10)()
+
+    # Scoped `survey_subentry_id` filters out other trackers and coalesces bursty deltas at 250 ms
+    conn_survey = websocket_api.ActiveConnection()
+    await _call_ws(
+        hass2,
+        conn_survey,
+        20,
+        "latter/system/subscribe",
+        subentry_id=coord.subentry_id,
+        survey_subentry_id=coord.subentry_id,
+        studio_rev=STUDIO_REV,
+    )
+    conn_survey.messages.clear()
+    # Foreign tracker delta is ignored
+    assert tag_coord._ble_tracker is not None
+    fabric.emit_survey_delta(tag_coord._ble_tracker)
+    assert conn_survey.messages == []
+
+    # Leading edge emits immediately; rapid follow-up within 250 ms coalesces without flooding
+    fabric.emit_survey_delta(coord._ble_tracker)
+    fabric.emit_survey_delta(coord._ble_tracker)
+    deltas_now = [m["event"] for m in conn_survey.messages if m["event"].get("type") == "ble_survey_delta"]
+    assert len(deltas_now) == 1
+    conn_survey.subscriptions.pop(20)()
+
+    # Optimistic concurrency (`expected_config_rev`) on System and Device saves
+    sys_rev = initial_evt["system_config_rev"]
+    dev_rev = initial_evt["device_config_rev"]
+    assert sys_rev >= 1
+    assert dev_rev >= 1
+
+    await _call_ws(
+        hass2,
+        conn,
+        30,
+        "latter/system/command",
+        command="save_system_config",
+        payload={"config": {"ble_away_timeout_s": 210}, "expected_config_rev": sys_rev + 99},
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.errors[-1][1] == "conflict"
+    conn.errors.clear()
+
+    await _call_ws(
+        hass2,
+        conn,
+        31,
+        "latter/system/command",
+        command="save_system_config",
+        payload={"config": {"ble_away_timeout_s": 210}, "expected_config_rev": sys_rev},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    assert conn.results[-1][1]["system_config_rev"] == sys_rev + 1
+
+    await _call_ws(
+        hass2,
+        conn,
+        32,
+        "latter/device/command",
+        subentry_id=coord.subentry_id,
+        command="save_device_config",
+        payload={"config": {"area_handoff": False}, "expected_config_rev": dev_rev + 99},
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.errors[-1][1] == "conflict"
+    conn.errors.clear()
+
+    await _call_ws(
+        hass2,
+        conn,
+        33,
+        "latter/device/command",
+        subentry_id=coord.subentry_id,
+        command="save_device_config",
+        payload={"config": {"area_handoff": False}, "expected_config_rev": dev_rev},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    assert conn.results[-1][1]["device_config_rev"] == dev_rev + 1
+
+    assert await async_unload_entry(hass2, entry) is True

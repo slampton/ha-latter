@@ -111,6 +111,47 @@ class TestPrivateWallpapers(unittest.TestCase):
             self.assertEqual(sof_marker, 0xC0, f"{p['file']} must be baseline SOF0 JPEG")
             self.assertEqual(dims, (720, 720), p["file"])
 
+    def test_system_wide_snapshot_ids_and_delete_signature(self) -> None:
+        """ordered_wallpaper_ids, known_wallpaper_ids, and delete_uploaded_wallpaper operate System-wide without device_slug."""
+        import io
+        from types import SimpleNamespace
+
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new("RGB", (64, 64), (30, 80, 140)).save(buf, format="JPEG")
+        raw_jpg = buf.getvalue()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_hass = SimpleNamespace(
+                config=SimpleNamespace(config_dir=tmp),
+                async_add_executor_job=lambda fn, *a: fn(*a),
+            )
+            wallpaper_refs._scan_all_wallpapers_sync(wallpaper_refs.get_wallpaper_root(fake_hass))
+            preset_ids = [p["id"] for p in wallpaper_refs.BUILTIN_WALLPAPER_PRESETS]
+            self.assertEqual(wallpaper_refs.ordered_wallpaper_ids(), preset_ids)
+            self.assertEqual(wallpaper_refs.known_wallpaper_ids(), set(preset_ids))
+
+            src_sys, _ = wallpaper_refs.save_uploaded_wallpaper_bytes(
+                fake_hass, "system", "lobby.jpg", raw_jpg
+            )
+            src_dev, _ = wallpaper_refs.save_uploaded_wallpaper_bytes(
+                fake_hass, "kitchen_panel", "patio.jpg", raw_jpg
+            )
+            ordered = wallpaper_refs.ordered_wallpaper_ids()
+            self.assertEqual(ordered[: len(preset_ids)], preset_ids)
+            self.assertIn(src_sys, ordered)
+            self.assertIn(src_dev, ordered)
+            self.assertLess(ordered.index(src_sys), ordered.index(src_dev))
+            self.assertTrue({src_sys, src_dev}.issubset(wallpaper_refs.known_wallpaper_ids()))
+
+            self.assertTrue(wallpaper_refs.delete_uploaded_wallpaper(fake_hass, src_dev))
+            self.assertFalse(wallpaper_refs.delete_uploaded_wallpaper(fake_hass, src_dev))
+            self.assertFalse(wallpaper_refs.delete_uploaded_wallpaper(fake_hass, "preset:ocean_waves"))
+            self.assertNotIn(src_dev, wallpaper_refs.known_wallpaper_ids())
+            self.assertIn(src_sys, wallpaper_refs.known_wallpaper_ids())
+            self.assertTrue(wallpaper_refs.delete_uploaded_wallpaper(fake_hass, src_sys))
+
 
 if __name__ == "__main__":
     unittest.main()

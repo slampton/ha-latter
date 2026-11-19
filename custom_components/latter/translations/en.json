@@ -2,33 +2,24 @@
   "config": {
     "step": {
       "user": {
-        "title": "Set Up Latter System & Initial Device",
-        "description": "Create the Latter System and connect your first Latter Device (an ESPHome device running Latter firmware, with or without a screen). Add more Devices later with Add Device on the Latter integration page.",
+        "title": "Set Up Latter System",
+        "description": "Create the Latter System hub. Optionally select your first ESPHome Device running Latter firmware, or leave it blank to start with standalone BLE Area presence and sensor fusion and add Devices later in Latter Studio.",
         "data": {
-          "esphome_device_id": "ESPHome Device",
+          "esphome_device_id": "Initial ESPHome Device (optional)",
           "device_group": "Device Group",
           "native_ble_tracking": "Track the Area with BLE Proxies"
         },
         "data_description": {
-          "esphome_device_id": "The ESPHome device running Latter firmware (or a Latter Core build). Latter binds to this device and its MAC address.",
+          "esphome_device_id": "Optional. Pick an ESPHome device running Latter firmware (or a Latter Core build) to bind now, or leave blank for hub-only BLE presence setup.",
           "device_group": "Auto-detect the Device Group and baseline settings from hardware, or assign a Device Group directly.",
           "native_ble_tracking": "Use your Bluetooth proxies to work out which Area this device is in. Turn off to pin it to its assigned Home Assistant Area."
-        }
-      },
-      "reconfigure": {
-        "title": "Reconfigure Latter System",
-        "description": "Update the weather and alarm entities shared by every Latter Device.",
-        "data": {
-          "weather_entity": "System Weather Entity",
-          "alarm_entity": "System Alarm Control Panel"
         }
       }
     },
     "abort": {
       "already_configured": "This ESPHome device is already configured in Latter.",
       "not_supported": "This device is not an ESPHome device that announces Latter companion actions.",
-      "reconfigure_successful": "Configuration updated.",
-      "single_instance_allowed": "Latter System is already configured. Add more Devices with Add Device on the Latter integration page.",
+      "single_instance_allowed": "Latter System is already configured. Open Latter Studio or use Add Device on the Latter integration page.",
       "unique_id_mismatch": "The selected ESPHome device does not match the existing configuration entry.",
       "wrong_device": "The selected ESPHome device does not match this configuration entry."
     },
@@ -84,7 +75,8 @@
     "ble_tag": {
       "entry_type": "BLE Tag",
       "initiate_flow": {
-        "user": "Add BLE Tag"
+        "user": "Add BLE Tag",
+        "reconfigure": "Reconfigure BLE Tag"
       },
       "step": {
         "user": {
@@ -100,25 +92,28 @@
             "ble_target_address": "A static MAC address, an iBeacon UUID, or a `private_ble_device` / iBeacon tracker entity ID.",
             "assigned_person": "Optional. Notifications sent to a person, and occupancy, use it."
           }
+        },
+        "reconfigure": {
+          "title": "Reconfigure BLE Tag",
+          "description": "Update this BLE tag's display name, Bluetooth target address, or assigned person.",
+          "data": {
+            "name": "Name",
+            "ble_target_address": "MAC address, iBeacon UUID, or tracker entity",
+            "assigned_person": "Person"
+          },
+          "data_description": {
+            "name": "Display title for this BLE tag (existing entity IDs stay unchanged).",
+            "ble_target_address": "A static MAC address, an iBeacon UUID, or a `private_ble_device` / iBeacon tracker entity ID.",
+            "assigned_person": "Optional. Notifications sent to a person, and occupancy, use it."
+          }
         }
       },
       "abort": {
-        "already_configured": "A BLE tag with this name or address is already configured."
+        "already_configured": "A BLE tag with this name or address is already configured.",
+        "reconfigure_successful": "BLE tag configuration updated."
       },
       "error": {
         "ble_tag_incomplete": "Enter a name and a MAC address, iBeacon UUID, or tracker entity."
-      }
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Latter System Settings",
-        "description": "Set the weather and alarm entities shared by every Latter Device. Everything else, including each Device's Voice Follows Me settings, is in Latter Studio in the Home Assistant sidebar.",
-        "data": {
-          "weather_entity": "System Weather Entity",
-          "alarm_entity": "System Alarm Control Panel"
-        }
       }
     }
   },

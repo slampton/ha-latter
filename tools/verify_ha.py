@@ -9,16 +9,22 @@ and Latter Studio guardrails identically in local development and GitHub Actions
 from __future__ import annotations
 
 import ast
+import gzip
 import json
+import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import sys
 import tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
 LATTER_DIR = ROOT / "custom_components" / "latter"
 STUDIO_DIR = LATTER_DIR / "studio"
+STUDIO_EN_JSON = STUDIO_DIR / "locales" / "en.json"
 STUDIO_JS = LATTER_DIR / "frontend" / "latter-studio.js"
+STUDIO_MDI_JS = LATTER_DIR / "frontend" / "latter-studio-mdi.js"
 STUDIO_DOC = ROOT / "docs" / "studio-design.md"
 
 SKIP_DIRS = {
@@ -209,7 +215,7 @@ def _check_ast_security_and_identity(
                 exc_t = node.type
                 if isinstance(exc_t, ast.Name) and exc_t.id in {"ImportError", "ModuleNotFoundError"}:
                     failures.append(
-                        f"[28-MODULE TOPOLOGY] {rel}:{node.lineno} contains forbidden try/except {exc_t.id} shim"
+                        f"[31-MODULE TOPOLOGY] {rel}:{node.lineno} contains forbidden try/except {exc_t.id} shim"
                     )
 
             if not isinstance(node, ast.Call):
@@ -412,13 +418,13 @@ def main() -> int:
                     root_pkg = alias.name.split(".", 1)[0]
                     if root_pkg in FORBIDDEN_NON_STDLIB_ROOTS:
                         failures.append(
-                            f"[28-MODULE TOPOLOGY] {full_rel}:{node.lineno} imports non-stdlib package {root_pkg!r}"
+                            f"[31-MODULE TOPOLOGY] {full_rel}:{node.lineno} imports non-stdlib package {root_pkg!r}"
                         )
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
                 root_pkg = node.module.split(".", 1)[0]
                 if root_pkg in FORBIDDEN_NON_STDLIB_ROOTS:
                     failures.append(
-                        f"[28-MODULE TOPOLOGY] {full_rel}:{node.lineno} imports non-stdlib package {root_pkg!r}"
+                        f"[31-MODULE TOPOLOGY] {full_rel}:{node.lineno} imports non-stdlib package {root_pkg!r}"
                     )
 
     # 3. Translations parity, [HA QUALITY], and services.yaml parity
@@ -605,13 +611,42 @@ def main() -> int:
                 "[STUDIO NO REST] studio/__init__.py must mount only versioned static prefix (/latter_ui_<ver>)"
             )
 
-    studio_sources = [STUDIO_JS] if STUDIO_JS.is_file() else []
+    studio_sources = [p for p in (STUDIO_JS, STUDIO_MDI_JS) if p.is_file()]
     frontend_src_dir = ROOT / "frontend_src"
     if frontend_src_dir.is_dir():
         studio_sources.extend(p for p in iter_repo_files(frontend_src_dir) if p.suffix in {".ts", ".js"})
 
     if not STUDIO_JS.is_file():
         failures.append("[STUDIO] custom_components/latter/frontend/latter-studio.js is missing")
+    if not STUDIO_MDI_JS.is_file() or STUDIO_MDI_JS.stat().st_size == 0:
+        failures.append("[STUDIO] custom_components/latter/frontend/latter-studio-mdi.js is missing or empty")
+
+    if not STUDIO_EN_JSON.is_file():
+        failures.append("[STUDIO I18N] custom_components/latter/studio/locales/en.json is missing")
+    else:
+        try:
+            en_locale_data = json.loads(STUDIO_EN_JSON.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            failures.append(f"[STUDIO I18N] studio/locales/en.json failed JSON parse: {exc}")
+        else:
+            if not isinstance(en_locale_data, dict) or not en_locale_data:
+                failures.append("[STUDIO I18N] studio/locales/en.json must be a non-empty JSON object")
+
+    for js_bundle in (STUDIO_JS, STUDIO_MDI_JS):
+        if not js_bundle.is_file():
+            continue
+        gz_sibling = js_bundle.with_name(f"{js_bundle.name}.gz")
+        rel_gz = gz_sibling.relative_to(ROOT).as_posix()
+        if not gz_sibling.is_file():
+            failures.append(f"[STUDIO GZIP] {rel_gz} is missing")
+        else:
+            try:
+                decompressed = gzip.decompress(gz_sibling.read_bytes())
+            except OSError as exc:
+                failures.append(f"[STUDIO GZIP] {rel_gz} is not a valid gzip archive: {exc}")
+            else:
+                if decompressed != js_bundle.read_bytes():
+                    failures.append(f"[STUDIO GZIP] {rel_gz} does not match {js_bundle.name} byte-for-byte")
 
     for sf in studio_sources:
         stxt = sf.read_text(encoding="utf-8")
@@ -636,6 +671,42 @@ def main() -> int:
                 failures.append(f"[STUDIO TOKENS] {rel} uses literal font-size outside :host")
             if re.search(r"#[0-9a-fA-F]{3,8}\b|\brgba?\s*\(", body_css):
                 failures.append(f"[STUDIO TOKENS] {rel} uses color literal outside :host")
+
+    # 8. Full-mode Studio bundle check & frontend DOM/unit tests (skipped when LATTER_VERIFY_FAST=1)
+    if os.environ.get("LATTER_VERIFY_FAST") != "1" and (frontend_src_dir / "build.mjs").is_file():
+        node_bin = shutil.which("node")
+        npm_bin = shutil.which("npm")
+        if not node_bin:
+            failures.append("[STUDIO BUILD] 'node' binary not found in PATH")
+        else:
+            build_proc = subprocess.run(
+                [node_bin, "--no-warnings", "frontend_src/build.mjs", "--check"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if build_proc.returncode != 0:
+                detail = "\n    ".join(
+                    part.strip() for part in (build_proc.stdout, build_proc.stderr) if part and part.strip()
+                )
+                failures.append(f"[STUDIO BUILD] frontend_src/build.mjs --check failed:\n    {detail}")
+
+        if not npm_bin:
+            failures.append("[STUDIO TESTS] 'npm' binary not found in PATH")
+        else:
+            test_proc = subprocess.run(
+                [npm_bin, "--prefix", "frontend_src", "test"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if test_proc.returncode != 0:
+                detail = "\n    ".join(
+                    part.strip() for part in (test_proc.stdout, test_proc.stderr) if part and part.strip()
+                )
+                failures.append(f"[STUDIO TESTS] npm --prefix frontend_src test failed:\n    {detail}")
 
     if failures:
         print(f"verify_ha.py FAILED ({len(failures)} issue(s)):")

@@ -13,10 +13,10 @@ Most ESPHome display projects hardcode entity IDs into YAML—a renamed light, a
 
 | Repository | Runs on | Responsibility |
 | :--- | :--- | :--- |
-| **ha-latter** *(this repo)* | Home Assistant | Integration and **Latter Studio**: live entity mapping, BLE Area presence & sensor fusion, signed ESP32 media proxy, and 19 `latter.*` services. |
+| **ha-latter** *(this repo)* | Home Assistant | Integration and **Latter Studio**: live entity mapping, BLE Area presence & sensor fusion, signed ESP32 media proxy, and 20 `latter.*` services. |
 | **[esphome-latter-core](https://github.com/slampton/esphome-latter-core)** | ESP32-S3 / ESP32-P4 | Compiled C++20 firmware for five Waveshare touch displays, [Web Installer](https://slampton.github.io/esphome-latter-core/), and the Latter Core SDK. |
 
-You need both repos for the touch displays. If you only want BLE Area presence and occupancy fusion from the Bluetooth proxies, phones, watches, and beacons you already own, `ha-latter` works standalone.
+You need both repos for the touch displays. If you only want BLE Area presence and occupancy fusion from the Bluetooth proxies, phones, watches, and beacons you already own, `ha-latter` works standalone with zero displays configured.
 
 ---
 
@@ -26,7 +26,7 @@ You need both repos for the touch displays. If you only want BLE Area presence a
 
 | Device | Waveshare Hardware | Display | Best For |
 | :--- | :--- | :--- | :--- |
-| **Pocket Assistant** | [Waveshare ESP32-S3-Touch-AMOLED-1.75C][ws-175c] | 1.75" round AMOLED, 466×466 | Carrying room to room; voice and music |
+| **Pocket Assistant** | [Waveshare ESP32-S3-Touch-AMOLED-1.75C][ws-175c] | 1.75" round AMOLED, 466×466 | Carrying Area to Area; voice and music |
 | **Mobile Assistant** | [Waveshare ESP32-S3-Touch-AMOLED-2.16][ws-216] | 2.16" square AMOLED, 480×480 | Handheld album art, sliders, and browsing |
 | **Wrist Assist** | [Waveshare ESP32-S3-Touch-AMOLED-2.06][ws-206] | 2.06" watch AMOLED, 410×502 | Wearable timers, alarms, Assist, and per-person presence |
 | **Remote Assistant** | [Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5][ws-p4-35] | 3.5" IPS, 320×480 | Fast P4 couch remote for TVs and media |
@@ -38,7 +38,7 @@ You need both repos for the touch displays. If you only want BLE Area presence a
 
 **3. Install Latter via HACS:** open **HACS → ⋮ → Custom repositories**, add `https://github.com/slampton/ha-latter` as **Integration**, download **Latter**, and restart Home Assistant.
 
-**4. Accept discovery & open Latter Studio:** click **Add** on **Discovered: Latter** under **Settings → Devices & Services**, then open **Latter** in the sidebar to map your shared entities, speakers, and themes live. → [Full walkthrough](docs/getting-started.md)
+**4. Accept discovery & open Latter Studio:** click **Add** on **Discovered: Latter** under **Settings → Devices & Services** (or **Add Integration → Latter** with no display selected for standalone BLE presence), then click **Configure** or open **Latter** in the sidebar to map your shared entities, speakers, and colors & wallpapers live. → [Full walkthrough](docs/getting-started.md)
 
 ---
 
@@ -69,11 +69,11 @@ Latter detects your doorbell's ring entity automatically, wakes displays for 20 
 <!-- MEDIA: docs/media/doorbell.gif — doorbell press waking Desk Assistant with a live camera popup. -->
 
 ### Latter Studio
-An admin-only sidebar control plane where every change pushes live without reflashing:
-- **System scope:** shared whole-home entities, cameras & doorbell audio filter, 6 built-in `720p` wallpapers + 15 MB photo uploads, 24-swatch custom color library, TV/AV remotes & remote groups, operational Device Groups, live WebSocket BLE calibration, doorbell speaker testing, HMAC key rotation, and JSON backup/restore.
-- **Per-device scope:** **Overview** status tiles & quick actions, **Display** (weather sky, screensavers, brightness, themes, wallpapers), **Interface** (single-app kiosk mode, start screen, dock apps, Area/Home category pills, World Clocks & 2-way Alarms), **Audio**, **Power**, **Presence**, and **Tools**.
+An admin-only sidebar control plane where every change pushes live without reflashing (and queues automatically for sleeping battery Devices):
+- **System scope:** shared Home Hub & weather entities (searchable WAI-ARIA comboboxes), cameras (on-demand signed previews) & doorbell audio filter, 6 built-in `720p` wallpapers + 15 MB photo uploads, 24-swatch custom color library, TV/AV remotes & remote groups, operational Device groups + staged **Batch controls**, live WebSocket BLE calibration, doorbell speaker testing, HMAC key rotation, JSON backup/restore, and **Support & diagnostics**.
+- **Per-Device scope:** **Overview** (status tiles, quick actions, **Open in Home Assistant**, assignments, and 2-way **Timers & alarms**), **Display** (**Home screen appearance**, screensaver, brightness, clock, colors & wallpapers, **Music appearance**), **Interface** (Single-App kiosk mode, start screen, drag-and-drop **App Dock**, pinned shortcuts, Area/Home category pills, and **World clocks**), **Audio**, **Power**, **Presence**, and **Tools**.
 
-<!-- MEDIA: docs/media/studio-overview.png — Latter Studio, System → Overview. -->
+![Latter Studio — System Overview](docs/media/studio-system-overview.png)
 
 → [Latter Studio guide](docs/studio.md)
 
@@ -84,15 +84,15 @@ An admin-only sidebar control plane where every change pushes live without refla
 ```mermaid
 flowchart LR
     DEV["ESP32-S3 / P4 Display<br/>(esphome-latter-core)"] -- "System: RPC Outbox<br/>(zero-privilege taps & sync)" --> HA["Latter Integration<br/>(ha-latter)"]
-    HA -- "latter_push_v3 & latter_set_slots<br/>(6 domains + signed LAN media)" --> DEV
+    HA -- "latter_push_v3 & latter_set_slots<br/>(7 domains + signed LAN media)" --> DEV
     BLE["ESPHome BLE Proxies"] -- "RSSI" --> HA
     HA <--> STUDIO["Latter Studio<br/>(live admin panel)"]
     HA <--> ECOSYS["HA Areas · Assist · Music Assistant"]
 ```
 
-- **Zero-Privilege Bound RPC & 6-Domain Protocol v3 Push.** Devices bind strictly by `esphome_device_id` and hardware MAC (`via_device_id`). Outbound device taps emit compact chunked frames on `System: RPC Outbox` (`identity.py`) and inbound state pushes directly over `esphome.<node>_latter_push_v3` across 6 content-hashed domains (`area_context`, `active_media`, `remote_config`, `weather_forecast`, `calendar_agenda`, `device_prefs`) plus `latter_set_slots`—requiring neither `allow_service_calls` nor `device_slug` YAML substitutions, and keeping `~8 KB` of signed URLs off Home Assistant's `state_changed` bus and SQLite recorder.
-- **3-Tier Sleep-Safe Entity Architecture & `O(1)` `AreaStateIndex`.** All 49 device preferences persist in subentries (`studio/settings.py`) and reconcile offline NVS edits on `device_hello`, so Studio and Device Groups work even while battery handhelds hibernate. Home Assistant gets a clean Tier 2 automation surface (`Device Group`, `Wake Word Mode`, `Alert Volume`, `Find My Device`, `Activate Screensaver`, `Timer Active`, `Timer Remaining`, `Alarm Ringing`) backed by 1 Hz local timer ticks and an incremental `O(1)` `AreaStateIndex` (`hub.py`—never calling `hass.states.async_all()`).
-- **ESP32-Native Signed Media Proxy.** ESP-IDF's JPEG decoder rejects progressive JPEGs and can't resolve `.local` mDNS hostnames. Latter re-encodes artwork, `720p` wallpapers, camera snapshots (with predictive live-feed prefetching), and OpenStreetMap event pins as baseline 4:2:0 JPEG on executor threads—applying circular masks on round panels—and serves them over Home Assistant's numeric LAN IPv4 with constant-time, parameter-scoped HMAC signatures (`http.py`).
+- **Zero-Privilege Bound RPC & 7-Domain Protocol v3 Push.** Devices bind strictly by `esphome_device_id` and hardware MAC (`via_device_id`). Outbound device taps emit compact chunked frames on `System: RPC Outbox` (`identity.py`) and inbound state pushes directly over `esphome.<node>_latter_push_v3` across 7 content-hashed domains (`area_context`, `active_media`, `remote_config`, `weather_forecast`, `calendar_agenda`, `device_prefs`, `shortcuts`) plus `latter_set_slots`—requiring neither `allow_service_calls` nor `device_slug` YAML substitutions, and keeping `~8 KB` of signed URLs off Home Assistant's `state_changed` bus and SQLite recorder.
+- **3-Tier Sleep-Safe Entity Architecture & `O(1)` `AreaStateIndex`.** All 50 device preferences persist in subentries (`studio/settings.py`) and reconcile offline NVS edits on `device_hello`, so Studio and Device groups work even while battery handhelds hibernate. Home Assistant gets a clean Tier 2 automation surface (`Device Group`, `Wake Word Mode`, `Alert Volume`, `Find My Device`, `Activate Screensaver`, `Timer Active`, `Timer Remaining`, `Alarm Ringing`) backed by an isolated 1 Hz local `Timer Remaining` tick and an incremental `O(1)` `AreaStateIndex` (`hub.py`—never calling `hass.states.async_all()`).
+- **ESP32-Native Signed Media Proxy.** ESP-IDF's JPEG decoder rejects progressive JPEGs and can't resolve `.local` mDNS hostnames. Latter re-encodes artwork, `720p` wallpapers, camera snapshots (with predictive live-feed prefetching and on-demand 600 s Studio previews), and OpenStreetMap event pins as baseline 4:2:0 JPEG on executor threads—applying circular masks on round panels—and serves them over Home Assistant's numeric LAN IPv4 with constant-time, parameter-scoped HMAC signatures (`http.py`).
 
 ---
 
@@ -103,10 +103,10 @@ flowchart LR
 
 | Reference | Covers |
 | :--- | :--- |
-| **[Services](docs/reference/services.md)** | All 19 `latter.*` services, parameters, security PIN rules, and special targets (`all`, `occupied_areas`, `person.<id>`) |
+| **[Services](docs/reference/services.md)** | All 20 `latter.*` services, parameters, security PIN rules, and special targets (`all`, `occupied_areas`, `person.<id>`) |
 | **[Entities](docs/reference/entities.md)** | The 3-tier entity architecture across all 6 Home Assistant platforms, occupancy attributes, and `latter_event` payloads |
 | **[HTTP API](docs/reference/http-api.md)** | Signed baseline-JPEG & FLAC endpoints, Bearer wallpaper upload, and Studio WebSocket architecture |
-| **[Device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md)** | Discovery, Manifest v2, 6-domain Protocol v3 push, and `System: RPC Outbox` framing |
+| **[Device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md)** | Discovery, Manifest v2, 7-domain Protocol v3 push, and `System: RPC Outbox` framing |
 | **[Building a GUI](https://github.com/slampton/esphome-latter-core/blob/main/docs/building-a-gui.md)** | Writing a custom touch or rotary UI on top of `esphome-latter-core` |
 
 ---
@@ -124,9 +124,9 @@ flowchart LR
 **Local-first network footprint:** everything runs locally on your LAN except four optional lookups—OpenStreetMap tiles + Nominatim geocoding for calendar event maps, and LRCLIB lyrics + Wikipedia bios when Music Assistant lacks text metadata.
 
 **Version `3.0.0` Status:**
-- **Stable:** device discovery, Latter Studio, 6-domain Protocol v3 sync, Area control, Home Hub, Time/Alarms, Music Assistant browsing & transfer, BLE Area presence & sensor fusion, doorbell camera popups, and JSON backup/restore.
-- **Experimental / Current Limits:** doorbell listen & push-to-talk TTS reply (no live device-to-door audio or on-device echo cancellation yet); BLE calibration uses one offset per Area rather than per-scanner trilateration.
-- **CI Gate:** every push to `dev` runs `hassfest`, HACS validation, `ruff`, `tools/verify_ha.py`, TypeScript + Lit Studio bundle parity (`npm --prefix frontend_src run check`), and the `pytest` suite (`>= 75%` coverage across the **31-module** backend: 27 root `.py` modules + 4 `studio/` `.py` modules) before fast-forwarding `main`.
+- **Stable:** device discovery, Latter Studio, 7-domain Protocol v3 sync, Area control, Home Hub, Time/Alarms, Music Assistant browsing & transfer, BLE Area presence & sensor fusion, doorbell camera popups, and JSON backup/restore.
+- **Experimental / Current Limits:** doorbell listen & push-to-talk TTS reply (no live device-to-door audio or on-device echo cancellation yet); BLE calibration uses per-scanner gain trim + multi-scanner Area signatures rather than `(x, y, z)` floorplan coordinates.
+- **CI Gate:** every push to `dev` runs `hassfest`, HACS validation, `ruff`, `tools/verify_ha.py`, TypeScript + `lit-html` Studio bundle & DOM test parity (`npm --prefix frontend_src run check && npm --prefix frontend_src test`), and the `pytest` suite (`>= 75%` coverage across the **31-module** backend: 27 root `.py` modules + 4 `studio/` `.py` modules) before fast-forwarding `main`.
 
 Bugs and feature requests: [GitHub Issues](https://github.com/slampton/ha-latter/issues).
 

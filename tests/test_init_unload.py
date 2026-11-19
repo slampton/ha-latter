@@ -34,8 +34,11 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     entry, sys_obj, coord = await setup_latter_hub(hass, with_device=True, with_ble_tag=True)
     assert coord is not None
     assert "sub_tag" in sys_obj.coordinators
-    assert "_studio_js_digest" in hass.data[DOMAIN]
+    assert "_registered_panel_url" in hass.data[DOMAIN]
     assert "latter" in hass._panels
+    assert hass._panels["latter"]["config_panel_domain"] == DOMAIN
+    assert hass.http.static_paths
+    assert all(sp.cache_headers is True for sp in hass.http.static_paths)
     assert len(hass._extra_js_urls) == 1
 
     # Verify all entity platforms populated states and enforce _attr_has_entity_name = True
@@ -100,7 +103,7 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     assert await async_unload_entry(hass, entry) is True
     await hass.async_block_till_done()
     assert dummy_task.cancelled() or dummy_task.done()
-    assert "_studio_js_digest" not in hass.data.get(DOMAIN, {})
+    assert "_registered_panel_url" not in hass.data.get(DOMAIN, {})
     assert "latter" not in hass._panels
     assert len(hass._extra_js_urls) == 0
 

@@ -2699,6 +2699,7 @@ class LatterBleFabric:
             return
         payload = {
             "device_slug": tracker._raw_slug,
+            "packets_seen": tracker.packets_seen,
             "current_area_id": tracker.current_area_id or "",
             "winning_rssi": tracker.winning_rssi,
             "closest_scanner": tracker.closest_scanner,
@@ -3722,6 +3723,7 @@ def get_discovered_ble_candidates(
                 "title": friendly,
                 "target_address": entry.entity_id,
                 "kind": kind_lbl,
+                "is_tracker": True,
                 "rssi": rssi_int,
                 "area_name": area_name,
                 "scanner": scanner_str,
@@ -3996,6 +3998,7 @@ def get_discovered_ble_candidates(
                 "title": friendly,
                 "target_address": entry.entity_id,
                 "kind": kind_lbl,
+                "is_tracker": True,
                 "rssi": rssi_int,
                 "area_name": area_name,
                 "scanner": src_scanner,
@@ -4096,6 +4099,7 @@ def get_discovered_ble_candidates(
                 "title": title,
                 "target_address": target_key,
                 "kind": kind_lbl,
+                "is_tracker": not kind_lbl.startswith("Named BLE"),
                 "rssi": rssi_int,
                 "area_name": area_name,
                 "scanner": scanner_name,
@@ -4108,6 +4112,7 @@ def get_discovered_ble_candidates(
 
     candidates.sort(
         key=lambda x: (
+            not bool(x.get("is_tracker", True)),
             x.get("rssi") is None,
             -(x.get("rssi") if x.get("rssi") is not None else -999),
             str(x.get("title") or "").lower(),

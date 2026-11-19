@@ -1,8 +1,8 @@
 # Using Latter with ESPHome Devices You Already Have
 
-Latter manages Latter devices: one of the [supported displays](../README.md#get-started), or your own build on [Latter Core](https://github.com/slampton/esphome-latter-core). Other ESPHome devices aren't added to Latter, but the Bluetooth data they already give Home Assistant feeds Latter's presence engine.
+Latter manages Latter Devices: one of the [supported displays](../README.md#get-started-in-minutes), or your own build on [Latter Core](https://github.com/slampton/esphome-latter-core). Other ESPHome devices aren't added as Latter displays, but the Bluetooth data they already give Home Assistant powers Latter's Area presence and sensor-fusion engine—even with **zero Latter displays** configured.
 
-> These are standard ESPHome components in your own configs. Latter reads what Home Assistant's Bluetooth integration already collects; it doesn't ship or support this YAML.
+> **Standalone 0-display setup:** Go to **Settings → Devices & Services → Add Integration → Latter** and leave **Initial ESPHome Device (optional)** blank, then click **Configure** (or **Latter** in the sidebar) to open Latter Studio. These are standard ESPHome components in your own configs—Latter reads what Home Assistant's Bluetooth integration already collects; it doesn't ship or support this YAML.
 
 ---
 
@@ -29,12 +29,12 @@ esp32_ble_beacon:
   uuid: "<a UUID unique to this node>"
 ```
 
-Then open **Studio → Devices → Discovered → Bluetooth Devices** and click **Adopt**, or add it by UUID with **Add BLE Tag**.
+Then open **Studio → Devices → Discovered → Bluetooth devices** (**Phones & trackers** filter) and click **Adopt**, or add it by UUID with **Add BLE tag**.
 
 ## Phones and watches
 
-1. Set up Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration for each phone or watch.
-2. Adopt it from the same **Bluetooth Devices** list under **Studio → Devices → Discovered**.
+1. On Android with the Home Assistant Companion App, enable the **BLE Transmitter** sensor (auto-discovered directly by phone name); on iOS, Apple Watch, or Android without the Companion App, set up Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration once.
+2. Adopt it from **Bluetooth devices** under **Studio → Devices → Discovered** (Studio jumps straight to the new Device's **Overview** page so you can assign a Person).
 
 → [Presence guide](presence.md)
 

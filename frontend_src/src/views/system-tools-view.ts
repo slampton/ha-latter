@@ -1,28 +1,43 @@
 /**
- * System Tools View (`system_tools`): Notifications & Announcements, Doorbell & Intercom Audio,
- * Backup & Restore, Perimeter Security & Signing, and Logs-only `system_log`.
+ * System tools view (`system_tools`, `D-020` / `D-040` / `D-064` / `D-066`):
+ * Notifications & announcements, doorbell & intercom audio, backup & restore,
+ * perimeter security & signing, System & Device logs, and Support & diagnostics.
  */
 
 import { renderCard, renderSettingsRow } from "../components/controls.js";
-import { html, nothing, type TemplateResult } from "../lib/lit.js";
+import { STUDIO_REV } from "../constants.js";
+import { focusSafe, html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
+
+const DOCS_URL = "https://github.com/slampton/ha-latter";
+const ISSUES_URL = "https://github.com/slampton/ha-latter/issues";
 
 export function renderSystemToolsView(store: StudioStore): TemplateResult {
   const data = store.state;
   const allDevices = data?.system_devices || [];
   const latterDevices = allDevices.filter((d) => d.kind !== "ble_tag");
+  const bleTagCount = allDevices.length - latterDevices.length;
   const configuredCameras = (data?.system_config?.camera_entities || [])
     .map((c) => String(c || "").trim())
     .filter(Boolean);
   const primaryCamera = configuredCameras[0] || "";
   const canTestDoorbell = Boolean(primaryCamera && latterDevices.length > 0);
   const doorbellTestDescription = !primaryCamera
-    ? "Map a camera with a bound door speaker in Shared Entities first to test TTS reply playback."
+    ? store.t("tools_sys.doorbell_desc_no_cam")
     : !latterDevices.length
-      ? "Onboard at least one Latter Device first to route push-to-talk test replies."
-      : `Plays a short TTS phrase on Camera 1's bound media player (${primaryCamera}).`;
+      ? store.t("tools_sys.doorbell_desc_no_dev")
+      : store.t("tools_sys.doorbell_desc_ready", { camera: primaryCamera });
   const hasSystemPin = Boolean(data?.has_security_pin);
   const isBroadcast = store.announceMode === "broadcast";
+
+  const sysInfo = data?.system_info;
+  const haVer = sysInfo?.ha_version || store.hass?.config?.version || store.t("common.unknown");
+  const rawIntVer = sysInfo?.integration_version || data?.version || "";
+  const intVer = rawIntVer ? `v${rawIntVer}` : store.t("common.unknown");
+  const sdkRev = sysInfo?.min_firmware_sdk_rev
+    ? String(sysInfo.min_firmware_sdk_rev)
+    : store.t("common.unknown");
+  const studioRev = `rev ${String(sysInfo?.studio_rev ?? STUDIO_REV)}`;
 
   const onAnnounceRadioKey = (ev: Event): void => {
     const kev = ev as KeyboardEvent;
@@ -42,16 +57,20 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
     <div class="columns">
       <div class="column">
         ${renderCard({
-          heading: html`<h3 class="card-title">Notifications &amp; Announcements</h3>`,
-          subtitle:
-            "Send screen popups or spoken intercom broadcasts to all Devices, Occupied Areas, or one display.",
+          id: "card-notifications-announcements",
+          title: store.t("card.notifications_announcements"),
+          subtitle: store.t("tools_sys.announce_subtitle"),
           contentClass: "stack",
-          body: html`<div role="radiogroup" aria-label="Announcement mode" class="segmented">
+          body: html`<div
+              role="radiogroup"
+              aria-label=${store.t("tools_sys.announce_mode_aria")}
+              class="segmented"
+            >
               <button
                 type="button"
                 data-mode="notify"
                 tabindex=${!isBroadcast ? "0" : "-1"}
-                aria-checked=${!isBroadcast}
+                aria-checked=${String(!isBroadcast)}
                 @click=${() => {
                   store.announceMode = "notify";
                   store.host.requestUpdate();
@@ -59,13 +78,13 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                 @keydown=${onAnnounceRadioKey}
                 role="radio"
               >
-                Screen Notification
+                ${store.t("tools_sys.screen_notification")}
               </button>
               <button
                 type="button"
                 data-mode="broadcast"
                 tabindex=${isBroadcast ? "0" : "-1"}
-                aria-checked=${isBroadcast}
+                aria-checked=${String(isBroadcast)}
                 @click=${() => {
                   store.announceMode = "broadcast";
                   store.host.requestUpdate();
@@ -73,12 +92,12 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                 @keydown=${onAnnounceRadioKey}
                 role="radio"
               >
-                Voice Broadcast
+                ${store.t("tools_sys.voice_broadcast")}
               </button>
             </div>
 
             <div class="stacked-field">
-              <label for="ann-target">Target</label>
+              <label for="ann-target">${store.t("tools_sys.target_label")}</label>
               <select
                 id="ann-target"
                 .value=${store.announceTarget}
@@ -88,13 +107,13 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                 }}
               >
                 <option value="all" ?selected=${store.announceTarget === "all"}>
-                  All Latter Displays
+                  ${store.t("tools_sys.all_displays")}
                 </option>
                 <option
                   value="occupied_areas"
                   ?selected=${store.announceTarget === "occupied_areas"}
                 >
-                  Occupied Areas Only
+                  ${store.t("tools_sys.occupied_areas_only")}
                 </option>
                 ${latterDevices.map(
                   (d) =>
@@ -102,7 +121,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                       value=${d.device_slug}
                       ?selected=${store.announceTarget === d.device_slug}
                     >
-                      Device: ${d.title}
+                      ${store.t("tools_sys.device_prefix", { title: d.title })}
                     </option>`,
                 )}
               </select>
@@ -110,12 +129,12 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
 
             ${!isBroadcast
               ? html`<div class="stacked-field">
-                    <label for="ann-title">Notification Title</label>
+                    <label for="ann-title">${store.t("tools_sys.notification_title")}</label>
                     <input
                       type="text"
                       id="ann-title"
-                      placeholder="e.g. Front Gate"
-                      .value=${store.announceTitle}
+                      placeholder=${store.t("tools_sys.notification_title_placeholder")}
+                      .value=${focusSafe(store.announceTitle)}
                       @input=${(ev: Event) => {
                         store.announceTitle = (ev.currentTarget as HTMLInputElement).value;
                       }}
@@ -123,7 +142,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                   </div>
                   <div class="list-row-main">
                     <div class="stacked-field">
-                      <label for="ann-priority">Priority</label>
+                      <label for="ann-priority">${store.t("tools_sys.priority")}</label>
                       <select
                         id="ann-priority"
                         .value=${store.announcePriority}
@@ -134,9 +153,9 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                             | "critical";
                         }}
                       >
-                        <option value="normal">Normal</option>
-                        <option value="warning">Warning</option>
-                        <option value="critical">Critical</option>
+                        <option value="normal">${store.t("tools_sys.priority_normal")}</option>
+                        <option value="warning">${store.t("tools_sys.priority_warning")}</option>
+                        <option value="critical">${store.t("tools_sys.priority_critical")}</option>
                       </select>
                     </div>
                     <label class="inline-switch">
@@ -151,18 +170,18 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                         }}
                         class="switch"
                       />
-                      <span>Include Primary Camera</span>
+                      <span>${store.t("tools_sys.include_camera")}</span>
                     </label>
                   </div>`
               : nothing}
 
             <div class="stacked-field">
-              <label for="ann-message">Message</label>
+              <label for="ann-message">${store.t("tools_sys.message")}</label>
               <textarea
                 id="ann-message"
                 rows="3"
-                placeholder="Message to display or speak…"
-                .value=${store.announceMessage}
+                placeholder=${store.t("tools_sys.message_placeholder")}
+                .value=${focusSafe(store.announceMessage)}
                 @input=${(ev: Event) => {
                   store.announceMessage = (ev.currentTarget as HTMLTextAreaElement).value;
                 }}
@@ -172,24 +191,24 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
             <div class="input-action-row">
               <button
                 type="button"
-                @click=${() => void store.sendAnnouncement()}
+                id="btn-send-announcement"
+                @click=${() => void store.tools.sendAnnouncement()}
                 class="btn btn-primary"
               >
-                Send Now
+                ${store.t("tools_sys.send_now")}
               </button>
             </div>`,
         })}
 
         ${renderCard({
           id: "card-doorbell-intercom-audio",
-          heading: html`<h3 class="card-title">Doorbell &amp; Intercom Audio</h3>`,
-          subtitle:
-            "Verify push-to-talk TTS reply playback through Camera 1's bound door speaker.",
+          title: store.t("card.doorbell_intercom_audio"),
+          subtitle: store.t("tools_sys.doorbell_subtitle"),
           contentClass: "settings-list",
           body: html`${renderSettingsRow({
-              label: "Source Device",
+              label: store.t("tools_sys.source_device"),
               forId: "doorbell-test-device",
-              description: "Latter Device context used when routing the door speaker reply.",
+              description: store.t("tools_sys.source_device_desc"),
               control: html`<select
                 id="doorbell-test-device"
                 ?disabled=${!canTestDoorbell}
@@ -209,12 +228,12 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                           ${d.title}
                         </option>`,
                     )
-                  : html`<option value="">— No Latter Devices —</option>`}
+                  : html`<option value="">${store.t("tools_sys.no_latter_devices")}</option>`}
               </select>`,
             })}
             ${renderSettingsRow({
               id: "row-doorbell-test-reply",
-              label: "Test Door Speaker Reply",
+              label: store.t("tools_sys.test_door_reply"),
               forId: "doorbell-test-reply",
               description: doorbellTestDescription,
               stacked: true,
@@ -223,9 +242,9 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                   type="text"
                   id="doorbell-test-reply"
                   maxlength="160"
-                  placeholder="Testing Latter doorbell audio."
+                  placeholder=${store.t("tools_sys.doorbell_reply_placeholder")}
                   ?disabled=${!canTestDoorbell}
-                  .value=${store.doorbellTestReply}
+                  .value=${focusSafe(store.doorbellTestReply)}
                   @input=${(ev: Event) => {
                     store.doorbellTestReply = (ev.currentTarget as HTMLInputElement).value;
                   }}
@@ -234,10 +253,10 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                   type="button"
                   id="btn-play-door-speaker"
                   ?disabled=${!canTestDoorbell}
-                  @click=${() => void store.testDoorbellSpeaker()}
+                  @click=${() => void store.entity.testDoorbellSpeaker()}
                   class="btn btn-primary btn-compact"
                 >
-                  Play on Door Speaker
+                  ${store.t("tools_sys.play_door_speaker")}
                 </button>
                 ${!primaryCamera
                   ? html`<button
@@ -246,7 +265,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                         store.openSystemSection("shared_entities", "card-cameras-doorbell")}
                       class="btn btn-text btn-compact"
                     >
-                      Open Shared Entities
+                      ${store.t("action.open_shared_entities")}
                     </button>`
                   : nothing}
               </div>`,
@@ -254,30 +273,35 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
         })}
 
         <details
+          id="card-system-logs"
           ?open=${store.logsOpen}
           @toggle=${(ev: Event) =>
-            store.onToggleLogsDetails((ev.currentTarget as HTMLDetailsElement).open)}
+            store.tools.onToggleLogsDetails((ev.currentTarget as HTMLDetailsElement).open)}
           class="card"
         >
           <summary class="card-header">
             <div class="card-heading">
-              <h3 class="card-title">System &amp; Device Logs</h3>
+              <h3 class="card-title">${store.t("card.system_device_logs")}</h3>
             </div>
           </summary>
           <div class="card-content stack">
             <div class="input-action-row">
               <select
-                aria-label="Filter diagnostic logs"
+                aria-label=${store.t("tools_sys.logs_filter_aria")}
                 .value=${store.logFilter}
                 @change=${(ev: Event) => {
                   store.logFilter = (ev.currentTarget as HTMLSelectElement).value || "all";
                   store.host.requestUpdate();
                 }}
               >
-                <option value="all" ?selected=${store.logFilter === "all"}>All Events</option>
-                <option value="latter" ?selected=${store.logFilter === "latter"}>Latter Studio</option>
+                <option value="all" ?selected=${store.logFilter === "all"}>
+                  ${store.t("tools_sys.logs_all")}
+                </option>
+                <option value="latter" ?selected=${store.logFilter === "latter"}>
+                  ${store.t("tools_sys.logs_studio")}
+                </option>
                 <option value="errors" ?selected=${store.logFilter === "errors"}>
-                  Warnings &amp; Errors
+                  ${store.t("tools_sys.logs_errors")}
                 </option>
                 ${allDevices.map(
                   (d) =>
@@ -285,7 +309,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                       value=${`device:${d.device_slug}`}
                       ?selected=${store.logFilter === `device:${d.device_slug}`}
                     >
-                      Device: ${d.title}
+                      ${store.t("tools_sys.device_prefix", { title: d.title })}
                     </option>`,
                 )}
               </select>
@@ -294,31 +318,32 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                 @click=${() => void store.refreshState({ includeLogs: true })}
                 class="btn btn-secondary btn-compact"
               >
-                Refresh Logs
+                ${store.t("tools_sys.refresh_logs")}
               </button>
               <button
                 type="button"
-                @click=${() => void store.copyLogsToClipboard()}
+                @click=${() => void store.tools.copyLogsToClipboard()}
                 class="btn btn-secondary btn-compact"
               >
-                Copy Logs
+                ${store.t("tools_sys.copy_logs")}
               </button>
               <button
                 type="button"
-                @click=${() => void store.clearInternalLogs()}
+                id="btn-clear-internal-logs"
+                @click=${() => void store.tools.clearInternalLogs()}
                 class="btn btn-text btn-compact"
               >
-                Clear Studio Events
+                ${store.t("tools_sys.clear_logs")}
               </button>
               <button
                 type="button"
                 @click=${() => store.openHaPage("/config/logs")}
                 class="btn btn-text btn-compact"
               >
-                Open Native HA Logs
+                ${store.t("action.open_ha_logs")}
               </button>
             </div>
-            <pre class="log-output">${store.formatVisibleLogs()}</pre>
+            <pre class="log-output">${store.tools.formatVisibleLogs()}</pre>
           </div>
         </details>
       </div>
@@ -326,13 +351,12 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
       <div class="column">
         ${renderCard({
           id: "card-backup-restore",
-          handoffActive: Boolean(store.isHandoffTarget?.("card-backup-restore")),
-          heading: html`<h3 class="card-title">Backup &amp; Restore</h3>`,
-          subtitle:
-            "Export or restore non-secret System and Device configurations as portable JSON bundles.",
+          handoffActive: store.isHandoffTarget("card-backup-restore"),
+          title: store.t("card.backup_restore"),
+          subtitle: store.t("tools_sys.backup_subtitle"),
           contentClass: "stack",
           body: html`<div class="stacked-field">
-              <label for="bkp-scope-select">Export Scope</label>
+              <label for="bkp-scope-select">${store.t("tools_sys.export_scope")}</label>
               <div class="input-action-row">
                 <select
                   id="bkp-scope-select"
@@ -343,7 +367,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                   }}
                 >
                   <option value="system" ?selected=${store.backupExportScope === "system"}>
-                    Entire System + All Devices
+                    ${store.t("tools_sys.entire_system")}
                   </option>
                   ${allDevices.map(
                     (d) =>
@@ -351,25 +375,26 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                         value=${`device:${d.subentry_id}`}
                         ?selected=${store.backupExportScope === `device:${d.subentry_id}`}
                       >
-                        Device: ${d.title}
+                        ${store.t("tools_sys.device_prefix", { title: d.title })}
                       </option>`,
                   )}
                 </select>
                 <button
                   type="button"
-                  @click=${() => void store.exportBackup()}
+                  id="btn-download-backup"
+                  @click=${() => void store.tools.exportBackup()}
                   class="btn btn-secondary"
                 >
-                  Download Backup
+                  ${store.t("action.download_backup")}
                 </button>
               </div>
             </div>
 
             <div class="stacked-field">
-              <label for="bkp-upload-file">Restore From Backup</label>
+              <label for="input-restore-backup">${store.t("tools_sys.restore_from_backup")}</label>
               <input
                 type="file"
-                id="bkp-upload-file"
+                id="input-restore-backup"
                 accept=".json,application/json"
                 @change=${(ev: Event) => {
                   const inp = ev.currentTarget as HTMLInputElement;
@@ -380,7 +405,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
             </div>
 
             <div class="stacked-field">
-              <label for="bkp-restore-device">Target Device (for Single-Device Backups)</label>
+              <label for="bkp-restore-device">${store.t("tools_sys.target_device_restore")}</label>
               <select
                 id="bkp-restore-device"
                 .value=${store.backupRestoreSubentryId}
@@ -389,7 +414,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                   store.host.requestUpdate();
                 }}
               >
-                <option value="">— Automatic (System Backup) —</option>
+                <option value="">${store.t("tools_sys.auto_system_backup")}</option>
                 ${allDevices.map(
                   (d) =>
                     html`<option
@@ -405,28 +430,33 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
             <div class="input-action-row">
               <button
                 type="button"
+                id="btn-restore-backup"
                 ?disabled=${!store.selectedBackupFile}
-                @click=${() => void store.restoreFromUploadedFile()}
+                @click=${() => void store.tools.requestRestoreFromUploadedFile()}
                 class="btn btn-primary"
               >
-                Restore Backup
+                ${store.t("action.restore_backup")}
               </button>
             </div>`,
         })}
 
         ${renderCard({
           id: "card-perimeter-security",
-          handoffActive: Boolean(store.isHandoffTarget?.("card-perimeter-security")),
-          title: "Perimeter Security & Signing",
+          handoffActive: store.isHandoffTarget("card-perimeter-security"),
+          title: store.t("card.perimeter_security_signing"),
           contentClass: "settings-list",
           body: html`${renderSettingsRow({
-              label: "System Security PIN",
-              description:
-                "Default numeric PIN (4 to 12 digits, PBKDF2-HMAC-SHA256) used when a Device's Perimeter Security Policy requires PIN verification.",
+              label: store.t("tools_sys.system_pin_label"),
+              description: store.t("tools_sys.system_pin_desc"),
               stacked: true,
               control: html`<div class="input-action-row">
-                <span id="sys-security-pin-status" class="chip ${hasSystemPin ? "chip-success" : ""}">
-                  ${hasSystemPin ? "PIN configured" : "Not set"}
+                <span
+                  id="sys-security-pin-status"
+                  class="chip ${hasSystemPin ? "chip-success" : ""}"
+                >
+                  ${hasSystemPin
+                    ? store.t("status.pin_configured")
+                    : store.t("status.pin_not_set")}
                 </span>
                 <input
                   type="password"
@@ -434,9 +464,11 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                   inputmode="numeric"
                   pattern="[0-9]*"
                   autocomplete="new-password"
-                  aria-label="System Security PIN (4 to 12 digits)"
-                  placeholder=${hasSystemPin ? "Enter new PIN to replace…" : "4 to 12 digits"}
-                  .value=${store.systemPinDraft}
+                  aria-label=${store.t("tools_sys.system_pin_aria")}
+                  placeholder=${hasSystemPin
+                    ? store.t("tools_sys.pin_replace_placeholder")
+                    : store.t("tools_sys.pin_digits_placeholder")}
+                  .value=${focusSafe(store.systemPinDraft)}
                   @input=${(ev: Event) => {
                     store.systemPinDraft = (ev.currentTarget as HTMLInputElement).value;
                     store.host.requestUpdate();
@@ -444,37 +476,105 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                 />
                 <button
                   type="button"
+                  id="btn-save-security-pin"
                   ?disabled=${store.pinBusy || !store.systemPinDraft.trim()}
-                  @click=${() => void store.saveSecurityPin("system")}
+                  @click=${() => void store.tools.saveSecurityPin("system")}
                   class="btn btn-primary btn-compact"
                 >
-                  Save PIN
+                  ${store.t("tools_sys.save_pin")}
                 </button>
                 ${hasSystemPin
                   ? html`<button
                       type="button"
                       id="btn-clear-security-pin"
                       ?disabled=${store.pinBusy}
-                      @click=${() => void store.clearSecurityPin("system")}
+                      @click=${() => store.tools.requestClearSecurityPin("system")}
                       class="btn btn-danger btn-compact"
                     >
-                      Clear PIN
+                      ${store.t("tools_sys.clear_pin")}
                     </button>`
                   : nothing}
               </div>`,
             })}
             ${renderSettingsRow({
-              label: "HTTP Resource Signing Key",
-              description:
-                "Rotates the System HMAC secret and pushes refreshed signed artwork, map, camera, and wallpaper URLs to online Devices.",
+              label: store.t("tools_sys.signing_key_label"),
+              description: store.t("tools_sys.signing_key_desc"),
               control: html`<button
                 type="button"
-                @click=${() => void store.rotateSigningKey()}
+                id="btn-rotate-signing-key"
+                @click=${() => store.tools.requestRotateSigningKey()}
                 class="btn btn-secondary btn-compact"
               >
-                Rotate Signing Key
+                ${store.t("tools_sys.rotate_signing_key")}
               </button>`,
             })}`,
+        })}
+
+        ${renderCard({
+          id: "card-support-diagnostics",
+          title: store.t("card.support_diagnostics"),
+          subtitle: store.t("card.support_subtitle"),
+          contentClass: "stack",
+          footerActions: html`<a
+              href=${DOCS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn btn-text"
+            >
+              ${store.t("support.documentation")}
+            </a>
+            <a
+              href=${ISSUES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn btn-text"
+            >
+              ${store.t("support.report_issue")}
+            </a>`,
+          body: html`<div class="kv-list">
+              <div class="kv-row">
+                <span>${store.t("support.ha_version")}</span>
+                <strong>${haVer}</strong>
+              </div>
+              <div class="kv-row">
+                <span>${store.t("support.integration_version")}</span>
+                <strong>${intVer}</strong>
+              </div>
+              <div class="kv-row">
+                <span>${store.t("support.sdk_rev")}</span>
+                <strong>${sdkRev}</strong>
+              </div>
+              <div class="kv-row">
+                <span>${store.t("support.studio_rev")}</span>
+                <strong>${studioRev}</strong>
+              </div>
+              <div class="kv-row">
+                <span>${store.t("support.managed_devices")}</span>
+                <strong>${store.t("support.managed_devices_value", {
+                  total: allDevices.length,
+                  displays: latterDevices.length,
+                  trackers: bleTagCount,
+                })}</strong>
+              </div>
+            </div>
+            <div class="input-action-row">
+              <button
+                type="button"
+                id="btn-download-system-diagnostics"
+                @click=${() => void store.tools.downloadSystemDiagnostics()}
+                class="btn btn-primary"
+              >
+                ${store.t("support.download_system_diagnostics")}
+              </button>
+              <button
+                type="button"
+                id="btn-copy-system-info"
+                @click=${() => void store.tools.copySystemInfoSummary()}
+                class="btn btn-secondary"
+              >
+                ${store.t("support.copy_summary")}
+              </button>
+            </div>`,
         })}
       </div>
     </div>

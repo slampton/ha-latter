@@ -1,10 +1,11 @@
 /**
- * Wallpaper Gallery & Multipart XHR Upload Component (Device & System scopes).
+ * Wallpaper Gallery & Multipart XHR Upload Component (Device & System scopes, `D-25`, `Q5`, `Q9a`).
  */
 
 import { html, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { StudioScope, WallpaperItem } from "../types.js";
+import { fmtNumber } from "../utils/format.js";
 import { renderTrashIconButton } from "./controls.js";
 
 function renderStarIcon(filled: boolean): TemplateResult {
@@ -29,13 +30,13 @@ export function renderWallpaperGalleryItems(
   displayShape: string,
 ): TemplateResult {
   if (!items.length) {
-    return html`<p class="empty-state">No wallpapers available yet.</p>`;
+    return html`<p class="empty-state">${store.t("wp_gallery.empty")}</p>`;
   }
   const shapeClass = displayShape === "circle" ? "circle" : "square";
 
   return html`${repeat(
     items,
-    (wp) => wp.id,
+    (wp, idx) => `${wp.id}::${idx}`,
     (wp) => {
       const label = wp.name || wp.id;
       const isActive = Boolean(wp.active);
@@ -44,24 +45,31 @@ export function renderWallpaperGalleryItems(
       const thumbSrc = wp.thumb_url || wp.preview_url || "";
       const activeCls = isActive ? "wp-card active" : "wp-card";
       const onUse = (): void => {
-        void store.selectWallpaperSource(wp.id);
+        void store.entity.selectWallpaperSource(wp.id);
       };
       const onFav = (): void => {
-        void store.toggleWallpaperFav(wp.id);
+        void store.entity.toggleWallpaperFav(wp.id);
       };
       const onDel = (): void => {
-        void store.deleteWallpaper(scope, wp.id);
+        store.entity.requestDeleteWallpaper(wp.id, label);
       };
 
+      const clickableThumb = scope === "device" && !isActive;
       const thumbImg = thumbSrc
-        ? html`<img src=${thumbSrc} alt=${label} loading="lazy" class="wp-thumb ${shapeClass}" />`
-        : html`<div class="wp-thumb ${shapeClass}"></div>`;
+        ? html`<img
+            src=${thumbSrc}
+            alt=${clickableThumb ? "" : label}
+            loading="lazy"
+            class="wp-thumb ${shapeClass}"
+          />`
+        : html`<div class="wp-thumb ${shapeClass}" aria-hidden="true"></div>`;
 
       return html`<div class=${activeCls}>
-        ${scope === "device" && !isActive
+        ${clickableThumb
           ? html`<button
               type="button"
-              aria-label=${`Use wallpaper ${label}`}
+              tabindex="-1"
+              aria-hidden="true"
               @click=${onUse}
               class="wp-thumb-btn ${shapeClass}"
             >
@@ -72,25 +80,42 @@ export function renderWallpaperGalleryItems(
         <div class="wp-actions">
           ${scope === "device"
             ? html`${isActive
-                  ? html`<span class="chip chip-primary">Active</span>`
-                  : html`<button type="button" @click=${onUse} class="btn btn-secondary btn-compact">
-                      Use
+                  ? html`<span class="chip chip-primary">${store.t("common.active")}</span>`
+                  : html`<button
+                      type="button"
+                      aria-label=${store.t("wp_gallery.use_aria", { name: label })}
+                      @click=${onUse}
+                      class="btn btn-secondary btn-compact"
+                    >
+                      ${store.t("action.use")}
                     </button>`}
                 <button
                   type="button"
-                  aria-label=${isFav ? `Remove ${label} from favorites` : `Star ${label} for rotation`}
+                  aria-label=${isFav
+                    ? store.t("wp_gallery.star_remove_aria", { name: label })
+                    : store.t("wp_gallery.star_add_aria", { name: label })}
                   aria-pressed=${String(isFav)}
-                  title=${isFav ? "Starred for rotation" : "Star for rotation"}
+                  title=${isFav
+                    ? store.t("wp_gallery.star_active_title")
+                    : store.t("wp_gallery.star_inactive_title")}
                   @click=${onFav}
                   class="btn-icon wp-star-btn${isFav ? " starred" : ""}"
                 >
                   ${renderStarIcon(isFav)}
                 </button>
-                ${canDelete ? renderTrashIconButton(`Delete wallpaper ${label}`, onDel) : nothing}`
+                ${canDelete
+                  ? renderTrashIconButton(
+                      store.t("wp_gallery.delete_aria", { name: label }),
+                      onDel,
+                    )
+                  : nothing}`
             : canDelete
-              ? html`<span class="chip chip-primary">Uploaded</span>
-                  ${renderTrashIconButton(`Delete wallpaper ${label}`, onDel)}`
-              : html`<span class="chip">Built-in</span>`}
+              ? html`<span class="chip chip-primary">${store.t("wp_gallery.uploaded")}</span>
+                  ${renderTrashIconButton(
+                    store.t("wp_gallery.delete_aria", { name: label }),
+                    onDel,
+                  )}`
+              : html`<span class="chip">${store.t("wp_gallery.builtin")}</span>`}
         </div>
       </div>`;
     },
@@ -114,7 +139,7 @@ export function renderWallpaperUploadTrigger(
       store.selectedSystemWallpaperFile = f;
     }
     if (f) {
-      void store.uploadWallpaper(scope);
+      void store.entity.uploadWallpaper(scope);
     } else {
       store.host.requestUpdate();
     }
@@ -133,7 +158,7 @@ export function renderWallpaperUploadTrigger(
       type="file"
       id=${inputId}
       accept="image/*"
-      aria-label="Wallpaper image (up to 15 MB)"
+      aria-label=${store.t("wp_gallery.file_aria")}
       @change=${onFilePick}
       class="offscreen"
     />
@@ -144,7 +169,7 @@ export function renderWallpaperUploadTrigger(
       @click=${onTriggerPick}
       class="btn btn-secondary btn-compact"
     >
-      ${isUploadingThisScope ? "Uploading…" : "Upload Photo"}
+      ${isUploadingThisScope ? store.t("wp_gallery.uploading") : store.t("wp_gallery.upload_photo")}
     </button>
   </span>`;
 }
@@ -159,15 +184,16 @@ export function renderWallpaperUploadProgress(
 
   return html`<div class="stack">
     <div class="wp-upload-status">
-      <span>Uploading photo…</span>
-      <span class="chip chip-primary">${store.uploadPercent}%</span>
+      <span>${store.t("wp_gallery.uploading_photo")}</span>
+      <span class="chip chip-primary">${fmtNumber(store.uploadPercent, store.hass, 0)}%</span>
     </div>
     <div
-      class="upload-progress"
       role="progressbar"
+      aria-label=${store.t("wp_gallery.upload_progress_aria")}
       aria-valuenow=${String(store.uploadPercent)}
       aria-valuemin="0"
       aria-valuemax="100"
+      class="upload-progress"
     >
       <div class="upload-progress-fill" style=${pctStyle}></div>
     </div>

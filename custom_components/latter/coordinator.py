@@ -64,7 +64,6 @@ from .const import (
     CONF_BLE_TARGET_ADDRESS,
     CONF_CALENDAR_ENTITIES,
     CONF_CAMERA_ENTITIES,
-    CONF_CAMERA_ENTITY,
     CONF_CUSTOM_PALETTES,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
@@ -434,6 +433,9 @@ class LatterCoordinator:
         self.subentry_id: str = subentry.subentry_id
         self.name: str = f"{DOMAIN}_{self.subentry_id}"
         self._listeners: dict[Callable[[], None], None] = {}
+        self._timer_tick_listeners: dict[Callable[[], None], None] = {}
+        self.config_lock = asyncio.Lock()
+        self.device_config_rev: int = 1
         self._hmac_secret = hmac_secret
         self._runtime = LatterDeviceRuntime(hass, self.subentry_id)
         self._url_signer = UrlSigner(hass, self.subentry_id, hmac_secret)
@@ -462,10 +464,12 @@ class LatterCoordinator:
         self.timer_paused: bool = False
         self.timer_remaining_sec: int = 0
         self._timer_anchor_mono: float = 0.0
+        self.timer_ends_at_utc: str = ""
         self.stopwatch_running: bool = False
         self.stopwatch_paused: bool = False
         self.stopwatch_elapsed_sec: int = 0
         self._stopwatch_anchor_mono: float = 0.0
+        self.stopwatch_started_at_utc: str = ""
         self.alarm_ringing: bool = False
         self._unsub_timer_tick: Callable[[], None] | None = None
         self._unsub_core_config: Callable[[], None] | None = None
@@ -577,6 +581,25 @@ class LatterCoordinator:
         for cb in list(self._listeners):
             cb()
 
+    @callback
+    def async_add_timer_tick_listener(
+        self, tick_callback: Callable[[], None]
+    ) -> Callable[[], None]:
+        """Register a dedicated 1 Hz timer countdown listener (`LatterTimerRemainingSensor` only)."""
+        self._timer_tick_listeners[tick_callback] = None
+
+        @callback
+        def _remove() -> None:
+            self._timer_tick_listeners.pop(tick_callback, None)
+
+        return _remove
+
+    @callback
+    def _notify_timer_tick_listeners(self) -> None:
+        """Notify dedicated 1 Hz timer listeners without triggering Studio full-payload broadcasts."""
+        for cb in list(self._timer_tick_listeners):
+            cb()
+
     def _capture_structural_snapshot(self) -> dict[str, Any]:
         return {
             CONF_DEVICE_SLUG: self.device_slug,
@@ -651,8 +674,8 @@ class LatterCoordinator:
             self.entry, self._live_subentry(), data=merged_data
         )
         self._live_subentry()
-        if changed_pref_keys:
-            self._schedule_persist_runtime_state()
+        self.device_config_rev = max(1, self.device_config_rev + 1)
+        self._schedule_persist_runtime_state()
 
     def get_opt(self, key: str, default: Any = None) -> Any:
         domain_data = self.hass.data.get(DOMAIN, {})
@@ -1001,25 +1024,16 @@ class LatterCoordinator:
     @property
     def camera_entities(self) -> list[str]:
         raw_list = self.get_opt(CONF_CAMERA_ENTITIES)
-        cleaned = (
+        return (
             [str(x).strip() for x in raw_list[:10] if str(x or "").strip()]
             if isinstance(raw_list, list)
             else []
         )
-        if not cleaned and (
-            single := str(self.get_opt(CONF_CAMERA_ENTITY) or "").strip()
-        ):
-            cleaned = [single]
-        return cleaned[:10]
 
     @property
     def camera_entity(self) -> str | None:
         cams = self.camera_entities
-        return (
-            cams[0]
-            if cams
-            else (str(self.get_opt(CONF_CAMERA_ENTITY) or "").strip() or None)
-        )
+        return cams[0] if cams else None
 
     def _clean_entity_list_opt(self, key: str, prefix: str, limit: int) -> list[str]:
         raw_list = self.get_opt(key)
@@ -1440,6 +1454,7 @@ class LatterCoordinator:
             "matched_ble_addresses": list(self._matched_ble_addresses[:8]),
             "prefs_seq": self.prefs_seq,
             "prefs_key_seq": dict(self.prefs_key_seq),
+            "device_config_rev": self.device_config_rev,
         }
 
     def _apply_stored_runtime(self, stored: dict[str, Any]) -> None:
@@ -1483,6 +1498,7 @@ class LatterCoordinator:
                 if (norm := str(item or "").strip().upper())
             ]
         self.prefs_seq = max(0, int(stored.get("prefs_seq") or 0))
+        self.device_config_rev = max(1, int(stored.get("device_config_rev") or 1))
         raw_key_seq = stored.get("prefs_key_seq")
         if isinstance(raw_key_seq, dict):
             self.prefs_key_seq = {
@@ -1844,7 +1860,7 @@ class LatterCoordinator:
 
     def resolve_wallpaper_rotation_pool(self) -> list[str]:
         """Return valid starred wallpaper IDs, or the full gallery when none are starred."""
-        all_ids = ordered_wallpaper_ids(self.device_slug)
+        all_ids = ordered_wallpaper_ids()
         known = set(all_ids)
         valid_favs = [f for f in self.wallpaper_favorites if f in known]
         return valid_favs if valid_favs else all_ids
@@ -1854,7 +1870,7 @@ class LatterCoordinator:
         """Seed an active wallpaper from the rotation pool when rotation is enabled."""
         if self.is_ble_tag or self.wallpaper_cycle_minutes <= 0:
             return False
-        all_ids = ordered_wallpaper_ids(self.device_slug)
+        all_ids = ordered_wallpaper_ids()
         known = set(all_ids)
         valid_favs = [f for f in self.wallpaper_favorites if f in known]
         pool = valid_favs if valid_favs else all_ids
@@ -2137,7 +2153,11 @@ class LatterCoordinator:
                 }
                 new_seq = max(self.prefs_seq, dev_seq) + 1
                 if accepted:
-                    cleaned = clean_device_settings(accepted, current=self.device_data)
+                    cleaned = clean_device_settings(
+                        accepted,
+                        current=self.device_data,
+                        is_round_display=self.is_round_display,
+                    )
                     if cleaned:
                         merged = {**self.device_data, **cleaned}
                         self.update_device_config(merged, bump_prefs_seq=False)
@@ -2168,7 +2188,11 @@ class LatterCoordinator:
         force_bump: bool = False,
     ) -> dict[str, Any]:
         """Validate, persist, and push subentry device preferences (sleep-safe when offline)."""
-        cleaned = clean_device_settings(dict(updates), current=self.device_data)
+        cleaned = clean_device_settings(
+            dict(updates),
+            current=self.device_data,
+            is_round_display=self.is_round_display,
+        )
         if not cleaned and not force_bump:
             return {}
         prev_seq = self.prefs_seq
@@ -2217,21 +2241,17 @@ class LatterCoordinator:
 
     @callback
     def _sync_timer_tick(self) -> None:
-        need_tick = (
-            (self.timer_running and self.current_timer_remaining_sec > 0)
-            or self.stopwatch_running
-        )
+        need_tick = self.timer_running and self.current_timer_remaining_sec > 0
         if need_tick:
             if self._unsub_timer_tick is None:
 
                 @callback
                 def _on_timer_tick(_now: datetime) -> None:
                     if not (
-                        (self.timer_running and self.current_timer_remaining_sec > 0)
-                        or self.stopwatch_running
+                        self.timer_running and self.current_timer_remaining_sec > 0
                     ):
                         self._stop_timer_tick()
-                    self.async_update_listeners()
+                    self._notify_timer_tick_listeners()
 
                 self._unsub_timer_tick = async_track_time_interval(
                     self.hass, _on_timer_tick, timedelta(seconds=1)
@@ -2250,19 +2270,35 @@ class LatterCoordinator:
         stopwatch_paused: bool = False,
         stopwatch_elapsed_sec: int = 0,
     ) -> None:
-        """Update event-driven timer, stopwatch, and alarm state and manage the local 1 Hz tick."""
+        """Update event-driven timer, stopwatch, and alarm state and manage the isolated 1 Hz tick."""
         now_mono = time.monotonic()
+        now_utc = dt_util.utcnow()
         self.timer_running = bool(timer_running)
         self.timer_paused = bool(timer_paused) and not self.timer_running
         self.timer_remaining_sec = max(0, int(remaining_sec or 0))
         self._timer_anchor_mono = now_mono
+        self.timer_ends_at_utc = (
+            (now_utc + timedelta(seconds=self.timer_remaining_sec)).isoformat(
+                timespec="seconds"
+            )
+            if self.timer_running and self.timer_remaining_sec > 0
+            else ""
+        )
         self.alarm_ringing = bool(ringing)
         self.stopwatch_running = bool(stopwatch_running)
         self.stopwatch_paused = bool(stopwatch_paused) and not self.stopwatch_running
         self.stopwatch_elapsed_sec = max(0, int(stopwatch_elapsed_sec or 0))
         self._stopwatch_anchor_mono = now_mono
+        self.stopwatch_started_at_utc = (
+            (now_utc - timedelta(seconds=self.stopwatch_elapsed_sec)).isoformat(
+                timespec="seconds"
+            )
+            if self.stopwatch_running
+            else ""
+        )
 
         self._sync_timer_tick()
+        self._notify_timer_tick_listeners()
         self.async_update_listeners()
 
     async def async_send_device_command(
@@ -2300,12 +2336,15 @@ class LatterCoordinator:
                         self.timer_running = False
                         self.timer_paused = False
                         self.timer_remaining_sec = 0
+                        self.timer_ends_at_utc = ""
                         self._sync_timer_tick()
+                        self._notify_timer_tick_listeners()
                         self.async_update_listeners()
                     elif cmd == "reset_stopwatch":
                         self.stopwatch_running = False
                         self.stopwatch_paused = False
                         self.stopwatch_elapsed_sec = 0
+                        self.stopwatch_started_at_utc = ""
                         self._sync_timer_tick()
                         self.async_update_listeners()
                     return True

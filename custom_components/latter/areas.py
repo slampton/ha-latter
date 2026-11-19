@@ -19,7 +19,7 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
@@ -969,13 +969,10 @@ def get_available_home_categories(
         has_cameras
         if has_cameras is not None
         else (
-            bool(hub_info.get("camera_entities") or hub_info.get("camera_entity"))
+            bool(hub_info.get("camera_entities"))
             or (
                 coordinator is not None
-                and (
-                    len(getattr(coordinator, "camera_entities", ()) or ()) > 0
-                    or bool(getattr(coordinator, "camera_entity", None))
-                )
+                and len(getattr(coordinator, "camera_entities", ()) or ()) > 0
             )
         )
     )
@@ -1199,6 +1196,9 @@ async def async_execute_area_action(
     level: int | float | None = None,
     code: str | None = None,
     option: str | None = None,
+    *,
+    blocking: bool = False,
+    raise_on_missing: bool = False,
 ) -> None:
     """Execute a normalized area, whole-home (alarm/thermostat/garage/lock/vacuum), or light color/kelvin action."""
     raw_action = action.strip().lower()
@@ -1223,13 +1223,17 @@ async def async_execute_area_action(
             entity_id = mapped_id
             state_obj = hass.states.get(entity_id)
     if state_obj is None:
-        if entity_id.startswith("button."):
+        if entity_id.startswith("button.") and not raise_on_missing:
             await hass.services.async_call(
-                "button", "press", {ATTR_ENTITY_ID: entity_id}, blocking=False
+                "button", "press", {ATTR_ENTITY_ID: entity_id}, blocking=blocking
             )
             return
+        if raise_on_missing:
+            raise HomeAssistantError(f"Entity '{entity_id}' was not found")
         _LOGGER.debug("Action target entity not found: %s", entity_id)
         return
+    if raise_on_missing and state_obj.state == STATE_UNAVAILABLE:
+        raise HomeAssistantError(f"Entity '{entity_id}' is currently unavailable")
 
     domain = state_obj.domain
     if not action and domain not in ("alarm_control_panel", "lock"):
@@ -1238,21 +1242,21 @@ async def async_execute_area_action(
 
     if domain in ("button", "input_button"):
         await hass.services.async_call(
-            domain, "press", {ATTR_ENTITY_ID: entity_id}, blocking=False
+            domain, "press", {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
         return
 
     if domain == "update":
         if action in ("install", "update") and state_obj.state == STATE_ON:
             await hass.services.async_call(
-                "update", "install", {ATTR_ENTITY_ID: entity_id}, blocking=False
+                "update", "install", {ATTR_ENTITY_ID: entity_id}, blocking=blocking
             )
         elif hass.services.has_service("homeassistant", "update_entity"):
             await hass.services.async_call(
                 "homeassistant",
                 "update_entity",
                 {ATTR_ENTITY_ID: entity_id},
-                blocking=False,
+                blocking=blocking,
             )
         return
 
@@ -1262,12 +1266,12 @@ async def async_execute_area_action(
                 domain,
                 "select_option",
                 {ATTR_ENTITY_ID: entity_id, "option": str(option)},
-                blocking=False,
+                blocking=blocking,
             )
             return
         if action in ("select_next", "select_previous"):
             await hass.services.async_call(
-                domain, action, {ATTR_ENTITY_ID: entity_id}, blocking=False
+                domain, action, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
             )
             return
 
@@ -1276,7 +1280,7 @@ async def async_execute_area_action(
             domain,
             "set_value",
             {ATTR_ENTITY_ID: entity_id, "value": float(level)},
-            blocking=False,
+            blocking=blocking,
         )
         return
 
@@ -1376,14 +1380,14 @@ async def async_execute_area_action(
 
     if domain == "scene":
         await hass.services.async_call(
-            "scene", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=False
+            "scene", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
         return
 
     if domain == "script":
         svc_script = "turn_off" if action == "turn_off" else "turn_on"
         await hass.services.async_call(
-            "script", svc_script, {ATTR_ENTITY_ID: entity_id}, blocking=False
+            "script", svc_script, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
         return
 
@@ -1392,7 +1396,7 @@ async def async_execute_area_action(
             action if action in ("trigger", "toggle", "turn_on", "turn_off") else "trigger"
         )
         await hass.services.async_call(
-            "automation", svc_auto, {ATTR_ENTITY_ID: entity_id}, blocking=False
+            "automation", svc_auto, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
         return
 
@@ -1406,14 +1410,14 @@ async def async_execute_area_action(
         else:
             svc_valve = "close_valve" if state_obj.state == STATE_OPEN else "open_valve"
         await hass.services.async_call(
-            "valve", svc_valve, {ATTR_ENTITY_ID: entity_id}, blocking=False
+            "valve", svc_valve, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
         return
 
     if domain == "lawn_mower":
         svc_mower = action if action in ("start_mowing", "pause", "dock") else "start_mowing"
         await hass.services.async_call(
-            "lawn_mower", svc_mower, {ATTR_ENTITY_ID: entity_id}, blocking=False
+            "lawn_mower", svc_mower, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
         return
 
@@ -1423,7 +1427,7 @@ async def async_execute_area_action(
         "media_previous_track",
     ):
         await hass.services.async_call(
-            "media_player", action, {ATTR_ENTITY_ID: entity_id}, blocking=False
+            "media_player", action, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
         return
 
@@ -1439,7 +1443,7 @@ async def async_execute_area_action(
                 if level is not None and int(level) > 0:
                     payload_c["brightness_pct"] = max(1, min(100, int(level)))
                 await hass.services.async_call(
-                    "light", "turn_on", payload_c, blocking=False
+                    "light", "turn_on", payload_c, blocking=blocking
                 )
                 return
             except ValueError:
@@ -1451,7 +1455,7 @@ async def async_execute_area_action(
             "light",
             "turn_on",
             {ATTR_ENTITY_ID: entity_id, "color_temp_kelvin": kelvin},
-            blocking=False,
+            blocking=blocking,
         )
         return
 
@@ -1474,7 +1478,7 @@ async def async_execute_area_action(
             "climate",
             "set_hvac_mode",
             {ATTR_ENTITY_ID: entity_id, "hvac_mode": target_mode},
-            blocking=False,
+            blocking=blocking,
         )
         return
 
@@ -1498,7 +1502,7 @@ async def async_execute_area_action(
                         "target_temp_low": round(tgt - half, 1),
                         "target_temp_high": round(tgt + half, 1),
                     },
-                    blocking=False,
+                    blocking=blocking,
                 )
                 return
             except (ValueError, TypeError):
@@ -1507,7 +1511,7 @@ async def async_execute_area_action(
             "climate",
             "set_temperature",
             {ATTR_ENTITY_ID: entity_id, "temperature": float(level)},
-            blocking=False,
+            blocking=blocking,
         )
         return
 
@@ -1525,7 +1529,7 @@ async def async_execute_area_action(
             else ("close_cover" if action in ("close_cover", "close") else "stop_cover")
         )
         await hass.services.async_call(
-            "cover", svc_cover, {ATTR_ENTITY_ID: entity_id}, blocking=False
+            "cover", svc_cover, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
         return
 
@@ -1571,7 +1575,7 @@ async def async_execute_area_action(
         else:
             svc_v = "turn_on" if (not (sf & 8192) and bool(sf & 1)) else "start"
         await hass.services.async_call(
-            "vacuum", svc_v, {ATTR_ENTITY_ID: entity_id}, blocking=False
+            "vacuum", svc_v, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
         return
 
@@ -1580,14 +1584,14 @@ async def async_execute_area_action(
         if domain == "light":
             if lvl == 0:
                 await hass.services.async_call(
-                    "light", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=False
+                    "light", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=blocking
                 )
             else:
                 await hass.services.async_call(
                     "light",
                     "turn_on",
                     {ATTR_ENTITY_ID: entity_id, "brightness_pct": lvl},
-                    blocking=False,
+                    blocking=blocking,
                 )
             return
         if domain == "cover":
@@ -1595,20 +1599,20 @@ async def async_execute_area_action(
                 "cover",
                 "set_cover_position",
                 {ATTR_ENTITY_ID: entity_id, "position": lvl},
-                blocking=False,
+                blocking=blocking,
             )
             return
         if domain == "fan":
             if lvl == 0:
                 await hass.services.async_call(
-                    "fan", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=False
+                    "fan", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=blocking
                 )
             else:
                 await hass.services.async_call(
                     "fan",
                     "set_percentage",
                     {ATTR_ENTITY_ID: entity_id, "percentage": lvl},
-                    blocking=False,
+                    blocking=blocking,
                 )
             return
         if domain == "climate":
@@ -1616,7 +1620,7 @@ async def async_execute_area_action(
                 "climate",
                 "set_temperature",
                 {ATTR_ENTITY_ID: entity_id, "temperature": float(lvl)},
-                blocking=False,
+                blocking=blocking,
             )
             return
         if domain == "media_player":
@@ -1628,12 +1632,12 @@ async def async_execute_area_action(
     if action == "turn_on":
         svc = "open_cover" if domain == "cover" else "turn_on"
         await hass.services.async_call(
-            domain, svc, {ATTR_ENTITY_ID: entity_id}, blocking=False
+            domain, svc, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
     elif action == "turn_off":
         svc = "close_cover" if domain == "cover" else "turn_off"
         await hass.services.async_call(
-            domain, svc, {ATTR_ENTITY_ID: entity_id}, blocking=False
+            domain, svc, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
     else:
         svc = "media_play_pause" if domain == "media_player" else "toggle"
@@ -1644,7 +1648,7 @@ async def async_execute_area_action(
                 else "open_cover"
             )
         await hass.services.async_call(
-            domain, svc, {ATTR_ENTITY_ID: entity_id}, blocking=False
+            domain, svc, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
 
 

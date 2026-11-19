@@ -16,7 +16,7 @@ _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = json.loads(
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 33
+STUDIO_REV: Final = 34
 MIN_FIRMWARE_SDK_REV: Final = 2026111801
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
@@ -40,7 +40,6 @@ CONF_DEVICE_SLUG: Final = "device_slug"
 CONF_ESPHOME_DEVICE_ID: Final = "esphome_device_id"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
-CONF_CAMERA_ENTITY: Final = "camera_entity"
 CONF_CAMERA_ENTITIES: Final = "camera_entities"
 CONF_THERMOSTAT_ENTITIES: Final = "thermostat_entities"
 CONF_LOCK_ENTITIES: Final = "lock_entities"
@@ -91,6 +90,8 @@ CONF_SECURITY_PIN_POLICY: Final = "security_pin_policy"
 CONF_SECURITY_PIN_HASH: Final = "security_pin_hash"
 CONF_SECURITY_PIN: Final = "security_pin"
 CONF_SYSTEM_BLE_UUID: Final = "system_ble_uuid"
+CONF_IGNORED_DISCOVERED_DEVICES: Final = "ignored_discovered_devices"
+CONF_SYSTEM_CONFIG_REV: Final = "system_config_rev"
 
 # Device Preference Keys (Protocol v3 `device_prefs` domain)
 CONF_WAKE_WORD_MODE: Final = "wake_word_mode"
@@ -230,7 +231,6 @@ TRANSFER_HOLD_WINDOW_SECONDS: Final = 6.0
 GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_WEATHER_ENTITY,
     CONF_ALARM_ENTITY,
-    CONF_CAMERA_ENTITY,
     CONF_CAMERA_ENTITIES,
     CONF_THERMOSTAT_ENTITIES,
     CONF_LOCK_ENTITIES,
@@ -251,6 +251,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_DEVICE_GROUPS,
     CONF_AREA_FUSION_CONFIG,
     CONF_SYSTEM_BLE_UUID,
+    CONF_IGNORED_DISCOVERED_DEVICES,
 )
 
 # Special values for `target_device` in `latter.notify` and `latter.intercom_broadcast`

@@ -8,23 +8,23 @@ export const SHORTCUT_DOMAIN_ACTIONS: Readonly<
 > = {
   light: [
     { action: "toggle", label: "Toggle" },
-    { action: "turn_on", label: "Turn On" },
-    { action: "turn_off", label: "Turn Off" },
+    { action: "turn_on", label: "Turn on" },
+    { action: "turn_off", label: "Turn off" },
   ],
   switch: [
     { action: "toggle", label: "Toggle" },
-    { action: "turn_on", label: "Turn On" },
-    { action: "turn_off", label: "Turn Off" },
+    { action: "turn_on", label: "Turn on" },
+    { action: "turn_off", label: "Turn off" },
   ],
   input_boolean: [
     { action: "toggle", label: "Toggle" },
-    { action: "turn_on", label: "Turn On" },
-    { action: "turn_off", label: "Turn Off" },
+    { action: "turn_on", label: "Turn on" },
+    { action: "turn_off", label: "Turn off" },
   ],
   fan: [
     { action: "toggle", label: "Toggle" },
-    { action: "turn_on", label: "Turn On" },
-    { action: "turn_off", label: "Turn Off" },
+    { action: "turn_on", label: "Turn on" },
+    { action: "turn_off", label: "Turn off" },
   ],
   cover: [
     { action: "toggle", label: "Toggle" },
@@ -45,7 +45,7 @@ export const SHORTCUT_DOMAIN_ACTIONS: Readonly<
   ],
   automation: [
     { action: "trigger", label: "Trigger" },
-    { action: "toggle", label: "Toggle Enable" },
+    { action: "toggle", label: "Toggle enable" },
     { action: "turn_on", label: "Enable" },
     { action: "turn_off", label: "Disable" },
   ],
@@ -58,72 +58,72 @@ export const SHORTCUT_DOMAIN_ACTIONS: Readonly<
   ],
   alarm_control_panel: [
     { action: "disarm", label: "Disarm" },
-    { action: "arm_home", label: "Arm Home" },
-    { action: "arm_away", label: "Arm Away" },
-    { action: "arm_night", label: "Arm Night" },
-    { action: "arm_vacation", label: "Arm Vacation" },
+    { action: "arm_home", label: "Arm home" },
+    { action: "arm_away", label: "Arm away" },
+    { action: "arm_night", label: "Arm night" },
+    { action: "arm_vacation", label: "Arm vacation" },
   ],
   vacuum: [
     { action: "start", label: "Start" },
     { action: "pause", label: "Pause" },
-    { action: "return_to_base", label: "Return To Base" },
+    { action: "return_to_base", label: "Return to base" },
     { action: "stop", label: "Stop" },
-    { action: "clean_spot", label: "Spot Clean" },
+    { action: "clean_spot", label: "Spot clean" },
     { action: "locate", label: "Locate" },
   ],
   lawn_mower: [
-    { action: "start_mowing", label: "Start Mowing" },
+    { action: "start_mowing", label: "Start mowing" },
     { action: "pause", label: "Pause" },
     { action: "dock", label: "Dock" },
   ],
   media_player: [
-    { action: "media_play_pause", label: "Play / Pause" },
-    { action: "turn_on", label: "Turn On" },
-    { action: "turn_off", label: "Turn Off" },
-    { action: "media_next_track", label: "Next Track" },
+    { action: "media_play_pause", label: "Play / pause" },
+    { action: "turn_on", label: "Turn on" },
+    { action: "turn_off", label: "Turn off" },
+    { action: "media_next_track", label: "Next track" },
   ],
   climate: [
-    { action: "turn_on", label: "Turn On" },
-    { action: "turn_off", label: "Turn Off" },
+    { action: "turn_on", label: "Turn on" },
+    { action: "turn_off", label: "Turn off" },
   ],
   humidifier: [
     { action: "toggle", label: "Toggle" },
-    { action: "turn_on", label: "Turn On" },
-    { action: "turn_off", label: "Turn Off" },
+    { action: "turn_on", label: "Turn on" },
+    { action: "turn_off", label: "Turn off" },
   ],
   siren: [
-    { action: "turn_on", label: "Turn On" },
-    { action: "turn_off", label: "Turn Off" },
+    { action: "turn_on", label: "Turn on" },
+    { action: "turn_off", label: "Turn off" },
   ],
   water_heater: [
-    { action: "turn_on", label: "Turn On" },
-    { action: "turn_off", label: "Turn Off" },
+    { action: "turn_on", label: "Turn on" },
+    { action: "turn_off", label: "Turn off" },
   ],
   select: [
-    { action: "select_next", label: "Next Option" },
-    { action: "select_previous", label: "Previous Option" },
+    { action: "select_next", label: "Next option" },
+    { action: "select_previous", label: "Previous option" },
   ],
   input_select: [
-    { action: "select_next", label: "Next Option" },
-    { action: "select_previous", label: "Previous Option" },
+    { action: "select_next", label: "Next option" },
+    { action: "select_previous", label: "Previous option" },
   ],
 };
 
 export const SHORTCUT_DOMAIN_LABELS: Readonly<Record<string, string>> = {
-  alarm_control_panel: "Security Alarm",
+  alarm_control_panel: "Security alarm",
   automation: "Automations",
   button: "Buttons",
   climate: "Climate",
-  cover: "Covers & Blinds",
+  cover: "Covers & blinds",
   fan: "Fans",
   humidifier: "Humidifiers",
-  input_boolean: "Input Booleans",
-  input_button: "Input Buttons",
-  input_select: "Input Selects",
-  lawn_mower: "Lawn Mowers",
+  input_boolean: "Input booleans",
+  input_button: "Input buttons",
+  input_select: "Input selects",
+  lawn_mower: "Lawn mowers",
   light: "Lights",
   lock: "Locks",
-  media_player: "Media Players",
+  media_player: "Media players",
   scene: "Scenes",
   script: "Scripts",
   select: "Selects",
@@ -131,7 +131,7 @@ export const SHORTCUT_DOMAIN_LABELS: Readonly<Record<string, string>> = {
   switch: "Switches",
   vacuum: "Vacuums",
   valve: "Valves",
-  water_heater: "Water Heaters",
+  water_heater: "Water heaters",
 };
 
 export function shortcutActionLabel(domain: string, action: string): string {
@@ -1026,16 +1026,20 @@ const PACKED_MDI_CHUNKS: ReadonlyArray<string> = [
   "7taurus|7virgo",
 ];
 
+// Replaced at bundle build time with `./latter-studio-mdi.js?v=<sha256-16>` while PACKED_MDI_CHUNKS
+// stays intact in TypeScript source for cross-repo 7,447-icon firmware parity verification.
+const MDI_LAZY_CHUNK_URL = "__LATTER_MDI_CHUNK_URL__";
+
+let activePackedMdiChunks: ReadonlyArray<string> = PACKED_MDI_CHUNKS;
 let cachedAllMdiIcons: string[] | null = null;
 let cachedAllMdiSet: Set<string> | null = null;
+let curatedFallbackSet: Set<string> | null = null;
+let mdiLoadPromise: Promise<void> | null = null;
 
-export function getAllMdiIcons(): ReadonlyArray<string> {
-  if (cachedAllMdiIcons !== null) {
-    return cachedAllMdiIcons;
-  }
+function unpackMdiChunks(chunks: ReadonlyArray<string>): string[] {
   const out: string[] = [];
   let prev = "";
-  for (const chunk of PACKED_MDI_CHUNKS) {
+  for (const chunk of chunks) {
     for (const token of chunk.split("|")) {
       if (!token) continue;
       const shared = parseInt(token[0], 36);
@@ -1044,13 +1048,63 @@ export function getAllMdiIcons(): ReadonlyArray<string> {
       out.push(`mdi:${slug}`);
     }
   }
-  cachedAllMdiIcons = out;
   return out;
+}
+
+export function isMdiCatalogLoaded(): boolean {
+  return activePackedMdiChunks.length > 0;
+}
+
+export function registerPackedMdiChunks(chunks: ReadonlyArray<string>): void {
+  if (!Array.isArray(chunks) || chunks.length === 0) return;
+  activePackedMdiChunks = chunks;
+  cachedAllMdiIcons = null;
+  cachedAllMdiSet = null;
+}
+
+export function ensureMdiCatalogLoaded(): Promise<void> {
+  if (activePackedMdiChunks.length > 0) {
+    return Promise.resolve();
+  }
+  if (mdiLoadPromise) {
+    return mdiLoadPromise;
+  }
+  mdiLoadPromise = import(MDI_LAZY_CHUNK_URL)
+    .then((mod: { PACKED_MDI_CHUNKS?: ReadonlyArray<string> }) => {
+      if (mod && Array.isArray(mod.PACKED_MDI_CHUNKS)) {
+        registerPackedMdiChunks(mod.PACKED_MDI_CHUNKS);
+      }
+    })
+    .catch((err: unknown) => {
+      mdiLoadPromise = null;
+      throw err;
+    });
+  return mdiLoadPromise;
+}
+
+export function getAllMdiIcons(): ReadonlyArray<string> {
+  if (activePackedMdiChunks.length === 0) {
+    return CURATED_MDI_ICONS;
+  }
+  if (cachedAllMdiIcons !== null) {
+    return cachedAllMdiIcons;
+  }
+  cachedAllMdiIcons = unpackMdiChunks(activePackedMdiChunks);
+  return cachedAllMdiIcons;
 }
 
 export function isKnownMdiIcon(icon: string): boolean {
   const norm = normalizeMdiIconSlug(icon);
   if (!norm) return false;
+  if (activePackedMdiChunks.length === 0) {
+    if (curatedFallbackSet === null) {
+      curatedFallbackSet = new Set([
+        ...CURATED_MDI_ICONS,
+        ...Object.values(ROUTE_PREVIEW_ICONS),
+      ]);
+    }
+    return curatedFallbackSet.has(norm);
+  }
   if (cachedAllMdiSet === null) {
     cachedAllMdiSet = new Set(getAllMdiIcons());
   }

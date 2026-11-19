@@ -1,0 +1,479 @@
+/**
+ * Native App Configuration Modal (`#latter-app-config-modal`, `D-053`, `D-054`, `D-064`, `Q7`).
+ * - Short-circuits closed `<dialog>` body (`F-06`, `B-18`, `R-5`)
+ * - Zero `FALLBACK_*` option arrays & zero `typeof store.x === "function"` guards (`A-12`, `A-13`, `F-16`)
+ * - Editable `Clock` modal (`app === "clock"`, `Q7`)
+ * - `renderSortableList` / `renderPillList` across Pinned, World clocks, Home categories, Area categories, Tools, & Games (`U4`)
+ * - Single `isCatalogItemSupported(item, caps)` gate (`A-14`)
+ */
+
+import {
+  AREA_CATEGORIES_CATALOG,
+  CALENDAR_LOOKAHEAD_OPTIONS,
+  CALENDAR_WEEK_START_OPTIONS,
+  type CatalogItem,
+  GAMES_ITEMS_CATALOG,
+  HOME_CATEGORIES_CATALOG,
+  MAX_PINNED_ITEMS,
+  SHORTCUT_ROUTES_CATALOG,
+  TOOLS_ITEMS_CATALOG,
+} from "../../constants.js";
+import type { StudioTranslationKey } from "../../i18n/index.js";
+import { html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { ROUTE_PREVIEW_ICONS, shortcutActionLabel } from "../../mdi-catalog.js";
+import { isCatalogItemSupported, type StudioStore } from "../../state/store.js";
+import type { ConfigurableAppId, DeviceCapabilities, ShortcutItem } from "../../types.js";
+import {
+  type PillListItem,
+  renderNativeControlRow,
+  renderPillList,
+  renderPrefControlRow,
+  renderSelectRow,
+  renderSettingsRow,
+  renderSortableList,
+  renderTrashIconButton,
+} from "../controls.js";
+import { renderTimeAppConfigBody } from "./world-clocks.js";
+
+const APP_MODAL_TITLE_KEYS: Readonly<Record<ConfigurableAppId, StudioTranslationKey>> = {
+  pinned: "dialogs.app_pinned",
+  home_hub: "dialogs.app_home_hub",
+  area: "dialogs.app_area",
+  music: "dialogs.app_music",
+  remote: "dialogs.app_remote",
+  time: "dialogs.app_time",
+  calendar: "dialogs.app_calendar",
+  clock: "dialogs.app_clock",
+  tools: "dialogs.app_tools",
+  games: "dialogs.app_games",
+};
+
+function buildOrderedPillItems(
+  catalog: ReadonlyArray<CatalogItem>,
+  enabledTokens: readonly string[],
+  caps?: DeviceCapabilities,
+): PillListItem[] {
+  const supported = catalog.filter((c) => isCatalogItemSupported(c, caps));
+  const byToken = new Map(supported.map((c) => [c.token, c]));
+  const enabledSet = new Set<string>();
+  const out: PillListItem[] = [];
+
+  for (const tok of enabledTokens) {
+    const meta = byToken.get(tok);
+    if (!meta || enabledSet.has(tok)) continue;
+    enabledSet.add(tok);
+    out.push({ token: tok, label: meta.label, enabled: true });
+  }
+  for (const item of supported) {
+    if (enabledSet.has(item.token)) continue;
+    out.push({ token: item.token, label: item.label, enabled: false });
+  }
+  return out;
+}
+
+function resolvePrefOptions(
+  store: StudioStore,
+  key: string,
+  caps?: DeviceCapabilities,
+): readonly string[] {
+  const livePref = store.entity.getPref(key);
+  const spec = store.entity.getPrefSpec(key);
+  const base =
+    livePref?.options && livePref.options.length > 0
+      ? livePref.options
+      : spec?.options || [];
+  if (key === "clock_face" && caps?.is_round === false) {
+    return base.filter((opt) => opt !== "Modern Analog");
+  }
+  return base;
+}
+
+function resolvePrefStringValue(
+  store: StudioStore,
+  key: string,
+  options: readonly string[],
+): string {
+  const livePref = store.entity.getPref(key);
+  const cfgVal = store.state?.config?.[key];
+  const spec = store.entity.getPrefSpec(key);
+  const raw = String(livePref?.value ?? cfgVal ?? spec?.default ?? "");
+  if (options.length > 0 && !options.includes(raw)) {
+    return options[0];
+  }
+  return raw;
+}
+
+function renderEditableSelectPref(
+  store: StudioStore,
+  key: string,
+  domId: string,
+  caps?: DeviceCapabilities,
+): TemplateResult | typeof nothing {
+  const livePref = store.entity.getPref(key);
+  if (livePref && (!domId || key.endsWith("_sort_order"))) {
+    return renderPrefControlRow(store, livePref);
+  }
+  const options = resolvePrefOptions(store, key, caps);
+  if (options.length === 0) return nothing;
+  const curVal = resolvePrefStringValue(store, key, options);
+  return renderSelectRow({
+    id: domId || undefined,
+    label: store.tPrefLabel(key),
+    value: curVal,
+    rawOptions: options.map((opt) => ({
+      value: opt,
+      label: store.tPrefOption(key, opt),
+    })),
+    onChange: (val) => store.entity.stageDeviceSetting(key, val, domId || undefined),
+  });
+}
+
+export function renderAppConfigModalBody(store: StudioStore): TemplateResult | typeof nothing {
+  const app = store.appConfigModal.app;
+  if (!app) return nothing;
+
+  const data = store.state;
+  const cfg = data?.config || {};
+  const caps = data?.capabilities;
+  const titleKey = APP_MODAL_TITLE_KEYS[app];
+  const title = titleKey ? store.t(titleKey) : store.t("dialogs.app_fallback");
+
+  let body: TemplateResult;
+  let extraAction: TemplateResult | typeof nothing = nothing;
+  let donePrimary = true;
+
+  if (app === "pinned") {
+    donePrimary = false;
+    const pinnedItems = store.entity.getPinnedItems();
+    const shortcutEntityMap = new Map(
+      (data?.catalog?.shortcut_entities || []).map((e) => [e.id, e]),
+    );
+    const routeSpecMap = new Map(SHORTCUT_ROUTES_CATALOG.map((r) => [r.token, r]));
+
+    const resolvePinnedMeta = (
+      item: ShortcutItem,
+    ): { displayTitle: string; metaLine: string; iconSlug: string } => {
+      if (item.kind === "route") {
+        const spec = routeSpecMap.get(item.target);
+        return {
+          displayTitle: item.label || spec?.label || item.target,
+          metaLine: spec ? `${spec.group} • ${spec.label}` : item.target,
+          iconSlug: item.icon || ROUTE_PREVIEW_ICONS[item.target] || "mdi:apps",
+        };
+      }
+      const ent = shortcutEntityMap.get(item.target);
+      const dom = item.target.split(".", 1)[0] || "";
+      const actLbl = shortcutActionLabel(dom, item.action);
+      const modeLbl = item.confirm
+        ? store.t("dialogs.pinned_confirm_mode")
+        : store.t("dialogs.pinned_one_tap_mode");
+      return {
+        displayTitle: item.label || ent?.name || item.target,
+        metaLine: `${actLbl} • ${modeLbl} • ${item.target}`,
+        iconSlug: item.icon || ent?.icon || "mdi:flash",
+      };
+    };
+
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        id: "pinned-shortcuts-row",
+        label: store.t("dialogs.pinned_label"),
+        description: store.t("dialogs.pinned_desc"),
+        stacked: true,
+        control: html`<div class="stack">
+          ${renderSortableList({
+            id: "pinned-shortcuts-container",
+            ariaLabel: store.t("dialogs.pinned_aria"),
+            items: pinnedItems,
+            rowClass: "shortcut-item-row",
+            emptyState: store.t("dialogs.pinned_empty"),
+            overlay: store.localeOverlay,
+            getKey: (item) => `${item.kind}|${item.target}|${item.action}`,
+            getLabel: (item) => resolvePinnedMeta(item).displayTitle,
+            onReorder: (fromIdx, toIdx) =>
+              store.entity.reorderShortcutItems("pinned_items", fromIdx, toIdx),
+            renderContent: (item, idx) => {
+              const info = resolvePinnedMeta(item);
+              const pageNum = Math.floor(idx / 6) + 1;
+              return html`<div class="shortcut-icon-row">
+                <span class="shortcut-icon-badge" aria-hidden="true">
+                  <ha-icon .icon=${info.iconSlug}></ha-icon>
+                </span>
+                <div class="shortcut-item-info">
+                  <span class="shortcut-item-title">${info.displayTitle}</span>
+                  <span class="shortcut-item-meta">${info.metaLine}</span>
+                </div>
+                <span class="chip">
+                  ${store.t("dialogs.pinned_page_slot", { page: pageNum })}
+                </span>
+              </div>`;
+            },
+            renderActions: (item, idx) => {
+              const info = resolvePinnedMeta(item);
+              return html`<button
+                  type="button"
+                  aria-label=${store.t("action.edit_item", { item: info.displayTitle })}
+                  @click=${() => store.entity.openShortcutModal("pinned_items", idx)}
+                  class="btn btn-secondary btn-compact"
+                >
+                  ${store.t("action.edit")}
+                </button>
+                ${renderTrashIconButton(
+                  store.t("action.remove_item", { item: info.displayTitle }),
+                  () => store.entity.removeShortcutItem("pinned_items", idx),
+                )}`;
+            },
+          })}
+          <div class="shortcut-toolbar">
+            <button
+              type="button"
+              id="btn-add-pinned-item"
+              ?disabled=${pinnedItems.length >= MAX_PINNED_ITEMS}
+              @click=${() => store.entity.openShortcutModal("pinned_items", null)}
+              class="btn btn-primary"
+            >
+              ${store.t("action.add_pinned_item")}
+            </button>
+          </div>
+        </div>`,
+      })}
+    </div>`;
+  } else if (app === "home_hub") {
+    const enabledHomeCats = store.entity.getEnabledHomeCategories();
+    const pillItems = buildOrderedPillItems(HOME_CATEGORIES_CATALOG, enabledHomeCats, caps);
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        label: store.t("dialogs.home_cats_label"),
+        description: store.t("dialogs.home_cats_desc"),
+        stacked: true,
+        control: renderPillList({
+          id: "home-categories-pills",
+          ariaLabel: store.t("dialogs.home_cats_label"),
+          items: pillItems,
+          onToggle: (tok, next) => store.entity.toggleHomeCategoryToken(tok, next),
+          onReorder: (fromIdx, toIdx) => store.entity.reorderHomeCategories(fromIdx, toIdx),
+          overlay: store.localeOverlay,
+        }),
+      })}
+    </div>`;
+    extraAction = html`<button
+      type="button"
+      @click=${() => {
+        store.entity.closeAppConfigModal();
+        store.openSystemSection("shared_entities", "card-whole-home", [
+          "card-whole-home",
+          "card-cameras-doorbell",
+        ]);
+      }}
+      class="btn btn-text"
+    >
+      ${store.t("action.open_shared_entities")}
+    </button>`;
+  } else if (app === "area") {
+    const enabledAreaCats = store.entity.getEnabledAreaCategories();
+    const pillItems = buildOrderedPillItems(AREA_CATEGORIES_CATALOG, enabledAreaCats, caps);
+    const areaExtraItems = store.entity
+      .getSectionItems("area")
+      .filter((it) => it.key !== "ble_beacon_mode");
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        label: store.t("dialogs.area_cats_label"),
+        description: store.t("dialogs.area_cats_desc"),
+        stacked: true,
+        control: renderPillList({
+          id: "area-categories-pills",
+          ariaLabel: store.t("dialogs.area_cats_label"),
+          items: pillItems,
+          onToggle: (tok, next) => store.entity.toggleAreaCategoryToken(tok, next),
+          onReorder: (fromIdx, toIdx) => store.entity.reorderAreaCategories(fromIdx, toIdx),
+          overlay: store.localeOverlay,
+        }),
+      })}
+      ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}
+    </div>`;
+  } else if (app === "music") {
+    const sortKeys = ["album_sort_order", "artist_album_sort_order", "podcast_sort_order"] as const;
+    body = html`<div class="settings-list">
+      ${sortKeys.map((k) => renderEditableSelectPref(store, k, `cfg-${k}`, caps))}
+    </div>`;
+  } else if (app === "remote") {
+    const remoteGroups = data?.system_config?.remote_groups || [];
+    const curDevEntry = (data?.system_devices || []).find(
+      (d) => d.subentry_id === store.activeSubentryId,
+    );
+    const curRemoteMode =
+      String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
+      "area_auto";
+    const remoteModeOptions: Array<{ value: string; label: string }> = [
+      { value: "area_auto", label: store.t("dialogs.remote_follow_area") },
+      ...remoteGroups.map((g) => ({
+        value: `group:${g.id}`,
+        label: store.t("dialogs.remote_group_option", { name: g.name }),
+      })),
+      { value: "all", label: store.t("dialogs.remote_all_system") },
+    ];
+    if (!remoteModeOptions.some((o) => o.value === curRemoteMode)) {
+      const rawId = curRemoteMode.startsWith("group:") ? curRemoteMode.slice(6) : curRemoteMode;
+      remoteModeOptions.push({
+        value: curRemoteMode,
+        label: store.t("dialogs.remote_missing_group", { id: rawId }),
+      });
+    }
+    const remoteEspItems = store.entity.getSectionItems("remote");
+    body = html`<div class="settings-list">
+      ${renderSelectRow({
+        id: "cfg-device_remote_group",
+        label: store.t("dialogs.remote_group_label"),
+        description: store.t("dialogs.remote_group_desc"),
+        value: curRemoteMode,
+        rawOptions: remoteModeOptions,
+        onChange: (val) =>
+          store.entity.stageDeviceSetting("device_remote_group", val, "cfg-device_remote_group"),
+      })}
+      ${remoteEspItems.map((it) => renderNativeControlRow(store, it))}
+    </div>`;
+    extraAction = html`<button
+      type="button"
+      @click=${() => {
+        store.entity.closeAppConfigModal();
+        store.openSystemSection("remotes", "card-remote-groups");
+      }}
+      class="btn btn-text"
+    >
+      ${store.t("dialogs.manage_remote_groups")}
+    </button>`;
+  } else if (app === "time") {
+    donePrimary = false;
+    body = renderTimeAppConfigBody(store);
+  } else if (app === "clock") {
+    body = html`<div class="settings-list">
+      ${renderEditableSelectPref(store, "clock_face", "cfg-clock_face", caps)}
+      ${renderEditableSelectPref(store, "time_format", "cfg-time_format", caps)}
+    </div>`;
+  } else if (app === "calendar") {
+    const lookaheadPref = store.entity.getPref("calendar_lookahead_days");
+    const rawLookahead = Number(lookaheadPref?.value ?? cfg.calendar_lookahead_days ?? 30);
+    const lookaheadDays =
+      rawLookahead <= 10 ? 7 : rawLookahead <= 21 ? 14 : rawLookahead <= 45 ? 30 : 60;
+
+    const weekStartOpts = resolvePrefOptions(store, "calendar_week_start", caps);
+    const resolvedWeekOpts = weekStartOpts.length > 0 ? weekStartOpts : CALENDAR_WEEK_START_OPTIONS;
+    const weekStartVal = resolvePrefStringValue(
+      store,
+      "calendar_week_start",
+      resolvedWeekOpts,
+    );
+
+    body = html`<div class="settings-list">
+      ${renderSelectRow({
+        id: "cfg-calendar_lookahead_days",
+        label: store.t("dialogs.calendar_lookahead_label"),
+        description: store.t("dialogs.calendar_lookahead_desc"),
+        value: String(lookaheadDays),
+        rawOptions: CALENDAR_LOOKAHEAD_OPTIONS.map((o) => ({
+          value: String(o.value),
+          label: o.label,
+        })),
+        onChange: (val) =>
+          store.entity.stageDeviceSetting(
+            "calendar_lookahead_days",
+            Number(val),
+            "cfg-calendar_lookahead_days",
+          ),
+      })}
+      ${renderSelectRow({
+        id: "cfg-calendar_week_start",
+        label: store.t("dialogs.calendar_week_start_label"),
+        description: store.t("dialogs.calendar_week_start_desc"),
+        value: weekStartVal,
+        rawOptions: resolvedWeekOpts.map((opt) => ({
+          value: opt,
+          label: store.tPrefOption("calendar_week_start", opt),
+        })),
+        onChange: (val) =>
+          store.entity.stageDeviceSetting("calendar_week_start", val, "cfg-calendar_week_start"),
+      })}
+    </div>`;
+    extraAction = html`<button
+      type="button"
+      @click=${() => {
+        store.entity.closeAppConfigModal();
+        store.openSystemSection("shared_entities", "card-calendars");
+      }}
+      class="btn btn-text"
+    >
+      ${store.t("action.open_shared_entities")}
+    </button>`;
+  } else if (app === "tools") {
+    const enabledTools = store.entity.getEnabledToolsItems();
+    const pillItems = buildOrderedPillItems(TOOLS_ITEMS_CATALOG, enabledTools, caps);
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        label: store.t("dialogs.tools_label"),
+        description: store.t("dialogs.tools_desc"),
+        stacked: true,
+        control: renderPillList({
+          id: "tools-items-pills",
+          ariaLabel: store.t("dialogs.tools_label"),
+          items: pillItems,
+          onToggle: (tok, next) => store.entity.toggleToolItemToken(tok, next),
+          onReorder: (fromIdx, toIdx) => store.entity.reorderToolsItems(fromIdx, toIdx),
+          overlay: store.localeOverlay,
+        }),
+      })}
+    </div>`;
+  } else {
+    const enabledGames = store.entity.getEnabledGamesItems();
+    const pillItems = buildOrderedPillItems(GAMES_ITEMS_CATALOG, enabledGames, caps);
+    body = html`<div class="settings-list">
+      ${renderSettingsRow({
+        label: store.t("dialogs.games_label"),
+        description: store.t("dialogs.games_desc"),
+        stacked: true,
+        control: renderPillList({
+          id: "games-items-pills",
+          ariaLabel: store.t("dialogs.games_label"),
+          items: pillItems,
+          onToggle: (tok, next) => store.entity.toggleGameItemToken(tok, next),
+          onReorder: (fromIdx, toIdx) => store.entity.reorderGamesItems(fromIdx, toIdx),
+          overlay: store.localeOverlay,
+        }),
+      })}
+    </div>`;
+  }
+
+  return html`<div class="dialog-body">
+    <h3 id="latter-app-config-title" class="dialog-title">${title}</h3>
+    ${body}
+    <div class="dialog-actions">
+      ${extraAction}
+      <button
+        type="button"
+        id="app-config-done-btn"
+        @click=${() => store.entity.closeAppConfigModal()}
+        class="btn ${donePrimary ? "btn-primary" : "btn-secondary"}"
+      >
+        ${store.t("action.done")}
+      </button>
+    </div>
+  </div>`;
+}
+
+export function renderAppConfigDialog(store: StudioStore): TemplateResult {
+  const close = (): void => store.entity.closeAppConfigModal();
+  const onBackdropClick = (ev: Event): void => {
+    if (ev.target === ev.currentTarget) {
+      close();
+    }
+  };
+
+  return html`<dialog
+    id="latter-app-config-modal"
+    aria-labelledby="latter-app-config-title"
+    @cancel=${close}
+    @click=${onBackdropClick}
+    class="studio-dialog shortcut-dialog"
+  >
+    ${store.appConfigModal.open ? renderAppConfigModalBody(store) : nothing}
+  </dialog>`;
+}

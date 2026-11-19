@@ -1,13 +1,146 @@
 /**
- * Locale-aware formatters, Title Case entity label converter (D-013), and color helpers.
+ * Locale-aware formatters (`hass.locale` number/time/date/weekday), cached `Intl` instances,
+ * entity label humanizer, color helpers, and shadow-safe clipboard / download helpers.
  * Note: Avoid literal `#RRGGBB` color constants here so `[STUDIO TOKENS]` stays 100% pure.
  */
 
-import { ISSUE_TEXT, LABEL_ACRONYMS, LABEL_MINOR_WORDS } from "../constants.js";
+import { LABEL_ACRONYMS } from "../constants.js";
+import { localizeRepairIssue } from "../i18n/index.js";
 import type { HomeAssistant, IssueItem } from "../types.js";
 
+export interface HassLocaleInfo {
+  language?: string;
+  number_format?: "language" | "system" | "comma_decimal" | "decimal_comma" | "space_comma" | "none" | string;
+  time_format?: "language" | "system" | "am_pm" | "24" | string;
+  date_format?: "language" | "system" | "DMY" | "MDY" | "YMD" | string;
+  time_zone?: "local" | "server" | string;
+  first_weekday?:
+    | "language"
+    | "monday"
+    | "tuesday"
+    | "wednesday"
+    | "thursday"
+    | "friday"
+    | "saturday"
+    | "sunday"
+    | string;
+}
+
+type HassWithLocale = HomeAssistant & { locale?: HassLocaleInfo };
+
+const MAX_FORMATTER_CACHE = 64;
+const NUMBER_FMT_CACHE = new Map<string, Intl.NumberFormat>();
+const REL_TIME_FMT_CACHE = new Map<string, Intl.RelativeTimeFormat>();
+const DATE_TIME_FMT_CACHE = new Map<string, Intl.DateTimeFormat>();
+
+function setBoundedCache<V>(cache: Map<string, V>, key: string, val: V): V {
+  if (cache.size >= MAX_FORMATTER_CACHE) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) {
+      cache.delete(oldest);
+    }
+  }
+  cache.set(key, val);
+  return val;
+}
+
+function getLocaleObj(hass: HomeAssistant | null | undefined): HassLocaleInfo | undefined {
+  return (hass as HassWithLocale | null | undefined)?.locale;
+}
+
 export function hassLanguage(hass: HomeAssistant | null | undefined): string {
-  return String(hass?.locale?.language || hass?.language || navigator.language || "en");
+  const navLang = typeof navigator !== "undefined" ? navigator.language : "";
+  return String(getLocaleObj(hass)?.language || hass?.language || navLang || "en");
+}
+
+function resolveNumberLocaleAndGrouping(
+  hass: HomeAssistant | null | undefined,
+): { locale: string | undefined; useGrouping: boolean | undefined } {
+  const nf = getLocaleObj(hass)?.number_format;
+  switch (nf) {
+    case "comma_decimal":
+      return { locale: "en-US", useGrouping: true };
+    case "decimal_comma":
+      return { locale: "de-DE", useGrouping: true };
+    case "space_comma":
+      return { locale: "fr-FR", useGrouping: true };
+    case "none":
+      return { locale: hassLanguage(hass), useGrouping: false };
+    case "system":
+      return { locale: undefined, useGrouping: undefined };
+    default:
+      return { locale: hassLanguage(hass), useGrouping: undefined };
+  }
+}
+
+function getNumberFormatter(
+  locale: string | undefined,
+  opts: Intl.NumberFormatOptions,
+): Intl.NumberFormat {
+  const key = `${locale || "sys"}|${opts.style || "decimal"}|${opts.unit || ""}|${opts.maximumFractionDigits ?? ""}|${String(opts.useGrouping ?? "")}`;
+  const cached = NUMBER_FMT_CACHE.get(key);
+  if (cached) return cached;
+  return setBoundedCache(NUMBER_FMT_CACHE, key, new Intl.NumberFormat(locale, opts));
+}
+
+function getRelativeTimeFormatter(locale: string): Intl.RelativeTimeFormat {
+  const cached = REL_TIME_FMT_CACHE.get(locale);
+  if (cached) return cached;
+  return setBoundedCache(
+    REL_TIME_FMT_CACHE,
+    locale,
+    new Intl.RelativeTimeFormat(locale, { numeric: "auto" }),
+  );
+}
+
+function resolveDateTimeLocale(hass: HomeAssistant | null | undefined): string | undefined {
+  const df = getLocaleObj(hass)?.date_format;
+  switch (df) {
+    case "DMY":
+      return "en-GB";
+    case "MDY":
+      return "en-US";
+    case "YMD":
+      return "sv-SE";
+    case "system":
+      return undefined;
+    default:
+      return hassLanguage(hass);
+  }
+}
+
+function resolveHour12(hass: HomeAssistant | null | undefined): boolean | undefined {
+  const tf = getLocaleObj(hass)?.time_format;
+  if (tf === "am_pm") return true;
+  if (tf === "24") return false;
+  return undefined;
+}
+
+function getDateTimeFormatter(
+  locale: string | undefined,
+  opts: Intl.DateTimeFormatOptions,
+): Intl.DateTimeFormat {
+  const key = `${locale || "sys"}|${opts.timeZone || "local"}|${String(opts.hour12 ?? "auto")}`;
+  const cached = DATE_TIME_FMT_CACHE.get(key);
+  if (cached) return cached;
+  return setBoundedCache(DATE_TIME_FMT_CACHE, key, new Intl.DateTimeFormat(locale, opts));
+}
+
+export function hassFirstWeekday(hass?: HomeAssistant | null): "Sunday" | "Monday" {
+  const fw = String(getLocaleObj(hass)?.first_weekday || "language").toLowerCase();
+  if (fw === "monday") return "Monday";
+  if (fw === "sunday") return "Sunday";
+  try {
+    const loc = new Intl.Locale(hassLanguage(hass)) as Intl.Locale & {
+      getWeekInfo?: () => { firstDay?: number };
+      weekInfo?: { firstDay?: number };
+    };
+    const firstDay = loc.getWeekInfo?.()?.firstDay ?? loc.weekInfo?.firstDay;
+    if (firstDay === 1) return "Monday";
+  } catch {
+    // Default to Sunday when Intl.Locale weekInfo is unavailable.
+  }
+  return "Sunday";
 }
 
 export function fmtNumber(
@@ -19,7 +152,8 @@ export function fmtNumber(
   const num = Number(value);
   if (!Number.isFinite(num)) return String(value);
   try {
-    return new Intl.NumberFormat(hassLanguage(hass), { maximumFractionDigits }).format(num);
+    const { locale, useGrouping } = resolveNumberLocaleAndGrouping(hass);
+    return getNumberFormatter(locale, { maximumFractionDigits, useGrouping }).format(num);
   } catch {
     return String(num);
   }
@@ -33,9 +167,11 @@ export function fmtPercent(
   const num = Number(value);
   if (!Number.isFinite(num)) return String(value);
   try {
-    return new Intl.NumberFormat(hassLanguage(hass), {
+    const { locale, useGrouping } = resolveNumberLocaleAndGrouping(hass);
+    return getNumberFormatter(locale, {
       style: "percent",
       maximumFractionDigits: 0,
+      useGrouping,
     }).format(num / 100);
   } catch {
     return `${Math.round(num)}%`;
@@ -48,16 +184,18 @@ export function fmtDistance(
   feet?: number | null,
 ): string {
   const isImperial = hass?.config?.unit_system?.length === "mi";
+  const { locale, useGrouping } = resolveNumberLocaleAndGrouping(hass);
   if (isImperial) {
     const hasFeet = feet !== null && feet !== undefined && Number.isFinite(Number(feet));
     const hasMeters = meters !== null && meters !== undefined && Number.isFinite(Number(meters));
     if (!hasFeet && !hasMeters) return "—";
     const ft = hasFeet ? Number(feet) : Number(meters) * 3.28084;
     try {
-      return new Intl.NumberFormat(hassLanguage(hass), {
+      return getNumberFormatter(locale, {
         style: "unit",
         unit: "foot",
         maximumFractionDigits: 1,
+        useGrouping,
       }).format(ft);
     } catch {
       return `${ft.toFixed(1)} ft`;
@@ -66,10 +204,11 @@ export function fmtDistance(
   if (meters === null || meters === undefined || !Number.isFinite(Number(meters))) return "—";
   const m = Number(meters);
   try {
-    return new Intl.NumberFormat(hassLanguage(hass), {
+    return getNumberFormatter(locale, {
       style: "unit",
       unit: "meter",
       maximumFractionDigits: 1,
+      useGrouping,
     }).format(m);
   } catch {
     return `${m.toFixed(1)} m`;
@@ -85,7 +224,7 @@ export function fmtAgo(
   }
   const secs = Math.max(0, Math.round(Number(secondsAgo)));
   try {
-    const rtf = new Intl.RelativeTimeFormat(hassLanguage(hass), { numeric: "auto" });
+    const rtf = getRelativeTimeFormatter(hassLanguage(hass));
     if (secs < 60) return rtf.format(-secs, "second");
     if (secs < 3600) return rtf.format(-Math.round(secs / 60), "minute");
     if (secs < 86400) return rtf.format(-Math.round(secs / 3600), "hour");
@@ -102,7 +241,8 @@ export function fmtDateTime(
   if (ts === null || ts === undefined || ts === "") return "";
   const date = typeof ts === "number" ? new Date(ts < 1e12 ? ts * 1000 : ts) : new Date(ts);
   if (Number.isNaN(date.getTime())) return String(ts);
-  const useServerTz = hass?.locale?.time_zone === "server" && Boolean(hass?.config?.time_zone);
+  const localeObj = getLocaleObj(hass);
+  const useServerTz = localeObj?.time_zone === "server" && Boolean(hass?.config?.time_zone);
   const opts: Intl.DateTimeFormatOptions = {
     year: "numeric",
     month: "2-digit",
@@ -111,24 +251,36 @@ export function fmtDateTime(
     minute: "2-digit",
     second: "2-digit",
   };
+  const hour12 = resolveHour12(hass);
+  if (hour12 !== undefined) {
+    opts.hour12 = hour12;
+  }
   if (useServerTz && hass?.config?.time_zone) {
     opts.timeZone = hass.config.time_zone;
   }
   try {
-    return new Intl.DateTimeFormat(hassLanguage(hass), opts).format(date);
+    return getDateTimeFormatter(resolveDateTimeLocale(hass), opts).format(date);
   } catch {
     return date.toISOString();
   }
 }
 
-function capitalizeSegment(seg: string): string {
+function formatSentenceSegment(seg: string, isFirstWord: boolean): string {
   if (!seg) return seg;
   const low = seg.toLowerCase();
   if (LABEL_ACRONYMS[low]) return LABEL_ACRONYMS[low];
   if (/^[a-z]+[A-Z]/.test(seg) || /^[A-Z0-9]{2,}$/.test(seg)) return seg;
-  return seg.charAt(0).toUpperCase() + seg.slice(1);
+  if (isFirstWord) {
+    return seg.charAt(0).toUpperCase() + seg.slice(1);
+  }
+  return seg;
 }
 
+/**
+ * Formats an entity or setting label in Home Assistant Sentence case (`D-061`),
+ * capitalizing the leading word while preserving acronyms (`BLE`, `Wi-Fi`, `ESPHome`, `PIN`)
+ * and parenthesized units (`(ms)`, `(dBm)`, `(%)`).
+ */
 export function entityLabel(rawName: string | null | undefined): string {
   const cleaned = String(rawName || "").trim();
   if (!cleaned) return "—";
@@ -140,33 +292,33 @@ export function entityLabel(rawName: string | null | undefined): string {
       const core = m ? m[2] : word;
       const trail = m ? m[3] : "";
       if (!core) return word;
-      // Preserve parenthesized units such as (ms), (s), (dB), (dBm), (%).
-      if (lead === "(" && trail === ")" && /^(ms|s|m|h|dB|dBm|Hz|kHz|MHz|V|mV|A|mA|W|%|°C|°F)$/.test(core)) {
+      if (
+        lead === "(" &&
+        trail === ")" &&
+        /^(ms|s|m|h|d|dB|dBm|Hz|kHz|MHz|V|mV|A|mA|W|%|°C|°F)$/.test(core)
+      ) {
         return word;
       }
-      const isEdge = idx === 0 || idx === words.length - 1;
       const low = core.toLowerCase();
-      if (!isEdge && LABEL_MINOR_WORDS.has(low)) {
-        return `${lead}${low}${trail}`;
-      }
       if (LABEL_ACRONYMS[low]) {
         return `${lead}${LABEL_ACRONYMS[low]}${trail}`;
       }
       const hyph = core
         .split("-")
-        .map((seg) => capitalizeSegment(seg))
+        .map((seg, segIdx) => formatSentenceSegment(seg, idx === 0 && segIdx === 0))
         .join("-");
       return `${lead}${hyph}${trail}`;
     })
     .join(" ");
 }
 
-export function issueMessage(issue: IssueItem): string {
+export function issueMessage(issue: IssueItem, hass?: HomeAssistant | null): string {
   const kind = String(issue.kind || issue.key || "");
-  const fn = ISSUE_TEXT[kind];
-  if (fn) return fn(issue);
-  const label = kind ? kind.replace(/_/g, " ") : "issue";
-  return `Repair: ${label}.`;
+  return localizeRepairIssue(
+    hass,
+    kind,
+    issue.detail ? { detail: issue.detail } : undefined,
+  );
 }
 
 export function rssiToPercent(rssi: number | null | undefined): number {
@@ -193,7 +345,7 @@ function byteToHex(b: number): string {
   return clamped.toString(16).padStart(2, "0").toUpperCase();
 }
 
-export function rgbBytesToHex(r: number, g: number, b: number): string {
+function packRgbHex(r: number, g: number, b: number): string {
   return String.fromCharCode(35) + byteToHex(r) + byteToHex(g) + byteToHex(b);
 }
 
@@ -219,7 +371,7 @@ export function hsvToRgbJS(h: number, s: number, v: number): [number, number, nu
 
 export function hsvToHex(h: number, s: number, v: number): string {
   const [r, g, b] = hsvToRgbJS(h, s, v);
-  return rgbBytesToHex(r, g, b);
+  return packRgbHex(r, g, b);
 }
 
 export function defaultThemeHex(hostEl?: Element | null): string {
@@ -227,28 +379,49 @@ export function defaultThemeHex(hostEl?: Element | null): string {
     const raw = getComputedStyle(hostEl).getPropertyValue("--primary-color").trim();
     if (isValidHexColor(raw)) return raw.toUpperCase();
   }
-  return rgbBytesToHex(0, 154, 199);
+  return packRgbHex(0, 154, 199);
 }
 
-export async function copyTextToClipboard(text: string): Promise<boolean> {
+export async function copyTextToClipboard(
+  text: string,
+  root?: ParentNode | null,
+): Promise<boolean> {
   if (!text) return false;
   try {
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    if (typeof navigator !== "undefined" && typeof navigator.clipboard?.writeText === "function") {
       await navigator.clipboard.writeText(text);
       return true;
     }
   } catch {
-    // Fall back to offscreen textarea selection below.
+    // Fall back to shadow-safe offscreen textarea selection below.
   }
+  if (typeof document === "undefined") return false;
   try {
+    const shadow =
+      (root && "querySelector" in root ? root : null) ??
+      document.activeElement?.shadowRoot ??
+      document.querySelector("latter-studio")?.shadowRoot ??
+      null;
+    const prevActive =
+      (shadow && "activeElement" in shadow
+        ? (shadow as ShadowRoot).activeElement
+        : document.activeElement) as HTMLElement | null;
+    const mountTarget: Node =
+      shadow?.querySelector("dialog[open]") ?? shadow ?? document.body;
+
     const ta = document.createElement("textarea");
     ta.className = "offscreen";
+    ta.setAttribute("aria-hidden", "true");
+    ta.tabIndex = -1;
+    ta.readOnly = true;
     ta.value = text;
-    document.body.appendChild(ta);
+    mountTarget.appendChild(ta);
+    ta.focus({ preventScroll: true });
     ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
+    const ok = typeof document.execCommand === "function" && document.execCommand("copy");
+    mountTarget.removeChild(ta);
+    prevActive?.focus?.({ preventScroll: true });
+    return Boolean(ok);
   } catch {
     return false;
   }

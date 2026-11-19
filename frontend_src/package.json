@@ -3,13 +3,18 @@
   "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "Zero-npm TypeScript source bundle for Latter Studio (ha-latter)",
+  "description": "TypeScript source bundle for Latter Studio (ha-latter)",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build": "node --no-warnings build.mjs",
     "typecheck": "node --no-warnings build.mjs --typecheck",
-    "check": "node --no-warnings build.mjs --check"
+    "check": "node --no-warnings build.mjs --check",
+    "test": "node --no-warnings --import ./src/lib/node-ts-loader.mjs --test"
   },
   "devDependencies": {
-    "typescript": "^5.7.3"
+    "lit-html": "3.3.3",
+    "typescript": "5.9.3"
   }
 }

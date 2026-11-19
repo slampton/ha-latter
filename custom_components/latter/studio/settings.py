@@ -10,18 +10,16 @@ from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
+import hashlib
 import json
 import math
 from pathlib import Path
 import re
 from typing import Any, Literal, Protocol, TypeVar
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
-try:
-    ZoneInfo("UTC")
-    _SYSTEM_HAS_TZDATA = True
-except ZoneInfoNotFoundError:
-    _SYSTEM_HAS_TZDATA = False
+_AVAILABLE_IANA_ZONES: frozenset[str] | None = None
+_ZONEINFO_CACHE: dict[str, ZoneInfo | None] = {}
 
 _PROTOCOL_V3_DATA: dict[str, Any] = json.loads(
     (Path(__file__).resolve().parent.parent / "protocol_v3.json").read_text(
@@ -30,8 +28,14 @@ _PROTOCOL_V3_DATA: dict[str, Any] = json.loads(
 )
 
 # ---------------------------------------------------------------------------
-# Catalog Push Gate
+# Catalog & Section Push Gates
 # ---------------------------------------------------------------------------
+
+HEAVY_SUBSCRIPTION_SECTIONS: tuple[str, ...] = (
+    "discovered_ble_devices",
+    "system_wallpapers",
+    "ble_area_signatures",
+)
 
 
 class CatalogGate:
@@ -51,55 +55,66 @@ class CatalogGate:
         return dirty
 
 
+class SectionHashGate:
+    """Per-subscription content-digest gate omitting unchanged heavy System sections on live pushes."""
+
+    def __init__(self) -> None:
+        """Initialize empty section digest map."""
+        self._digests: dict[str, str] = {}
+
+    def mark_dirty(self, *keys: str) -> None:
+        """Force the next live push to resend the specified sections (or all when empty)."""
+        if not keys:
+            self._digests.clear()
+            return
+        for k in keys:
+            self._digests.pop(k, None)
+
+    def has_sent(self, key: str) -> bool:
+        """Return True if `key` has already been pushed on this subscription."""
+        return key in self._digests
+
+    def record_initial(
+        self,
+        payload: Mapping[str, Any],
+        keys: Iterable[str] = HEAVY_SUBSCRIPTION_SECTIONS,
+    ) -> None:
+        """Record baseline section digests from the initial full subscription push without stripping."""
+        for k in keys:
+            if k in payload:
+                raw = json.dumps(payload[k], sort_keys=True, separators=(",", ":"))
+                self._digests[k] = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+    def filter_sections(
+        self,
+        payload: dict[str, Any],
+        keys: Iterable[str] = HEAVY_SUBSCRIPTION_SECTIONS,
+    ) -> dict[str, Any]:
+        """Strip sections whose content digest is unchanged since the previous push on this subscription."""
+        for k in keys:
+            if k not in payload:
+                continue
+            raw = json.dumps(payload[k], sort_keys=True, separators=(",", ":"))
+            digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+            if self._digests.get(k) == digest:
+                payload.pop(k, None)
+            else:
+                self._digests[k] = digest
+        return payload
+
+
 # ---------------------------------------------------------------------------
 # Studio Command Scopes & Target Checks
 # ---------------------------------------------------------------------------
 
-SYSTEM_COMMANDS: frozenset[str] = frozenset(
-    {
-        "set_ble_scanner_offset",
-        "set_area_fusion",
-        "capture_ble_area_signature",
-        "clear_ble_area_signature",
-        "system_entity_action",
-        "send_announcement",
-        "check_system_updates",
-        "clear_internal_logs",
-        "remove_device",
-        "add_latter_device",
-        "add_ble_device",
-        "create_device_group",
-        "delete_device_group",
-        "update_group_baseline",
-        "apply_batch_device_setting",
-        "test_doorbell_speaker",
-        "delete_system_wallpaper",
-        "save_system_config",
-        "rotate_signing_key",
-        "set_security_pin",
-    }
-)
+_STUDIO_CONTRACT: dict[str, Any] = _PROTOCOL_V3_DATA["studio_contract"]
 
-DEVICE_COMMANDS: frozenset[str] = frozenset(
-    {
-        "esphome_entity_action",
-        "device_action",
-        "select_wallpaper",
-        "toggle_wallpaper_favorite",
-        "delete_wallpaper",
-        "save_device_config",
-    }
-)
+SYSTEM_COMMANDS: frozenset[str] = frozenset(_STUDIO_CONTRACT["system_commands"])
 
-ALLOWED_DEVICE_ACTIONS: tuple[str, ...] = (
-    "restart",
-    "find_my",
-    "activate_screensaver",
-    "trigger_va",
-    "log_memory_report",
-    "dismiss_ringing",
-    "cancel_timer",
-    "reset_stopwatch",
+DEVICE_COMMANDS: frozenset[str] = frozenset(_STUDIO_CONTRACT["device_commands"])
+
+ALLOWED_DEVICE_ACTIONS: tuple[str, ...] = tuple(
+    _STUDIO_CONTRACT["allowed_device_actions"]
 )
 
 DEVICE_ENTITY_VERBS: frozenset[str] = frozenset(
@@ -162,9 +177,12 @@ def allowed_entity_targets(
 
 
 def checked_entity_verb(body: Mapping[str, Any], verbs: Collection[str]) -> str:
-    """Return the action verb of an entity action; an option or level needs no verb, anything else must be in `verbs`."""
+    """Return the action verb of an entity action; option/level verbs must be empty or known."""
     action = str(body.get("action") or "").strip().lower()
     if body.get("option") is not None or body.get("level") is not None:
+        allowed_param_verbs = {"", *verbs, "select_option", "set_value", "set_level"}
+        if action not in allowed_param_verbs:
+            raise TargetNotAllowed(f"Unsupported action '{action}'")
         return action
     if action not in verbs:
         raise TargetNotAllowed(f"Unsupported action '{action or '(none)'}'")
@@ -196,6 +214,7 @@ SYSTEM_SETTING_KEYS: tuple[str, ...] = (
     "ble_max_radius_m",
     "ble_max_velocity_mps",
     "ble_away_timeout_s",
+    "ignored_discovered_devices",
 )
 
 @dataclass(frozen=True, slots=True)
@@ -222,101 +241,7 @@ class DevicePrefSpec:
     max_val: int | None = None
     step: int | None = None
     unit: str = ""
-
-
-WAKE_WORD_MODE_OPTIONS: tuple[str, ...] = ("Docked Only", "Always On", "Disabled")
-TAP_TO_WAKE_OPTIONS: tuple[str, ...] = (
-    "Single Tap",
-    "Double Tap",
-    "Docked Only",
-    "Disabled",
-)
-WAKE_GESTURE_OPTIONS: tuple[str, ...] = ("Always On", "Docked Only", "Disabled")
-BATTERY_SCREEN_TIMEOUT_OPTIONS: tuple[str, ...] = (
-    "10s",
-    "15s",
-    "30s",
-    "1 min",
-    "2 min",
-    "Never",
-)
-DOCKED_IDLE_TIMEOUT_OPTIONS: tuple[str, ...] = (
-    "10s",
-    "15s",
-    "30s",
-    "1 min",
-    "2 min",
-    "5 min",
-    "Never",
-)
-BATTERY_HIBERNATE_TIMEOUT_OPTIONS: tuple[str, ...] = (
-    "5 min",
-    "10 min",
-    "15 min",
-    "30 min",
-    "Disabled",
-)
-SCREENSAVER_STYLE_OPTIONS: tuple[str, ...] = (
-    "Ambient Clock",
-    "Aurora",
-    "Starfield",
-    "Digital Rain",
-    "Fireworks",
-)
-AUTO_BRIGHTNESS_MODE_OPTIONS: tuple[str, ...] = (
-    "Disabled",
-    "Sun Synchronized",
-    "Time Schedule",
-)
-BRIGHTNESS_PCT_OPTIONS: tuple[str, ...] = ("60%", "70%", "80%", "90%", "100%")
-COLOR_PROFILE_OPTIONS: tuple[str, ...] = (
-    "Steel Blue",
-    "Pink",
-    "Blue",
-    "Green",
-    "Custom",
-)
-VA_VISUAL_PROFILE_OPTIONS: tuple[str, ...] = (
-    "Nebula",
-    "Solaris",
-    "Rings",
-    "Light Bar",
-    "Dot Wave",
-)
-START_SCREEN_OPTIONS: tuple[str, ...] = (
-    "Home",
-    "Pinned",
-    "Time App",
-    "Calendar",
-    "Clock Face",
-    "Media",
-    "Home Hub",
-    "Area Controls",
-    "Remote",
-    "Weather",
-    "Cameras",
-    "Games",
-    "Tools",
-)
-RETURN_TO_HOME_TIMEOUT_OPTIONS: tuple[str, ...] = (
-    "15s",
-    "30s",
-    "1 min",
-    "2 min",
-    "5 min",
-    "10 min",
-    "Never",
-)
-CLOCK_FACE_OPTIONS: tuple[str, ...] = (
-    "Minimal Digital",
-    "Modern Analog",
-    "Hybrid Digital",
-)
-HOME_CLOCK_TAP_OPTIONS: tuple[str, ...] = ("Time App", "Clock Face")
-HOME_DATE_TAP_OPTIONS: tuple[str, ...] = ("Day View", "Overview")
-CALENDAR_LOOKAHEAD_VALUES: tuple[int, ...] = (7, 14, 30, 60)
-CALENDAR_WEEK_START_OPTIONS: tuple[str, ...] = ("Sunday", "Monday")
-TIME_FORMAT_OPTIONS: tuple[str, ...] = ("12-Hour (AM/PM)", "24-Hour")
+    esphome_section: str = ""
 
 
 def snap_calendar_lookahead_days(val: Any) -> int:
@@ -334,70 +259,16 @@ def snap_calendar_lookahead_days(val: Any) -> int:
     if ival <= 45:
         return 30
     return 60
+
+
 MAX_WORLD_CLOCKS = 4
 DEFAULT_ALARMS_SUMMARY = "07:00|0|1;08:30|0|2;09:00|0|2"
 
-WORLD_CLOCK_CATALOG: tuple[dict[str, Any], ...] = (
-    # Canonical standard time zones ordered from UTC-12:00 through UTC+14:00
-    {"iana": "Etc/GMT+12", "city": "UTC-12", "std_off": -720, "dst_off": -720, "std_abbr": "UTC-12", "dst_abbr": "UTC-12", "rule": "none"},
-    {"iana": "Pacific/Pago_Pago", "city": "Pago Pago", "std_off": -660, "dst_off": -660, "std_abbr": "SST", "dst_abbr": "SST", "rule": "none"},
-    {"iana": "Pacific/Honolulu", "city": "Honolulu", "std_off": -600, "dst_off": -600, "std_abbr": "HST", "dst_abbr": "HST", "rule": "none"},
-    {"iana": "Pacific/Marquesas", "city": "Marquesas", "std_off": -570, "dst_off": -570, "std_abbr": "MART", "dst_abbr": "MART", "rule": "none"},
-    {"iana": "America/Anchorage", "city": "Anchorage", "std_off": -540, "dst_off": -480, "std_abbr": "AKST", "dst_abbr": "AKDT", "rule": "us"},
-    {"iana": "America/Los_Angeles", "city": "Los Angeles", "std_off": -480, "dst_off": -420, "std_abbr": "PST", "dst_abbr": "PDT", "rule": "us"},
-    {"iana": "Etc/GMT+8", "city": "UTC-8", "std_off": -480, "dst_off": -480, "std_abbr": "UTC-8", "dst_abbr": "UTC-8", "rule": "none"},
-    {"iana": "America/Denver", "city": "Denver", "std_off": -420, "dst_off": -360, "std_abbr": "MST", "dst_abbr": "MDT", "rule": "us"},
-    {"iana": "America/Phoenix", "city": "Phoenix", "std_off": -420, "dst_off": -420, "std_abbr": "MST", "dst_abbr": "MST", "rule": "none"},
-    {"iana": "America/Chicago", "city": "Chicago", "std_off": -360, "dst_off": -300, "std_abbr": "CST", "dst_abbr": "CDT", "rule": "us"},
-    {"iana": "America/Regina", "city": "Regina", "std_off": -360, "dst_off": -360, "std_abbr": "CST", "dst_abbr": "CST", "rule": "none"},
-    {"iana": "America/New_York", "city": "New York", "std_off": -300, "dst_off": -240, "std_abbr": "EST", "dst_abbr": "EDT", "rule": "us"},
-    {"iana": "America/Lima", "city": "Lima", "std_off": -300, "dst_off": -300, "std_abbr": "EST", "dst_abbr": "EST", "rule": "none"},
-    {"iana": "America/Halifax", "city": "Halifax", "std_off": -240, "dst_off": -180, "std_abbr": "AST", "dst_abbr": "ADT", "rule": "us"},
-    {"iana": "America/Puerto_Rico", "city": "Puerto Rico", "std_off": -240, "dst_off": -240, "std_abbr": "AST", "dst_abbr": "AST", "rule": "none"},
-    {"iana": "America/St_Johns", "city": "St. John's", "std_off": -210, "dst_off": -150, "std_abbr": "NST", "dst_abbr": "NDT", "rule": "us"},
-    {"iana": "America/Sao_Paulo", "city": "Sao Paulo", "std_off": -180, "dst_off": -180, "std_abbr": "BRT", "dst_abbr": "BRT", "rule": "none"},
-    {"iana": "Etc/GMT+2", "city": "UTC-2", "std_off": -120, "dst_off": -120, "std_abbr": "UTC-2", "dst_abbr": "UTC-2", "rule": "none"},
-    {"iana": "Atlantic/Azores", "city": "Azores", "std_off": -60, "dst_off": 0, "std_abbr": "AZOT", "dst_abbr": "AZOST", "rule": "eu"},
-    {"iana": "Atlantic/Cape_Verde", "city": "Cape Verde", "std_off": -60, "dst_off": -60, "std_abbr": "CVT", "dst_abbr": "CVT", "rule": "none"},
-    {"iana": "Atlantic/Reykjavik", "city": "Reykjavik", "std_off": 0, "dst_off": 0, "std_abbr": "GMT", "dst_abbr": "GMT", "rule": "none"},
-    {"iana": "Europe/London", "city": "London", "std_off": 0, "dst_off": 60, "std_abbr": "GMT", "dst_abbr": "BST", "rule": "eu"},
-    {"iana": "Europe/Berlin", "city": "Berlin", "std_off": 60, "dst_off": 120, "std_abbr": "CET", "dst_abbr": "CEST", "rule": "eu"},
-    {"iana": "Africa/Lagos", "city": "Lagos", "std_off": 60, "dst_off": 60, "std_abbr": "WAT", "dst_abbr": "WAT", "rule": "none"},
-    {"iana": "Europe/Athens", "city": "Athens", "std_off": 120, "dst_off": 180, "std_abbr": "EET", "dst_abbr": "EEST", "rule": "eu"},
-    {"iana": "Africa/Johannesburg", "city": "Johannesburg", "std_off": 120, "dst_off": 120, "std_abbr": "SAST", "dst_abbr": "SAST", "rule": "none"},
-    {"iana": "Asia/Riyadh", "city": "Riyadh", "std_off": 180, "dst_off": 180, "std_abbr": "AST", "dst_abbr": "AST", "rule": "none"},
-    {"iana": "Asia/Tehran", "city": "Tehran", "std_off": 210, "dst_off": 210, "std_abbr": "IRST", "dst_abbr": "IRST", "rule": "none"},
-    {"iana": "Asia/Dubai", "city": "Dubai", "std_off": 240, "dst_off": 240, "std_abbr": "GST", "dst_abbr": "GST", "rule": "none"},
-    {"iana": "Asia/Kabul", "city": "Kabul", "std_off": 270, "dst_off": 270, "std_abbr": "AFT", "dst_abbr": "AFT", "rule": "none"},
-    {"iana": "Asia/Karachi", "city": "Karachi", "std_off": 300, "dst_off": 300, "std_abbr": "PKT", "dst_abbr": "PKT", "rule": "none"},
-    {"iana": "Asia/Kolkata", "city": "Kolkata", "std_off": 330, "dst_off": 330, "std_abbr": "IST", "dst_abbr": "IST", "rule": "none"},
-    {"iana": "Asia/Kathmandu", "city": "Kathmandu", "std_off": 345, "dst_off": 345, "std_abbr": "NPT", "dst_abbr": "NPT", "rule": "none"},
-    {"iana": "Asia/Dhaka", "city": "Dhaka", "std_off": 360, "dst_off": 360, "std_abbr": "BST", "dst_abbr": "BST", "rule": "none"},
-    {"iana": "Asia/Yangon", "city": "Yangon", "std_off": 390, "dst_off": 390, "std_abbr": "MMT", "dst_abbr": "MMT", "rule": "none"},
-    {"iana": "Asia/Bangkok", "city": "Bangkok", "std_off": 420, "dst_off": 420, "std_abbr": "ICT", "dst_abbr": "ICT", "rule": "none"},
-    {"iana": "Asia/Singapore", "city": "Singapore", "std_off": 480, "dst_off": 480, "std_abbr": "SGT", "dst_abbr": "SGT", "rule": "none"},
-    {"iana": "Australia/Eucla", "city": "Eucla", "std_off": 525, "dst_off": 525, "std_abbr": "ACWST", "dst_abbr": "ACWST", "rule": "none"},
-    {"iana": "Asia/Tokyo", "city": "Tokyo", "std_off": 540, "dst_off": 540, "std_abbr": "JST", "dst_abbr": "JST", "rule": "none"},
-    {"iana": "Australia/Adelaide", "city": "Adelaide", "std_off": 570, "dst_off": 630, "std_abbr": "ACST", "dst_abbr": "ACDT", "rule": "au"},
-    {"iana": "Australia/Darwin", "city": "Darwin", "std_off": 570, "dst_off": 570, "std_abbr": "ACST", "dst_abbr": "ACST", "rule": "none"},
-    {"iana": "Australia/Sydney", "city": "Sydney", "std_off": 600, "dst_off": 660, "std_abbr": "AEST", "dst_abbr": "AEDT", "rule": "au"},
-    {"iana": "Australia/Brisbane", "city": "Brisbane", "std_off": 600, "dst_off": 600, "std_abbr": "AEST", "dst_abbr": "AEST", "rule": "none"},
-    {"iana": "Australia/Lord_Howe", "city": "Lord Howe", "std_off": 630, "dst_off": 660, "std_abbr": "LHST", "dst_abbr": "LHDT", "rule": "au30"},
-    {"iana": "Pacific/Guadalcanal", "city": "Guadalcanal", "std_off": 660, "dst_off": 660, "std_abbr": "SBT", "dst_abbr": "SBT", "rule": "none"},
-    {"iana": "Pacific/Auckland", "city": "Auckland", "std_off": 720, "dst_off": 780, "std_abbr": "NZST", "dst_abbr": "NZDT", "rule": "nz"},
-    {"iana": "Etc/GMT-12", "city": "UTC+12", "std_off": 720, "dst_off": 720, "std_abbr": "UTC+12", "dst_abbr": "UTC+12", "rule": "none"},
-    {"iana": "Pacific/Chatham", "city": "Chatham", "std_off": 765, "dst_off": 825, "std_abbr": "CHAST", "dst_abbr": "CHADT", "rule": "nz"},
-    {"iana": "Pacific/Tongatapu", "city": "Tongatapu", "std_off": 780, "dst_off": 780, "std_abbr": "TOT", "dst_abbr": "TOT", "rule": "none"},
-    {"iana": "Pacific/Kiritimati", "city": "Kiritimati", "std_off": 840, "dst_off": 840, "std_abbr": "LINT", "dst_abbr": "LINT", "rule": "none"},
-    # Additional regional aliases supported when host lacks system tzdata
-    {"iana": "America/Toronto", "city": "Toronto", "std_off": -300, "dst_off": -240, "std_abbr": "EST", "dst_abbr": "EDT", "rule": "us"},
-    {"iana": "America/Argentina/Buenos_Aires", "city": "Buenos Aires", "std_off": -180, "dst_off": -180, "std_abbr": "ART", "dst_abbr": "ART", "rule": "none"},
-    {"iana": "Europe/Paris", "city": "Paris", "std_off": 60, "dst_off": 120, "std_abbr": "CET", "dst_abbr": "CEST", "rule": "eu"},
-    {"iana": "Europe/Zurich", "city": "Zurich", "std_off": 60, "dst_off": 120, "std_abbr": "CET", "dst_abbr": "CEST", "rule": "eu"},
-    {"iana": "Africa/Cairo", "city": "Cairo", "std_off": 120, "dst_off": 180, "std_abbr": "EET", "dst_abbr": "EEST", "rule": "eg"},
-    {"iana": "Asia/Hong_Kong", "city": "Hong Kong", "std_off": 480, "dst_off": 480, "std_abbr": "HKT", "dst_abbr": "HKT", "rule": "none"},
-    {"iana": "Asia/Shanghai", "city": "Shanghai", "std_off": 480, "dst_off": 480, "std_abbr": "CST", "dst_abbr": "CST", "rule": "none"},
-    {"iana": "Asia/Seoul", "city": "Seoul", "std_off": 540, "dst_off": 540, "std_abbr": "KST", "dst_abbr": "KST", "rule": "none"},
+WORLD_CLOCK_ZONES: tuple[dict[str, Any], ...] = tuple(
+    _PROTOCOL_V3_DATA["world_clock_zones"]
+)
+WORLD_CLOCK_CATALOG: tuple[dict[str, Any], ...] = WORLD_CLOCK_ZONES + tuple(
+    _PROTOCOL_V3_DATA.get("world_clock_aliases", ())
 )
 WORLD_CLOCK_CATALOG_MAP: dict[str, dict[str, Any]] = {
     str(item["iana"]): item for item in WORLD_CLOCK_CATALOG
@@ -407,6 +278,76 @@ _PINNED_UTC_ALIASES: frozenset[str] = frozenset(
     {"UTC", "Etc/UTC", "GMT", "Etc/GMT", "Etc/GMT+0", "Etc/GMT-0", "Etc/GMT0"}
 )
 _ALARM_RECORD_RE = re.compile(r"^(\d{1,2}):(\d{2})\|([01])\|([0-3])$")
+_MODEL_UPPER_ACRONYMS: frozenset[str] = frozenset(
+    {
+        "s3",
+        "p4",
+        "c3",
+        "c6",
+        "h2",
+        "amoled",
+        "ips",
+        "lcd",
+        "oled",
+        "tft",
+        "dsi",
+        "qspi",
+        "rgb",
+        "ble",
+        "usb",
+        "hd",
+        "fhd",
+        "ai",
+        "ir",
+        "poe",
+    }
+)
+
+
+def warm_timezone_cache(extra_zones: Iterable[str] = ()) -> None:
+    """Populate available IANA zone set and common `ZoneInfo` objects off the event loop."""
+    global _AVAILABLE_IANA_ZONES
+    try:
+        zones = frozenset(available_timezones())
+    except Exception:  # noqa: BLE001
+        zones = frozenset()
+    _AVAILABLE_IANA_ZONES = zones
+    for item in WORLD_CLOCK_CATALOG:
+        iana = str(item.get("iana") or "").strip()
+        if iana and iana not in _ZONEINFO_CACHE:
+            if zones and iana not in zones:
+                _ZONEINFO_CACHE[iana] = None
+                continue
+            try:
+                _ZONEINFO_CACHE[iana] = ZoneInfo(iana)
+            except (ZoneInfoNotFoundError, ValueError):
+                _ZONEINFO_CACHE[iana] = None
+    for raw_extra in extra_zones:
+        iana = str(raw_extra or "").strip()
+        if iana and iana not in _ZONEINFO_CACHE:
+            try:
+                _ZONEINFO_CACHE[iana] = ZoneInfo(iana)
+            except (ZoneInfoNotFoundError, ValueError):
+                _ZONEINFO_CACHE[iana] = None
+
+
+def get_cached_zoneinfo(iana: str) -> ZoneInfo | None:
+    """Return a cached `ZoneInfo` object for `iana`, avoiding repeated tzdata disk opens."""
+    tok = str(iana or "").strip()
+    if not tok:
+        return None
+    if tok in _ZONEINFO_CACHE:
+        return _ZONEINFO_CACHE[tok]
+    if _AVAILABLE_IANA_ZONES is not None and _AVAILABLE_IANA_ZONES and tok not in _AVAILABLE_IANA_ZONES:
+        _ZONEINFO_CACHE[tok] = None
+        return None
+    try:
+        tz = ZoneInfo(tok)
+    except (ZoneInfoNotFoundError, ValueError):
+        _ZONEINFO_CACHE[tok] = None
+        return None
+    _ZONEINFO_CACHE[tok] = tz
+    return tz
 
 
 def is_valid_iana_zone(iana: str) -> bool:
@@ -418,13 +359,55 @@ def is_valid_iana_zone(iana: str) -> bool:
         return False
     if tok in WORLD_CLOCK_CATALOG_MAP:
         return True
-    if _SYSTEM_HAS_TZDATA:
-        try:
-            ZoneInfo(tok)
-            return True
-        except (ZoneInfoNotFoundError, ValueError):
-            return False
-    return False
+    if _AVAILABLE_IANA_ZONES is not None and _AVAILABLE_IANA_ZONES:
+        return tok in _AVAILABLE_IANA_ZONES
+    return get_cached_zoneinfo(tok) is not None
+
+
+def _humanize_slug_tokens(raw: str) -> str:
+    """Convert a kebab/snake hardware or model slug into a clean human-readable title."""
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    if " " in text and "_" not in text:
+        return text
+    parts = [p for p in re.split(r"[-_\s]+", text) if p]
+    if not parts:
+        return text
+    formatted: list[str] = []
+    for tok in parts:
+        low = tok.lower()
+        if low in _MODEL_UPPER_ACRONYMS:
+            formatted.append(low.upper())
+        elif re.fullmatch(r"\d+(?:\.\d+)?(?:in|mm|px)?", low) or any(
+            c.isupper() for c in tok[1:]
+        ):
+            formatted.append(tok)
+        else:
+            formatted.append(tok.capitalize())
+    return " ".join(formatted)
+
+
+def humanize_device_model_label(
+    raw_model: str,
+    manifest: Mapping[str, Any] | None = None,
+    *,
+    fallback: str = "",
+) -> str:
+    """Return a humanized model title + `(WxH)` resolution without exposing raw kebab/snake slugs."""
+    m = manifest or {}
+    w = int(m.get("w") or 0)
+    h = int(m.get("h") or 0)
+    board_lbl = _humanize_slug_tokens(str(m.get("board") or ""))
+    model_lbl = _humanize_slug_tokens(raw_model)
+    if w > 0 and h > 0:
+        dims = f"({w}x{h})"
+        if model_lbl:
+            return model_lbl if dims in model_lbl else f"{model_lbl} {dims}"
+        if board_lbl:
+            return f"{board_lbl} {dims}"
+        return f"Latter Display {dims}"
+    return model_lbl or board_lbl or fallback
 
 
 def sanitize_clock_label(val: Any, max_bytes: int = 32) -> str:
@@ -986,113 +969,37 @@ def normalize_pinned_items(
     )
 
 
-ALBUM_ART_STYLE_OPTIONS: tuple[str, ...] = (
-    "Full Screen",
-    "Letterbox",
-    "Standard",
-    "None",
-)
-MUSIC_OVERLAY_STYLE_OPTIONS: tuple[str, ...] = (
-    "Art Only",
-    "Art + Metadata",
-    "Always Visible",
-)
-ALBUM_SORT_OPTIONS: tuple[str, ...] = (
-    "Alphabetical",
-    "Newest on Top",
-    "Oldest on Top",
-)
-ARTIST_ALBUM_SORT_OPTIONS: tuple[str, ...] = (
-    "Oldest on Top",
-    "Newest on Top",
-    "Alphabetical",
-)
-PODCAST_SORT_OPTIONS: tuple[str, ...] = ("Newest on Top", "Oldest on Top")
-WW_SENSITIVITY_OPTIONS: tuple[str, ...] = (
-    "Slightly sensitive",
-    "Moderately sensitive",
-    "Very sensitive",
-)
-BLE_BEACON_MODE_OPTIONS: tuple[str, ...] = (
-    "Handheld Only",
-    "Handheld + Screen Off",
-    "Always",
-)
-WEATHER_SIM_CONDITION_OPTIONS: tuple[str, ...] = (
-    "Live (Home Assistant)",
-    "Clear Night",
-    "Sunny / Clear Day",
-    "Partly Cloudy (Day)",
-    "Partly Cloudy (Night)",
-    "Cloudy / Overcast (Day)",
-    "Cloudy / Overcast (Night)",
-    "Fog / Mist (Day)",
-    "Fog / Mist (Night)",
-    "Rainy (Day)",
-    "Rainy (Night)",
-    "Pouring / Heavy Rain",
-    "Snow (Day)",
-    "Snow (Night)",
-    "Thunderstorm (Day)",
-    "Thunderstorm (Night)",
-    "Windy",
-)
-
-DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = (
-    DevicePrefSpec("wake_word_mode", "Wake Word Mode", "select", "Docked Only", "audio", "mic", "behavior", options=WAKE_WORD_MODE_OPTIONS),
-    DevicePrefSpec("tap_to_wake", "Tap to Wake", "select", "Docked Only", "power", "display", "behavior", options=TAP_TO_WAKE_OPTIONS),
-    DevicePrefSpec("pickup_to_wake", "Pickup to Wake", "select", "Docked Only", "power", "display_imu", "behavior", options=WAKE_GESTURE_OPTIONS),
-    DevicePrefSpec("battery_screen_timeout", "Battery Screen Timeout", "select", "30s", "power", "display_battery", "behavior", options=BATTERY_SCREEN_TIMEOUT_OPTIONS),
-    DevicePrefSpec("docked_idle_timeout", "Docked Idle Timeout", "select", "1 min", "display", "display", "behavior", options=DOCKED_IDLE_TIMEOUT_OPTIONS),
-    DevicePrefSpec("battery_hibernate_timeout", "Battery Hibernate Timeout", "select", "15 min", "power", "display_battery", "behavior", options=BATTERY_HIBERNATE_TIMEOUT_OPTIONS),
-    DevicePrefSpec("docked_screensaver", "Docked Screensaver", "switch", True, "display", "display", "behavior"),
-    DevicePrefSpec("screensaver_style", "Screensaver Style", "select", "Ambient Clock", "display", "display", "display", options=SCREENSAVER_STYLE_OPTIONS),
-    DevicePrefSpec("hold_crown_power_off", "Hold Crown to Power Off", "switch", False, "power", "display_battery", "behavior"),
-    DevicePrefSpec("auto_brightness_mode", "Auto Brightness Mode", "select", "Sun Synchronized", "display", "display", "behavior", options=AUTO_BRIGHTNESS_MODE_OPTIONS),
-    DevicePrefSpec("manual_brightness", "Manual Brightness", "select", "90%", "display", "display", "behavior", options=BRIGHTNESS_PCT_OPTIONS),
-    DevicePrefSpec("day_brightness", "Day Brightness", "select", "90%", "display", "display", "behavior", options=BRIGHTNESS_PCT_OPTIONS),
-    DevicePrefSpec("night_brightness", "Night Brightness", "select", "70%", "display", "display", "behavior", options=BRIGHTNESS_PCT_OPTIONS),
-    DevicePrefSpec("day_start_hour", "Day Start Hour", "number", 7, "display", "display", "behavior", min_val=0, max_val=23, step=1, unit="h"),
-    DevicePrefSpec("night_start_hour", "Night Start Hour", "number", 20, "display", "display", "behavior", min_val=0, max_val=23, step=1, unit="h"),
-    DevicePrefSpec("color_profile", "Color Profile", "select", "Steel Blue", "display", "display", "display", options=COLOR_PROFILE_OPTIONS),
-    DevicePrefSpec("va_visual_profile", "Visual Profile", "select", "Nebula", "display", "display", "display", options=VA_VISUAL_PROFILE_OPTIONS),
-    DevicePrefSpec("home_screen_enabled", "Enable Home Screen", "switch", True, "interface", "display", "interface"),
-    DevicePrefSpec("start_screen", "Start Screen", "select", "Home", "interface", "display", "interface", options=START_SCREEN_OPTIONS),
-    DevicePrefSpec("return_to_home_timeout", "Return to Home Timeout", "select", "2 min", "interface", "display", "interface", options=RETURN_TO_HOME_TIMEOUT_OPTIONS),
-    DevicePrefSpec("clock_face", "Clock Face", "select", "Minimal Digital", "display", "display", "display", options=CLOCK_FACE_OPTIONS),
-    DevicePrefSpec("time_format", "Time Format", "select", "12-Hour (AM/PM)", "display", "display", "display", options=TIME_FORMAT_OPTIONS),
-    DevicePrefSpec("weather_background", "Weather Background", "switch", True, "display", "display", "display"),
-    DevicePrefSpec("home_sun", "Sun", "switch", True, "display", "display", "display"),
-    DevicePrefSpec("home_moon", "Moon", "switch", True, "display", "display", "display"),
-    DevicePrefSpec("wake_greeting", "Wake Greeting", "switch", True, "display", "display", "display"),
-    DevicePrefSpec("album_art_style", "Album Art Style", "select", "Full Screen", "display", "display", "display", options=ALBUM_ART_STYLE_OPTIONS),
-    DevicePrefSpec("music_overlay_style", "Overlay Style", "select", "Art + Metadata", "display", "display", "display", options=MUSIC_OVERLAY_STYLE_OPTIONS),
-    DevicePrefSpec("album_sort_order", "Album Sort Order", "select", "Alphabetical", "interface", "display", "interface", options=ALBUM_SORT_OPTIONS),
-    DevicePrefSpec("artist_album_sort_order", "Artist Album Sort Order", "select", "Oldest on Top", "interface", "display", "interface", options=ARTIST_ALBUM_SORT_OPTIONS),
-    DevicePrefSpec("podcast_sort_order", "Podcast Sort Order", "select", "Newest on Top", "interface", "display", "interface", options=PODCAST_SORT_OPTIONS),
-    DevicePrefSpec("ww_sens_okay_nabu", "Okay Nabu Sensitivity", "select", "Moderately sensitive", "audio", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
-    DevicePrefSpec("ww_sens_hey_luna", "Hey Luna Sensitivity", "select", "Moderately sensitive", "audio", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
-    DevicePrefSpec("ww_sens_hey_jarvis", "Hey Jarvis Sensitivity", "select", "Moderately sensitive", "audio", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
-    DevicePrefSpec("ww_sens_hey_mycroft", "Hey Mycroft Sensitivity", "select", "Moderately sensitive", "audio", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
-    DevicePrefSpec("ww_sens_alexa", "Alexa Sensitivity", "select", "Moderately sensitive", "audio", "mic", "behavior", options=WW_SENSITIVITY_OPTIONS),
-    DevicePrefSpec("wake_screen_on_assist", "Wake Screen on Assist", "switch", True, "audio", "display", "behavior"),
-    DevicePrefSpec("alert_volume", "Alert Volume", "number", 80, "audio", "speaker", "behavior", min_val=20, max_val=100, step=5, unit="%"),
-    DevicePrefSpec("volume_step_size", "Volume Step Size", "number", 5, "audio", "speaker", "behavior", min_val=1, max_val=10, step=1, unit="%"),
-    DevicePrefSpec("game_sound_effects", "Game Sound Effects", "switch", True, "audio", "display", "behavior"),
-    DevicePrefSpec("ble_beacon_mode", "BLE Beacon Mode", "select", "Handheld Only", "presence", "beacon_battery", "behavior", options=BLE_BEACON_MODE_OPTIONS),
-    DevicePrefSpec("weather_sim_condition", "Weather Simulation", "select", "Live (Home Assistant)", "developer", "display", None, options=WEATHER_SIM_CONDITION_OPTIONS),
-    DevicePrefSpec("home_clock_tap_action", "Home Time Tap", "select", "Time App", "interface", "display", "interface", options=HOME_CLOCK_TAP_OPTIONS),
-    DevicePrefSpec("home_date_tap_action", "Home Date Tap", "select", "Day View", "interface", "display", "interface", options=HOME_DATE_TAP_OPTIONS),
-    DevicePrefSpec("local_clock_label", "Local Clock Label", "text", "", "time", "display", None),
-    DevicePrefSpec("show_utc_clock", "Show UTC Clock", "switch", False, "interface", "display", "interface"),
-    DevicePrefSpec("world_clocks", "World Clocks", "text", "", "interface", "display", "interface"),
-    DevicePrefSpec("alarms_summary", "Alarms", "text", DEFAULT_ALARMS_SUMMARY, "time", "display", None),
-    DevicePrefSpec("calendar_lookahead_days", "Overview Lookahead", "number", 30, "interface", "display", "interface", min_val=7, max_val=60, step=1, unit="d"),
-    DevicePrefSpec("calendar_week_start", "Start Week On", "select", "Sunday", "interface", "display", "interface", options=CALENDAR_WEEK_START_OPTIONS),
+DEVICE_PREF_SPECS: tuple[DevicePrefSpec, ...] = tuple(
+    DevicePrefSpec(
+        key=str(raw["key"]),
+        label=str(raw["label"]),
+        domain=raw["domain"],
+        default=raw["default"],
+        section=str(raw["section"]),
+        capability=raw["capability"],
+        group_tier=raw.get("group_tier"),
+        options=tuple(str(o) for o in (raw.get("options") or ())),
+        min_val=int(raw["min"]) if raw.get("min") is not None else None,
+        max_val=int(raw["max"]) if raw.get("max") is not None else None,
+        step=int(raw["step"]) if raw.get("step") is not None else None,
+        unit=str(raw.get("unit") or ""),
+        esphome_section=str(raw.get("esphome_section") or ""),
+    )
+    for raw in _PROTOCOL_V3_DATA["device_pref_specs"]
 )
 
 DEVICE_PREF_SPEC_MAP: dict[str, DevicePrefSpec] = {s.key: s for s in DEVICE_PREF_SPECS}
 DEVICE_PREF_KEYS: tuple[str, ...] = tuple(s.key for s in DEVICE_PREF_SPECS)
+
+WAKE_WORD_MODE_OPTIONS: tuple[str, ...] = tuple(
+    DEVICE_PREF_SPEC_MAP["wake_word_mode"].options
+)
+START_SCREEN_OPTIONS: tuple[str, ...] = tuple(
+    DEVICE_PREF_SPEC_MAP["start_screen"].options
+)
+RETURN_TO_HOME_TIMEOUT_OPTIONS: tuple[str, ...] = tuple(
+    DEVICE_PREF_SPEC_MAP["return_to_home_timeout"].options
+)
 
 
 def resolve_device_pref_value(cfg: Mapping[str, Any], key: str) -> Any:
@@ -1173,6 +1080,12 @@ MAX_GARAGES = 6
 MAX_VACUUMS = 6
 MAX_CALENDARS = 50
 MAX_CUSTOM_PALETTES = 24
+MAX_REMOTE_GROUPS = 20
+MAX_REMOTE_GROUP_NAME_LEN = 64
+MAX_PALETTE_NAME_LEN = 48
+MAX_ANNOUNCE_TITLE_LEN = 64
+MAX_ANNOUNCE_MESSAGE_LEN = 500
+MAX_IGNORED_DISCOVERED = 100
 DWELL_MIN_S = 3
 DWELL_MAX_S = 60
 DEFAULT_BLE_ATTENUATION = 2.2
@@ -1194,7 +1107,8 @@ DEFAULT_NOISE_REDUCTION = "strong"
 SECURITY_PIN_POLICIES: tuple[str, ...] = ("auto", "allow", "require_pin", "block")
 BLE_CATEGORIES: tuple[str, ...] = ("auto", "phone", "ble_tag")
 _HEX_COLOR = re.compile(r"^#[0-9A-F]{6}$")
-_REMOTE_GROUP_REF = re.compile(r"^group:[A-Za-z0-9_-]+$")
+_REMOTE_GROUP_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,48}$")
+_REMOTE_GROUP_REF = re.compile(r"^group:[A-Za-z0-9_-]{1,48}$")
 
 
 class SettingsScopeError(ValueError):
@@ -1238,24 +1152,48 @@ def _volume_overrides(val: Any) -> list[dict[str, str]]:
     return out[:MAX_LIST_ITEMS]
 
 
-def _remote_groups(val: Any) -> list[dict[str, Any]]:
+def _remote_groups(val: Any, *, strict: bool = False) -> list[dict[str, Any]]:
     if not isinstance(val, (list, tuple)):
+        if strict:
+            raise SettingsScopeError("remote_groups must be a list")
         return []
+    if strict and len(val) > MAX_REMOTE_GROUPS:
+        raise SettingsScopeError(
+            f"remote_groups supports at most {MAX_REMOTE_GROUPS} groups"
+        )
     out: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
     for item in val:
         if not isinstance(item, Mapping):
+            if strict:
+                raise SettingsScopeError("Each remote group must be an object")
             continue
         gid = _text(item.get("id"))
         if not gid:
             continue
+        if not _REMOTE_GROUP_ID_RE.fullmatch(gid):
+            if strict:
+                raise SettingsScopeError(
+                    f"Invalid remote group id '{gid}' (use 1-48 letters, digits, '_' or '-')"
+                )
+            continue
+        if gid in seen_ids:
+            if strict:
+                raise SettingsScopeError(f"Duplicate remote group id '{gid}'")
+            continue
+        seen_ids.add(gid)
+        name = _text(item.get("name"))[:MAX_REMOTE_GROUP_NAME_LEN] or gid
+        area_id = _text(item.get("area_id"))[:64]
         out.append(
             {
                 "id": gid,
-                "name": _text(item.get("name")) or gid,
-                "area_id": _text(item.get("area_id")),
+                "name": name,
+                "area_id": area_id,
                 "remotes": _entity_list(item.get("remotes")),
             }
         )
+        if len(out) >= MAX_REMOTE_GROUPS:
+            break
     return out
 
 
@@ -1268,8 +1206,24 @@ def _custom_palettes(val: Any) -> list[dict[str, str]]:
             continue
         hex_val = _text(item.get("hex")).upper()
         if _HEX_COLOR.match(hex_val) and all(p["hex"] != hex_val for p in out):
-            out.append({"name": _text(item.get("name")) or hex_val, "hex": hex_val})
+            name = _text(item.get("name"))[:MAX_PALETTE_NAME_LEN] or hex_val
+            out.append({"name": name, "hex": hex_val})
     return out[:MAX_CUSTOM_PALETTES]
+
+
+def _ignored_device_ids(val: Any, *, strict: bool = False) -> list[str]:
+    if not isinstance(val, (list, tuple)):
+        if strict:
+            raise SettingsScopeError("ignored_discovered_devices must be a list")
+        return []
+    out: list[str] = []
+    for item in val:
+        dev_id = _text(item)[:128]
+        if dev_id and dev_id not in out:
+            out.append(dev_id)
+        if len(out) >= MAX_IGNORED_DISCOVERED:
+            break
+    return out
 
 
 def _noise_reduction(val: Any) -> str:
@@ -1324,7 +1278,6 @@ def _ble_int(
 FUSION_MODES: tuple[str, ...] = ("weighted", "any_or", "ble_only", "ble_and_sensor")
 FUSION_THRESHOLD_MIN = 20
 FUSION_THRESHOLD_MAX = 95
-DEFAULT_FUSION_THRESHOLD = 50
 
 
 def clean_area_fusion(
@@ -1395,12 +1348,19 @@ def _safe_domain_entity_list(val: Any, prefix: str, limit: int) -> list[str]:
 
 
 def clean_system_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
-    """Validate and normalize a System save. The primary camera (`camera_entity`) is derived, never sent."""
+    """Validate and normalize a System save (`camera_entities` is the sole canonical camera list)."""
     _check_scope(incoming, SYSTEM_SETTING_KEYS, "System")
     out: dict[str, Any] = {}
     for key in SYSTEM_ENTITY_KEYS:
         if key in incoming:
-            out[key] = _text(incoming[key])
+            ent = _text(incoming[key])[:128]
+            if ent:
+                expected_prefix = "weather." if key == "weather_entity" else "alarm_control_panel."
+                if not ent.startswith(expected_prefix):
+                    raise SettingsScopeError(
+                        f"Expected a {expected_prefix}* entity for {key}, got {ent}"
+                    )
+            out[key] = ent
     if "thermostat_entities" in incoming:
         out["thermostat_entities"] = _domain_entity_list(
             incoming["thermostat_entities"],
@@ -1430,17 +1390,23 @@ def clean_system_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
             "vacuum_entities",
         )
     if "camera_entities" in incoming:
-        cams = _entity_list(incoming["camera_entities"])
-        out["camera_entities"] = cams
-        out["camera_entity"] = cams[0] if cams else ""
+        out["camera_entities"] = _domain_entity_list(
+            incoming["camera_entities"],
+            "camera.",
+            MAX_LIST_ITEMS,
+            "camera_entities",
+        )
     if "remotes_list" in incoming:
         out["remotes_list"] = _entity_list(incoming["remotes_list"])
     if "calendar_entities" in incoming:
-        out["calendar_entities"] = _entity_list(
-            incoming["calendar_entities"], limit=MAX_CALENDARS
+        out["calendar_entities"] = _domain_entity_list(
+            incoming["calendar_entities"],
+            "calendar.",
+            MAX_CALENDARS,
+            "calendar_entities",
         )
     if "remote_groups" in incoming:
-        out["remote_groups"] = _remote_groups(incoming["remote_groups"])
+        out["remote_groups"] = _remote_groups(incoming["remote_groups"], strict=True)
     if "volume_overrides" in incoming:
         out["volume_overrides"] = _volume_overrides(incoming["volume_overrides"])
     if "custom_palettes" in incoming:
@@ -1484,18 +1450,26 @@ def clean_system_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
             BLE_AWAY_TIMEOUT_MAX_S,
             strict=True,
         )
+    if "ignored_discovered_devices" in incoming:
+        out["ignored_discovered_devices"] = _ignored_device_ids(
+            incoming["ignored_discovered_devices"], strict=True
+        )
     return out
 
 
 def clean_device_settings(
-    incoming: Mapping[str, Any], current: Mapping[str, Any] | None = None
+    incoming: Mapping[str, Any],
+    current: Mapping[str, Any] | None = None,
+    *,
+    is_round_display: bool | None = None,
+    strict_traits: bool = False,
 ) -> dict[str, Any]:
     """Validate and normalize a Device save."""
     _check_scope(incoming, DEVICE_SETTING_KEYS, "Device")
     out: dict[str, Any] = {}
     for key in DEVICE_TEXT_KEYS:
         if key in incoming:
-            out[key] = _text(incoming[key])
+            out[key] = _text(incoming[key])[:256]
     for key in DEVICE_BOOL_KEYS:
         if key in incoming:
             raw_b = incoming[key]
@@ -1638,6 +1612,13 @@ def clean_device_settings(
     if not eff_home_enabled and eff_start == "Home":
         out["start_screen"] = "Time App"
 
+    if is_round_display is False and out.get("clock_face") == "Modern Analog":
+        if strict_traits:
+            raise SettingsScopeError(
+                "Modern Analog clock face is only supported on round displays"
+            )
+        out["clock_face"] = "Minimal Digital"
+
     if (
         out.get("native_ble_tracking") is True
         and "ble_auto_switch" not in incoming
@@ -1677,9 +1658,9 @@ def clean_device_settings(
 
 def system_settings_view(global_cfg: Mapping[str, Any]) -> dict[str, Any]:
     """Return the System settings as Studio shows them, read straight from `.storage/latter.site`."""
-    cams = _entity_list(global_cfg.get("camera_entities"))
-    if not cams and _text(global_cfg.get("camera_entity")):
-        cams = [_text(global_cfg.get("camera_entity"))]
+    cams = _safe_domain_entity_list(
+        global_cfg.get("camera_entities"), "camera.", MAX_LIST_ITEMS
+    )
     view: dict[str, Any] = {
         key: _text(global_cfg.get(key)) for key in SYSTEM_ENTITY_KEYS
     }
@@ -1701,8 +1682,8 @@ def system_settings_view(global_cfg: Mapping[str, Any]) -> dict[str, Any]:
             "remotes_list": _entity_list(global_cfg.get("remotes_list")),
             "remote_groups": _remote_groups(global_cfg.get("remote_groups")),
             "volume_overrides": _volume_overrides(global_cfg.get("volume_overrides")),
-            "calendar_entities": _entity_list(
-                global_cfg.get("calendar_entities"), limit=MAX_CALENDARS
+            "calendar_entities": _safe_domain_entity_list(
+                global_cfg.get("calendar_entities"), "calendar.", MAX_CALENDARS
             ),
             "custom_palettes": _custom_palettes(global_cfg.get("custom_palettes")),
             "doorbell_noise_reduction": _noise_reduction(
@@ -1735,6 +1716,9 @@ def system_settings_view(global_cfg: Mapping[str, Any]) -> dict[str, Any]:
                 BLE_AWAY_TIMEOUT_MIN_S,
                 BLE_AWAY_TIMEOUT_MAX_S,
             ),
+            "ignored_discovered_devices": _ignored_device_ids(
+                global_cfg.get("ignored_discovered_devices")
+            ),
         }
     )
     return view
@@ -1754,6 +1738,10 @@ def clean_announcement(
     message = _text(body.get("message"))
     if not message:
         raise SettingsScopeError("Enter a message")
+    if len(message) > MAX_ANNOUNCE_MESSAGE_LEN:
+        raise SettingsScopeError(
+            f"Announcement message must be at most {MAX_ANNOUNCE_MESSAGE_LEN} characters"
+        )
     if mode == "notify":
         if target not in device_slugs and target not in NOTIFY_SPECIAL_TARGETS:
             raise SettingsScopeError(
@@ -1762,6 +1750,10 @@ def clean_announcement(
         title = _text(body.get("title"))
         if not title:
             raise SettingsScopeError("Enter a title")
+        if len(title) > MAX_ANNOUNCE_TITLE_LEN:
+            raise SettingsScopeError(
+                f"Announcement title must be at most {MAX_ANNOUNCE_TITLE_LEN} characters"
+            )
         priority = _text(body.get("priority")).lower() or "normal"
         if priority not in ANNOUNCE_PRIORITIES:
             raise SettingsScopeError(f"Unknown priority: {priority}")

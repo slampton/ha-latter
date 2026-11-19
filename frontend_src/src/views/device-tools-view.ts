@@ -1,20 +1,23 @@
 /**
- * Device Tools View (`tools`, D-027): Standard Diagnostics + collapsed Developer & Telemetry drawer,
- * Perimeter Security Policy + write-only PIN, Replace Hardware & Danger Zone.
+ * Device Tools View (`tools`, `D-027`, `D-064`, `D-066`, `Q5`, `Q8`, `Q12`):
+ * - Column 1: Diagnostics + collapsed Developer & telemetry drawer + `Open in Home Assistant`.
+ * - Column 2: Perimeter security policy + write-only PIN (`focusSafe` + `requestClearSecurityPin`),
+ *   Replace hardware (lossless Home Assistant Reconfigure + `Download backup`), & Danger zone.
  */
 
 import {
   renderCard,
-  renderNativeControlRow,
   renderPrefControlRow,
   renderSelectRow,
   renderSettingsRow,
 } from "../components/controls.js";
 import { SECURITY_PIN_POLICY_OPTIONS } from "../constants.js";
-import { html, nothing, type TemplateResult } from "../lib/lit.js";
+import { t } from "../i18n/index.js";
+import { focusSafe, html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { EspHomeEntityItem, HomeAssistant } from "../types.js";
 import { fmtNumber } from "../utils/format.js";
+import { renderDeviceEntityRow, renderDeviceOfflineBanner } from "./device-overview-view.js";
 
 export interface DiagnosticsTelemetryRow {
   label: string;
@@ -82,6 +85,7 @@ function formatTelemetryDuration(totalSec: number): string {
 export function parseDeviceLinkReportRows(
   rawState: string | null | undefined,
   hass?: HomeAssistant | null,
+  overlay?: Readonly<Record<string, string>> | null,
 ): DiagnosticsTelemetryRow[] {
   if (!isValidTelemetryState(rawState)) return [];
   const kv = new Map<string, string>();
@@ -97,14 +101,18 @@ export function parseDeviceLinkReportRows(
   const upRaw = kv.get("up");
   if (upRaw !== undefined && Number.isFinite(Number(upRaw))) {
     rows.push({
-      label: "Session Uptime",
+      label: t("dev_tools.telem_uptime", undefined, overlay),
       value: formatTelemetryDuration(Number(upRaw)),
     });
   }
 
   const rstRaw = kv.get("rst");
   if (rstRaw) {
-    rows.push({ label: "Last Reset", value: rstRaw, code: true });
+    rows.push({
+      label: t("dev_tools.telem_last_reset", undefined, overlay),
+      value: rstRaw,
+      code: true,
+    });
   }
 
   const discRaw = kv.get("disc");
@@ -112,10 +120,14 @@ export function parseDeviceLinkReportRows(
     const btoNum = Number(kv.get("bto") ?? 0);
     const btoSuffix =
       Number.isFinite(btoNum) && btoNum > 0
-        ? ` (${fmtNumber(btoNum, hass, 0)} beacon timeouts)`
+        ? t(
+            "dev_tools.telem_beacon_timeouts",
+            { count: fmtNumber(btoNum, hass, 0) },
+            overlay,
+          )
         : "";
     rows.push({
-      label: "Wi-Fi Disconnects",
+      label: t("dev_tools.telem_wifi_disc", undefined, overlay),
       value: `${fmtNumber(Number(discRaw), hass, 0)}${btoSuffix}`,
     });
   }
@@ -125,7 +137,7 @@ export function parseDeviceLinkReportRows(
     const [avgStr, minStr] = rssiRaw.split("/", 2);
     if (Number.isFinite(Number(avgStr)) && Number.isFinite(Number(minStr))) {
       rows.push({
-        label: "Wi-Fi Avg / Min",
+        label: t("dev_tools.telem_wifi_avg_min", undefined, overlay),
         value: `${fmtNumber(Number(avgStr), hass, 0)} / ${fmtNumber(Number(minStr), hass, 0)} dBm`,
       });
     }
@@ -136,10 +148,10 @@ export function parseDeviceLinkReportRows(
     const gapNum = Number(kv.get("gap") ?? 0);
     const gapSuffix =
       Number.isFinite(gapNum) && gapNum > 0
-        ? ` (max gap ${formatTelemetryDuration(gapNum)})`
+        ? t("dev_tools.telem_max_gap", { duration: formatTelemetryDuration(gapNum) }, overlay)
         : "";
     rows.push({
-      label: "HA Sessions",
+      label: t("dev_tools.telem_ha_sessions", undefined, overlay),
       value: `${fmtNumber(Number(haRaw), hass, 0)}${gapSuffix}`,
     });
   }
@@ -149,10 +161,10 @@ export function parseDeviceLinkReportRows(
     const lsNum = Number(kv.get("ls") ?? 0);
     const lsSuffix =
       Number.isFinite(lsNum) && lsNum > 0
-        ? ` (${fmtNumber(lsNum, hass, 0)} cycles)`
+        ? t("dev_tools.telem_cycles", { count: fmtNumber(lsNum, hass, 0) }, overlay)
         : "";
     rows.push({
-      label: "Light Sleep Duty",
+      label: t("dev_tools.telem_light_sleep", undefined, overlay),
       value: `${fmtNumber(Number(slpRaw), hass, 1)}%${lsSuffix}`,
     });
   }
@@ -162,8 +174,16 @@ export function parseDeviceLinkReportRows(
     const parts = nvsRaw.split("/");
     if (parts.length >= 3 && parts.every((p) => Number.isFinite(Number(p)))) {
       rows.push({
-        label: "NVS Flash Writes",
-        value: `${fmtNumber(Number(parts[0]), hass, 0)} writes (${fmtNumber(Number(parts[1]), hass, 0)} erases, ${fmtNumber(Number(parts[2]), hass, 0)} ms max)`,
+        label: t("dev_tools.telem_nvs_writes", undefined, overlay),
+        value: t(
+          "dev_tools.telem_nvs_value",
+          {
+            writes: fmtNumber(Number(parts[0]), hass, 0),
+            erases: fmtNumber(Number(parts[1]), hass, 0),
+            maxMs: fmtNumber(Number(parts[2]), hass, 0),
+          },
+          overlay,
+        ),
       });
     }
   }
@@ -174,6 +194,7 @@ export function parseDeviceLinkReportRows(
 export function parseDeviceHardwareManifestRows(
   rawState: string | null | undefined,
   hass?: HomeAssistant | null,
+  overlay?: Readonly<Record<string, string>> | null,
 ): DiagnosticsTelemetryRow[] {
   if (!isValidTelemetryState(rawState)) return [];
   const trimmed = rawState.trim();
@@ -191,7 +212,11 @@ export function parseDeviceHardwareManifestRows(
   const rows: DiagnosticsTelemetryRow[] = [];
   const board = typeof parsed.board === "string" ? parsed.board.trim() : "";
   if (board) {
-    rows.push({ label: "Hardware Board", value: board, code: true });
+    rows.push({
+      label: t("dev_tools.telem_board", undefined, overlay),
+      value: board,
+      code: true,
+    });
   }
 
   const chip = typeof parsed.chip === "string" ? parsed.chip.trim() : "";
@@ -199,15 +224,21 @@ export function parseDeviceHardwareManifestRows(
   if (chip) {
     const psramSuffix =
       Number.isFinite(psramMb) && psramMb > 0
-        ? ` • ${fmtNumber(psramMb, hass, 0)} MB PSRAM`
+        ? t("dev_tools.telem_psram_suffix", { mb: fmtNumber(psramMb, hass, 0) }, overlay)
         : "";
-    rows.push({ label: "Processor & PSRAM", value: `${chip}${psramSuffix}` });
+    rows.push({
+      label: t("dev_tools.telem_processor", undefined, overlay),
+      value: `${chip}${psramSuffix}`,
+    });
   }
 
   const hasDisplay = Number(parsed.display ?? 0) === 1 && parsed.shape !== "none";
   if (parsed.display !== undefined) {
     if (!hasDisplay) {
-      rows.push({ label: "Display Panel", value: "Headless" });
+      rows.push({
+        label: t("dev_tools.telem_display_panel", undefined, overlay),
+        value: t("dev_tools.telem_headless", undefined, overlay),
+      });
     } else {
       const w = Number(parsed.w ?? 0);
       const h = Number(parsed.h ?? 0);
@@ -216,24 +247,36 @@ export function parseDeviceHardwareManifestRows(
         parsed.ips === 1 ? "IPS" : parsed.ips === 0 ? "AMOLED" : "";
       if (w > 0 && h > 0) {
         const parts = [`${w}×${h}`, shape, panelTech].filter(Boolean);
-        rows.push({ label: "Display Panel", value: parts.join(" ") });
+        rows.push({
+          label: t("dev_tools.telem_display_panel", undefined, overlay),
+          value: parts.join(" "),
+        });
       }
     }
   }
 
   const traits: string[] = [];
-  if (Number(parsed.touch) === 1) traits.push("Touch");
-  if (Number(parsed.mic) === 1) traits.push("Mic");
-  if (Number(parsed.spk) === 1) traits.push("Speaker");
+  if (Number(parsed.touch) === 1) traits.push(t("dev_tools.trait_touch", undefined, overlay));
+  if (Number(parsed.mic) === 1) traits.push(t("dev_tools.trait_mic", undefined, overlay));
+  if (Number(parsed.spk) === 1) traits.push(t("dev_tools.trait_speaker", undefined, overlay));
   if (Number(parsed.mic) !== 1 && Number(parsed.spk) !== 1 && Number(parsed.audio) === 1) {
-    traits.push("Audio");
+    traits.push(t("dev_tools.trait_audio", undefined, overlay));
   }
-  if (Number(parsed.imu) === 1) traits.push("IMU");
-  if (Number(parsed.battery) === 1) traits.push("Battery");
-  if (Number(parsed.wearable) === 1) traits.push("Wearable");
-  if (Number(parsed.stationary) === 1) traits.push("Stationary");
+  if (Number(parsed.imu) === 1) traits.push(t("dev_tools.trait_imu", undefined, overlay));
+  if (Number(parsed.battery) === 1) {
+    traits.push(t("dev_tools.trait_battery", undefined, overlay));
+  }
+  if (Number(parsed.wearable) === 1) {
+    traits.push(t("dev_tools.trait_wearable", undefined, overlay));
+  }
+  if (Number(parsed.stationary) === 1) {
+    traits.push(t("dev_tools.trait_stationary", undefined, overlay));
+  }
   if (traits.length) {
-    rows.push({ label: "Hardware Traits", value: traits.join(", ") });
+    rows.push({
+      label: t("dev_tools.telem_traits", undefined, overlay),
+      value: traits.join(", "),
+    });
   }
 
   return rows;
@@ -251,8 +294,8 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
     (data?.system_devices || []).find((d) => d.subentry_id === store.activeSubentryId) ||
     (data?.system_devices || []).find((d) => d.is_current);
 
-  const networkItems = store.getSectionItems("network");
-  const developerItems = store.getSectionItems("developer");
+  const networkItems = store.entity.getSectionItems("network");
+  const developerItems = store.entity.getSectionItems("developer");
 
   const networkControlItems = networkItems.filter((it) =>
     INTERACTIVE_ENTITY_DOMAINS.has(it.domain),
@@ -272,7 +315,7 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
   };
 
   const winRow = (curDevEntry?.ble_survey_rows || []).find((r) => r.is_winner);
-  let signalText = "—";
+  let signalText = store.t("common.unknown");
   if (!isBleOnly) {
     if (curDevEntry?.wifi_rssi !== null && curDevEntry?.wifi_rssi !== undefined) {
       signalText = `${fmtNumber(curDevEntry.wifi_rssi, store.hass, 0)} dBm`;
@@ -291,12 +334,12 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
   const rawSw = String(
     live.device_sw_version || esp?.device?.sw_version || findNetworkState("firmware_version") || "",
   ).replace(/^v/i, "");
-  const fwVersionText = rawSw ? `v${rawSw}` : "—";
-  const modelText = curDevEntry?.model_label || esp?.device?.model || "—";
+  const fwVersionText = rawSw ? `v${rawSw}` : store.t("common.unknown");
+  const modelText = curDevEntry?.model_label || esp?.device?.model || store.t("common.unknown");
   const ipStr = curDevEntry?.ip_address || findNetworkState("ip_address") || "";
   const macStr = esp?.device?.mac || findNetworkState("mac_address") || "";
 
-  const weatherSimPref = store.getPref("weather_sim_condition");
+  const weatherSimPref = store.entity.getPref("weather_sim_condition");
   const devControlItems = developerItems.filter(
     (it) =>
       INTERACTIVE_ENTITY_DOMAINS.has(it.domain) &&
@@ -312,8 +355,16 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
   const manifestEntity = networkItems.find(
     (it) => it.key === "hardware_manifest" || it.entity_id.endsWith("_hardware_manifest"),
   );
-  const linkRows = parseDeviceLinkReportRows(linkReportEntity?.state, store.hass);
-  const manifestRows = parseDeviceHardwareManifestRows(manifestEntity?.state, store.hass);
+  const linkRows = parseDeviceLinkReportRows(
+    linkReportEntity?.state,
+    store.hass,
+    store.localeOverlay,
+  );
+  const manifestRows = parseDeviceHardwareManifestRows(
+    manifestEntity?.state,
+    store.hass,
+    store.localeOverlay,
+  );
   const hasDeveloperDrawer =
     !isBleOnly &&
     Boolean(
@@ -325,96 +376,134 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
     );
 
   const curPinPolicy = String(cfg.security_pin_policy || "auto");
+  const effectivePinPolicyLabel = store.tPrefOption(
+    "security_pin_policy",
+    live.effective_security_pin_policy || curPinPolicy,
+  );
+  const localizedPinPolicyOptions = SECURITY_PIN_POLICY_OPTIONS.map((opt) => ({
+    value: opt.value,
+    label: store.tPrefOption("security_pin_policy", opt.value),
+  }));
   const hasPin = store.hasConfiguredSecurityPin;
+  const hasOpenInHa = Boolean(links.esphome_device_id || links.latter_device_id);
 
   return html`<section id="view-tools">
+    ${renderDeviceOfflineBanner(store)}
+
     <div class="columns">
       <div class="column">
         ${renderCard({
           id: "card-device-diagnostics",
-          handoffActive: Boolean(store.isHandoffTarget?.("card-device-diagnostics")),
-          heading: html`<h3 class="card-title">Diagnostics</h3>`,
+          handoffActive: store.isHandoffTarget("card-device-diagnostics"),
+          heading: html`<h3 class="card-title">${store.t("card.diagnostics")}</h3>`,
           contentClass: "stack",
           body: html`${networkControlItems.length
               ? html`<div class="settings-list">
-                  ${networkControlItems.map((it) => renderNativeControlRow(store, it))}
+                  ${networkControlItems.map((it) => renderDeviceEntityRow(store, it))}
                 </div>`
               : nothing}
             <div class="kv-list">
               ${isBleOnly
                 ? html`<div class="kv-row">
-                      <span>BLE Signal</span>
+                      <span>${store.t("dev_tools.ble_signal")}</span>
                       <strong>${signalText}</strong>
                     </div>
                     <div class="kv-row">
-                      <span>BLE Target</span>
-                      <strong>${cfg.ble_target_address ? html`<code>${cfg.ble_target_address}</code>` : "—"}</strong>
+                      <span>${store.t("dev_tools.ble_target")}</span>
+                      <strong>
+                        ${cfg.ble_target_address
+                          ? html`<code>${cfg.ble_target_address}</code>`
+                          : store.t("common.unknown")}
+                      </strong>
                     </div>`
                 : html`<div class="kv-row">
-                      <span>Model</span>
+                      <span>${store.t("dev_tools.model")}</span>
                       <strong>${modelText}</strong>
                     </div>
                     <div class="kv-row">
-                      <span>ESPHome Node</span>
-                      <strong><code id="diag-node-name">${cfg.device_slug || "—"}</code></strong>
+                      <span>${store.t("dev_tools.esphome_node")}</span>
+                      <strong>
+                        <code id="diag-node-name">
+                          ${cfg.device_slug || store.t("common.unknown")}
+                        </code>
+                      </strong>
                     </div>
                     <div class="kv-row">
-                      <span>Firmware Version</span>
+                      <span>${store.t("dev_tools.firmware_version")}</span>
                       <strong>${fwVersionText}</strong>
                     </div>
                     <div class="kv-row">
-                      <span>Latter SDK</span>
-                      <strong id="diag-sdk-rev">${live.sdk_rev || "—"}</strong>
+                      <span>${store.t("dev_tools.latter_sdk")}</span>
+                      <strong id="diag-sdk-rev">
+                        ${live.sdk_rev || store.t("common.unknown")}
+                      </strong>
                     </div>
                     <div class="kv-row">
-                      <span>Wi-Fi Signal</span>
+                      <span>${store.t("dev_tools.wifi_signal")}</span>
                       <strong>${signalText}</strong>
                     </div>
                     <div class="kv-row">
-                      <span>IP Address</span>
-                      <strong>${ipStr ? html`<code>${ipStr}</code>` : "—"}</strong>
+                      <span>${store.t("dev_tools.ip_address")}</span>
+                      <strong>
+                        ${ipStr ? html`<code>${ipStr}</code>` : store.t("common.unknown")}
+                      </strong>
                     </div>
                     ${macStr
                       ? html`<div class="kv-row">
-                          <span>MAC Address</span>
+                          <span>${store.t("dev_tools.mac_address")}</span>
                           <strong><code>${macStr}</code></strong>
                         </div>`
                       : nothing}
-                    ${extraNetworkSensorItems.map((it) => renderNativeControlRow(store, it))}`}
+                    ${extraNetworkSensorItems.map((it) => renderDeviceEntityRow(store, it))}`}
             </div>
-            ${links.latter_device_id || links.entry_id
-              ? html`<div class="settings-list">
-                  ${renderSettingsRow({
+            <div class="settings-list">
+              ${links.latter_device_id || links.entry_id
+                ? renderSettingsRow({
                     id: "row-diagnostics",
-                    label: "Diagnostics File",
-                    description: "Downloads redacted Home Assistant diagnostics for troubleshooting.",
+                    label: store.t("dev_tools.diagnostics_file_label"),
+                    description: store.t("dev_tools.diagnostics_file_desc"),
                     control: html`<button
                       type="button"
-                      @click=${() => void store.downloadDeviceDiagnostics()}
+                      @click=${() => void store.tools.downloadDeviceDiagnostics()}
                       class="btn btn-secondary btn-compact"
                     >
-                      Download Diagnostics
+                      ${store.t("action.download_diagnostics")}
                     </button>`,
-                  })}
-                </div>`
-              : nothing}
+                  })
+                : nothing}
+              ${isBleOnly
+                ? renderSettingsRow({
+                    label: store.t("dev_tools.backup_row_label"),
+                    description: store.t("dev_tools.backup_row_desc"),
+                    control: html`<button
+                      type="button"
+                      @click=${() => void store.tools.exportBackup(store.activeSubentryId)}
+                      class="btn btn-secondary btn-compact"
+                    >
+                      ${store.t("action.download_backup")}
+                    </button>`,
+                  })
+                : nothing}
+            </div>
             ${hasDeveloperDrawer
               ? html`<details class="sub-collapsible">
-                  <summary>Developer &amp; Telemetry</summary>
+                  <summary>${store.t("card.developer_telemetry")}</summary>
                   <div class="card-content">
                     ${weatherSimPref || devControlItems.length
                       ? html`<div class="settings-list">
                           ${weatherSimPref ? renderPrefControlRow(store, weatherSimPref) : nothing}
-                          ${devControlItems.map((it) => renderNativeControlRow(store, it))}
+                          ${devControlItems.map((it) => renderDeviceEntityRow(store, it))}
                         </div>`
                       : nothing}
                     ${devSensorItems.length || linkRows.length || manifestRows.length
                       ? html`<div class="kv-list">
-                          ${devSensorItems.map((it) => renderNativeControlRow(store, it))}
+                          ${devSensorItems.map((it) => renderDeviceEntityRow(store, it))}
                           ${[...linkRows, ...manifestRows].map(
                             (row) => html`<div class="kv-row">
                               <span>${row.label}</span>
-                              <strong>${row.code ? html`<code>${row.value}</code>` : row.value}</strong>
+                              <strong>
+                                ${row.code ? html`<code>${row.value}</code>` : row.value}
+                              </strong>
                             </div>`,
                           )}
                         </div>`
@@ -422,17 +511,16 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                   </div>
                 </details>`
               : nothing}`,
-          footerActions:
-            !isBleOnly && (links.esphome_device_id || links.latter_device_id)
-              ? html`<button
-                  type="button"
-                  id="btn-tools-open-in-ha"
-                  @click=${() => store.openDeviceInHa()}
-                  class="btn btn-text"
-                >
-                  Open in ESPHome
-                </button>`
-              : nothing,
+          footerActions: hasOpenInHa
+            ? html`<button
+                type="button"
+                id="btn-tools-open-in-ha"
+                @click=${() => store.openDeviceInHa(isBleOnly)}
+                class="btn btn-text"
+              >
+                ${store.t("action.open_in_ha")}
+              </button>`
+            : nothing,
         })}
       </div>
 
@@ -440,31 +528,32 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
         ${!isBleOnly
           ? html`${renderCard({
                 id: "card-device-security",
-                title: "Perimeter Security",
-                subtitle:
-                  "Governs unlocking doors, disarming alarms, and opening garage or gate covers from this Device.",
+                title: store.t("card.perimeter_security"),
+                subtitle: store.t("dev_tools.perimeter_subtitle"),
                 contentClass: "settings-list",
                 body: html`${renderSelectRow({
                     id: "cfg-security_pin_policy",
-                    label: "Perimeter Security Policy",
-                    description: html`Auto requires a PIN on stationary wall panels when configured and allows roaming personal Devices. Effective policy: <strong>${live.effective_security_pin_policy || curPinPolicy}</strong>.`,
+                    label: store.tPrefLabel("security_pin_policy"),
+                    description: html`${store.t("dev_tools.pin_policy_desc_prefix")}
+                      <strong>${effectivePinPolicyLabel}</strong>.`,
                     value: curPinPolicy,
-                    rawOptions: SECURITY_PIN_POLICY_OPTIONS,
+                    rawOptions: localizedPinPolicyOptions,
                     onChange: (val) =>
-                      store.stageDeviceSetting(
+                      store.entity.stageDeviceSetting(
                         "security_pin_policy",
                         val,
                         "cfg-security_pin_policy",
                       ),
                   })}
                   ${renderSettingsRow({
-                    label: "Security PIN",
-                    description:
-                      "Write-only 4 to 12 digit numeric PIN verified server-side (PBKDF2-HMAC-SHA256) when the on-device keypad prompts. Never echoed back to the browser.",
+                    label: store.t("dev_tools.security_pin_label"),
+                    description: store.t("dev_tools.security_pin_desc"),
                     stacked: true,
                     control: html`<div class="input-action-row">
                       <span class="chip ${hasPin ? "chip-success" : ""}">
-                        ${hasPin ? "PIN configured" : "Not set"}
+                        ${hasPin
+                          ? store.t("status.pin_configured")
+                          : store.t("status.pin_not_set")}
                       </span>
                       <input
                         type="password"
@@ -472,9 +561,11 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                         inputmode="numeric"
                         pattern="[0-9]*"
                         autocomplete="new-password"
-                        aria-label="New Security PIN (4 to 12 digits)"
-                        placeholder=${hasPin ? "Enter new PIN to replace…" : "4 to 12 digits"}
-                        .value=${store.devicePinDraft}
+                        aria-label=${store.t("dev_tools.pin_input_aria")}
+                        placeholder=${hasPin
+                          ? store.t("dev_tools.pin_placeholder_replace")
+                          : store.t("dev_tools.pin_placeholder_new")}
+                        .value=${focusSafe(store.devicePinDraft)}
                         @input=${(ev: Event) => {
                           store.devicePinDraft = (ev.currentTarget as HTMLInputElement).value;
                           store.host.requestUpdate();
@@ -483,19 +574,19 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                       <button
                         type="button"
                         ?disabled=${store.pinBusy || !store.devicePinDraft.trim()}
-                        @click=${() => void store.saveSecurityPin("device")}
+                        @click=${() => void store.tools.saveSecurityPin("device")}
                         class="btn btn-primary btn-compact"
                       >
-                        Save PIN
+                        ${store.t("dev_tools.save_pin")}
                       </button>
                       ${hasPin
                         ? html`<button
                             type="button"
                             ?disabled=${store.pinBusy}
-                            @click=${() => void store.clearSecurityPin("device")}
+                            @click=${() => store.tools.requestClearSecurityPin("device")}
                             class="btn btn-danger btn-compact"
                           >
-                            Clear PIN
+                            ${store.t("dev_tools.clear_pin")}
                           </button>`
                         : nothing}
                     </div>`,
@@ -503,60 +594,60 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
               })}
               ${renderCard({
                 id: "card-replace-hardware",
-                heading: html`<h3 class="card-title">Replace Hardware</h3>`,
+                heading: html`<h3 class="card-title">${store.t("card.replace_hardware")}</h3>`,
                 contentClass: "stack",
                 body: html`<p class="row-description">
-                    Moving to a replacement board? Download this Device's backup first, add the new ESPHome board in Home Assistant, and restore the backup onto it from System Tools.
+                    ${store.t("card.replace_hardware_body")}
                   </p>
                   <div class="input-action-row">
                     <button
                       type="button"
-                      @click=${() => void store.exportBackup(store.activeSubentryId)}
+                      id="btn-reconfigure-hardware"
+                      @click=${() => store.openDeviceInHa(true)}
                       class="btn btn-secondary"
                     >
-                      Download Device Backup
+                      ${store.t("dev_tools.reconfigure_in_ha")}
                     </button>
                     <button
                       type="button"
-                      @click=${() => store.openSystemSection("system_tools", "card-backup-restore")}
+                      id="btn-download-device-backup"
+                      @click=${() => void store.tools.exportBackup(store.activeSubentryId)}
                       class="btn btn-text"
                     >
-                      Open Backup &amp; Restore
+                      ${store.t("action.download_backup")}
                     </button>
                   </div>`,
               })}`
           : nothing}
 
         ${renderCard({
-          heading: html`<h3 class="card-title">Danger Zone</h3>`,
+          heading: html`<h3 class="card-title">${store.t("card.danger_zone")}</h3>`,
           danger: true,
           contentClass: "settings-list",
           body: html`${renderSettingsRow({
-              label: "Reset to Defaults",
-              description:
-                "Resets on-device preferences and/or Latter settings while keeping Wi-Fi and Home Assistant pairing.",
+              label: store.t("dev_tools.reset_defaults_label"),
+              description: store.t("dev_tools.reset_defaults_desc"),
               control: html`<button
                 type="button"
-                @click=${() => store.openResetDeviceModal()}
+                @click=${() => store.tools.openResetDeviceModal()}
                 class="btn btn-danger"
               >
-                Reset to Defaults
+                ${store.t("dev_tools.reset_defaults_label")}
               </button>`,
             })}
             ${renderSettingsRow({
-              label: "Remove Device",
-              description:
-                "Removes this subentry from Latter. The ESPHome device remains in Home Assistant.",
+              label: store.t("dev_tools.remove_device_label"),
+              description: store.t("dev_tools.remove_device_desc"),
               control: html`<button
                 type="button"
                 @click=${() =>
-                  store.openRemoveDeviceModal(
+                  store.tools.openRemoveDeviceModal(
                     store.activeSubentryId,
-                    data?.title || cfg.device_slug || "Device",
+                    data?.title || cfg.device_slug || store.t("devices.col_device"),
                   )}
                 class="btn btn-danger"
               >
-                Remove Device
+                ${store.t("dev_tools.remove_device_label")}
               </button>`,
             })}`,
         })}

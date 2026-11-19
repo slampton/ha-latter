@@ -139,10 +139,13 @@ async def async_execute_doorbell_intercom(
             stored_hash = (
                 str(global_cfg.get(CONF_SECURITY_PIN_HASH) or "").strip() or None
             )
-        allowed, err_key = check_perimeter_action_allowed(
-            getattr(coordinator, "security_pin_policy", "require_pin"),
-            provided_code=code,
-            stored_pin_hash=stored_hash,
+        eff_pol = getattr(coordinator, "security_pin_policy", "require_pin")
+        allowed, err_key = await hass.async_add_executor_job(
+            lambda: check_perimeter_action_allowed(
+                eff_pol,
+                provided_code=code,
+                stored_pin_hash=stored_hash,
+            )
         )
         if not allowed:
             raise ServiceValidationError(

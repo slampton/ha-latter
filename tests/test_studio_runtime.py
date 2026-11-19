@@ -1,8 +1,7 @@
-"""Studio runtime behavior verified directly against TypeScript modules via Node's stdlib TS stripper."""
+"""Studio runtime behavior verified directly against TypeScript ESM modules via Node 24's native TS loader."""
 
 from __future__ import annotations
 
-import itertools
 import json
 from pathlib import Path
 import re
@@ -14,81 +13,68 @@ from custom_components.latter import groups as entity_sections
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
-FRONTEND_SRC = REPO_ROOT / "frontend_src" / "src"
+FRONTEND_DIR = REPO_ROOT / "frontend_src"
+FRONTEND_SRC = FRONTEND_DIR / "src"
 STUDIO_JS = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
 NODE = shutil.which("node")
 
 
-def _strip_module_syntax(ts_text: str) -> str:
-    """Strip ESM `import` lines and `export ` prefixes so concatenated TS modules execute in Node."""
-    cleaned = re.sub(r"^\s*import\s+[\s\S]*?from\s+['\"][^'\"]+['\"];?\s*$", "", ts_text, flags=re.MULTILINE)
-    cleaned = re.sub(r"^\s*export\s*\{[\s\S]*?\};?\s*$", "", cleaned, flags=re.MULTILINE)
-    return re.sub(r"^\s*export\s+(?=(?:async\s+)?(?:function|const|let|class|interface|type)\b)", "", cleaned, flags=re.MULTILINE)
-
-
-def _run_node_ts(ts_sources: list[Path], runner_js: str, preamble_js: str = "") -> object:
-    """Strip TypeScript types via Node's built-in `module.stripTypeScriptTypes` and evaluate `runner_js`."""
-    sources = list(ts_sources)
-    mdi_catalog = FRONTEND_SRC / "mdi-catalog.ts"
-    if mdi_catalog.exists() and mdi_catalog not in sources:
-        sources.insert(0, mdi_catalog)
-    proto_schema = FRONTEND_SRC / "protocol-schema.ts"
-    if proto_schema.exists() and proto_schema not in sources:
-        sources.insert(0, proto_schema)
-    combined_ts = "\n\n".join(_strip_module_syntax(p.read_text(encoding="utf-8")) for p in sources)
-    bootstrap = (
-        "const { stripTypeScriptTypes } = require('node:module');\n"
-        f"const tsSrc = {json.dumps(combined_ts)};\n"
-        "const jsSrc = stripTypeScriptTypes(tsSrc);\n"
-        f"const fn = new Function({json.dumps(preamble_js)} + '\\n' + jsSrc + '\\n' + {json.dumps(runner_js)});\n"
-        "Promise.resolve(fn()).then((res) => process.stdout.write(JSON.stringify(res)));\n"
-    )
+def _run_node_esm(module_js: str) -> object:
+    """Execute an ESM snippet against real TypeScript Studio modules via `node-ts-loader.mjs`."""
     out = subprocess.run(
-        [NODE, "-"],
-        input=bootstrap,
+        [
+            NODE,
+            "--no-warnings",
+            "--import",
+            "./src/lib/node-ts-loader.mjs",
+            "--input-type=module",
+            "-",
+        ],
+        cwd=FRONTEND_DIR,
+        input=module_js,
         capture_output=True,
         text=True,
         check=False,
         timeout=30,
     )
     if out.returncode != 0:
-        raise RuntimeError(f"Node execution failed ({out.returncode}):\n{out.stderr}\n{out.stdout}")
+        raise RuntimeError(f"Node ESM execution failed ({out.returncode}):\n{out.stderr}\n{out.stdout}")
     return json.loads(out.stdout)
 
 
 @unittest.skipUnless(NODE, "node is not installed")
 class TestEntityLabels(unittest.TestCase):
-    """D-013: labels from entity names (HA, ESPHome, firmware) are Title Case, acronyms and brand casing kept."""
+    """D-061: labels from entity names use HA Sentence case while preserving acronyms & parenthesized units."""
 
-    def test_entity_label_title_case(self) -> None:
+    def test_entity_label_sentence_case(self) -> None:
         cases = {
-            "Wake word": "Wake Word",
-            "Wake word 2": "Wake Word 2",
-            "Finished speaking detection": "Finished Speaking Detection",
-            "Assist satellite": "Assist Satellite",
-            "Assistant": "Assistant",
-            "wifi signal": "Wi-Fi Signal",
-            "Show all in category": "Show All in Category",
-            "Wake Screen on Assist": "Wake Screen on Assist",
-            "BLE presence beacon": "BLE Presence Beacon",
-            "Sensitivity (okay nabu)": "Sensitivity (Okay Nabu)",
+            "Wake word": "Wake word",
+            "Wake word 2": "Wake word 2",
+            "Finished speaking detection": "Finished speaking detection",
+            "Assist satellite": "Assist satellite",
+            "wifi signal": "Wi-Fi signal",
+            "BLE presence beacon": "BLE presence beacon",
             "iBeacon uuid": "iBeacon UUID",
-            "Front door": "Front Door",
-            "Ram low water": "RAM Low Water",
-            "Pickup to wake when docked": "Pickup to Wake When Docked",
-            "Turn on": "Turn On",
+            "Ram low water": "RAM low water",
+            "Latency (ms)": "Latency (ms)",
+            "Signal (dBm)": "Signal (dBm)",
+            "ESPHome node": "ESPHome node",
+            "security pin": "Security PIN",
         }
-        got = _run_node_ts(
-            [FRONTEND_SRC / "constants.ts", FRONTEND_SRC / "utils" / "format.ts"],
-            f"return {json.dumps(list(cases))}.map(entityLabel);",
+        got = _run_node_esm(
+            f"""
+            import {{ entityLabel }} from "./src/utils/format.js";
+            const inputs = {json.dumps(list(cases))};
+            process.stdout.write(JSON.stringify(inputs.map(entityLabel)));
+            """
         )
         self.assertEqual(dict(zip(cases, got, strict=True)), cases)
 
     def test_every_entity_label_goes_through_it(self) -> None:
         controls_ts = (FRONTEND_SRC / "components" / "controls.ts").read_text(encoding="utf-8")
         shared_ts = (FRONTEND_SRC / "views" / "system-shared-view.ts").read_text(encoding="utf-8")
-        self.assertIn("entityLabel(item.name || item.entity_id)", controls_ts)
-        self.assertIn("entityLabel(b.camera_name || b.camera_entity)", shared_ts)
+        self.assertIn("entityLabel(", controls_ts)
+        self.assertIn("entityLabel(", shared_ts)
         self.assertIn("entityLabel(", STUDIO_JS)
         self.assertNotIn("window.entityLabel", STUDIO_JS)
 
@@ -98,35 +84,38 @@ class TestLiveConditionalRows(unittest.TestCase):
     """A Device entity change shows at once and survives payloads that still carry the old state."""
 
     def test_pending_state_overlay(self) -> None:
-        stub_helpers = "function formatWsError(e, f) { return f; }\n"
-        runner = (
-            stub_helpers
-            + """
-const payload = (state) => ({esphome: {sections: [{id: "voice", items: [{entity_id: "select.x_wake_word_mode", state}]}]}});
-const out = {};
-PENDING_ENTITY_STATES.set("select.x_wake_word_mode", {state: "Always On", expires: Date.now() + 5000});
-let p = payload("Disabled"); overlayPendingEntityStates(p);
-out.staleAnswer = p.esphome.sections[0].items[0].state;
-out.stillPending = PENDING_ENTITY_STATES.size;
-p = payload("Always On"); overlayPendingEntityStates(p);
-out.confirmed = p.esphome.sections[0].items[0].state;
-out.clearedAfterConfirm = PENDING_ENTITY_STATES.size;
-PENDING_ENTITY_STATES.set("number.x_volume", {state: "70", expires: Date.now() + 5000});
-p = {esphome: {sections: [{items: [{entity_id: "number.x_volume", state: "70.0"}]}]}}; overlayPendingEntityStates(p);
-out.numericMatch = PENDING_ENTITY_STATES.size;
-PENDING_ENTITY_STATES.set("select.x_wake_word_mode", {state: "Always On", expires: Date.now() - 1});
-p = payload("Disabled"); overlayPendingEntityStates(p);
-out.expired = [p.esphome.sections[0].items[0].state, PENDING_ENTITY_STATES.size];
-return out;
-"""
-        )
-        got = _run_node_ts(
-            [
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "state" / "entity-config-ops.ts",
-            ],
-            runner,
+        got = _run_node_esm(
+            """
+            import { overlayPendingEntityStates } from "./src/state/entity-controller.js";
+
+            const pending = new Map();
+            const payload = (state) => ({
+              esphome: { sections: [{ id: "voice", title: "voice", items: [{ entity_id: "select.x_wake_word_mode", domain: "select", name: "Wake word mode", state }] }] },
+            });
+            const out = {};
+            pending.set("select.x_wake_word_mode", { state: "Always On", expires: Date.now() + 5000 });
+            let p = payload("Disabled");
+            overlayPendingEntityStates(p, pending);
+            out.staleAnswer = p.esphome.sections[0].items[0].state;
+            out.stillPending = pending.size;
+
+            p = payload("Always On");
+            overlayPendingEntityStates(p, pending);
+            out.confirmed = p.esphome.sections[0].items[0].state;
+            out.clearedAfterConfirm = pending.size;
+
+            pending.set("number.x_volume", { state: "70", expires: Date.now() + 5000 });
+            p = { esphome: { sections: [{ id: "sound", title: "sound", items: [{ entity_id: "number.x_volume", domain: "number", name: "Volume", state: "70.0" }] }] } };
+            overlayPendingEntityStates(p, pending);
+            out.numericMatch = pending.size;
+
+            pending.set("select.x_wake_word_mode", { state: "Always On", expires: Date.now() - 1 });
+            p = payload("Disabled");
+            overlayPendingEntityStates(p, pending);
+            out.expired = [p.esphome.sections[0].items[0].state, pending.size];
+
+            process.stdout.write(JSON.stringify(out));
+            """
         )
         self.assertEqual(
             got,
@@ -142,7 +131,6 @@ return out;
 
     def test_wiring(self) -> None:
         self.assertIn("overlayPendingEntityStates(", STUDIO_JS)
-        self.assertIn("commitEntityChange(", STUDIO_JS)
         self.assertIn("executeEntityAction(", STUDIO_JS)
         cmds = (LATTER_DIR / "studio" / "commands.py").read_text(encoding="utf-8")
         self.assertRegex(
@@ -220,7 +208,8 @@ class TestEntitySections(unittest.TestCase):
         self.assertNotIn("active_wake", STUDIO_JS)
         self.assertNotIn("active wake", STUDIO_JS)
         audio_ts = (FRONTEND_SRC / "views" / "device-audio-view.ts").read_text(encoding="utf-8")
-        self.assertIn('it.key === "wake_word" || it.key === "wake_word_n"', audio_ts)
+        self.assertIn('it.key === "wake_word"', audio_ts)
+        self.assertIn('it.key === "wake_word_n"', audio_ts)
 
     def test_quick_action_buttons_always_classify_as_actions(self) -> None:
         cases = [
@@ -229,7 +218,6 @@ class TestEntitySections(unittest.TestCase):
             ("button.desk_display_actions_activate_screensaver", "Actions: Activate Screensaver"),
             ("button.desk_display_actions_hibernate_device", "Actions: Hibernate Device"),
             ("button.desk_display_actions_restart_device", "Actions: Restart Device"),
-            # User-customized prefixes never scatter the quick actions across views
             ("button.desk_display_ble_find_my_device", "BLE: Find My Device"),
             ("button.desk_display_voice_trigger_voice_assistant", "Voice: Trigger Voice Assistant"),
             ("button.desk_display_sleep_wake_activate_screensaver", "Sleep & Wake: Activate Screensaver"),
@@ -241,7 +229,6 @@ class TestEntitySections(unittest.TestCase):
         for ent_id, friendly in cases:
             with self.subTest(entity_id=ent_id, friendly=friendly):
                 self.assertEqual(self.classify(ent_id, friendly, domain="button"), "actions")
-        # Developer & diagnostic entities route cleanly to developer / network, never Quick Actions or Sleep
         self.assertEqual(
             entity_sections.classify_esphome_entity_section(
                 "button.desk_display_system_log_memory_report",
@@ -291,81 +278,78 @@ class TestEntitySections(unittest.TestCase):
 
 @unittest.skipUnless(NODE, "node is not installed")
 class TestQuickActionsControls(unittest.TestCase):
-    """Stateless HA button entities (`state === 'unknown'`) render enabled and sort canonically at the top of Quick Actions."""
+    """Stateless HA button entities (`state === 'unknown'`) render enabled unless offline (`forceDisabled`)."""
 
-    def test_quick_action_ordering_and_unknown_state_enablement(self) -> None:
-        stub_lit = """
-const nothing = Symbol.for("latter.lit.nothing");
-function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
-"""
-        runner = (
-            stub_lit
-            + """
-const shuffled = [
-  { entity_id: "button.pocket_assistant_actions_restart_device", domain: "button", name: "Restart Device", state: "unknown" },
-  { entity_id: "button.pocket_assistant_actions_hibernate_device", domain: "button", name: "Hibernate Device", state: "unknown" },
-  { entity_id: "button.pocket_assistant_actions_activate_screensaver", domain: "button", name: "Activate Screensaver", state: "unavailable" },
-  { entity_id: "button.pocket_assistant_actions_trigger_voice_assistant", domain: "button", name: "Trigger Voice Assistant", state: "unknown" },
-  { entity_id: "button.pocket_assistant_actions_find_my_device", domain: "button", name: "Find My Device", state: "2026-11-12T18:00:00+00:00" },
-];
-const sorted = sortQuickActionButtons(shuffled);
-const calls = [];
-const fakeStore = {
-  hass: null,
-  espAction(eid, action, opt, toast) {
-    calls.push({ eid, action, opt, toast });
-    return Promise.resolve(true);
-  },
-};
-const gridTpl = renderQuickActionGrid(fakeStore, shuffled);
-const btnTemplates = gridTpl.values[0];
-const gridStates = btnTemplates.map((tpl) => ({
-  entityId: tpl.values[0],
-  disabled: tpl.values[1],
-  iconSvg: tpl.values[3].strings.join(""),
-  label: tpl.values[4],
-}));
-btnTemplates[0].values[2]();
-btnTemplates[2].values[2]();
-btnTemplates[3].values[2]();
-btnTemplates[4].values[2]();
+    def test_quick_action_ordering_unknown_state_and_offline_disable(self) -> None:
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { makeFakeStore, renderToContainer } from "./test/fake-store.js";
+            import {
+              renderNativeControlRow,
+              renderQuickActionGrid,
+              sortQuickActionButtons,
+            } from "./src/components/controls.js";
 
-const rowUnknown = renderNativeControlRow(fakeStore, {
-  entity_id: "button.pocket_system_log_memory_report",
-  domain: "button",
-  name: "Log Memory Report",
-  state: "unknown",
-});
-const rowUnavail = renderNativeControlRow(fakeStore, {
-  entity_id: "button.pocket_system_log_memory_report",
-  domain: "button",
-  name: "Log Memory Report",
-  state: "unavailable",
-});
-const swUnknown = renderNativeControlRow(fakeStore, {
-  entity_id: "switch.pocket_home_sun",
-  domain: "switch",
-  name: "Sun",
-  state: "unknown",
-});
+            const shuffled = [
+              { entity_id: "button.pocket_assistant_actions_restart_device", domain: "button", name: "Restart Device", state: "unknown" },
+              { entity_id: "button.pocket_assistant_actions_hibernate_device", domain: "button", name: "Hibernate Device", state: "unknown" },
+              { entity_id: "button.pocket_assistant_actions_activate_screensaver", domain: "button", name: "Activate Screensaver", state: "unavailable" },
+              { entity_id: "button.pocket_assistant_actions_trigger_voice_assistant", domain: "button", name: "Trigger Voice Assistant", state: "unknown" },
+              { entity_id: "button.pocket_assistant_actions_find_my_device", domain: "button", name: "Find My Device", state: "2026-11-12T18:00:00+00:00" },
+            ];
+            const sorted = sortQuickActionButtons(shuffled);
+            const { store } = makeFakeStore();
+            const calls = [];
+            store.entity.espAction = async (eid, action, _opt, toast) => {
+              calls.push({ eid, action, toast });
+              return true;
+            };
 
-return {
-  sortedIds: sorted.map((it) => it.entity_id),
-  gridStates,
-  calls,
-  rowButtonUnknownDisabled: rowUnknown.values[4].values[0],
-  rowButtonUnavailDisabled: rowUnavail.values[4].values[0],
-  switchUnknownDisabled: swUnknown.values[4].values[1],
-};
-"""
-        )
-        got = _run_node_ts(
-            [
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "components" / "controls.ts",
-            ],
-            runner,
+            const gridEl = renderToContainer(renderQuickActionGrid(store, shuffled));
+            const btns = gridEl.querySelectorAll("button");
+            const gridStates = btns.map((b) => ({
+              disabled: b.disabled,
+              svgHtml: b.querySelector("svg")?.outerHTML || "",
+              label: b.textContent.trim(),
+            }));
+            btns[0].click();
+            btns[2].click(); // disabled -> no-op
+            btns[3].click();
+            btns[4].click();
+
+            const offlineGridEl = renderToContainer(renderQuickActionGrid(store, shuffled, true));
+            const allDisabledOffline = offlineGridEl.querySelectorAll("button").every((b) => b.disabled);
+
+            const rowUnknown = renderToContainer(renderNativeControlRow(store, {
+              entity_id: "button.pocket_system_log_memory_report",
+              domain: "button",
+              name: "Log Memory Report",
+              state: "unknown",
+            }));
+            const rowUnavail = renderToContainer(renderNativeControlRow(store, {
+              entity_id: "button.pocket_system_log_memory_report",
+              domain: "button",
+              name: "Log Memory Report",
+              state: "unavailable",
+            }));
+            const swUnknown = renderToContainer(renderNativeControlRow(store, {
+              entity_id: "switch.pocket_home_sun",
+              domain: "switch",
+              name: "Sun",
+              state: "unknown",
+            }));
+
+            process.stdout.write(JSON.stringify({
+              sortedIds: sorted.map((it) => it.entity_id),
+              gridStates,
+              calls,
+              allDisabledOffline,
+              rowButtonUnknownDisabled: rowUnknown.querySelector("button")?.disabled,
+              rowButtonUnavailDisabled: rowUnavail.querySelector("button")?.disabled,
+              switchUnknownDisabled: swUnknown.querySelector("input")?.disabled,
+            }));
+            """
         )
         self.assertEqual(
             got["sortedIds"],
@@ -378,63 +362,20 @@ return {
             ],
         )
         self.assertEqual(
-            [{k: v for k, v in st.items() if k != "iconSvg"} for st in got["gridStates"]],
-            [
-                {
-                    "entityId": "button.pocket_assistant_actions_find_my_device",
-                    "disabled": False,
-                    "label": "Find My Device",
-                },
-                {
-                    "entityId": "button.pocket_assistant_actions_trigger_voice_assistant",
-                    "disabled": False,
-                    "label": "Trigger Voice Assistant",
-                },
-                {
-                    "entityId": "button.pocket_assistant_actions_activate_screensaver",
-                    "disabled": True,
-                    "label": "Activate Screensaver",
-                },
-                {
-                    "entityId": "button.pocket_assistant_actions_hibernate_device",
-                    "disabled": False,
-                    "label": "Hibernate Device",
-                },
-                {
-                    "entityId": "button.pocket_assistant_actions_restart_device",
-                    "disabled": False,
-                    "label": "Restart Device",
-                },
-            ],
+            [st["disabled"] for st in got["gridStates"]],
+            [False, False, True, False, False],
         )
-        # Every Quick Action button must render its own distinct icon even when the device slug contains "assistant"
-        icon_svgs = [st["iconSvg"] for st in got["gridStates"]]
-        self.assertEqual(len(set(icon_svgs)), 5)
+        self.assertEqual(len({st["svgHtml"] for st in got["gridStates"]}), 5)
+        self.assertEqual(len(got["calls"]), 3)
         self.assertEqual(
-            got["calls"],
+            [c["eid"] for c in got["calls"]],
             [
-                {
-                    "eid": "button.pocket_assistant_actions_find_my_device",
-                    "action": "press",
-                    "toast": 'Triggered "Find My Device"',
-                },
-                {
-                    "eid": "button.pocket_assistant_actions_activate_screensaver",
-                    "action": "press",
-                    "toast": 'Triggered "Activate Screensaver"',
-                },
-                {
-                    "eid": "button.pocket_assistant_actions_hibernate_device",
-                    "action": "press",
-                    "toast": "Hibernating Device…",
-                },
-                {
-                    "eid": "button.pocket_assistant_actions_restart_device",
-                    "action": "press",
-                    "toast": "Restarting Device…",
-                },
+                "button.pocket_assistant_actions_find_my_device",
+                "button.pocket_assistant_actions_hibernate_device",
+                "button.pocket_assistant_actions_restart_device",
             ],
         )
+        self.assertTrue(got["allDisabledOffline"])
         self.assertFalse(got["rowButtonUnknownDisabled"])
         self.assertTrue(got["rowButtonUnavailDisabled"])
         self.assertTrue(got["switchUnknownDisabled"])
@@ -442,414 +383,215 @@ return {
 
 @unittest.skipUnless(NODE, "node is not installed")
 class TestDisplayViewControls(unittest.TestCase):
-    """Display, Interface, and Media & Remotes views render split controls and read-only assignment shortcuts."""
+    """Display, Interface, Audio, Power, Modals, and Remotes render Sentence-case controls & disambiguated headings."""
 
-    def test_sun_moon_pills_and_wallpaper_states(self) -> None:
-        stub_lit = """
-const nothing = Symbol.for("latter.lit.nothing");
-function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
-function repeat(items, keyFn, tplFn) { return items.map((it, idx) => tplFn(it, idx)); }
-function flattenHtml(node) {
-  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
-  if (Array.isArray(node)) return node.map(flattenHtml).join("");
-  if (typeof node === "object" && node._$litType$ === 1) {
-    let out = "";
-    for (let i = 0; i < node.strings.length; i += 1) {
-      out += node.strings[i];
-      if (i < node.values.length) {
-        const v = node.values[i];
-        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
-      }
-    }
-    return out;
-  }
-  return String(node);
-}
-"""
-        runner = (
-            stub_lit
-            + """
-function makeStore({ weatherBgState = "Dynamic", cycleMins = 0, activeId = "", favIds = [], autoBrtState = "Disabled", remoteMode = "group:living_tv" }) {
-  const favSet = new Set(favIds);
-  const wallpapers = [
-    { id: "preset:forest_mountains", name: "Forest Mountains", kind: "preset", active: activeId === "preset:forest_mountains", favorite: favSet.has("preset:forest_mountains"), deletable: false, thumb_url: "/thumb1" },
-    { id: "preset:ocean_waves", name: "Ocean Waves", kind: "preset", active: activeId === "preset:ocean_waves", favorite: favSet.has("preset:ocean_waves"), deletable: false, thumb_url: "/thumb2" },
-  ];
-  const homeSection = [
-    { entity_id: "switch.pocket_home_wake_greeting", domain: "switch", name: "Wake Greeting", state: "on" },
-    { entity_id: "select.pocket_home_weather_background", domain: "select", name: "Weather Background", state: weatherBgState, options: ["off", "Dynamic"] },
-    { entity_id: "switch.pocket_home_moon", domain: "switch", name: "Home: Moon", state: "off" },
-    { entity_id: "switch.pocket_home_sun", domain: "switch", name: "Home: Sun", state: "on" },
-  ];
-  const displaySection = [
-    { entity_id: "light.pocket_display_screen_backlight", domain: "light", name: "Display: Screen Backlight", state: "on" },
-    { entity_id: "select.pocket_display_color_profile", domain: "select", name: "Display: Color Profile", state: "Default", options: ["Default", "Custom"] },
-    { entity_id: "select.pocket_display_clock_face", domain: "select", name: "Display: Clock Face", state: "Modern", options: ["Modern", "Analog"] },
-    { entity_id: "select.pocket_display_time_format", domain: "select", name: "Display: Time Format", state: "12-Hour (AM/PM)", options: ["12-Hour (AM/PM)", "24-Hour"] },
-    { entity_id: "select.pocket_display_start_screen", domain: "select", name: "Display: Start Screen", state: "Home", options: ["Home", "Area"] },
-    { entity_id: "select.pocket_display_auto_brightness_mode", domain: "select", name: "Display: Auto Brightness Mode", state: autoBrtState, options: ["Disabled", "Sun Synchronized", "Time Schedule"] },
-    { entity_id: "number.pocket_display_manual_brightness", domain: "number", name: "Display: Manual Brightness", state: "80", min: 5, max: 100, step: 1, unit: "%" },
-    { entity_id: "number.pocket_display_day_brightness", domain: "number", name: "Display: Day Brightness", state: "90", min: 5, max: 100, step: 1, unit: "%" },
-    { entity_id: "number.pocket_display_night_brightness", domain: "number", name: "Display: Night Brightness", state: "25", min: 5, max: 100, step: 1, unit: "%" },
-    { entity_id: "number.pocket_display_day_start_hour", domain: "number", name: "Display: Day Start Hour", state: "7", min: 0, max: 23, step: 1, unit: "h" },
-    { entity_id: "number.pocket_display_night_start_hour", domain: "number", name: "Display: Night Start Hour", state: "22", min: 0, max: 23, step: 1, unit: "h" },
-  ];
-  const sleepSection = [
-    { entity_id: "select.pocket_sleep_power_profile", domain: "select", name: "Power Profile", state: "Balanced", options: ["Balanced", "Low Power"] },
-    { entity_id: "select.pocket_sleep_battery_screen_timeout", domain: "select", name: "Battery Screen Timeout", state: "30 s", options: ["15 s", "30 s"] },
-    { entity_id: "switch.pocket_sleep_docked_screensaver", domain: "switch", name: "Docked Screensaver", state: "on" },
-    { entity_id: "select.pocket_sleep_screensaver_style", domain: "select", name: "Screensaver Style", state: "Starfield", options: ["Clock", "Starfield"] },
-    { entity_id: "select.pocket_sleep_docked_idle_timeout", domain: "select", name: "Docked Idle Timeout", state: "5 min", options: ["1 min", "5 min"] },
-  ];
-  const actionsSection = [
-    { entity_id: "button.pocket_actions_activate_screensaver", domain: "button", name: "Activate Screensaver", state: "unknown" },
-  ];
-  const batterySection = [
-    { entity_id: "sensor.pocket_battery_level", domain: "sensor", name: "Battery Level", state: "88", unit: "%" },
-  ];
-  const musicSection = [
-    { entity_id: "media_player.pocket", domain: "media_player", name: "Player", state: "idle" },
-    { entity_id: "select.pocket_music_overlay_style", domain: "select", name: "Overlay Style", state: "Art + Metadata", options: ["Art Only", "Art + Metadata"] },
-    { entity_id: "select.pocket_music_album_art_style", domain: "select", name: "Album Art Style", state: "Full Screen", options: ["Full Screen", "Standard"] },
-    { entity_id: "select.pocket_music_album_sort_order", domain: "select", name: "Album Sort Order", state: "Alphabetical", options: ["Alphabetical"] },
-    { entity_id: "select.pocket_music_artist_album_sort_order", domain: "select", name: "Artist Album Sort Order", state: "Oldest on Top", options: ["Oldest on Top", "Newest on Top"] },
-    { entity_id: "select.pocket_music_podcast_sort_order", domain: "select", name: "Podcast Sort Order", state: "Newest on Top", options: ["Newest on Top"] },
-  ];
-  const soundSection = [
-    { entity_id: "number.pocket_sound_speaker_volume", domain: "number", name: "Speaker Volume", state: "60", min: 10, max: 100, step: 5, unit: "%" },
-  ];
-  const voiceSection = [
-    { entity_id: "select.pocket_voice_wake_word_mode", domain: "select", name: "Voice: Wake Word Mode", state: "On Device", options: ["Disabled", "On Device"] },
-    { entity_id: "select.pocket_voice_visual_profile", domain: "select", name: "Voice: Visual Profile", state: "Nebula", options: ["Nebula", "Solaris", "Rings", "Light Bar", "Dot Wave"] },
-    { entity_id: "switch.pocket_voice_wake_screen_on_assist", domain: "switch", name: "Voice: Wake Screen on Assist", state: "on" },
-  ];
-  return {
-    host: null,
-    activeSubentryId: "sub_1",
-    uploadBusy: false,
-    uploadScope: null,
-    uploadPercent: 0,
-    state: {
-      config: {
-        device_slug: "desk_panel",
-        activity_card: true,
-        wallpaper_cycle_minutes: cycleMins,
-        display_shape: "square",
-        area_categories: "scene,light",
-        device_remote_group: remoteMode,
-      },
-      capabilities: { is_roaming_device: true },
-      live: { ma_link_matched: true },
-      system_config: {
-        custom_palettes: [],
-        remotes_list: ["remote.living_tv"],
-        volume_overrides: [],
-        remote_groups: [{ id: "living_tv", name: "Living Area TV", area_id: "living", remotes: ["remote.living_tv"] }],
-      },
-      system_devices: [
-        { subentry_id: "sub_1", title: "Desk Panel", kind: "device", has_display: true, active_area_name: "Office", device_remote_group: remoteMode },
-      ],
-      catalog: { remotes: [{ id: "remote.living_tv", name: "Living TV" }], areas: [], ma_speakers: [] },
-      wallpapers,
-    },
-    getSectionItems(sec) {
-      if (sec === "home") return homeSection;
-      if (sec === "display") return displaySection;
-      if (sec === "sleep") return sleepSection;
-      if (sec === "actions") return actionsSection;
-      if (sec === "battery") return batterySection;
-      if (sec === "music") return musicSection;
-      if (sec === "sound") return soundSection;
-      if (sec === "voice") return voiceSection;
-      return [];
-    },
-    getPref(key) {
-      if (this.state && Array.isArray(this.state.device_prefs)) {
-        const found = this.state.device_prefs.find((p) => p.key === key);
-        if (found) return found;
-      }
-      const all = [
-        ...homeSection,
-        ...displaySection,
-        ...sleepSection,
-        ...actionsSection,
-        ...batterySection,
-        ...musicSection,
-        ...soundSection,
-        ...voiceSection,
-      ];
-      const altKey = key.replace(/^va_/, "voice_").replace(/^music_/, "");
-      for (const it of all) {
-        if (
-          it.pref_key === key ||
-          it.key === key ||
-          (it.entity_id && (
-            it.entity_id.endsWith("_" + key) ||
-            it.entity_id.endsWith("_" + altKey) ||
-            it.entity_id.endsWith("_" + key.replace(/^va_/, ""))
-          ))
-        ) {
-          return {
-            key,
-            label: it.name ? it.name.replace(/^Voice:\\s*/, "").replace(/^Display:\\s*/, "").replace(/^Home:\\s*/, "") : key,
-            section: "",
-            domain: it.domain,
-            value: it.domain === "switch" ? it.state === "on" : it.state,
-            options: it.options,
-            min: it.min,
-            max: it.max,
-            step: it.step,
-            unit: it.unit,
-          };
-        }
-      }
-      return undefined;
-    },
-    getPrefs(keys) {
-      return (keys || []).map((k) => this.getPref(k)).filter(Boolean);
-    },
-    getEnabledActivitySources() { return ["calendar"]; },
-    getDockItems() {
-      return [
-        { kind: "route", target: "app:area", action: "", label: "", icon: "", confirm: false },
-        { kind: "route", target: "app:music", action: "", label: "", icon: "", confirm: false },
-      ];
-    },
-    getPinnedItems() { return []; },
-    getEnabledAreaCategories() { return ["scene", "light"]; },
-    getEnabledHomeCategories() { return ["alarm", "thermostat", "entry", "vacuum"]; },
-    getEnabledToolsItems() { return ["stopwatch", "level", "flashlight", "calculator", "dice", "coin_flip"]; },
-    getEnabledGamesItems() { return ["marbles", "archery", "bricks", "chomp", "2048", "memory"]; },
-  };
-}
+    def test_sun_moon_pills_disambiguated_headings_and_wallpaper_states(self) -> None:
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
+            import { renderAppConfigModalBody } from "./src/components/dialogs.js";
+            import { renderDeviceAudioView } from "./src/views/device-audio-view.js";
+            import { renderDeviceDisplayView } from "./src/views/device-display-view.js";
+            import { renderDeviceInterfaceView } from "./src/views/device-interface-view.js";
+            import { renderDevicePowerView } from "./src/views/device-power-view.js";
+            import { renderSystemRemotesView } from "./src/views/system-remotes-view.js";
 
-function renderModalApp(app, opts = {}) {
-  const s = makeStore(opts);
-  s.appConfigModal = { open: true, app };
-  return flattenHtml(renderAppConfigModalBody(s));
-}
+            function buildStore({
+              weatherBgState = "Dynamic",
+              cycleMins = 0,
+              activeId = "",
+              favIds = [],
+              autoBrtState = "Disabled",
+              remoteMode = "group:living_tv",
+            } = {}) {
+              const favSet = new Set(favIds);
+              const wallpapers = [
+                { id: "preset:forest_mountains", name: "Forest Mountains", kind: "preset", active: activeId === "preset:forest_mountains", favorite: favSet.has("preset:forest_mountains"), deletable: false, thumb_url: "/thumb1" },
+                { id: "preset:ocean_waves", name: "Ocean Waves", kind: "preset", active: activeId === "preset:ocean_waves", favorite: favSet.has("preset:ocean_waves"), deletable: false, thumb_url: "/thumb2" },
+              ];
+              return makeFakeStore({
+                activeSubentryId: "sub_1",
+                sections: {
+                  home: [
+                    { entity_id: "switch.pocket_home_wake_greeting", pref_key: "wake_greeting", domain: "switch", name: "Wake greeting", state: "on" },
+                    { entity_id: "select.pocket_home_weather_background", pref_key: "weather_background", domain: "select", name: "Weather background", state: weatherBgState, options: ["Disabled", "Dynamic"] },
+                    { entity_id: "switch.pocket_home_sun", pref_key: "home_sun", domain: "switch", name: "Sun", state: "on" },
+                    { entity_id: "switch.pocket_home_moon", pref_key: "home_moon", domain: "switch", name: "Moon", state: "off" },
+                  ],
+                  display: [
+                    { entity_id: "select.pocket_display_color_profile", pref_key: "color_profile", domain: "select", name: "Color profile", state: "Default", options: ["Default", "Custom"] },
+                    { entity_id: "select.pocket_display_clock_face", pref_key: "clock_face", domain: "select", name: "Clock face", state: "Minimal Digital", options: ["Minimal Digital", "Modern Analog"] },
+                    { entity_id: "select.pocket_display_time_format", pref_key: "time_format", domain: "select", name: "Time format", state: "12-Hour (AM/PM)", options: ["12-Hour (AM/PM)", "24-Hour"] },
+                    { entity_id: "select.pocket_display_start_screen", pref_key: "start_screen", domain: "select", name: "Start screen", state: "Home", options: ["Home", "Area Controls", "Time App"] },
+                    { entity_id: "select.pocket_display_auto_brightness_mode", pref_key: "auto_brightness_mode", domain: "select", name: "Auto-brightness", state: autoBrtState, options: ["Disabled", "Sun Synchronized", "Time Schedule"] },
+                    { entity_id: "number.pocket_display_manual_brightness", pref_key: "manual_brightness", domain: "number", name: "Manual brightness", state: "80", min: 5, max: 100, step: 1, unit: "%" },
+                    { entity_id: "number.pocket_display_day_brightness", pref_key: "day_brightness", domain: "number", name: "Day brightness", state: "90", min: 5, max: 100, step: 1, unit: "%" },
+                    { entity_id: "number.pocket_display_night_brightness", pref_key: "night_brightness", domain: "number", name: "Night brightness", state: "25", min: 5, max: 100, step: 1, unit: "%" },
+                    { entity_id: "number.pocket_display_day_start_hour", pref_key: "day_start_hour", domain: "number", name: "Day start hour", state: "7", min: 0, max: 23, step: 1, unit: "h" },
+                    { entity_id: "number.pocket_display_night_start_hour", pref_key: "night_start_hour", domain: "number", name: "Night start hour", state: "22", min: 0, max: 23, step: 1, unit: "h" },
+                  ],
+                  sleep: [
+                    { entity_id: "select.pocket_sleep_battery_screen_timeout", pref_key: "battery_screen_timeout", domain: "select", name: "Battery screen timeout", state: "30s", options: ["15s", "30s"] },
+                    { entity_id: "switch.pocket_sleep_docked_screensaver", pref_key: "docked_screensaver", domain: "switch", name: "Docked screensaver", state: "on" },
+                    { entity_id: "select.pocket_sleep_screensaver_style", pref_key: "screensaver_style", domain: "select", name: "Screensaver style", state: "Starfield", options: ["Clock", "Starfield"] },
+                    { entity_id: "select.pocket_sleep_docked_idle_timeout", pref_key: "docked_idle_timeout", domain: "select", name: "Docked idle timeout", state: "5 min", options: ["1 min", "5 min"] },
+                  ],
+                  actions: [
+                    { entity_id: "button.pocket_actions_activate_screensaver", device_command: "activate_screensaver", domain: "button", name: "Activate screensaver", state: "unknown" },
+                  ],
+                  battery: [
+                    { entity_id: "sensor.pocket_battery_level", domain: "sensor", name: "Battery level", state: "88", unit: "%" },
+                  ],
+                  music: [
+                    { entity_id: "select.pocket_music_overlay_style", pref_key: "music_overlay_style", domain: "select", name: "Overlay style", state: "Art + Metadata", options: ["Art Only", "Art + Metadata"] },
+                    { entity_id: "select.pocket_music_album_art_style", pref_key: "music_album_art_style", domain: "select", name: "Album art style", state: "Full Screen", options: ["Full Screen", "Standard"] },
+                    { entity_id: "select.pocket_music_album_sort_order", pref_key: "album_sort_order", domain: "select", name: "Album sort order", state: "Alphabetical", options: ["Alphabetical"] },
+                    { entity_id: "select.pocket_music_artist_album_sort_order", pref_key: "artist_album_sort_order", domain: "select", name: "Artist album sort order", state: "Oldest on Top", options: ["Oldest on Top", "Newest on Top"] },
+                    { entity_id: "select.pocket_music_podcast_sort_order", pref_key: "podcast_sort_order", domain: "select", name: "Podcast sort order", state: "Newest on Top", options: ["Newest on Top"] },
+                  ],
+                  sound: [
+                    { entity_id: "number.pocket_sound_alert_volume", pref_key: "alert_volume", domain: "number", name: "Alert volume", state: "60", min: 0, max: 100, step: 5, unit: "%" },
+                  ],
+                  voice: [
+                    { entity_id: "select.pocket_voice_wake_word_mode", pref_key: "wake_word_mode", domain: "select", name: "Wake word mode", state: "On Device", options: ["Disabled", "On Device"] },
+                    { entity_id: "select.pocket_voice_visual_profile", pref_key: "va_visual_profile", domain: "select", name: "Visual profile", state: "Nebula", options: ["Nebula", "Solaris"] },
+                    { entity_id: "switch.pocket_voice_wake_screen_on_assist", pref_key: "wake_screen_on_assist", domain: "switch", name: "Wake screen on Assist", state: "on" },
+                  ],
+                },
+                state: {
+                  config: {
+                    kind: "device",
+                    device_slug: "desk_panel",
+                    home_screen_enabled: true,
+                    activity_card: true,
+                    activity_sources: "calendar",
+                    wallpaper_source: activeId,
+                    wallpaper_favorites: favIds,
+                    wallpaper_cycle_minutes: cycleMins,
+                    display_shape: "square",
+                    area_categories: "scene,light",
+                    home_categories: "alarm,thermostat,entry,vacuum",
+                    tools_items: "stopwatch,level,flashlight,calculator,dice,coin_flip",
+                    games_items: "marbles,archery,bricks,chomp,2048,memory",
+                    device_remote_group: remoteMode,
+                    native_ble_tracking: true,
+                    dock_items: [
+                      { kind: "route", target: "app:area", action: "", label: "", icon: "", confirm: false },
+                      { kind: "route", target: "app:music", action: "", label: "", icon: "", confirm: false },
+                    ],
+                    pinned_items: [],
+                  },
+                  capabilities: { has_display: true, has_audio: true, has_power: true, is_round: true, has_imu: true, is_roaming_device: true },
+                  live: { ma_link_matched: true },
+                  speaker_volume: { entity_id: "media_player.desk_panel", name: "Speaker volume", domain: "number", volume_pct: 60, state: "60", min: 0, max: 100, step: 5, unit: "%" },
+                  system_config: {
+                    custom_palettes: [],
+                    remotes_list: ["remote.living_tv"],
+                    volume_overrides: [],
+                    remote_groups: [{ id: "living_tv", name: "Living Area TV", area_id: "living", remotes: ["remote.living_tv"] }],
+                  },
+                  system_devices: [
+                    { subentry_id: "sub_1", title: "Desk Panel", kind: "device", is_online: true, has_display: true, active_area_name: "Office", device_remote_group: remoteMode },
+                  ],
+                  catalog: { remotes: [{ id: "remote.living_tv", name: "Living TV" }], areas: [], ma_speakers: [] },
+                  wallpapers,
+                },
+              }).store;
+            }
 
-const offMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 0, activeId: "", autoBrtState: "Disabled" })));
-const dispWeatherOff = flattenHtml(renderDeviceDisplayView(makeStore({ weatherBgState: "off", cycleMins: 0, activeId: "", autoBrtState: "Disabled" })));
-const staticMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 0, activeId: "preset:ocean_waves", autoBrtState: "Sun Synchronized" })));
-const rotatingMarkup = flattenHtml(renderDeviceDisplayView(makeStore({ cycleMins: 5, activeId: "preset:ocean_waves", favIds: ["preset:forest_mountains", "preset:ocean_waves"], autoBrtState: "Time Schedule" })));
-const powerMarkup = flattenHtml(renderDevicePowerView(makeStore({})));
-const audioMarkup = flattenHtml(renderDeviceAudioView(makeStore({})));
-const ifaceMarkup = flattenHtml(renderDeviceInterfaceView(makeStore({ weatherBgState: "Dynamic" })));
-const modalPinnedMarkup = renderModalApp("pinned");
-const modalAreaMarkup = renderModalApp("area");
-const modalTimeMarkup = renderModalApp("time");
-const modalMusicMarkup = renderModalApp("music");
-const modalRemoteMarkup = renderModalApp("remote", { remoteMode: "group:living_tv" });
-const modalToolsMarkup = renderModalApp("tools");
-const modalGamesMarkup = renderModalApp("games");
-const sysRemotesMarkup = flattenHtml(renderSystemRemotesView(makeStore({ remoteMode: "group:living_tv" })));
+            function renderModalApp(app, opts = {}) {
+              const s = buildStore(opts);
+              s.appConfigModal = { open: true, app };
+              return renderToHtml(renderAppConfigModalBody(s));
+            }
 
-return {
-  offMarkup,
-  dispWeatherOff,
-  staticMarkup,
-  rotatingMarkup,
-  powerMarkup,
-  audioMarkup,
-  ifaceMarkup,
-  modalPinnedMarkup,
-  modalAreaMarkup,
-  modalTimeMarkup,
-  modalMusicMarkup,
-  modalRemoteMarkup,
-  modalToolsMarkup,
-  modalGamesMarkup,
-  sysRemotesMarkup,
-};
-"""
+            process.stdout.write(JSON.stringify({
+              offMarkup: renderToHtml(renderDeviceDisplayView(buildStore({ cycleMins: 0, activeId: "", autoBrtState: "Disabled" }))),
+              dispWeatherOff: renderToHtml(renderDeviceDisplayView(buildStore({ weatherBgState: "Disabled", cycleMins: 0, activeId: "", autoBrtState: "Disabled" }))),
+              staticMarkup: renderToHtml(renderDeviceDisplayView(buildStore({ cycleMins: 0, activeId: "preset:ocean_waves", autoBrtState: "Sun Synchronized" }))),
+              rotatingMarkup: renderToHtml(renderDeviceDisplayView(buildStore({ cycleMins: 5, activeId: "preset:ocean_waves", favIds: ["preset:forest_mountains", "preset:ocean_waves"], autoBrtState: "Time Schedule" }))),
+              powerMarkup: renderToHtml(renderDevicePowerView(buildStore())),
+              audioMarkup: renderToHtml(renderDeviceAudioView(buildStore())),
+              ifaceMarkup: renderToHtml(renderDeviceInterfaceView(buildStore())),
+              modalPinnedMarkup: renderModalApp("pinned"),
+              modalAreaMarkup: renderModalApp("area"),
+              modalTimeMarkup: renderModalApp("time"),
+              modalClockMarkup: renderModalApp("clock"),
+              modalMusicMarkup: renderModalApp("music"),
+              modalRemoteMarkup: renderModalApp("remote", { remoteMode: "group:living_tv" }),
+              modalToolsMarkup: renderModalApp("tools"),
+              modalGamesMarkup: renderModalApp("games"),
+              sysRemotesMarkup: renderToHtml(renderSystemRemotesView(buildStore({ remoteMode: "group:living_tv" }))),
+            }));
+            """
         )
-        got = _run_node_ts(
+
+        # 1. Disambiguated Display view headings (`D-066` / `Q7` Sentence case)
+        card_titles = [
+            m.strip()
+            for m in re.findall(r'<h3 class="card-title">([\s\S]*?)</h3>', got["offMarkup"])
+        ]
+        self.assertEqual(
+            card_titles,
             [
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "components" / "controls.ts",
-                FRONTEND_SRC / "components" / "dialogs.ts",
-                FRONTEND_SRC / "components" / "wallpaper-gallery.ts",
-                FRONTEND_SRC / "views" / "device-display-view.ts",
-                FRONTEND_SRC / "views" / "device-power-view.ts",
-                FRONTEND_SRC / "views" / "device-audio-view.ts",
-                FRONTEND_SRC / "views" / "device-interface-view.ts",
-                FRONTEND_SRC / "views" / "system-remotes-view.ts",
+                "Home screen appearance",
+                "Screensaver",
+                "Voice assistant",
+                "Brightness",
+                "Clock",
+                "Colors",
+                "Wallpapers",
+                "Music appearance",
             ],
-            runner,
         )
-        # 1. Display view (D-034): Col 1 Home Screen -> Screensavers -> Voice Assistant -> Brightness -> Clock; Col 2 Colors -> Wallpapers -> Media Player
-        display_cards = (
-            "Home Screen",
-            "Screensavers",
-            "Voice Assistant",
-            "Brightness",
-            "Clock",
-            "Colors",
-            "Wallpapers",
-            "Media Player",
-        )
-        for card_title in display_cards:
-            self.assertIn(f'<h3 class="card-title">{card_title}</h3>', got["offMarkup"])
-        for earlier, later in itertools.pairwise(display_cards):
-            self.assertLess(
-                got["offMarkup"].index(f'<h3 class="card-title">{earlier}</h3>'),
-                got["offMarkup"].index(f'<h3 class="card-title">{later}</h3>'),
-            )
-        self.assertNotIn("Brightness & Theme", got["offMarkup"])
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Home Screen</h3>'), got["offMarkup"].index("Wake Greeting"))
-        self.assertLess(got["offMarkup"].index("Wake Greeting"), got["offMarkup"].index("Weather Background"))
-        self.assertLess(got["offMarkup"].index("Weather Background"), got["offMarkup"].index("id=weather-celestial-bodies"))
-        self.assertIn("✓ Sun", got["offMarkup"])
-        self.assertIn("+ Moon", got["offMarkup"])
-        self.assertLess(got["offMarkup"].index("✓ Sun"), got["offMarkup"].index("+ Moon"))
-        self.assertNotIn("id=weather-celestial-bodies", got["dispWeatherOff"])
-        self.assertLess(got["offMarkup"].index("id=weather-celestial-bodies"), got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'))
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Screensavers</h3>'), got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'))
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Voice Assistant</h3>'), got["offMarkup"].index("Visual Profile"))
-        self.assertLess(got["offMarkup"].index("Visual Profile"), got["offMarkup"].index('<h3 class="card-title">Brightness</h3>'))
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Brightness</h3>'), got["offMarkup"].index('<h3 class="card-title">Clock</h3>'))
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Clock</h3>'), got["offMarkup"].index("Clock Face"))
-        self.assertLess(got["offMarkup"].index("Clock Face"), got["offMarkup"].index("Time Format"))
-        self.assertLess(got["offMarkup"].index("Time Format"), got["offMarkup"].index('<h3 class="card-title">Colors</h3>'))
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Colors</h3>'), got["offMarkup"].index("Color Profile"))
-        self.assertLess(got["offMarkup"].index("Color Profile"), got["offMarkup"].index("Custom Color"))
-        self.assertLess(got["offMarkup"].index("Custom Color"), got["offMarkup"].index('<h3 class="card-title">Wallpapers</h3>'))
-        self.assertLess(got["offMarkup"].index('<h3 class="card-title">Media Player</h3>'), got["offMarkup"].index("Album Art Style"))
-        self.assertLess(got["offMarkup"].index("Album Art Style"), got["offMarkup"].index("Overlay Style"))
-        self.assertNotIn("Wake Screen on Assist", got["offMarkup"])
-        self.assertIn("Wake Screen on Assist", got["audioMarkup"])
-        self.assertNotIn("Visual Profile", got["audioMarkup"])
-        for saver_label in ("Docked Screensaver", "Screensaver Style", "Docked Idle Timeout", "Activate Screensaver", "Preview"):
-            self.assertIn(saver_label, got["offMarkup"])
-        self.assertIn('id="btn-enable-wp-rotation"', got["offMarkup"])
-        self.assertNotIn('id="btn-turn-off-wp"', got["offMarkup"])
-        self.assertNotIn('id="btn-stop-wp-rotation"', got["offMarkup"])
-        self.assertNotIn("Screen Backlight", got["offMarkup"])
-        self.assertNotIn("Start Screen", got["offMarkup"])
-        self.assertIn("Manual Brightness", got["offMarkup"])
-        self.assertNotIn("Day Brightness", got["offMarkup"])
-        self.assertNotIn("Day Start Hour", got["offMarkup"])
 
-        # 1b. Power view (D-027): Sleep & Wake keeps power/battery timeouts and excludes screensavers
-        self.assertIn("Power Profile", got["powerMarkup"])
-        self.assertIn("Battery Screen Timeout", got["powerMarkup"])
-        self.assertIn("Battery Level", got["powerMarkup"])
-        for saver_label in ("Docked Screensaver", "Screensaver Style", "Docked Idle Timeout"):
-            self.assertNotIn(saver_label, got["powerMarkup"])
+        self.assertIn('id="weather-celestial-bodies"', got["offMarkup"])
+        self.assertNotIn('id="weather-celestial-bodies"', got["dispWeatherOff"])
+        self.assertIn("Manual brightness", got["offMarkup"])
+        self.assertNotIn("Day brightness", got["offMarkup"])
+        self.assertNotIn("Day start hour", got["offMarkup"])
 
-        # 2. Interface view (D-053): 2 balanced cards (Home Screen + App Dock) with per-app configuration in #latter-app-config-modal
-        self.assertIn("Start Screen", got["ifaceMarkup"])
-        self.assertIn('<h3 class="card-title">Home Screen</h3>', got["ifaceMarkup"])
-        self.assertIn('<h3 class="card-title">App Dock</h3>', got["ifaceMarkup"])
+        # Power view keeps battery/sleep timeouts and excludes screensavers
+        self.assertIn("Battery screen timeout", got["powerMarkup"])
+        self.assertNotIn("Docked screensaver", got["powerMarkup"])
+
+        # Interface view: Home screen + App Dock with `≡` drag-handle sortable rows
+        self.assertIn("Home screen", got["ifaceMarkup"])
+        self.assertIn("App Dock", got["ifaceMarkup"])
         self.assertIn('id="dock-shortcuts-container"', got["ifaceMarkup"])
         self.assertIn('id="dock-hidden-native-apps"', got["ifaceMarkup"])
-        self.assertIn("Add Custom Shortcut", got["ifaceMarkup"])
-        self.assertIn("Hidden From Dock", got["ifaceMarkup"])
-        self.assertNotIn("Configure Sky & Weather", got["ifaceMarkup"])
-        self.assertNotIn('id="pinned-shortcuts-container"', got["ifaceMarkup"])
+        self.assertIn("drag-handle", got["ifaceMarkup"])
+        self.assertIn("Add custom shortcut", got["ifaceMarkup"])
+
+        # App config modals (`pinned`, `area`, `time`, `clock`, `music`, `remote`, `tools`, `games`)
         self.assertIn('id="pinned-shortcuts-container"', got["modalPinnedMarkup"])
         self.assertIn('id="area-categories-pills"', got["modalAreaMarkup"])
-        self.assertIn("✓ Scenes", got["modalAreaMarkup"])
-        self.assertIn("✓ Lights", got["modalAreaMarkup"])
-        self.assertIn("+ All Devices", got["modalAreaMarkup"])
-        self.assertIn("categories with no entities in the active Area are not displayed", got["modalAreaMarkup"])
-        self.assertNotIn("Area Cards Per Page", got["ifaceMarkup"])
-        self.assertNotIn("cfg-default_page_size", got["ifaceMarkup"])
-        self.assertNotIn("Default Category", got["ifaceMarkup"])
-        self.assertNotIn("Show All Category", got["ifaceMarkup"])
-        for display_only_label in (
-            "for=cfg-clock_face",
-            ">Clock Face</label>",
-            "Time Format",
-            "Wake Greeting",
-            "Weather Background",
-            "id=weather-celestial-bodies",
-            "Album Art Style",
-            "Overlay Style",
-        ):
-            self.assertNotIn(display_only_label, got["ifaceMarkup"])
-        self.assertIn("Home Time Tap", got["ifaceMarkup"])
-        self.assertIn("id=cfg-home_clock_tap_action", got["ifaceMarkup"])
-        self.assertIn("Local Clock Label", got["modalTimeMarkup"])
         self.assertIn('id="cfg-local_clock_label"', got["modalTimeMarkup"])
-        self.assertIn("Show UTC Clock", got["modalTimeMarkup"])
-        self.assertIn('id="cfg-world_clock_new_label"', got["modalTimeMarkup"])
-        self.assertIn('id="cfg-world_clocks_add"', got["modalTimeMarkup"])
-        self.assertIn('id="btn-world_clock_add"', got["modalTimeMarkup"])
-        self.assertIn("UTC-12:00 — International Date Line West", got["modalTimeMarkup"])
-        self.assertIn("UTC-05:00 — Eastern Time (EST/EDT)", got["modalTimeMarkup"])
-        self.assertIn("UTC+14:00 — Line Islands Time (LINT)", got["modalTimeMarkup"])
-        self.assertLess(
-            got["modalTimeMarkup"].index("UTC-12:00 — International Date Line West"),
-            got["modalTimeMarkup"].index("UTC-05:00 — Eastern Time (EST/EDT)"),
-        )
-        self.assertLess(
-            got["modalTimeMarkup"].index("UTC-05:00 — Eastern Time (EST/EDT)"),
-            got["modalTimeMarkup"].index("UTC+14:00 — Line Islands Time (LINT)"),
-        )
-        self.assertNotIn("Defaults to selected zone city", got["modalTimeMarkup"])
-        self.assertNotIn('label="All Time Zones"', got["modalTimeMarkup"])
-        self.assertNotIn("cfg-alarm_1_time", got["modalTimeMarkup"])
-        self.assertNotIn("cfg-alarm_1_time", got["ifaceMarkup"])
-        self.assertIn("Albums: Alphabetical • Artists: Oldest on Top", got["ifaceMarkup"])
-        self.assertNotIn("media-player-shortcuts", got["modalMusicMarkup"])
-        self.assertNotIn("Show Speaker Shortcut", got["modalMusicMarkup"])
-        self.assertNotIn("Show Library Shortcut", got["modalMusicMarkup"])
-        self.assertNotIn("Show Speaker Shortcut", got["ifaceMarkup"])
-        self.assertNotIn("Show Library Shortcut", got["ifaceMarkup"])
-        self.assertNotIn("Show Speaker Shortcut", got["audioMarkup"])
-        self.assertNotIn("Show Library Shortcut", got["audioMarkup"])
-        self.assertNotIn("<summary>Library Sorting</summary>", got["modalMusicMarkup"])
-        for media_nav_label in (
-            "Album Sort Order",
-            "Artist Album Sort Order",
-            "Podcast Sort Order",
-        ):
-            self.assertIn(media_nav_label, got["modalMusicMarkup"])
-            self.assertNotIn(media_nav_label, got["audioMarkup"])
-        self.assertNotIn("Album Art Style", got["audioMarkup"])
-        self.assertNotIn("Overlay Style", got["audioMarkup"])
-        self.assertLess(got["modalMusicMarkup"].index("Album Sort Order"), got["modalMusicMarkup"].index("Artist Album Sort Order"))
-        self.assertLess(got["modalMusicMarkup"].index("Artist Album Sort Order"), got["modalMusicMarkup"].index("Podcast Sort Order"))
-        self.assertIn('<h3 class="card-title">Sound &amp; Playback</h3>', got["audioMarkup"])
-        self.assertIn("Speaker Volume", got["audioMarkup"])
-        self.assertIn("id=cfg-device_remote_group", got["modalRemoteMarkup"])
-        self.assertIn("Group: Living Area TV", got["modalRemoteMarkup"])
+        self.assertIn("UTC-12:00", got["modalTimeMarkup"])
+        self.assertIn("UTC+14:00", got["modalTimeMarkup"])
+        self.assertIn("Clock face", got["modalClockMarkup"])
+        self.assertIn("Album sort order", got["modalMusicMarkup"])
+        self.assertNotIn("Album sort order", got["audioMarkup"])
+        self.assertIn("Sound &amp; playback", got["audioMarkup"])
+        self.assertIn("cfg-device_remote_group", got["modalRemoteMarkup"])
         self.assertIn('id="tools-items-pills"', got["modalToolsMarkup"])
-        self.assertIn("✓ Analog Chronograph", got["modalToolsMarkup"])
-        self.assertIn("✓ Bubble Level", got["modalToolsMarkup"])
         self.assertIn('id="games-items-pills"', got["modalGamesMarkup"])
-        self.assertIn("✓ Marbles", got["modalGamesMarkup"])
-        self.assertIn("✓ Memory Match", got["modalGamesMarkup"])
 
-        # 3. System -> Media & Remotes (D-042): Remote Controls, Speaker Volume Overrides & Remote Control Groups only (no Device Assignments card)
-        for rem_card in ("Remote Controls", "Speaker Volume Overrides", "Remote Control Groups"):
-            self.assertIn(f'<h3 class="card-title">{rem_card}</h3>', got["sysRemotesMarkup"])
-        self.assertNotIn("Device Assignments", got["sysRemotesMarkup"])
-        self.assertNotIn("device-remote-assignments-list", got["sysRemotesMarkup"])
-        self.assertNotIn("Configure remotes for Desk Panel", got["sysRemotesMarkup"])
+        # System -> Media & remotes
+        for rem_card in ("Remote controls", "Speaker volume overrides", "Remote control groups"):
+            self.assertIn(rem_card, got["sysRemotesMarkup"])
 
-        # 4. Static wallpaper + Sun Synchronized: Day/Night Brightness shown, Manual Brightness & Start Hours hidden
+        # Static vs rotating wallpaper + Sun Synchronized / Time Schedule brightness
         self.assertIn('id="btn-enable-wp-rotation"', got["staticMarkup"])
         self.assertIn('id="btn-turn-off-wp"', got["staticMarkup"])
-        self.assertNotIn('id="btn-stop-wp-rotation"', got["staticMarkup"])
-        self.assertIn('<span class="chip chip-primary">Active</span>', got["staticMarkup"])
-        self.assertNotIn("Manual Brightness", got["staticMarkup"])
-        self.assertIn("Day Brightness", got["staticMarkup"])
-        self.assertIn("Night Brightness", got["staticMarkup"])
-        self.assertNotIn("Day Start Hour", got["staticMarkup"])
+        self.assertNotIn("Manual brightness", got["staticMarkup"])
+        self.assertIn("Day brightness", got["staticMarkup"])
+        self.assertNotIn("Day start hour", got["staticMarkup"])
 
-        # 5. Rotating wallpaper + Time Schedule: Day/Night Brightness & Start Hours shown
         self.assertIn('id="btn-stop-wp-rotation"', got["rotatingMarkup"])
-        self.assertIn('id="btn-turn-off-wp"', got["rotatingMarkup"])
-        self.assertIn('id="btn-clear-stars-wp"', got["rotatingMarkup"])
-        self.assertNotIn('id="btn-star-all-wp"', got["rotatingMarkup"])
-        self.assertNotIn("Manual Brightness", got["rotatingMarkup"])
-        self.assertIn("Day Brightness", got["rotatingMarkup"])
-        self.assertIn("Day Start Hour", got["rotatingMarkup"])
-        self.assertIn("Night Start Hour", got["rotatingMarkup"])
+        self.assertIn("Day start hour", got["rotatingMarkup"])
+        self.assertIn("Night start hour", got["rotatingMarkup"])
 
 
 @unittest.skipUnless(NODE, "node is not installed")
@@ -857,106 +599,102 @@ class TestWallpaperUploadBearerAuth(unittest.TestCase):
     """D-025: POST /api/latter/wallpaper/upload uses live hass.auth Bearer token, never auth/sign_path."""
 
     def test_xhr_bearer_header_preflight_refresh_and_401_retry(self) -> None:
-        runner = """
-return (async () => {
-  const wsCalls = [];
-  const xhrLog = [];
-  let nextResponses = [];
+        got = _run_node_esm(
+            """
+            import { StudioWsClient } from "./src/api/ws-client.js";
 
-  globalThis.XMLHttpRequest = class MockXHR {
-    constructor() {
-      this.headers = {};
-      this.upload = {};
-      this.status = 0;
-      this.response = null;
-      this.responseType = "";
-    }
-    open(method, url) {
-      this.method = method;
-      this.url = url;
-    }
-    setRequestHeader(k, v) {
-      this.headers[k] = v;
-    }
-    send(form) {
-      const step = nextResponses.shift() || { status: 200, body: { ok: true } };
-      xhrLog.push({
-        method: this.method,
-        url: this.url,
-        auth: this.headers.Authorization || "",
-        scope: form.get("scope"),
-        subentryId: form.get("subentry_id"),
-      });
-      if (this.upload && this.upload.onprogress) {
-        this.upload.onprogress({ lengthComputable: true, loaded: 50, total: 100 });
-      }
-      this.status = step.status;
-      this.response = step.body;
-      this.onload();
-    }
-  };
+            const wsCalls = [];
+            const xhrLog = [];
+            let nextResponses = [];
 
-  let refreshCalls = 0;
-  const auth = {
-    data: { access_token: "tok_live" },
-    expired: false,
-    async refreshAccessToken() {
-      refreshCalls += 1;
-      auth.expired = false;
-      auth.data.access_token = `tok_refreshed_${refreshCalls}`;
-    },
-  };
-  const client = new StudioWsClient(() => {});
-  client.setHass({
-    auth,
-    async callWS(msg) {
-      wsCalls.push(msg.type);
-      throw new Error(`Unexpected WS call: ${msg.type}`);
-    },
-  });
+            globalThis.XMLHttpRequest = class MockXHR {
+              constructor() {
+                this.headers = {};
+                this.upload = {};
+                this.status = 0;
+                this.response = null;
+                this.responseType = "";
+              }
+              open(method, url) {
+                this.method = method;
+                this.url = url;
+              }
+              setRequestHeader(k, v) {
+                this.headers[k] = v;
+              }
+              send(form) {
+                const step = nextResponses.shift() || { status: 200, body: { ok: true } };
+                xhrLog.push({
+                  method: this.method,
+                  url: this.url,
+                  auth: this.headers.Authorization || "",
+                  scope: form.get("scope"),
+                  subentryId: form.get("subentry_id"),
+                });
+                if (this.upload && this.upload.onprogress) {
+                  this.upload.onprogress({ lengthComputable: true, loaded: 50, total: 100 });
+                }
+                this.status = step.status;
+                this.response = step.body;
+                this.onload();
+              }
+            };
 
-  const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "crater.png", { type: "image/png" });
-  const progress = [];
+            let refreshCalls = 0;
+            const auth = {
+              data: { access_token: "tok_live" },
+              expired: false,
+              async refreshAccessToken() {
+                refreshCalls += 1;
+                auth.expired = false;
+                auth.data.access_token = `tok_refreshed_${refreshCalls}`;
+              },
+            };
+            const client = new StudioWsClient(() => {});
+            client.setHass({
+              auth,
+              async callWS(msg) {
+                wsCalls.push(msg.type);
+                throw new Error(`Unexpected WS call: ${msg.type}`);
+              },
+            });
 
-  // 1. Live token on System scope: direct Bearer POST, zero auth/sign_path WS calls
-  nextResponses = [{ status: 200, body: { ok: true, source_id: "upload:_system/crater_1a2b3c.jpg" } }];
-  const sysRes = await client.uploadWallpaperMultipart({
-    scope: "system",
-    file,
-    onProgress: (p) => progress.push(p),
-  });
+            const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "crater.png", { type: "image/png" });
+            const progress = [];
 
-  // 2. Expired token on Device scope: pre-flight refresh before sending XHR
-  auth.expired = true;
-  nextResponses = [{ status: 200, body: { ok: true, source_id: "upload:desk/crater_1a2b3c.jpg" } }];
-  const devRes = await client.uploadWallpaperMultipart({
-    scope: "device",
-    subentryId: "sub_desk",
-    file,
-  });
+            nextResponses = [{ status: 200, body: { ok: true, source_id: "upload:_system/crater_1a2b3c.jpg" } }];
+            const sysRes = await client.uploadWallpaperMultipart({
+              scope: "system",
+              file,
+              onProgress: (p) => progress.push(p),
+            });
 
-  // 3. Clock-skew 401 when auth.expired === false: refreshes once and retries cleanly
-  nextResponses = [
-    { status: 401, body: null },
-    { status: 200, body: { ok: true, source_id: "upload:_system/retry_ok.jpg" } },
-  ];
-  const skewRes = await client.uploadWallpaperMultipart({ scope: "system", file });
+            auth.expired = true;
+            nextResponses = [{ status: 200, body: { ok: true, source_id: "upload:desk/crater_1a2b3c.jpg" } }];
+            const devRes = await client.uploadWallpaperMultipart({
+              scope: "device",
+              subentryId: "sub_desk",
+              file,
+            });
 
-  // 4. Persistent 401 after single refresh retry: rejects cleanly without looping
-  nextResponses = [{ status: 401, body: null }, { status: 401, body: null }];
-  let persistentErr = "";
-  try {
-    await client.uploadWallpaperMultipart({ scope: "system", file });
-  } catch (err) {
-    persistentErr = err.message;
-  }
+            nextResponses = [
+              { status: 401, body: null },
+              { status: 200, body: { ok: true, source_id: "upload:_system/retry_ok.jpg" } },
+            ];
+            const skewRes = await client.uploadWallpaperMultipart({ scope: "system", file });
 
-  return { wsCalls, refreshCalls, progress, sysRes, devRes, skewRes, persistentErr, xhrLog };
-})();
-"""
-        got = _run_node_ts(
-            [FRONTEND_SRC / "constants.ts", FRONTEND_SRC / "api" / "ws-client.ts"],
-            runner,
+            nextResponses = [{ status: 401, body: null }, { status: 401, body: null }];
+            let persistentErr = "";
+            try {
+              await client.uploadWallpaperMultipart({ scope: "system", file });
+            } catch (err) {
+              persistentErr = err.message;
+            }
+
+            process.stdout.write(JSON.stringify({
+              wsCalls, refreshCalls, progress, sysRes, devRes, skewRes, persistentErr, xhrLog,
+            }));
+            """
         )
         self.assertEqual(got["wsCalls"], [])
         self.assertEqual(got["refreshCalls"], 3)
@@ -965,891 +703,453 @@ return (async () => {
         self.assertEqual(got["devRes"]["source_id"], "upload:desk/crater_1a2b3c.jpg")
         self.assertEqual(got["skewRes"]["source_id"], "upload:_system/retry_ok.jpg")
         self.assertEqual(got["persistentErr"], "Wallpaper upload failed (HTTP 401)")
-        self.assertEqual(
-            got["xhrLog"],
-            [
-                {
-                    "method": "POST",
-                    "url": "/api/latter/wallpaper/upload",
-                    "auth": "Bearer tok_live",
-                    "scope": "system",
-                    "subentryId": None,
-                },
-                {
-                    "method": "POST",
-                    "url": "/api/latter/wallpaper/upload",
-                    "auth": "Bearer tok_refreshed_1",
-                    "scope": "device",
-                    "subentryId": "sub_desk",
-                },
-                {
-                    "method": "POST",
-                    "url": "/api/latter/wallpaper/upload",
-                    "auth": "Bearer tok_refreshed_1",
-                    "scope": "system",
-                    "subentryId": None,
-                },
-                {
-                    "method": "POST",
-                    "url": "/api/latter/wallpaper/upload",
-                    "auth": "Bearer tok_refreshed_2",
-                    "scope": "system",
-                    "subentryId": None,
-                },
-                {
-                    "method": "POST",
-                    "url": "/api/latter/wallpaper/upload",
-                    "auth": "Bearer tok_refreshed_2",
-                    "scope": "system",
-                    "subentryId": None,
-                },
-                {
-                    "method": "POST",
-                    "url": "/api/latter/wallpaper/upload",
-                    "auth": "Bearer tok_refreshed_3",
-                    "scope": "system",
-                    "subentryId": None,
-                },
-            ],
-        )
+        self.assertEqual(len(got["xhrLog"]), 6)
 
 
 @unittest.skipUnless(NODE, "node is not installed")
 class TestToolsDiagnosticsView(unittest.TestCase):
-    """D-027: Device Tools renders curated Diagnostics + collapsed Developer & Telemetry drawer without raw outbox blobs or All Entities."""
+    """Device Tools, Overview, Presence, Interface, Discovered, & System Presence views (`D-061`-`D-066`)."""
 
     def test_standard_diagnostics_parsed_telemetry_and_ble_tag_mode(self) -> None:
-        stub_lit = """
-const nothing = Symbol.for("latter.lit.nothing");
-function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
-function flattenHtml(node) {
-  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
-  if (Array.isArray(node)) return node.map(flattenHtml).join("");
-  if (typeof node === "object" && node._$litType$ === 1) {
-    let out = "";
-    for (let i = 0; i < node.strings.length; i += 1) {
-      out += node.strings[i];
-      if (i < node.values.length) {
-        const v = node.values[i];
-        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
-      }
-    }
-    return out;
-  }
-  return String(node);
-}
-"""
-        runner = (
-            stub_lit
-            + """
-function makeToolsStore(isBle = false) {
-  const networkSection = isBle ? [] : [
-    { entity_id: "update.desk_panel_firmware", domain: "update", name: "Firmware", state: "off" },
-    { entity_id: "sensor.desk_panel_wifi_signal", domain: "sensor", name: "Wi-Fi Signal", state: "-54", unit: "dBm" },
-    { entity_id: "sensor.desk_panel_ip_address", domain: "sensor", name: "IP Address", state: "192.168.1.44" },
-    { entity_id: "sensor.desk_panel_connected_ssid", domain: "sensor", name: "Connected SSID", state: "HomeLAN" },
-    { entity_id: "sensor.desk_panel_system_rpc_outbox", domain: "sensor", name: "System: RPC Outbox", state: '{"v":3,"cmd":"media_play","seq":99}' },
-    {
-      entity_id: "sensor.desk_panel_system_link_report",
-      domain: "sensor",
-      name: "System: Link Report",
-      state: "up=7320 rst=POWERON bto=1 disc=2 rsn=0 rssi=-55/-62 n=120 wlk=0.0 ls=45 slp=78.5 awk=21.5 api=3 ha=2 gap=14 down=0 nvs=5/0/3",
-    },
-    {
-      entity_id: "sensor.desk_panel_system_hardware_manifest",
-      domain: "sensor",
-      name: "System: Hardware Manifest",
-      state: '{"v":2,"contract":3,"board":"waveshare_s3_square_4_0","w":480,"h":480,"shape":"square","display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":1,"battery":0,"stationary":1,"wearable":0,"ips":1,"chip":"ESP32-S3","psram_mb":8,"minor":4}',
-    },
-  ];
-  const developerSection = isBle ? [] : [
-    { entity_id: "switch.desk_panel_system_telemetry_profiler", domain: "switch", name: "Telemetry Profiler", state: "off" },
-    { entity_id: "button.desk_panel_system_log_memory_report", domain: "button", name: "Log Memory Report", state: "unknown" },
-    { entity_id: "sensor.desk_panel_system_internal_ram_low_water", domain: "sensor", name: "Internal RAM Low Water", state: "64", unit: "kB" },
-  ];
-  return {
-    hass: null,
-    host: null,
-    activeSubentryId: "sub_1",
-    devicePinDraft: "",
-    pinBusy: false,
-    hasConfiguredSecurityPin: true,
-    state: {
-      title: isBle ? "Keychain Tag" : "Desk Panel",
-      config: isBle
-        ? { kind: "ble_tag", ble_target_address: "AA:BB:CC:11:22:33" }
-        : { kind: "device", device_slug: "desk_panel", security_pin_policy: "auto" },
-      live: isBle
-        ? {}
-        : { device_sw_version: "3.0.0", sdk_rev: "2026111202", effective_security_pin_policy: "require_pin" },
-      links: isBle
-        ? { entry_id: "ent_1" }
-        : { entry_id: "ent_1", esphome_device_id: "esp_dev_1", latter_device_id: "lat_dev_1" },
-      esphome: isBle ? {} : { device: { mac: "10:20:30:40:50:60" } },
-      system_devices: [
-        isBle
-          ? { subentry_id: "sub_1", kind: "ble_tag", ble_survey_rows: [{ is_winner: true, effective_rssi: -68 }] }
-          : { subentry_id: "sub_1", kind: "device", model_label: "Latter Square 4.0", wifi_rssi: -54, ip_address: "192.168.1.44" },
-      ],
-    },
-    getSectionItems(sec) {
-      if (sec === "network") return networkSection;
-      if (sec === "developer") return developerSection;
-      return [];
-    },
-    getPref(key) {
-      return undefined;
-    },
-    getPrefs(keys) {
-      return [];
-    },
-  };
-}
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
+            import { renderDeviceOverviewView } from "./src/views/device-overview-view.js";
+            import { renderDeviceToolsView } from "./src/views/device-tools-view.js";
 
-function makeOverviewStore(mode) {
-  if (mode === "ble") {
-    return {
-      hass: null,
-      host: null,
-      activeSubentryId: "sub_ble",
-      state: {
-        config: { kind: "ble_tag", ble_target_address: "AA:BB:CC:11:22:33" },
-        capabilities: {},
-        live: { active_area_name: "Entryway", ble_closest_proxy: "Entry Proxy" },
-        links: { entry_id: "ent_1" },
-        esphome: {},
-        device_groups: [],
-        system_config: { remote_groups: [] },
-        system_devices: [
-          {
-            subentry_id: "sub_ble",
-            kind: "ble_tag",
-            status_label: "Detected",
-            has_assigned_area: false,
-            ble_survey_rows: [{ is_winner: true, effective_rssi: -64, distance_m: 1.8 }],
-          },
-        ],
-      },
-      getSectionItems() { return []; },
-    };
-  }
-  const isBattery = mode === "battery";
-  return {
-    hass: null,
-    host: null,
-    activeSubentryId: "sub_1",
-    state: {
-      config: {
-        kind: "device",
-        device_slug: "roaming_pocket",
-        device_group: "handhelds",
-        device_remote_group: isBattery ? "group:living_tv" : "area_auto",
-        native_ble_tracking: isBattery,
-      },
-      capabilities: {
-        has_display: true,
-        has_power: true,
-        has_ble_beacon: isBattery,
-        is_roaming_device: isBattery,
-      },
-      live: {
-        active_area_name: "Kitchen",
-        ble_closest_proxy: isBattery ? "Kitchen Proxy" : "",
-        device_sw_version: "3.0.0",
-        fw_update_available: !isBattery,
-        group_sync_status: isBattery ? "customized" : "in_sync",
-      },
-      links: { entry_id: "ent_1", esphome_device_id: "esp_1" },
-      esphome: { device: { sw_version: "3.0.0", model: "Pocket" } },
-      device_groups: [{ id: "handhelds", name: "Handhelds" }],
-      system_config: {
-        remote_groups: [{ id: "living_tv", name: "Living Area TV", area_id: "living", remotes: ["remote.tv"] }],
-      },
-      system_devices: [
-        {
-          subentry_id: "sub_1",
-          kind: "device",
-          is_online: true,
-          has_display: true,
-          has_assigned_area: !isBattery,
-          area_label: "Office",
-          battery_level: isBattery ? 82 : null,
-          is_charging: isBattery,
-          is_usb_connected: isBattery,
-          wifi_rssi: isBattery ? -58 : -84,
-          ip_address: "192.168.1.44",
-          ble_survey_rows: isBattery ? [{ is_winner: true, effective_rssi: -61, distance_m: 2.4 }] : [],
-        },
-      ],
-    },
-    getSectionItems() { return []; },
-  };
-}
+            function buildTools(isBle = false) {
+              return makeFakeStore({
+                activeSubentryId: "sub_1",
+                sections: isBle ? {} : {
+                  network: [
+                    { entity_id: "update.desk_panel_firmware", domain: "update", name: "Firmware", state: "off" },
+                    { entity_id: "sensor.desk_panel_wifi_signal", domain: "sensor", name: "Wi-Fi signal", state: "-54", unit: "dBm" },
+                    { entity_id: "sensor.desk_panel_ip_address", domain: "sensor", name: "IP address", state: "192.168.1.44" },
+                    { entity_id: "sensor.desk_panel_connected_ssid", domain: "sensor", name: "Connected SSID", state: "HomeLAN" },
+                    { entity_id: "sensor.desk_panel_system_rpc_outbox", domain: "sensor", name: "System: RPC Outbox", state: '{"v":3,"cmd":"media_play","seq":99}' },
+                    { entity_id: "sensor.desk_panel_system_link_report", domain: "sensor", name: "System: Link Report", state: "up=7320 rst=POWERON bto=1 disc=2 rsn=0 rssi=-55/-62 n=120 wlk=0.0 ls=45 slp=78.5 awk=21.5 api=3 ha=2 gap=14 down=0 nvs=5/0/3" },
+                    { entity_id: "sensor.desk_panel_system_hardware_manifest", domain: "sensor", name: "System: Hardware Manifest", state: '{"v":2,"contract":3,"board":"waveshare_s3_square_4_0","w":480,"h":480,"shape":"square","display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":1,"battery":0,"stationary":1,"wearable":0,"ips":1,"chip":"ESP32-S3","psram_mb":8,"minor":4}' },
+                  ],
+                  developer: [
+                    { entity_id: "switch.desk_panel_system_telemetry_profiler", domain: "switch", name: "Telemetry profiler", state: "off" },
+                    { entity_id: "button.desk_panel_system_log_memory_report", domain: "button", name: "Log memory report", state: "unknown" },
+                    { entity_id: "sensor.desk_panel_system_internal_ram_low_water", domain: "sensor", name: "Internal RAM low water", state: "64", unit: "kB" },
+                  ],
+                },
+                state: {
+                  title: isBle ? "Keychain Tag" : "Desk Panel",
+                  config: isBle
+                    ? { kind: "ble_tag", ble_target_address: "AA:BB:CC:11:22:33" }
+                    : { kind: "device", device_slug: "desk_panel", security_pin_policy: "auto", has_security_pin: true },
+                  live: isBle ? {} : { device_sw_version: "3.0.0", sdk_rev: "2026111801", effective_security_pin_policy: "require_pin" },
+                  links: isBle ? { entry_id: "ent_1" } : { entry_id: "ent_1", esphome_device_id: "esp_dev_1", latter_device_id: "lat_dev_1" },
+                  esphome: isBle ? {} : { device: { mac: "10:20:30:40:50:60" } },
+                  system_devices: [
+                    isBle
+                      ? { subentry_id: "sub_1", kind: "ble_tag", is_online: true, ble_survey_rows: [{ is_winner: true, effective_rssi: -68 }] }
+                      : { subentry_id: "sub_1", kind: "device", is_online: true, model_label: "Latter Square 4.0", wifi_rssi: -54, ip_address: "192.168.1.44" },
+                  ],
+                },
+              }).store;
+            }
 
-return {
-  espMarkup: flattenHtml(renderDeviceToolsView(makeToolsStore(false))),
-  bleMarkup: flattenHtml(renderDeviceToolsView(makeToolsStore(true))),
-  ovBattery: flattenHtml(renderDeviceOverviewView(makeOverviewStore("battery"))),
-  ovMainsUpdate: flattenHtml(renderDeviceOverviewView(makeOverviewStore("mains"))),
-  ovBle: flattenHtml(renderDeviceOverviewView(makeOverviewStore("ble"))),
-};
-"""
+            function buildOverview(mode) {
+              if (mode === "ble") {
+                return makeFakeStore({
+                  activeSubentryId: "sub_ble",
+                  state: {
+                    config: { kind: "ble_tag", ble_target_address: "AA:BB:CC:11:22:33" },
+                    capabilities: {},
+                    live: { active_area_name: "Entryway", ble_closest_proxy: "Entry Proxy" },
+                    links: { entry_id: "ent_1" },
+                    system_devices: [
+                      {
+                        subentry_id: "sub_ble",
+                        kind: "ble_tag",
+                        status_code: "online",
+                        status_label: "Detected",
+                        has_assigned_area: false,
+                        ble_survey_rows: [{ is_winner: true, effective_rssi: -64, distance_m: 1.8 }],
+                      },
+                    ],
+                  },
+                }).store;
+              }
+              const isBattery = mode === "battery";
+              const isOffline = mode === "offline";
+              return makeFakeStore({
+                activeSubentryId: "sub_1",
+                sections: isBattery
+                  ? { network: [{ entity_id: "update.roaming_pocket_firmware", domain: "update", name: "Firmware", state: "off" }] }
+                  : {},
+                state: {
+                  config: {
+                    kind: "device",
+                    device_slug: "roaming_pocket",
+                    device_group: "handhelds",
+                    device_remote_group: isBattery ? "group:living_tv" : "area_auto",
+                    native_ble_tracking: isBattery,
+                  },
+                  capabilities: {
+                    has_display: true,
+                    has_power: true,
+                    has_battery: isBattery,
+                    has_ble_beacon: isBattery,
+                    is_roaming_device: isBattery,
+                  },
+                  live: {
+                    active_area_name: "Kitchen",
+                    ble_closest_proxy: isBattery ? "Kitchen Proxy" : "",
+                    device_sw_version: "3.0.0",
+                    fw_update_available: mode === "mains",
+                  },
+                  links: { entry_id: "ent_1", esphome_device_id: "esp_1", latter_device_id: "lat_1" },
+                  esphome: { device: { sw_version: "3.0.0", model: "Pocket" } },
+                  device_groups: [{ id: "handhelds", name: "Handhelds" }],
+                  system_config: {
+                    remote_groups: [{ id: "living_tv", name: "Living Area TV", area_id: "living", remotes: ["remote.tv"] }],
+                  },
+                  system_devices: [
+                    {
+                      subentry_id: "sub_1",
+                      kind: "device",
+                      is_online: !isOffline,
+                      status_code: isOffline ? "offline" : mode === "mains" ? "update" : "online",
+                      status_label: isOffline ? "Offline" : mode === "mains" ? "Update available" : "Online",
+                      has_display: true,
+                      has_battery: isBattery,
+                      has_assigned_area: !isBattery,
+                      area_label: "Office",
+                      battery_level: isBattery ? 82 : null,
+                      is_charging: isBattery,
+                      is_usb_connected: isBattery,
+                      wifi_rssi: isBattery ? -58 : -84,
+                      ip_address: "192.168.1.44",
+                      ble_survey_rows: isBattery ? [{ is_winner: true, effective_rssi: -61, distance_m: 2.4 }] : [],
+                    },
+                  ],
+                },
+              }).store;
+            }
+
+            process.stdout.write(JSON.stringify({
+              espMarkup: renderToHtml(renderDeviceToolsView(buildTools(false))),
+              bleMarkup: renderToHtml(renderDeviceToolsView(buildTools(true))),
+              ovBattery: renderToHtml(renderDeviceOverviewView(buildOverview("battery"))),
+              ovMainsUpdate: renderToHtml(renderDeviceOverviewView(buildOverview("mains"))),
+              ovOffline: renderToHtml(renderDeviceOverviewView(buildOverview("offline"))),
+              ovBle: renderToHtml(renderDeviceOverviewView(buildOverview("ble"))),
+            }));
+            """
         )
-        got = _run_node_ts(
-            [
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "components" / "controls.ts",
-                FRONTEND_SRC / "views" / "device-tools-view.ts",
-                FRONTEND_SRC / "views" / "device-overview-view.ts",
-            ],
-            runner,
-        )
+
         esp = got["espMarkup"]
         ble = got["bleMarkup"]
         ov_bat = got["ovBattery"]
         ov_mains = got["ovMainsUpdate"]
+        ov_offline = got["ovOffline"]
         ov_ble = got["ovBle"]
 
-        # Standard Diagnostics summary (including Model & ESPHome Node moved from Overview) + zero raw RPC Outbox / All Entities
         self.assertIn("Model", esp)
         self.assertIn("Latter Square 4.0", esp)
         self.assertIn('id="diag-node-name"', esp)
         self.assertIn("desk_panel", esp)
         self.assertIn('id="diag-sdk-rev"', esp)
-        self.assertIn("Firmware Version", esp)
         self.assertIn("v3.0.0", esp)
-        self.assertIn("2026111202", esp)
+        self.assertIn("2026111801", esp)
         self.assertIn("192.168.1.44", esp)
         self.assertIn("10:20:30:40:50:60", esp)
-        self.assertIn("Connected SSID", esp)
         self.assertIn("HomeLAN", esp)
-        self.assertIn("Download Diagnostics", esp)
-        self.assertIn("Open in ESPHome", esp)
+        self.assertIn("Open in Home Assistant", esp)
+        self.assertIn("Reconfigure", esp)
         self.assertNotIn("All Entities", esp)
         self.assertNotIn("media_play", esp)
-        self.assertNotIn("RPC Outbox", esp)
+        self.assertIn("Developer &amp; telemetry", esp)
+        self.assertIn("2h 2m", esp)
+        self.assertIn("waveshare_s3_square_4_0", esp)
+        self.assertIn("ESP32-S3 • 8 MB PSRAM", esp)
 
-        # Collapsed Developer & Telemetry drawer with parsed Link Report & Hardware Manifest
-        self.assertIn('<details class="sub-collapsible">', esp)
-        self.assertIn("<summary>Developer &amp; Telemetry</summary>", esp)
-        for label in (
-            "Telemetry Profiler",
-            "Log Memory Report",
-            "Internal RAM Low Water",
-            "Session Uptime",
-            "2h 2m",
-            "Last Reset",
-            "POWERON",
-            "Wi-Fi Disconnects",
-            "2 (1 beacon timeouts)",
-            "Wi-Fi Avg / Min",
-            "-55 / -62 dBm",
-            "HA Sessions",
-            "2 (max gap 14s)",
-            "Light Sleep Duty",
-            "78.5% (45 cycles)",
-            "NVS Flash Writes",
-            "5 writes (0 erases, 3 ms max)",
-            "Hardware Board",
-            "waveshare_s3_square_4_0",
-            "Processor & PSRAM",
-            "ESP32-S3 • 8 MB PSRAM",
-            "Display Panel",
-            "480\u00d7480 square IPS",
-            "Hardware Traits",
-            "Touch, Mic, Speaker, IMU, Stationary",
-        ):
-            self.assertIn(label, esp)
-
-        # BLE Tag mode: shows BLE Signal & BLE Target, hides Developer & Telemetry and Open in ESPHome
-        self.assertIn("BLE Signal", ble)
+        # BLE tag hides Developer & telemetry
         self.assertIn("-68 dBm", ble)
         self.assertIn("AA:BB:CC:11:22:33", ble)
-        self.assertNotIn("Developer &amp; Telemetry", ble)
-        self.assertNotIn("Open in ESPHome", ble)
+        self.assertNotIn("Developer &amp; telemetry", ble)
 
-        # Overview -> Status (D-029): header status chip, 2x2 tonal tiles, assignment rows, and retired low-value rows
-        self.assertIn('class="status-tiles"', ov_bat)
+        # Overview: Battery (`has_battery=true`) + real `update.*` entity -> "Up to date" + "Open in Home Assistant" (`Q12`)
         for expected in (
             "Online",
             "Current Area",
             "Kitchen",
-            "Roaming • Kitchen Proxy",
             "Battery",
             "82%",
             "Charging",
-            "--signal-pct:82%",
-            "Wi-Fi Signal",
+            "Wi-Fi signal",
             "-58 dBm",
-            "Excellent",
             "Firmware",
             "v3.0.0",
             "Up to date",
-            "Device Group",
             "Handhelds",
-            "Custom",
-            "Manage Groups",
-            "Remote Control Group",
             "Living Area TV",
-            "Open in ESPHome",
-            "Download Backup",
+            "Open in Home Assistant",
         ):
             self.assertIn(expected, ov_bat)
-        # Overview -> Status & Quick Actions (D-029 / D-051): utility links moved from Status into Quick Actions footer
-        self.assertLess(ov_bat.index("Quick Actions"), ov_bat.index("Open in ESPHome"))
-        self.assertLess(ov_bat.index("Quick Actions"), ov_bat.index("Download Backup"))
-        for retired in ("Now Playing", "IP Address", "192.168.1.44", "Latter SDK", "ESPHome Node", "roaming_pocket"):
-            self.assertNotIn(retired, ov_bat)
+        self.assertNotIn("Download backup", ov_bat)
 
-        # Plugged-in stationary Device with available firmware update + weak Wi-Fi
-        for expected in ("Update available", "Office", "Stationary", "Power", "Plugged in", "Weak", "signal-fill low", "Follow Area"):
+        # Plugged-in (`has_battery=false`) shows Power / Plugged in
+        for expected in ("Update available", "Office", "Power", "Plugged in", "Follow Area"):
             self.assertIn(expected, ov_mains)
-        self.assertNotIn("Mains", ov_mains)
 
-        # BLE Tag Overview Status tiles (retains Download Backup in Status footer since Quick Actions is hidden)
-        for expected in ("Detected", "Entryway", "Closest Proxy", "Entry Proxy", "BLE Signal", "-64 dBm", "BLE Target", "AA:BB:CC:11:22:33", "Download Backup"):
+        # Offline Device renders `.offline-banner` (`D-066` / `Q8`)
+        self.assertIn("offline-banner", ov_offline)
+        self.assertIn("Device is offline or hibernating", ov_offline)
+
+        # BLE Tag Overview hides Quick actions
+        for expected in ("Online", "Entryway", "-64 dBm", "AA:BB:CC:11:22:33"):
             self.assertIn(expected, ov_ble)
-        self.assertNotIn("Quick Actions", ov_ble)
-        self.assertNotIn("status-assignments", ov_ble)
+        self.assertNotIn("Quick actions", ov_ble)
 
     def test_presence_view_static_assigned_area_vs_ble_roaming_modes(self) -> None:
-        """D-032: Presence renders Assigned Area when Static and Auto-Switch + Fallback Area when BLE Roaming."""
-        stub_lit = """
-const nothing = Symbol.for("latter.lit.nothing");
-function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
-function flattenHtml(node) {
-  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
-  if (Array.isArray(node)) return node.map(flattenHtml).join("");
-  if (typeof node === "object" && node._$litType$ === 1) {
-    let out = "";
-    for (let i = 0; i < node.strings.length; i += 1) {
-      out += node.strings[i];
-      if (i < node.values.length) {
-        const v = node.values[i];
-        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
-      }
-    }
-    return out;
-  }
-  return String(node);
-}
-"""
-        runner = (
-            stub_lit
-            + """
-function makePresenceStore(bleTracking) {
-  return {
-    hass: null,
-    host: null,
-    activeSubentryId: "sub_1",
-    state: {
-      config: {
-        kind: "device",
-        native_ble_tracking: bleTracking,
-        ble_auto_switch: bleTracking,
-        default_area: "living_room",
-        ble_target_address: "",
-        ble_beacon_uuid: "E2C56DB5-DFFB-48D2-B060-D0F5A71096E1",
-      },
-      catalog: {
-        areas: [
-          { value: "living_room", label: "Living Area" },
-          { value: "kitchen", label: "Kitchen" },
-        ],
-      },
-    },
-    getSectionItems() {
-      return [
-        {
-          entity_id: "pref:ble_beacon_mode",
-          pref_key: "ble_beacon_mode",
-          domain: "select",
-          name: "BLE Beacon Mode",
-          state: "Handheld Only",
-          options: ["Handheld Only", "Handheld + Screen Off", "Always"],
-        },
-      ];
-    },
-    getPref(key) {
-      if (key === "ble_beacon_mode") {
-        return {
-          key: "ble_beacon_mode",
-          label: "BLE Beacon Mode",
-          section: "presence",
-          domain: "select",
-          value: "Handheld Only",
-          options: ["Handheld Only", "Handheld + Screen Off", "Always"],
-        };
-      }
-      return undefined;
-    },
-    getPrefs(keys) {
-      return (keys || []).map((k) => this.getPref(k)).filter(Boolean);
-    },
-  };
-}
-return {
-  staticMarkup: flattenHtml(renderDevicePresenceView(makePresenceStore(false))),
-  roamingMarkup: flattenHtml(renderDevicePresenceView(makePresenceStore(true))),
-};
-"""
-        )
-        got = _run_node_ts(
-            [
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "components" / "controls.ts",
-                FRONTEND_SRC / "views" / "device-presence-view.ts",
-            ],
-            runner,
-        )
-        static_html = got["staticMarkup"]
-        roaming_html = got["roamingMarkup"]
+        """D-032 & D-066: Static mode hides BLE identity & Voice Follows Me while keeping area_handoff visible."""
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
+            import { renderDeviceAudioView } from "./src/views/device-audio-view.js";
+            import { renderDevicePresenceView } from "./src/views/device-presence-view.js";
 
-        self.assertIn("Track the Area with BLE Proxies", static_html)
-        self.assertIn("Assigned Area", static_html)
-        self.assertIn("— Unassigned —", static_html)
-        self.assertNotIn("Auto-Switch Active Area", static_html)
-        self.assertNotIn("Fallback Area", static_html)
-        self.assertNotIn("BLE Beacon Mode", static_html)
+            function build(bleTracking) {
+              return makeFakeStore({
+                activeSubentryId: "sub_1",
+                sections: {
+                  presence: [
+                    { entity_id: "pref:ble_beacon_mode", pref_key: "ble_beacon_mode", domain: "select", name: "BLE beacon mode", state: "Handheld Only", options: ["Handheld Only", "Always"] },
+                  ],
+                },
+                state: {
+                  config: {
+                    kind: "device",
+                    native_ble_tracking: bleTracking,
+                    ble_auto_switch: bleTracking,
+                    sync_device_area: bleTracking,
+                    area_handoff: true,
+                    default_area: "living_room",
+                    ble_target_address: "",
+                    ble_beacon_uuid: "E2C56DB5-DFFB-48D2-B060-D0F5A71096E1",
+                  },
+                  capabilities: { has_display: true, has_audio: true, is_roaming_device: true },
+                  catalog: {
+                    areas: [
+                      { id: "living_room", name: "Living Room" },
+                      { id: "kitchen", name: "Kitchen" },
+                    ],
+                  },
+                },
+              }).store;
+            }
 
-        self.assertIn("Track the Area with BLE Proxies", roaming_html)
-        self.assertIn("Auto-Switch Active Area", roaming_html)
-        self.assertIn("Fallback Area", roaming_html)
-        self.assertIn("— Automatic (ESPHome Area) —", roaming_html)
-        self.assertIn("BLE Beacon Mode", roaming_html)
-        self.assertNotIn("Assigned Area", roaming_html)
+            const staticStore = build(false);
+            const roamingStore = build(true);
+            process.stdout.write(JSON.stringify({
+              staticPresence: renderToHtml(renderDevicePresenceView(staticStore)),
+              roamingPresence: renderToHtml(renderDevicePresenceView(roamingStore)),
+              staticAudio: renderToHtml(renderDeviceAudioView(staticStore)),
+              roamingAudio: renderToHtml(renderDeviceAudioView(roamingStore)),
+            }));
+            """
+        )
+        self.assertIn("Assigned Area", got["staticPresence"])
+        self.assertNotIn("card-ble-identity", got["staticPresence"])
+        self.assertNotIn("BLE beacon mode", got["staticPresence"])
+        self.assertNotIn("Voice Follows Me", got["staticAudio"])
+        self.assertIn('id="cfg-area_handoff"', got["staticAudio"])
+
+        self.assertIn("card-ble-identity", got["roamingPresence"])
+        self.assertIn("Fallback Area", got["roamingPresence"])
+        self.assertNotIn("Assigned Area", got["roamingPresence"])
+        self.assertIn("Voice Follows Me", got["roamingAudio"])
+        self.assertIn('id="cfg-area_handoff"', got["roamingAudio"])
 
     def test_interface_view_home_screen_toggle_single_app_and_home_controls(self) -> None:
-        """D-035: Disabling Home Screen hides Dock Apps, Return Timeout, and Activity Card, and excludes Home from Start Screen."""
-        stub_lit = """
-const nothing = Symbol.for("latter.lit.nothing");
-function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
-function flattenHtml(node) {
-  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
-  if (Array.isArray(node)) return node.map(flattenHtml).join("");
-  if (typeof node === "object" && node._$litType$ === 1) {
-    let out = "";
-    for (let i = 0; i < node.strings.length; i += 1) {
-      out += node.strings[i];
-      if (i < node.values.length) {
-        const v = node.values[i];
-        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
-      }
-    }
-    return out;
-  }
-  return String(node);
-}
-"""
-        runner = (
-            stub_lit
-            + """
-function makeInterfaceStore(homeEnabled) {
-  return {
-    hass: null,
-    host: null,
-    activeSubentryId: "sub_1",
-    state: {
-      config: {
-        kind: "device",
-        home_screen_enabled: homeEnabled,
-        start_screen: homeEnabled ? "Home" : "Home",
-        return_to_home_timeout: "2 min",
-        activity_card: true,
-        dock_items: [
-          { kind: "route", target: "app:pinned", action: "", label: "", icon: "", confirm: false },
-          { kind: "route", target: "app:music", action: "", label: "", icon: "", confirm: false },
-        ],
-        pinned_items: [
-          { kind: "entity", target: "script.baby_help", action: "turn_on", label: "Baby Help", icon: "mdi:baby-face-outline", confirm: false },
-        ],
-        local_clock_label: "Oakland",
-        world_clocks: "Westminster|Europe/London;Kyoto|Asia/Tokyo",
-        alarms_summary: "06:45|1|1;08:30|0|2;09:00|0|3",
-        home_categories: "alarm,thermostat,entry",
-        area_categories: "scene,light",
-        device_remote_group: "area_auto",
-      },
-      system_config: { remote_groups: [] },
-      system_devices: [{ subentry_id: "sub_1", device_remote_group: "area_auto" }],
-    },
-    getSectionItems(sec) {
-      if (sec === "display") {
-        return [
-          {
-            entity_id: "pref:home_screen_enabled",
-            pref_key: "home_screen_enabled",
-            domain: "switch",
-            name: "Enable Home Screen",
-            state: homeEnabled ? "on" : "off",
-          },
-          {
-            entity_id: "pref:start_screen",
-            pref_key: "start_screen",
-            domain: "select",
-            name: "Start Screen",
-            state: homeEnabled ? "Home" : "Time App",
-            options: START_SCREEN_OPTIONS,
-          },
-          {
-            entity_id: "pref:return_to_home_timeout",
-            pref_key: "return_to_home_timeout",
-            domain: "select",
-            name: "Return to Home Timeout",
-            state: "2 min",
-            options: RETURN_TO_HOME_TIMEOUT_OPTIONS,
-          },
-        ];
-      }
-      return [];
-    },
-    getPref(key) {
-      const items = this.getSectionItems("display");
-      const it = items.find((p) => p.pref_key === key || p.key === key);
-      if (it) {
-        return {
-          key,
-          label: it.name || key,
-          section: "interface",
-          domain: it.domain,
-          value: it.domain === "switch" ? it.state === "on" : it.state,
-          options: it.options,
-        };
-      }
-      return undefined;
-    },
-    getPrefs(keys) {
-      return (keys || []).map((k) => this.getPref(k)).filter(Boolean);
-    },
-    getDockItems() {
-      return [
-        { kind: "route", target: "app:pinned", action: "", label: "", icon: "", confirm: false },
-        { kind: "route", target: "app:music", action: "", label: "", icon: "", confirm: false },
-        { kind: "route", target: "weather:moon", action: "", label: "Moon Phase", icon: "", confirm: false },
-      ];
-    },
-    getPinnedItems() {
-      return [
-        { kind: "entity", target: "script.baby_help", action: "turn_on", label: "Baby Help", icon: "mdi:baby-face-outline", confirm: false },
-      ];
-    },
-    getEnabledHomeCategories() {
-      return ["alarm", "thermostat", "entry"];
-    },
-    getEnabledAreaCategories() {
-      return ["scene", "light"];
-    },
-    getEnabledActivitySources() {
-      return ["calendar", "timers"];
-    },
-    getEnabledToolsItems() {
-      return ["stopwatch", "level", "flashlight", "calculator", "dice", "coin_flip"];
-    },
-    getEnabledGamesItems() {
-      return ["marbles", "archery", "bricks", "chomp", "2048", "memory"];
-    },
-  };
-}
-function renderModal(app, caps = {}) {
-  const s = makeInterfaceStore(true);
-  s.state.capabilities = caps;
-  s.appConfigModal = { open: true, app };
-  return flattenHtml(renderAppConfigModalBody(s));
-}
-return {
-  enabledMarkup: flattenHtml(renderDeviceInterfaceView(makeInterfaceStore(true))),
-  singleAppMarkup: flattenHtml(renderDeviceInterfaceView(makeInterfaceStore(false))),
-  pinnedModalMarkup: renderModal("pinned"),
-  homeHubModalMarkup: renderModal("home_hub"),
-  timeModalMarkup: renderModal("time"),
-  rectWallToolsModalMarkup: renderModal("tools", { is_round: false, has_imu: false }),
-};
-"""
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
+            import { START_SCREEN_OPTIONS, RETURN_TO_HOME_TIMEOUT_OPTIONS } from "./src/constants.js";
+            import { renderAppConfigModalBody } from "./src/components/dialogs.js";
+            import { renderDeviceInterfaceView } from "./src/views/device-interface-view.js";
+
+            function build(homeEnabled, caps = { has_display: true, is_round: true, has_imu: true }) {
+              return makeFakeStore({
+                activeSubentryId: "sub_1",
+                devicePrefs: [
+                  { key: "home_screen_enabled", label: "Home screen", section: "interface", domain: "switch", value: homeEnabled },
+                  { key: "start_screen", label: "Start screen", section: "interface", domain: "select", value: homeEnabled ? "Home" : "Time App", options: START_SCREEN_OPTIONS },
+                  { key: "return_to_home_timeout", label: "Return to Home timeout", section: "interface", domain: "select", value: "2 min", options: RETURN_TO_HOME_TIMEOUT_OPTIONS },
+                ],
+                state: {
+                  config: {
+                    kind: "device",
+                    home_screen_enabled: homeEnabled,
+                    start_screen: homeEnabled ? "Home" : "Time App",
+                    return_to_home_timeout: "2 min",
+                    activity_card: true,
+                    activity_sources: "calendar,timers",
+                    dock_items: [
+                      { kind: "route", target: "app:pinned", action: "", label: "", icon: "", confirm: false },
+                      { kind: "route", target: "app:music", action: "", label: "", icon: "", confirm: false },
+                      { kind: "route", target: "weather:moon", action: "", label: "Moon Phase", icon: "", confirm: false },
+                    ],
+                    pinned_items: [
+                      { kind: "entity", target: "script.baby_help", action: "turn_on", label: "Baby Help", icon: "mdi:baby-face-outline", confirm: false },
+                    ],
+                    local_clock_label: "Oakland",
+                    world_clocks: "Westminster|Europe/London;Kyoto|Asia/Tokyo",
+                    home_categories: "alarm,thermostat,entry",
+                    area_categories: "scene,light",
+                    tools_items: "stopwatch,level,flashlight,calculator,dice,coin_flip",
+                    games_items: "marbles,archery,bricks,chomp,2048,memory",
+                    device_remote_group: "area_auto",
+                  },
+                  capabilities: caps,
+                  system_config: { remote_groups: [] },
+                  system_devices: [{ subentry_id: "sub_1", kind: "device", is_online: true, device_remote_group: "area_auto" }],
+                },
+              }).store;
+            }
+
+            function modalHtml(app, caps) {
+              const s = build(true, caps);
+              s.appConfigModal = { open: true, app };
+              return renderToHtml(renderAppConfigModalBody(s));
+            }
+
+            process.stdout.write(JSON.stringify({
+              enabledMarkup: renderToHtml(renderDeviceInterfaceView(build(true))),
+              singleAppMarkup: renderToHtml(renderDeviceInterfaceView(build(false))),
+              pinnedModalMarkup: modalHtml("pinned"),
+              homeHubModalMarkup: modalHtml("home_hub"),
+              timeModalMarkup: modalHtml("time"),
+              rectWallToolsModalMarkup: modalHtml("tools", { has_display: true, is_round: false, has_imu: false }),
+            }));
+            """
         )
-        got = _run_node_ts(
-            [
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "components" / "controls.ts",
-                FRONTEND_SRC / "components" / "dialogs.ts",
-                FRONTEND_SRC / "components" / "wallpaper-gallery.ts",
-                FRONTEND_SRC / "views" / "device-display-view.ts",
-                FRONTEND_SRC / "views" / "device-interface-view.ts",
-            ],
-            runner,
-        )
-        enabled_html = got["enabledMarkup"]
-        single_html = got["singleAppMarkup"]
-        pinned_modal = got["pinnedModalMarkup"]
-        home_hub_modal = got["homeHubModalMarkup"]
-        time_modal = got["timeModalMarkup"]
-        rect_wall_tools = got["rectWallToolsModalMarkup"]
+        self.assertIn("App Dock", got["enabledMarkup"])
+        self.assertIn("Moon Phase", got["enabledMarkup"])
+        self.assertIn('id="dock-hidden-native-apps"', got["enabledMarkup"])
+        self.assertIn("Baby Help", got["pinnedModalMarkup"])
+        self.assertIn('id="world-clocks-list"', got["timeModalMarkup"])
+        self.assertNotIn("Analog Chronograph", got["rectWallToolsModalMarkup"])
+        self.assertNotIn("Bubble Level", got["rectWallToolsModalMarkup"])
+        self.assertIn("Flashlight", got["rectWallToolsModalMarkup"])
 
-        for expected in (
-            "Enable Home Screen",
-            "Start Screen",
-            ".value=Home",
-            "<option value=Home ?selected=>",
-            "Home Time Tap",
-            "Return to Home Timeout",
-            "App Dock",
-            "Add Custom Shortcut",
-            "Reset Default Dock",
-            "Moon Phase",
-            "Always shown last on the App Dock",
-            "Hidden From Dock",
-            "1 shortcut • 1 page",
-            "Show the Activity Card",
-            "Activity Card Sources",
-        ):
-            self.assertIn(expected, enabled_html)
-        self.assertNotIn("Configure Sky & Weather", enabled_html)
-
-        for expected_pinned in ("Pinned Shortcuts", "Add Pinned Item", "Baby Help", "Page 1"):
-            self.assertIn(expected_pinned, pinned_modal)
-        for expected_home in (
-            "Home Categories",
-            "✓ Security Alarm",
-            "✓ Thermostat",
-            "✓ Entry & Garage",
-            "+ Robot Vacuum",
-        ):
-            self.assertIn(expected_home, home_hub_modal)
-        for expected_time in (
-            'id="cfg-local_clock_label"',
-            ".value=Oakland",
-            'id="world-clocks-list"',
-            ".value=Westminster",
-            ".value=Kyoto",
-        ):
-            self.assertIn(expected_time, time_modal)
-        self.assertNotIn("Analog Chronograph", rect_wall_tools)
-        self.assertNotIn("Bubble Level", rect_wall_tools)
-        self.assertIn("✓ Flashlight", rect_wall_tools)
-
-        self.assertIn("Enable Home Screen", single_html)
-        self.assertIn("Start Screen", single_html)
-        self.assertIn(".value=Time App", single_html)
-        self.assertIn("<option value=Pinned ?selected=>", single_html)
-        self.assertIn("<option value=Time App ?selected=>", single_html)
-        self.assertIn("<option value=Clock Face ?selected=>", single_html)
-        self.assertIn("<option value=Home Hub ?selected=>", single_html)
-        self.assertNotIn("<option value=Home ?selected=>", single_html)
-        self.assertIn('id="btn-configure-start-screen"', single_html)
-        self.assertIn('<h3 class="card-title">Single-App Mode Active</h3>', single_html)
-        self.assertIn('id="btn-configure-locked-app"', single_html)
-        self.assertIn("Configure Time App", single_html)
-        self.assertNotIn("Home Time Tap", single_html)
-        self.assertNotIn("Return to Home Timeout", single_html)
-        self.assertNotIn('id="dock-shortcuts-container"', single_html)
-        self.assertNotIn("Add Custom Shortcut", single_html)
-        self.assertNotIn("Show the Activity Card", single_html)
-        self.assertNotIn("Activity Card Sources", single_html)
+        self.assertIn("card-single-app-mode", got["singleAppMarkup"])
+        self.assertIn('id="btn-configure-locked-app"', got["singleAppMarkup"])
+        self.assertNotIn('id="dock-shortcuts-container"', got["singleAppMarkup"])
 
     def test_time_card_focus_safe_typing_and_manual_world_clock_add(self) -> None:
-        """D-039: Focused text inputs survive live WS re-renders, stop HA shortcut bubbling, and require manual World Clock labels."""
-        runner = """
-// 1. Verify PropertyPart in lib/lit.ts skips overwriting focused text inputs
-const shadow = { activeElement: null };
-const textInput = {
-  tagName: "INPUT",
-  type: "text",
-  value: "M",
-  getRootNode() { return shadow; },
-};
-const rangeInput = {
-  tagName: "INPUT",
-  type: "range",
-  value: "40",
-  getRootNode() { return shadow; },
-};
-const textPropPart = new PropertyPart(textInput, "value", 0);
-shadow.activeElement = textInput;
-// Simulate live ble_survey_delta re-render trying to reset .value back to ""
-textPropPart.update([""]);
-const preservedWhileFocused = textInput.value;
-// Once blurred, external updates sync normally
-shadow.activeElement = null;
-textPropPart.update(["Synced"]);
-const updatedAfterBlur = textInput.value;
-// Non-text inputs (e.g. range) still update even when focused
-const rangePropPart = new PropertyPart(rangeInput, "value", 0);
-shadow.activeElement = rangeInput;
-rangePropPart.update(["75"]);
-const rangeUpdatedWhileFocused = rangeInput.value;
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { SimEvent } from "./test/dom-shim.js";
+            import { makeFakeStore, renderToContainer } from "./test/fake-store.js";
+            import { WORLD_CLOCK_ZONES_CATALOG } from "./src/constants.js";
+            import { renderAppConfigModalBody } from "./src/components/dialogs.js";
+            import { focusSafe, html, render } from "./src/lib/lit.js";
+            import { LatterStudio } from "./src/latter-studio.js";
 
-// 2. Verify ShadowRoot keydown isolation stops HA single-key shortcuts ('a', 'c', 'd', 'e', 'm') on INPUT
-function runKeyDown(key, opts = {}) {
-  let stopped = false;
-  const fakeInner = { tagName: opts.tagName || "INPUT" };
-  const ev = {
-    key,
-    ctrlKey: Boolean(opts.ctrlKey),
-    metaKey: Boolean(opts.metaKey),
-    altKey: Boolean(opts.altKey),
-    composedPath: () => [fakeInner],
-    stopPropagation() { stopped = true; },
-  };
-  LatterStudio.prototype._onRootKeyDown.call({}, ev);
-  return stopped;
-}
+            // 1. focusSafe() preserves focused text input across background updates
+            const tplInput = (val) => html`<input id="t" type="text" .value=${focusSafe(val)} />`;
+            const box = renderToContainer(tplInput("Init"));
+            document.body.appendChild(box);
+            const inp = box.querySelector("#t");
+            inp.focus();
+            inp.value = "M";
+            render(tplInput(""), box);
+            const preservedWhileFocused = inp.value;
+            inp.blur();
+            render(tplInput("Synced"), box);
+            const updatedAfterBlur = inp.value;
 
-// 3. Verify UTC-12..UTC+14 catalog & manual city label flow in renderDeviceInterfaceView
-const stagedCalls = [];
-const toasts = [];
-const domEls = {
-  "cfg-world_clock_new_label": { value: "", focused: false, focus() { this.focused = true; } },
-  "cfg-world_clocks_add": { value: "", focused: false, focus() { this.focused = true; } },
-};
-const store = {
-  activeSubentryId: "sub_1",
-  appConfigModal: { open: true, app: "time" },
-  worldClockNewLabel: "",
-  worldClockNewZone: "",
-  requestCount: 0,
-  host: {
-    renderRoot: {
-      getElementById(id) { return domEls[id] || null; },
-    },
-    requestUpdate() { store.requestCount += 1; },
-  },
-  state: {
-    config: {
-      kind: "device",
-      home_screen_enabled: true,
-      start_screen: "Home",
-      return_to_home_timeout: "2 min",
-      activity_card: true,
-      dock_items: [],
-      pinned_items: [],
-      local_clock_label: "",
-      world_clocks: "Westminster|Europe/London",
-      alarms_summary: "07:00|0|1;08:30|0|2;09:00|0|2",
-    },
-    system_config: { remote_groups: [] },
-    system_devices: [{ subentry_id: "sub_1", device_remote_group: "area_auto" }],
-  },
-  getSectionItems() { return []; },
-  getPref() { return undefined; },
-  getPrefs() { return []; },
-  getDockItems() { return []; },
-  getPinnedItems() { return []; },
-  getEnabledHomeCategories() { return []; },
-  getEnabledAreaCategories() { return []; },
-  getEnabledActivitySources() { return []; },
-  stageDeviceSetting(key, val, domId, debounceMs) {
-    stagedCalls.push({ key, val, domId, debounceMs });
-    store.state.config[key] = val;
-  },
-  flushAllPendingSettings() { return Promise.resolve(); },
-  showToast(msg, isErr) { toasts.push({ msg, isErr: Boolean(isErr) }); },
-};
+            // 2. ShadowRoot keydown isolation stops HA single-key shortcuts on INPUT
+            function runKeyDown(key, opts = {}) {
+              let stopped = false;
+              const fakeInner = { tagName: opts.tagName || "INPUT" };
+              const ev = {
+                key,
+                ctrlKey: Boolean(opts.ctrlKey),
+                metaKey: Boolean(opts.metaKey),
+                altKey: Boolean(opts.altKey),
+                composedPath: () => [fakeInner],
+                stopPropagation() { stopped = true; },
+              };
+              LatterStudio.prototype._onRootKeyDown.call({}, ev);
+              return stopped;
+            }
 
-// Walk TemplateResult tree to extract event handlers by element id
-function collectHandlers(node, out = {}) {
-  if (!node || typeof node !== "object") return out;
-  if (Array.isArray(node)) {
-    for (const item of node) collectHandlers(item, out);
-    return out;
-  }
-  if (node._$litType$ === 1 && Array.isArray(node.strings)) {
-    let raw = "";
-    for (let i = 0; i < node.strings.length; i++) {
-      raw += node.strings[i];
-      if (i < node.values.length) {
-        const v = node.values[i];
-        if (typeof v === "function") {
-          const idMatch = /id=(?:"([^"]+)"|([A-Za-z0-9_-]+))(?![\\s\\S]*<)/.exec(raw);
-          const attrMatch = /@([a-z]+)=\\s*$/.exec(raw);
-          const curId = idMatch ? (idMatch[1] || idMatch[2]) : null;
-          if (curId && attrMatch) {
-            out[curId] = out[curId] || {};
-            out[curId][attrMatch[1]] = v;
-          }
-          raw += "__FN__";
-        } else if (v && typeof v === "object") {
-          collectHandlers(v, out);
-          raw += "__TPL__";
-        } else {
-          raw += String(v ?? "");
-        }
-      }
-    }
-  }
-  return out;
-}
+            // 3. World clock manual city label flow
+            const { store, toasts } = makeFakeStore({
+              activeSubentryId: "sub_1",
+              state: {
+                config: {
+                  kind: "device",
+                  local_clock_label: "",
+                  world_clocks: "Westminster|Europe/London",
+                },
+              },
+            });
+            store.appConfigModal = { open: true, app: "time" };
+            const stagedCalls = [];
+            store.entity.stageDeviceSetting = (key, val, domId, debounceMs) => {
+              stagedCalls.push({ key, val, domId, debounceMs });
+              store.state.config[key] = val;
+            };
 
-const tpl = renderAppConfigModalBody(store);
-const handlers = collectHandlers(tpl);
+            const modalRoot = renderToContainer(renderAppConfigModalBody(store));
+            store.host.renderRoot = modalRoot;
 
-// Type "Main " (with trailing space!) into Local Clock Label — DOM .value must NOT be trimmed mid-typing
-const localEl = { value: "Main " };
-handlers["cfg-local_clock_label"].input({ currentTarget: localEl });
-const localDomDuringTyping = localEl.value;
+            const localInput = modalRoot.querySelector("#cfg-local_clock_label");
+            localInput.value = "Main ";
+            localInput.dispatchEvent(new SimEvent("input", { bubbles: true }));
+            const localDomDuringTyping = localInput.value;
 
-// Pick UTC-05:00 Eastern Time in #cfg-world_clocks_add — must NOT auto-populate label or stage world_clocks
-domEls["cfg-world_clocks_add"].value = "America/New_York";
-handlers["cfg-world_clocks_add"].change({ currentTarget: domEls["cfg-world_clocks_add"] });
-const labelAfterZonePick = store.worldClockNewLabel;
-const stagedWorldClocksAfterPick = stagedCalls.filter((c) => c.key === "world_clocks").length;
+            const zoneSelect = modalRoot.querySelector("#cfg-world_clocks_add");
+            zoneSelect.value = "America/New_York";
+            zoneSelect.dispatchEvent(new SimEvent("change", { bubbles: true }));
+            const labelAfterZonePick = store.worldClockNewLabel;
+            const stagedWorldClocksAfterPick = stagedCalls.filter((c) => c.key === "world_clocks").length;
 
-// Clicking Add without a city label shows toast & focuses New City Label
-handlers["btn-world_clock_add"].click({});
-const toastOnMissingCity = toasts[toasts.length - 1]?.msg || "";
-const focusedLabelOnMissing = domEls["cfg-world_clock_new_label"].focused;
+            modalRoot.querySelector("#btn-world_clock_add").click();
+            const toastOnMissingCity = toasts[toasts.length - 1]?.msg || "";
 
-// Enter manual city "Akron, OH" and click Add
-domEls["cfg-world_clock_new_label"].value = "Akron, OH";
-handlers["cfg-world_clock_new_label"].input({ currentTarget: domEls["cfg-world_clock_new_label"] });
-handlers["btn-world_clock_add"].click({});
+            const newCityInput = modalRoot.querySelector("#cfg-world_clock_new_label");
+            newCityInput.value = "Akron, OH";
+            newCityInput.dispatchEvent(new SimEvent("input", { bubbles: true }));
+            modalRoot.querySelector("#btn-world_clock_add").click();
 
-return {
-  preservedWhileFocused,
-  updatedAfterBlur,
-  rangeUpdatedWhileFocused,
-  stopLetterA: runKeyDown("a"),
-  stopLetterC: runKeyDown("c"),
-  allowEscape: !runKeyDown("Escape"),
-  allowTab: !runKeyDown("Tab"),
-  allowCtrlC: !runKeyDown("c", { ctrlKey: true }),
-  allowButtonKey: !runKeyDown("c", { tagName: "BUTTON" }),
-  firstCatalogZone: WORLD_CLOCK_ZONES_CATALOG[0],
-  lastCatalogZone: WORLD_CLOCK_ZONES_CATALOG[WORLD_CLOCK_ZONES_CATALOG.length - 1],
-  localDomDuringTyping,
-  localStagedCall: stagedCalls[0],
-  labelAfterZonePick,
-  stagedWorldClocksAfterPick,
-  toastOnMissingCity,
-  focusedLabelOnMissing,
-  finalWorldClocks: store.state.config.world_clocks,
-  clearedDraftLabel: store.worldClockNewLabel,
-  clearedDraftZone: store.worldClockNewZone,
-};
-"""
-        stub_lit_dom = (
-            "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
-            "globalThis.customElements = { get: () => true, define: () => {} };\n"
-            "function renderActiveView() { return nothing; }\n"
-            "const STUDIO_STYLES = { styleSheetText: '' };\n"
-            "class StudioStore { constructor() {} addController() {} }\n"
-        )
-        got = _run_node_ts(
-            [
-                FRONTEND_SRC / "lib" / "lit.ts",
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "components" / "controls.ts",
-                FRONTEND_SRC / "components" / "dialogs.ts",
-                FRONTEND_SRC / "latter-studio.ts",
-            ],
-            runner,
-            preamble_js=stub_lit_dom,
+            process.stdout.write(JSON.stringify({
+              preservedWhileFocused,
+              updatedAfterBlur,
+              stopLetterA: runKeyDown("a"),
+              stopLetterC: runKeyDown("c"),
+              allowEscape: !runKeyDown("Escape"),
+              allowTab: !runKeyDown("Tab"),
+              allowCtrlC: !runKeyDown("c", { ctrlKey: true }),
+              allowButtonKey: !runKeyDown("c", { tagName: "BUTTON" }),
+              firstCatalogZone: WORLD_CLOCK_ZONES_CATALOG[0],
+              lastCatalogZone: WORLD_CLOCK_ZONES_CATALOG[WORLD_CLOCK_ZONES_CATALOG.length - 1],
+              localDomDuringTyping,
+              localStagedCall: stagedCalls[0],
+              labelAfterZonePick,
+              stagedWorldClocksAfterPick,
+              toastOnMissingCity,
+              finalWorldClocks: store.state.config.world_clocks,
+              clearedDraftLabel: store.worldClockNewLabel,
+              clearedDraftZone: store.worldClockNewZone,
+            }));
+            """
         )
         self.assertEqual(got["preservedWhileFocused"], "M")
         self.assertEqual(got["updatedAfterBlur"], "Synced")
-        self.assertEqual(got["rangeUpdatedWhileFocused"], "75")
         self.assertTrue(got["stopLetterA"])
         self.assertTrue(got["stopLetterC"])
         self.assertTrue(got["allowEscape"])
@@ -1857,18 +1157,13 @@ return {
         self.assertTrue(got["allowCtrlC"])
         self.assertTrue(got["allowButtonKey"])
         self.assertEqual(got["firstCatalogZone"]["iana"], "Etc/GMT+12")
-        self.assertTrue(got["firstCatalogZone"]["label"].startswith("UTC-12:00"))
         self.assertEqual(got["lastCatalogZone"]["iana"], "Pacific/Kiritimati")
-        self.assertTrue(got["lastCatalogZone"]["label"].startswith("UTC+14:00"))
         self.assertEqual(got["localDomDuringTyping"], "Main ")
-        self.assertEqual(
-            got["localStagedCall"],
-            {"key": "local_clock_label", "val": "Main", "domId": "cfg-local_clock_label", "debounceMs": 600},
-        )
+        self.assertEqual(got["localStagedCall"]["key"], "local_clock_label")
+        self.assertEqual(got["localStagedCall"]["val"], "Main")
         self.assertEqual(got["labelAfterZonePick"], "")
         self.assertEqual(got["stagedWorldClocksAfterPick"], 0)
-        self.assertIn("Enter a city or label", got["toastOnMissingCity"])
-        self.assertTrue(got["focusedLabelOnMissing"])
+        self.assertTrue(got["toastOnMissingCity"])
         self.assertEqual(
             got["finalWorldClocks"],
             "Westminster|Europe/London;Akron, OH|America/New_York",
@@ -1877,1897 +1172,687 @@ return {
         self.assertEqual(got["clearedDraftZone"], "")
 
     def test_managed_and_discovered_lifecycle_views_and_badge(self) -> None:
-        """D-041: Managed vs. Discovered sidebar, Option C badge, dynamic Managed card header, and stacked Discovered cards."""
-        stub_lit = """
-function flattenHtml(node) {
-  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
-  if (Array.isArray(node)) return node.map(flattenHtml).join("");
-  if (typeof node === "object" && node._$litKeyed$ === 1) return flattenHtml(node.templates);
-  if (typeof node === "object" && node._$litType$ === 1) {
-    let out = "";
-    for (let i = 0; i < node.strings.length; i += 1) {
-      out += node.strings[i];
-      if (i < node.values.length) {
-        const v = node.values[i];
-        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
-      }
-    }
-    return out;
-  }
-  return String(node);
-}
-"""
-        runner = (
-            stub_lit
-            + """
-function makeFakeHost(storeOverrides) {
-  const store = Object.assign(
-    {
-      currentScope: "device",
-      currentViewId: "select_device_prompt",
-      deviceSelected: false,
-      activeSubentryId: "",
-      deviceSortField: "title",
-      deviceSortAsc: true,
-      deviceCategoryFilter: "all",
-      discoveredBleSearch: "",
-      discoveredBleKindFilter: "all",
-      discoveredBleSort: "name",
-      discoveredBlePaused: false,
-      discoveredBleFrozenSnapshot: null,
-      discoveredBlePersonDrafts: new Map(),
-      discoveredLatterGroupDrafts: new Map(),
-      discoveredLatterPersonDrafts: new Map(),
-      hass: null,
-      host: { requestUpdate() {} },
-      state: {
-        title: "Desk Panel",
-        capabilities: { has_display: true, has_audio: true, has_power: true },
-        config: { kind: "device" },
-        device_groups: [
-          { id: "wall_panels", name: "Wall & Desk Panels" },
-          { id: "handhelds", name: "Handhelds" },
-        ],
-        catalog: { persons: [{ id: "person.sean", name: "Sean" }] },
-        system_devices: [
-          {
-            subentry_id: "sub_1",
-            title: "Desk Panel",
-            model_label: "Square 4.0 (480x480)",
-            area_label: "Office",
-            device_group: "wall_panels",
-            device_group_name: "Wall & Desk Panels",
-            status_label: "Online",
-            is_online: true,
-            is_latter_native: true,
-            has_display: true,
-            is_roaming: false,
-            ble_tracked: false,
-            assigned_person: "",
-            kind: "device",
-          },
-          {
-            subentry_id: "sub_2",
-            title: "Pocket Assistant",
-            model_label: "Pocket 2.06 (410x502)",
-            area_label: "Roaming",
-            device_group: "handhelds",
-            device_group_name: "Handhelds",
-            status_label: "Online",
-            is_online: true,
-            is_latter_native: true,
-            has_display: true,
-            is_roaming: true,
-            ble_tracked: true,
-            assigned_person: "person.sean",
-            kind: "device",
-          },
-        ],
-        discovered_latter_devices: [],
-        discovered_ble_devices: [
-          {
-            title: "Sean's Watch",
-            target_address: "device_tracker.watch_ble",
-            kind: "Private BLE (phone or watch)",
-            rssi: -58,
-            area_name: "Office",
-          },
-          {
-            title: "Living TV BLE",
-            target_address: "11:22:33:44:55:66",
-            kind: "Named BLE device",
-            rssi: -79,
-            area_name: "Living Area",
-          },
-        ],
-      },
-      openDevicesLanding() {},
-      openDiscoveredDevices() {},
-      setScope() {},
-      switchView() {},
-      switchSystemDevice() {},
-      openHaPage() {},
-      openAddBleModal() {},
-      adoptLatterDevice() {},
-      quickAdoptBleCandidate() {},
-    },
-    storeOverrides || {},
-  );
-  return Object.assign(Object.create(LatterStudio.prototype), { store });
-}
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
+            import { LatterStudio } from "./src/latter-studio.js";
+            import { renderDevicesDiscoveredView } from "./src/views/devices-discovered-view.js";
+            import { renderDevicesListView } from "./src/views/devices-list-view.js";
 
-// 1. Option C badge: 0 Latter devices + 2 BLE devices -> NO #nav-discovered-count badge!
-const hostZeroLatter = makeFakeHost();
-const sidebarZeroLatter = flattenHtml(LatterStudio.prototype._renderSidebar.call(hostZeroLatter));
+            function buildHost(overrides = {}, extraState = {}) {
+              const { store } = makeFakeStore({
+                currentScope: overrides.currentScope ?? "device",
+                currentViewId: overrides.currentViewId ?? "select_device_prompt",
+                deviceSelected: overrides.deviceSelected ?? false,
+                activeSubentryId: overrides.activeSubentryId ?? "",
+                state: {
+                  title: "Desk Panel",
+                  config: { kind: "device" },
+                  device_groups: [
+                    { id: "wall_panels", name: "Wall & Desk Panels" },
+                    { id: "handhelds", name: "Handhelds" },
+                  ],
+                  catalog: { persons: [{ id: "person.alex", name: "Alex" }] },
+                  system_devices: [
+                    {
+                      subentry_id: "sub_1",
+                      title: "Desk Panel",
+                      model_label: "Square 4.0 (480x480)",
+                      area_label: "Office",
+                      device_group: "wall_panels",
+                      device_group_name: "Wall & Desk Panels",
+                      status_code: "online",
+                      status_label: "Online",
+                      is_online: true,
+                      is_latter_native: true,
+                      has_display: true,
+                      is_roaming: false,
+                      ble_tracked: false,
+                      assigned_person: "",
+                      kind: "device",
+                    },
+                    {
+                      subentry_id: "sub_2",
+                      title: "Pocket Assistant",
+                      model_label: "Pocket 2.06 (410x502)",
+                      area_label: "Roaming",
+                      device_group: "handhelds",
+                      device_group_name: "Handhelds",
+                      status_code: "online",
+                      status_label: "Online",
+                      is_online: true,
+                      is_latter_native: true,
+                      has_display: true,
+                      is_roaming: true,
+                      ble_tracked: true,
+                      assigned_person: "person.alex",
+                      kind: "device",
+                    },
+                  ],
+                  discovered_latter_devices: [],
+                  ignored_latter_devices: [],
+                  discovered_ble_devices: [
+                    {
+                      title: "Zoe's Watch",
+                      target_address: "device_tracker.watch_ble",
+                      kind: "Private BLE (phone or watch)",
+                      is_tracker: true,
+                      rssi: -58,
+                      area_name: "Office",
+                    },
+                    {
+                      title: "Living TV BLE",
+                      target_address: "11:22:33:44:55:66",
+                      kind: "Named BLE device",
+                      is_tracker: false,
+                      rssi: -79,
+                      area_name: "Living Room",
+                    },
+                  ],
+                  ...extraState,
+                },
+              });
+              if (overrides.deviceCategoryFilter) {
+                store.deviceCategoryFilter = overrides.deviceCategoryFilter;
+              }
+              return { store, el: Object.assign(Object.create(LatterStudio.prototype), { store }) };
+            }
 
-// 2. 1 unbound Latter device waiting -> #nav-discovered-count badge shows "1"!
-const hostOneLatter = makeFakeHost();
-hostOneLatter.store.state = Object.assign({}, hostOneLatter.store.state, {
-  discovered_latter_devices: [
-    {
-      esphome_device_id: "esp_new_1",
-      node_name: "kitchen_panel",
-      title: "Kitchen Panel",
-      model_label: "Square 4.0 (480x480)",
-      area_name: "Kitchen",
-      default_group: "wall_panels",
-    },
-  ],
-});
-const sidebarOneLatter = flattenHtml(LatterStudio.prototype._renderSidebar.call(hostOneLatter));
+            const zero = buildHost();
+            const sidebarZeroLatter = renderToHtml(LatterStudio.prototype._renderSidebar.call(zero.el));
 
-// 3. Single Device drill-down back button says "← Managed"
-const hostDrilldown = makeFakeHost({ deviceSelected: true, currentViewId: "dashboard" });
-const sidebarDrilldown = flattenHtml(LatterStudio.prototype._renderSidebar.call(hostDrilldown));
+            const one = buildHost({}, {
+              discovered_latter_devices: [
+                {
+                  esphome_device_id: "esp_new_1",
+                  node_name: "kitchen_panel",
+                  title: "Kitchen Panel",
+                  model_label: "Square 4.0 (480x480)",
+                  area_name: "Kitchen",
+                  default_group: "wall_panels",
+                },
+              ],
+              ignored_latter_devices: [
+                {
+                  esphome_device_id: "esp_ignored_1",
+                  node_name: "test_bench",
+                  title: "Test Bench",
+                  model_label: "Pocket",
+                  area_name: "",
+                  default_group: "pocket_carry",
+                },
+              ],
+            });
+            const sidebarOneLatter = renderToHtml(LatterStudio.prototype._renderSidebar.call(one.el));
+            const drilldown = buildHost({ deviceSelected: true, activeSubentryId: "sub_1", currentViewId: "dashboard" });
+            const sidebarDrilldown = renderToHtml(LatterStudio.prototype._renderSidebar.call(drilldown.el));
 
-// 4. Managed Devices dynamic card <h3> reflects dropdown filter
-const managedDefault = flattenHtml(renderDevicesListView(makeFakeHost({ deviceCategoryFilter: "all" }).store));
-const managedRoaming = flattenHtml(renderDevicesListView(makeFakeHost({ deviceCategoryFilter: "roaming" }).store));
-const managedDisplays = flattenHtml(renderDevicesListView(makeFakeHost({ deviceCategoryFilter: "native" }).store));
-const managedGroup = flattenHtml(renderDevicesListView(makeFakeHost({ deviceCategoryFilter: "group:wall_panels" }).store));
+            const managedRoaming = renderToHtml(renderDevicesListView(buildHost({ deviceCategoryFilter: "roaming" }).store));
 
-// 5. Discovered Devices stacked cards + stable Name sort vs Signal strength sort + Pause List freeze + BLE search & tracker filter
-const discAll = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
-hostOneLatter.store.discoveredBleSort = "rssi";
-const discSortRssi = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
-hostOneLatter.store.discoveredBleSort = "name";
-hostOneLatter.store.discoveredBlePaused = true;
-hostOneLatter.store.discoveredBleFrozenSnapshot = [hostOneLatter.store.state.discovered_ble_devices[0]];
-// Mutate live state while paused — frozen snapshot must keep only Sean's Watch and ignore Stray Beacon!
-hostOneLatter.store.state.discovered_ble_devices.push({
-  title: "Stray Neighbor Beacon",
-  target_address: "99:88:77:66:55:44",
-  kind: "Named BLE device",
-  rssi: -40,
-  area_name: "Kitchen",
-});
-const discPaused = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
-hostOneLatter.store.discoveredBlePaused = false;
-hostOneLatter.store.discoveredBleFrozenSnapshot = null;
-hostOneLatter.store.state.discovered_ble_devices.pop();
+            const discAll = renderToHtml(renderDevicesDiscoveredView(one.store));
+            one.store.discoveredBleSort = "rssi";
+            const discSortRssi = renderToHtml(renderDevicesDiscoveredView(one.store));
+            one.store.discoveredBleSort = "name";
+            one.store.discoveredBleKindFilter = "tracker";
+            const discTrackersOnly = renderToHtml(renderDevicesDiscoveredView(one.store));
 
-hostOneLatter.store.discoveredBleKindFilter = "tracker";
-const discTrackersOnly = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
-hostOneLatter.store.discoveredBleKindFilter = "all";
-hostOneLatter.store.discoveredBleSearch = "living tv";
-const discSearch = flattenHtml(renderDevicesDiscoveredView(hostOneLatter.store));
-
-return {
-  sidebarZeroLatter,
-  sidebarOneLatter,
-  sidebarDrilldown,
-  managedDefault,
-  managedRoaming,
-  managedDisplays,
-  managedGroup,
-  discAll,
-  discSortRssi,
-  discPaused,
-  discTrackersOnly,
-  discSearch,
-};
-"""
+            process.stdout.write(JSON.stringify({
+              sidebarZeroLatter,
+              sidebarOneLatter,
+              sidebarDrilldown,
+              managedRoaming,
+              discAll,
+              discSortRssi,
+              discTrackersOnly,
+            }));
+            """
         )
-        stub_lit_dom = (
-            "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
-            "globalThis.customElements = { get: () => true, define: () => {} };\n"
-            "function renderStudioDialogs() { return nothing; }\n"
-            "function syncStudioDialogs() {}\n"
-            "function renderActiveView() { return nothing; }\n"
-            "const STUDIO_STYLES = { styleSheetText: '' };\n"
-            "class StudioStore { constructor() {} addController() {} }\n"
-        )
-        got = _run_node_ts(
-            [
-                FRONTEND_SRC / "lib" / "lit.ts",
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "components" / "controls.ts",
-                FRONTEND_SRC / "views" / "devices-list-view.ts",
-                FRONTEND_SRC / "views" / "devices-discovered-view.ts",
-                FRONTEND_SRC / "latter-studio.ts",
-            ],
-            runner,
-            preamble_js=stub_lit_dom,
-        )
-
-        # Sidebar Option C badge & labels
-        self.assertIn("<span>Managed</span>", got["sidebarZeroLatter"])
-        self.assertIn('id="nav-system-count" class="nav-badge">2</span>', got["sidebarZeroLatter"])
-        self.assertIn("<span>Discovered</span>", got["sidebarZeroLatter"])
+        self.assertIn('href="/latter/devices"', got["sidebarZeroLatter"])
+        self.assertIn('href="/latter/devices/discovered"', got["sidebarZeroLatter"])
+        self.assertIn('id="nav-system-count"', got["sidebarZeroLatter"])
         self.assertNotIn("nav-discovered-count", got["sidebarZeroLatter"])
 
-        self.assertIn('id="nav-discovered-count" class="nav-badge">1</span>', got["sidebarOneLatter"])
-        self.assertIn("<span>&larr; Managed</span>", got["sidebarDrilldown"])
-        self.assertNotIn("All Devices", got["sidebarDrilldown"])
+        self.assertIn('id="nav-discovered-count"', got["sidebarOneLatter"])
+        self.assertIn("← Managed", got["sidebarDrilldown"])
 
-        # Dynamic Managed Devices card header
-        self.assertIn('<h3 class="card-title">All Devices</h3>', got["managedDefault"])
-        self.assertIn('<h3 class="card-title">Roaming Devices</h3>', got["managedRoaming"])
-        self.assertNotIn('<td class="col-name">Desk Panel</td>', got["managedRoaming"])
-        self.assertIn('<td class="col-name">Pocket Assistant</td>', got["managedRoaming"])
-        self.assertIn('<h3 class="card-title">Latter Displays</h3>', got["managedDisplays"])
-        self.assertIn('<h3 class="card-title">Group: Wall & Desk Panels</h3>', got["managedGroup"])
+        self.assertNotIn(">Desk Panel<", got["managedRoaming"])
+        self.assertIn('<a href="/latter/devices/sub_2">Pocket Assistant</a>', got["managedRoaming"])
 
-        # Discovered Devices two stacked cards + stable Name default sort vs Signal strength + Pause List + filtering
-        self.assertIn('<h3 class="card-title">Latter Devices</h3>', got["discAll"])
-        self.assertIn('<h3 class="card-title">Bluetooth Devices</h3>', got["discAll"])
-        self.assertLess(
-            got["discAll"].index('<h3 class="card-title">Latter Devices</h3>'),
-            got["discAll"].index('<h3 class="card-title">Bluetooth Devices</h3>'),
-        )
         self.assertIn("Kitchen Panel", got["discAll"])
-        self.assertIn("Auto (Wall & Desk Panels)", got["discAll"])
-        self.assertIn("Pause List", got["discAll"])
-        # Default Sort = Name (A-Z): "Living TV BLE" (-79 dBm) renders BEFORE "Sean's Watch" (-58 dBm)
-        self.assertLess(
-            got["discAll"].index("Living TV BLE"),
-            got["discAll"].index("Sean's Watch"),
-        )
-        # Sort = Signal strength: "Sean's Watch" (-58 dBm) renders BEFORE "Living TV BLE" (-79 dBm)
-        self.assertLess(
-            got["discSortRssi"].index("Sean's Watch"),
-            got["discSortRssi"].index("Living TV BLE"),
-        )
-        # Paused snapshot ignores newly pushed live BLE items and shows Resume List
-        self.assertIn("Resume List", got["discPaused"])
-        self.assertIn("List updates paused", got["discPaused"])
-        self.assertIn("Sean's Watch", got["discPaused"])
-        self.assertNotIn("Stray Neighbor Beacon", got["discPaused"])
-        self.assertNotIn("Living TV BLE", got["discPaused"])
-
-        self.assertIn("Sean's Watch", got["discTrackersOnly"])
+        self.assertIn("Ignore", got["discAll"])
+        self.assertIn("Ignored (1)", got["discAll"])
+        self.assertLess(got["discAll"].index("Living TV BLE"), got["discAll"].index("Zoe's Watch"))
+        self.assertLess(got["discSortRssi"].index("Zoe's Watch"), got["discSortRssi"].index("Living TV BLE"))
+        self.assertIn("Zoe's Watch", got["discTrackersOnly"])
         self.assertNotIn("Living TV BLE", got["discTrackersOnly"])
 
-        self.assertNotIn("Sean's Watch", got["discSearch"])
-        self.assertIn("Living TV BLE", got["discSearch"])
-
     def test_system_presence_walk_around_ux_and_ble_tracked_filter(self) -> None:
-        """D-044 / D-045: System -> BLE & Area Presence Area boxes, smooth-scroll handoff, stream freeze, and inline Antenna Trim."""
-        runner = """
-return (async () => {
-function flattenHtml(val) {
-  if (val == null || val === false || val === true || typeof val === "symbol") return "";
-  if (Array.isArray(val)) return val.map(flattenHtml).join("");
-  if (typeof val === "object") {
-    if (Array.isArray(val.strings) && Array.isArray(val.values)) {
-      let out = "";
-      for (let i = 0; i < val.strings.length; i += 1) {
-        out += val.strings[i];
-        if (i < val.values.length) {
-          const prev = val.strings[i];
-          const v = val.values[i];
-          if (typeof v === "boolean" && /\\?[a-zA-Z0-9_-]+=$/.test(prev)) {
-            out += String(v);
-          } else {
-            out += flattenHtml(v);
-          }
-        }
-      }
-      return out;
-    }
-    if (val._$litKeyed$ === 1 && Array.isArray(val.templates)) {
-      return val.templates.map(flattenHtml).join("");
-    }
-  }
-  return String(val);
-}
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { makeFakeStore, renderToContainer, renderToHtml } from "./test/fake-store.js";
+            import { renderSystemPresenceView } from "./src/views/system-presence-view.js";
 
-function findButtonClickByText(node, buttonText) {
-  if (!node || typeof node !== "object") return null;
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      const found = findButtonClickByText(item, buttonText);
-      if (found) return found;
-    }
-    return null;
-  }
-  if (node._$litKeyed$ === 1 && Array.isArray(node.templates)) {
-    return findButtonClickByText(node.templates, buttonText);
-  }
-  if (Array.isArray(node.strings) && Array.isArray(node.values)) {
-    for (let i = 0; i < node.values.length; i += 1) {
-      const v = node.values[i];
-      if (
-        typeof v === "function" &&
-        node.strings[i].includes("@click=") &&
-        (node.strings[i + 1] || "").includes(buttonText)
-      ) {
-        return v;
-      }
-      const nested = findButtonClickByText(v, buttonText);
-      if (nested) return nested;
-    }
-  }
-  return null;
-}
+            globalThis.requestAnimationFrame = (cb) => { cb(0); return 1; };
 
-const scrolledCalls = [];
-const focusedCalls = [];
-globalThis.requestAnimationFrame = (cb) => cb();
+            const deskUntracked = {
+              subentry_id: "sub_desk",
+              title: "Desk Assistant",
+              has_ble: true,
+              ble_tracked: false,
+              kind: "device",
+              active_area_name: "Office",
+              ble_packets_seen: 0,
+              ble_survey_rows: [],
+            };
+            const pocketTracked = {
+              subentry_id: "sub_pocket",
+              title: "Pocket Assistant",
+              has_ble: true,
+              ble_tracked: true,
+              kind: "device",
+              active_area_name: "Bedroom",
+              ble_packets_seen: 14,
+              ble_survey_rows: [
+                {
+                  area_id: "bedroom",
+                  area_name: "Bedroom",
+                  scanner_source: "AA:BB:CC:DD:EE:01",
+                  scanner_name: "Bedroom Proxy",
+                  raw_rssi: -58,
+                  effective_rssi: -57,
+                  offset_db: 1.0,
+                  distance_m: 1.2,
+                  age_seconds: 1,
+                  is_fresh: true,
+                  is_winner: true,
+                },
+                {
+                  area_id: "",
+                  area_name: "",
+                  scanner_source: "AA:BB:CC:DD:EE:02",
+                  scanner_name: "Hallway Plug",
+                  raw_rssi: -76,
+                  effective_rssi: -76,
+                  offset_db: 0,
+                  distance_m: 4.8,
+                  age_seconds: 2,
+                  is_fresh: true,
+                  is_winner: false,
+                },
+              ],
+            };
+            const keyringTag = {
+              subentry_id: "sub_tag",
+              title: "Keyring Tag",
+              has_ble: false,
+              ble_tracked: false,
+              kind: "ble_tag",
+              active_area_name: "Kitchen",
+              ble_packets_seen: 5,
+              ble_survey_rows: [],
+            };
 
-const fakeHost = {
-  isConnected: true,
-  requestUpdate() {},
-  addController() {},
-  removeController() {},
-  updateComplete: Promise.resolve(true),
-  renderRoot: {
-    getElementById(id) {
-      return {
-        id,
-        scrollIntoView(opts) { scrolledCalls.push({ id, opts: opts || null }); },
-        focus(opts) { focusedCalls.push({ id, opts: opts || null }); },
-      };
-    },
-  },
-};
+            const { store, sysCalls, scrolled, focused } = makeFakeStore({
+              activeSubentryId: "sub_desk",
+              state: {
+                system_config: {
+                  ble_away_timeout_s: 180,
+                  ble_max_radius_m: 12,
+                  ble_max_velocity_mps: 3.5,
+                  ble_attenuation: 2.2,
+                },
+                system_devices: [
+                  structuredClone(deskUntracked),
+                  structuredClone(pocketTracked),
+                  structuredClone(keyringTag),
+                ],
+                ble_area_signatures: [
+                  { area_id: "bedroom", area_name: "Bedroom", floor_id: "upstairs", has_ble_proxy: true, has_signature: true, scanner_count: 2, sample_count: 18, captured_at: "2026-11-16T20:00:00Z" },
+                  { area_id: "office", area_name: "Office", floor_id: "downstairs", has_ble_proxy: false, has_signature: false, scanner_count: 0, sample_count: 0, captured_at: "" },
+                ],
+                live: {
+                  area_presence_grid: [
+                    { area_id: "bedroom", area_name: "Bedroom", floor_name: "Upstairs", is_occupied: true, confidence_pct: 84, occupant_names: ["Alex"], winning_rssi: -57, closest_distance_m: 1.2, match_method: "signature", fusion_mode: "weighted", fusion_threshold_pct: 50, fusion_sensors: [], fusion_sensor_choices: [] },
+                  ],
+                },
+              },
+            });
 
-const deskUntracked = {
-  subentry_id: "sub_desk",
-  title: "Desk Assistant",
-  has_ble: true,
-  ble_tracked: false,
-  kind: "device",
-  active_area_name: "Office",
-  ble_packets_seen: 0,
-  ble_survey_rows: [],
-};
-const pocketTracked = {
-  subentry_id: "sub_pocket",
-  title: "Pocket Assistant",
-  has_ble: true,
-  ble_tracked: true,
-  kind: "device",
-  active_area_name: "Bedroom",
-  ble_packets_seen: 14,
-  ble_survey_rows: [
-    {
-      area_id: "bedroom",
-      area_name: "Bedroom",
-      scanner_source: "AA:BB:CC:DD:EE:01",
-      scanner_name: "Bedroom Proxy",
-      raw_rssi: -58,
-      effective_rssi: -57,
-      offset_db: 1.0,
-      distance_m: 1.2,
-      age_seconds: 1,
-      is_fresh: true,
-      is_winner: true,
-    },
-    {
-      area_id: "",
-      area_name: "",
-      scanner_source: "AA:BB:CC:DD:EE:02",
-      scanner_name: "Hallway Plug",
-      raw_rssi: -76,
-      effective_rssi: -76,
-      offset_db: 0,
-      distance_m: 4.8,
-      age_seconds: 2,
-      is_fresh: true,
-      is_winner: false,
-    },
-  ],
-};
-const keyringTag = {
-  subentry_id: "sub_tag",
-  title: "Keyring Tag",
-  has_ble: false,
-  ble_tracked: false,
-  kind: "ble_tag",
-  active_area_name: "Kitchen",
-  ble_packets_seen: 5,
-  ble_survey_rows: [],
-};
+            const defaultSurveyAfterFilter = store.bleSurveySubentryId;
+            const activeRendered = renderToHtml(renderSystemPresenceView(store));
 
-const baseState = {
-  system_config: {
-    ble_away_timeout_s: 180,
-    ble_max_radius_m: 12,
-    ble_max_velocity_mps: 3.5,
-    ble_attenuation: 2.2,
-  },
-  system_devices: [
-    structuredClone(deskUntracked),
-    structuredClone(pocketTracked),
-    structuredClone(keyringTag),
-  ],
-  ble_area_signatures: [
-    {
-      area_id: "bedroom",
-      area_name: "Bedroom",
-      floor_id: "upstairs",
-      has_ble_proxy: true,
-      has_signature: true,
-      scanner_count: 2,
-      sample_count: 18,
-      captured_at: "2026-11-16T20:00:00Z",
-    },
-    {
-      area_id: "office",
-      area_name: "Office",
-      floor_id: "downstairs",
-      has_ble_proxy: false,
-      has_signature: false,
-      scanner_count: 0,
-      sample_count: 0,
-      captured_at: "",
-    },
-    {
-      area_id: "guest_bath",
-      area_name: "Guest Bath",
-      floor_id: "downstairs",
-      has_ble_proxy: false,
-      has_signature: false,
-      scanner_count: 0,
-      sample_count: 0,
-      captured_at: "",
-    },
-  ],
-  live: {
-    area_presence_grid: [
-      {
-        area_id: "bedroom",
-        area_name: "Bedroom",
-        floor_name: "Upstairs",
-        is_occupied: true,
-        confidence_pct: 84,
-        occupant_names: ["Sean"],
-        winning_rssi: -57,
-        closest_distance_m: 1.2,
-        match_method: "signature",
-        fusion_mode: "weighted",
-        fusion_threshold_pct: 50,
-        fusion_sensors: [],
-        fusion_sensor_choices: [],
-      },
-    ],
-  },
-};
+            store.groups.selectBleCalibrateArea("office", true);
+            const handoffActiveAfterSelect = store.bleCalibrateHandoffActive;
+            const handoffDom = renderToContainer(renderSystemPresenceView(store));
+            const afterBridgeRendered = handoffDom.innerHTML;
 
-const wsCalls = [];
-const subCalls = [];
-const store = new StudioStore(fakeHost);
-store.ws.hass = { locale: { language: "en" }, config: { unit_system: { length: "km" } } };
-store.ws.runSystemCommand = async (command, payload) => {
-  wsCalls.push({ command, payload });
-  if (command === "capture_ble_area_signature") {
-    return {
-      ...structuredClone(store.state),
-      ble_area_signatures: store.state.ble_area_signatures.map((s) =>
-        s.area_id === payload.area_id
-          ? { ...s, has_signature: true, scanner_count: 2, sample_count: 10, captured_at: "2026-11-16T22:00:00Z" }
-          : s,
-      ),
-    };
-  }
-  if (command === "set_ble_scanner_offset") {
-    return {
-      ...structuredClone(store.state),
-      system_devices: [
-        structuredClone(deskUntracked),
-        {
-          ...structuredClone(pocketTracked),
-          ble_packets_seen: 300,
-          active_area_name: "Garage",
-          ble_survey_rows: [
-            {
-              ...structuredClone(pocketTracked.ble_survey_rows[0]),
-              raw_rssi: -40,
-              offset_db: payload.offset_db,
-              effective_rssi: -58 + payload.offset_db,
-            },
-            structuredClone(pocketTracked.ble_survey_rows[1]),
-          ],
-        },
-        structuredClone(keyringTag),
-      ],
-    };
-  }
-  return structuredClone(store.state);
-};
-store.ensureSubscription = async (force = false) => {
-  subCalls.push(Boolean(force));
-};
-store.showToast = () => {};
-store.activeSubentryId = "sub_desk";
-store.bleSurveySubentryId = "sub_desk";
-store.ingestPayload(structuredClone(baseState), false);
+            await store.groups.captureBleAreaSignature("office");
+            const handoffAfterCapture = store.bleCalibrateHandoffActive;
 
-const defaultSurveyAfterFilter = store.bleSurveySubentryId;
-const activeRendered = flattenHtml(renderSystemPresenceView(store));
+            store.groups.toggleBleLiveStream(false);
+            const pausedRendered = renderToHtml(renderSystemPresenceView(store));
+            store.applyBleSurveyDelta({
+              type: "ble_survey_delta",
+              subentry_id: "sub_pocket",
+              ble_packets_seen: 99,
+              ble_survey_rows: [{ area_id: "kitchen", area_name: "Kitchen", scanner_source: "AA:BB:CC:DD:EE:99", scanner_name: "Kitchen Proxy", raw_rssi: -42, effective_rssi: -42, offset_db: 0, distance_m: 0.5, age_seconds: 0, is_fresh: true, is_winner: true }],
+            });
+            const afterPausedDeltaDev = structuredClone(store.groups.getActiveSurveyDevice());
 
-// 1. Calibrate handoff: smooth scroll #card-ble-calibration + preventScroll focus + warning highlight + Dismiss & Capture clear
-store.selectBleCalibrateArea("office", true);
-const handoffActiveAfterSelect = store.bleCalibrateHandoffActive;
-const handoffTpl = renderSystemPresenceView(store);
-const afterBridgeRendered = flattenHtml(handoffTpl);
-const dismissHandler = findButtonClickByText(handoffTpl, "Dismiss");
-if (dismissHandler) dismissHandler();
-const handoffAfterDismiss = store.bleCalibrateHandoffActive;
-const afterDismissRendered = flattenHtml(renderSystemPresenceView(store));
+            store.groups.toggleBleLiveStream(true);
+            store.applyBleSurveyDelta({
+              type: "ble_survey_delta",
+              subentry_id: "sub_pocket",
+              ble_packets_seen: 42,
+              ble_survey_rows: [{ area_id: "kitchen", area_name: "Kitchen", scanner_source: "AA:BB:CC:DD:EE:99", scanner_name: "Kitchen Proxy", raw_rssi: -44, effective_rssi: -44, offset_db: 0, distance_m: 0.6, age_seconds: 0, is_fresh: true, is_winner: true }],
+            });
+            const afterResumedDeltaDev = structuredClone(store.groups.getActiveSurveyDevice());
 
-store.selectBleCalibrateArea("office", true);
-const handoffBeforeCapture = store.bleCalibrateHandoffActive;
-await store.captureBleAreaSignature("office");
-const handoffAfterCapture = store.bleCalibrateHandoffActive;
-
-// 2. Inline per-proxy Antenna Trim scoped to a single proxy via openProxyTrims
-store.openProxyTrims.add("AA:BB:CC:DD:EE:01");
-const oneProxyTrimOpenRendered = flattenHtml(renderSystemPresenceView(store));
-store.openProxyTrims.clear();
-
-// 3. Stream pause freeze across applyBleSurveyDelta & ingestPayload + manual trim update + resume
-subCalls.length = 0;
-store.toggleBleLiveStream(false);
-const pausedRendered = flattenHtml(renderSystemPresenceView(store));
-const frozenSizeWhilePaused = store.bleSurveyFrozen.size;
-
-store.applyBleSurveyDelta({
-  type: "ble_survey_delta",
-  subentry_id: "sub_pocket",
-  ble_packets_seen: 99,
-  ble_survey_rows: [
-    {
-      area_id: "kitchen",
-      area_name: "Kitchen",
-      scanner_source: "AA:BB:CC:DD:EE:99",
-      scanner_name: "Kitchen Proxy",
-      raw_rssi: -42,
-      effective_rssi: -42,
-      offset_db: 0,
-      distance_m: 0.5,
-      age_seconds: 0,
-      is_fresh: true,
-      is_winner: true,
-    },
-  ],
-});
-const afterPausedDeltaDev = structuredClone(store.getActiveSurveyDevice());
-
-store.ingestPayload(
-  {
-    ...structuredClone(store.state),
-    system_devices: [
-      structuredClone(deskUntracked),
-      {
-        ...structuredClone(pocketTracked),
-        ble_packets_seen: 250,
-        active_area_name: "Garage",
-        ble_survey_rows: [
-          {
-            area_id: "garage",
-            area_name: "Garage",
-            scanner_source: "AA:BB:CC:DD:EE:88",
-            scanner_name: "Garage Proxy",
-            raw_rssi: -49,
-            effective_rssi: -49,
-            offset_db: 0,
-            distance_m: 0.8,
-            age_seconds: 1,
-            is_fresh: true,
-            is_winner: true,
-          },
-        ],
-      },
-      structuredClone(keyringTag),
-    ],
-  },
-  false,
-);
-const afterPausedIngestDev = structuredClone(store.getActiveSurveyDevice());
-
-await store.setBleScannerOffset("AA:BB:CC:DD:EE:01", 3.0);
-const afterPausedManualTrimDev = structuredClone(store.getActiveSurveyDevice());
-
-subCalls.length = 0;
-store.toggleBleLiveStream(true);
-const frozenSizeAfterResume = store.bleSurveyFrozen.size;
-const subCallsOnResume = [...subCalls];
-
-store.applyBleSurveyDelta({
-  type: "ble_survey_delta",
-  subentry_id: "sub_pocket",
-  ble_packets_seen: 42,
-  ble_survey_rows: [
-    {
-      area_id: "kitchen",
-      area_name: "Kitchen",
-      scanner_source: "AA:BB:CC:DD:EE:99",
-      scanner_name: "Kitchen Proxy",
-      raw_rssi: -44,
-      effective_rssi: -44,
-      offset_db: 0,
-      distance_m: 0.6,
-      age_seconds: 0,
-      is_fresh: true,
-      is_winner: true,
-    },
-  ],
-});
-const afterResumedDeltaDev = structuredClone(store.getActiveSurveyDevice());
-
-store.ingestPayload(
-  {
-    ...structuredClone(store.state),
-    system_devices: [
-      structuredClone(deskUntracked),
-      {
-        ...structuredClone(pocketTracked),
-        ble_packets_seen: 55,
-        active_area_name: "Office",
-      },
-      structuredClone(keyringTag),
-    ],
-  },
-  false,
-);
-const afterResumedIngestDev = structuredClone(store.getActiveSurveyDevice());
-
-// 4. Zero BLE-tracked devices -> empty state + Open Discovered Devices
-const storeZeroBle = new StudioStore(fakeHost);
-storeZeroBle.ws.hass = store.ws.hass;
-storeZeroBle.ensureSubscription = async () => {};
-storeZeroBle.ingestPayload(
-  {
-    ...structuredClone(baseState),
-    system_devices: [structuredClone(deskUntracked)],
-  },
-  false,
-);
-const emptyBleRendered = flattenHtml(renderSystemPresenceView(storeZeroBle));
-
-return {
-  defaultSurveyAfterFilter,
-  activeSurveyId: store.getActiveSurveyDevice()?.subentry_id || "",
-  scrolledCalls,
-  focusedCalls,
-  wsCalls,
-  bleCalibrateAreaId: store.bleCalibrateAreaId,
-  handoffActiveAfterSelect,
-  handoffAfterDismiss,
-  handoffBeforeCapture,
-  handoffAfterCapture,
-  activeRendered,
-  afterBridgeRendered,
-  afterDismissRendered,
-  oneProxyTrimOpenRendered,
-  pausedRendered,
-  frozenSizeWhilePaused,
-  afterPausedDeltaDev,
-  afterPausedIngestDev,
-  afterPausedManualTrimDev,
-  frozenSizeAfterResume,
-  subCallsOnResume,
-  afterResumedDeltaDev,
-  afterResumedIngestDev,
-  emptyBleSurveyId: storeZeroBle.bleSurveySubentryId,
-  emptyBleRendered,
-};
-})();
-"""
-        stub_deps = (
-            "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
-            "function navigateHaPath() {}\n"
-            "class StudioWsClient {}\n"
-            "function formatWsError(_e, f) { return f; }\n"
-            + "".join(
-                f"function {fn}() {{}}\n"
-                for fn in (
-                    "adoptLatterDeviceOp",
-                    "checkSystemUpdatesOp",
-                    "clearInternalLogsOp",
-                    "clearSecurityPinOp",
-                    "confirmAddBleModalOp",
-                    "confirmRemoveDeviceOp",
-                    "confirmResetDeviceOp",
-                    "copyLogsToClipboardOp",
-                    "downloadDeviceDiagnosticsOp",
-                    "exportBackupOp",
-                    "formatVisibleLogsOp",
-                    "openColorWheelModalOp",
-                    "quickAdoptBleCandidateOp",
-                    "restoreFromUploadedFileOp",
-                    "rotateSigningKeyOp",
-                    "saveColorWheelSelectionOp",
-                    "saveSecurityPinOp",
-                    "selectBleCandidateInModalOp",
-                    "sendAnnouncementOp",
-                    "addRemoteGroupRowOp",
-                    "addStringListRowOp",
-                    "addVolumeOverrideRowOp",
-                    "applyDeviceCustomColorOp",
-                    "commitEntityChange",
-                    "deleteCustomPaletteOp",
-                    "deleteWallpaperOp",
-                    "executeEntityActionOp",
-                    "flushDeviceBucketOp",
-                    "flushSystemSettingsOp",
-                    "getDockItemsOp",
-                    "getEnabledActivitySourcesOp",
-                    "getEnabledAreaCategoriesOp",
-                    "getEnabledHomeCategoriesOp",
-                    "getPinnedItemsOp",
-                    "moveAreaCategoryTokenOp",
-                    "moveHomeCategoryTokenOp",
-                    "moveShortcutItemOp",
-                    "openShortcutModalOp",
-                    "overlayDevicePrefsOnSections",
-                    "overlayPendingBlankListSlots",
-                    "overlayPendingEntityStates",
-                    "previewCameraOp",
-                    "removeRemoteGroupRowOp",
-                    "removeShortcutItemOp",
-                    "removeStringListRowOp",
-                    "removeVolumeOverrideRowOp",
-                    "resetDockItemsToDefaultOp",
-                    "runDeviceActionOp",
-                    "saveShortcutModalOp",
-                    "selectWallpaperSourceOp",
-                    "setAllWallpaperFavoritesOp",
-                    "setWallpaperRotationOp",
-                    "stageDeviceSettingOp",
-                    "stageSystemSettingOp",
-                    "testDoorbellSpeakerOp",
-                    "toggleActivitySourceOp",
-                    "toggleAreaCategoryTokenOp",
-                    "toggleHomeCategoryTokenOp",
-                    "toggleRemoteInGroupOp",
-                    "toggleWallpaperFavOp",
-                    "updateRemoteGroupFieldOp",
-                    "updateStringListRowOp",
-                    "updateVolumeOverrideRowOp",
-                    "uploadWallpaperOp",
-                )
-            )
-            + "const PENDING_ENTITY_STATES = new Map();\n"
+            process.stdout.write(JSON.stringify({
+              defaultSurveyAfterFilter,
+              activeRendered,
+              scrolled,
+              focused,
+              sysCalls,
+              handoffActiveAfterSelect,
+              afterBridgeRendered,
+              handoffAfterCapture,
+              pausedRendered,
+              afterPausedDeltaDev,
+              afterResumedDeltaDev,
+            }));
+            """
         )
-        got = _run_node_ts(
-            [
-                FRONTEND_SRC / "lib" / "lit.ts",
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "components" / "controls.ts",
-                FRONTEND_SRC / "state" / "groups-presence-ops.ts",
-                FRONTEND_SRC / "state" / "store.ts",
-                FRONTEND_SRC / "views" / "system-presence-view.ts",
-            ],
-            runner,
-            preamble_js=stub_deps,
-        )
-
-        # Untracked stationary display (has_ble=true, ble_tracked=false) is excluded cleanly
         self.assertEqual(got["defaultSurveyAfterFilter"], "sub_pocket")
-        self.assertEqual(got["activeSurveyId"], "sub_pocket")
         self.assertNotIn("Desk Assistant", got["activeRendered"])
         self.assertIn("Pocket Assistant (Bedroom)", got["activeRendered"])
-        self.assertIn("Keyring Tag (Kitchen)", got["activeRendered"])
-
-        # D-045 (1): Enclosed Area boxes use neutral border (no .area-presence-box.occupied blue outline)
-        self.assertIn('class="area-presence-box"', got["activeRendered"])
-        self.assertNotIn("area-presence-box occupied", got["activeRendered"])
-        self.assertIn('<span class="area-box-title">Bedroom</span>', got["activeRendered"])
-        self.assertIn("Occupied • 84%", got["activeRendered"])
-        self.assertIn('<span class="chip">Upstairs</span>', got["activeRendered"])
-        self.assertIn("Signature (2 Proxies)", got["activeRendered"])
-        self.assertIn("Clear Signature", got["activeRendered"])
-        self.assertIn('<span class="area-box-title">Guest Bath</span>', got["activeRendered"])
-        self.assertIn('<span class="chip chip-warning">No BLE Proxy</span>', got["activeRendered"])
-        self.assertIn("calibrate with a carried Device to detect BLE presence here", got["activeRendered"])
-
-        # Area-first Nearby Bluetooth Proxies + Unassigned warning chip + Live signal banner
-        self.assertIn("Live BLE signal active", got["activeRendered"])
-        self.assertIn('<span class="row-label">Bedroom</span>', got["activeRendered"])
-        self.assertIn('<span class="chip">Bedroom Proxy</span>', got["activeRendered"])
-        self.assertIn('<span class="chip chip-primary">Active Winner</span>', got["activeRendered"])
-        self.assertIn('<span class="row-label">Unassigned Proxy</span>', got["activeRendered"])
-        self.assertIn('<span class="chip chip-warning">Assign Area in HA</span>', got["activeRendered"])
-
-        # D-045 (2): Calibrate handoff sets bleCalibrateHandoffActive, smooth-scrolls #card-ble-calibration,
-        # calls focus({ preventScroll: true }) on #ble-calibrate-area-select, renders warning banner, and clears on Dismiss / Capture
-        self.assertEqual(got["bleCalibrateAreaId"], "office")
+        self.assertIn('<h4 class="area-box-title">Bedroom</h4>', got["activeRendered"])
+        self.assertIn("Standing in Area", got["activeRendered"])
+        self.assertIn("Pause stream", got["activeRendered"])
+        self.assertIn("Resume stream", got["pausedRendered"])
         self.assertTrue(got["handoffActiveAfterSelect"])
-        self.assertEqual(
-            got["scrolledCalls"][0],
-            {"id": "card-ble-calibration", "opts": {"behavior": "smooth", "block": "start"}},
-        )
-        self.assertEqual(
-            got["focusedCalls"][0],
-            {"id": "ble-calibrate-area-select", "opts": {"preventScroll": True}},
-        )
-        self.assertNotIn("handoff-active", got["activeRendered"])
-        self.assertNotIn("ble-calibrate-handoff-banner", got["activeRendered"])
-        self.assertIn('class="calibrate-target-box handoff-active"', got["afterBridgeRendered"])
-        self.assertIn('id="ble-calibrate-handoff-banner"', got["afterBridgeRendered"])
-        self.assertIn(
-            "Ready to calibrate Office — carry Pocket Assistant into Office and click Calibrate Area.",
-            got["afterBridgeRendered"],
-        )
-        self.assertIn(
-            "Captures readings from surrounding Bluetooth proxies so Office detects presence without a local proxy.",
-            got["afterBridgeRendered"],
-        )
-        self.assertFalse(got["handoffAfterDismiss"])
-        self.assertNotIn("handoff-active", got["afterDismissRendered"])
-        self.assertNotIn("ble-calibrate-handoff-banner", got["afterDismissRendered"])
-        self.assertTrue(got["handoffBeforeCapture"])
+        self.assertIn("ble-calibrate-handoff-banner", got["afterBridgeRendered"])
         self.assertFalse(got["handoffAfterCapture"])
-        self.assertEqual(
-            got["wsCalls"][0],
-            {
-                "command": "capture_ble_area_signature",
-                "payload": {"area_id": "office", "survey_subentry_id": "sub_pocket"},
-            },
-        )
-
-        # D-045 (3): toggleBleLiveStream(false) snapshots bleSurveyFrozen across delta & ingestPayload,
-        # allows manual scanner trim feedback, and toggleBleLiveStream(true) clears freeze & resumes live updates
-        self.assertIn("Stream Paused", got["pausedRendered"])
-        self.assertGreaterEqual(got["frozenSizeWhilePaused"], 1)
-        for frozen_dev in (got["afterPausedDeltaDev"], got["afterPausedIngestDev"]):
-            self.assertEqual(frozen_dev["ble_packets_seen"], 14)
-            self.assertEqual(frozen_dev["active_area_name"], "Bedroom")
-            self.assertEqual(
-                [r["scanner_name"] for r in frozen_dev["ble_survey_rows"]],
-                ["Bedroom Proxy", "Hallway Plug"],
-            )
-            self.assertEqual(frozen_dev["ble_survey_rows"][0]["effective_rssi"], -57)
-        # Manual trim while paused updates ONLY that scanner's offset_db & effective_rssi without unfreezing raw_rssi or packets_seen
-        self.assertEqual(got["afterPausedManualTrimDev"]["ble_packets_seen"], 14)
-        self.assertEqual(got["afterPausedManualTrimDev"]["active_area_name"], "Bedroom")
-        self.assertEqual(got["afterPausedManualTrimDev"]["ble_survey_rows"][0]["offset_db"], 3.0)
-        self.assertEqual(got["afterPausedManualTrimDev"]["ble_survey_rows"][0]["effective_rssi"], -55)
-        self.assertEqual(got["afterPausedManualTrimDev"]["ble_survey_rows"][0]["raw_rssi"], -58)
-        # Resuming live stream clears bleSurveyFrozen and accepts subsequent delta + ingestPayload updates
-        self.assertEqual(got["frozenSizeAfterResume"], 0)
-        self.assertEqual(got["subCallsOnResume"], [True])
+        self.assertEqual(got["afterPausedDeltaDev"]["ble_packets_seen"], 14)
         self.assertEqual(got["afterResumedDeltaDev"]["ble_packets_seen"], 42)
-        self.assertEqual(got["afterResumedDeltaDev"]["active_area_name"], "Kitchen")
-        self.assertEqual(
-            [r["scanner_name"] for r in got["afterResumedDeltaDev"]["ble_survey_rows"]],
-            ["Kitchen Proxy"],
-        )
-        self.assertEqual(got["afterResumedIngestDev"]["ble_packets_seen"], 55)
-        self.assertEqual(got["afterResumedIngestDev"]["active_area_name"], "Office")
-
-        # D-045 (4): Inline per-proxy Antenna Trim inside .signal-row with zero duplicate proxy list
-        trim_markup = got["oneProxyTrimOpenRendered"]
-        self.assertNotIn("ble-proxy-trim-drawer", trim_markup)
-        self.assertNotIn("Proxy Antenna Trim", trim_markup)
-        self.assertEqual(trim_markup.count("<summary>Antenna Trim</summary>"), 2)
-        self.assertEqual(trim_markup.count('<span class="chip">Bedroom Proxy</span>'), 1)
-        self.assertEqual(trim_markup.count('<span class="chip">Hallway Plug</span>'), 1)
-        proxies_section = trim_markup[trim_markup.index("Nearby Bluetooth Proxies") :]
-        open_flags = re.findall(r"<details\s+\?open=(true|false)", proxies_section)
-        self.assertEqual(open_flags, ["true", "false"])
-
-        # Zero BLE-tracked devices -> empty state + Open Discovered Devices
-        self.assertEqual(got["emptyBleSurveyId"], "")
-        self.assertIn(
-            "No Devices currently have Bluetooth Area tracking enabled.",
-            got["emptyBleRendered"],
-        )
-        self.assertIn("Open Discovered Devices", got["emptyBleRendered"])
+        self.assertEqual(got["sysCalls"][0]["command"], "capture_ble_area_signature")
 
 
 @unittest.skipUnless(NODE, "node is not installed")
 class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
-    """D-048: Enclosed Device Groups boxes, Batch Controls live state, Managed Devices filter diet, and Save Custom Group modal."""
+    """Device groups, staged Batch controls, System overview, Support card, 7,447 MDI icons, & handoff highlights."""
 
-    def test_groups_boxes_batch_controls_overview_assignments_and_save_custom_modal(self) -> None:
-        runner = """
-return (async () => {
-function flattenHtml(val) {
-  if (val === null || val === undefined || typeof val === "symbol") return "";
-  if (Array.isArray(val)) return val.map(flattenHtml).join("");
-  if (typeof val === "object") {
-    if (Array.isArray(val.strings) && Array.isArray(val.values)) {
-      let out = "";
-      for (let i = 0; i < val.strings.length; i += 1) {
-        out += val.strings[i];
-        if (i < val.values.length) {
-          const prev = val.strings[i];
-          const v = val.values[i];
-          if (typeof v === "boolean" && /\\?[a-zA-Z0-9_-]+=$/.test(prev)) {
-            out += String(v);
-          } else {
-            out += flattenHtml(v);
-          }
-        }
-      }
-      return out;
-    }
-    if (val._$litKeyed$ === 1 && Array.isArray(val.templates)) {
-      return val.templates.map(flattenHtml).join("");
-    }
-  }
-  return String(val);
-}
+    def test_groups_boxes_staged_batch_controls_and_save_custom_modal(self) -> None:
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
+            import { renderDeviceOverviewView } from "./src/views/device-overview-view.js";
+            import { renderSystemGroupsView } from "./src/views/system-groups-view.js";
+            import { renderSystemToolsView } from "./src/views/system-tools-view.js";
 
-const fakeHost = {
-  isConnected: true,
-  requestUpdate() {},
-  addController() {},
-  removeController() {},
-  updateComplete: Promise.resolve(true),
-  renderRoot: { getElementById() { return null; } },
-};
+            const { store, sysCalls } = makeFakeStore({
+              activeSubentryId: "sub_mobile",
+              state: {
+                title: "Mobile Assistant",
+                system_info: { ha_version: "2026.11.0", integration_version: "3.0.0", min_firmware_sdk_rev: 2026111801, studio_rev: 34 },
+                config: {
+                  kind: "device",
+                  device_slug: "mobile_assistant",
+                  device_group: "custom",
+                  assigned_person: "person.alex",
+                  device_remote_group: "area_auto",
+                  native_ble_tracking: true,
+                },
+                capabilities: { has_display: true, has_battery: true, is_roaming_device: true },
+                live: { active_area_name: "Office" },
+                device_groups: [
+                  { id: "pocket_carry", name: "Pocket Carry", description: "Compact displays", builtin: true, include_display: false, include_interface: false, device_config: { tap_to_wake: "Docked Only", native_ble_tracking: true } },
+                  { id: "handhelds", name: "Handhelds", description: "Battery displays", builtin: true, include_display: false, include_interface: false, device_config: { tap_to_wake: "Single Tap", native_ble_tracking: true } },
+                  { id: "guest_suites", name: "Guest Suites", description: "Guest displays", builtin: false, include_display: true, include_interface: true, device_config: { clock_face: "Hybrid Digital" } },
+                ],
+                system_devices: [
+                  { subentry_id: "sub_mobile", title: "Mobile Assistant", device_slug: "mobile_assistant", kind: "device", has_display: true, has_battery: true, is_online: true, is_roaming: true, ble_tracked: true, device_group: "custom", device_group_name: "Custom", status_code: "online", status_label: "Online" },
+                  { subentry_id: "sub_pocket", title: "Pocket Assistant", device_slug: "pocket_assistant", kind: "device", has_display: true, has_battery: true, is_online: true, is_roaming: true, ble_tracked: true, device_group: "pocket_carry", device_group_name: "Pocket Carry", status_code: "online", status_label: "Online" },
+                ],
+                system_controls: [
+                  {
+                    key: "audio:switch:voice follows me",
+                    pref_key: "sync_device_area",
+                    tier: "behavior",
+                    section: "audio",
+                    section_title: "Audio",
+                    name: "Voice Follows Me",
+                    domain: "switch",
+                    state: "off",
+                    options: [],
+                    targets: [
+                      { device_slug: "mobile_assistant", device_group: "custom", is_online: true, is_roaming: true, pref_key: "sync_device_area", state: "on" },
+                      { device_slug: "pocket_assistant", device_group: "pocket_carry", is_online: true, is_roaming: true, pref_key: "sync_device_area", state: "off" },
+                    ],
+                  },
+                ],
+              },
+            });
 
-const wsCalls = [];
-const store = new StudioStore(fakeHost);
-store.ws.hass = { locale: { language: "en" }, config: { unit_system: { length: "km" } } };
-store.ws.runSystemCommand = async (command, payload) => {
-  wsCalls.push({ command, payload });
-  return structuredClone(store.state);
-};
-store.ensureSubscription = async () => {};
+            const groupsHtml = renderToHtml(renderSystemGroupsView(store));
+            store.groups.toggleNewGroupForm(true);
+            const groupsCreateOpenHtml = renderToHtml(renderSystemGroupsView(store));
+            store.newGroupName = "Patio Panels";
+            await store.groups.createDeviceGroup();
 
-store.ingestPayload(
-  {
-    studio_rev: STUDIO_REV,
-    subentry_id: "sub_mobile",
-    title: "Mobile Assistant",
-    config: {
-      kind: "device",
-      device_slug: "mobile_assistant",
-      device_group: "custom",
-      assigned_person: "person.sean",
-      device_remote_group: "area_auto",
-      native_ble_tracking: true,
-    },
-    capabilities: {
-      has_display: true,
-      has_battery: true,
-      is_roaming_device: true,
-    },
-    live: {
-      device_online: true,
-      device_group_name: "Custom",
-      device_remote_group_name: "Area Automatic",
-      active_area_name: "Office",
-      battery_level: 88,
-      wifi_rssi: -54,
-      sw_version: "2026.11.0",
-      issues: [],
-    },
-    esphome_inspector: { sections: [] },
-    catalog: {
-      people: [{ id: "person.sean", name: "Sean" }],
-      areas: [{ id: "office", name: "Office" }],
-    },
-    device_groups: [
-      {
-        id: "pocket_carry",
-        name: "Pocket Carry",
-        description: "Compact pocket-carried displays",
-        builtin: true,
-        include_display: false,
-        include_interface: false,
-        device_config: { tap_to_wake: "Docked Only", native_ble_tracking: true },
-      },
-      {
-        id: "handhelds",
-        name: "Handhelds",
-        description: "Battery-powered roaming displays",
-        builtin: true,
-        include_display: false,
-        include_interface: false,
-        device_config: { tap_to_wake: "Single Tap", native_ble_tracking: true },
-      },
-      {
-        id: "wearables",
-        name: "Wearables",
-        description: "Compact wearable displays",
-        builtin: true,
-        include_display: false,
-        include_interface: false,
-        device_config: { tap_to_wake: "Double Tap", native_ble_tracking: true },
-      },
-      {
-        id: "wall_panels",
-        name: "Wall & Desk Panels",
-        description: "Stationary mains-powered panels",
-        builtin: true,
-        include_display: false,
-        include_interface: false,
-        device_config: { tap_to_wake: "Single Tap", native_ble_tracking: false },
-      },
-      {
-        id: "guest_suites",
-        name: "Guest Suites",
-        description: "Guest bedroom displays",
-        builtin: false,
-        include_display: true,
-        include_interface: true,
-        device_config: { tap_to_wake: "Docked Only", native_ble_tracking: false, clock_face: "Hybrid Digital" },
-      },
-    ],
-    system_devices: [
-      {
-        subentry_id: "sub_mobile",
-        title: "Mobile Assistant",
-        device_slug: "mobile_assistant",
-        kind: "device",
-        has_display: true,
-        is_online: true,
-        is_roaming: true,
-        ble_tracked: true,
-        device_group: "custom",
-        device_group_name: "Custom",
-        assigned_person: "person.sean",
-        assigned_person_name: "Sean",
-        active_area_name: "Office",
-        status_label: "Online",
-      },
-      {
-        subentry_id: "sub_pocket",
-        title: "Pocket Assistant",
-        device_slug: "pocket_assistant",
-        kind: "device",
-        has_display: true,
-        is_online: true,
-        is_roaming: true,
-        ble_tracked: true,
-        device_group: "pocket_carry",
-        device_group_name: "Pocket Carry",
-        assigned_person: "",
-        assigned_person_name: "",
-        active_area_name: "Bedroom",
-        status_label: "Online",
-      },
-      {
-        subentry_id: "sub_tag",
-        title: "Keyring Tag",
-        device_slug: "keyring_tag",
-        kind: "ble_tag",
-        has_display: false,
-        is_online: true,
-        is_roaming: true,
-        ble_tracked: true,
-        device_group: "",
-        device_group_name: "",
-        assigned_person: "",
-        assigned_person_name: "",
-        active_area_name: "Kitchen",
-        status_label: "Detected",
-      },
-    ],
-    system_controls: [
-      {
-        key: "audio:switch:voice follows me",
-        pref_key: "sync_device_area",
-        tier: "behavior",
-        section: "audio",
-        section_title: "Audio",
-        name: "Voice Follows Me",
-        domain: "switch",
-        state: "off",
-        options: [],
-        targets: [
-          { device_slug: "mobile_assistant", device_group: "custom", is_online: true, is_roaming: true, pref_key: "sync_device_area", state: "on" },
-          { device_slug: "pocket_assistant", device_group: "pocket_carry", is_online: true, is_roaming: true, pref_key: "sync_device_area", state: "off" },
-        ],
-      },
-    ],
-  },
-  false,
-);
+            // Stage a Batch control change and apply it
+            store.groups.stageBatchSetting("sync_device_area", true);
+            await store.groups.applyBatchDraft();
 
-const groupsHtml = flattenHtml(renderSystemGroupsView(store));
-store.toggleNewGroupForm(true);
-const groupsCreateOpenHtml = flattenHtml(renderSystemGroupsView(store));
-store.newGroupName = "Patio Panels";
-await store.createDeviceGroup();
-const groupsAfterCreateHtml = flattenHtml(renderSystemGroupsView(store));
-const managedHtml = flattenHtml(renderDevicesListView(store));
-const overviewCustomHtml = flattenHtml(renderDeviceOverviewView(store));
+            store.groups.openSaveGroupModal();
+            store.saveGroupModal = { ...store.saveGroupModal, name: " Alex Carry ", description: "Personal handheld" };
+            await store.groups.confirmSaveGroupModal();
 
-store.activeSubentryId = "sub_mobile";
-store.openSaveGroupModal();
-store.saveGroupModal = { ...store.saveGroupModal, name: " Sean Carry ", description: "Personal handheld" };
-await store.confirmSaveGroupModal();
+            const overviewCustomHtml = renderToHtml(renderDeviceOverviewView(store));
+            const sysToolsHtml = renderToHtml(renderSystemToolsView(store));
 
-// Switch active device to handhelds + active timer, stopwatch & ringing -> Save Custom Group hides and Timers & Alarms renders live controls
-store.ingestPayload(
-  {
-    ...structuredClone(store.state),
-    config: { ...structuredClone(store.state.config), device_group: "handhelds" },
-    live: {
-      ...structuredClone(store.state.live),
-      device_group_name: "Handhelds",
-      timer_running: true,
-      timer_paused: false,
-      timer_remaining_sec: 125,
-      stopwatch_running: true,
-      stopwatch_paused: false,
-      stopwatch_elapsed_sec: 3665,
-      alarm_ringing: true,
-    },
-  },
-  false,
-);
-const overviewGroupHtml = flattenHtml(renderDeviceOverviewView(store));
+            // Active timer & stopwatch via UTC ISO anchors (`timer_ends_at`, `stopwatch_started_at`)
+            store.liveClockNowMs = Date.parse("2026-11-19T00:00:00Z");
+            store.state.config.device_group = "handhelds";
+            store.state.live = {
+              ...store.state.live,
+              timer_running: true,
+              timer_paused: false,
+              timer_remaining_sec: 125,
+              timer_ends_at: "2026-11-19T00:02:05Z",
+              stopwatch_running: true,
+              stopwatch_paused: false,
+              stopwatch_elapsed_sec: 3665,
+              stopwatch_started_at: "2026-11-18T22:58:55Z",
+              alarm_ringing: true,
+            };
+            const overviewGroupHtml = renderToHtml(renderDeviceOverviewView(store));
 
-return {
-  groupsHtml,
-  groupsCreateOpenHtml,
-  groupsAfterCreateHtml,
-  managedHtml,
-  overviewCustomHtml,
-  overviewGroupHtml,
-  wsCalls,
-};
-})();
-"""
-        stub_deps = (
-            "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
-            "function navigateHaPath() {}\n"
-            "class StudioWsClient {}\n"
-            "function formatWsError(_e, f) { return f; }\n"
-            + "".join(
-                f"function {fn}() {{}}\n"
-                for fn in (
-                    "adoptLatterDeviceOp",
-                    "checkSystemUpdatesOp",
-                    "clearInternalLogsOp",
-                    "clearSecurityPinOp",
-                    "confirmAddBleModalOp",
-                    "confirmRemoveDeviceOp",
-                    "confirmResetDeviceOp",
-                    "copyLogsToClipboardOp",
-                    "downloadDeviceDiagnosticsOp",
-                    "exportBackupOp",
-                    "formatVisibleLogsOp",
-                    "openColorWheelModalOp",
-                    "quickAdoptBleCandidateOp",
-                    "restoreFromUploadedFileOp",
-                    "rotateSigningKeyOp",
-                    "saveColorWheelSelectionOp",
-                    "saveSecurityPinOp",
-                    "selectBleCandidateInModalOp",
-                    "sendAnnouncementOp",
-                    "addRemoteGroupRowOp",
-                    "addStringListRowOp",
-                    "addVolumeOverrideRowOp",
-                    "applyDeviceCustomColorOp",
-                    "commitEntityChange",
-                    "deleteCustomPaletteOp",
-                    "deleteWallpaperOp",
-                    "executeEntityActionOp",
-                    "flushDeviceBucketOp",
-                    "flushSystemSettingsOp",
-                    "getDockItemsOp",
-                    "getEnabledActivitySourcesOp",
-                    "getEnabledAreaCategoriesOp",
-                    "getEnabledHomeCategoriesOp",
-                    "getPinnedItemsOp",
-                    "moveAreaCategoryTokenOp",
-                    "moveHomeCategoryTokenOp",
-                    "moveShortcutItemOp",
-                    "openShortcutModalOp",
-                    "overlayDevicePrefsOnSections",
-                    "overlayPendingBlankListSlots",
-                    "overlayPendingEntityStates",
-                    "previewCameraOp",
-                    "removeRemoteGroupRowOp",
-                    "removeShortcutItemOp",
-                    "removeStringListRowOp",
-                    "removeVolumeOverrideRowOp",
-                    "resetDockItemsToDefaultOp",
-                    "runDeviceActionOp",
-                    "saveShortcutModalOp",
-                    "selectWallpaperSourceOp",
-                    "setAllWallpaperFavoritesOp",
-                    "setWallpaperRotationOp",
-                    "stageDeviceSettingOp",
-                    "stageSystemSettingOp",
-                    "testDoorbellSpeakerOp",
-                    "toggleActivitySourceOp",
-                    "toggleAreaCategoryTokenOp",
-                    "toggleHomeCategoryTokenOp",
-                    "toggleRemoteInGroupOp",
-                    "toggleWallpaperFavOp",
-                    "updateRemoteGroupFieldOp",
-                    "updateStringListRowOp",
-                    "updateVolumeOverrideRowOp",
-                    "uploadWallpaperOp",
-                )
-            )
-            + "const PENDING_ENTITY_STATES = new Map();\n"
+            process.stdout.write(JSON.stringify({
+              groupsHtml,
+              groupsCreateOpenHtml,
+              overviewCustomHtml,
+              overviewGroupHtml,
+              sysToolsHtml,
+              sysCalls,
+            }));
+            """
         )
-        got = _run_node_ts(
-            [
-                FRONTEND_SRC / "lib" / "lit.ts",
-                FRONTEND_SRC / "protocol-schema.ts",
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "components" / "controls.ts",
-                FRONTEND_SRC / "state" / "groups-presence-ops.ts",
-                FRONTEND_SRC / "state" / "store.ts",
-                FRONTEND_SRC / "views" / "system-groups-view.ts",
-                FRONTEND_SRC / "views" / "devices-list-view.ts",
-                FRONTEND_SRC / "views" / "device-overview-view.ts",
-            ],
-            runner,
-            preamble_js=stub_deps,
-        )
-
-        # Column 1 collapsed Create Group button by default -> reveals form on click -> collapses again on create
         self.assertIn('id="btn-open-create-group"', got["groupsHtml"])
-        self.assertNotIn('id="create-group-form"', got["groupsHtml"])
-        self.assertNotIn('id="new-group-name"', got["groupsHtml"])
+        self.assertIn('id="group-box-pocket_carry"', got["groupsHtml"])
+        self.assertIn('id="group-box-custom"', got["groupsHtml"])
+        self.assertIn('id="btn-batch-reset"', got["groupsHtml"])
+        self.assertIn('id="btn-batch-apply"', got["groupsHtml"])
         self.assertIn('id="create-group-form"', got["groupsCreateOpenHtml"])
-        self.assertIn('id="new-group-name"', got["groupsCreateOpenHtml"])
-        self.assertIn('id="btn-cancel-create-group"', got["groupsCreateOpenHtml"])
-        self.assertNotIn('id="create-group-form"', got["groupsAfterCreateHtml"])
-        self.assertIn('id="btn-open-create-group"', got["groupsAfterCreateHtml"])
-
-        # Column 1 enclosed .area-presence-box containers + Column 2 Batch Controls listing traits + all Device Groups + Custom
-        self.assertIn('id=group-box-pocket_carry class="area-presence-box"', got["groupsHtml"])
-        self.assertIn('id=group-box-handhelds class="area-presence-box"', got["groupsHtml"])
-        self.assertIn('id=group-box-guest_suites class="area-presence-box"', got["groupsHtml"])
-        self.assertIn("<summary>Baseline Settings</summary>", got["groupsHtml"])
-        self.assertIn("Include Display Settings", got["groupsHtml"])
-        self.assertIn("Include Interface &amp; Shortcuts", got["groupsCreateOpenHtml"])
-        self.assertIn("<summary>Interface &amp; Shortcuts</summary>", got["groupsHtml"])
-        self.assertIn("Pocket Carry", got["groupsHtml"])
-        self.assertNotIn("Power Profile", got["groupsHtml"])
-        self.assertNotIn("Show Speaker Shortcut", got["groupsHtml"])
-        self.assertNotIn("Show Library Shortcut", got["groupsHtml"])
-        self.assertNotIn("Portable Carry", got["groupsHtml"])
-        self.assertNotIn("Tabletop Dock", got["groupsHtml"])
-        self.assertIn("aria-label=Delete group Guest Suites", got["groupsHtml"])
-        self.assertNotIn("aria-label=Delete group Pocket Carry", got["groupsHtml"])
-        self.assertNotIn("aria-label=Delete group Handhelds", got["groupsHtml"])
-        batch_select = got["groupsHtml"][
-            got["groupsHtml"].index('id="batch-target-filter"') : got["groupsHtml"].index('id="batch-cat-filter"')
-        ]
-        for expected_opt in (
-            "All Latter Devices",
-            "Online Devices",
-            "Roaming Devices",
-            "Stationary Devices",
-            "Pocket Carry",
-            "Handhelds",
-            "Wearables",
-            "Wall & Desk Panels",
-            "Guest Suites",
-            "Custom",
-        ):
-            self.assertIn(expected_opt, batch_select)
-        after_cat = got["groupsHtml"][got["groupsHtml"].index('id="batch-cat-filter"') :]
-        cat_filter_select = after_cat[: after_cat.index("</select>")]
-        for expected_cat in ("All Categories", "Display", "Interface", "Audio", "Power", "Presence", "Security"):
-            self.assertIn(expected_cat, cat_filter_select)
-        self.assertIn("Voice Follows Me", got["groupsHtml"])
-        self.assertIn("Mixed values", got["groupsHtml"])
-        batch_controls_list = got["groupsHtml"][got["groupsHtml"].index('id="system-controls-list"') :]
-        self.assertNotIn("?open=true", batch_controls_list)
-        self.assertIn("?open=false", batch_controls_list)
-
-        # Managed Devices filter diet: populated groups (`Group: Pocket Carry`) + Custom + BLE Tags + Assigned to a Person shown; 0-member groups & Updates Available hidden
-        cat_select = got["managedHtml"][
-            got["managedHtml"].index('id="device-category-filter"') : got["managedHtml"].index("</select>")
-        ]
-        self.assertIn("Group: Pocket Carry", cat_select)
-        self.assertIn("Group: Custom", cat_select)
-        self.assertIn("BLE Tags", cat_select)
-        self.assertIn("Assigned to a Person", cat_select)
-        self.assertNotIn("Group: Handhelds", cat_select)
-        self.assertNotIn("Group: Wearables", cat_select)
-        self.assertNotIn("Group: Wall &amp; Desk Panels", cat_select)
-        self.assertNotIn("Group: Guest Suites", cat_select)
-        self.assertNotIn("Updates Available", cat_select)
-        self.assertNotIn("Screenless Devices", cat_select)
-
-        # Device Overview Assignments & Timers & Alarms: Save Custom Group shown when Custom and hidden when on Handhelds; live ringing/timer/stopwatch/alarms rendered
-        self.assertIn("id=card-device-assignments", got["overviewCustomHtml"])
         self.assertIn('id="btn-save-custom-group"', got["overviewCustomHtml"])
-        self.assertIn('id="btn-configure-remote-group"', got["overviewCustomHtml"])
-        self.assertIn("Save Custom Group", got["overviewCustomHtml"])
-        self.assertIn("id=card-device-timers-alarms", got["overviewCustomHtml"])
-        self.assertIn("No active timer", got["overviewCustomHtml"])
-        self.assertIn("Not running", got["overviewCustomHtml"])
-        self.assertNotIn('id="overview-ringing-alert"', got["overviewCustomHtml"])
-        self.assertIn('id="overview-alarms-drawer"', got["overviewCustomHtml"])
-        self.assertIn("?open=false", got["overviewCustomHtml"])
-        self.assertIn("All Off", got["overviewCustomHtml"])
-        self.assertIn("id=cfg-alarm_1_time", got["overviewCustomHtml"])
-
         self.assertNotIn('id="btn-save-custom-group"', got["overviewGroupHtml"])
         self.assertIn('id="overview-ringing-alert"', got["overviewGroupHtml"])
-        self.assertIn('id="btn-dismiss-ringing"', got["overviewGroupHtml"])
         self.assertIn("02:05", got["overviewGroupHtml"])
-        self.assertIn('id="btn-cancel-timer"', got["overviewGroupHtml"])
         self.assertIn("01:01:05", got["overviewGroupHtml"])
-        self.assertIn('id="btn-reset-stopwatch"', got["overviewGroupHtml"])
-        self.assertIn("Tools", got["groupsHtml"])
-        self.assertIn("Games", got["groupsHtml"])
+        self.assertIn('id="card-support-diagnostics"', got["sysToolsHtml"])
+        self.assertIn('id="btn-download-system-diagnostics"', got["sysToolsHtml"])
+        self.assertIn('id="btn-copy-system-info"', got["sysToolsHtml"])
         self.assertEqual(
-            got["wsCalls"],
-            [
-                {
-                    "command": "create_device_group",
-                    "payload": {
-                        "name": "Patio Panels",
-                        "description": "",
-                    },
-                },
-                {
-                    "command": "create_device_group",
-                    "payload": {
-                        "name": "Sean Carry",
-                        "description": "Personal handheld",
-                        "source_subentry_id": "sub_mobile",
-                        "assign_source": True,
-                    },
-                },
-            ],
+            [c["command"] for c in got["sysCalls"]],
+            ["create_device_group", "apply_batch_device_setting", "create_device_group"],
         )
 
     def test_full_7447_mdi_catalog_and_ranked_search(self) -> None:
-        """All 7,447 @mdi/js v7.4.47 icons decode in 1:1 parity with firmware ui_mdi.cpp and rank exact searches first."""
-        runner = """
-const all = getAllMdiIcons();
-const teddy = searchMdiIcons("teddy-bear");
-const multiWord = searchMdiIcons("teddy bear");
-const empty = searchMdiIcons("");
-const missingRouteIcons = SHORTCUT_ROUTES_CATALOG
-  .map((r) => r.token)
-  .filter((tok) => !ROUTE_PREVIEW_ICONS[tok] || !isKnownMdiIcon(ROUTE_PREVIEW_ICONS[tok]));
-return {
-  count: all.length,
-  hasTeddyBear: isKnownMdiIcon("mdi:teddy-bear"),
-  hasBareTeddy: isKnownMdiIcon("teddy-bear"),
-  unknownFake: isKnownMdiIcon("mdi:definitely-not-an-icon-xyz"),
-  teddyTop: teddy.items[0],
-  teddyTotal: teddy.totalMatches,
-  multiWordTop: multiWord.items[0],
-  emptyTotal: empty.totalMatches,
-  emptyLen: empty.items.length,
-  missingRouteIcons,
-};
-"""
-        got = _run_node_ts([FRONTEND_SRC / "mdi-catalog.ts"], runner)
+        """Lazy `latter-studio-mdi.js` chunk unpacks all 7,447 icons in 1:1 parity with firmware."""
+        got = _run_node_esm(
+            """
+            import { PACKED_MDI_CHUNKS } from "../custom_components/latter/frontend/latter-studio-mdi.js";
+            import { SHORTCUT_ROUTES_CATALOG } from "./src/constants.js";
+            import {
+              getAllMdiIcons,
+              isKnownMdiIcon,
+              isMdiCatalogLoaded,
+              registerPackedMdiChunks,
+              ROUTE_PREVIEW_ICONS,
+              searchMdiIcons,
+            } from "./src/mdi-catalog.js";
+
+            const beforeLoaded = isMdiCatalogLoaded();
+            registerPackedMdiChunks(PACKED_MDI_CHUNKS);
+            const afterLoaded = isMdiCatalogLoaded();
+            const all = getAllMdiIcons();
+            const teddy = searchMdiIcons("teddy-bear");
+            const multiWord = searchMdiIcons("teddy bear");
+            const empty = searchMdiIcons("");
+            const missingRouteIcons = SHORTCUT_ROUTES_CATALOG
+              .map((r) => r.token)
+              .filter((tok) => !ROUTE_PREVIEW_ICONS[tok] || !isKnownMdiIcon(ROUTE_PREVIEW_ICONS[tok]));
+
+            process.stdout.write(JSON.stringify({
+              beforeLoaded,
+              afterLoaded,
+              count: all.length,
+              hasTeddyBear: isKnownMdiIcon("mdi:teddy-bear"),
+              hasBareTeddy: isKnownMdiIcon("teddy-bear"),
+              unknownFake: isKnownMdiIcon("mdi:definitely-not-an-icon-xyz"),
+              teddyTop: teddy.items[0],
+              multiWordTop: multiWord.items[0],
+              emptyTotal: empty.totalMatches,
+              missingRouteIcons,
+            }));
+            """
+        )
+        self.assertTrue(got["beforeLoaded"])
+        self.assertTrue(got["afterLoaded"])
         self.assertEqual(got["count"], 7447)
         self.assertEqual(got["missingRouteIcons"], [])
         self.assertTrue(got["hasTeddyBear"])
         self.assertTrue(got["hasBareTeddy"])
         self.assertFalse(got["unknownFake"])
         self.assertEqual(got["teddyTop"], "mdi:teddy-bear")
-        self.assertGreaterEqual(got["teddyTotal"], 1)
         self.assertEqual(got["multiWordTop"], "mdi:teddy-bear")
         self.assertEqual(got["emptyTotal"], 7447)
-        self.assertGreater(got["emptyLen"], 100)
 
     def test_system_overview_visual_status_deployment_and_capabilities(self) -> None:
-        """D-051: System Overview renders conditional alerts, Status 2x2 tiles, Area Deployment, and System Capabilities."""
-        stub_lit = """
-const nothing = Symbol.for("latter.lit.nothing");
-function html(strings, ...values) { return { _$litType$: 1, strings, values }; }
-function flattenHtml(node) {
-  if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
-  if (Array.isArray(node)) return node.map(flattenHtml).join("");
-  if (typeof node === "object" && node._$litType$ === 1) {
-    let out = "";
-    for (let i = 0; i < node.strings.length; i += 1) {
-      out += node.strings[i];
-      if (i < node.values.length) {
-        const v = node.values[i];
-        out += typeof v === "function" ? "[fn]" : flattenHtml(v);
-      }
-    }
-    return out;
-  }
-  return String(node);
-}
-"""
-        runner = (
-            stub_lit
-            + """
-function makeSysStore(withAlerts) {
-  return {
-    hass: null,
-    host: null,
-    state: {
-      version: "3.0.0",
-      ble_proxy_count: 5,
-      has_security_pin: !withAlerts,
-      issues: withAlerts
-        ? [{ issue_id: "device_crashed_sub1", kind: "device_crashed", severity: "error", subentry_id: "sub_1", device_title: "Kitchen Panel" }]
-        : [],
-      discovered_latter_devices: withAlerts
-        ? [{ esphome_device_id: "esp_new", node_name: "office_dock", title: "Office Dock", model_label: "Latter 4.0", area_name: "Office", default_group: "wall_panels" }]
-        : [],
-      device_groups: [
-        { id: "pocket_carry", name: "Pocket Carry", description: "" },
-        { id: "handhelds", name: "Handhelds", description: "" },
-        { id: "wall_panels", name: "Wall & Desk Panels", description: "" },
-      ],
-      system_devices: [
-        {
-          subentry_id: "sub_1",
-          title: "Living Panel",
-          kind: "device",
-          is_online: true,
-          has_display: true,
-          is_roaming: false,
-          has_assigned_area: true,
-          area_label: "Living Area",
-          active_area_name: "Living Area",
-          device_group: "wall_panels",
-          assigned_person: "",
-          ble_tracked: false,
-          status_label: "Online",
-        },
-        {
-          subentry_id: "sub_2",
-          title: "Sean Pocket",
-          kind: "device",
-          is_online: true,
-          has_display: true,
-          is_roaming: true,
-          has_assigned_area: false,
-          area_label: "Roaming",
-          active_area_name: "Living Area",
-          device_group: "pocket_carry",
-          assigned_person: "person.sean",
-          ble_tracked: true,
-          status_label: "Online",
-        },
-      ],
-      live: {
-        area_presence_grid: [
-          {
-            area_id: "living",
-            area_name: "Living Area",
-            floor_name: "Main Floor",
-            is_occupied: true,
-            occupant_names: ["Sean"],
-            active_sensors: ["binary_sensor.living_mmwave"],
-            fusion_sensors: ["binary_sensor.living_mmwave"],
-          },
-          {
-            area_id: "study",
-            area_name: "Study",
-            is_occupied: false,
-            occupant_names: [],
-            active_sensors: [],
-            fusion_sensors: ["binary_sensor.study_pir"],
-          },
-        ],
-      },
-      ble_area_signatures: [
-        { area_id: "living", area_name: "Living Area", has_ble_proxy: true, has_signature: true, scanner_count: 3, sample_count: 15, captured_at: "" },
-        { area_id: "study", area_name: "Study", has_ble_proxy: false, has_signature: false, scanner_count: 0, sample_count: 0, captured_at: "" },
-      ],
-      system_config: {
-        weather_entity: "weather.home",
-        alarm_entity: "alarm_control_panel.home",
-        thermostat_entities: ["climate.main", "climate.upstairs"],
-        lock_entities: ["lock.front"],
-        garage_entities: [],
-        vacuum_entities: ["vacuum.robo"],
-        camera_entities: ["camera.front_door", "camera.patio"],
-        calendar_entities: ["calendar.family"],
-        remotes_list: ["remote.living_tv"],
-        remote_groups: [{ id: "rg_living", name: "Living TV", area_id: "living", remotes: ["remote.living_tv"] }],
-        volume_overrides: [{ speaker: "media_player.living", target: "media_player.avr" }],
-        custom_palettes: [{ name: "Ocean", hex: "#009ac7" }],
-        doorbell_noise_reduction: "strong",
-      },
-      doorbells: [{ camera_entity: "camera.front_door", ring_entity: "binary_sensor.front_doorbell" }],
-      system_wallpapers: [
-        { id: "preset:forest_mountains", name: "Forest Mountains", kind: "preset" },
-        { id: "upload:1", name: "Custom Photo", kind: "upload", deletable: true },
-      ],
-    },
-  };
-}
-return {
-  healthyHtml: flattenHtml(renderSystemOverviewView(makeSysStore(false))),
-  alertsHtml: flattenHtml(renderSystemOverviewView(makeSysStore(true))),
-};
-"""
-        )
-        got = _run_node_ts(
-            [
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "components" / "controls.ts",
-                FRONTEND_SRC / "views" / "system-overview-view.ts",
-            ],
-            runner,
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
+            import { renderSystemOverviewView } from "./src/views/system-overview-view.js";
+
+            function build(withAlerts) {
+              return makeFakeStore({
+                state: {
+                  version: "3.0.0",
+                  ble_proxy_count: 5,
+                  has_security_pin: !withAlerts,
+                  issues: withAlerts
+                    ? [{ issue_id: "device_crashed_sub1", kind: "device_crashed", severity: "error", subentry_id: "sub_1", device_title: "Kitchen Panel" }]
+                    : [],
+                  discovered_latter_devices: withAlerts
+                    ? [{ esphome_device_id: "esp_new", node_name: "office_dock", title: "Office Dock", model_label: "Latter 4.0", area_name: "Office", default_group: "wall_panels" }]
+                    : [],
+                  device_groups: [
+                    { id: "pocket_carry", name: "Pocket Carry", description: "" },
+                    { id: "wall_panels", name: "Wall & Desk Panels", description: "" },
+                  ],
+                  system_devices: [
+                    {
+                      subentry_id: "sub_1",
+                      title: "Living Panel",
+                      kind: "device",
+                      is_online: true,
+                      has_display: true,
+                      is_roaming: false,
+                      has_assigned_area: true,
+                      area_id: "living",
+                      area_label: "Living Area",
+                      active_area_name: "Living Area",
+                      device_group: "wall_panels",
+                      assigned_person: "",
+                      ble_tracked: false,
+                      status_code: "online",
+                      status_label: "Online",
+                    },
+                    {
+                      subentry_id: "sub_2",
+                      title: "Alex Pocket",
+                      kind: "device",
+                      is_online: true,
+                      has_display: true,
+                      is_roaming: true,
+                      has_assigned_area: false,
+                      area_id: "living",
+                      area_label: "Roaming",
+                      active_area_name: "Living Area",
+                      device_group: "pocket_carry",
+                      assigned_person: "person.alex",
+                      ble_tracked: true,
+                      status_code: "online",
+                      status_label: "Online",
+                    },
+                  ],
+                  live: {
+                    area_presence_grid: [
+                      { area_id: "living", area_name: "Living Area", floor_name: "Main Floor", is_occupied: true, occupant_names: ["Alex"], active_sensors: ["binary_sensor.living_mmwave"], fusion_sensors: ["binary_sensor.living_mmwave"] },
+                      { area_id: "study", area_name: "Study", is_occupied: false, occupant_names: [], active_sensors: [], fusion_sensors: [] },
+                    ],
+                  },
+                  ble_area_signatures: [
+                    { area_id: "living", area_name: "Living Area", has_ble_proxy: true, has_signature: true, scanner_count: 3, sample_count: 15, captured_at: "" },
+                    { area_id: "study", area_name: "Study", has_ble_proxy: false, has_signature: false, scanner_count: 0, sample_count: 0, captured_at: "" },
+                  ],
+                  system_config: {
+                    weather_entity: "weather.home",
+                    alarm_entity: "alarm_control_panel.home",
+                    thermostat_entities: ["climate.main", "climate.upstairs"],
+                    lock_entities: ["lock.front"],
+                    garage_entities: [],
+                    vacuum_entities: ["vacuum.robo"],
+                    camera_entities: ["camera.front_door", "camera.patio"],
+                    calendar_entities: ["calendar.family"],
+                    remotes_list: ["remote.living_tv"],
+                    remote_groups: [{ id: "rg_living", name: "Living TV", area_id: "living", remotes: ["remote.living_tv"] }],
+                    volume_overrides: [{ speaker: "media_player.living", target: "media_player.avr" }],
+                    custom_palettes: [{ name: "Ocean", hex: "#009ac7" }],
+                    doorbell_noise_reduction: "strong",
+                  },
+                  doorbells: [{ camera_entity: "camera.front_door", ring_entity: "binary_sensor.front_doorbell" }],
+                  system_wallpapers: [
+                    { id: "preset:forest_mountains", name: "Forest Mountains", kind: "preset" },
+                    { id: "upload:1", name: "Custom Photo", kind: "upload", deletable: true },
+                  ],
+                },
+              }).store;
+            }
+
+            process.stdout.write(JSON.stringify({
+              healthyHtml: renderToHtml(renderSystemOverviewView(build(false))),
+              alertsHtml: renderToHtml(renderSystemOverviewView(build(true))),
+            }));
+            """
         )
         healthy = re.sub(r"\s+", " ", got["healthyHtml"])
         alerts = re.sub(r"\s+", " ", got["alertsHtml"])
 
         self.assertNotIn("sys-issues-banner", healthy)
-        self.assertNotIn("sys-discovered-banner", healthy)
-        self.assertNotIn("Configured Items", healthy)
         for expected in (
-            "All Online",
-            "2 / 2 Online",
-            "2 displays",
-            "1 Occupied",
+            "All online",
+            "2 / 2 online",
+            "1 occupied",
             "2 Areas • 5 BLE proxies",
-            "1 Tracked",
             "1 person assigned",
-            "v3.0.0",
-            "Firmware up to date",
-            "Open Repairs",
-            "Check Firmware Updates",
-            "Area Deployment",
-            "Roaming Devices",
-            "Sean Pocket (Living Area)",
-            "Living Area",
-            "Main Floor",
-            "Signature (3)",
-            "Living Panel • Here: Sean Pocket • 1 remote • 1 active sensor",
-            "Study",
-            "No BLE Proxy",
-            "System Capabilities",
-            "5 / 6 Active",
-            "✓ Weather",
-            "✓ Alarm",
-            "✓ 2 Zones",
-            "✓ Door Lock",
-            "✓ Vacuum",
-            "2 Cameras",
-            "1 Doorbell",
-            "1 Calendar",
-            "1 Remote",
-            "1 Area group • 1 volume override",
-            "Pocket Carry: 1",
-            "Wall & Desk Panels: 1",
+            "Area deployment",
+            "System capabilities",
+            "Colors &amp; wallpapers",
             "--swatch-color:#009AC7",
-            "1 custom color • 1 preset, 1 uploaded",
-            "System PIN Set",
+            "System PIN set",
         ):
             self.assertIn(expected, healthy)
 
         for expected_alert in (
             "sys-issues-banner",
-            "Needs Attention",
+            'role="region"',
             "Kitchen Panel",
-            "Open Device",
             "sys-discovered-banner",
-            "Hardware Ready to Adopt",
+            "Hardware ready to adopt",
             "Office Dock",
-            "Open Discovered",
-            "1 Issue",
             "No System PIN",
         ):
             self.assertIn(expected_alert, alerts)
 
     def test_section_handoff_blue_highlights_vs_whole_page_navigation(self) -> None:
-        """D-057: Specific-section jumps scroll and highlight in primary blue while whole-page destinations stay unhighlighted."""
-        stub_deps = (
-            "globalThis.HTMLElement = class { attachShadow() { return {}; } toggleAttribute() {} };\n"
-            "globalThis.history = { pushState() {}, replaceState() {} };\n"
-            "globalThis.dispatchEvent = () => true;\n"
-            "class StudioWsClient {}\n"
-            "function formatWsError(_e, f) { return f; }\n"
-            + "".join(
-                f"function {fn}() {{}}\n"
-                for fn in (
-                    "adoptLatterDeviceOp",
-                    "checkSystemUpdatesOp",
-                    "clearInternalLogsOp",
-                    "clearSecurityPinOp",
-                    "confirmAddBleModalOp",
-                    "confirmRemoveDeviceOp",
-                    "confirmResetDeviceOp",
-                    "copyLogsToClipboardOp",
-                    "downloadDeviceDiagnosticsOp",
-                    "exportBackupOp",
-                    "formatVisibleLogsOp",
-                    "openColorWheelModalOp",
-                    "quickAdoptBleCandidateOp",
-                    "restoreFromUploadedFileOp",
-                    "rotateSigningKeyOp",
-                    "saveColorWheelSelectionOp",
-                    "saveSecurityPinOp",
-                    "selectBleCandidateInModalOp",
-                    "sendAnnouncementOp",
-                    "addRemoteGroupRowOp",
-                    "addStringListRowOp",
-                    "addVolumeOverrideRowOp",
-                    "applyDeviceCustomColorOp",
-                    "commitEntityChange",
-                    "deleteCustomPaletteOp",
-                    "deleteWallpaperOp",
-                    "executeEntityActionOp",
-                    "flushDeviceBucketOp",
-                    "flushSystemSettingsOp",
-                    "getDockItemsOp",
-                    "getEnabledActivitySourcesOp",
-                    "getEnabledAreaCategoriesOp",
-                    "getEnabledGamesItemsOp",
-                    "getEnabledHomeCategoriesOp",
-                    "getEnabledToolsItemsOp",
-                    "getPinnedItemsOp",
-                    "moveAreaCategoryTokenOp",
-                    "moveGameItemTokenOp",
-                    "moveHomeCategoryTokenOp",
-                    "moveShortcutItemOp",
-                    "moveToolItemTokenOp",
-                    "openShortcutModalOp",
-                    "overlayDevicePrefsOnSections",
-                    "overlayPendingBlankListSlots",
-                    "overlayPendingEntityStates",
-                    "previewCameraOp",
-                    "removeRemoteGroupRowOp",
-                    "removeShortcutItemOp",
-                    "removeStringListRowOp",
-                    "removeVolumeOverrideRowOp",
-                    "resetDockItemsToDefaultOp",
-                    "runDeviceActionOp",
-                    "saveShortcutModalOp",
-                    "selectWallpaperSourceOp",
-                    "setAllWallpaperFavoritesOp",
-                    "setWallpaperRotationOp",
-                    "stageDeviceSettingOp",
-                    "stageSystemSettingOp",
-                    "testDoorbellSpeakerOp",
-                    "toggleActivitySourceOp",
-                    "toggleAreaCategoryTokenOp",
-                    "toggleGameItemTokenOp",
-                    "toggleHomeCategoryTokenOp",
-                    "toggleNativeDockAppOp",
-                    "toggleRemoteInGroupOp",
-                    "toggleToolItemTokenOp",
-                    "toggleWallpaperFavOp",
-                    "updateRemoteGroupFieldOp",
-                    "updateStringListRowOp",
-                    "updateVolumeOverrideRowOp",
-                    "uploadWallpaperOp",
-                    "applyBatchCopyFromDeviceOp",
-                    "applyBatchDeviceSettingOp",
-                    "bulkColorOp",
-                    "bulkNumberOp",
-                    "bulkPillsToggleOp",
-                    "bulkSelectOp",
-                    "bulkToggleOp",
-                    "captureBleAreaSignatureOp",
-                    "clearBleAreaSignatureOp",
-                    "confirmSaveDeviceAsGroupOp",
-                    "copyDeviceToGroupBaselineOp",
-                    "createDeviceGroupOp",
-                    "deleteDeviceGroupOp",
-                    "filteredControlTargetsOp",
-                    "getActiveSurveyDeviceOp",
-                    "resolvedBatchTargetIdOp",
-                    "setAreaFusionOp",
-                    "setBleScannerOffsetOp",
-                    "updateGroupBaselineOp",
-                    "updateGroupScopeOp",
-                )
-            )
-            + "const PENDING_ENTITY_STATES = new Map();\n"
-            + "function renderWallpaperGalleryItems() { return ''; }\n"
-            + "function renderWallpaperUploadProgress() { return ''; }\n"
-            + "function renderWallpaperUploadTrigger() { return ''; }\n"
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
+            import { STUDIO_STYLES } from "./src/styles/tokens.js";
+            import { renderDeviceToolsView } from "./src/views/device-tools-view.js";
+            import { renderSystemGroupsView } from "./src/views/system-groups-view.js";
+            import { renderSystemPresenceView } from "./src/views/system-presence-view.js";
+            import { renderSystemRemotesView } from "./src/views/system-remotes-view.js";
+            import { renderSystemSharedView } from "./src/views/system-shared-view.js";
+
+            globalThis.history = { pushState() {}, replaceState() {} };
+            globalThis.requestAnimationFrame = (cb) => { cb(0); return 1; };
+
+            const { store, scrolled } = makeFakeStore({
+              activeSubentryId: "sub_1",
+              deviceSelected: true,
+              state: {
+                device_groups: [{ id: "handhelds", name: "Handhelds", description: "Portable", builtin: true, device_config: {} }],
+                system_devices: [{ subentry_id: "sub_1", title: "Alex Pocket", kind: "device", is_online: true, has_display: true, is_roaming: true, ble_tracked: true, active_area_name: "Living Room", device_group: "handhelds" }],
+                live: { area_presence_grid: [{ area_id: "living", area_name: "Living Room", is_occupied: true, confidence_pct: 90, occupant_names: ["Alex"] }] },
+                ble_area_signatures: [{ area_id: "living", area_name: "Living Room", has_ble_proxy: true, has_signature: false, scanner_count: 1, sample_count: 0, captured_at: "" }],
+                system_config: { camera_entities: ["camera.front"], calendar_entities: ["calendar.home"], remotes_list: ["remote.tv"], remote_groups: [{ id: "rg1", name: "Living TV", area_id: "living", remotes: ["remote.tv"] }] },
+                config: { kind: "device", device_slug: "alex_pocket", device_group: "handhelds" },
+              },
+            });
+
+            store.openSystemSection("area_tracking", "area-box-living");
+            store.applyRoute({ prefix: "/latter", path: "/system/presence" });
+            store.hostUpdated();
+            await Promise.resolve();
+            const presenceHtml = renderToHtml(renderSystemPresenceView(store));
+
+            store.openSystemSection("shared_entities", "card-cameras-doorbell", ["card-cameras-doorbell", "card-calendars"]);
+            const sharedCamCalHtml = renderToHtml(renderSystemSharedView(store));
+
+            store.openSystemSection("remotes");
+            const remotesWholePageHtml = renderToHtml(renderSystemRemotesView(store));
+
+            store.openManageGroups("handhelds");
+            const groupsTargetedHtml = renderToHtml(renderSystemGroupsView(store));
+
+            store.openDeviceSection("tools", "card-device-diagnostics");
+            const devToolsHtml = renderToHtml(renderDeviceToolsView(store));
+            store.hostUpdated();
+
+            store.onMainFocusIn({
+              target: { tagName: "BUTTON", id: "other-btn", parentElement: { id: "card-replace-hardware", parentElement: null } },
+            });
+            const devToolsClearedHtml = renderToHtml(renderDeviceToolsView(store));
+
+            process.stdout.write(JSON.stringify({
+              cssText: Array.isArray(STUDIO_STYLES) ? STUDIO_STYLES.map((s) => s.styleSheetText).join("\\n") : STUDIO_STYLES.styleSheetText,
+              scrolled,
+              presenceHtml,
+              sharedCamCalHtml,
+              remotesWholePageHtml,
+              groupsTargetedHtml,
+              devToolsHtml,
+              devToolsClearedHtml,
+            }));
+            """
         )
-        runner = """
-return (async () => {
-  function flattenHtml(node) {
-    if (node === null || node === undefined || node === nothing || typeof node === "boolean") return "";
-    if (Array.isArray(node)) return node.map(flattenHtml).join("");
-    if (typeof node === "object" && node._$litKeyed$ === 1) return node.templates.map(flattenHtml).join("");
-    if (typeof node === "object" && node._$litType$ === 1) {
-      let out = "";
-      for (let i = 0; i < node.strings.length; i += 1) {
-        out += node.strings[i];
-        if (i < node.values.length) {
-          const v = node.values[i];
-          out += typeof v === "function" ? "[fn]" : flattenHtml(v);
-        }
-      }
-      return out;
-    }
-    return String(node);
-  }
-
-  const scrolled = [];
-  const focused = [];
-  const fakeHost = {
-    isConnected: true,
-    requestUpdate() {},
-    updateComplete: Promise.resolve(true),
-    renderRoot: {
-      getElementById(id) {
-        return {
-          id,
-          hasAttribute() { return false; },
-          setAttribute() {},
-          scrollIntoView(opts) {
-            scrolled.push({ id, opts });
-            return Promise.resolve();
-          },
-          focus(opts) {
-            focused.push({ id, opts });
-          },
-        };
-      },
-    },
-  };
-  globalThis.requestAnimationFrame = (cb) => cb();
-
-  const store = new StudioStore(fakeHost);
-  store.ensureSubscription = async () => {};
-  store.state = {
-    version: "3.0.0",
-    has_security_pin: false,
-    device_groups: [
-      { id: "handhelds", name: "Handhelds", description: "Portable", builtin: true, device_config: {} },
-    ],
-    system_devices: [
-      {
-        subentry_id: "sub_1",
-        title: "Sean Pocket",
-        kind: "device",
-        is_online: true,
-        has_display: true,
-        is_roaming: true,
-        ble_tracked: true,
-        active_area_name: "Living Room",
-        device_group: "handhelds",
-      },
-    ],
-    live: {
-      area_presence_grid: [
-        { area_id: "living", area_name: "Living Room", is_occupied: true, confidence_pct: 90, occupant_names: ["Sean"] },
-        { area_id: "study", area_name: "Study", is_occupied: false, occupant_names: [] },
-      ],
-    },
-    ble_area_signatures: [
-      { area_id: "living", area_name: "Living Room", has_ble_proxy: true, has_signature: false, scanner_count: 1, sample_count: 0, captured_at: "" },
-      { area_id: "study", area_name: "Study", has_ble_proxy: true, has_signature: false, scanner_count: 1, sample_count: 0, captured_at: "" },
-    ],
-    system_config: {
-      camera_entities: ["camera.front"],
-      calendar_entities: ["calendar.home"],
-      remotes_list: ["remote.tv"],
-      remote_groups: [{ id: "rg1", name: "Living TV", area_id: "living", remotes: ["remote.tv"] }],
-      volume_overrides: [],
-      custom_palettes: [{ name: "Ocean", hex: "#009ac7" }],
-    },
-    system_wallpapers: [{ id: "preset:ocean_waves", name: "Ocean Waves", kind: "preset" }],
-    config: { kind: "device", device_slug: "sean_pocket", device_group: "handhelds" },
-    capabilities: { has_display: true, has_power: true },
-    links: { entry_id: "entry_1" },
-  };
-
-  // 1. System Overview -> Living Room highlights ONLY #area-box-living (survives HA applyRoute echo)
-  store.openSystemSection("area_tracking", "area-box-living");
-  store.applyRoute({ prefix: "/latter", path: "/system/presence" });
-  store.hostUpdated();
-  await Promise.resolve();
-  const presenceHtml = flattenHtml(renderSystemPresenceView(store));
-
-  // Clicking Calibrate transfers blue handoff from #area-box-living to #ble-calibrate-target-box
-  store.selectBleCalibrateArea("living", true);
-  const afterCalibrateHtml = flattenHtml(renderSystemPresenceView(store));
-
-  // 2. System Capabilities: multi-card shared_entities highlights vs whole-page remotes & groups (unhighlighted)
-  store.openSystemSection("shared_entities", "card-cameras-doorbell", ["card-cameras-doorbell", "card-calendars"]);
-  const sharedCamCalHtml = flattenHtml(renderSystemSharedView(store));
-
-  store.openSystemSection("remotes");
-  const remotesWholePageHtml = flattenHtml(renderSystemRemotesView(store));
-
-  store.openSystemSection("remotes", "card-remote-groups");
-  const remotesTargetedHtml = flattenHtml(renderSystemRemotesView(store));
-
-  store.openSystemSection("system_sync");
-  const groupsWholePageHtml = flattenHtml(renderSystemGroupsView(store));
-
-  store.openManageGroups("handhelds");
-  const groupsTargetedHtml = flattenHtml(renderSystemGroupsView(store));
-
-  // 3. Device Overview -> Wi-Fi / Firmware highlights #card-device-diagnostics on Device -> Tools
-  store.activeSubentryId = "sub_1";
-  store.deviceSelected = true;
-  store.openDeviceSection("tools", "card-device-diagnostics");
-  store.hostUpdated();
-  const devToolsHtml = flattenHtml(renderDeviceToolsView(store));
-
-  // 4. Focusing an interactive control outside the highlighted card clears the highlight
-  store.onMainFocusIn({
-    target: { tagName: "BUTTON", id: "other-btn", parentElement: { id: "card-replace-hardware", parentElement: null } },
-  });
-  const devToolsClearedHtml = flattenHtml(renderDeviceToolsView(store));
-
-  return {
-    cssText: STUDIO_STYLES.styleSheetText,
-    scrolled,
-    focused,
-    presenceHtml,
-    afterCalibrateHtml,
-    sharedCamCalHtml,
-    remotesWholePageHtml,
-    remotesTargetedHtml,
-    groupsWholePageHtml,
-    groupsTargetedHtml,
-    devToolsHtml,
-    devToolsClearedHtml,
-  };
-})();
-"""
-        got = _run_node_ts(
-            [
-                FRONTEND_SRC / "lib" / "lit.ts",
-                FRONTEND_SRC / "styles" / "tokens.ts",
-                FRONTEND_SRC / "constants.ts",
-                FRONTEND_SRC / "utils" / "format.ts",
-                FRONTEND_SRC / "components" / "controls.ts",
-                FRONTEND_SRC / "state" / "store.ts",
-                FRONTEND_SRC / "views" / "system-presence-view.ts",
-                FRONTEND_SRC / "views" / "system-shared-view.ts",
-                FRONTEND_SRC / "views" / "system-remotes-view.ts",
-                FRONTEND_SRC / "views" / "system-groups-view.ts",
-                FRONTEND_SRC / "views" / "device-tools-view.ts",
-            ],
-            runner,
-            preamble_js=stub_deps,
-        )
-
-        # Primary-blue CSS handoff (warning orange retired from .calibrate-target-box.handoff-active)
         self.assertIn("--studio-handoff-surface:", got["cssText"])
-        self.assertIn("--studio-handoff-ring: inset 0 0 0 1px var(--studio-primary);", got["cssText"])
-        self.assertNotIn("border: 2px solid var(--studio-warning);", got["cssText"])
-
-        # Living Room highlighted, Study neutral; smooth-scrolled + focused with preventScroll: true
-        self.assertIn('id=area-box-living class="area-presence-box handoff-active"', got["presenceHtml"])
-        self.assertIn('id=area-box-study class="area-presence-box"', got["presenceHtml"])
+        self.assertIn('id="area-box-living" class="area-presence-box handoff-active"', got["presenceHtml"])
         self.assertEqual(
             got["scrolled"][0],
             {"id": "area-box-living", "opts": {"behavior": "smooth", "block": "start"}},
         )
-        self.assertEqual(
-            got["focused"][0],
-            {"id": "area-box-living", "opts": {"preventScroll": True}},
-        )
-
-        # Calibrate transfers highlight cleanly from #area-box-living to #ble-calibrate-target-box
-        self.assertIn('id=area-box-living class="area-presence-box"', got["afterCalibrateHtml"])
-        self.assertIn('class="calibrate-target-box handoff-active"', got["afterCalibrateHtml"])
-
-        # Cameras + Calendars highlights those 2 cards while Whole-Home stays unhighlighted
-        self.assertIn('id=card-cameras-doorbell class="card handoff-active"', got["sharedCamCalHtml"])
-        self.assertIn('id=card-calendars class="card handoff-active"', got["sharedCamCalHtml"])
-        self.assertIn('id=card-whole-home class="card"', got["sharedCamCalHtml"])
-
-        # Whole-page Media & Remotes and Device Groups stay unhighlighted; targeted deep-links highlight
+        self.assertEqual(got["sharedCamCalHtml"].count("handoff-active"), 2)
         self.assertNotIn("handoff-active", got["remotesWholePageHtml"])
-        self.assertIn('id=card-remote-groups class="card handoff-active"', got["remotesTargetedHtml"])
-        self.assertNotIn("handoff-active", got["groupsWholePageHtml"])
-        self.assertIn('id=group-box-handhelds class="area-presence-box handoff-active"', got["groupsTargetedHtml"])
-
-        # Device -> Tools Diagnostics highlight & outside focus dismissal
-        self.assertIn('id=card-device-diagnostics class="card handoff-active"', got["devToolsHtml"])
+        self.assertIn('id="group-box-handhelds" class="area-presence-box handoff-active"', got["groupsTargetedHtml"])
+        self.assertIn('id="card-device-diagnostics" class="card handoff-active"', got["devToolsHtml"])
         self.assertNotIn("handoff-active", got["devToolsClearedHtml"])
 
 

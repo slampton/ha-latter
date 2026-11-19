@@ -1,6 +1,14 @@
 /**
- * TypeScript domain & Home Assistant panel types for Latter Studio.
+ * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 34`).
  */
+
+import type {
+  CatalogItem,
+  DevicePrefSpecItem,
+  WorldClockZoneItem,
+} from "./protocol-schema.js";
+
+export type { CatalogItem, DevicePrefSpecItem, WorldClockZoneItem };
 
 export type StudioScope = "device" | "system";
 
@@ -27,6 +35,8 @@ export type StudioViewId = DeviceViewId | SystemViewId;
 
 export type SecurityPinPolicy = "auto" | "allow" | "require_pin" | "block";
 
+export type DeviceStatusCode = "online" | "offline" | "update" | "away" | "scanning";
+
 export type ConfigurableAppId =
   | "pinned"
   | "music"
@@ -50,9 +60,11 @@ export interface HassConnection {
     callback: (event: T) => void,
     subscribeMessage: Record<string, unknown>,
   ): Promise<() => void>;
+  addEventListener?: (eventType: string, callback: () => void) => void;
+  removeEventListener?: (eventType: string, callback: () => void) => void;
 }
 
-export interface HassAuth {
+interface HassAuth {
   data?: { access_token?: string };
   expired?: boolean;
   refreshAccessToken?: () => Promise<void>;
@@ -61,13 +73,44 @@ export interface HassAuth {
 export interface HomeAssistant {
   auth?: HassAuth;
   language?: string;
-  locale?: { language?: string; time_zone?: string };
+  dockedSidebar?: "docked" | "auto" | "always_hidden";
+  localize?: (key: string, ...args: unknown[]) => string;
+  loadBackendTranslation?: (
+    category: string,
+    integration?: string | string[],
+    configFlow?: boolean,
+  ) => Promise<(key: string, ...args: unknown[]) => string>;
+  formatEntityState?: (stateObj: HassEntityState, state?: string) => string;
+  locale?: {
+    language?: string;
+    number_format?:
+      | "language"
+      | "system"
+      | "comma_decimal"
+      | "decimal_comma"
+      | "space_comma"
+      | "none"
+      | string;
+    time_format?: "language" | "system" | "am_pm" | "24" | string;
+    date_format?: "language" | "system" | "DMY" | "MDY" | "YMD" | string;
+    time_zone?: "local" | "server" | string;
+    first_weekday?:
+      | "language"
+      | "monday"
+      | "tuesday"
+      | "wednesday"
+      | "thursday"
+      | "friday"
+      | "saturday"
+      | "sunday"
+      | string;
+  };
   config?: {
     unit_system?: { length?: string };
     time_zone?: string;
+    version?: string;
   };
   themes?: { darkMode?: boolean };
-  selectedTheme?: { dark?: boolean };
   states?: Record<string, HassEntityState>;
   connection?: HassConnection;
   callWS<T = unknown>(msg: Record<string, unknown>): Promise<T>;
@@ -81,13 +124,12 @@ export interface HassRoute {
 export interface CatalogChoice {
   id: string;
   name: string;
-  preview_url?: string;
   area_name?: string;
   state_label?: string;
   state_tone?: "primary" | "success" | "warning" | "error" | "" | string;
 }
 
-export interface AreaChoice {
+interface AreaChoice {
   id: string;
   name: string;
 }
@@ -101,7 +143,7 @@ export interface ShortcutItem {
   confirm: boolean;
 }
 
-export interface ShortcutEntityOption {
+interface ShortcutEntityOption {
   id: string;
   name: string;
   domain: string;
@@ -110,7 +152,7 @@ export interface ShortcutEntityOption {
   area_name: string;
 }
 
-export interface EntityCatalog {
+interface EntityCatalog {
   areas?: AreaChoice[];
   ma_speakers?: CatalogChoice[];
   ma_players?: CatalogChoice[];
@@ -160,13 +202,16 @@ export interface SystemDeviceEntry {
   device_slug: string;
   title: string;
   model_label: string;
+  area_id: string;
   has_assigned_area: boolean;
   area_label: string;
+  status_code: DeviceStatusCode;
   status_label: string;
   is_online: boolean;
   kind: "device" | "ble_tag";
   ble_category?: "phone" | "ble_tag" | "" | string;
   has_display: boolean;
+  has_battery: boolean;
   is_roaming: boolean;
   device_group: string;
   device_remote_group: string;
@@ -210,10 +255,9 @@ export interface DiscoveredBleCandidate {
   title: string;
   label?: string;
   kind?: string;
+  is_tracker: boolean;
   rssi: number | null;
   area_name?: string;
-  address?: string;
-  name?: string;
 }
 
 export interface VolumeOverride {
@@ -247,6 +291,7 @@ export interface SystemConfig {
   calendar_entities: string[];
   custom_palettes: CustomPalette[];
   doorbell_noise_reduction: "strong" | "light" | "off" | string;
+  ignored_discovered_devices?: string[];
   ble_attenuation?: number;
   ble_max_radius_m?: number;
   ble_max_velocity_mps?: number;
@@ -295,6 +340,7 @@ export interface DeviceCapabilities {
   has_display?: boolean;
   has_imu?: boolean;
   is_round?: boolean;
+  has_battery?: boolean;
   has_power?: boolean;
   has_voice?: boolean;
   has_audio?: boolean;
@@ -320,13 +366,13 @@ export interface EspHomeEntityItem {
   mode?: string;
 }
 
-export interface EspHomeSection {
+interface EspHomeSection {
   id: string;
   title: string;
   items: EspHomeEntityItem[];
 }
 
-export interface EspHomeInspector {
+interface EspHomeInspector {
   device?: {
     id?: string;
     name?: string;
@@ -349,15 +395,14 @@ export interface WallpaperItem {
   scope?: "device" | "system" | string;
 }
 
-export interface DoorbellTalkEntry {
+interface DoorbellTalkEntry {
   device_title: string;
   state: string;
 }
 
-export interface DoorbellStatusItem {
+interface DoorbellStatusItem {
   camera_entity: string;
   camera_name?: string;
-  preview_url?: string;
   ring_entity?: string;
   ring_name?: string;
   ring_state?: string;
@@ -365,7 +410,7 @@ export interface DoorbellStatusItem {
   talk?: DoorbellTalkEntry[];
 }
 
-export interface AreaFusionSensorChoice {
+interface AreaFusionSensorChoice {
   entity_id: string;
   name: string;
   state?: string;
@@ -415,9 +460,9 @@ export interface SharedControlItem {
   state?: string;
   options?: string[];
   option_labels?: Record<string, string>;
-  min?: number;
-  max?: number;
-  step?: number;
+  min?: number | null;
+  max?: number | null;
+  step?: number | null;
   unit?: string;
   targets: SharedControlTarget[];
 }
@@ -426,13 +471,13 @@ export interface DevicePrefItem {
   key: string;
   label: string;
   section: string;
-  group_tier?: string;
+  group_tier?: string | null;
   domain: string;
   value: unknown;
   options?: string[];
-  min?: number;
-  max?: number;
-  step?: number;
+  min?: number | null;
+  max?: number | null;
+  step?: number | null;
   unit?: string;
 }
 
@@ -446,7 +491,7 @@ export interface DeviceGroup {
   device_config?: Record<string, unknown>;
 }
 
-export interface LogEntry {
+interface LogEntry {
   ts?: number | string;
   timestamp?: string;
   level?: string;
@@ -454,13 +499,13 @@ export interface LogEntry {
   message?: string;
 }
 
-export interface BleTransmitterStatus {
+interface BleTransmitterStatus {
   state: string;
   tx_power: string;
   advertise_mode: string;
 }
 
-export interface LiveDeviceSection {
+export interface LiveDeviceTelemetry {
   active_area_name?: string;
   ma_link_matched?: boolean;
   ble_closest_proxy?: string;
@@ -473,16 +518,19 @@ export interface LiveDeviceSection {
   fw_update_available?: boolean;
   effective_security_pin_policy?: string;
   has_security_pin?: boolean;
+  is_ble_sleep_expected?: boolean;
   timer_running?: boolean;
   timer_paused?: boolean;
   timer_remaining_sec?: number;
+  timer_ends_at?: string;
   stopwatch_running?: boolean;
   stopwatch_paused?: boolean;
   stopwatch_elapsed_sec?: number;
+  stopwatch_started_at?: string;
   alarm_ringing?: boolean;
 }
 
-export interface QuickActionPayloadItem {
+interface QuickActionPayloadItem {
   key: string;
   device_command: string;
   label: string;
@@ -491,22 +539,36 @@ export interface QuickActionPayloadItem {
   device_class?: string;
 }
 
-export interface DeviceLinks {
+interface DeviceLinks {
   entry_id?: string;
   esphome_device_id?: string;
   latter_device_id?: string;
 }
 
+export interface SystemInfo {
+  ha_version: string;
+  integration_version: string;
+  min_firmware_sdk_rev: number;
+  studio_rev: number;
+}
+
 export interface StudioStatePayload {
+  type?: "state";
   subentry_id: string;
   title: string;
   version: string;
+  studio_rev?: number;
+  system_config_rev: number;
+  device_config_rev: number;
+  system_info?: SystemInfo;
+  locale_strings?: Record<string, string>;
   internal_logs: LogEntry[];
   system_devices: SystemDeviceEntry[];
   issues: IssueItem[];
   ble_proxy_count: number;
   ble_area_signatures?: BleAreaSignatureSummary[];
   discovered_latter_devices?: DiscoveredLatterDevice[];
+  ignored_latter_devices?: DiscoveredLatterDevice[];
   discovered_ble_devices: DiscoveredBleCandidate[];
   system_controls: SharedControlItem[];
   device_groups: DeviceGroup[];
@@ -515,23 +577,26 @@ export interface StudioStatePayload {
   system_wallpapers: WallpaperItem[];
   doorbells: DoorbellStatusItem[];
   catalog?: EntityCatalog;
+  pref_specs?: DevicePrefSpecItem[];
+  world_clock_zones?: WorldClockZoneItem[];
   capabilities: DeviceCapabilities;
   config: DeviceConfig;
-  device_prefs?: DevicePrefItem[];
+  device_prefs: DevicePrefItem[];
   quick_actions?: QuickActionPayloadItem[];
   speaker_volume?: EspHomeEntityItem | null;
   esphome: EspHomeInspector;
   wallpapers: WallpaperItem[];
   links?: DeviceLinks;
-  live: LiveDeviceSection;
+  live: LiveDeviceTelemetry;
   update_check?: { checked: number; available: number };
   removed?: boolean;
   removed_subentry_id?: string;
+  adopted_subentry_id?: string;
+  adopted_esphome_device_id?: string;
 }
 
 export interface BleSurveyDeltaEvent {
-  type?: string;
-  event?: string;
+  type: "ble_survey_delta";
   subentry_id?: string;
   ble_packets_seen?: number;
   ble_closest_proxy?: string;

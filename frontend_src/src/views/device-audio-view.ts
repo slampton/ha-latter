@@ -1,19 +1,20 @@
 /**
- * Device Audio & Voice View (`audio_voice`, D-031 / D-036):
- * Voice Assistant, Wake Word, Voice Follows Me, Sound & Music Assistant.
+ * Device Audio View (`audio_voice`, `D-008`, `D-031`, `D-036`, `D-066`, `Q7`, `Q8`):
+ * - Column 1: Voice assistant & wake word (hides `Voice Follows Me` & delay when `native_ble_tracking` is Off).
+ * - Column 2: Sound & playback (keeps `area_handoff` visible in both Static and BLE modes per `D-008`,
+ *   using unified `store.tPrefLabel("area_handoff")` matching System Groups).
  */
 
 import {
   renderCard,
-  renderNativeControlRow,
   renderPrefControlRow,
+  renderRangeRow,
   renderSelectRow,
-  renderSettingsRow,
   renderSwitchRow,
 } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import { fmtNumber } from "../utils/format.js";
+import { renderDeviceEntityRow, renderDeviceOfflineBanner } from "./device-overview-view.js";
 
 export function renderDeviceAudioView(store: StudioStore): TemplateResult {
   const data = store.state;
@@ -21,12 +22,12 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
   const caps = data?.capabilities || {};
   const live = data?.live || {};
 
-  const wwModePref = store.getPref("wake_word_mode");
+  const wwModePref = store.entity.getPref("wake_word_mode");
   const wwDisabled = wwModePref ? String(wwModePref.value) === "Disabled" : false;
 
-  const wakeScreenPref = store.getPref("wake_screen_on_assist");
+  const wakeScreenPref = store.entity.getPref("wake_screen_on_assist");
 
-  const voiceItems = store.getSectionItems("voice");
+  const voiceItems = store.entity.getSectionItems("voice");
   const voicePrimary = voiceItems.filter((it) => {
     if (it.domain === "assist_satellite") return false;
     const k = it.key || it.pref_key || (it.entity_id ? it.entity_id.split(".").pop() || "" : "");
@@ -36,15 +37,19 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
     if (k.startsWith("ww_sens_") || k.includes("_ww_sens_")) return false;
     if (
       wwDisabled &&
-      (it.key === "wake_word" || it.key === "wake_word_n" || k.endsWith("_wake_word") || k.endsWith("_wake_word_n"))
-    )
+      (it.key === "wake_word" ||
+        it.key === "wake_word_n" ||
+        k.endsWith("_wake_word") ||
+        k.endsWith("_wake_word_n"))
+    ) {
       return false;
+    }
     return true;
   });
 
   const sensitivityPrefs = wwDisabled
     ? []
-    : store.getPrefs([
+    : store.entity.getPrefs([
         "ww_sens_okay_nabu",
         "ww_sens_hey_luna",
         "ww_sens_hey_jarvis",
@@ -52,14 +57,16 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
         "ww_sens_alexa",
       ]);
 
-  const soundPrefs = store.getPrefs([
+  const soundPrefs = store.entity.getPrefs([
     "alert_volume",
     "volume_step_size",
     "game_sound_effects",
   ]);
-  const soundItems = store.getSectionItems("sound").filter((it) => !it.pref_key);
+  const soundItems = store.entity.getSectionItems("sound").filter((it) => !it.pref_key);
 
-  const isRoaming = caps.is_roaming_device !== false;
+  // Hide `Voice Follows Me` & dwell delay when `native_ble_tracking` is Off (Static mode, `Q8` / `E-13`)
+  const showVoiceFollowsMe =
+    Boolean(cfg.native_ble_tracking) && caps.is_roaming_device !== false;
   const dwellSeconds = Number(cfg.area_follow_dwell_s ?? 10);
 
   const autoMaEntity = cfg.device_slug ? `media_player.${cfg.device_slug}` : "";
@@ -67,62 +74,61 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
   const maUnmatched = live.ma_link_matched === false;
   const hasCustomMaOverride = Boolean(savedMa && savedMa !== autoMaEntity);
   const showMaOverrideRow = maUnmatched || hasCustomMaOverride;
+  const maTargetName = autoMaEntity || store.t("dev_audio.ma_player_fallback_target");
   const maDescription = maUnmatched
-    ? `Automatic match did not find ${autoMaEntity || "this Device's player"} in Music Assistant. Choose this Device's player for library playback, queues and lyrics.`
-    : `Linked manually (${autoMaEntity || "default slug"} was not used). Clear to return to automatic matching.`;
+    ? store.t("dev_audio.ma_player_unmatched_desc", { entity: maTargetName })
+    : store.t("dev_audio.ma_player_manual_desc", { entity: maTargetName });
 
   const speakerChoices = data?.catalog?.ma_speakers;
 
   return html`<section id="view-audio_voice">
+    ${renderDeviceOfflineBanner(store)}
+
     <div class="columns">
       <div class="column">
         ${renderCard({
-          heading: html`<h3 class="card-title">Voice Assistant &amp; Wake Word</h3>`,
+          heading: html`<h3 class="card-title">${store.t("dev_audio.card_voice_wake")}</h3>`,
           contentClass: "settings-list",
           body: html`${wwModePref ? renderPrefControlRow(store, wwModePref) : nothing}
-            ${voicePrimary.map((it) => renderNativeControlRow(store, it))}
+            ${voicePrimary.map((it) => renderDeviceEntityRow(store, it))}
             ${wakeScreenPref ? renderPrefControlRow(store, wakeScreenPref) : nothing}
-            ${isRoaming
+            ${showVoiceFollowsMe
               ? html`${renderSwitchRow({
                     rowId: "row-sync-device-area",
                     id: "cfg-sync_device_area",
-                    label: "Voice Follows Me",
-                    description:
-                      "Updates this roaming Device's Home Assistant Area when BLE presence settles in a new Area, so Area-less voice commands target where you are.",
+                    label: store.tPrefLabel("sync_device_area"),
+                    description: store.t("dev_audio.vfm_desc"),
                     checked: Boolean(cfg.sync_device_area),
                     onChange: (checked) =>
-                      store.stageDeviceSetting(
+                      store.entity.stageDeviceSetting(
                         "sync_device_area",
                         checked,
                         "cfg-sync_device_area",
                       ),
                   })}
-                  ${renderSettingsRow({
-                    id: "row-area-follow-dwell",
-                    label: "Voice Follows Me Delay",
-                    forId: "cfg-area_follow_dwell_s",
-                    description:
-                      "How long a BLE-detected Area stays stable before moving the Device (3 to 60 seconds).",
-                    control: html`<input
-                        type="range"
-                        id="cfg-area_follow_dwell_s"
-                        min="3"
-                        max="60"
-                        step="1"
-                        .value=${String(dwellSeconds)}
-                        @change=${(ev: Event) =>
-                          store.stageDeviceSetting(
-                            "area_follow_dwell_s",
-                            Number((ev.currentTarget as HTMLInputElement).value) || 10,
-                            "cfg-area_follow_dwell_s",
-                          )}
-                      />
-                      <span id="dwell-value" class="chip">${fmtNumber(dwellSeconds, store.hass, 0)} s</span>`,
+                  ${renderRangeRow({
+                    rowId: "row-area-follow-dwell",
+                    id: "cfg-area_follow_dwell_s",
+                    label: store.t("dev_audio.vfm_delay_label"),
+                    ariaLabel: store.t("dev_audio.vfm_delay_label"),
+                    description: store.t("dev_audio.vfm_delay_desc"),
+                    value: dwellSeconds,
+                    min: 3,
+                    max: 60,
+                    step: 1,
+                    unit: "s",
+                    hass: store.hass,
+                    onCommit: (val) =>
+                      store.entity.stageDeviceSetting(
+                        "area_follow_dwell_s",
+                        val || 10,
+                        "cfg-area_follow_dwell_s",
+                      ),
                   })}`
               : nothing}
             ${sensitivityPrefs.length
               ? html`<details class="sub-collapsible">
-                  <summary>Wake Word Sensitivity (Per Model)</summary>
+                  <summary>${store.t("dev_audio.ww_sensitivity_summary")}</summary>
                   <div class="card-content settings-list">
                     ${sensitivityPrefs.map((p) => renderPrefControlRow(store, p))}
                   </div>
@@ -133,43 +139,48 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
 
       <div class="column">
         ${renderCard({
-          heading: html`<h3 class="card-title">Sound &amp; Playback</h3>`,
+          heading: html`<h3 class="card-title">
+            ${store.t("dev_audio.card_sound_playback")}
+          </h3>`,
           contentClass: "settings-list",
           body: html`${renderSelectRow({
               id: "cfg-default_speaker",
-              label: "Default Speaker",
-              description: "Primary speaker controlled from Music and Home when this Device starts up.",
+              label: store.t("dev_audio.default_speaker_label"),
+              description: store.t("dev_audio.default_speaker_desc"),
               value: cfg.default_speaker,
               choices: speakerChoices,
-              emptyOptionLabel: "— Automatic (Built-in or Area) —",
+              emptyOptionLabel: store.t("dev_audio.default_speaker_auto"),
               onChange: (val) =>
-                store.stageDeviceSetting("default_speaker", val, "cfg-default_speaker"),
+                store.entity.stageDeviceSetting("default_speaker", val, "cfg-default_speaker"),
             })}
             ${showMaOverrideRow
               ? renderSelectRow({
                   rowId: "row-ma-player-entity",
                   id: "cfg-ma_player_entity",
-                  label: "Music Assistant Player",
+                  label: store.t("dev_audio.ma_player_label"),
                   description: maDescription,
                   descId: "desc-ma-player-entity",
                   value: savedMa,
                   choices: data?.catalog?.ma_players,
-                  emptyOptionLabel: "— Automatic Match —",
+                  emptyOptionLabel: store.t("dev_audio.ma_player_auto"),
                   onChange: (val) =>
-                    store.stageDeviceSetting("ma_player_entity", val, "cfg-ma_player_entity"),
+                    store.entity.stageDeviceSetting(
+                      "ma_player_entity",
+                      val,
+                      "cfg-ma_player_entity",
+                    ),
                 })
               : nothing}
             ${renderSwitchRow({
               id: "cfg-area_handoff",
-              label: "Media Follows This Device to Its New Area",
-              description:
-                "Transfers active Music Assistant playback when this Device moves to another Area.",
+              label: store.tPrefLabel("area_handoff"),
+              description: store.t("dev_audio.area_handoff_desc"),
               checked: Boolean(cfg.area_handoff),
               onChange: (checked) =>
-                store.stageDeviceSetting("area_handoff", checked, "cfg-area_handoff"),
+                store.entity.stageDeviceSetting("area_handoff", checked, "cfg-area_handoff"),
             })}
             ${soundPrefs.map((p) => renderPrefControlRow(store, p))}
-            ${soundItems.map((it) => renderNativeControlRow(store, it))}`,
+            ${soundItems.map((it) => renderDeviceEntityRow(store, it))}`,
         })}
       </div>
     </div>
