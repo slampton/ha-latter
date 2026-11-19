@@ -22,7 +22,9 @@ import {
   repeat,
   type ReactiveController,
 } from "../src/lib/lit.js";
+import { renderDeviceInterfaceView } from "../src/views/device-interface-view.js";
 import { resetDomBody, simDocument } from "./dom-shim.js";
+import { makeFakeStore } from "./fake-store.js";
 
 const SHARED_SHEET_A = css`
   :host {
@@ -359,5 +361,151 @@ describe("src/lib/lit.ts — LitElement, repeat(), nested arrays & focusSafe()",
       () => render(html`<div>${focusSafe("bad")}</div>`, badContainer),
       /focusSafe\(\) can only be used in property or attribute bindings/,
     );
+  });
+
+  it("resyncs live DOM .checked and <select .value> properties after user DOM mutations", () => {
+    const container = simDocument.createElement("div");
+
+    // 1. Live `.checked=${false}` resync even when template expression stays `false`
+    const renderHiddenSwitches = (items: readonly string[]): void => {
+      render(
+        html`<div>
+          ${items.map(
+            (id) => html`<input data-id=${id} type="checkbox" .checked=${false} />`,
+          )}
+        </div>`,
+        container,
+      );
+    };
+
+    renderHiddenSwitches(["weather", "time", "calendar", "clock"]);
+    const firstInput = container.querySelector('input[data-id="weather"]') as unknown as HTMLInputElement;
+    // Simulate browser toggling `.checked = true` on click before re-render shifts list
+    firstInput.checked = true;
+    renderHiddenSwitches(["time", "calendar", "clock"]);
+    const allInputs = container.querySelectorAll("input") as unknown as HTMLInputElement[];
+    assert.deepEqual(
+      allInputs.map((el) => [el.getAttribute("data-id"), el.checked]),
+      [
+        ["time", false],
+        ["calendar", false],
+        ["clock", false],
+      ],
+    );
+
+    // 2. Post-children `<select .value=${cur}>${dynamicOptions}</select>` without `?selected`
+    const selectHost = simDocument.createElement("div");
+    const renderSelect = (cur: string, opts: readonly string[]): void => {
+      render(
+        html`<select id="tz" .value=${cur}>
+          ${opts.map((o) => html`<option value=${o}>${o}</option>`)}
+        </select>`,
+        selectHost,
+      );
+    };
+
+    renderSelect("Asia/Tokyo", ["UTC", "America/New_York", "Asia/Tokyo"]);
+    const sel = selectHost.querySelector("#tz") as unknown as HTMLSelectElement;
+    assert.equal(sel.value, "Asia/Tokyo");
+
+    // Simulate user picking a rejected option and state re-rendering unchanged `cur`
+    sel.value = "UTC";
+    renderSelect("Asia/Tokyo", ["UTC", "America/New_York", "Asia/Tokyo"]);
+    assert.equal(sel.value, "Asia/Tokyo");
+  });
+
+  it("keeps App Dock and Hidden from dock switches in exact sync across enable/disable toggles", () => {
+    const { store } = makeFakeStore({
+      currentScope: "device",
+      currentViewId: "interface",
+      activeSubentryId: "sub_dev_1",
+      deviceSelected: true,
+    });
+    const container = simDocument.createElement("div");
+    const rerender = (): void => {
+      render(renderDeviceInterfaceView(store), container);
+    };
+
+    const readSwitchStates = (rootSelector: string): Array<[string, boolean]> => {
+      const root = container.querySelector(rootSelector);
+      if (!root) return [];
+      const switches = root.querySelectorAll('input[type="checkbox"]') as unknown as HTMLInputElement[];
+      return switches.map((sw) => [sw.getAttribute("aria-label") || "", Boolean(sw.checked)]);
+    };
+
+    try {
+      rerender();
+      // Default fresh device has Sky & Weather, Time, Calendar, and Clock Face hidden and unchecked
+      const initialHidden = readSwitchStates("#dock-hidden-native-apps");
+      assert.equal(initialHidden.length, 4);
+      assert.ok(initialHidden.every(([, checked]) => checked === false));
+
+      // Step 1: Enable Sky & Weather from Hidden from dock (simulating real browser click mutating .checked = true)
+      const hiddenSwitches1 = container
+        .querySelector("#dock-hidden-native-apps")!
+        .querySelectorAll('input[type="checkbox"]') as unknown as HTMLInputElement[];
+      hiddenSwitches1[0].checked = true;
+      hiddenSwitches1[0].dispatchEvent(new Event("change", { bubbles: true }));
+      rerender();
+
+      // Remaining hidden apps (Time, Calendar, Clock Face) MUST all still be unchecked!
+      const afterWeatherHidden = readSwitchStates("#dock-hidden-native-apps");
+      assert.equal(afterWeatherHidden.length, 3);
+      assert.ok(
+        afterWeatherHidden.every(([, checked]) => checked === false),
+        `Expected all hidden switches unchecked after enabling Weather, got ${JSON.stringify(afterWeatherHidden)}`,
+      );
+
+      // Step 2: Enable Time from Hidden from dock -> moves up in 1 click, Calendar & Clock Face stay unchecked
+      const hiddenSwitches2 = container
+        .querySelector("#dock-hidden-native-apps")!
+        .querySelectorAll('input[type="checkbox"]') as unknown as HTMLInputElement[];
+      hiddenSwitches2[0].checked = true;
+      hiddenSwitches2[0].dispatchEvent(new Event("change", { bubbles: true }));
+      rerender();
+
+      const afterTimeHidden = readSwitchStates("#dock-hidden-native-apps");
+      assert.equal(afterTimeHidden.length, 2);
+      assert.ok(
+        afterTimeHidden.every(([, checked]) => checked === false),
+        `Expected Calendar & Clock Face unchecked after enabling Time, got ${JSON.stringify(afterTimeHidden)}`,
+      );
+
+      // Step 3: Untoggle Time in the active App Dock -> Time returns to Hidden from dock unchecked!
+      const activeSwitches = container
+        .querySelector("#dock-shortcuts-container")!
+        .querySelectorAll('input[type="checkbox"]') as unknown as HTMLInputElement[];
+      const timeActiveSw = activeSwitches.find((sw) =>
+        (sw.getAttribute("aria-label") || "").includes("Time"),
+      )!;
+      assert.ok(timeActiveSw, "Expected Time switch in active App Dock");
+      assert.equal(timeActiveSw.checked, true);
+      timeActiveSw.checked = false;
+      timeActiveSw.dispatchEvent(new Event("change", { bubbles: true }));
+      rerender();
+
+      const afterDisableTimeHidden = readSwitchStates("#dock-hidden-native-apps");
+      assert.equal(afterDisableTimeHidden.length, 3);
+      assert.ok(
+        afterDisableTimeHidden.every(([, checked]) => checked === false),
+        `Expected Time, Calendar & Clock Face all unchecked after untoggling Time, got ${JSON.stringify(afterDisableTimeHidden)}`,
+      );
+
+      // Step 4: Enable all remaining hidden apps (Time, Calendar, Clock Face) -> section disappears cleanly
+      for (let step = 0; step < 3; step += 1) {
+        const curHidden = container
+          .querySelector("#dock-hidden-native-apps")!
+          .querySelectorAll('input[type="checkbox"]') as unknown as HTMLInputElement[];
+        curHidden[0].checked = true;
+        curHidden[0].dispatchEvent(new Event("change", { bubbles: true }));
+        rerender();
+      }
+      assert.equal(container.querySelector("#dock-hidden-native-apps"), null);
+      const allActive = readSwitchStates("#dock-shortcuts-container");
+      assert.ok(allActive.length >= 10);
+      assert.ok(allActive.every(([, checked]) => checked === true));
+    } finally {
+      store.entity.discardDeviceBucket("sub_dev_1");
+    }
   });
 });

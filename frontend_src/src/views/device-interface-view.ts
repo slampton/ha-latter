@@ -32,7 +32,7 @@ import {
   TOOLS_ITEMS_CATALOG,
 } from "../constants.js";
 import type { StudioTranslationKey } from "../i18n/index.js";
-import { html, nothing, type TemplateResult } from "../lib/lit.js";
+import { html, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import { ROUTE_PREVIEW_ICONS, shortcutActionLabel } from "../mdi-catalog.js";
 import { isCatalogItemSupported, type StudioStore } from "../state/store.js";
 import type { ShortcutItem } from "../types.js";
@@ -665,48 +665,52 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                       <div class="subsection-title">
                         ${store.t("dev_interface.hidden_from_dock")}
                       </div>
-                      ${hiddenNativeApps.map((tok) => {
-                        const spec = routeSpecMap.get(tok);
-                        const displayTitle = spec?.label || tok;
-                        const iconSlug = ROUTE_PREVIEW_ICONS[tok] || "mdi:apps";
-                        const configApp = NATIVE_DOCK_CONFIG_APP_MAP[tok];
-                        return html`<div class="dock-row shortcut-item-hidden">
-                          <span class="shortcut-icon-badge" aria-hidden="true">
-                            <ha-icon .icon=${iconSlug}></ha-icon>
-                          </span>
-                          <div class="shortcut-item-info">
-                            <span class="shortcut-item-title">${displayTitle}</span>
-                            <span class="shortcut-item-meta">${describeNativeDockApp(tok)}</span>
-                          </div>
-                          ${configApp
-                            ? html`<button
-                                type="button"
-                                aria-label=${store.t("action.configure_item", {
-                                  item: displayTitle,
-                                })}
-                                @click=${() => store.entity.openAppConfigModal(configApp)}
-                                class="btn btn-secondary btn-compact"
-                              >
-                                ${store.t("action.configure")}
-                              </button>`
-                            : nothing}
-                          <input
-                            type="checkbox"
-                            role="switch"
-                            aria-label=${store.t("dev_interface.show_on_dock_aria", {
-                              title: displayTitle,
-                            })}
-                            ?disabled=${dockItems.length >= MAX_DOCK_ITEMS}
-                            .checked=${false}
-                            @change=${(ev: Event) =>
-                              store.entity.toggleNativeDockApp(
-                                tok,
-                                (ev.currentTarget as HTMLInputElement).checked,
-                              )}
-                            class="switch"
-                          />
-                        </div>`;
-                      })}
+                      ${repeat(
+                        hiddenNativeApps,
+                        (tok) => tok,
+                        (tok) => {
+                          const spec = routeSpecMap.get(tok);
+                          const displayTitle = spec?.label || tok;
+                          const iconSlug = ROUTE_PREVIEW_ICONS[tok] || "mdi:apps";
+                          const configApp = NATIVE_DOCK_CONFIG_APP_MAP[tok];
+                          return html`<div class="dock-row shortcut-item-hidden">
+                            <span class="shortcut-icon-badge" aria-hidden="true">
+                              <ha-icon .icon=${iconSlug}></ha-icon>
+                            </span>
+                            <div class="shortcut-item-info">
+                              <span class="shortcut-item-title">${displayTitle}</span>
+                              <span class="shortcut-item-meta">${describeNativeDockApp(tok)}</span>
+                            </div>
+                            ${configApp
+                              ? html`<button
+                                  type="button"
+                                  aria-label=${store.t("action.configure_item", {
+                                    item: displayTitle,
+                                  })}
+                                  @click=${() => store.entity.openAppConfigModal(configApp)}
+                                  class="btn btn-secondary btn-compact"
+                                >
+                                  ${store.t("action.configure")}
+                                </button>`
+                              : nothing}
+                            <input
+                              type="checkbox"
+                              role="switch"
+                              aria-label=${store.t("dev_interface.show_on_dock_aria", {
+                                title: displayTitle,
+                              })}
+                              ?disabled=${dockItems.length >= MAX_DOCK_ITEMS}
+                              .checked=${false}
+                              @change=${(ev: Event) =>
+                                store.entity.toggleNativeDockApp(
+                                  tok,
+                                  (ev.currentTarget as HTMLInputElement).checked,
+                                )}
+                              class="switch"
+                            />
+                          </div>`;
+                        },
+                      )}
                     </div>`
                   : nothing}`,
             })

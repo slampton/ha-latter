@@ -1134,6 +1134,14 @@ export function renderSortableList<T>(opts: SortableListOptions<T>): TemplateRes
     </div>`;
   }
 
+  const seenKeys = new Map<string, number>();
+  const uniqueKeys = opts.items.map((item, idx) => {
+    const raw = String(opts.getKey(item, idx));
+    const prevCount = seenKeys.get(raw) ?? 0;
+    seenKeys.set(raw, prevCount + 1);
+    return prevCount === 0 ? raw : `${raw}__dup_${prevCount}`;
+  });
+
   return html`<div
     id=${opts.id}
     data-sortable-list=${opts.id}
@@ -1143,9 +1151,9 @@ export function renderSortableList<T>(opts: SortableListOptions<T>): TemplateRes
   >
     ${repeat(
       opts.items,
-      (item, idx) => opts.getKey(item, idx),
+      (_item, idx) => uniqueKeys[idx],
       (item, idx) => {
-        const key = opts.getKey(item, idx);
+        const key = uniqueKeys[idx];
         const label = opts.getLabel(item, idx);
         const movable = opts.canMoveItem ? opts.canMoveItem(item, idx) : true;
         const extraCls =
@@ -1440,7 +1448,7 @@ export function renderEntitySlotList(opts: EntitySlotListOptions): TemplateResul
     return renderSortableList({
       id: opts.id,
       items: opts.items,
-      getKey: (val, idx) => (val ? `ent:${val}:${idx}` : `empty:${idx}`),
+      getKey: (val) => (val ? `ent:${val}` : "empty"),
       getLabel: (val, idx) =>
         opts.slotLabel ? opts.slotLabel(idx) : val || `${opts.selectAriaLabel} ${idx + 1}`,
       onReorder: opts.onReorder,

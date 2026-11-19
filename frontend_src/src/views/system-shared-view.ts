@@ -212,7 +212,7 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
                       ariaLabel: g.title,
                       items: g.items,
                       overlay: store.localeOverlay,
-                      getKey: (val, idx) => (val ? `ent:${val}:${idx}` : `empty:${idx}`),
+                      getKey: (val) => (val ? `ent:${val}` : "empty"),
                       getLabel: (val, idx) => {
                         const meta = findCatalogChoice(g.choices, val);
                         return meta?.name || val || `${g.selectAriaLabel} ${idx + 1}`;
