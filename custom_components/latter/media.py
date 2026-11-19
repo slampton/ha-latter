@@ -113,6 +113,7 @@ _STRICT_MAC_RE = re.compile(
     r"^(?:bridge[-_])?((?:[0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}|[0-9a-fA-F]{12})$"
 )
 _MA_RECONNECT_GRACE_SECONDS: float = 45.0
+_MA_OFFLINE_CACHE_TTL_SECONDS: float = 5.0
 
 _KNOWN_URI_MEDIA_TYPES: frozenset[str] = frozenset(
     {
@@ -269,45 +270,67 @@ def _lookup_mass_player(mass: Any, player_id: str) -> Any | None:
     return None
 
 
+def _collect_sendspin_from_config_entries(
+    hass: HomeAssistant, cfg_entries: Iterable[Any]
+) -> tuple[set[str], bool]:
+    """Return `(sendspin_client_ids, pending_client_id)` from ESPHome ConfigEntry objects."""
+    client_ids: set[str] = set()
+    pending_pairing = False
+    esphome_dom = hass.data.get("esphome")
+    ss_domain_map = getattr(esphome_dom, "sendspin_client_ids", None)
+    entry_ids: set[str] = set()
+
+    for cfg_entry in cfg_entries:
+        if cfg_entry is None or getattr(cfg_entry, "domain", None) != "esphome":
+            continue
+        cfg_id = str(getattr(cfg_entry, "entry_id", "") or "").strip()
+        if not cfg_id or cfg_id in entry_ids:
+            continue
+        entry_ids.add(cfg_id)
+        runtime_data = getattr(cfg_entry, "runtime_data", None)
+        dev_caps = getattr(runtime_data, "device_capabilities", None)
+        ss_cap = _attr_or_key(dev_caps, "sendspin")
+        if ss_cap is not None:
+            cid = str(_attr_or_key(ss_cap, "client_id") or "").strip()
+            flags = _attr_or_key(ss_cap, "feature_flags")
+            if cid:
+                client_ids.add(cid)
+            elif isinstance(flags, int) and flags > 0:
+                pending_pairing = True
+
+    if entry_ids and isinstance(ss_domain_map, Mapping):
+        for map_cid, map_entry_id in ss_domain_map.items():
+            if map_entry_id in entry_ids and map_cid:
+                client_ids.add(str(map_cid).strip())
+
+    if client_ids:
+        pending_pairing = False
+    return client_ids, pending_pairing
+
+
 def _extract_esphome_sendspin_info(
     hass: HomeAssistant, dev_ids: Iterable[str]
 ) -> tuple[set[str], bool]:
     """Return `(sendspin_client_ids, pending_client_id)` from bound ESPHome config entries."""
     dev_reg = dr.async_get(hass)
-    client_ids: set[str] = set()
-    pending_pairing = False
-    esphome_dom = hass.data.get("esphome")
-    ss_domain_map = getattr(esphome_dom, "sendspin_client_ids", None)
-
     seen_entries: set[str] = set()
+    cfg_entries: list[Any] = []
+
     for did in dev_ids:
         d_obj = dev_reg.async_get(did)
         if d_obj is None:
             continue
-        for cfg_id in d_obj.config_entries:
-            if not cfg_id or cfg_id in seen_entries:
-                continue
-            seen_entries.add(cfg_id)
-            cfg_entry = hass.config_entries.async_get_entry(cfg_id)
-            if cfg_entry is None or cfg_entry.domain != "esphome":
-                continue
-            runtime_data = getattr(cfg_entry, "runtime_data", None)
-            dev_caps = getattr(runtime_data, "device_capabilities", None)
-            ss_cap = _attr_or_key(dev_caps, "sendspin")
-            if ss_cap is not None:
-                cid = str(_attr_or_key(ss_cap, "client_id") or "").strip()
-                flags = _attr_or_key(ss_cap, "feature_flags")
-                if cid:
-                    client_ids.add(cid)
-                elif isinstance(flags, int) and flags > 0:
-                    pending_pairing = True
-            if isinstance(ss_domain_map, Mapping):
-                for map_cid, map_entry_id in ss_domain_map.items():
-                    if map_entry_id == cfg_id and map_cid:
-                        client_ids.add(str(map_cid).strip())
-    if client_ids:
-        pending_pairing = False
-    return client_ids, pending_pairing
+        cfg_id = getattr(d_obj, "config_entry_id", None) or getattr(
+            d_obj, "primary_config_entry", None
+        )
+        if not cfg_id or cfg_id in seen_entries:
+            continue
+        seen_entries.add(cfg_id)
+        cfg_entry = hass.config_entries.async_get_entry(cfg_id)
+        if cfg_entry is not None:
+            cfg_entries.append(cfg_entry)
+
+    return _collect_sendspin_from_config_entries(hass, cfg_entries)
 
 
 def _extract_mass_player_identity(
@@ -412,14 +435,17 @@ def _collect_other_esphome_identities(
     """Return `(macs, sendspin_protocol_ids)` of all ESPHome devices in HA except `exclude_dev_ids`."""
     dev_reg = dr.async_get(hass)
     macs: set[str] = set()
-    other_dev_ids: set[str] = set()
+    other_entries: list[Any] = []
     for esp_ce in hass.config_entries.async_entries("esphome"):
+        has_other_dev = False
         for d_esp in dr.async_entries_for_config_entry(dev_reg, esp_ce.entry_id):
             if d_esp.id in exclude_dev_ids:
                 continue
-            other_dev_ids.add(d_esp.id)
+            has_other_dev = True
             macs.update(_extract_macs_from_device_or_entry(d_esp, None))
-    protos, _ = _extract_esphome_sendspin_info(hass, other_dev_ids)
+        if has_other_dev:
+            other_entries.append(esp_ce)
+    protos, _ = _collect_sendspin_from_config_entries(hass, other_entries)
     return macs, protos
 
 
@@ -1134,15 +1160,27 @@ def resolve_ma_counterpart_entity(
 
     _ensure_ma_cache_listeners(hass)
     domain_data = hass.data.setdefault(DOMAIN, {})
-    cache: dict[str, str | None] = domain_data.setdefault("_ma_counterpart_cache", {})
+    cache: dict[str, tuple[str | None, bool, float]] = domain_data.setdefault(
+        "_ma_counterpart_cache", {}
+    )
     if speaker_entity_id in cache:
-        cached_ent = cache[speaker_entity_id]
-        if (
-            cached_ent is not None
-            and ent_reg.async_get(cached_ent) is not None
-            and _is_entity_live(hass, cached_ent)
-        ):
-            return cached_ent
+        cached_val = cache[speaker_entity_id]
+        if isinstance(cached_val, tuple) and len(cached_val) == 3:
+            cached_ent, cached_live, cached_at = cached_val
+            if cached_live:
+                if (
+                    cached_ent is not None
+                    and ent_reg.async_get(cached_ent) is not None
+                    and _is_entity_live(hass, cached_ent)
+                ):
+                    return cached_ent
+            elif (time.monotonic() - cached_at) < _MA_OFFLINE_CACHE_TTL_SECONDS:
+                if cached_ent is None:
+                    return None
+                if ent_reg.async_get(cached_ent) is not None and not _is_entity_live(
+                    hass, cached_ent
+                ):
+                    return cached_ent
         cache.pop(speaker_entity_id, None)
 
     owner_coord: Any = next(
@@ -1298,8 +1336,8 @@ def resolve_ma_counterpart_entity(
         elif not in_reconnect_grace:
             _update_ma_link_issue(hass, owner_coord, speaker_entity_id, False)
 
-    if matched_entity is not None and _is_entity_live(hass, matched_entity):
-        cache[speaker_entity_id] = matched_entity
+    is_live = matched_entity is not None and _is_entity_live(hass, matched_entity)
+    cache[speaker_entity_id] = (matched_entity, is_live, time.monotonic())
     return matched_entity
 
 
@@ -2334,6 +2372,7 @@ def _resolve_speaker_media_snapshot(
 ) -> tuple[
     State | None,
     State | None,
+    str | None,
     str,
     dict[str, Any],
     dict[str, Any],
@@ -2363,7 +2402,21 @@ def _resolve_speaker_media_snapshot(
         1 if coordinator.is_local_speaker_entity(coordinator.active_speaker) else 0
     )
     if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-        return None, ma_st, "", {}, {}, "", "", "", 0.0, 0.0, "", is_local_flag
+        return (
+            None,
+            ma_st,
+            ma_counterpart,
+            "",
+            {},
+            {},
+            "",
+            "",
+            "",
+            0.0,
+            0.0,
+            "",
+            is_local_flag,
+        )
 
     state = state_obj.state
     if (
@@ -2435,6 +2488,7 @@ def _resolve_speaker_media_snapshot(
     return (
         state_obj,
         ma_st,
+        ma_counterpart,
         state,
         attrs,
         m_attrs,
@@ -2454,6 +2508,7 @@ def _sync_active_speaker_media_snapshot(coordinator: LatterCoordinator) -> None:
     (
         state_obj,
         _ma_st,
+        _ma_counterpart,
         state,
         attrs,
         m_attrs,
@@ -3532,12 +3587,13 @@ def build_active_media_payload(
     now_m = time.monotonic()
     if (
         coordinator._cached_media_payload is not None
-        and (now_m - coordinator._cached_media_payload[0]) < 0.05
+        and (now_m - coordinator._cached_media_payload[0]) < 0.15
     ):
         return coordinator._cached_media_payload[1]
     (
         state_obj,
         ma_st,
+        ma_counterpart,
         state,
         attrs,
         m_attrs,
@@ -3550,11 +3606,6 @@ def build_active_media_payload(
         is_local_flag,
     ) = _resolve_speaker_media_snapshot(coordinator)
 
-    ma_counterpart = (
-        resolve_ma_counterpart_entity(coordinator.hass, coordinator.active_speaker)
-        if coordinator.active_speaker
-        else None
-    )
     vol_target = coordinator.get_volume_target_entity(coordinator.active_speaker)
     fallback_spk_name = (
         coordinator.device_title
@@ -3639,7 +3690,7 @@ def build_active_media_payload(
                 "payload": med_payload,
             },
         )
-        coordinator._cached_media_payload = (now_m, res)
+        coordinator._cached_media_payload = (time.monotonic(), res)
         return res
 
     if coordinator._transfer_hold_spinup_until > 0.0:
@@ -3881,5 +3932,5 @@ def build_active_media_payload(
             "payload": med_payload,
         },
     )
-    coordinator._cached_media_payload = (now_m, res)
+    coordinator._cached_media_payload = (time.monotonic(), res)
     return res

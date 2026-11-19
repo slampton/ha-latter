@@ -163,6 +163,7 @@ def install_fake_ha_registries(slugify_fn: Callable[..., str], entity_category_c
         id: str
         identifiers: set[tuple[str, str]] = field(default_factory=set)
         connections: set[tuple[str, str]] = field(default_factory=set)
+        config_entry_id: str | None = None
         config_entries: set[str] = field(default_factory=set)
         config_entries_subentries: dict[str, set[str | None]] = field(default_factory=dict)
         name: str | None = None
@@ -228,6 +229,8 @@ def install_fake_ha_registries(slugify_fn: Callable[..., str], entity_category_c
             }
             existing = self.async_get_device(idents, conns)
             if existing is not None:
+                if existing.config_entry_id is None:
+                    existing.config_entry_id = config_entry_id
                 existing.config_entries.add(config_entry_id)
                 existing.config_entries_subentries.setdefault(config_entry_id, set()).add(config_subentry_id)
                 existing.identifiers |= idents
@@ -248,6 +251,7 @@ def install_fake_ha_registries(slugify_fn: Callable[..., str], entity_category_c
                 id=did,
                 identifiers=idents,
                 connections=conns,
+                config_entry_id=config_entry_id,
                 config_entries={config_entry_id},
                 config_entries_subentries={config_entry_id: {config_subentry_id}},
                 name=name,

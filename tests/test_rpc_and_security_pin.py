@@ -1929,6 +1929,77 @@ async def test_ma_2_10_encrypted_sendspin_client_id_and_nth_twin_bijection(
     assert not any("sub_test_assistant" in k[1] for k in issue_reg.issues)
 
 
+async def test_sendspin_uses_config_entry_id_and_caches_ma_misses(
+    hass: Any, setup_latter_hub: Any, monkeypatch: Any
+) -> None:
+    """Prevent MainThread CPU storms: never touch deprecated DeviceEntry.config_entries, cache offline/None MA lookups, and coalesce active_media builds."""
+    from types import SimpleNamespace
+
+    from custom_components.latter import media as media_mod
+    from custom_components.latter.media import (
+        _extract_esphome_sendspin_info,
+        build_active_media_payload,
+        clear_ma_counterpart_cache,
+    )
+
+    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+    dev_reg = dr.async_get(hass)
+
+    class _NoDeprecatedConfigEntriesDev:
+        id = "dev_strict_no_legacy"
+        config_entry_id = "esp_strict_entry"
+
+        @property
+        def config_entries(self) -> set[str]:
+            raise AssertionError("Must not access deprecated DeviceEntry.config_entries")
+
+    esp_ce = hass.config_entries.add_entry(
+        ConfigEntry(entry_id="esp_strict_entry", domain="esphome", title="Strict")
+    )
+    esp_ce.runtime_data = SimpleNamespace(
+        device_capabilities=SimpleNamespace(
+            sendspin=SimpleNamespace(client_id="ss_strict_client_123", feature_flags=1)
+        )
+    )
+    dev_reg.devices[_NoDeprecatedConfigEntriesDev.id] = _NoDeprecatedConfigEntriesDev()  # type: ignore[assignment]
+
+    cids, pending = _extract_esphome_sendspin_info(hass, [_NoDeprecatedConfigEntriesDev.id])
+    assert cids == {"ss_strict_client_123"}
+    assert pending is False
+
+    # Unmatched / offline speaker must be cached so repeated calls do not rescan MA candidates
+    clear_ma_counterpart_cache(hass)
+    scan_calls = 0
+    orig_build_candidates = media_mod._build_ma_candidates
+
+    def _counting_build_candidates(h: Any) -> Any:
+        nonlocal scan_calls
+        scan_calls += 1
+        return orig_build_candidates(h)
+
+    monkeypatch.setattr(media_mod, "_build_ma_candidates", _counting_build_candidates)
+
+    assert resolve_ma_counterpart_entity(hass, coord.local_speaker) is None
+    assert resolve_ma_counterpart_entity(hass, coord.local_speaker) is None
+    assert scan_calls == 1
+
+    # build_active_media_payload must call resolve_ma_counterpart_entity once per build and coalesce back-to-back reads
+    resolve_calls = 0
+    orig_resolve = media_mod.resolve_ma_counterpart_entity
+
+    def _counting_resolve(h: Any, spk: str) -> Any:
+        nonlocal resolve_calls
+        resolve_calls += 1
+        return orig_resolve(h, spk)
+
+    monkeypatch.setattr(media_mod, "resolve_ma_counterpart_entity", _counting_resolve)
+    coord._cached_media_payload = None
+    _state1, _attrs1 = build_active_media_payload(coord)
+    _state2, _attrs2 = build_active_media_payload(coord)
+    assert resolve_calls == 1
+
+
+
 
 
 
