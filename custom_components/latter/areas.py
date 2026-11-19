@@ -1825,7 +1825,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
     now_m = time.monotonic()
     if (
         coordinator._cached_area_payload is not None
-        and (now_m - coordinator._cached_area_payload[0]) < 0.05
+        and (now_m - coordinator._cached_area_payload[0]) < 0.15
     ):
         return coordinator._cached_area_payload[1]
     area_entry = resolve_active_area_entry(coordinator)
@@ -1975,7 +1975,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
     area_attrs["rev"] = area_rev
     area_attrs["payload"] = area_payload
     res = (area_name, area_attrs)
-    coordinator._cached_area_payload = (now_m, res)
+    coordinator._cached_area_payload = (time.monotonic(), res)
     return res
 
 

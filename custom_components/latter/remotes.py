@@ -242,7 +242,7 @@ def build_remote_config_payload(
     now_m = time.monotonic()
     if (
         coordinator._cached_remote_payload is not None
-        and (now_m - coordinator._cached_remote_payload[0]) < 0.05
+        and (now_m - coordinator._cached_remote_payload[0]) < 0.15
     ):
         return coordinator._cached_remote_payload[1]
     slots = coordinator.get_remote_slots()
@@ -282,7 +282,7 @@ def build_remote_config_payload(
         "payload": rem_payload,
     }
     res = (state_str, attrs)
-    coordinator._cached_remote_payload = (now_m, res)
+    coordinator._cached_remote_payload = (time.monotonic(), res)
     return res
 
 
