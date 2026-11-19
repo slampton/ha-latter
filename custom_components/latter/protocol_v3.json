@@ -3432,7 +3432,7 @@
       "key": "home_date_tap_action",
       "label": "Home Date Tap",
       "domain": "select",
-      "default": "Day View",
+      "default": "Overview",
       "section": "interface",
       "esphome_section": "home",
       "group_tier": "interface",

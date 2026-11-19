@@ -2195,7 +2195,7 @@ const DEVICE_PREF_SPECS_CATALOG = [
   {key: "ble_beacon_mode", label: "BLE Beacon Mode", domain: "select", default: "Handheld Only", section: "presence", esphome_section: "presence", group_tier: "behavior", options: ["Handheld Only", "Handheld + Screen Off", "Always"], min: null, max: null, step: null, unit: "", capability: "beacon_battery" },
   {key: "weather_sim_condition", label: "Weather Simulation", domain: "select", default: "Live (Home Assistant)", section: "developer", esphome_section: "developer", group_tier: null, options: ["Live (Home Assistant)", "Clear Night", "Sunny / Clear Day", "Partly Cloudy (Day)", "Partly Cloudy (Night)", "Cloudy / Overcast (Day)", "Cloudy / Overcast (Night)", "Fog / Mist (Day)", "Fog / Mist (Night)", "Rainy (Day)", "Rainy (Night)", "Pouring / Heavy Rain", "Snow (Day)", "Snow (Night)", "Thunderstorm (Day)", "Thunderstorm (Night)", "Windy"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "home_clock_tap_action", label: "Home Time Tap", domain: "select", default: "Time App", section: "interface", esphome_section: "home", group_tier: "interface", options: ["Time App", "Clock Face"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "home_date_tap_action", label: "Home Date Tap", domain: "select", default: "Day View", section: "interface", esphome_section: "home", group_tier: "interface", options: ["Day View", "Overview"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_date_tap_action", label: "Home Date Tap", domain: "select", default: "Overview", section: "interface", esphome_section: "home", group_tier: "interface", options: ["Day View", "Overview"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "local_clock_label", label: "Local Clock Label", domain: "text", default: "", section: "time", esphome_section: "time", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "show_utc_clock", label: "Show UTC Clock", domain: "switch", default: false, section: "interface", esphome_section: "home", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "world_clocks", label: "World Clocks", domain: "text", default: "", section: "interface", esphome_section: "home", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
@@ -14771,7 +14771,7 @@ function renderDeviceInterfaceView(store) {
     label: store.tPrefOption("home_date_tap_action", opt),
   }));
   const homeDateTapValue = String(
-    homeDateTapPref?.value ?? cfg.home_date_tap_action ?? "Day View",
+    homeDateTapPref?.value ?? cfg.home_date_tap_action ?? "Overview",
   );
   const returnTimeoutPref = store.entity.getPref("return_to_home_timeout");
   const rawReturnTimeoutOptions = (

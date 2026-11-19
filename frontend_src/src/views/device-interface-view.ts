@@ -141,7 +141,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     label: store.tPrefOption("home_date_tap_action", opt),
   }));
   const homeDateTapValue = String(
-    homeDateTapPref?.value ?? cfg.home_date_tap_action ?? "Day View",
+    homeDateTapPref?.value ?? cfg.home_date_tap_action ?? "Overview",
   );
 
   const returnTimeoutPref = store.entity.getPref("return_to_home_timeout");
