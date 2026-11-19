@@ -1476,4 +1476,278 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     assert ("vacuum", "turn_off", {"entity_id": "vacuum.robo_vac"}) in svc_calls
 
 
+async def test_sendspin_mass_players_mac_auto_links_twin_boards_and_heals_cross_link(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify MA 2.10 `universal_player` (`up...`) auto-links twin same-model boards via `mass.players` MACs without cross-linking."""
+    from types import SimpleNamespace
+
+    from custom_components.latter.config_flow import _apply_onboarding_profile_and_defaults
+    from custom_components.latter.media import async_heal_coordinator_ma_links, clear_ma_counterpart_cache
+
+    entry, _sys_obj, _pocket_coord = await setup_latter_hub(hass)
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+    issue_reg = ir.async_get(hass)
+
+    # Set up Music Assistant entry with runtime `mass.players` holding Sendspin MACs (HA Device Registry has connections=[])
+    mass_players: dict[str, Any] = {
+        "up4a1a675f": SimpleNamespace(
+            player_id="up4a1a675f",
+            device_info=SimpleNamespace(
+                mac_address="E8:F6:0A:E0:F2:FE",
+                identifiers={"mac_address": "E8:F6:0A:E0:F2:FE"},
+            ),
+            protocols=[],
+            output_protocols=[],
+        ),
+        "up94060b4a": SimpleNamespace(
+            player_id="up94060b4a",
+            device_info=SimpleNamespace(
+                mac_address="E8:F6:0A:E0:F2:DA",
+                identifiers={"mac_address": "E8:F6:0A:E0:F2:DA"},
+            ),
+            protocols=[],
+            output_protocols=[],
+        ),
+    }
+    ma_entry = ConfigEntry(
+        entry_id="ma_sendspin_twins",
+        domain="music_assistant",
+        title="Music Assistant",
+        data={},
+    )
+    ma_entry.runtime_data = SimpleNamespace(mass=SimpleNamespace(players=mass_players))
+    hass.config_entries.add_entry(ma_entry)
+
+    ma_desk_dev = dev_reg.async_get_or_create(
+        config_entry_id=ma_entry.entry_id,
+        identifiers={("music_assistant", "up4a1a675f")},
+        name="Desk Assistant",
+        manufacturer="slampton",
+        model="desk-assistant-p4-86",
+    )
+    ma_garage_dev = dev_reg.async_get_or_create(
+        config_entry_id=ma_entry.entry_id,
+        identifiers={("music_assistant", "up94060b4a")},
+        name="Garage Assistant",
+        manufacturer="slampton",
+        model="desk-assistant-p4-86",
+    )
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="media_player.desk_assistant",
+            platform="music_assistant",
+            unique_id="up4a1a675f",
+            device_id=ma_desk_dev.id,
+            config_entry_id=ma_entry.entry_id,
+        )
+    )
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="media_player.garage_assistant",
+            platform="music_assistant",
+            unique_id="up94060b4a",
+            device_id=ma_garage_dev.id,
+            config_entry_id=ma_entry.entry_id,
+        )
+    )
+
+    # Board 1: Desk Assistant (offline while Garage Assistant's Sendspin player comes online first!)
+    esp_desk_entry = hass.config_entries.add_entry(
+        ConfigEntry(
+            entry_id="esp_desk_p4",
+            domain="esphome",
+            title="Desk Assistant",
+            data={"device_name": "desk_assistant"},
+        )
+    )
+    esp_desk_dev = dev_reg.async_get_or_create(
+        config_entry_id=esp_desk_entry.entry_id,
+        connections={(dr.CONNECTION_NETWORK_MAC, "e8:f6:0a:e0:f2:fe")},
+        name="Desk Assistant",
+        manufacturer="slampton",
+        model="desk-assistant-p4-86",
+        area_id="living_room",
+    )
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="media_player.desk_assistant_music",
+            platform="esphome",
+            device_id=esp_desk_dev.id,
+            config_entry_id=esp_desk_entry.entry_id,
+        )
+    )
+    hass.states.async_set("media_player.desk_assistant_music", "unavailable", {})
+    hass.states.async_set("media_player.desk_assistant", "unavailable", {})
+    hass.states.async_set("media_player.garage_assistant", "idle", {})
+
+    # Even before Garage Assistant is added to ESPHome, Pass 3 MUST NOT cross-link Desk Assistant to Garage Assistant!
+    sub_desk = ConfigSubentry(
+        data={
+            CONF_ESPHOME_DEVICE_ID: esp_desk_dev.id,
+            "mac": "e8:f6:0a:e0:f2:fe",
+            CONF_DEVICE_SLUG: "desk_assistant",
+            CONF_DEFAULT_AREA: "living_room",
+            CONF_MA_PLAYER_ENTITY: "media_player.garage_assistant",  # Simulate prior accidental cross-link
+        },
+        subentry_type=SUBENTRY_DEVICE,
+        title="Desk Assistant",
+        unique_id="latter_e8:f6:0a:e0:f2:fe",
+        subentry_id="sub_desk_p4",
+    )
+    entry.subentries[sub_desk.subentry_id] = sub_desk
+    coord_desk = LatterCoordinator(hass=hass, entry=entry, hmac_secret=b"\x01" * 32, subentry=sub_desk)
+    await coord_desk.async_setup()
+    hass.data[DOMAIN][coord_desk.subentry_id] = coord_desk
+    entry.runtime_data.coordinators[coord_desk.subentry_id] = coord_desk
+
+    # Board 2: Garage Assistant (exact same manufacturer & model: slampton / desk-assistant-p4-86)
+    esp_garage_entry = hass.config_entries.add_entry(
+        ConfigEntry(
+            entry_id="esp_garage_p4",
+            domain="esphome",
+            title="Garage Assistant",
+            data={"device_name": "garage_assistant"},
+        )
+    )
+    esp_garage_dev = dev_reg.async_get_or_create(
+        config_entry_id=esp_garage_entry.entry_id,
+        connections={(dr.CONNECTION_NETWORK_MAC, "e8:f6:0a:e0:f2:da")},
+        name="Garage Assistant",
+        manufacturer="slampton",
+        model="desk-assistant-p4-86",
+        area_id="garage",
+    )
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="media_player.garage_assistant_music",
+            platform="esphome",
+            device_id=esp_garage_dev.id,
+            config_entry_id=esp_garage_entry.entry_id,
+        )
+    )
+    hass.states.async_set("media_player.garage_assistant_music", "idle", {})
+
+    # Onboarding Garage Assistant auto-populates `ma_player_entity` directly from Sendspin MAC!
+    clear_ma_counterpart_cache(hass)
+    onboarded_data = _apply_onboarding_profile_and_defaults(
+        hass, esp_garage_dev, {"device_group": "auto"}, rebind_hardware=True
+    )
+    assert onboarded_data[CONF_MA_PLAYER_ENTITY] == "media_player.garage_assistant"
+
+    sub_garage = ConfigSubentry(
+        data={k: v for k, v in onboarded_data.items() if k != CONF_MA_PLAYER_ENTITY},  # Also test runtime auto-link!
+        subentry_type=SUBENTRY_DEVICE,
+        title="Garage Assistant",
+        unique_id="latter_e8:f6:0a:e0:f2:da",
+        subentry_id="sub_garage_p4",
+    )
+    entry.subentries[sub_garage.subentry_id] = sub_garage
+    coord_garage = LatterCoordinator(hass=hass, entry=entry, hmac_secret=b"\x01" * 32, subentry=sub_garage)
+    await coord_garage.async_setup()
+    hass.data[DOMAIN][coord_garage.subentry_id] = coord_garage
+    entry.runtime_data.coordinators[coord_garage.subentry_id] = coord_garage
+
+    async_heal_coordinator_ma_links(hass)
+
+    assert resolve_ma_counterpart_entity(hass, "media_player.garage_assistant_music") == "media_player.garage_assistant"
+    assert coord_garage.get_opt(CONF_MA_PLAYER_ENTITY) == "media_player.garage_assistant"
+    assert not any("sub_garage_p4" in k[1] for k in issue_reg.issues)
+
+    # And Desk Assistant's cross-linked `media_player.garage_assistant` self-healed back to `media_player.desk_assistant`!
+    assert resolve_ma_counterpart_entity(hass, "media_player.desk_assistant_music") == "media_player.desk_assistant"
+    assert coord_desk.get_opt(CONF_MA_PLAYER_ENTITY) == "media_player.desk_assistant"
+    assert not any("sub_desk_p4" in k[1] for k in issue_reg.issues)
+
+
+async def test_firmware_flash_and_reboot_stagger_never_flashes_transient_ma_repair(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify firmware flash / restart staggered reconnects never briefly raise `link_ma_player`."""
+    from types import SimpleNamespace
+
+    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+    issue_reg = ir.async_get(hass)
+
+    # Register another always-online MA speaker in the house so `live_candidates` is non-empty
+    ma_entry = ConfigEntry(
+        entry_id="ma_reboot_test",
+        domain="music_assistant",
+        title="Music Assistant",
+        data={},
+    )
+    mass_players: dict[str, Any] = {
+        "up_pocket": SimpleNamespace(
+            player_id="up_pocket",
+            device_info=SimpleNamespace(
+                mac_address="AA:BB:CC:DD:EE:01",
+                identifiers={"mac_address": "AA:BB:CC:DD:EE:01"},
+            ),
+            protocols=[],
+            output_protocols=[],
+        ),
+        "up_hifi": SimpleNamespace(
+            player_id="up_hifi",
+            device_info=SimpleNamespace(mac_address=None, identifiers={}),
+            protocols=[],
+            output_protocols=[],
+        ),
+    }
+    ma_entry.runtime_data = SimpleNamespace(mass=SimpleNamespace(players=mass_players))
+    hass.config_entries.add_entry(ma_entry)
+
+    for uid, eid, name in (
+        ("up_pocket", "media_player.pocket_ma", "Pocket Assistant"),
+        ("up_hifi", "media_player.house_hifi", "House HiFi"),
+    ):
+        d = dev_reg.async_get_or_create(
+            config_entry_id=ma_entry.entry_id,
+            identifiers={("music_assistant", uid)},
+            name=name,
+        )
+        ent_reg.async_register(
+            er.RegistryEntry(
+                entity_id=eid,
+                platform="music_assistant",
+                unique_id=uid,
+                device_id=d.id,
+                config_entry_id=ma_entry.entry_id,
+            )
+        )
+
+    hass.states.async_set(coord.local_speaker, "idle", {})
+    hass.states.async_set("media_player.house_hifi", "idle", {})
+    hass.states.async_set("media_player.pocket_ma", "idle", {})
+    await hass.async_block_till_done()
+
+    assert resolve_ma_counterpart_entity(hass, coord.local_speaker) == "media_player.pocket_ma"
+    assert not any("link_ma_player" in k[1] for k in issue_reg.issues)
+
+    # 1) Simulate Sendspin detaching on reboot (`device_info` loses MAC while detached, MA entity goes `unavailable`
+    #    BEFORE ESPHome's `local_speaker` marks itself `unavailable`):
+    mass_players["up_pocket"].device_info = SimpleNamespace(mac_address=None, identifiers={})
+    hass.states.async_set("media_player.pocket_ma", "unavailable", {})
+    await hass.async_block_till_done()
+    assert not any("link_ma_player" in k[1] for k in issue_reg.issues)
+
+    # 2) ESPHome Native API drops, then reconnects FIRST (`unavailable` -> `idle`) while Sendspin is still `unavailable`:
+    hass.states.async_set(coord.local_speaker, "unavailable", {})
+    await hass.async_block_till_done()
+    hass.states.async_set(coord.local_speaker, "idle", {})
+    await hass.async_block_till_done()
+    assert resolve_ma_counterpart_entity(hass, coord.local_speaker) == "media_player.pocket_ma"
+    assert not any("link_ma_player" in k[1] for k in issue_reg.issues)
+
+    # 3) Also test a manually-linked non-MAC MA speaker (`media_player.house_hifi`) bouncing across reboot:
+    async_set_ma_player_link(hass, coord, "media_player.house_hifi")
+    hass.states.async_set("media_player.house_hifi", "unavailable", {})
+    await hass.async_block_till_done()
+    assert resolve_ma_counterpart_entity(hass, coord.local_speaker) == "media_player.house_hifi"
+    assert not any("link_ma_player" in k[1] for k in issue_reg.issues)
+
+
+
 

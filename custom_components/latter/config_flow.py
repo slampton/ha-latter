@@ -43,6 +43,7 @@ from .const import (
     CONF_GAMES_ITEMS,
     CONF_HOME_CATEGORIES,
     CONF_IGNORED_DISCOVERED_DEVICES,
+    CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PINNED_ITEMS,
     CONF_SYNC_DEVICE_AREA,
@@ -73,6 +74,7 @@ from .identity import (
     is_latter_compatible_esphome_device,
     read_device_hardware_manifest,
 )
+from .media import discover_ma_player_for_device
 from .presence import _iter_devices
 from .protocol import default_dock_items
 from .studio.settings import humanize_device_model_label
@@ -310,11 +312,15 @@ def device_option_defaults(
                 and matched_grp["device_config"][k] is not None
             ):
                 group_defs[k] = matched_grp["device_config"][k]
-    return {
+    defaults: dict[str, Any] = {
         **hw_defs,
         **group_defs,
         CONF_DEFAULT_SPEAKER: _discover_default_speaker(hass, dev.id if dev is not None else None),
     }
+    discovered_ma = discover_ma_player_for_device(hass, dev.id if dev is not None else None)
+    if discovered_ma:
+        defaults[CONF_MA_PLAYER_ENTITY] = discovered_ma
+    return defaults
 
 
 def ble_tag_option_defaults(slug: str, target_address: str) -> dict[str, Any]:
@@ -361,6 +367,13 @@ def _apply_onboarding_profile_and_defaults(
 
     if rebind_hardware or not merged.get(CONF_DEFAULT_SPEAKER):
         merged[CONF_DEFAULT_SPEAKER] = _discover_default_speaker(hass, dev.id)
+
+    if rebind_hardware or not merged.get(CONF_MA_PLAYER_ENTITY):
+        discovered_ma = discover_ma_player_for_device(hass, dev.id)
+        if discovered_ma:
+            merged[CONF_MA_PLAYER_ENTITY] = discovered_ma
+        elif rebind_hardware:
+            merged.pop(CONF_MA_PLAYER_ENTITY, None)
 
     raw_grp_id = str(user_input.get(CONF_DEVICE_GROUP) or "auto").strip()
     grp_id = raw_grp_id
