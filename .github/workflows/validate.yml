@@ -49,14 +49,16 @@ jobs:
           package-manager-cache: false
       - name: Install lint and test dependencies
         run: pip install --upgrade pip ruff pytest pytest-asyncio pytest-cov voluptuous Pillow aiohttp
-      - name: Verify static architecture, security, and Studio guardrails
-        run: python tools/verify_ha.py
       - name: Install Studio frontend toolchain
         run: npm --prefix frontend_src ci --no-audit --no-fund
-      - name: Verify Studio TypeScript bundle parity
-        run: npm --prefix frontend_src run check
+      - name: Verify static architecture, security, and Studio guardrails
+        run: python tools/verify_ha.py
+      - name: Verify Studio TypeScript bundle parity & DOM unit tests
+        run: |
+          npm --prefix frontend_src run check
+          npm --prefix frontend_src test
       - name: Run ruff static analysis
-        run: ruff check custom_components/latter tests
+        run: ruff check custom_components/latter tests tools/verify_ha.py
       - name: Run pytest integration suite with coverage gate
         run: pytest tests --cov=custom_components.latter --cov-fail-under=75 -q
 
