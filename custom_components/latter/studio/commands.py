@@ -1085,6 +1085,8 @@ async def _cmd_save_device_config(
             async_refresh_ma_link(hass, coordinator)
         coordinator._bind_wallpaper_cycle_timer()
         coordinator.async_notify_listeners()
+    if (sys_obj := get_latter_system(hass)) is not None:
+        await sys_obj.async_evaluate_bedtime_schedules()
     log_studio_event(
         hass,
         "INFO",
@@ -1507,6 +1509,8 @@ async def _cmd_update_group_baseline(
         )
     if member_targets:
         await async_apply_group_baseline_to_coordinators(hass, grp, member_targets)
+    if (sys_obj := get_latter_system(hass)) is not None:
+        await sys_obj.async_evaluate_bedtime_schedules()
     log_studio_event(
         hass,
         "INFO",
@@ -1552,7 +1556,7 @@ async def _cmd_apply_batch_device_setting(
                 else:
                     raw_updates[ck] = resolve_behavior_key_value(src_data, ck)
 
-    allowed_keys = set(GROUP_ALL_DEVICE_KEYS)
+    allowed_keys = set(GROUP_ALL_DEVICE_KEYS) | {"bedtime_active"}
     filtered = {k: v for k, v in raw_updates.items() if k in allowed_keys}
     if not filtered:
         raise StudioCommandError(
@@ -1610,6 +1614,8 @@ async def _cmd_apply_batch_device_setting(
                 await c.async_apply_options()
                 c._bind_wallpaper_cycle_timer()
                 c.async_notify_listeners()
+    if (sys_obj := get_latter_system(hass)) is not None:
+        await sys_obj.async_evaluate_bedtime_schedules()
 
 
 async def _cmd_rotate_signing_key(

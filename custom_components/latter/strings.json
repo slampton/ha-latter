@@ -194,6 +194,11 @@
         "name": "Activate Screensaver"
       }
     },
+    "switch": {
+      "bedtime_mode": {
+        "name": "Bedtime Mode"
+      }
+    },
     "device_tracker": {
       "ble_tracker": {
         "name": "BLE Tracker"

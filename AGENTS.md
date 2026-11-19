@@ -4,11 +4,11 @@
 
 ---
 
-## 1. Exact 31-Module Architecture (`custom_components/latter/`)
+## 1. Exact 32-Module Architecture (`custom_components/latter/`)
 
-Do **not** create backward-compatibility shims, `try/except ImportError` wrappers, or splinter subpackages. Every subsystem has one canonical owner across **27 flat root modules** + **4 `studio/` modules**:
+Do **not** create backward-compatibility shims, `try/except ImportError` wrappers, or splinter subpackages. Every subsystem has one canonical owner across **28 flat root modules** + **4 `studio/` modules**:
 
-### Root Integration Modules (27)
+### Root Integration Modules (28)
 - `__init__.py` — Integration lifecycle (`LatterConfigEntry = ConfigEntry[LatterSystemHub]`), HTTP view & Studio registration, and `latter_ping` handshake (`async_ping_bound_devices`).
 - `areas.py` — Area curation, exact normalized Area matching (`match_area_by_name_or_id`), roaming *Voice Follows Me* `area_id` sync (`sync_esphome_device_area`), Person Area distance, and `area_context` v3 payloads.
 - `backup.py` — Home Assistant `backup` hooks (`async_pre_backup` / `async_post_backup`) and System/Device JSON bundle export/restore.
@@ -35,6 +35,7 @@ Do **not** create backward-compatibility shims, `try/except ImportError` wrapper
 - `select.py` — Curated Tier 2 sleep-safe `device_group` and `wake_word_mode` select entities backed by the Device subentry.
 - `sensor.py` — System diagnostic, BLE presence, Person Area, and display-gated `timer_remaining` sensors.
 - `services.py` — All 20 `latter.*` Home Assistant service schemas and handlers (`target_device="occupied_areas"` supported on `notify` and `intercom_broadcast`).
+- `switch.py` — Curated Tier 2 sleep-safe `bedtime_mode` switch entity backed by the Device subentry.
 - `wallpapers.py` — Built-in preset catalog and private `.storage/latter/wallpapers/` asset management.
 
 ### Latter Studio Package (`studio/`, 4)

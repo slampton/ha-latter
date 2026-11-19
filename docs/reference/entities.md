@@ -4,11 +4,11 @@ All Latter entities are pure local-push—none of them poll. Per-device entities
 
 ## 3-Tier Entity Architecture
 
-Latter spans **6 Home Assistant platforms** ([`sensor.py`](../../custom_components/latter/sensor.py), [`binary_sensor.py`](../../custom_components/latter/binary_sensor.py), [`device_tracker.py`](../../custom_components/latter/device_tracker.py), [`select.py`](../../custom_components/latter/select.py), [`number.py`](../../custom_components/latter/number.py), [`button.py`](../../custom_components/latter/button.py)) organized into three clean tiers:
+Latter spans **7 Home Assistant platforms** ([`sensor.py`](../../custom_components/latter/sensor.py), [`binary_sensor.py`](../../custom_components/latter/binary_sensor.py), [`device_tracker.py`](../../custom_components/latter/device_tracker.py), [`select.py`](../../custom_components/latter/select.py), [`number.py`](../../custom_components/latter/number.py), [`button.py`](../../custom_components/latter/button.py), [`switch.py`](../../custom_components/latter/switch.py)) organized into three clean tiers:
 
 1. **Tier 1 — Hardware & OS Entities on the Bound `ESPHome` Device:** `Music` (Sendspin `media_player`), Assist satellite + `Wake word` / `Wake word 2` selects, `Display: Screen Backlight`, `Project Firmware`, battery/USB telemetry, `System: RPC Outbox`, `System: Hardware Manifest`, `System: Link Report`, and hardware diagnostics. → [Using your device](https://github.com/slampton/esphome-latter-core/blob/main/docs/using-your-device.md)
 2. **Tier 2 — Sleep-Safe Automation Surface on the `Latter` Device:** curated presence, timer/alarm, config, and quick-action entities backed by the Device's subentry—staying available for automations even while a battery device is asleep or hibernating.
-3. **Tier 3 — Studio Preferences (`device_prefs` Protocol v3 Domain):** all **50 typed device preferences** (`studio/settings.py`) push directly over `esphome.<node>_latter_push_v3` across **6 Protocol v3 domains**, keeping `~8 KB` of signed URLs and preference blobs off Home Assistant's `state_changed` bus and SQLite recorder.
+3. **Tier 3 — Studio Preferences (`device_prefs` Protocol v3 Domain):** all **55 typed device preferences** (`studio/settings.py`) push directly over `esphome.<node>_latter_push_v3` across **6 Protocol v3 domains**, keeping `~8 KB` of signed URLs and preference blobs off Home Assistant's `state_changed` bus and SQLite recorder.
 
 ---
 
@@ -27,7 +27,8 @@ Latter spans **6 Home Assistant platforms** ([`sensor.py`](../../custom_componen
 | `binary_sensor.<slug>_timer_active` | `binary_sensor` (`running`) | `on` / `off` *(display devices)* | `paused`, `remaining_seconds` — event-driven via `latter.timer_alarm_state` |
 | `sensor.<slug>_timer_remaining` | `sensor` (`duration`, `s`) | Remaining seconds *(display devices)* | `running`, `paused` — ticked locally at 1 Hz in Home Assistant while running (zero Wi-Fi polling) |
 | `binary_sensor.<slug>_alarm_ringing` | `binary_sensor` (`sound`) | `on` / `off` *(display devices)* | Asserts while an on-device alarm or timer chime is ringing (`latter.timer_alarm_state`) |
-| `select.<slug>_device_group` | `select` (`config`) | *Pocket Carry* · *Handhelds* · *Wearables* · *Wall & Desk Panels* · custom groups · *Custom* | Sleep-safe subentry Device Group preset selector; syncs active group baseline via `device_prefs` |
+| `select.<slug>_device_group` | `select` | *Pocket Carry* · *Handhelds* · *Wearables* · *Wall & Desk Panels* · custom groups · *Custom* | Sleep-safe subentry Device Group preset selector; syncs active group baseline via `device_prefs` |
+| `switch.<slug>_bedtime_mode` | `switch` | `on` / `off` *(display devices)* | Sleep-safe overnight Bedtime Mode toggle (`Screen Off` or `Ambient Clock` idle display, `18%` night-wake brightness, silenced non-critical alerts, without detaching from the Device Group); syncs via `device_prefs` |
 | `select.<slug>_wake_word_mode` | `select` (`config`) | *Docked Only* · *Always On* · *Disabled* | Sleep-safe subentry control *(mic-equipped devices)*; syncs via `device_prefs` |
 | `number.<slug>_alert_volume` | `number` (`config`) | `20–100%` (step `5%`) | Sleep-safe chime/alarm volume *(speaker-equipped devices)*; syncs via `device_prefs` |
 | `button.<slug>_find_my_device` | `button` (`identify`) | Press | Dispatches `latter_device_command(command="find_my")` *(speaker-equipped devices)* |

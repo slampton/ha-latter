@@ -1,7 +1,7 @@
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 
 export const PROTOCOL_CONTRACT_VERSION = 3;
-export const STUDIO_REV = 34;
+export const STUDIO_REV = 35;
 
 export const ALLOWED_DEVICE_ACTIONS: ReadonlyArray<string> = [
   "restart",
@@ -304,6 +304,11 @@ export const DEVICE_PREF_SPECS_CATALOG: ReadonlyArray<DevicePrefSpecItem> = [
   {key: "alarms_summary", label: "Alarms", domain: "text", default: "07:00|0|1;08:30|0|2;09:00|0|2", section: "time", esphome_section: "time", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "calendar_lookahead_days", label: "Overview Lookahead", domain: "number", default: 30, section: "interface", esphome_section: "home", group_tier: "interface", options: [], min: 7, max: 60, step: 1, unit: "d", capability: "display" },
   {key: "calendar_week_start", label: "Start Week On", domain: "select", default: "Sunday", section: "interface", esphome_section: "home", group_tier: "interface", options: ["Sunday", "Monday"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_active", label: "Bedtime Mode", domain: "switch", default: false, section: "power", esphome_section: "sleep", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_display", label: "Idle Display in Bedtime", domain: "select", default: "Screen Off", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["Screen Off", "Ambient Clock"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_schedule", label: "Bedtime Schedule", domain: "switch", default: false, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_start_hour", label: "Bedtime Starts", domain: "number", default: 22, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: "h", capability: "display" },
+  {key: "bedtime_end_hour", label: "Bedtime Ends", domain: "number", default: 7, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: "h", capability: "display" },
 ];
 
 export const DEVICE_PREF_SPECS_MAP: Readonly<Record<string, DevicePrefSpecItem>> = Object.fromEntries(DEVICE_PREF_SPECS_CATALOG.map((s) => [s.key, s]));

@@ -739,3 +739,174 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     assert sent_cmds == ["dismiss_ringing", "cancel_timer", "reset_stopwatch"]
 
     assert await async_unload_entry(hass, entry) is True
+
+
+@pytest.mark.asyncio
+async def test_bedtime_mode_switch_group_preservation_schedule_and_quiet_notifications(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify D-068: switch.<slug>_bedtime_mode toggles without detaching from Device Group, schedule edges respect manual overrides, and non-critical alerts silence chimes/TTS."""
+    from datetime import UTC, datetime
+
+    entry, sys_obj, coord = await setup_latter_hub(hass, with_device=True)
+    _register_wifi_sensor(hass, coord, "-49")
+    slug = coord.device_slug
+
+    # Assign to Wall & Desk Panels group
+    group_sel = _find_entity(hass, "select", f"select.{slug}_device_group")
+    await group_sel.async_select_option("Wall & Desk Panels")
+    assert coord.device_group == "wall_panels"
+
+    # 1) Sleep-safe switch.<slug>_bedtime_mode toggles On and Off without detaching from Wall & Desk Panels
+    bt_sw = _find_entity(hass, "switch", f"switch.{slug}_bedtime_mode")
+    assert bt_sw.is_on is False
+    assert hass.states.get(f"switch.{slug}_bedtime_mode").state == "off"
+
+    await bt_sw.async_turn_on()
+    assert bt_sw.is_on is True
+    assert coord.get_device_pref("bedtime_active") is True
+    assert hass.states.get(f"switch.{slug}_bedtime_mode").state == "on"
+    assert coord.device_group == "wall_panels"
+    assert group_sel.current_option == "Wall & Desk Panels"
+
+    # 2) Non-critical notification suppresses chime & TTS announcement in Bedtime Mode; critical breaks through!
+    hass.states.async_set(
+        f"media_player.{slug}_music",
+        "idle",
+        attributes={"supported_features": 0xFFFF},
+    )
+    er.async_get(hass).async_register(
+        er.RegistryEntry(
+            entity_id=f"media_player.{slug}_music",
+            platform="esphome",
+            device_id=coord.esphome_device_id,
+            config_entry_id=f"esp_entry_{slug}",
+            original_name="Music",
+        )
+    )
+    hass.services.calls.clear()
+    await hass.services.async_call(
+        "latter",
+        "notify",
+        {
+            "target_device": slug,
+            "title": "Package Delivered",
+            "message": "Front porch",
+            "priority": "normal",
+            "chime": True,
+            "announce": False,
+        },
+        blocking=True,
+    )
+    assert coord.alert_chime is False
+    esp_notify_calls = [
+        c
+        for c in hass.services.calls
+        if c.domain == "esphome" and c.service == f"{slug}_latter_show_notification"
+    ]
+    assert esp_notify_calls and esp_notify_calls[-1].data["chime"] is False
+
+    # Non-critical announce=True also suppresses TTS playback in Bedtime Mode
+    hass.services.calls.clear()
+    await hass.services.async_call(
+        "latter",
+        "notify",
+        {
+            "target_device": slug,
+            "title": "Laundry Done",
+            "message": "Washer cycle finished",
+            "priority": "normal",
+            "chime": False,
+            "announce": True,
+        },
+        blocking=True,
+    )
+    announce_calls = [
+        c
+        for c in hass.services.calls
+        if c.domain in ("assist_satellite", "tts", "media_player")
+    ]
+    assert announce_calls == []
+
+    # Critical notification breaks through with chime=True!
+    hass.services.calls.clear()
+    await hass.services.async_call(
+        "latter",
+        "notify",
+        {
+            "target_device": slug,
+            "title": "Smoke Alarm",
+            "message": "Kitchen smoke detected",
+            "priority": "critical",
+            "chime": True,
+            "announce": False,
+        },
+        blocking=True,
+    )
+    assert coord.alert_chime is True
+    esp_crit_calls = [
+        c
+        for c in hass.services.calls
+        if c.domain == "esphome" and c.service == f"{slug}_latter_show_notification"
+    ]
+    assert esp_crit_calls and esp_crit_calls[-1].data["chime"] is True
+
+    # 3) Batch controls `bedtime_active=False` works without detaching from Wall & Desk Panels
+    conn = websocket_api.ActiveConnection()
+    await _call_ws(
+        hass,
+        conn,
+        1,
+        "latter/system/command",
+        studio_rev=STUDIO_REV,
+        command="apply_batch_device_setting",
+        payload={"target": "all", "config": {"bedtime_active": False}},
+    )
+    assert conn.errors == []
+    assert bt_sw.is_on is False
+    assert coord.device_group == "wall_panels"
+
+    # 4) Edge-triggered schedule sync (`22:00` -> `07:00`) holds manual overrides until next boundary
+    await sys_obj.async_evaluate_bedtime_schedules(
+        now=datetime(2026, 11, 18, 21, 0, tzinfo=UTC)
+    )
+    await coord.async_update_device_prefs(
+        {
+            "bedtime_schedule": True,
+            "bedtime_start_hour": 22,
+            "bedtime_end_hour": 7,
+        }
+    )
+    # Daytime at 21:00 -> stays off
+    await sys_obj.async_evaluate_bedtime_schedules(
+        now=datetime(2026, 11, 18, 21, 30, tzinfo=UTC)
+    )
+    assert bt_sw.is_on is False
+
+    # Cross 22:00 start boundary -> turns ON!
+    await sys_obj.async_evaluate_bedtime_schedules(
+        now=datetime(2026, 11, 18, 22, 0, tzinfo=UTC)
+    )
+    assert bt_sw.is_on is True
+
+    # User manually turns Bedtime Mode OFF at 23:00 -> stays OFF at 23:30 and 02:00!
+    await bt_sw.async_turn_off()
+    assert bt_sw.is_on is False
+    await sys_obj.async_evaluate_bedtime_schedules(
+        now=datetime(2026, 11, 18, 23, 30, tzinfo=UTC)
+    )
+    assert bt_sw.is_on is False
+    await sys_obj.async_evaluate_bedtime_schedules(
+        now=datetime(2026, 11, 19, 2, 0, tzinfo=UTC)
+    )
+    assert bt_sw.is_on is False
+
+    # Re-enable at 03:00 -> crossing 07:00 end boundary turns OFF automatically!
+    await bt_sw.async_turn_on()
+    assert bt_sw.is_on is True
+    await sys_obj.async_evaluate_bedtime_schedules(
+        now=datetime(2026, 11, 19, 7, 0, tzinfo=UTC)
+    )
+    assert bt_sw.is_on is False
+
+    assert await async_unload_entry(hass, entry) is True

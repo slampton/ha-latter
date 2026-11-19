@@ -1006,6 +1006,41 @@
           "cpp_enum": "CALENDAR_WEEK_START",
           "type": "string",
           "description": "First day of week in Calendar Week and Month views (Sunday|Monday)"
+        },
+        {
+          "index": 58,
+          "name": "bedtime_active",
+          "cpp_enum": "BEDTIME_ACTIVE",
+          "type": "bool",
+          "description": "1 = Bedtime Mode currently active (ultra-dim wake brightness, 15s idle -> bedtime_display, suppressed wake greeting, and silenced non-critical notification chimes/screen wakes), else 0"
+        },
+        {
+          "index": 59,
+          "name": "bedtime_display",
+          "cpp_enum": "BEDTIME_DISPLAY",
+          "type": "string",
+          "description": "Idle display behavior while Bedtime Mode is active (Screen Off|Ambient Clock)"
+        },
+        {
+          "index": 60,
+          "name": "bedtime_schedule",
+          "cpp_enum": "BEDTIME_SCHEDULE",
+          "type": "bool",
+          "description": "1 = automatically toggle Bedtime Mode on at bedtime_start_hour and off at bedtime_end_hour (manual/HA switch overrides hold until next boundary), else 0"
+        },
+        {
+          "index": 61,
+          "name": "bedtime_start_hour",
+          "cpp_enum": "BEDTIME_START_HOUR",
+          "type": "u16",
+          "description": "Bedtime Mode schedule start hour in local 24h time (0..23)"
+        },
+        {
+          "index": 62,
+          "name": "bedtime_end_hour",
+          "cpp_enum": "BEDTIME_END_HOUR",
+          "type": "u16",
+          "description": "Bedtime Mode schedule end hour in local 24h time (0..23)"
         }
       ]
     },
@@ -3514,10 +3549,88 @@
       "step": null,
       "unit": "",
       "capability": "display"
+    },
+    {
+      "key": "bedtime_active",
+      "label": "Bedtime Mode",
+      "domain": "switch",
+      "default": false,
+      "section": "power",
+      "esphome_section": "sleep",
+      "group_tier": null,
+      "options": [],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "display"
+    },
+    {
+      "key": "bedtime_display",
+      "label": "Idle Display in Bedtime",
+      "domain": "select",
+      "default": "Screen Off",
+      "section": "power",
+      "esphome_section": "sleep",
+      "group_tier": "behavior",
+      "options": [
+        "Screen Off",
+        "Ambient Clock"
+      ],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "display"
+    },
+    {
+      "key": "bedtime_schedule",
+      "label": "Bedtime Schedule",
+      "domain": "switch",
+      "default": false,
+      "section": "power",
+      "esphome_section": "sleep",
+      "group_tier": "behavior",
+      "options": [],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "display"
+    },
+    {
+      "key": "bedtime_start_hour",
+      "label": "Bedtime Starts",
+      "domain": "number",
+      "default": 22,
+      "section": "power",
+      "esphome_section": "sleep",
+      "group_tier": "behavior",
+      "options": [],
+      "min": 0,
+      "max": 23,
+      "step": 1,
+      "unit": "h",
+      "capability": "display"
+    },
+    {
+      "key": "bedtime_end_hour",
+      "label": "Bedtime Ends",
+      "domain": "number",
+      "default": 7,
+      "section": "power",
+      "esphome_section": "sleep",
+      "group_tier": "behavior",
+      "options": [],
+      "min": 0,
+      "max": 23,
+      "step": 1,
+      "unit": "h",
+      "capability": "display"
     }
   ],
   "studio_contract": {
-    "studio_rev": 34,
+    "studio_rev": 35,
     "allowed_device_actions": [
       "restart",
       "find_my",

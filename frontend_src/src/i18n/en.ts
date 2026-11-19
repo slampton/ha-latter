@@ -19,7 +19,7 @@ export const EN_STRINGS = {
 export type StudioTranslationKey = keyof typeof EN_STRINGS;
 
 /**
- * Sentence-case labels for all 50 `DevicePrefSpec` keys + group/device setting keys.
+ * Sentence-case labels for all 55 `DevicePrefSpec` keys + group/device setting keys.
  */
 export const PREF_LABELS: Readonly<Record<string, string>> = {
   wake_word_mode: "Wake word mode",
@@ -31,6 +31,11 @@ export const PREF_LABELS: Readonly<Record<string, string>> = {
   docked_screensaver: "Docked screensaver",
   screensaver_style: "Screensaver style",
   hold_crown_power_off: "Hold crown to power off",
+  bedtime_active: "Bedtime mode",
+  bedtime_display: "Idle display in bedtime",
+  bedtime_schedule: "Bedtime schedule",
+  bedtime_start_hour: "Bedtime starts",
+  bedtime_end_hour: "Bedtime ends",
   auto_brightness_mode: "Auto brightness mode",
   manual_brightness: "Manual brightness",
   day_brightness: "Day brightness",
@@ -114,6 +119,7 @@ export const PREF_OPTION_LABELS: Readonly<Record<string, string>> = {
   "30 min": "30 minutes",
 
   // Screensaver, brightness & colors
+  "Screen Off": "Screen off",
   "Ambient Clock": "Ambient clock",
   Aurora: "Aurora",
   Starfield: "Starfield",

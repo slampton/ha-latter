@@ -1,6 +1,6 @@
 /**
- * Device Power View (`power`, `D-014`, `D-027`, `D-036`, `D-066`):
- * Sleep & wake controls and Power & battery telemetry.
+ * Device Power View (`power`, `D-014`, `D-027`, `D-036`, `D-066`, `D-068`):
+ * Sleep & wake controls, Bedtime mode, and Power & battery telemetry.
  */
 
 import { renderCard, renderPrefControlRow } from "../components/controls.js";
@@ -14,6 +14,15 @@ const SCREENSAVER_KEYS = new Set([
   "docked_idle_timeout",
 ]);
 
+const BEDTIME_KEYS = new Set([
+  "bedtime_active",
+  "bedtime_display",
+  "bedtime_schedule",
+  "bedtime_start_hour",
+  "bedtime_end_hour",
+  "bedtime_mode",
+]);
+
 export function renderDevicePowerView(store: StudioStore): TemplateResult {
   const sleepPrefs = store.entity
     .getPrefs([
@@ -25,11 +34,30 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
     ])
     .filter((p) => !SCREENSAVER_KEYS.has(p.key));
 
+  const bedtimeAllPrefs = store.entity.getPrefs([
+    "bedtime_active",
+    "bedtime_display",
+    "bedtime_schedule",
+    "bedtime_start_hour",
+    "bedtime_end_hour",
+  ]);
+  const bedtimeScheduleOn = Boolean(
+    bedtimeAllPrefs.find((p) => p.key === "bedtime_schedule")?.value,
+  );
+  const bedtimePrefs = bedtimeAllPrefs.filter(
+    (p) =>
+      bedtimeScheduleOn ||
+      (p.key !== "bedtime_start_hour" && p.key !== "bedtime_end_hour"),
+  );
+
   const sleepPrefKeys = new Set(sleepPrefs.map((p) => p.key));
   const sleepEntities = store.entity.getSectionItems("sleep").filter((it) => {
     if (it.pref_key) return false;
     const k = it.key || (it.entity_id ? it.entity_id.split(".").pop() || "" : "");
     if (SCREENSAVER_KEYS.has(k) || Array.from(SCREENSAVER_KEYS).some((sk) => k.endsWith(sk))) {
+      return false;
+    }
+    if (BEDTIME_KEYS.has(k) || Array.from(BEDTIME_KEYS).some((bk) => k.endsWith(bk))) {
       return false;
     }
     if (sleepPrefKeys.has(k) || Array.from(sleepPrefKeys).some((pk) => k.endsWith(pk))) {
@@ -40,7 +68,7 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
 
   const batteryItems = store.entity.getSectionItems("battery");
   const sleepItems = [...sleepPrefs, ...sleepEntities];
-  const bothEmpty = !sleepItems.length && !batteryItems.length;
+  const allEmpty = !sleepItems.length && !bedtimePrefs.length && !batteryItems.length;
 
   return html`<section id="view-power">
     ${renderDeviceOfflineBanner(store)}
@@ -57,7 +85,7 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
                 ${sleepEntities.map((it) => renderDeviceEntityRow(store, it))}
               </div>
             </div>`
-          : bothEmpty
+          : allEmpty
             ? renderCard({
                 title: store.t("dev_power.card_power_battery"),
                 body: html`<p class="empty-state">${store.t("dev_power.empty")}</p>`,
@@ -65,6 +93,15 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
             : nothing}
       </div>
       <div class="column">
+        ${bedtimePrefs.length
+          ? renderCard({
+              id: "card-bedtime-mode",
+              title: store.t("dev_power.card_bedtime"),
+              subtitle: store.t("dev_power.card_bedtime_subtitle"),
+              contentClass: "settings-list",
+              body: html`${bedtimePrefs.map((p) => renderPrefControlRow(store, p))}`,
+            })
+          : nothing}
         ${batteryItems.length
           ? html`<div class="card" data-entity-card>
               <div class="card-header">

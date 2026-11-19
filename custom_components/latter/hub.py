@@ -28,6 +28,7 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CALENDAR_REFRESH_INTERVAL_MINUTES,
@@ -415,6 +416,8 @@ class LatterSystemHub:
         self._unsub_sky_state: Callable[[], None] | None = None
         self._unsub_forecast_timer: Callable[[], None] | None = None
         self._unsub_calendar_timer: Callable[[], None] | None = None
+        self._unsub_bedtime_timer: Callable[[], None] | None = None
+        self._bedtime_sched_trackers: dict[str, tuple[bool, int, int, bool]] = {}
         self._tracked_weather_entity: str | None = None
 
         self.weather_snapshot: tuple[V3Records, dict[str, Any]] | None = None
@@ -503,6 +506,13 @@ class LatterSystemHub:
                 self._async_periodic_calendar_refresh,
                 timedelta(minutes=CALENDAR_REFRESH_INTERVAL_MINUTES),
             )
+        if self._unsub_bedtime_timer is None:
+            self._unsub_bedtime_timer = async_track_time_interval(
+                self.hass,
+                self._async_periodic_bedtime_schedule_check,
+                timedelta(seconds=60),
+            )
+            self._seed_bedtime_schedule_trackers()
 
     @callback
     def async_cleanup_feeds(self) -> None:
@@ -512,6 +522,7 @@ class LatterSystemHub:
             self._unsub_sky_state,
             self._unsub_forecast_timer,
             self._unsub_calendar_timer,
+            self._unsub_bedtime_timer,
         ):
             if unsub is not None:
                 unsub()
@@ -519,6 +530,8 @@ class LatterSystemHub:
         self._unsub_sky_state = None
         self._unsub_forecast_timer = None
         self._unsub_calendar_timer = None
+        self._unsub_bedtime_timer = None
+        self._bedtime_sched_trackers.clear()
         self._tracked_weather_entity = None
         self.weather_loaded = False
         self.calendar_loaded = False
@@ -561,6 +574,74 @@ class LatterSystemHub:
     async def _async_periodic_calendar_refresh(self, _now: datetime) -> None:
         """Refresh the Site calendar agenda every 15 minutes."""
         await self.async_refresh_calendar_agenda()
+
+    @staticmethod
+    def _is_hour_in_bedtime_window(hour: int, start_h: int, end_h: int) -> bool:
+        """Return True when `hour` (0..23) falls inside `[start_h, end_h)`."""
+        if start_h == end_h:
+            return False
+        if start_h < end_h:
+            return start_h <= hour < end_h
+        return hour >= start_h or hour < end_h
+
+    def _seed_bedtime_schedule_trackers(self) -> None:
+        """Seed initial schedule state per coordinator without clobbering manual overrides on restart."""
+        cur_hour = int(dt_util.now().hour) % 24
+        for coord in list(self.coordinators.values()):
+            if coord.is_ble_tag or not coord.has_display:
+                continue
+            if coord.subentry_id in self._bedtime_sched_trackers:
+                continue
+            sched_on = bool(coord.get_device_pref("bedtime_schedule"))
+            start_h = int(coord.get_device_pref("bedtime_start_hour")) % 24
+            end_h = int(coord.get_device_pref("bedtime_end_hour")) % 24
+            in_win = self._is_hour_in_bedtime_window(cur_hour, start_h, end_h)
+            self._bedtime_sched_trackers[coord.subentry_id] = (
+                sched_on,
+                start_h,
+                end_h,
+                in_win,
+            )
+
+    async def _async_periodic_bedtime_schedule_check(self, now: datetime) -> None:
+        """Evaluate sleep-safe Bedtime Mode schedule boundary crossings every minute."""
+        await self.async_evaluate_bedtime_schedules(now=now)
+
+    async def async_evaluate_bedtime_schedules(
+        self, *, now: datetime | None = None
+    ) -> None:
+        """Apply Bedtime Mode schedule boundary transitions while preserving mid-window manual overrides."""
+        local_dt = dt_util.as_local(now) if now is not None else dt_util.now()
+        cur_hour = int(local_dt.hour) % 24
+        live_ids: set[str] = set()
+        for coord in list(self.coordinators.values()):
+            if coord.is_ble_tag or not coord.has_display:
+                continue
+            sub_id = coord.subentry_id
+            live_ids.add(sub_id)
+            sched_on = bool(coord.get_device_pref("bedtime_schedule"))
+            start_h = int(coord.get_device_pref("bedtime_start_hour")) % 24
+            end_h = int(coord.get_device_pref("bedtime_end_hour")) % 24
+            in_win = self._is_hour_in_bedtime_window(cur_hour, start_h, end_h)
+            prev = self._bedtime_sched_trackers.get(sub_id)
+            self._bedtime_sched_trackers[sub_id] = (sched_on, start_h, end_h, in_win)
+            if not sched_on:
+                continue
+            if prev is None:
+                continue
+            prev_sched_on, prev_start_h, prev_end_h, prev_in_win = prev
+            schedule_config_changed = (
+                not prev_sched_on
+                or prev_start_h != start_h
+                or prev_end_h != end_h
+            )
+            window_edge_crossed = prev_in_win != in_win
+            if (schedule_config_changed or window_edge_crossed) and (
+                bool(coord.get_device_pref("bedtime_active")) != in_win
+            ):
+                await coord.async_update_device_prefs({"bedtime_active": in_win})
+        for stale_id in set(self._bedtime_sched_trackers) - live_ids:
+            self._bedtime_sched_trackers.pop(stale_id, None)
 
     async def async_refresh_weather_forecast(self, *, coalesce: bool = False) -> None:
         """Fetch the daily forecast once for the Site and fan out to all display coordinators."""

@@ -311,8 +311,11 @@ export const EN_DEVICES_STRINGS = {
   "dev_audio.area_handoff_desc":
     "Transfers active Music Assistant playback when this Device moves to or selects another Area.",
 
-  // Device -> Power (D-027)
+  // Device -> Power (D-027 / D-068)
   "dev_power.card_sleep_wake": "Sleep & wake",
+  "dev_power.card_bedtime": "Bedtime mode",
+  "dev_power.card_bedtime_subtitle":
+    "Turns off or dims the display overnight and silences non-critical notification chimes.",
   "dev_power.card_power_battery": "Power & battery",
   "dev_power.empty": "No sleep or battery entities reported by this Device.",
 

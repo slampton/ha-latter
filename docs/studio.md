@@ -91,7 +91,8 @@ The **Devices** sidebar splits inventory lifecycle into two top-level views:
 - **Sound & playback:** **Default speaker** (searchable combobox), conditional **Music Assistant player** override, **Media Area handoff** (active for both BLE moves and manual on-device Area picks), **Alert volume**, **Volume step size**, and **Game sound effects**.
 
 ### Power
-- **Sleep & wake:** **Tap to wake**, **Pickup to wake**, **Battery screen timeout**, **Battery hibernate timeout**, and **Hold crown to power off**, alongside live **Power & battery** telemetry (gated on hardware capabilities).
+- **Column 1 — Sleep & wake:** **Tap to wake**, **Pickup to wake**, **Battery screen timeout**, **Battery hibernate timeout**, and **Hold crown to power off**.
+- **Column 2 — Bedtime mode & Power & battery:** **Bedtime mode** (**Bedtime mode** live switch synced with `switch.<slug>_bedtime_mode` without detaching from the Device group, **Idle display in bedtime** *Screen off* or *Ambient clock*, and optional **Bedtime schedule** with **Bedtime starts** / **Bedtime ends** hours that hold manual overrides until the next boundary) above live **Power & battery** telemetry (gated on hardware capabilities).
 
 ### Presence
 - **Area tracking:** **BLE Area tracking** (`Track the Area with BLE Proxies`).

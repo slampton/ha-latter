@@ -1868,6 +1868,62 @@ class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
         self.assertIn('id="card-device-diagnostics" class="card handoff-active"', got["devToolsHtml"])
         self.assertNotIn("handoff-active", got["devToolsClearedHtml"])
 
+    def test_device_power_bedtime_card_and_non_detaching_batch_preview(self) -> None:
+        """Verify D-068: #card-bedtime-mode hides schedule hours until enabled and staging bedtime_active does not warn of group detachment."""
+        got = _run_node_esm(
+            """
+            import "./test/dom-shim.js";
+            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
+            import { renderDevicePowerView } from "./src/views/device-power-view.js";
+
+            function buildPower(schedOn) {
+              return makeFakeStore({
+                activeSubentryId: "sub_1",
+                state: {
+                  device_prefs: [
+                    { key: "tap_to_wake", label: "Tap to wake", section: "power", group_tier: "behavior", domain: "select", value: "Single Tap", options: ["Single Tap", "Disabled"] },
+                    { key: "bedtime_active", label: "Bedtime mode", section: "power", group_tier: null, domain: "switch", value: false, options: [] },
+                    { key: "bedtime_display", label: "Idle display in bedtime", section: "power", group_tier: "behavior", domain: "select", value: "Screen Off", options: ["Screen Off", "Ambient Clock"] },
+                    { key: "bedtime_schedule", label: "Bedtime schedule", section: "power", group_tier: "behavior", domain: "switch", value: schedOn, options: [] },
+                    { key: "bedtime_start_hour", label: "Bedtime starts", section: "power", group_tier: "behavior", domain: "number", value: 22, options: [], min: 0, max: 23, step: 1, unit: ":00" },
+                    { key: "bedtime_end_hour", label: "Bedtime ends", section: "power", group_tier: "behavior", domain: "number", value: 7, options: [], min: 0, max: 23, step: 1, unit: ":00" },
+                  ],
+                  pref_specs: [
+                    { key: "bedtime_active", label: "Bedtime mode", section: "power", group_tier: null, domain: "switch", default: false, options: [] },
+                    { key: "bedtime_display", label: "Idle display in bedtime", section: "power", group_tier: "behavior", domain: "select", default: "Screen Off", options: ["Screen Off", "Ambient Clock"] },
+                  ],
+                  system_devices: [
+                    { subentry_id: "sub_1", title: "Bedroom Desk", kind: "device", is_online: true, has_display: true, device_group: "wall_panels" },
+                  ],
+                },
+              }).store;
+            }
+
+            const sOff = buildPower(false);
+            const sOn = buildPower(true);
+
+            sOn.groups.stageBatchSetting("bedtime_active", true);
+            const detachBedtimeOnly = sOn.groups.previewBatchDetachmentCount();
+            sOn.groups.stageBatchSetting("bedtime_display", "Ambient Clock");
+            const detachWithPolicy = sOn.groups.previewBatchDetachmentCount();
+
+            process.stdout.write(JSON.stringify({
+              offHtml: renderToHtml(renderDevicePowerView(sOff)),
+              onHtml: renderToHtml(renderDevicePowerView(sOn)),
+              detachBedtimeOnly,
+              detachWithPolicy,
+            }));
+            """
+        )
+        self.assertIn('id="card-bedtime-mode"', got["offHtml"])
+        self.assertIn("Idle display in bedtime", got["offHtml"])
+        self.assertIn("Screen off", got["offHtml"])
+        self.assertNotIn("Bedtime starts", got["offHtml"])
+        self.assertIn("Bedtime starts", got["onHtml"])
+        self.assertIn("Bedtime ends", got["onHtml"])
+        self.assertEqual(got["detachBedtimeOnly"], 0)
+        self.assertEqual(got["detachWithPolicy"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

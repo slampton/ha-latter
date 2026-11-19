@@ -1488,12 +1488,19 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         cam_ent = str(data.get("camera_entity") or "").strip() or None
 
         for coord in target_coords:
+            in_bedtime = bool(
+                not coord.is_ble_tag
+                and coord.has_display
+                and coord.get_device_pref("bedtime_active")
+            )
+            suppress_quiet = in_bedtime and priority != "critical"
+            coord_chime = False if suppress_quiet else card_chime
             coord.async_dispatch_notification(
                 title=title,
                 message=message,
                 priority=priority,
                 duration=duration,
-                chime=card_chime,
+                chime=coord_chime,
                 camera_entity=cam_ent,
             )
 
@@ -1510,7 +1517,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                             "message": message[:160],
                             "priority": priority,
                             "duration": duration,
-                            "chime": card_chime,
+                            "chime": coord_chime,
                             "camera_url": coord.alert_camera_url,
                             "alert_id": coord.alert_id,
                         },
@@ -1519,7 +1526,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.debug("Direct esphome.%s call skipped: %s", esp_notify_svc, err)
 
-            if is_announce and message:
+            if is_announce and message and not suppress_quiet:
                 sat_ent = resolve_assist_satellite_entity(hass, coord.local_speaker, coord)
                 target_list = [sat_ent] if sat_ent else ([coord.local_speaker] if coord.local_speaker else [])
                 if target_list:

@@ -70,7 +70,7 @@ class TestProtocolV3Contract(unittest.TestCase):
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 4,
-            "device_prefs": 55,
+            "device_prefs": 60,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})
@@ -1131,7 +1131,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             self.assertNotIn(retired_key, studio_scope.DEVICE_SETTING_KEYS)
             with self.assertRaises(studio_scope.SettingsScopeError):
                 studio_scope.clean_device_settings({retired_key: "1"})
-        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 50)
+        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 55)
 
         cleaned = studio_scope.clean_device_settings(
             {

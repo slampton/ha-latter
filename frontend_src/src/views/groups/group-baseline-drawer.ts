@@ -463,6 +463,24 @@ export function renderGroupBaselineDrawer(
             ? html`${renderSpecRange(store, group, "day_start_hour", cfg.day_start_hour, caps)}
                 ${renderSpecRange(store, group, "night_start_hour", cfg.night_start_hour, caps)}`
             : nothing}
+          ${renderSpecSelect(store, group, "bedtime_display", cfg.bedtime_display, caps)}
+          ${renderSpecSwitch(store, group, "bedtime_schedule", cfg.bedtime_schedule, caps)}
+          ${Boolean(cfg.bedtime_schedule)
+            ? html`${renderSpecRange(
+                  store,
+                  group,
+                  "bedtime_start_hour",
+                  cfg.bedtime_start_hour,
+                  caps,
+                )}
+                ${renderSpecRange(
+                  store,
+                  group,
+                  "bedtime_end_hour",
+                  cfg.bedtime_end_hour,
+                  caps,
+                )}`
+            : nothing}
         </div>
       </details>
 

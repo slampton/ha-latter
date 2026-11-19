@@ -633,6 +633,14 @@ export class GroupsController {
 
   previewBatchDetachmentCount(): number {
     if (!this.hasBatchDraft) return 0;
+    const hasDetachingKey =
+      this.batchPillDrafts.size > 0 ||
+      this.batchEntityDrafts.size > 0 ||
+      Array.from(this.store.batchDraft.keys()).some((key) => {
+        const spec = this.store.entity.getPrefSpec(key);
+        return !spec || spec.group_tier !== null;
+      });
+    if (!hasDetachingKey) return 0;
     return this.matchingBatchDevices().filter(
       (d) => Boolean(d.device_group && d.device_group !== "custom"),
     ).length;

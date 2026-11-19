@@ -38,10 +38,10 @@ async def _call_ws(
 async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify mandatory studio_rev=34 schema validation and studio_rev_mismatch on all 9 WS endpoints."""
+    """Verify mandatory studio_rev=35 schema validation and studio_rev_mismatch on all 9 WS endpoints."""
     import voluptuous as vol
 
-    assert STUDIO_REV == 34
+    assert STUDIO_REV == 35
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 

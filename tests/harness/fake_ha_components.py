@@ -33,6 +33,7 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
     select_comp_mod = ensure_module("homeassistant.components.select")
     number_comp_mod = ensure_module("homeassistant.components.number")
     button_comp_mod = ensure_module("homeassistant.components.button")
+    switch_comp_mod = ensure_module("homeassistant.components.switch")
 
     class _BaseEntity:
         hass: Any = None
@@ -201,6 +202,23 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
 
     button_comp_mod.ButtonEntity = ButtonEntity  # type: ignore[attr-defined]
     button_comp_mod.ButtonDeviceClass = ButtonDeviceClass  # type: ignore[attr-defined]
+
+    class SwitchEntity(_BaseEntity):
+        _attr_is_on: bool | None = None
+
+        @property
+        def is_on(self) -> bool | None:
+            return self._attr_is_on
+
+        async def async_turn_on(self, **kwargs: Any) -> None:
+            _ = kwargs
+            return None
+
+        async def async_turn_off(self, **kwargs: Any) -> None:
+            _ = kwargs
+            return None
+
+    switch_comp_mod.SwitchEntity = SwitchEntity  # type: ignore[attr-defined]
 
     class SourceType(StrEnum):
         BLUETOOTH_LE = "bluetooth_le"

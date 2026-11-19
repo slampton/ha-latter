@@ -50,6 +50,7 @@ def install_fake_ha_core() -> None:
         SELECT = "select"
         NUMBER = "number"
         BUTTON = "button"
+        SWITCH = "switch"
 
     class EntityCategory(StrEnum):
         CONFIG = "config"

@@ -7,7 +7,7 @@ rules:
   brands: done
   common-modules:
     status: done
-    comment: Flat 27-module root layout (__init__.py, areas.py, backup.py, config_flow.py, const.py, coordinator.py, diagnostics.py, doorbell.py, feeds.py, groups.py, http.py, hub.py, identity.py, media.py, media_browse.py, presence.py, protocol.py, remotes.py, repairs.py, services.py, wallpapers.py, plus 6 entity platforms) and 4 studio/ modules (31 total).
+    comment: Flat 28-module root layout (__init__.py, areas.py, backup.py, config_flow.py, const.py, coordinator.py, diagnostics.py, doorbell.py, feeds.py, groups.py, http.py, hub.py, identity.py, media.py, media_browse.py, presence.py, protocol.py, remotes.py, repairs.py, services.py, wallpapers.py, plus 7 entity platforms) and 4 studio/ modules (32 total).
   config-flow: done
   config-flow-test-coverage: done
   dependency-transparency: done

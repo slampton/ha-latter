@@ -504,8 +504,11 @@ const EN_DEVICES_STRINGS = {
   "dev_audio.ma_player_auto": "— Automatic match —",
   "dev_audio.area_handoff_desc":
     "Transfers active Music Assistant playback when this Device moves to or selects another Area.",
-  // Device -> Power (D-027)
+  // Device -> Power (D-027 / D-068)
   "dev_power.card_sleep_wake": "Sleep & wake",
+  "dev_power.card_bedtime": "Bedtime mode",
+  "dev_power.card_bedtime_subtitle":
+    "Turns off or dims the display overnight and silences non-critical notification chimes.",
   "dev_power.card_power_battery": "Power & battery",
   "dev_power.empty": "No sleep or battery entities reported by this Device.",
   // Device -> Presence (D-032 / D-066 / Q8)
@@ -1346,7 +1349,7 @@ const EN_STRINGS = {
   ...EN_DEVICES_STRINGS,
 };
 /**
- * Sentence-case labels for all 50 `DevicePrefSpec` keys + group/device setting keys.
+ * Sentence-case labels for all 55 `DevicePrefSpec` keys + group/device setting keys.
  */
 const PREF_LABELS = {
   wake_word_mode: "Wake word mode",
@@ -1358,6 +1361,11 @@ const PREF_LABELS = {
   docked_screensaver: "Docked screensaver",
   screensaver_style: "Screensaver style",
   hold_crown_power_off: "Hold crown to power off",
+  bedtime_active: "Bedtime mode",
+  bedtime_display: "Idle display in bedtime",
+  bedtime_schedule: "Bedtime schedule",
+  bedtime_start_hour: "Bedtime starts",
+  bedtime_end_hour: "Bedtime ends",
   auto_brightness_mode: "Auto brightness mode",
   manual_brightness: "Manual brightness",
   day_brightness: "Day brightness",
@@ -1439,6 +1447,7 @@ const PREF_OPTION_LABELS = {
   "15 min": "15 minutes",
   "30 min": "30 minutes",
   // Screensaver, brightness & colors
+  "Screen Off": "Screen off",
   "Ambient Clock": "Ambient clock",
   Aurora: "Aurora",
   Starfield: "Starfield",
@@ -1934,7 +1943,7 @@ __latterExp(__exports, { Directive: () => Directive, directive: () => directive,
 __latterDef("src/protocol-schema.ts", (__exports, __req) => {
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 const PROTOCOL_CONTRACT_VERSION = 3;
-const STUDIO_REV = 34;
+const STUDIO_REV = 35;
 const ALLOWED_DEVICE_ACTIONS = [
   "restart",
   "find_my",
@@ -2191,6 +2200,11 @@ const DEVICE_PREF_SPECS_CATALOG = [
   {key: "alarms_summary", label: "Alarms", domain: "text", default: "07:00|0|1;08:30|0|2;09:00|0|2", section: "time", esphome_section: "time", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "calendar_lookahead_days", label: "Overview Lookahead", domain: "number", default: 30, section: "interface", esphome_section: "home", group_tier: "interface", options: [], min: 7, max: 60, step: 1, unit: "d", capability: "display" },
   {key: "calendar_week_start", label: "Start Week On", domain: "select", default: "Sunday", section: "interface", esphome_section: "home", group_tier: "interface", options: ["Sunday", "Monday"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_active", label: "Bedtime Mode", domain: "switch", default: false, section: "power", esphome_section: "sleep", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_display", label: "Idle Display in Bedtime", domain: "select", default: "Screen Off", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["Screen Off", "Ambient Clock"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_schedule", label: "Bedtime Schedule", domain: "switch", default: false, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_start_hour", label: "Bedtime Starts", domain: "number", default: 22, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: "h", capability: "display" },
+  {key: "bedtime_end_hour", label: "Bedtime Ends", domain: "number", default: 7, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: "h", capability: "display" },
 ];
 const DEVICE_PREF_SPECS_MAP = Object.fromEntries(DEVICE_PREF_SPECS_CATALOG.map((s) => [s.key, s]));
 const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools";
@@ -8018,6 +8032,14 @@ class GroupsController {
   }
   previewBatchDetachmentCount() {
     if (!this.hasBatchDraft) return 0;
+    const hasDetachingKey =
+      this.batchPillDrafts.size > 0 ||
+      this.batchEntityDrafts.size > 0 ||
+      Array.from(this.store.batchDraft.keys()).some((key) => {
+        const spec = this.store.entity.getPrefSpec(key);
+        return !spec || spec.group_tier !== null;
+      });
+    if (!hasDetachingKey) return 0;
     return this.matchingBatchDevices().filter(
       (d) => Boolean(d.device_group && d.device_group !== "custom"),
     ).length;
@@ -15223,13 +15245,21 @@ const { renderCard, renderPrefControlRow } = __req("src/components/controls.ts")
 const { html, nothing } = __req("src/lib/lit.ts");
 const { renderDeviceEntityRow, renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
 /**
- * Device Power View (`power`, `D-014`, `D-027`, `D-036`, `D-066`):
- * Sleep & wake controls and Power & battery telemetry.
+ * Device Power View (`power`, `D-014`, `D-027`, `D-036`, `D-066`, `D-068`):
+ * Sleep & wake controls, Bedtime mode, and Power & battery telemetry.
  */
 const SCREENSAVER_KEYS = new Set([
   "docked_screensaver",
   "screensaver_style",
   "docked_idle_timeout",
+]);
+const BEDTIME_KEYS = new Set([
+  "bedtime_active",
+  "bedtime_display",
+  "bedtime_schedule",
+  "bedtime_start_hour",
+  "bedtime_end_hour",
+  "bedtime_mode",
 ]);
 function renderDevicePowerView(store) {
   const sleepPrefs = store.entity
@@ -15241,11 +15271,29 @@ function renderDevicePowerView(store) {
       "hold_crown_power_off",
     ])
     .filter((p) => !SCREENSAVER_KEYS.has(p.key));
+  const bedtimeAllPrefs = store.entity.getPrefs([
+    "bedtime_active",
+    "bedtime_display",
+    "bedtime_schedule",
+    "bedtime_start_hour",
+    "bedtime_end_hour",
+  ]);
+  const bedtimeScheduleOn = Boolean(
+    bedtimeAllPrefs.find((p) => p.key === "bedtime_schedule")?.value,
+  );
+  const bedtimePrefs = bedtimeAllPrefs.filter(
+    (p) =>
+      bedtimeScheduleOn ||
+      (p.key !== "bedtime_start_hour" && p.key !== "bedtime_end_hour"),
+  );
   const sleepPrefKeys = new Set(sleepPrefs.map((p) => p.key));
   const sleepEntities = store.entity.getSectionItems("sleep").filter((it) => {
     if (it.pref_key) return false;
     const k = it.key || (it.entity_id ? it.entity_id.split(".").pop() || "" : "");
     if (SCREENSAVER_KEYS.has(k) || Array.from(SCREENSAVER_KEYS).some((sk) => k.endsWith(sk))) {
+      return false;
+    }
+    if (BEDTIME_KEYS.has(k) || Array.from(BEDTIME_KEYS).some((bk) => k.endsWith(bk))) {
       return false;
     }
     if (sleepPrefKeys.has(k) || Array.from(sleepPrefKeys).some((pk) => k.endsWith(pk))) {
@@ -15255,7 +15303,7 @@ function renderDevicePowerView(store) {
   });
   const batteryItems = store.entity.getSectionItems("battery");
   const sleepItems = [...sleepPrefs, ...sleepEntities];
-  const bothEmpty = !sleepItems.length && !batteryItems.length;
+  const allEmpty = !sleepItems.length && !bedtimePrefs.length && !batteryItems.length;
   return html`<section id="view-power">
     ${renderDeviceOfflineBanner(store)}
 
@@ -15271,7 +15319,7 @@ function renderDevicePowerView(store) {
                 ${sleepEntities.map((it) => renderDeviceEntityRow(store, it))}
               </div>
             </div>`
-          : bothEmpty
+          : allEmpty
             ? renderCard({
                 title: store.t("dev_power.card_power_battery"),
                 body: html`<p class="empty-state">${store.t("dev_power.empty")}</p>`,
@@ -15279,6 +15327,15 @@ function renderDevicePowerView(store) {
             : nothing}
       </div>
       <div class="column">
+        ${bedtimePrefs.length
+          ? renderCard({
+              id: "card-bedtime-mode",
+              title: store.t("dev_power.card_bedtime"),
+              subtitle: store.t("dev_power.card_bedtime_subtitle"),
+              contentClass: "settings-list",
+              body: html`${bedtimePrefs.map((p) => renderPrefControlRow(store, p))}`,
+            })
+          : nothing}
         ${batteryItems.length
           ? html`<div class="card" data-entity-card>
               <div class="card-header">
@@ -17692,6 +17749,24 @@ function renderGroupBaselineDrawer(
           ${autoBrt === "Time Schedule"
             ? html`${renderSpecRange(store, group, "day_start_hour", cfg.day_start_hour, caps)}
                 ${renderSpecRange(store, group, "night_start_hour", cfg.night_start_hour, caps)}`
+            : nothing}
+          ${renderSpecSelect(store, group, "bedtime_display", cfg.bedtime_display, caps)}
+          ${renderSpecSwitch(store, group, "bedtime_schedule", cfg.bedtime_schedule, caps)}
+          ${Boolean(cfg.bedtime_schedule)
+            ? html`${renderSpecRange(
+                  store,
+                  group,
+                  "bedtime_start_hour",
+                  cfg.bedtime_start_hour,
+                  caps,
+                )}
+                ${renderSpecRange(
+                  store,
+                  group,
+                  "bedtime_end_hour",
+                  cfg.bedtime_end_hour,
+                  caps,
+                )}`
             : nothing}
         </div>
       </details>
