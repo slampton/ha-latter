@@ -377,9 +377,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         coordinator.on_area_changed_push_slots = (
             lambda c: async_push_active_area_entities(hass, c)
         )
-        await coordinator.async_setup()
         domain_data[coordinator.subentry_id] = coordinator
         sys_obj.coordinators[coordinator.subentry_id] = coordinator
+        try:
+            await coordinator.async_setup()
+        except Exception:
+            domain_data.pop(coordinator.subentry_id, None)
+            sys_obj.coordinators.pop(coordinator.subentry_id, None)
+            raise
         _LOGGER.info(
             "Latter v%s initialized device subentry '%s' (%s, active_speaker: %s)",
             INTEGRATION_VERSION,

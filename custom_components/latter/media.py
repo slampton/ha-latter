@@ -33,7 +33,13 @@ from homeassistant.helpers import (
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_MA_PLAYER_ENTITY, DOMAIN, TRANSFER_HOLD_WINDOW_SECONDS
+from .const import (
+    CONF_ESPHOME_DEVICE_ID,
+    CONF_MA_PLAYER_ENTITY,
+    DOMAIN,
+    SUBENTRY_DEVICE,
+    TRANSFER_HOLD_WINDOW_SECONDS,
+)
 from .hub import get_area_state_index, is_media_position_only_tick, iter_coordinators
 from .identity import (
     device_entities,
@@ -263,18 +269,67 @@ def _lookup_mass_player(mass: Any, player_id: str) -> Any | None:
     return None
 
 
+def _extract_esphome_sendspin_info(
+    hass: HomeAssistant, dev_ids: Iterable[str]
+) -> tuple[set[str], bool]:
+    """Return `(sendspin_client_ids, pending_client_id)` from bound ESPHome config entries."""
+    dev_reg = dr.async_get(hass)
+    client_ids: set[str] = set()
+    pending_pairing = False
+    esphome_dom = hass.data.get("esphome")
+    ss_domain_map = getattr(esphome_dom, "sendspin_client_ids", None)
+
+    seen_entries: set[str] = set()
+    for did in dev_ids:
+        d_obj = dev_reg.async_get(did)
+        if d_obj is None:
+            continue
+        for cfg_id in d_obj.config_entries:
+            if not cfg_id or cfg_id in seen_entries:
+                continue
+            seen_entries.add(cfg_id)
+            cfg_entry = hass.config_entries.async_get_entry(cfg_id)
+            if cfg_entry is None or cfg_entry.domain != "esphome":
+                continue
+            runtime_data = getattr(cfg_entry, "runtime_data", None)
+            dev_caps = getattr(runtime_data, "device_capabilities", None)
+            ss_cap = _attr_or_key(dev_caps, "sendspin")
+            if ss_cap is not None:
+                cid = str(_attr_or_key(ss_cap, "client_id") or "").strip()
+                flags = _attr_or_key(ss_cap, "feature_flags")
+                if cid:
+                    client_ids.add(cid)
+                elif isinstance(flags, int) and flags > 0:
+                    pending_pairing = True
+            if isinstance(ss_domain_map, Mapping):
+                for map_cid, map_entry_id in ss_domain_map.items():
+                    if map_entry_id == cfg_id and map_cid:
+                        client_ids.add(str(map_cid).strip())
+    if client_ids:
+        pending_pairing = False
+    return client_ids, pending_pairing
+
+
 def _extract_mass_player_identity(
     hass: HomeAssistant, ent: RegistryEntry | None
-) -> tuple[set[str], set[str]]:
-    """Extract hardware MACs and linked HA media_player IDs from Music Assistant's runtime `Player` model."""
+) -> tuple[set[str], set[str], set[str]]:
+    """Extract `(macs, linked_ha_entities, protocol_ids)` from Music Assistant's runtime `Player` model."""
     if ent is None or not ent.unique_id:
-        return set(), set()
+        return set(), set(), set()
     p_obj = _lookup_mass_player(get_ma_mass_client(hass), str(ent.unique_id).strip())
     if p_obj is None:
-        return set(), set()
+        return set(), set(), set()
 
     macs: set[str] = set()
     ha_entities: set[str] = set()
+    protocol_ids: set[str] = set()
+
+    provider_str = str(_attr_or_key(p_obj, "provider") or "").strip().lower()
+    raw_pid = str(_attr_or_key(p_obj, "player_id") or "").strip()
+    if raw_pid and provider_str.startswith("sendspin"):
+        protocol_ids.add(raw_pid)
+        if strict_mac := _extract_strict_mac(raw_pid):
+            macs.add(strict_mac)
 
     dev_info = _attr_or_key(p_obj, "device_info")
     if dev_info is not None:
@@ -285,20 +340,27 @@ def _extract_mass_player_identity(
         if isinstance(raw_idents, Mapping):
             for id_key, id_val in raw_idents.items():
                 key_name = str(getattr(id_key, "value", id_key) or "").strip().lower()
-                if id_val and "mac" in key_name:
-                    macs.update(_extract_macs_from_string(str(id_val)))
+                val_str = str(id_val or "").strip()
+                if not val_str:
+                    continue
+                if "mac" in key_name:
+                    macs.update(_extract_macs_from_string(val_str))
+                elif "uuid" in key_name:
+                    protocol_ids.add(val_str)
 
     protocols = _attr_or_key(p_obj, "protocols")
     if isinstance(protocols, Iterable) and not isinstance(protocols, (str, bytes, Mapping)):
         for proto in protocols:
             p_id = str(_attr_or_key(proto, "protocol_id") or "").strip()
             p_dom = str(_attr_or_key(proto, "domain") or "").strip().lower()
-            if not p_id:
+            if not p_id or p_id == "native":
                 continue
             if p_dom == "hass_players" or p_id.startswith("media_player."):
                 ha_entities.add(p_id)
-            elif strict_mac := _extract_strict_mac(p_id):
-                macs.add(strict_mac)
+            else:
+                protocol_ids.add(p_id)
+                if strict_mac := _extract_strict_mac(p_id):
+                    macs.add(strict_mac)
 
     out_protocols = _attr_or_key(p_obj, "output_protocols")
     if isinstance(out_protocols, Iterable) and not isinstance(
@@ -307,44 +369,58 @@ def _extract_mass_player_identity(
         for out_p in out_protocols:
             op_id = str(_attr_or_key(out_p, "output_protocol_id") or "").strip()
             op_dom = str(_attr_or_key(out_p, "protocol_domain") or "").strip().lower()
-            if not op_id:
-                continue
-            if op_dom == "hass_players" or op_id.startswith("media_player."):
-                ha_entities.add(op_id)
-            elif strict_mac := _extract_strict_mac(op_id):
-                macs.add(strict_mac)
+            if op_id and op_id != "native":
+                if op_dom == "hass_players" or op_id.startswith("media_player."):
+                    ha_entities.add(op_id)
+                else:
+                    protocol_ids.add(op_id)
+                    if strict_mac := _extract_strict_mac(op_id):
+                        macs.add(strict_mac)
+            derived = str(_attr_or_key(out_p, "derived_from") or "").strip()
+            if derived and derived != "native":
+                protocol_ids.add(derived)
+                if strict_mac := _extract_strict_mac(derived):
+                    macs.add(strict_mac)
 
-    return macs, ha_entities
+    return macs, ha_entities, protocol_ids
 
 
 def _candidate_identity(
     hass: HomeAssistant, c_entry: RegistryEntry, c_dev: DeviceEntry | None
-) -> tuple[set[str], set[str]]:
-    """Return `(macs, linked_ha_entities)` for one MA candidate, retaining observed Sendspin MACs across reboots."""
+) -> tuple[set[str], set[str], set[str]]:
+    """Return `(macs, linked_ha_entities, protocol_ids)` for one MA candidate, retaining observed IDs across reboots."""
     macs = _extract_macs_from_device_or_entry(c_dev, c_entry)
-    mass_macs, ha_entities = _extract_mass_player_identity(hass, c_entry)
+    mass_macs, ha_entities, protocol_ids = _extract_mass_player_identity(hass, c_entry)
     macs.update(mass_macs)
     domain_data = hass.data.setdefault(DOMAIN, {})
     known_macs: dict[str, set[str]] = domain_data.setdefault("_ma_known_macs", {})
+    known_protos: dict[str, set[str]] = domain_data.setdefault("_ma_known_protocols", {})
     if macs:
         known_macs[c_entry.entity_id] = set(macs)
     elif c_entry.entity_id in known_macs:
         macs = set(known_macs[c_entry.entity_id])
-    return macs, ha_entities
+    if protocol_ids:
+        known_protos[c_entry.entity_id] = set(protocol_ids)
+    elif c_entry.entity_id in known_protos:
+        protocol_ids = set(known_protos[c_entry.entity_id])
+    return macs, ha_entities, protocol_ids
 
 
-def _collect_other_esphome_macs(
+def _collect_other_esphome_identities(
     hass: HomeAssistant, exclude_dev_ids: set[str]
-) -> set[str]:
-    """Return normalized MACs of all ESPHome devices in Home Assistant except `exclude_dev_ids`."""
+) -> tuple[set[str], set[str]]:
+    """Return `(macs, sendspin_protocol_ids)` of all ESPHome devices in HA except `exclude_dev_ids`."""
     dev_reg = dr.async_get(hass)
-    out: set[str] = set()
+    macs: set[str] = set()
+    other_dev_ids: set[str] = set()
     for esp_ce in hass.config_entries.async_entries("esphome"):
         for d_esp in dr.async_entries_for_config_entry(dev_reg, esp_ce.entry_id):
             if d_esp.id in exclude_dev_ids:
                 continue
-            out.update(_extract_macs_from_device_or_entry(d_esp, None))
-    return out
+            other_dev_ids.add(d_esp.id)
+            macs.update(_extract_macs_from_device_or_entry(d_esp, None))
+    protos, _ = _extract_esphome_sendspin_info(hass, other_dev_ids)
+    return macs, protos
 
 
 @callback
@@ -353,7 +429,12 @@ def clear_ma_counterpart_cache(hass: HomeAssistant) -> None:
     domain_data = hass.data.get(DOMAIN)
     if not isinstance(domain_data, dict):
         return
-    for key in ("_ma_counterpart_cache", "_ma_known_macs", "_ma_reconnect_until"):
+    for key in (
+        "_ma_counterpart_cache",
+        "_ma_known_macs",
+        "_ma_known_protocols",
+        "_ma_reconnect_until",
+    ):
         bucket = domain_data.get(key)
         if isinstance(bucket, dict):
             bucket.clear()
@@ -541,8 +622,8 @@ def _collect_device_target_identity(
     speaker_entity_id: str = "",
     owner_coord: Any = None,
     esphome_device_id: str | None = None,
-) -> tuple[set[str], set[str], set[str], DeviceEntry | None]:
-    """Collect `(target_dev_ids, target_macs, target_ha_entities, spk_dev)` for one speaker/ESPHome node."""
+) -> tuple[set[str], set[str], set[str], set[str], bool, DeviceEntry | None]:
+    """Collect `(target_dev_ids, target_macs, target_ha_entities, target_protocol_ids, pending_sendspin, spk_dev)`."""
     ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
     target_dev_ids: set[str] = set()
@@ -582,30 +663,47 @@ def _collect_device_target_identity(
             if d_ent.platform == "esphome":
                 target_ha_entities.add(d_ent.entity_id)
 
-    return target_dev_ids, target_macs, target_ha_entities, spk_dev
+    target_protocol_ids, pending_sendspin = _extract_esphome_sendspin_info(
+        hass, target_dev_ids
+    )
+    return (
+        target_dev_ids,
+        target_macs,
+        target_ha_entities,
+        target_protocol_ids,
+        pending_sendspin,
+        spk_dev,
+    )
 
 
 def _match_ma_by_identity(
-    candidates: Iterable[tuple[RegistryEntry, DeviceEntry | None, set[str], set[str]]],
+    candidates: Iterable[
+        tuple[RegistryEntry, DeviceEntry | None, set[str], set[str], set[str]]
+    ],
     target_dev_ids: set[str],
     target_macs: set[str],
     target_ha_entities: set[str] | None = None,
+    target_protocol_ids: set[str] | None = None,
 ) -> str | None:
-    """Match a Music Assistant candidate by exact device_id/via_device_id, linked HA entity, or exact MAC."""
+    """Match a Music Assistant candidate by exact device_id/via_device_id, linked HA entity, Sendspin protocol_id, or MAC."""
     cand_list = list(candidates)
     if target_dev_ids:
-        for c_entry, c_dev, _c_macs, _c_ha_ents in cand_list:
+        for c_entry, c_dev, _c_macs, _c_ha_ents, _c_protos in cand_list:
             if c_entry.device_id and (
                 c_entry.device_id in target_dev_ids
                 or (c_dev is not None and c_dev.via_device_id in target_dev_ids)
             ):
                 return c_entry.entity_id
     if target_ha_entities:
-        for c_entry, _c_dev, _c_macs, c_ha_ents in cand_list:
+        for c_entry, _c_dev, _c_macs, c_ha_ents, _c_protos in cand_list:
             if target_ha_entities & c_ha_ents:
                 return c_entry.entity_id
+    if target_protocol_ids:
+        for c_entry, _c_dev, _c_macs, _c_ha_ents, c_protos in cand_list:
+            if target_protocol_ids & c_protos:
+                return c_entry.entity_id
     if target_macs:
-        for c_entry, _c_dev, c_macs, _c_ha_ents in cand_list:
+        for c_entry, _c_dev, c_macs, _c_ha_ents, _c_protos in cand_list:
             if target_macs & c_macs:
                 return c_entry.entity_id
     return None
@@ -614,21 +712,21 @@ def _match_ma_by_identity(
 def _build_ma_candidates(
     hass: HomeAssistant,
 ) -> tuple[
-    list[tuple[RegistryEntry, DeviceEntry | None, set[str], set[str]]],
-    list[tuple[RegistryEntry, DeviceEntry | None, set[str], set[str]]],
+    list[tuple[RegistryEntry, DeviceEntry | None, set[str], set[str], set[str]]],
+    list[tuple[RegistryEntry, DeviceEntry | None, set[str], set[str], set[str]]],
 ]:
     """Partition enabled MA players into `(live_candidates, offline_candidates)` with extracted identity."""
     dev_reg = dr.async_get(hass)
     live_candidates: list[
-        tuple[RegistryEntry, DeviceEntry | None, set[str], set[str]]
+        tuple[RegistryEntry, DeviceEntry | None, set[str], set[str], set[str]]
     ] = []
     offline_candidates: list[
-        tuple[RegistryEntry, DeviceEntry | None, set[str], set[str]]
+        tuple[RegistryEntry, DeviceEntry | None, set[str], set[str], set[str]]
     ] = []
     for entry in ma_player_entities(hass):
         c_dev = dev_reg.async_get(entry.device_id) if entry.device_id else None
-        c_macs, c_ha_ents = _candidate_identity(hass, entry, c_dev)
-        row = (entry, c_dev, c_macs, c_ha_ents)
+        c_macs, c_ha_ents, c_protos = _candidate_identity(hass, entry, c_dev)
+        row = (entry, c_dev, c_macs, c_ha_ents, c_protos)
         if _is_entity_live(hass, entry.entity_id):
             live_candidates.append(row)
         else:
@@ -636,16 +734,82 @@ def _build_ma_candidates(
     return live_candidates, offline_candidates
 
 
+def _conflicts_with_target(
+    c_macs: set[str],
+    c_protos: set[str],
+    target_macs: set[str],
+    target_protos: set[str],
+) -> bool:
+    """Return True if a candidate reports MAC or Sendspin protocol IDs that conflict with the target device."""
+    return bool(
+        (c_macs and target_macs and not (c_macs & target_macs))
+        or (c_protos and target_protos and not (c_protos & target_protos))
+    )
+
+
+def _collect_bound_peer_ma_links(
+    hass: HomeAssistant,
+    exclude_esp_id: str | None,
+    all_ma_ids: set[str],
+    *,
+    exclude_coord: Any = None,
+) -> tuple[set[str], set[str]]:
+    """Return `(claimed_ma_entities, bound_peer_esp_ids)` across active/sleeping peer Latter Devices."""
+    claimed: set[str] = set()
+    bound_esp_ids: set[str] = set()
+    seen_esp_ids: set[str] = set()
+
+    for c in iter_coordinators(hass):
+        if c is exclude_coord:
+            continue
+        c_esp_id = str(getattr(c, "esphome_device_id", "") or "").strip()
+        if exclude_esp_id and c_esp_id == exclude_esp_id:
+            continue
+        if c_esp_id:
+            seen_esp_ids.add(c_esp_id)
+        saved_ma = str(c.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip()
+        if not saved_ma or saved_ma not in all_ma_ids:
+            continue
+        c_local_spk = str(getattr(c, "local_speaker", "") or "")
+        if _is_entity_live(hass, saved_ma) or not _is_entity_live(hass, c_local_spk):
+            claimed.add(saved_ma)
+            if c_esp_id:
+                bound_esp_ids.add(c_esp_id)
+
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for sub in entry.subentries.values():
+            if sub.subentry_type != SUBENTRY_DEVICE:
+                continue
+            s_esp_id = str(sub.data.get(CONF_ESPHOME_DEVICE_ID) or "").strip()
+            if (
+                not s_esp_id
+                or s_esp_id in seen_esp_ids
+                or (exclude_esp_id and s_esp_id == exclude_esp_id)
+            ):
+                continue
+            saved_ma = str(sub.data.get(CONF_MA_PLAYER_ENTITY) or "").strip()
+            if not saved_ma or saved_ma not in all_ma_ids:
+                continue
+            s_local_spk = resolve_esphome_local_speaker(hass, s_esp_id)
+            if _is_entity_live(hass, saved_ma) or not _is_entity_live(hass, s_local_spk):
+                claimed.add(saved_ma)
+                bound_esp_ids.add(s_esp_id)
+
+    return claimed, bound_esp_ids
+
+
 def _match_unique_model_bijection(
     hass: HomeAssistant,
     esp_dev: DeviceEntry | None,
     target_macs: set[str],
+    target_protos: set[str],
     live_candidates: Sequence[
-        tuple[RegistryEntry, DeviceEntry | None, set[str], set[str]]
+        tuple[RegistryEntry, DeviceEntry | None, set[str], set[str], set[str]]
     ],
     claimed_by_others: set[str],
+    bound_peer_esp_ids: set[str],
 ) -> str | None:
-    """Match by 1-to-1 `(manufacturer, model)` only when a single ESPHome node of that model exists and MACs don't conflict."""
+    """Match by 1-to-1 `(manufacturer, model)` when only one unbound ESPHome node of that model remains."""
     if esp_dev is None or not esp_dev.manufacturer or not esp_dev.model:
         return None
     dev_reg = dr.async_get(hass)
@@ -657,7 +821,8 @@ def _match_unique_model_bijection(
                 and d_esp.model == esp_dev.model
             ):
                 same_model_esp_ids.add(d_esp.id)
-    if len(same_model_esp_ids) != 1:
+    unbound_same_model = same_model_esp_ids - (bound_peer_esp_ids - {esp_dev.id})
+    if len(unbound_same_model) != 1:
         return None
     return suggest_ma_player(
         (esp_dev.manufacturer, esp_dev.model),
@@ -667,9 +832,11 @@ def _match_unique_model_bijection(
                 c_dev.manufacturer if c_dev is not None else None,
                 c_dev.model if c_dev is not None else None,
             )
-            for c_entry, c_dev, c_macs, _c_ha_ents in live_candidates
+            for c_entry, c_dev, c_macs, _c_ha_ents, c_protos in live_candidates
             if c_entry.entity_id not in claimed_by_others
-            and not (c_macs and target_macs and not (c_macs & target_macs))
+            and not _conflicts_with_target(
+                c_macs, c_protos, target_macs, target_protos
+            )
         ],
     )
 
@@ -682,31 +849,52 @@ def discover_ma_player_for_device(
     if esp_dev is None or not hass.config_entries.async_entries("music_assistant"):
         return ""
     local_spk = resolve_esphome_local_speaker(hass, esp_dev.id)
-    target_dev_ids, target_macs, target_ha_entities, _ = _collect_device_target_identity(
+    (
+        target_dev_ids,
+        target_macs,
+        target_ha_entities,
+        target_protos,
+        _pending_ss,
+        _,
+    ) = _collect_device_target_identity(
         hass,
         speaker_entity_id=local_spk,
         esphome_device_id=esp_dev.id,
     )
     live_candidates, offline_candidates = _build_ma_candidates(hass)
     matched = _match_ma_by_identity(
-        live_candidates, target_dev_ids, target_macs, target_ha_entities
+        live_candidates,
+        target_dev_ids,
+        target_macs,
+        target_ha_entities,
+        target_protos,
     )
     if matched:
         return matched
     matched = _match_ma_by_identity(
-        offline_candidates, target_dev_ids, target_macs, target_ha_entities
+        offline_candidates,
+        target_dev_ids,
+        target_macs,
+        target_ha_entities,
+        target_protos,
     )
     if matched:
         return matched
-    claimed_by_others = {
-        str(c.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip()
-        for c in iter_coordinators(hass)
-        if getattr(c, "esphome_device_id", None) != esp_dev.id
-        and _is_entity_live(hass, str(c.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip())
+    all_ma_ids = {
+        row[0].entity_id for row in [*live_candidates, *offline_candidates]
     }
+    claimed_by_others, bound_peer_esp_ids = _collect_bound_peer_ma_links(
+        hass, esp_dev.id, all_ma_ids
+    )
     return (
         _match_unique_model_bijection(
-            hass, esp_dev, target_macs, live_candidates, claimed_by_others
+            hass,
+            esp_dev,
+            target_macs,
+            target_protos,
+            live_candidates,
+            claimed_by_others,
+            bound_peer_esp_ids,
         )
         or ""
     )
@@ -720,7 +908,14 @@ def suggest_ma_player_for(hass: HomeAssistant, coordinator: Any) -> str | None:
     if esp_dev is None:
         return None
     local_spk = str(getattr(coordinator, "local_speaker", "") or "")
-    target_dev_ids, target_macs, target_ha_entities, _ = _collect_device_target_identity(
+    (
+        target_dev_ids,
+        target_macs,
+        target_ha_entities,
+        target_protos,
+        _pending_ss,
+        _,
+    ) = _collect_device_target_identity(
         hass,
         speaker_entity_id=local_spk,
         owner_coord=coordinator,
@@ -728,22 +923,30 @@ def suggest_ma_player_for(hass: HomeAssistant, coordinator: Any) -> str | None:
     )
     live_candidates, offline_candidates = _build_ma_candidates(hass)
     exact_live = _match_ma_by_identity(
-        live_candidates, target_dev_ids, target_macs, target_ha_entities
+        live_candidates,
+        target_dev_ids,
+        target_macs,
+        target_ha_entities,
+        target_protos,
     )
     if exact_live:
         return exact_live
     exact_offline = _match_ma_by_identity(
-        offline_candidates, target_dev_ids, target_macs, target_ha_entities
+        offline_candidates,
+        target_dev_ids,
+        target_macs,
+        target_ha_entities,
+        target_protos,
     )
     if exact_offline:
         return exact_offline
 
-    claimed_by_others = {
-        str(c.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip()
-        for c in iter_coordinators(hass)
-        if c is not coordinator
-        and _is_entity_live(hass, str(c.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip())
+    all_ma_ids = {
+        row[0].entity_id for row in [*live_candidates, *offline_candidates]
     }
+    claimed_by_others, _ = _collect_bound_peer_ma_links(
+        hass, esp_dev.id, all_ma_ids, exclude_coord=coordinator
+    )
     unclaimed_live = [
         row for row in live_candidates if row[0].entity_id not in claimed_by_others
     ]
@@ -754,8 +957,10 @@ def suggest_ma_player_for(hass: HomeAssistant, coordinator: Any) -> str | None:
             c_dev.manufacturer if c_dev is not None else None,
             c_dev.model if c_dev is not None else None,
         )
-        for c_entry, c_dev, c_macs, _c_ha_ents in pool
-        if not (c_macs and target_macs and not (c_macs & target_macs))
+        for c_entry, c_dev, c_macs, _c_ha_ents, c_protos in pool
+        if not _conflicts_with_target(
+            c_macs, c_protos, target_macs, target_protos
+        )
     ]
     return suggest_ma_player((esp_dev.manufacturer, esp_dev.model), candidates)
 
@@ -795,7 +1000,7 @@ def async_set_ma_player_link(
 
 @callback
 def async_heal_coordinator_ma_links(hass: HomeAssistant) -> None:
-    """Auto-persist newly discovered MAC-matched MA links and heal stale/cross-linked subentry links."""
+    """Auto-persist newly discovered Sendspin/MAC-matched MA links and heal stale/cross-linked subentry links."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     if domain_data.get("_healing_ma_links"):
         return
@@ -806,47 +1011,74 @@ def async_heal_coordinator_ma_links(hass: HomeAssistant) -> None:
             cache.clear()
         live_candidates, offline_candidates = _build_ma_candidates(hass)
         all_candidates = [*live_candidates, *offline_candidates]
-        cand_macs_by_id = {
-            c_entry.entity_id: c_macs
-            for c_entry, _c_dev, c_macs, _c_ha_ents in all_candidates
+        cand_ident_by_id = {
+            c_entry.entity_id: (c_macs, c_protos)
+            for c_entry, _c_dev, c_macs, _c_ha_ents, c_protos in all_candidates
         }
         for coord in list(iter_coordinators(hass)):
             local_spk = str(getattr(coord, "local_speaker", "") or "")
             if not local_spk:
                 continue
-            target_dev_ids, target_macs, target_ha_entities, _ = (
-                _collect_device_target_identity(
-                    hass, speaker_entity_id=local_spk, owner_coord=coord
-                )
+            (
+                target_dev_ids,
+                target_macs,
+                target_ha_entities,
+                target_protos,
+                _pending_ss,
+                _,
+            ) = _collect_device_target_identity(
+                hass, speaker_entity_id=local_spk, owner_coord=coord
             )
             exact_ma = _match_ma_by_identity(
-                live_candidates, target_dev_ids, target_macs, target_ha_entities
+                live_candidates,
+                target_dev_ids,
+                target_macs,
+                target_ha_entities,
+                target_protos,
             ) or _match_ma_by_identity(
-                offline_candidates, target_dev_ids, target_macs, target_ha_entities
+                offline_candidates,
+                target_dev_ids,
+                target_macs,
+                target_ha_entities,
+                target_protos,
             )
             resolved_ma = resolve_ma_counterpart_entity(hass, local_spk)
             saved_ma = str(coord.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip()
-            saved_macs = cand_macs_by_id.get(saved_ma, set()) if saved_ma else set()
-            other_esp_macs = (
-                _collect_other_esphome_macs(hass, target_dev_ids)
-                if saved_macs and target_macs
-                else set()
+            saved_macs, saved_protos = (
+                cand_ident_by_id.get(saved_ma, (set(), set()))
+                if saved_ma
+                else (set(), set())
+            )
+            other_esp_macs, other_esp_protos = (
+                _collect_other_esphome_identities(hass, target_dev_ids)
+                if (saved_macs and target_macs) or (saved_protos and target_protos)
+                else (set(), set())
             )
             saved_cross_linked = bool(
-                saved_macs
-                and target_macs
-                and not (saved_macs & target_macs)
-                and (saved_macs & other_esp_macs)
+                (
+                    saved_macs
+                    and target_macs
+                    and not (saved_macs & target_macs)
+                    and (saved_macs & other_esp_macs)
+                )
+                or (
+                    saved_protos
+                    and target_protos
+                    and not (saved_protos & target_protos)
+                    and (saved_protos & other_esp_protos)
+                )
             )
             healed_cfg = False
-            if not saved_ma and exact_ma:
+            if not saved_ma and resolved_ma and (
+                resolved_ma == exact_ma or _is_entity_live(hass, resolved_ma)
+            ):
                 _LOGGER.info(
                     "Auto-linked Music Assistant player for '%s': %s",
                     getattr(coord, "device_slug", local_spk),
-                    exact_ma,
+                    resolved_ma,
                 )
                 coord.update_device_config(
-                    {**coord.device_data, CONF_MA_PLAYER_ENTITY: exact_ma},
+                    {**coord.device_data, CONF_MA_PLAYER_ENTITY: resolved_ma},
                     bump_prefs_seq=False,
                 )
                 healed_cfg = True
@@ -891,7 +1123,7 @@ def async_heal_coordinator_ma_links(hass: HomeAssistant) -> None:
 def resolve_ma_counterpart_entity(
     hass: HomeAssistant, speaker_entity_id: str
 ) -> str | None:
-    """Find the Music Assistant media_player for a speaker by explicit link, device_id, MAC/Sendspin identity, or unique hardware model."""
+    """Find the Music Assistant media_player for a speaker by explicit link, device_id, Sendspin/MAC identity, or unique hardware model."""
     if not speaker_entity_id:
         return None
 
@@ -922,10 +1154,15 @@ def resolve_ma_counterpart_entity(
         None,
     )
 
-    target_dev_ids, target_macs, target_ha_entities, spk_dev = (
-        _collect_device_target_identity(
-            hass, speaker_entity_id=speaker_entity_id, owner_coord=owner_coord
-        )
+    (
+        target_dev_ids,
+        target_macs,
+        target_ha_entities,
+        target_protos,
+        pending_sendspin,
+        spk_dev,
+    ) = _collect_device_target_identity(
+        hass, speaker_entity_id=speaker_entity_id, owner_coord=owner_coord
     )
     live_candidates, offline_candidates = _build_ma_candidates(hass)
 
@@ -934,40 +1171,52 @@ def resolve_ma_counterpart_entity(
         if owner_coord is not None
         else ""
     )
-    other_esp_macs = (
-        _collect_other_esphome_macs(hass, target_dev_ids)
-        if raw_configured and target_macs
-        else set()
+    other_esp_macs, other_esp_protos = (
+        _collect_other_esphome_identities(hass, target_dev_ids)
+        if raw_configured and (target_macs or target_protos)
+        else (set(), set())
     )
 
-    def _belongs_to_other_esphome(c_macs: set[str]) -> bool:
+    def _belongs_to_other_esphome(c_macs: set[str], c_protos: set[str]) -> bool:
         return bool(
-            c_macs
-            and target_macs
-            and not (c_macs & target_macs)
-            and (c_macs & other_esp_macs)
+            (
+                c_macs
+                and target_macs
+                and not (c_macs & target_macs)
+                and (c_macs & other_esp_macs)
+            )
+            or (
+                c_protos
+                and target_protos
+                and not (c_protos & target_protos)
+                and (c_protos & other_esp_protos)
+            )
         )
 
     matched_entity: str | None = None
 
-    # Pass 0: live explicit configured link on the Device subentry (guarded against cross-linked ESPHome MACs)
+    # Pass 0: live explicit configured link on the Device subentry (guarded against cross-linked ESPHome MAC/Sendspin IDs)
     if raw_configured:
         matched_entity = configured_link(
             raw_configured,
             (
                 c_entry.entity_id
-                for c_entry, _c_dev, c_macs, _c_ha_ents in live_candidates
-                if not _belongs_to_other_esphome(c_macs)
+                for c_entry, _c_dev, c_macs, _c_ha_ents, c_protos in live_candidates
+                if not _belongs_to_other_esphome(c_macs, c_protos)
             ),
         )
 
-    # Pass 1 & 2: live exact device_id/via_device_id, linked HA entity, or exact MAC/Sendspin match
+    # Pass 1 & 2: live exact device_id/via_device_id, linked HA entity, Sendspin protocol_id, or MAC match
     if matched_entity is None and live_candidates:
         matched_entity = _match_ma_by_identity(
-            live_candidates, target_dev_ids, target_macs, target_ha_entities
+            live_candidates,
+            target_dev_ids,
+            target_macs,
+            target_ha_entities,
+            target_protos,
         )
 
-    # Pass 3: live 1-to-1 hardware (manufacturer, model) bijection for a unique bound ESPHome Device
+    # Pass 3: live 1-to-1 hardware (manufacturer, model) bijection across unbound ESPHome Devices
     if matched_entity is None and live_candidates:
         esp_dev = (
             get_bound_esphome_device(
@@ -980,23 +1229,35 @@ def resolve_ma_counterpart_entity(
                 else None
             )
         )
-        claimed_by_others = {
-            str(c.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip()
-            for c in iter_coordinators(hass)
-            if c is not owner_coord
-            and _is_entity_live(
-                hass, str(c.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip()
-            )
+        all_ma_ids = {
+            row[0].entity_id for row in [*live_candidates, *offline_candidates]
         }
+        claimed_by_others, bound_peer_esp_ids = _collect_bound_peer_ma_links(
+            hass,
+            esp_dev.id if esp_dev is not None else None,
+            all_ma_ids,
+            exclude_coord=owner_coord,
+        )
         matched_entity = _match_unique_model_bijection(
-            hass, esp_dev, target_macs, live_candidates, claimed_by_others
+            hass,
+            esp_dev,
+            target_macs,
+            target_protos,
+            live_candidates,
+            claimed_by_others,
+            bound_peer_esp_ids,
         )
 
+    # If ESPHome has reported Sendspin pairing capability (`feature_flags > 0`) while its `client_id`
+    # refresh + Music Assistant `HassAutoPairer` handshake is still in flight, arm the reconnect grace window.
+    if matched_entity is None and pending_sendspin and speaker_entity_id:
+        _arm_ma_reconnect_grace(hass, speaker_entity_id)
+
     # Offline fallback:
-    # 1) Exact hardware identity (MAC / device_id / hass_players) ALWAYS resolves its own offline player
-    #    across firmware flashes, reboots, Sendspin socket resets, and sleep without Repair churn.
-    # 2) Non-MAC configured links are preserved while sleeping, while MA starts, or during the 45 s
+    # 1) Non-conflicting configured links are preserved while sleeping, while MA starts, or during the 45 s
     #    reboot/OTA reconnect grace window, while still catching permanently orphaned ghosts.
+    # 2) Exact hardware identity (Sendspin protocol_id / MAC / device_id / hass_players) ALWAYS resolves
+    #    its own offline player across firmware flashes, reboots, and sleep without Repair churn.
     in_reconnect_grace = _in_ma_reconnect_grace(hass, speaker_entity_id, raw_configured)
     if matched_entity is None and offline_candidates:
         if raw_configured:
@@ -1016,13 +1277,17 @@ def resolve_ma_counterpart_entity(
                 raw_configured,
                 (
                     c_entry.entity_id
-                    for c_entry, _c_dev, c_macs, _c_ha_ents in fallback_pool
-                    if not _belongs_to_other_esphome(c_macs)
+                    for c_entry, _c_dev, c_macs, _c_ha_ents, c_protos in fallback_pool
+                    if not _belongs_to_other_esphome(c_macs, c_protos)
                 ),
             )
         if matched_entity is None:
             matched_entity = _match_ma_by_identity(
-                offline_candidates, target_dev_ids, target_macs, target_ha_entities
+                offline_candidates,
+                target_dev_ids,
+                target_macs,
+                target_ha_entities,
+                target_protos,
             )
 
     if owner_coord is not None:

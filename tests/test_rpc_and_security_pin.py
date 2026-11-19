@@ -1749,5 +1749,186 @@ async def test_firmware_flash_and_reboot_stagger_never_flashes_transient_ma_repa
     assert not any("link_ma_player" in k[1] for k in issue_reg.issues)
 
 
+async def test_ma_2_10_encrypted_sendspin_client_id_and_nth_twin_bijection(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify MA 2.10.12 encrypted Sendspin (`output_protocols` client_id, empty `identifiers`) + Nth twin bijection."""
+    from types import SimpleNamespace
+
+    from custom_components.latter.config_flow import _apply_onboarding_profile_and_defaults
+    from custom_components.latter.media import async_heal_coordinator_ma_links, clear_ma_counterpart_cache
+
+    entry, _sys_obj, _pocket_coord = await setup_latter_hub(hass)
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+    issue_reg = ir.async_get(hass)
+
+    # Exact MA 2.10.12 shape: `device_info.identifiers == {}` (no MAC!), encrypted Sendspin `client_id` in `output_protocols`
+    mass_players: dict[str, Any] = {
+        "up4a1a675f": SimpleNamespace(
+            player_id="up4a1a675f",
+            provider="universal_player--inst",
+            device_info=SimpleNamespace(mac_address=None, identifiers={}),
+            protocols=[],
+            output_protocols=[
+                SimpleNamespace(
+                    output_protocol_id="ss_noise_key_desk_01",
+                    protocol_domain="sendspin",
+                    derived_from=None,
+                )
+            ],
+        ),
+        "up94060b4a": SimpleNamespace(
+            player_id="up94060b4a",
+            provider="universal_player--inst",
+            device_info=SimpleNamespace(mac_address=None, identifiers={}),
+            protocols=[],
+            output_protocols=[
+                SimpleNamespace(
+                    output_protocol_id="ss_noise_key_garage_02",
+                    protocol_domain="sendspin",
+                    derived_from=None,
+                )
+            ],
+        ),
+        "upefc5c691": SimpleNamespace(
+            player_id="upefc5c691",
+            provider="universal_player--inst",
+            device_info=SimpleNamespace(mac_address=None, identifiers={}),
+            protocols=[],
+            output_protocols=[
+                SimpleNamespace(
+                    output_protocol_id="ss_noise_key_test_03",
+                    protocol_domain="sendspin",
+                    derived_from=None,
+                )
+            ],
+        ),
+    }
+    ma_entry = ConfigEntry(
+        entry_id="ma_210_sendspin",
+        domain="music_assistant",
+        title="Music Assistant",
+        data={},
+    )
+    ma_entry.runtime_data = SimpleNamespace(mass=SimpleNamespace(players=mass_players))
+    hass.config_entries.add_entry(ma_entry)
+
+    boards = [
+        ("desk_assistant", "Desk Assistant", "e8:f6:0a:e0:f2:fe", "ss_noise_key_desk_01", "up4a1a675f", "media_player.desk_assistant", "unavailable"),
+        ("garage_assistant", "Garage Assistant", "e8:f6:0a:e0:f2:da", "ss_noise_key_garage_02", "up94060b4a", "media_player.garage_assistant", "idle"),
+        ("test_assistant", "Test Assistant", "30:ed:a0:e2:3d:92", "ss_noise_key_test_03", "upefc5c691", "media_player.desk_assistant_2", "idle"),
+    ]
+    esp_devs: dict[str, Any] = {}
+    esp_entries: dict[str, Any] = {}
+    for slug, title, mac, ss_cid, ma_uid, ma_eid, st in boards:
+        ma_dev = dev_reg.async_get_or_create(
+            config_entry_id=ma_entry.entry_id,
+            identifiers={("music_assistant", ma_uid)},
+            name=title,
+            manufacturer="slampton",
+            model="desk-assistant-p4-86",
+        )
+        ent_reg.async_register(
+            er.RegistryEntry(
+                entity_id=ma_eid,
+                platform="music_assistant",
+                unique_id=ma_uid,
+                device_id=ma_dev.id,
+                config_entry_id=ma_entry.entry_id,
+            )
+        )
+        hass.states.async_set(ma_eid, st, {"friendly_name": title})
+
+        esp_ce = ConfigEntry(
+            entry_id=f"esp_{slug}",
+            domain="esphome",
+            title=title,
+            data={"device_name": slug},
+        )
+        esp_ce.runtime_data = SimpleNamespace(
+            device_capabilities=SimpleNamespace(
+                sendspin=SimpleNamespace(client_id=ss_cid, feature_flags=1)
+            )
+        )
+        hass.config_entries.add_entry(esp_ce)
+        esp_entries[slug] = esp_ce
+        esp_d = dev_reg.async_get_or_create(
+            config_entry_id=esp_ce.entry_id,
+            connections={(dr.CONNECTION_NETWORK_MAC, mac)},
+            name=title,
+            manufacturer="slampton",
+            model="desk-assistant-p4-86",
+        )
+        esp_devs[slug] = esp_d
+        ent_reg.async_register(
+            er.RegistryEntry(
+                entity_id=f"media_player.{slug}_music",
+                platform="esphome",
+                device_id=esp_d.id,
+                config_entry_id=esp_ce.entry_id,
+            )
+        )
+        hass.states.async_set(f"media_player.{slug}_music", st, {})
+
+    # 1) Even when ALL THREE `desk-assistant-p4-86` boards are unbound simultaneously, encrypted Sendspin `client_id`
+    #    auto-discovers each board's exact `universal_player` entity 1-to-1 with zero ambiguity!
+    clear_ma_counterpart_cache(hass)
+    for slug, _title, _mac, _ss_cid, _ma_uid, expected_ma_eid, _st in boards:
+        onboarded = _apply_onboarding_profile_and_defaults(
+            hass, esp_devs[slug], {"device_group": "auto"}, rebind_hardware=True
+        )
+        assert onboarded[CONF_MA_PLAYER_ENTITY] == expected_ma_eid
+
+    # 2) Also verify Nth-twin unbound bijection when `mass` client is temporarily unavailable during onboarding
+    #    while Desk Assistant (offline) and Garage Assistant (online) are already bound in Latter:
+    ma_entry.runtime_data = None
+    clear_ma_counterpart_cache(hass)
+    for slug, title, mac, ma_eid in (
+        ("desk_assistant", "Desk Assistant", "e8:f6:0a:e0:f2:fe", "media_player.desk_assistant"),
+        ("garage_assistant", "Garage Assistant", "e8:f6:0a:e0:f2:da", "media_player.garage_assistant"),
+    ):
+        sub = ConfigSubentry(
+            data={
+                CONF_ESPHOME_DEVICE_ID: esp_devs[slug].id,
+                "mac": mac,
+                CONF_DEVICE_SLUG: slug,
+                CONF_MA_PLAYER_ENTITY: ma_eid,
+            },
+            subentry_type=SUBENTRY_DEVICE,
+            title=title,
+            unique_id=f"latter_{mac}",
+            subentry_id=f"sub_{slug}",
+        )
+        entry.subentries[sub.subentry_id] = sub
+        c = LatterCoordinator(hass=hass, entry=entry, hmac_secret=b"\x02" * 32, subentry=sub)
+        hass.data[DOMAIN][c.subentry_id] = c
+        entry.runtime_data.coordinators[c.subentry_id] = c
+        await c.async_setup()
+
+    onboarded_test = _apply_onboarding_profile_and_defaults(
+        hass, esp_devs["test_assistant"], {"device_group": "auto"}, rebind_hardware=True
+    )
+    assert onboarded_test[CONF_MA_PLAYER_ENTITY] == "media_player.desk_assistant_2"
+
+    sub_test = ConfigSubentry(
+        data={k: v for k, v in onboarded_test.items() if k != CONF_MA_PLAYER_ENTITY},
+        subentry_type=SUBENTRY_DEVICE,
+        title="Test Assistant",
+        unique_id="latter_30:ed:a0:e2:3d:92",
+        subentry_id="sub_test_assistant",
+    )
+    entry.subentries[sub_test.subentry_id] = sub_test
+    c_test = LatterCoordinator(hass=hass, entry=entry, hmac_secret=b"\x02" * 32, subentry=sub_test)
+    hass.data[DOMAIN][c_test.subentry_id] = c_test
+    entry.runtime_data.coordinators[c_test.subentry_id] = c_test
+    await c_test.async_setup()
+    async_heal_coordinator_ma_links(hass)
+
+    assert c_test.get_opt(CONF_MA_PLAYER_ENTITY) == "media_player.desk_assistant_2"
+    assert not any("sub_test_assistant" in k[1] for k in issue_reg.issues)
+
+
+
 
 
