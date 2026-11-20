@@ -82,7 +82,11 @@ from .media_browse import clear_browse_cache
 from .presence import _iter_devices
 from .repairs import async_delete_device_issues
 from .services import async_push_active_area_entities, async_setup_services
-from .studio import async_register_studio_panel, async_unregister_studio_panel
+from .studio import (
+    async_register_studio_icon_module,
+    async_register_studio_panel,
+    async_unregister_studio_panel,
+)
 from .studio.settings import warm_timezone_cache
 from .wallpapers import async_refresh_wallpaper_cache
 
@@ -224,6 +228,7 @@ def _async_check_esphome_device_for_discovery(
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Latter domain, register services, and scan for Latter-compatible ESPHome devices."""
     domain_data = hass.data.setdefault(DOMAIN, {})
+    await async_register_studio_icon_module(hass)
     await hass.async_add_executor_job(
         warm_timezone_cache,
         [str(getattr(getattr(hass, "config", None), "time_zone", "") or "")],
@@ -512,8 +517,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
-    """Unregister Studio panel and re-trigger discovery scan when the Latter System entry is removed."""
-    async_unregister_studio_panel(hass)
+    """Unregister Studio panel and icon module, then re-trigger discovery scan when the Latter System entry is removed."""
+    async_unregister_studio_panel(hass, remove_icon_module=True)
     _async_scan_all_esphome_devices_for_discovery(hass)
 
 

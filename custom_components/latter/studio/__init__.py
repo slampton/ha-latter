@@ -25,22 +25,9 @@ def content_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
 
 
-async def async_register_studio_panel(hass: HomeAssistant) -> None:
-    """Register Latter Studio static assets, admin WebSocket commands, and `panel_custom` sidebar panel."""
-    from .commands import async_register_studio_ws_commands
-    from .payload import load_studio_locales_sync, log_studio_event
-
+async def _async_ensure_static_dir(hass: HomeAssistant) -> tuple[Path, str]:
+    """Mount the versioned Studio frontend directory once and return `(frontend_dir, prefix)`."""
     domain_data = hass.data.setdefault(DOMAIN, {})
-    await hass.async_add_executor_job(load_studio_locales_sync)
-    prev_icon_url = domain_data.pop("_studio_icon_js_url", None)
-    if prev_icon_url:
-        try:
-            frontend.remove_extra_js_url(hass, prev_icon_url)
-        except Exception:  # noqa: BLE001
-            pass
-
-    async_register_studio_ws_commands(hass)
-
     frontend_dir = Path(__file__).parent.parent / "frontend"
     cache_tag = INTEGRATION_VERSION.replace(".", "_")
     versioned_prefix = f"{STATIC_URL_PREFIX}_{cache_tag}"
@@ -59,23 +46,51 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
                 )
             ]
         )
+    return frontend_dir, versioned_prefix
 
-    sidebar_icon = SIDEBAR_ICON_FALLBACK
-    icon_url: str | None = None
+
+async def async_register_studio_icon_module(hass: HomeAssistant) -> str | None:
+    """Register `latter-icons.js` as a frontend extra module as early as possible (idempotent)."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    frontend_dir, versioned_prefix = await _async_ensure_static_dir(hass)
+
     try:
         icon_digest = await hass.async_add_executor_job(
             content_digest, frontend_dir / ICONS_MODULE
         )
-        icon_url = f"{versioned_prefix}/{ICONS_MODULE}?v={icon_digest}"
-        frontend.add_extra_js_url(hass, icon_url)
-        domain_data["_studio_icon_js_url"] = icon_url
     except OSError as err:
-        icon_url = None
         _LOGGER.warning(
             "Latter sidebar icon unavailable, using %s: %s", SIDEBAR_ICON_FALLBACK, err
         )
-    if icon_url:
-        sidebar_icon = SIDEBAR_ICON
+        return None
+
+    icon_url = f"{versioned_prefix}/{ICONS_MODULE}?v={icon_digest}"
+    prev_icon_url = domain_data.get("_studio_icon_js_url")
+    if prev_icon_url == icon_url:
+        return icon_url
+    if prev_icon_url:
+        try:
+            frontend.remove_extra_js_url(hass, prev_icon_url)
+        except Exception:  # noqa: BLE001
+            pass
+
+    frontend.add_extra_js_url(hass, icon_url)
+    domain_data["_studio_icon_js_url"] = icon_url
+    return icon_url
+
+
+async def async_register_studio_panel(hass: HomeAssistant) -> None:
+    """Register Latter Studio static assets, admin WebSocket commands, and `panel_custom` sidebar panel."""
+    from .commands import async_register_studio_ws_commands
+    from .payload import load_studio_locales_sync, log_studio_event
+
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    icon_url = await async_register_studio_icon_module(hass)
+    await hass.async_add_executor_job(load_studio_locales_sync)
+    async_register_studio_ws_commands(hass)
+
+    frontend_dir, versioned_prefix = await _async_ensure_static_dir(hass)
+    sidebar_icon = SIDEBAR_ICON if icon_url else SIDEBAR_ICON_FALLBACK
 
     js_digest = await hass.async_add_executor_job(
         content_digest, frontend_dir / "latter-studio.js"
@@ -107,13 +122,16 @@ async def async_register_studio_panel(hass: HomeAssistant) -> None:
         _LOGGER.warning("Latter Studio panel_custom registration failed: %s", err)
 
 
-def async_unregister_studio_panel(hass: HomeAssistant) -> None:
-    """Remove the Latter Studio custom panel and clear cached digests/resources on unload."""
+def async_unregister_studio_panel(
+    hass: HomeAssistant, *, remove_icon_module: bool = False
+) -> None:
+    """Remove the Latter Studio custom panel; keep `latter-icons.js` across reloads unless removing the entry."""
     domain_data = hass.data.get(DOMAIN, {})
     icon_url = None
     if isinstance(domain_data, dict):
         domain_data.pop("_registered_panel_url", None)
-        icon_url = domain_data.pop("_studio_icon_js_url", None)
+        if remove_icon_module:
+            icon_url = domain_data.pop("_studio_icon_js_url", None)
     try:
         frontend.async_remove_panel(hass, "latter", warn_if_unknown=False)
     except Exception as err:  # noqa: BLE001
