@@ -279,7 +279,7 @@ def camera_records(cameras: Iterable[Mapping[str, Any]]) -> V3Records:
 
 
 # area_context.intercom_targets_summary: target_id|label|kind
-INTERCOM_MAX_RECORDS = 10
+INTERCOM_MAX_RECORDS = 64
 INTERCOM_LABEL_MAX = 32
 INTERCOM_KINDS: tuple[str, ...] = ("all", "device")
 
