@@ -40,7 +40,11 @@ from custom_components.latter.cameras import (
 
 
 def _make_baseline_420_jpeg(width: int, height: int) -> bytes:
-    """Build a valid Baseline 4:2:0 JPEG (SOF0 with Y=0x22, Cb=0x11, Cr=0x11) for any test env."""
+    """Build a valid Baseline 4:2:0 JPEG (real via Pillow when installed, SOF0 stub fallback)."""
+    real_raw = _make_real_or_stub_jpeg(width, height)
+    is_b420, rw, rh = inspect_jpeg_header(real_raw)
+    if is_b420 and rw == width and rh == height:
+        return real_raw
     sof0 = (
         b"\xff\xc0"
         + (17).to_bytes(2, "big")
@@ -742,6 +746,29 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
         hub = get_camera_stream_hub(hass)
         monkeypatch.setattr(hub, "async_iter_mjpeg_chunks", _one_chunk_single)
         monkeypatch.setattr(hub, "async_iter_grid_mjpeg_chunks", _one_chunk_grid)
+
+        from custom_components.latter import http as http_mod
+
+        class _CapturingStreamResponse:
+            def __init__(self, *, status: int = 200, headers: dict[str, str] | None = None) -> None:
+                self.status = status
+                self.headers = dict(headers or {})
+                self._chunks: list[bytes] = []
+
+            @property
+            def body(self) -> bytes:
+                return b"".join(self._chunks)
+
+            async def prepare(self, _request: Any) -> _CapturingStreamResponse:
+                return self
+
+            async def write(self, data: bytes) -> None:
+                self._chunks.append(bytes(data))
+
+            async def write_eof(self) -> None:
+                return None
+
+        monkeypatch.setattr(http_mod.web, "StreamResponse", _CapturingStreamResponse)
 
         s_view = LatterCameraStreamView(hass)
         s_resp = await s_view.get(
