@@ -1222,6 +1222,7 @@ export interface SortableListOptions<T> {
   items: readonly T[];
   getKey: (item: T, index: number) => string;
   getLabel: (item: T, index: number) => string;
+  renderHeader?: (item: T, index: number) => unknown;
   renderContent: (item: T, index: number) => unknown;
   renderActions?: (item: T, index: number) => unknown;
   onReorder: (fromIndex: number, toIndex: number) => void;
@@ -1281,12 +1282,8 @@ export function renderSortableList<T>(opts: SortableListOptions<T>): TemplateRes
           onReorder: opts.onReorder,
         });
 
-        return html`<div
-          data-sortable-key=${key}
-          data-sortable-index=${String(idx)}
-          class="sortable-row${extraCls ? ` ${extraCls}` : ""}"
-        >
-          ${movable && total > 1
+        const dragBtn =
+          movable && total > 1
             ? html`<button
                 type="button"
                 tabindex="-1"
@@ -1300,57 +1297,81 @@ export function renderSortableList<T>(opts: SortableListOptions<T>): TemplateRes
               >
                 ≡
               </button>`
+            : nothing;
+
+        const actionsEl = html`<div class="sortable-row-actions">
+          ${movable && total > 1
+            ? html`<button
+                  type="button"
+                  data-move-dir="prev"
+                  aria-label=${t("action.move_up", { item: label }, opts.overlay)}
+                  ?disabled=${idx === 0}
+                  @click=${(ev: Event) =>
+                    triggerKeyboardMoveWithFocusRestore({
+                      btnEl: ev.currentTarget as HTMLElement,
+                      listId: opts.id,
+                      itemKey: key,
+                      itemLabel: label,
+                      preferredDir: "prev",
+                      fromIndex: idx,
+                      toIndex: idx - 1,
+                      total,
+                      overlay: opts.overlay,
+                      onReorder: opts.onReorder,
+                    })}
+                  class="btn-icon"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  data-move-dir="next"
+                  aria-label=${t("action.move_down", { item: label }, opts.overlay)}
+                  ?disabled=${idx === total - 1}
+                  @click=${(ev: Event) =>
+                    triggerKeyboardMoveWithFocusRestore({
+                      btnEl: ev.currentTarget as HTMLElement,
+                      listId: opts.id,
+                      itemKey: key,
+                      itemLabel: label,
+                      preferredDir: "next",
+                      fromIndex: idx,
+                      toIndex: idx + 1,
+                      total,
+                      overlay: opts.overlay,
+                      onReorder: opts.onReorder,
+                    })}
+                  class="btn-icon"
+                >
+                  ↓
+                </button>`
             : nothing}
+          ${opts.renderActions ? opts.renderActions(item, idx) : nothing}
+        </div>`;
+
+        if (opts.renderHeader) {
+          return html`<div
+            data-sortable-key=${key}
+            data-sortable-index=${String(idx)}
+            class="sortable-row sortable-row-stacked${extraCls ? ` ${extraCls}` : ""}"
+          >
+            <div class="sortable-row-head">
+              ${dragBtn}
+              <div class="sortable-row-title">${opts.renderHeader(item, idx)}</div>
+              ${actionsEl}
+            </div>
+            <div class="sortable-row-content">${opts.renderContent(item, idx)}</div>
+          </div>`;
+        }
+
+        return html`<div
+          data-sortable-key=${key}
+          data-sortable-index=${String(idx)}
+          class="sortable-row${extraCls ? ` ${extraCls}` : ""}"
+        >
+          ${dragBtn}
           <div class="sortable-row-content">${opts.renderContent(item, idx)}</div>
-          <div class="sortable-row-actions">
-            ${movable && total > 1
-              ? html`<button
-                    type="button"
-                    data-move-dir="prev"
-                    aria-label=${t("action.move_up", { item: label }, opts.overlay)}
-                    ?disabled=${idx === 0}
-                    @click=${(ev: Event) =>
-                      triggerKeyboardMoveWithFocusRestore({
-                        btnEl: ev.currentTarget as HTMLElement,
-                        listId: opts.id,
-                        itemKey: key,
-                        itemLabel: label,
-                        preferredDir: "prev",
-                        fromIndex: idx,
-                        toIndex: idx - 1,
-                        total,
-                        overlay: opts.overlay,
-                        onReorder: opts.onReorder,
-                      })}
-                    class="btn-icon"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    data-move-dir="next"
-                    aria-label=${t("action.move_down", { item: label }, opts.overlay)}
-                    ?disabled=${idx === total - 1}
-                    @click=${(ev: Event) =>
-                      triggerKeyboardMoveWithFocusRestore({
-                        btnEl: ev.currentTarget as HTMLElement,
-                        listId: opts.id,
-                        itemKey: key,
-                        itemLabel: label,
-                        preferredDir: "next",
-                        fromIndex: idx,
-                        toIndex: idx + 1,
-                        total,
-                        overlay: opts.overlay,
-                        onReorder: opts.onReorder,
-                      })}
-                    class="btn-icon"
-                  >
-                    ↓
-                  </button>`
-              : nothing}
-            ${opts.renderActions ? opts.renderActions(item, idx) : nothing}
-          </div>
+          ${actionsEl}
         </div>`;
       },
     )}
@@ -1518,6 +1539,7 @@ export interface EntitySlotListOptions {
   slotLabel?: (idx: number) => string;
   slotMeta?: (item: string, idx: number) => TemplateResult | typeof nothing;
   extraActions?: (item: string, idx: number) => TemplateResult | typeof nothing;
+  stacked?: boolean;
   useCombobox?: boolean;
   host?: { requestUpdate(): void } | null;
   onReorder?: (fromIndex: number, toIndex: number) => void;
@@ -1532,10 +1554,12 @@ export function renderEntitySlotList(opts: EntitySlotListOptions): TemplateResul
     </div>`;
   }
 
-  const renderSlotField = (val: string, idx: number): TemplateResult => html`<div
+  const renderSlotField = (val: string, idx: number, includeLabel = true): TemplateResult => html`<div
     class="stacked-field list-row-grow"
   >
-    ${opts.slotLabel ? html`<span class="field-label">${opts.slotLabel(idx)}</span>` : nothing}
+    ${includeLabel && opts.slotLabel
+      ? html`<span class="field-label">${opts.slotLabel(idx)}</span>`
+      : nothing}
     ${opts.useCombobox
       ? renderEntityCombobox({
           id: `${opts.id}-combo-${idx}`,
@@ -1565,7 +1589,13 @@ export function renderEntitySlotList(opts: EntitySlotListOptions): TemplateResul
       getLabel: (val, idx) =>
         opts.slotLabel ? opts.slotLabel(idx) : val || `${opts.selectAriaLabel} ${idx + 1}`,
       onReorder: opts.onReorder,
-      renderContent: (val, idx) => renderSlotField(val, idx),
+      renderHeader: opts.stacked
+        ? (_val, idx) =>
+            opts.slotLabel
+              ? html`<span class="field-label">${opts.slotLabel(idx)}</span>`
+              : nothing
+        : undefined,
+      renderContent: (val, idx) => renderSlotField(val, idx, !opts.stacked),
       renderActions: (val, idx) => html`
         ${opts.extraActions ? opts.extraActions(val, idx) : nothing}
         ${renderTrashIconButton(opts.removeAriaLabel, () => opts.onRemove(idx))}

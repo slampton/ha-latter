@@ -376,6 +376,8 @@ describe("Dedicated Cameras App (D-071 / STUDIO_REV 38)", () => {
     });
 
     const htmlOut = renderToHtml(renderSystemSharedView(store));
+    assert.ok(htmlOut.includes("sortable-row-stacked"));
+    assert.ok(!htmlOut.includes("doorbell-status"));
     assert.ok(htmlOut.includes("RTSP"));
     assert.ok(htmlOut.includes("MJPEG"));
     assert.ok(htmlOut.includes("Snapshot"));

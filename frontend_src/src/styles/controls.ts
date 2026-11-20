@@ -514,4 +514,28 @@ export const CONTROL_STYLES = css`
     gap: var(--studio-space-1);
     flex-shrink: 0;
   }
+  .sortable-row-stacked {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--studio-space-2);
+    padding-block: var(--studio-space-3);
+  }
+  .sortable-row-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+    inline-size: 100%;
+  }
+  .sortable-row-title {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+  .sortable-row-stacked > .sortable-row-content {
+    inline-size: 100%;
+  }
+  .sortable-row-stacked .combobox-option-title {
+    white-space: normal;
+    line-height: 1.3;
+  }
 `;

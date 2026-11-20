@@ -24,7 +24,7 @@ import {
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StringListKey, StudioStore } from "../state/store.js";
 import type { CatalogChoice, SystemConfig } from "../types.js";
-import { entityLabel, fmtAgo, fmtNumber, isValidHexColor } from "../utils/format.js";
+import { entityLabel, fmtNumber, isValidHexColor } from "../utils/format.js";
 
 const ICON_THERMOSTAT =
   "M15,13V5A3,3 0 0,0 9,5V13A5,5 0 1,0 15,13M12,4A1,1 0 0,1 13,5V8H11V5A1,1 0 0,1 12,4Z";
@@ -51,7 +51,6 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
   const cameras = sc?.camera_entities || [];
   const calendars = sc?.calendar_entities || [];
   const palettes = (sc?.custom_palettes || []).filter((p) => isValidHexColor(p.hex));
-  const doorbells = data?.doorbells || [];
   const noiseRed = sc?.doorbell_noise_reduction || "strong";
 
   const doorbellFilterOptions = [
@@ -316,6 +315,7 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
               emptyStateText: store.t("shared.empty_cameras"),
               selectAriaLabel: store.t("shared.camera_aria"),
               removeAriaLabel: store.t("shared.remove_camera"),
+              stacked: true,
               useCombobox: (cat.cameras?.length ?? 0) > 8,
               host: store.host,
               slotLabel: (idx) =>
@@ -422,50 +422,6 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
                     src=${store.cameraPreviewUrl}
                     alt=${store.t("shared.camera_preview_alt")}
                   />
-                </div>`
-              : nothing}
-
-            ${doorbells.length
-              ? html`<div id="doorbell-status" class="stack">
-                  <h4 class="subsection-title">${store.t("shared.doorbells_heading")}</h4>
-                  <div id="doorbell-status-list" class="kv-list">
-                    ${doorbells.map((b) => {
-                      let ring = store.t("shared.no_ring_sensor");
-                      const ringEnt = b.ring_entity || "";
-                      if (ringEnt) {
-                        const when = b.ring_at
-                          ? fmtAgo((Date.now() - Date.parse(b.ring_at)) / 1000, store.hass)
-                          : "";
-                        const st = ringEnt.startsWith("event.")
-                          ? when
-                            ? store.t("shared.last_ring", { when })
-                            : store.t("shared.no_ring_yet")
-                          : b.ring_state === "on"
-                            ? store.t("shared.ringing")
-                            : b.ring_state
-                              ? when
-                                ? store.t("shared.idle_changed", { when })
-                                : store.t("shared.idle")
-                              : store.t("shared.unavailable");
-                        ring = `${b.ring_name || ringEnt}: ${st}`;
-                      }
-                      const talk = (b.talk || [])
-                        .map((entry) => {
-                          const stateWord =
-                            entry.state === "listening"
-                              ? store.t("shared.talk_listening")
-                              : entry.state === "talking"
-                                ? store.t("shared.talk_talking")
-                                : entry.state;
-                          return `${entry.device_title} ${stateWord}`;
-                        })
-                        .join(", ");
-                      return html`<div class="kv-row">
-                        <span>${entityLabel(b.camera_name || b.camera_entity)}</span>
-                        <strong>${ring}${talk ? ` • ${talk}` : ""}</strong>
-                      </div>`;
-                    })}
-                  </div>
                 </div>`
               : nothing}`,
         })}

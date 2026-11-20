@@ -70,8 +70,9 @@ class TestPayloadDiet(unittest.TestCase):
             self.assertIn(f'"{field}":', payload_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn(".doorbells", js)
-        for field in ("camera_name", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
-            self.assertIn(f".{field}", js)
+        self.assertIn(".ring_entity", js)
+        self.assertNotIn("doorbell-status-list", js)
+        self.assertIn("sortable-row-stacked", js)
         # Stage 6 encapsulation: zero window.* globals!
         self.assertNotIn("window.fmtPercent", js)
         self.assertNotIn("dialog-title danger", js)
