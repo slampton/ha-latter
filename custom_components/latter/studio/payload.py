@@ -1768,6 +1768,22 @@ def build_studio_state_payload(
         sign_resource=coordinator.sign_payload_resource,
         display_shape=coordinator.display_shape,
     )
+    valid_wp_ids = {str(item.get("id") or "") for item in wallpapers_catalog}
+    valid_ss_ids = {
+        str(item.get("id") or "")
+        for item in wallpapers_catalog
+        if item.get("kind") != "dynamic_preset"
+    }
+    clean_wallpaper_favorites = list(
+        dict.fromkeys(
+            pid for pid in coordinator.wallpaper_favorites if pid in valid_wp_ids
+        )
+    )
+    clean_screensaver_photo_ids = list(
+        dict.fromkeys(
+            pid for pid in coordinator.screensaver_photo_ids if pid in valid_ss_ids
+        )
+    )
 
     sec_ids = present_section_ids(esphome_inspector.get("sections"))
     all_esp_items: list[dict[str, Any]] = []
@@ -1858,12 +1874,12 @@ def build_studio_state_payload(
         CONF_WALLPAPER_MODE: coordinator.wallpaper_mode,
         CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
         CONF_WALLPAPER_COLLECTION: coordinator.wallpaper_collection,
-        CONF_WALLPAPER_FAVORITES: coordinator.wallpaper_favorites,
+        CONF_WALLPAPER_FAVORITES: clean_wallpaper_favorites,
         CONF_WALLPAPER_CYCLE_MINUTES: coordinator.wallpaper_cycle_minutes,
         CONF_SCREENSAVER_PHOTO_MODE: coordinator.screensaver_photo_mode,
         CONF_SCREENSAVER_PHOTO_SOURCE: coordinator.configured_screensaver_photo_source,
         CONF_SCREENSAVER_PHOTO_COLLECTION: coordinator.screensaver_photo_collection,
-        CONF_SCREENSAVER_PHOTO_IDS: coordinator.screensaver_photo_ids,
+        CONF_SCREENSAVER_PHOTO_IDS: clean_screensaver_photo_ids,
         CONF_SCREENSAVER_CYCLE_MINUTES: coordinator.screensaver_cycle_minutes,
         CONF_SCREENSAVER_SHUFFLE: coordinator.screensaver_shuffle,
         CONF_SECURITY_PIN_POLICY: coordinator.configured_security_pin_policy,

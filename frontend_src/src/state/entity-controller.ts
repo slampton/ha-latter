@@ -41,6 +41,7 @@ import {
   closePhotoPickerModalOp,
   closePhotoUploadModalOp,
   createPhotoCollectionOp,
+  createUploadCollectionOp,
   deletePhotoOp,
   importSelectedMediaOp,
   openMediaImportModalOp,
@@ -1326,8 +1327,12 @@ export class EntityController {
     await savePhotoEditModalOp(this.store);
   }
 
-  async createPhotoCollection(name: string): Promise<void> {
-    await createPhotoCollectionOp(this.store, name);
+  async createPhotoCollection(name: string): Promise<string | null> {
+    return createPhotoCollectionOp(this.store, name);
+  }
+
+  async createUploadCollection(): Promise<string | null> {
+    return createUploadCollectionOp(this.store);
   }
 
   async renamePhotoCollection(collectionId: string, name: string): Promise<void> {

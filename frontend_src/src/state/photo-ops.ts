@@ -39,6 +39,9 @@ export interface PhotoUploadModalState {
   files: StagedUploadPhoto[];
   activeIndex: number;
   collectionId: string;
+  newCollectionOpen: boolean;
+  newCollectionName: string;
+  creatingCollection: boolean;
   previewAspect: CropPreviewAspect;
   uploading: boolean;
   currentIndex: number;
@@ -93,6 +96,9 @@ export function emptyPhotoUploadModalState(): PhotoUploadModalState {
     files: [],
     activeIndex: 0,
     collectionId: "",
+    newCollectionOpen: false,
+    newCollectionName: "",
+    creatingCollection: false,
     previewAspect: "square",
     uploading: false,
     currentIndex: 0,
@@ -160,6 +166,25 @@ export function isPhotoUploaded(photo: PhotoItem): boolean {
 
 export function isPhotoDynamic(photo: PhotoItem): boolean {
   return photo.kind === "dynamic_preset" || photo.source_kind === "dynamic_preset";
+}
+
+export function filterEligiblePhotoIds(
+  ids: readonly string[] | undefined,
+  photos: readonly PhotoItem[],
+  excludeDynamic = false,
+): string[] {
+  const eligible = new Set(
+    photos.filter((p) => !excludeDynamic || !isPhotoDynamic(p)).map((p) => p.id),
+  );
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of ids || []) {
+    const id = String(raw || "").trim();
+    if (!id || seen.has(id) || !eligible.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
 }
 
 export function derivePhotoBaseName(filename: string): string {
@@ -341,8 +366,14 @@ export function removeStagedUploadOp(store: StudioStore, index: number): void {
 }
 
 export async function uploadAllStagedPhotosOp(store: StudioStore): Promise<void> {
-  const modal = store.photoUploadModal;
-  if (modal.uploading || modal.files.length === 0) return;
+  let modal = store.photoUploadModal;
+  if (modal.uploading || modal.creatingCollection || modal.files.length === 0) return;
+
+  if (modal.newCollectionOpen && modal.newCollectionName.trim()) {
+    const createdId = await createUploadCollectionOp(store);
+    if (!createdId) return;
+    modal = store.photoUploadModal;
+  }
 
   store.photoUploadModal = {
     ...modal,
@@ -474,9 +505,12 @@ export async function savePhotoEditModalOp(store: StudioStore): Promise<void> {
 
 // ---------- Photo Library Collections & Bulk Actions ----------
 
-export async function createPhotoCollectionOp(store: StudioStore, rawName: string): Promise<void> {
+export async function createPhotoCollectionOp(
+  store: StudioStore,
+  rawName: string,
+): Promise<string | null> {
   const name = String(rawName || "").trim();
-  if (!name) return;
+  if (!name) return null;
   try {
     const res = await store.ws.runSystemCommand(
       "create_photo_collection",
@@ -487,9 +521,37 @@ export async function createPhotoCollectionOp(store: StudioStore, rawName: strin
     store.photosNewCollectionName = "";
     if (res) store.ingestPayload(res, false);
     store.showToast(store.t("photos.created_collection_toast", { name }));
+    const createdId = String(res?.collection?.id || "").trim();
+    return createdId || null;
   } catch (err) {
     store.showToast(formatWsError(err, "Could not create collection"), true);
+    return null;
   }
+}
+
+export async function createUploadCollectionOp(store: StudioStore): Promise<string | null> {
+  const modal = store.photoUploadModal;
+  const name = modal.newCollectionName.trim();
+  if (!modal.open || modal.uploading || modal.creatingCollection || !name) return null;
+  store.photoUploadModal = { ...modal, creatingCollection: true };
+  store.host.requestUpdate();
+  const createdId = await createPhotoCollectionOp(store, name);
+  if (createdId) {
+    store.photoUploadModal = {
+      ...store.photoUploadModal,
+      collectionId: createdId,
+      newCollectionOpen: false,
+      newCollectionName: "",
+      creatingCollection: false,
+    };
+  } else {
+    store.photoUploadModal = {
+      ...store.photoUploadModal,
+      creatingCollection: false,
+    };
+  }
+  store.host.requestUpdate();
+  return createdId;
 }
 
 export async function renamePhotoCollectionOp(
@@ -797,28 +859,32 @@ export async function setDevicePhotoPoolOp(
 export function openPhotoPickerModalOp(store: StudioStore, target: PhotoPoolTarget): void {
   const cfg = store.state?.config || {};
   const isScreensaver = target === "screensaver";
+  const allPhotos =
+    (store.state?.wallpapers && store.state.wallpapers.length > 0
+      ? store.state.wallpapers
+      : store.state?.system_wallpapers) || [];
   const rawMode = String(
     isScreensaver ? cfg.screensaver_photo_mode || "off" : cfg.wallpaper_mode || "off",
   );
   const mode: Exclude<PhotoPoolMode, "off"> =
     rawMode === "collection" || rawMode === "custom" ? rawMode : "single";
-  const singleSource = String(
+  const rawSingleSource = String(
     isScreensaver ? cfg.screensaver_photo_source || "" : cfg.wallpaper_source || "",
   );
+  const singleSource =
+    filterEligiblePhotoIds(rawSingleSource ? [rawSingleSource] : [], allPhotos, isScreensaver)[0] ||
+    "";
   const collectionId = String(
     isScreensaver
       ? cfg.screensaver_photo_collection || VIRTUAL_COLLECTION_ALL
       : cfg.wallpaper_collection || VIRTUAL_COLLECTION_ALL,
   );
-  const customIds = Array.isArray(
+  const rawCustomIds = Array.isArray(
     isScreensaver ? cfg.screensaver_photo_ids : cfg.wallpaper_favorites,
   )
-    ? [
-        ...((isScreensaver
-          ? cfg.screensaver_photo_ids
-          : cfg.wallpaper_favorites) as string[]),
-      ]
+    ? ((isScreensaver ? cfg.screensaver_photo_ids : cfg.wallpaper_favorites) as string[])
     : [];
+  const customIds = filterEligiblePhotoIds(rawCustomIds, allPhotos, isScreensaver);
 
   store.photoPickerModal = {
     open: true,
@@ -844,11 +910,17 @@ export async function applyPhotoPickerModalOp(store: StudioStore): Promise<void>
   const modal = store.photoPickerModal;
   if (!modal.open || modal.busy) return;
 
-  store.photoPickerModal = { ...modal, busy: true };
+  const isScreensaver = modal.target === "screensaver";
+  const allPhotos =
+    (store.state?.wallpapers && store.state.wallpapers.length > 0
+      ? store.state.wallpapers
+      : store.state?.system_wallpapers) || [];
+  const cleanCustomIds = filterEligiblePhotoIds(modal.customIds, allPhotos, isScreensaver);
+
+  store.photoPickerModal = { ...modal, customIds: cleanCustomIds, busy: true };
   store.host.requestUpdate();
 
   const cfg = store.state?.config || {};
-  const isScreensaver = modal.target === "screensaver";
   const currentCycle = Number(
     isScreensaver ? cfg.screensaver_cycle_minutes ?? 15 : cfg.wallpaper_cycle_minutes ?? 0,
   );
@@ -865,7 +937,7 @@ export async function applyPhotoPickerModalOp(store: StudioStore): Promise<void>
     mode: modal.mode,
     sourceId: modal.mode === "single" ? modal.singleSource : undefined,
     collectionId: modal.mode === "collection" ? modal.collectionId : undefined,
-    photoIds: modal.mode === "custom" ? modal.customIds : undefined,
+    photoIds: modal.mode === "custom" ? cleanCustomIds : undefined,
     cycleMinutes: nextCycle,
     shuffle: isScreensaver ? Boolean(cfg.screensaver_shuffle) : undefined,
   });

@@ -22,6 +22,7 @@ import {
 } from "../src/constants.js";
 import { tPrefLabel, tPrefOption } from "../src/i18n/index.js";
 import { render } from "../src/lib/lit.js";
+import { DIALOG_STYLES } from "../src/styles/dialogs.js";
 import type { DeviceGroup, PhotoCollection, PhotoItem } from "../src/types.js";
 import { applyCanvasPanDelta, computeCropSourceRect } from "../src/utils/crop-math.js";
 import { renderDeviceDisplayView } from "../src/views/device-display-view.js";
@@ -464,5 +465,78 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
     assert.ok(drawerHtml.includes("Show subtle clock"));
     assert.ok(drawerHtml.includes("Live weather background"));
     assert.equal(drawerHtml.includes("Docked screensaver"), false);
+  });
+
+  it("prunes stale photo IDs in Photo Picker custom mode, allows creating a collection in Upload modal, and isolates modal scroll", async () => {
+    const harness = makeFakeStore({
+      currentScope: "device",
+      currentViewId: "display",
+      activeSubentryId: "sub_1",
+      deviceSelected: true,
+      state: {
+        wallpapers: samplePhotos(),
+        system_wallpapers: samplePhotos(),
+        photo_collections: sampleCollections(),
+        config: {
+          display_shape: "square",
+          wallpaper_mode: "custom",
+          wallpaper_favorites: [
+            "upload:legacy/deleted_one.jpg",
+            "upload:legacy/deleted_two.jpg",
+            "photo:beach_01",
+          ],
+          wallpaper_cycle_minutes: 15,
+        },
+      },
+    });
+    const { store, sysCalls } = harness;
+
+    // 1. Stale legacy IDs are filtered on open -> count is 1, not 3; Clear empties selection
+    store.entity.openPhotoPickerModal("wallpaper");
+    assert.deepEqual(store.photoPickerModal.customIds, ["photo:beach_01"]);
+    const pickerContainer = simDocument.createElement("div");
+    render(renderPhotoPickerDialog(store), pickerContainer);
+    assert.ok(pickerContainer.innerHTML.includes("1 photo selected"));
+    const clearBtn = pickerContainer.querySelector("#btn-picker-clear-custom") as unknown as HTMLButtonElement;
+    assert.ok(clearBtn);
+    clearBtn.click();
+    assert.deepEqual(store.photoPickerModal.customIds, []);
+    render(renderPhotoPickerDialog(store), pickerContainer);
+    assert.ok(pickerContainer.innerHTML.includes("0 photos selected"));
+
+    // 2. Upload modal inline New collection creates and auto-selects without clearing staged files
+    const origRunSys = store.ws.runSystemCommand.bind(store.ws);
+    store.ws.runSystemCommand = async (command, payload, subentryId) => {
+      await origRunSys(command, payload, subentryId);
+      if (command === "create_photo_collection") {
+        const nextCol = { id: "col_trips", name: String(payload?.name || "Trips"), count: 0 };
+        store.state!.photo_collections = [...(store.state!.photo_collections || []), nextCol];
+        return {
+          ...store.state!,
+          collection: { id: nextCol.id, name: nextCol.name },
+        };
+      }
+      return store.state!;
+    };
+
+    store.entity.openPhotoUploadModal();
+    const f1 = new File([new Uint8Array([1, 2, 3])], "trip_01.jpg", { type: "image/jpeg" });
+    store.entity.stageUploadFiles([f1]);
+    const uploadContainer = simDocument.createElement("div");
+    render(renderPhotoUploadDialog(store), uploadContainer);
+    const openNewColBtn = uploadContainer.querySelector(
+      "#btn-upload-new-collection",
+    ) as unknown as HTMLButtonElement;
+    assert.ok(openNewColBtn);
+    openNewColBtn.click();
+    store.photoUploadModal = { ...store.photoUploadModal, newCollectionName: "Trips" };
+    await store.entity.createUploadCollection();
+    assert.equal(sysCalls.some((c) => c.command === "create_photo_collection"), true);
+    assert.equal(store.photoUploadModal.collectionId, "col_trips");
+    assert.equal(store.photoUploadModal.newCollectionOpen, false);
+    assert.equal(store.photoUploadModal.files.length, 1);
+
+    // 3. Dialog & photo picker grid prevent scroll chaining to background window
+    assert.ok(DIALOG_STYLES.styleSheetText.includes("overscroll-behavior: contain"));
   });
 });

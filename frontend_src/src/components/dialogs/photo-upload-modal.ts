@@ -454,27 +454,108 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
 
           <div class="stacked-field">
             <label for="upload-photo-collection">${store.t("photo_upload.collection_label")}</label>
-            <select
-              id="upload-photo-collection"
-              ?disabled=${modal.uploading}
-              .value=${modal.collectionId}
-              @change=${(ev: Event) => {
-                store.photoUploadModal = {
-                  ...store.photoUploadModal,
-                  collectionId: (ev.currentTarget as HTMLSelectElement).value,
-                };
-                store.host.requestUpdate();
-              }}
-            >
-              <option value="" ?selected=${!modal.collectionId}>
-                ${store.t("photo_upload.no_collection")}
-              </option>
-              ${collections.map(
-                (col) => html`<option value=${col.id} ?selected=${modal.collectionId === col.id}>
-                  ${col.name}
-                </option>`,
-              )}
-            </select>
+            <div class="input-action-row">
+              <select
+                id="upload-photo-collection"
+                ?disabled=${modal.uploading || modal.creatingCollection}
+                .value=${modal.collectionId}
+                @change=${(ev: Event) => {
+                  store.photoUploadModal = {
+                    ...store.photoUploadModal,
+                    collectionId: (ev.currentTarget as HTMLSelectElement).value,
+                  };
+                  store.host.requestUpdate();
+                }}
+              >
+                <option value="" ?selected=${!modal.collectionId}>
+                  ${store.t("photo_upload.no_collection")}
+                </option>
+                ${collections.map(
+                  (col) => html`<option value=${col.id} ?selected=${modal.collectionId === col.id}>
+                    ${col.name}
+                  </option>`,
+                )}
+              </select>
+              ${!modal.newCollectionOpen
+                ? html`<button
+                    type="button"
+                    id="btn-upload-new-collection"
+                    ?disabled=${modal.uploading || modal.creatingCollection}
+                    @click=${() => {
+                      store.photoUploadModal = {
+                        ...store.photoUploadModal,
+                        newCollectionOpen: true,
+                        newCollectionName: "",
+                      };
+                      store.host.requestUpdate();
+                    }}
+                    class="btn btn-secondary btn-compact"
+                  >
+                    ${store.t("photos.new_collection_btn")}
+                  </button>`
+                : nothing}
+            </div>
+            ${modal.newCollectionOpen
+              ? html`<div class="input-action-row">
+                  <input
+                    type="text"
+                    id="input-upload-new-collection-name"
+                    aria-label=${store.t("photos.new_collection_btn")}
+                    placeholder=${store.t("photos.new_collection_placeholder")}
+                    ?disabled=${modal.uploading || modal.creatingCollection}
+                    .value=${focusSafe(modal.newCollectionName)}
+                    @input=${(ev: Event) => {
+                      store.photoUploadModal = {
+                        ...store.photoUploadModal,
+                        newCollectionName: (ev.currentTarget as HTMLInputElement).value,
+                      };
+                      store.host.requestUpdate();
+                    }}
+                    @keydown=${(ev: KeyboardEvent) => {
+                      if (ev.key === "Enter") {
+                        ev.preventDefault();
+                        void store.entity.createUploadCollection();
+                      } else if (ev.key === "Escape") {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        store.photoUploadModal = {
+                          ...store.photoUploadModal,
+                          newCollectionOpen: false,
+                          newCollectionName: "",
+                        };
+                        store.host.requestUpdate();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    id="btn-upload-create-collection"
+                    ?disabled=${modal.uploading ||
+                    modal.creatingCollection ||
+                    !modal.newCollectionName.trim()}
+                    @click=${() => void store.entity.createUploadCollection()}
+                    class="btn btn-secondary btn-compact"
+                  >
+                    ${store.t("photos.create_collection")}
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-upload-cancel-collection"
+                    ?disabled=${modal.uploading || modal.creatingCollection}
+                    @click=${() => {
+                      store.photoUploadModal = {
+                        ...store.photoUploadModal,
+                        newCollectionOpen: false,
+                        newCollectionName: "",
+                      };
+                      store.host.requestUpdate();
+                    }}
+                    class="btn btn-text btn-compact"
+                  >
+                    ${store.t("action.cancel")}
+                  </button>
+                </div>`
+              : nothing}
           </div>
 
           ${modal.uploading

@@ -17,6 +17,7 @@ export const DIALOG_STYLES = css`
     color: var(--studio-text);
     box-shadow: var(--studio-overlay-shadow);
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
   dialog.studio-dialog::backdrop { background: var(--studio-scrim); }
   dialog.studio-dialog.confirm-dialog {
@@ -132,6 +133,7 @@ export const DIALOG_STYLES = css`
     align-items: center;
     gap: var(--studio-space-2);
     overflow-x: auto;
+    overscroll-behavior-inline: contain;
     padding-block: var(--studio-space-1);
     inline-size: 100%;
   }
@@ -221,6 +223,7 @@ export const DIALOG_STYLES = css`
   .media-scroll-area {
     max-block-size: 360px;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: var(--studio-space-1);
     display: flex;
     flex-direction: column;
@@ -232,6 +235,7 @@ export const DIALOG_STYLES = css`
     gap: var(--studio-space-2);
     max-block-size: 320px;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: var(--studio-space-1);
   }
   .photo-picker-item {
@@ -379,6 +383,7 @@ export const DIALOG_STYLES = css`
     gap: var(--studio-space-1);
     max-block-size: 168px;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: var(--studio-space-2);
     border: 1px solid var(--studio-divider);
     border-radius: var(--studio-radius-control);

@@ -14,6 +14,7 @@ import {
 } from "../../constants.js";
 import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
 import {
+  filterEligiblePhotoIds,
   filterLibraryPhotos,
   isPhotoDynamic,
   resolveCollectionDisplayName,
@@ -62,12 +63,13 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
     { excludeDynamic: isScreensaver },
   );
 
-  const customSet = new Set(modal.customIds);
+  const validCustomIds = filterEligiblePhotoIds(modal.customIds, allPhotos, isScreensaver);
+  const customSet = new Set(validCustomIds);
 
   const toggleCustomPhoto = (photoId: string): void => {
     const next = customSet.has(photoId)
-      ? modal.customIds.filter((id) => id !== photoId)
-      : [...modal.customIds, photoId];
+      ? validCustomIds.filter((id) => id !== photoId)
+      : [...validCustomIds, photoId];
     store.photoPickerModal = { ...store.photoPickerModal, customIds: next };
     store.host.requestUpdate();
   };
@@ -78,7 +80,7 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
       ? Boolean(modal.singleSource)
       : modal.mode === "collection"
         ? Boolean(modal.collectionId)
-        : modal.customIds.length > 0);
+        : validCustomIds.length > 0);
 
   const title = isScreensaver
     ? store.t("photo_picker.title_screensaver")
@@ -293,12 +295,26 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
               ? html`<div class="photo-toolbar">
                   <span class="row-description">${store.t("photo_picker.custom_hint")}</span>
                   <span class="chip chip-primary">
-                    ${modal.customIds.length === 1
+                    ${validCustomIds.length === 1
                       ? store.t("photo_picker.custom_selected_one")
                       : store.t("photo_picker.custom_selected_many", {
-                          count: fmtNumber(modal.customIds.length, store.hass, 0),
+                          count: fmtNumber(validCustomIds.length, store.hass, 0),
                         })}
                   </span>
+                  ${validCustomIds.length > 0
+                    ? html`<button
+                        type="button"
+                        id="btn-picker-clear-custom"
+                        ?disabled=${modal.busy}
+                        @click=${() => {
+                          store.photoPickerModal = { ...store.photoPickerModal, customIds: [] };
+                          store.host.requestUpdate();
+                        }}
+                        class="btn btn-text btn-compact"
+                      >
+                        ${store.t("photos.clear_selection")}
+                      </button>`
+                    : nothing}
                 </div>`
               : nothing}
 
