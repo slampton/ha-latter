@@ -589,9 +589,11 @@ class LatterRpcReceiver:
         if action not in ("create", "update", "remove"):
             return
         ent_id = str(event.data.get("entity_id") or "")
+        old_ent_id = str(event.data.get("old_entity_id") or "")
         if (
             self._tracked_entity_id is None
             or ent_id == self._tracked_entity_id
+            or (old_ent_id and old_ent_id == self._tracked_entity_id)
             or any(ent_id.endswith(sfx) for sfx in RPC_OUTBOX_SUFFIXES)
         ):
             self.rebind()

@@ -154,6 +154,17 @@ from .settings import (
 
 _LOGGER = logging.getLogger(__name__)
 _SURVEY_COALESCE_INTERVAL_S = 0.25
+_STUDIO_STATUS_WATCH_SUFFIXES: tuple[str, ...] = (
+    "_system_rpc_outbox",
+    "_rpc_outbox",
+    "_system_wi_fi_signal",
+    "_wi_fi_signal",
+    "_ip_address",
+    "_battery_level",
+    "_battery_charging",
+    "_usb_power_connected",
+    "_project_firmware",
+)
 
 
 def _str_cap(max_len: int) -> Any:
@@ -2441,7 +2452,10 @@ async def ws_handle_subscribe(
                 e.entity_id
                 for c in watched
                 for e in device_entities(hass, c.esphome_device_id)
-                if target is not None or e.domain in STUDIO_BULK_CONTROL_DOMAINS
+                if target is not None
+                or e.domain in STUDIO_BULK_CONTROL_DOMAINS
+                or e.domain == "update"
+                or e.entity_id.endswith(_STUDIO_STATUS_WATCH_SUFFIXES)
             }
         )
         if entity_ids:

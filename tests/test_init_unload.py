@@ -232,3 +232,126 @@ async def test_discovery_scan_when_unconfigured(
         f.get("data", {}).get("esphome_device_id") == dev.id
         for f in hass.config_entries._in_progress_flows
     )
+
+
+async def test_esphome_device_and_entity_rename_sync_and_heal(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Renaming a bound ESPHome device & its entities syncs title, subentry, child device, speaker & Studio payload."""
+    from custom_components.latter.const import CONF_DEFAULT_SPEAKER
+    from custom_components.latter.media import build_active_media_payload
+    from custom_components.latter.studio.payload import build_studio_state_payload
+
+    entry, _sys_obj, coord = await setup_latter_hub(hass)
+    assert coord.device_title == "Pocket Assistant"
+    assert coord.get_opt(CONF_DEFAULT_SPEAKER) == "media_player.pocket_assistant_music"
+
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+    esp_dev_id = coord.esphome_device_id
+    assert esp_dev_id is not None
+    dev_info = coord.get_device_info()
+    latter_dev_before = dev_reg.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers=dev_info["identifiers"],
+        name=dev_info["name"],
+        via_device_id=esp_dev_id,
+    )
+    assert latter_dev_before.name == "Pocket Assistant"
+
+    # 1. Rename the bound ESPHome device and its music / outbox entities live
+    esp_ce = next(
+        ce for ce in hass.config_entries.async_entries("esphome")
+        if any(d.id == esp_dev_id for d in dr.async_entries_for_config_entry(dev_reg, ce.entry_id))
+    )
+    esp_ce.data["device_name"] = "living-room-assistant"
+    dev_reg.async_update_device(esp_dev_id, name="Living Room Assistant")
+
+    hass.states.async_set(
+        "media_player.living_room_assistant_music",
+        "idle",
+        {"friendly_name": "Living Room Assistant Music", "volume_level": 0.5},
+    )
+    hass.states._states.pop("media_player.pocket_assistant_music", None)
+    ent_reg.async_update_entity(
+        "media_player.pocket_assistant_music",
+        new_entity_id="media_player.living_room_assistant_music",
+    )
+    ent_reg.async_update_entity(
+        "sensor.pocket_assistant_system_rpc_outbox",
+        new_entity_id="sensor.living_room_assistant_system_rpc_outbox",
+    )
+    await hass.async_block_till_done()
+
+    # Subentry title, child Latter Device name, coordinator.device_title, Studio payload & Media speaker_name all match
+    assert coord.device_title == "Living Room Assistant"
+    assert entry.subentries[coord.subentry_id].title == "Living Room Assistant"
+    latter_dev = coord._find_latter_device_entry()
+    assert latter_dev is not None and latter_dev.name == "Living Room Assistant"
+
+    payload = build_studio_state_payload(hass, coord)
+    assert payload["title"] == "Living Room Assistant"
+    assert payload["system_devices"][0]["title"] == "Living Room Assistant"
+    assert payload["esphome"]["device"]["node_name"] == "living_room_assistant"
+
+    # Default speaker, active_speaker, last_speaker & RPC outbox all migrated cleanly
+    assert coord.get_opt(CONF_DEFAULT_SPEAKER) == "media_player.living_room_assistant_music"
+    assert coord.active_speaker == "media_player.living_room_assistant_music"
+    assert coord._rpc_receiver._tracked_entity_id == "sensor.living_room_assistant_system_rpc_outbox"
+    _m_state, m_attrs = build_active_media_payload(coord)
+    assert m_attrs["speaker_name"] == "Living Room Assistant"
+    assert not any(
+        w["code"] == "missing_entity" for w in async_audit_coordinator_health(hass, coord)
+    )
+
+
+async def test_startup_heals_preexisting_stale_renamed_local_speaker(
+    hass: Any, make_esphome_device: Any
+) -> None:
+    """When a device was renamed before reload, startup heals stale built-in default/active/last speaker refs."""
+    from homeassistant.config_entries import ConfigEntry, ConfigSubentry
+
+    from custom_components.latter import async_setup_entry
+    from custom_components.latter.const import (
+        CONF_DEFAULT_SPEAKER,
+        CONF_DEVICE_SLUG,
+        CONF_ESPHOME_DEVICE_ID,
+        SUBENTRY_DEVICE,
+    )
+
+    dev, mac = make_esphome_device(hass, slug="living_room_assistant", mac="aa:bb:cc:dd:ee:11", stationary=1)
+    dev_reg = dr.async_get(hass)
+    dev_reg.async_update_device(dev.id, name="Living Room Assistant")
+
+    sub = ConfigSubentry(
+        data={
+            CONF_DEVICE_SLUG: "garage_assistant",
+            CONF_ESPHOME_DEVICE_ID: dev.id,
+            "mac": mac,
+            CONF_DEFAULT_SPEAKER: "media_player.garage_assistant_music",
+        },
+        subentry_type=SUBENTRY_DEVICE,
+        title="Garage Assistant",
+        unique_id=f"latter_{mac}",
+        subentry_id="sub_renamed_lr",
+    )
+    entry = ConfigEntry(
+        entry_id="entry_renamed_lr",
+        domain=DOMAIN,
+        title="Latter",
+        subentries_data=[sub],
+    )
+    hass.config_entries.add_entry(entry)
+    assert await async_setup(hass, {}) is True
+    assert await async_setup_entry(hass, entry) is True
+    await hass.async_block_till_done()
+
+    coord = entry.runtime_data.coordinators[sub.subentry_id]
+    assert coord.device_title == "Living Room Assistant"
+    assert entry.subentries[sub.subentry_id].title == "Living Room Assistant"
+    assert coord.get_opt(CONF_DEFAULT_SPEAKER) == "media_player.living_room_assistant_music"
+    assert coord.active_speaker == "media_player.living_room_assistant_music"
+    assert coord.last_speaker == "media_player.living_room_assistant_music"
+    assert not any(
+        w["code"] == "missing_entity" for w in async_audit_coordinator_health(hass, coord)
+    )

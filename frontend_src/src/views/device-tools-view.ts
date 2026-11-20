@@ -424,7 +424,9 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                       <span>${store.t("dev_tools.esphome_node")}</span>
                       <strong>
                         <code id="diag-node-name">
-                          ${cfg.device_slug || store.t("common.unknown")}
+                          ${data?.esphome?.device?.node_name ||
+                          cfg.device_slug ||
+                          store.t("common.unknown")}
                         </code>
                       </strong>
                     </div>

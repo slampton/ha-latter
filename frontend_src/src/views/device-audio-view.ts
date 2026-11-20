@@ -69,7 +69,8 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
     Boolean(cfg.native_ble_tracking) && caps.is_roaming_device !== false;
   const dwellSeconds = Number(cfg.area_follow_dwell_s ?? 10);
 
-  const autoMaEntity = cfg.device_slug ? `media_player.${cfg.device_slug}` : "";
+  const espNode = data?.esphome?.device?.node_name || cfg.device_slug || "";
+  const autoMaEntity = espNode ? `media_player.${espNode}` : "";
   const savedMa = String(cfg.ma_player_entity || "").trim();
   const maUnmatched = live.ma_link_matched === false;
   const hasCustomMaOverride = Boolean(savedMa && savedMa !== autoMaEntity);

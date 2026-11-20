@@ -22,6 +22,7 @@ from homeassistant.helpers import (
     config_validation as cv,
     device_registry as dr,
     discovery_flow,
+    entity_registry as er,
 )
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
@@ -275,13 +276,21 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 _schedule_debounced_discovery_scan(5.0)
                 if action == "update":
                     changes = event.data.get("changes")
-                    if isinstance(changes, dict) and "area_id" not in changes:
+                    area_changed = not isinstance(changes, dict) or "area_id" in changes
+                    name_changed = (
+                        not isinstance(changes, dict)
+                        or "name" in changes
+                        or "name_by_user" in changes
+                    )
+                    if not area_changed and not name_changed:
                         return
                     new_area = str(dev.area_id or "").strip()
                     for coord in iter_coordinators(hass):
                         if coord.is_ble_tag:
                             continue
-                        if (
+                        if name_changed and dev.id == coord.esphome_device_id:
+                            coord.async_sync_ha_device_name()
+                        if area_changed and (
                             dev.id == coord.esphome_device_id
                             or bool(
                                 dev.identifiers
@@ -295,6 +304,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                             coord.async_on_ha_device_area_updated(dev.id, new_area)
 
         @callback
+        def _on_entity_registry_updated(event: Event) -> None:
+            if event.data.get("action") != "update":
+                return
+            old_entity_id = str(event.data.get("old_entity_id") or "").strip()
+            new_entity_id = str(event.data.get("entity_id") or "").strip()
+            if not old_entity_id or not new_entity_id or old_entity_id == new_entity_id:
+                return
+            ent_entry = er.async_get(hass).async_get(new_entity_id)
+            ent_dev_id = ent_entry.device_id if ent_entry is not None else None
+            for coord in iter_coordinators(hass):
+                coord.async_on_ha_entity_renamed(old_entity_id, new_entity_id, ent_dev_id)
+
+        @callback
         def _on_service_registered(event: Event) -> None:
             if event.data.get("domain") != "esphome":
                 return
@@ -305,10 +327,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         unsub_dev = hass.bus.async_listen(
             dr.EVENT_DEVICE_REGISTRY_UPDATED, _on_device_registry_updated
         )
+        unsub_ent = hass.bus.async_listen(
+            er.EVENT_ENTITY_REGISTRY_UPDATED, _on_entity_registry_updated
+        )
         unsub_svc = hass.bus.async_listen(
             EVENT_SERVICE_REGISTERED, _on_service_registered
         )
-        domain_data[DATA_DISCOVERY_UNSUB] = (unsub_dev, unsub_svc)
+        domain_data[DATA_DISCOVERY_UNSUB] = (unsub_dev, unsub_ent, unsub_svc)
 
     @callback
     def _on_ha_started(_ev: Event) -> None:
@@ -406,6 +431,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
 
     async_heal_coordinator_ma_links(hass)
     for coordinator in list(sys_obj.coordinators.values()):
+        coordinator.async_sync_ha_device_name()
         coordinator.async_sync_ha_device_areas()
         coordinator.async_notify_listeners()
 

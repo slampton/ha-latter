@@ -59,7 +59,12 @@ from .const import (
     DEFAULT_WALLPAPER_MODE,
     DOMAIN,
 )
-from .identity import device_entities, esphome_service, get_bound_esphome_device
+from .identity import (
+    device_entities,
+    esphome_node_name,
+    esphome_service,
+    get_bound_esphome_device,
+)
 from .studio.settings import (
     DEVICE_PREF_KEYS,
     DEVICE_PREF_SPEC_MAP,
@@ -279,6 +284,7 @@ def get_esphome_device_entities(
     dev_meta: dict[str, str] = {
         "device_id": target_device_id or "",
         "name": device_slug,
+        "node_name": esphome_node_name(hass, target_device_id) or device_slug,
         "model": "ESPHome Node",
         "manufacturer": "ESPHome",
         "sw_version": "",

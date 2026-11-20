@@ -346,11 +346,22 @@ def install_fake_ha_registries(slugify_fn: Callable[..., str], entity_category_c
 
         def async_update_entity(self, entity_id: str, **changes: Any) -> RegistryEntry:
             ent = self.entities[entity_id]
+            new_entity_id = changes.pop("new_entity_id", None)
+            event_data: dict[str, Any] = {
+                "action": "update",
+                "entity_id": entity_id,
+                "changes": dict(changes),
+            }
+            if new_entity_id and new_entity_id != entity_id:
+                self.entities.pop(entity_id)
+                ent.entity_id = new_entity_id
+                self.entities[new_entity_id] = ent
+                event_data["entity_id"] = new_entity_id
+                event_data["old_entity_id"] = entity_id
+                event_data["changes"]["entity_id"] = entity_id
             for k, v in changes.items():
                 setattr(ent, k, v)
-            self._hass.bus.async_fire(
-                EVENT_ENTITY_REGISTRY_UPDATED, {"action": "update", "entity_id": entity_id, "changes": changes}
-            )
+            self._hass.bus.async_fire(EVENT_ENTITY_REGISTRY_UPDATED, event_data)
             return ent
 
         def async_remove(self, entity_id: str) -> None:

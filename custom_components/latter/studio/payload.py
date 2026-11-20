@@ -1575,12 +1575,7 @@ def _build_system_section(
             {
                 "subentry_id": c.subentry_id,
                 "device_slug": c.device_slug,
-                "title": (
-                    str(c_dev_entry.name_by_user or c_dev_entry.name).strip()
-                    if c_dev_entry
-                    and (c_dev_entry.name_by_user or c_dev_entry.name)
-                    else c.device_title
-                ),
+                "title": c.device_title,
                 "model_label": c_model_label,
                 "area_id": c_area_id,
                 "has_assigned_area": c_has_assigned_area,

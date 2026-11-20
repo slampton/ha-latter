@@ -411,6 +411,7 @@ interface EspHomeInspector {
   device?: {
     id?: string;
     name?: string;
+    node_name?: string;
     model?: string;
     sw_version?: string;
     mac?: string;

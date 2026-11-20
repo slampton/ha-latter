@@ -24,6 +24,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
+    entity_registry as er,
     issue_registry as ir,
 )
 from homeassistant.helpers.debounce import Debouncer
@@ -81,6 +82,7 @@ from .const import (
     CONF_GARAGE_ENTITIES,
     CONF_HOME_CATEGORIES,
     CONF_LOCK_ENTITIES,
+    CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PINNED_ITEMS,
     CONF_REMOTE_GROUPS,
@@ -760,6 +762,12 @@ class LatterCoordinator:
 
     @property
     def device_title(self) -> str:
+        if not self.is_ble_tag and self.esphome_device_id:
+            esp_dev = get_bound_esphome_device(self.hass, self.esphome_device_id)
+            if esp_dev is not None:
+                live_name = str(esp_dev.name_by_user or esp_dev.name or "").strip()
+                if live_name:
+                    return live_name
         return (
             self.subentry.title
             if self._live_subentry().title
@@ -1790,6 +1798,7 @@ class LatterCoordinator:
         self._apply_stored_runtime(await self._runtime.async_load())
         self._structural_snapshot = self._capture_structural_snapshot()
         self._runtime.seed_snapshot(self._build_persisted_snapshot())
+        self.async_heal_renamed_local_speaker()
         local_spk = self.local_speaker
         if not (
             local_spk
@@ -2807,6 +2816,150 @@ class LatterCoordinator:
             latter_dev = self._find_latter_device_entry()
             if latter_dev is not None and latter_dev.id == device_id:
                 self._last_latter_area = area_id
+
+    @callback
+    def async_sync_ha_device_name(self) -> bool:
+        """Mirror the bound ESPHome Device's live name onto the Latter subentry and child Latter Device."""
+        if self.is_ble_tag or not self.esphome_device_id:
+            return False
+        esp_dev = get_bound_esphome_device(self.hass, self.esphome_device_id)
+        if esp_dev is None:
+            return False
+        live_name = str(esp_dev.name_by_user or esp_dev.name or "").strip()
+        if not live_name:
+            return False
+        self.async_heal_renamed_local_speaker()
+        changed = False
+        live_sub = self._live_subentry()
+        if live_sub.title != live_name:
+            self.hass.config_entries.async_update_subentry(
+                self.entry, live_sub, title=live_name
+            )
+            self._live_subentry()
+            changed = True
+        latter_dev = self._find_latter_device_entry()
+        if latter_dev is not None and latter_dev.name != live_name:
+            dr.async_get(self.hass).async_update_device(latter_dev.id, name=live_name)
+            changed = True
+        if changed:
+            self._cached_media_payload = None
+            for coord in iter_coordinators(self.hass):
+                coord._cached_area_payload = None
+                coord.async_notify_listeners()
+        return changed
+
+    @callback
+    def async_heal_renamed_local_speaker(self) -> bool:
+        """Heal stale built-in speaker refs when the bound ESPHome node was renamed before/offline."""
+        if self.is_ble_tag:
+            return False
+        local_spk = self.local_speaker
+        if not local_spk:
+            return False
+        prior_slugs = {
+            s
+            for s in (
+                self.device_slug,
+                normalize_device_slug(str(self._live_subentry().title or "")),
+            )
+            if s
+        }
+        old_local_candidates = {
+            f"media_player.{slug}{sfx}"
+            for slug in prior_slugs
+            for sfx in ("", "_music", "_media_player")
+        }
+        old_local_candidates.discard(local_spk)
+        if not old_local_candidates:
+            return False
+
+        ent_reg = er.async_get(self.hass)
+
+        def _is_stale_local(entity_id: str) -> bool:
+            return (
+                bool(entity_id)
+                and entity_id in old_local_candidates
+                and self.hass.states.get(entity_id) is None
+                and ent_reg.async_get(entity_id) is None
+            )
+
+        healed = False
+        raw_def_spk = str(self.get_opt(CONF_DEFAULT_SPEAKER) or "").strip()
+        if _is_stale_local(raw_def_spk):
+            _LOGGER.info(
+                "Healed renamed built-in default_speaker for '%s': %s -> %s",
+                self.device_slug,
+                raw_def_spk,
+                local_spk,
+            )
+            self.update_device_config(
+                {**self.device_data, CONF_DEFAULT_SPEAKER: local_spk},
+                bump_prefs_seq=False,
+            )
+            healed = True
+
+        runtime_changed = False
+        if _is_stale_local(self.active_speaker):
+            self.active_speaker = local_spk
+            runtime_changed = True
+        if _is_stale_local(self.last_speaker):
+            self.last_speaker = local_spk
+            runtime_changed = True
+        if runtime_changed:
+            self._cached_media_payload = None
+            self._schedule_persist_runtime_state()
+            healed = True
+        return healed
+
+    @callback
+    def async_on_ha_entity_renamed(
+        self,
+        old_entity_id: str,
+        new_entity_id: str,
+        entity_device_id: str | None = None,
+    ) -> bool:
+        """Migrate Device speaker/MA references and rebind listeners when an HA entity is renamed."""
+        if self.is_ble_tag or not old_entity_id or not new_entity_id or old_entity_id == new_entity_id:
+            return False
+        changed = False
+        cfg_updates: dict[str, Any] = {}
+        if str(self.get_opt(CONF_DEFAULT_SPEAKER) or "").strip() == old_entity_id:
+            cfg_updates[CONF_DEFAULT_SPEAKER] = new_entity_id
+        if str(self.get_opt(CONF_MA_PLAYER_ENTITY) or "").strip() == old_entity_id:
+            cfg_updates[CONF_MA_PLAYER_ENTITY] = new_entity_id
+        if cfg_updates:
+            self.update_device_config(
+                {**self.device_data, **cfg_updates},
+                bump_prefs_seq=False,
+            )
+            changed = True
+
+        runtime_changed = False
+        if self.active_speaker == old_entity_id:
+            self.active_speaker = new_entity_id
+            runtime_changed = True
+        if self.last_speaker == old_entity_id:
+            self.last_speaker = new_entity_id
+            runtime_changed = True
+        if runtime_changed:
+            self._schedule_persist_runtime_state()
+            changed = True
+
+        is_own_device = bool(
+            entity_device_id and self.esphome_device_id and entity_device_id == self.esphome_device_id
+        )
+        if changed or is_own_device:
+            self._cached_media_payload = None
+            bind_coordinator_speaker_listener(self)
+            if is_own_device:
+                self._bind_link_report_listener()
+                self._bind_ble_radio_listener()
+            try:
+                async_audit_coordinator_health(self.hass, self)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Repairs audit after rename skipped: %s", err)
+            self.async_notify_listeners()
+        return changed or is_own_device
 
     @callback
     def async_sync_ha_device_areas(self) -> None:
