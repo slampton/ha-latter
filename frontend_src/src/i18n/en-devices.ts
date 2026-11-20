@@ -184,13 +184,35 @@ export const EN_DEVICES_STRINGS = {
   "dev_display.screensaver_preview_desc":
     "Starts the screensaver on this Device immediately.",
   "dev_display.preview_btn": "Preview",
+  "dev_display.screensaver_photo_clock_desc":
+    "Draws a compact subtle clock in the corner while displaying photos.",
+  "dev_display.screensaver_pool_label": "Photo frame photos",
+  "dev_display.screensaver_pool_empty": "No photos selected — choose photos or a collection.",
+  "dev_display.screensaver_choose_photos": "Choose photos…",
+  "dev_display.screensaver_shuffle_desc":
+    "Randomizes photo order instead of advancing alphabetically.",
   "dev_display.custom_color_label": "Custom color",
   "dev_display.custom_color_desc": "Used when Color profile is set to Custom.",
   "dev_display.current_color_option": "Current ({hex})",
   "dev_display.add_color_btn": "Add color",
   "dev_display.wallpapers_subtitle":
-    "Shared presets and uploaded photos cropped for this display.",
+    "Shared photo library and collections cropped automatically for this display.",
   "dev_display.active_wallpaper_label": "Active wallpaper",
+  "dev_display.choose_wallpaper": "Choose wallpaper…",
+  "dev_display.manage_photo_library": "Manage photo library",
+  "dev_display.pool_single_meta": "Single photo • {name}",
+  "dev_display.pool_collection_meta": "Collection: {collection} ({count} photos)",
+  "dev_display.pool_collection_one_meta": "Collection: {collection} (1 photo)",
+  "dev_display.pool_custom_meta": "Custom selection ({count} photos)",
+  "dev_display.pool_custom_one_meta": "Custom selection (1 photo)",
+  "dev_display.pool_off_meta": "Off — no photos selected.",
+  "dev_display.wp_override_home_and_weather":
+    "Live weather background is active on Home and Sky & weather — wallpapers appear on other screens.",
+  "dev_display.wp_override_home_only":
+    "Weather background is enabled on Home — wallpapers appear across other screens.",
+  "dev_display.wp_override_weather_only":
+    "Live weather background is active in Sky & weather — wallpapers appear on Home and other screens.",
+  "dev_display.open_interface": "Open Interface",
   "dev_display.wp_weather_bg_note":
     "Weather background is enabled on Home — wallpapers appear across other screens.",
   "dev_display.wp_rotating_named_starred_one":
@@ -279,6 +301,8 @@ export const EN_DEVICES_STRINGS = {
   "dev_interface.remote_follow_area": "Follow the active Area",
   "dev_interface.remote_all": "All System remotes",
   "dev_interface.weather_meta": "Current, forecast, Sun & Moon",
+  "dev_interface.weather_meta_live_sky": "Live weather sky",
+  "dev_interface.weather_meta_wallpaper": "Uses device wallpaper",
   "dev_interface.time_utc_world_one": "UTC + 1 world clock",
   "dev_interface.time_utc_world_many": "UTC + {count} world clocks",
   "dev_interface.time_world_one": "1 world clock",

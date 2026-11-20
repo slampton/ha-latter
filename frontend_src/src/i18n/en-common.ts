@@ -28,6 +28,7 @@ export const EN_COMMON_STRINGS = {
   // View titles (HA Sentence case; proper/IT nouns preserved)
   "view.system_overview": "Overview",
   "view.shared_entities": "Shared entities",
+  "view.photos": "Photos",
   "view.remotes": "Media & remotes",
   "view.system_sync": "Device groups",
   "view.area_tracking": "BLE & Area presence",

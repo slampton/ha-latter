@@ -433,8 +433,8 @@ class TestDisplayViewControls(unittest.TestCase):
                   ],
                   sleep: [
                     { entity_id: "select.pocket_sleep_battery_screen_timeout", pref_key: "battery_screen_timeout", domain: "select", name: "Battery screen timeout", state: "30s", options: ["15s", "30s"] },
-                    { entity_id: "switch.pocket_sleep_docked_screensaver", pref_key: "docked_screensaver", domain: "switch", name: "Docked screensaver", state: "on" },
-                    { entity_id: "select.pocket_sleep_screensaver_style", pref_key: "screensaver_style", domain: "select", name: "Screensaver style", state: "Starfield", options: ["Clock", "Starfield"] },
+                    { entity_id: "select.pocket_sleep_screensaver_mode", pref_key: "screensaver_mode", domain: "select", name: "Screensaver mode", state: "Docked Only", options: ["Docked Only", "Always", "Never"] },
+                    { entity_id: "select.pocket_sleep_screensaver_style", pref_key: "screensaver_style", domain: "select", name: "Screensaver style", state: "Starfield", options: ["Clock", "Starfield", "Photo Frame"] },
                     { entity_id: "select.pocket_sleep_docked_idle_timeout", pref_key: "docked_idle_timeout", domain: "select", name: "Docked idle timeout", state: "5 min", options: ["1 min", "5 min"] },
                   ],
                   actions: [
@@ -466,9 +466,11 @@ class TestDisplayViewControls(unittest.TestCase):
                     home_screen_enabled: true,
                     activity_card: true,
                     activity_sources: "calendar",
+                    wallpaper_mode: activeId ? (cycleMins > 0 && favIds.length > 0 ? "custom" : "single") : "off",
                     wallpaper_source: activeId,
                     wallpaper_favorites: favIds,
                     wallpaper_cycle_minutes: cycleMins,
+                    weather_app_background: weatherBgState !== "Disabled",
                     display_shape: "square",
                     area_categories: "scene,light",
                     home_categories: "alarm,thermostat,entry,vacuum",
@@ -549,14 +551,15 @@ class TestDisplayViewControls(unittest.TestCase):
         self.assertNotIn("Day brightness", got["offMarkup"])
         self.assertNotIn("Day start hour", got["offMarkup"])
 
-        # Cross-tab Weather background note on Display -> Wallpapers (`D-069`)
-        self.assertIn("Weather background is enabled on Home", got["staticMarkup"])
-        self.assertNotIn("Weather background is enabled on Home", got["dispWeatherOffStatic"])
-        self.assertNotIn("Weather background is enabled on Home", got["offMarkup"])
+        # Cross-tab Weather background note on Display -> Wallpapers (`D-069` / `D-072`)
+        self.assertIn('id="wp-weather-override-note"', got["staticMarkup"])
+        self.assertIn("Live weather background is active on Home and Sky &amp; weather", got["staticMarkup"])
+        self.assertNotIn('id="wp-weather-override-note"', got["dispWeatherOffStatic"])
+        self.assertNotIn('id="wp-weather-override-note"', got["offMarkup"])
 
         # Power view keeps battery/sleep timeouts and excludes screensavers
         self.assertIn("Battery screen timeout", got["powerMarkup"])
-        self.assertNotIn("Docked screensaver", got["powerMarkup"])
+        self.assertNotIn("Screensaver mode", got["powerMarkup"])
 
         # Interface view: Home screen (with consolidated Home appearance + Time format) + App Dock
         self.assertIn("Home screen", got["ifaceMarkup"])
@@ -603,13 +606,14 @@ class TestDisplayViewControls(unittest.TestCase):
             self.assertIn(rem_card, got["sysRemotesMarkup"])
 
         # Static vs rotating wallpaper + Sun Synchronized / Time Schedule brightness
-        self.assertIn('id="btn-enable-wp-rotation"', got["staticMarkup"])
+        self.assertIn('id="btn-choose-wallpaper"', got["staticMarkup"])
         self.assertIn('id="btn-turn-off-wp"', got["staticMarkup"])
+        self.assertIn('id="btn-manage-photo-library"', got["staticMarkup"])
         self.assertNotIn("Manual brightness", got["staticMarkup"])
         self.assertIn("Day brightness", got["staticMarkup"])
         self.assertNotIn("Day start hour", got["staticMarkup"])
 
-        self.assertIn('id="btn-stop-wp-rotation"', got["rotatingMarkup"])
+        self.assertIn('id="cfg-wallpaper_cycle_minutes"', got["rotatingMarkup"])
         self.assertIn("Day start hour", got["rotatingMarkup"])
         self.assertIn("Night start hour", got["rotatingMarkup"])
 
@@ -1812,7 +1816,8 @@ class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
             "1 person assigned",
             "Area deployment",
             "System capabilities",
-            "Colors &amp; wallpapers",
+            "Photo library",
+            "Custom colors",
             "--swatch-color:#009AC7",
             "System PIN set",
         ):

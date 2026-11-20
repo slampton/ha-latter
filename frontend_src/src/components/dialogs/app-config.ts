@@ -31,6 +31,7 @@ import {
   renderSelectRow,
   renderSettingsRow,
   renderSortableList,
+  renderSwitchRow,
   renderTrashIconButton,
 } from "../controls.js";
 import { renderTimeAppConfigBody } from "./world-clocks.js";
@@ -42,6 +43,7 @@ const APP_MODAL_TITLE_KEYS: Readonly<Record<ConfigurableAppId, StudioTranslation
   area: "dialogs.app_area",
   music: "dialogs.app_music",
   remote: "dialogs.app_remote",
+  weather: "dialogs.app_weather",
   time: "dialogs.app_time",
   calendar: "dialogs.app_calendar",
   clock: "dialogs.app_clock",
@@ -476,6 +478,40 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
       class="btn btn-text"
     >
       ${store.t("dialogs.manage_remote_groups")}
+    </button>`;
+  } else if (app === "weather") {
+    const weatherAppBgPref = store.entity.getPref("weather_app_background");
+    const weatherAppBgRaw = weatherAppBgPref?.value ?? cfg.weather_app_background;
+    const weatherAppBgOn =
+      weatherAppBgRaw !== undefined && weatherAppBgRaw !== null
+        ? typeof weatherAppBgRaw === "string"
+          ? !["", "0", "false", "off", "disabled"].includes(weatherAppBgRaw.trim().toLowerCase())
+          : Boolean(weatherAppBgRaw)
+        : true;
+    body = html`<div class="settings-list">
+      ${renderSwitchRow({
+        id: "cfg-weather_app_background",
+        label: store.t("dialogs.weather_bg_label"),
+        description: store.t("dialogs.weather_bg_desc"),
+        checked: weatherAppBgOn,
+        onChange: (checked) =>
+          store.entity.stageDeviceSetting(
+            "weather_app_background",
+            checked,
+            "cfg-weather_app_background",
+          ),
+      })}
+    </div>`;
+    extraAction = html`<button
+      type="button"
+      id="btn-weather-open-shared"
+      @click=${() => {
+        store.entity.closeAppConfigModal();
+        store.openSystemSection("shared_entities", "card-whole-home");
+      }}
+      class="btn btn-text"
+    >
+      ${store.t("action.open_shared_entities")}
     </button>`;
   } else if (app === "time") {
     donePrimary = false;

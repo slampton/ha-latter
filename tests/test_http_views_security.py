@@ -37,8 +37,10 @@ from custom_components.latter.http import (
     verify,
 )
 from custom_components.latter.wallpapers import (
+    DAY_NIGHT_SKY_PRESET_ID,
     async_refresh_wallpaper_cache,
-    delete_uploaded_wallpaper,
+    create_collection,
+    delete_photo,
 )
 
 
@@ -183,20 +185,58 @@ async def test_hmac_rotation_and_wallpaper_upload_and_proxy_views(
     sig_ondemand = sign(b"secret_a", "pocket", "camera_audio:camera.front", exp_short)
     assert not verify(b"secret_a", "pocket", "camera_audio:camera.front", sig_ondemand, 1_001_000)
 
-    # 1) Zero-device hub setup -> 'system' wallpaper preview signing MUST work
+    # 1) Zero-device hub setup -> 'system' wallpaper preview signing MUST work (binding mode!)
     entry0, sys0, coord0 = await setup_latter_hub(hass, with_device=False)
     assert coord0 is None
     wp_view = LatterWallpaperProxyView(hass)
-    sys_sig = sys0.url_signer.sign_payload_resource("wallpaper:preset:aurora|466|466|square")
+    sys_sig = sys0.url_signer.sign_payload_resource(
+        "wallpaper:preset:forest_mountains|466|466|square|wallpaper"
+    )
     resp_sys = await wp_view.get(
-        _make_get_request(f"/api/latter/wallpaper/system?src=preset:aurora&w=466&h=466&sig={sys_sig}"),
+        _make_get_request(
+            f"/api/latter/wallpaper/system?src=preset:forest_mountains&w=466&h=466&mode=wallpaper&sig={sys_sig}"
+        ),
         "system",
     )
     assert resp_sys.status == 200
     assert resp_sys.content_type == "image/jpeg"
 
+    # Cross-mode signature reuse must fail (403)
+    resp_wrong_mode = await wp_view.get(
+        _make_get_request(
+            f"/api/latter/wallpaper/system?src=preset:forest_mountains&w=466&h=466&mode=screensaver&sig={sys_sig}"
+        ),
+        "system",
+    )
+    assert resp_wrong_mode.status == 403
+
+    # Day & Night Sky split preview & live sun.sun screensaver render
+    dns_split_sig = sys0.url_signer.sign_payload_resource(
+        f"wallpaper:{DAY_NIGHT_SKY_PRESET_ID}|240|240|square|wallpaper"
+    )
+    resp_dns_split = await wp_view.get(
+        _make_get_request(
+            f"/api/latter/wallpaper/system?src={DAY_NIGHT_SKY_PRESET_ID}&w=240&h=240&mode=wallpaper&sig={dns_split_sig}"
+        ),
+        "system",
+    )
+    assert resp_dns_split.status == 200
+    assert resp_dns_split.content_type == "image/jpeg"
+
+    hass.states.async_set("sun.sun", "below_horizon")
+    dns_ss_sig = sys0.url_signer.sign_payload_resource(
+        f"wallpaper:{DAY_NIGHT_SKY_PRESET_ID}|240|240|square|screensaver"
+    )
+    resp_dns_ss = await wp_view.get(
+        _make_get_request(
+            f"/api/latter/wallpaper/system?src={DAY_NIGHT_SKY_PRESET_ID}&w=240&h=240&mode=screensaver&sig={dns_ss_sig}"
+        ),
+        "system",
+    )
+    assert resp_dns_ss.status == 200
+
     resp_bad_sig = await wp_view.get(
-        _make_get_request("/api/latter/wallpaper/system?src=preset:aurora&w=466&h=466&sig=invalid"),
+        _make_get_request("/api/latter/wallpaper/system?src=preset:forest_mountains&w=466&h=466&sig=invalid"),
         "system",
     )
     assert resp_bad_sig.status == 403
@@ -260,12 +300,18 @@ async def test_hmac_rotation_and_wallpaper_upload_and_proxy_views(
     )
     assert r_404_unknown.status == 404
 
-    # Valid device-scoped upload (200)
+    # Valid device-scoped upload with crop, name, and collection metadata (200)
+    col_rec = create_collection(hass2, "Uploads")
     r_200_dev = await upload_view.post(
         _MultipartRequest(
             is_admin=True,
             parts=[
                 _MultipartPart("subentry_id", text_val=coord.subentry_id),
+                _MultipartPart("crop_x", text_val="0.3"),
+                _MultipartPart("crop_y", text_val="0.7"),
+                _MultipartPart("crop_zoom", text_val="1.5"),
+                _MultipartPart("name", text_val="Golden Sunset"),
+                _MultipartPart("collection_id", text_val=col_rec["id"]),
                 _MultipartPart("file", file_bytes=jpeg_raw, filename="sunset.jpg"),
             ],
         )
@@ -274,13 +320,19 @@ async def test_hmac_rotation_and_wallpaper_upload_and_proxy_views(
     body_dev = json.loads(r_200_dev.body.decode("utf-8"))
     assert body_dev["ok"] is True
     uploaded_src = body_dev["source_id"]
+    assert uploaded_src.startswith("photo:")
+    assert body_dev["photo"]["name"] == "Golden Sunset"
+    assert body_dev["photo"]["crop"] == {"x": 0.3, "y": 0.7, "zoom": 1.5}
+    assert body_dev["photo"]["collections"] == [col_rec["id"]]
     assert coord.wallpaper_source == uploaded_src
 
     # Proxy serves the uploaded wallpaper & hits LRU cache on second request
-    dev_sig = coord.sign_payload_resource(f"wallpaper:{uploaded_src}|466|466|circle")
+    dev_sig = coord.sign_payload_resource(
+        f"wallpaper:{uploaded_src}|466|466|circle|wallpaper"
+    )
     r_wp_miss = await wp_view2.get(
         _make_get_request(
-            f"/api/latter/wallpaper/{coord.device_slug}?src={uploaded_src}&w=466&h=466&sig={dev_sig}"
+            f"/api/latter/wallpaper/{coord.device_slug}?src={uploaded_src}&w=466&h=466&mode=wallpaper&sig={dev_sig}"
         ),
         coord.device_slug,
     )
@@ -289,12 +341,64 @@ async def test_hmac_rotation_and_wallpaper_upload_and_proxy_views(
 
     r_wp_hit = await wp_view2.get(
         _make_get_request(
-            f"/api/latter/wallpaper/{coord.device_slug}?src={uploaded_src}&w=466&h=466&sig={dev_sig}"
+            f"/api/latter/wallpaper/{coord.device_slug}?src={uploaded_src}&w=466&h=466&mode=wallpaper&sig={dev_sig}"
         ),
         coord.device_slug,
     )
     assert r_wp_hit.status == 200
     assert r_wp_hit.headers["X-Latter-Cache"] == "HIT"
+
+    # Screensaver mode (darken=1.0) serves brighter pixels than wallpaper mode (darken=0.78)
+    ss_sig = coord.sign_payload_resource(
+        f"wallpaper:{uploaded_src}|466|466|square|screensaver"
+    )
+    r_ss = await wp_view2.get(
+        _make_get_request(
+            f"/api/latter/wallpaper/{coord.device_slug}?src={uploaded_src}&w=466&h=466&shape=square&mode=screensaver&sig={ss_sig}"
+        ),
+        coord.device_slug,
+    )
+    assert r_ss.status == 200
+    with (
+        Image.open(io.BytesIO(r_wp_miss.body)) as im_wp,
+        Image.open(io.BytesIO(r_ss.body)) as im_ss,
+    ):
+        assert sum(im_ss.getpixel((233, 233))) > sum(im_wp.getpixel((233, 233)))
+
+    # Studio original mode & separate thumbnail LRU cache (<= 240 px)
+    orig_sig = coord.sign_payload_resource(
+        f"wallpaper:{uploaded_src}|1200|1200|square|original"
+    )
+    r_orig = await wp_view2.get(
+        _make_get_request(
+            f"/api/latter/wallpaper/{coord.device_slug}?src={uploaded_src}&w=1200&h=1200&shape=square&mode=original&sig={orig_sig}"
+        ),
+        coord.device_slug,
+    )
+    assert r_orig.status == 200
+
+    # Signed `/media` preview thumbnail security check
+    from pathlib import Path
+
+    media_dir = Path(hass2.config.config_dir) / "media_test"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    (media_dir / "sample.jpg").write_bytes(jpeg_raw)
+    hass2.config.media_dirs = {"local": str(media_dir)}
+    m_url = _sys_obj.url_signer.build_media_preview_url("local", "sample.jpg", 160, 160)
+    r_media_ok = await wp_view2.get(_make_get_request(m_url), "system")
+    assert r_media_ok.status == 200
+    assert r_media_ok.content_type == "image/jpeg"
+    # Traversal attempt rejected (404 / 403)
+    bad_m_sig = _sys_obj.url_signer.sign_on_demand_resource(
+        "media_preview:local|../secret.jpg|160|160", ttl_s=600
+    )
+    r_media_trav = await wp_view2.get(
+        _make_get_request(
+            f"/api/latter/wallpaper/system?media_root=local&media_path=../secret.jpg&w=160&h=160&sig={bad_m_sig}"
+        ),
+        "system",
+    )
+    assert r_media_trav.status == 404
 
     # 720x720 square display manifest serves native 720x720 album art and 720x720 wallpapers
     hass2.states.async_set(
@@ -304,7 +408,7 @@ async def test_hmac_rotation_and_wallpaper_upload_and_proxy_views(
     assert coord.art_dimensions == (720, 720)
     assert coord.wallpaper_dimensions == (720, 720)
     wp_720_url = coord.build_wallpaper_url()
-    assert "w=720&h=720&shape=square" in wp_720_url
+    assert "w=720&h=720&shape=square&mode=wallpaper" in wp_720_url
     r_wp_720 = await wp_view2.get(_make_get_request(wp_720_url), coord.device_slug)
     assert r_wp_720.status == 200
     with Image.open(io.BytesIO(r_wp_720.body)) as img_720:
@@ -314,7 +418,7 @@ async def test_hmac_rotation_and_wallpaper_upload_and_proxy_views(
     sig_720 = parse_qs(urlsplit(wp_720_url).query)["sig"][0]
     r_wp_720_default = await wp_view2.get(
         _make_get_request(
-            f"/api/latter/wallpaper/{coord.device_slug}?src={uploaded_src}&shape=square&sig={sig_720}"
+            f"/api/latter/wallpaper/{coord.device_slug}?src={uploaded_src}&shape=square&mode=wallpaper&sig={sig_720}"
         ),
         coord.device_slug,
     )
@@ -322,8 +426,8 @@ async def test_hmac_rotation_and_wallpaper_upload_and_proxy_views(
     with Image.open(io.BytesIO(r_wp_720_default.body)) as img_720_def:
         assert img_720_def.size == (720, 720)
 
-    # Delete uploaded wallpaper (canonical System signature without device_slug)
-    assert delete_uploaded_wallpaper(hass2, uploaded_src) is True
+    # Delete uploaded photo (canonical System signature without device_slug)
+    assert delete_photo(hass2, uploaded_src) is True
     await async_refresh_wallpaper_cache(hass2)
     assert await async_unload_entry(hass2, entry) is True
 

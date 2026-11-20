@@ -164,6 +164,14 @@ export function makeFakeStore(opts: FakeStoreOptions = {}): FakeStoreHarness {
     preview_url: `/api/latter/camera/system?entity_id=${encodeURIComponent(cameraEntity)}&sig=fake`,
     expires_in: 600,
   });
+  store.ws.browseMediaFolder = async (root, subpath) => ({
+    roots: [{ id: "local", name: "Media" }],
+    root: root || "local",
+    subpath: subpath || "",
+    parent_subpath: null,
+    folders: [],
+    images: [],
+  });
 
   const origShowToast = store.showToast.bind(store);
   store.showToast = (msg: string, isError = false) => {
@@ -212,6 +220,7 @@ export function makeFakeStore(opts: FakeStoreOptions = {}): FakeStoreHarness {
     system_config: {},
     system_devices: [],
     device_groups: [],
+    photo_collections: [],
     wallpapers: [],
     system_wallpapers: [],
     discovered_latter_devices: [],

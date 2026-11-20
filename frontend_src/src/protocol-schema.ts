@@ -1,7 +1,7 @@
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 
 export const PROTOCOL_CONTRACT_VERSION = 3;
-export const STUDIO_REV = 38;
+export const STUDIO_REV = 39;
 
 export const ALLOWED_DEVICE_ACTIONS: ReadonlyArray<string> = [
   "restart",
@@ -34,7 +34,14 @@ export const SYSTEM_WS_COMMANDS: ReadonlySet<string> = new Set([
   "apply_batch_device_setting",
   "test_doorbell_speaker",
   "mint_camera_preview_url",
-  "delete_wallpaper",
+  "delete_photo",
+  "create_photo_collection",
+  "rename_photo_collection",
+  "delete_photo_collection",
+  "update_photo_metadata",
+  "bulk_update_photos",
+  "browse_media_folder",
+  "import_media_photos",
   "save_system_config",
   "rotate_signing_key",
   "set_security_pin",
@@ -43,8 +50,7 @@ export const SYSTEM_WS_COMMANDS: ReadonlySet<string> = new Set([
 export const DEVICE_WS_COMMANDS: ReadonlySet<string> = new Set([
   "esphome_entity_action",
   "device_action",
-  "select_wallpaper",
-  "toggle_wallpaper_favorite",
+  "set_device_photo_pool",
   "save_device_config",
 ]);
 
@@ -263,8 +269,8 @@ export const DEVICE_PREF_SPECS_CATALOG: ReadonlyArray<DevicePrefSpecItem> = [
   {key: "battery_screen_timeout", label: "Battery Screen Timeout", domain: "select", default: "30s", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["10s", "15s", "30s", "1 min", "2 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display_battery" },
   {key: "docked_idle_timeout", label: "Docked Idle Timeout", domain: "select", default: "1 min", section: "display", esphome_section: "display", group_tier: "behavior", options: ["10s", "15s", "30s", "1 min", "2 min", "5 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "battery_hibernate_timeout", label: "Battery Hibernate Timeout", domain: "select", default: "15 min", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["5 min", "10 min", "15 min", "30 min", "Disabled"], min: null, max: null, step: null, unit: "", capability: "display_battery" },
-  {key: "docked_screensaver", label: "Docked Screensaver", domain: "switch", default: true, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "screensaver_style", label: "Screensaver Style", domain: "select", default: "Ambient Clock", section: "display", esphome_section: "display", group_tier: "display", options: ["Ambient Clock", "Aurora", "Starfield", "Digital Rain", "Fireworks"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "screensaver_mode", label: "Screensaver mode", domain: "select", default: "Docked Only", section: "display", esphome_section: "display", group_tier: "behavior", options: ["Docked Only", "Always", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "screensaver_style", label: "Screensaver Style", domain: "select", default: "Ambient Clock", section: "display", esphome_section: "display", group_tier: "display", options: ["Ambient Clock", "Photo Frame", "Aurora", "Starfield", "Digital Rain", "Fireworks"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "hold_crown_power_off", label: "Hold Crown to Power Off", domain: "switch", default: false, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display_battery" },
   {key: "auto_brightness_mode", label: "Auto Brightness Mode", domain: "select", default: "Sun Synchronized", section: "display", esphome_section: "display", group_tier: "behavior", options: ["Disabled", "Sun Synchronized", "Time Schedule"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "manual_brightness", label: "Manual Brightness", domain: "number", default: 80, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
@@ -318,6 +324,8 @@ export const DEVICE_PREF_SPECS_CATALOG: ReadonlyArray<DevicePrefSpecItem> = [
   {key: "camera_framing", label: "Camera framing", domain: "select", default: "Uncropped", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Uncropped", "Fill"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "camera_stream_mode", label: "Camera stream mode", domain: "select", default: "Auto", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Auto", "Low Bandwidth", "Snapshots"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "camera_doorbell_popup", label: "Doorbell ring popup", domain: "select", default: "Snapshot", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Snapshot", "Live Video"], min: null, max: null, step: null, unit: "", capability: "hw_jpeg" },
+  {key: "screensaver_photo_clock", label: "Show subtle clock", domain: "switch", default: false, section: "display", esphome_section: "display", group_tier: "display", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "weather_app_background", label: "Weather app background", domain: "switch", default: true, section: "interface", esphome_section: "display", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
 ];
 
 export const DEVICE_PREF_SPECS_MAP: Readonly<Record<string, DevicePrefSpecItem>> = Object.fromEntries(DEVICE_PREF_SPECS_CATALOG.map((s) => [s.key, s]));

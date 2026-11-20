@@ -16,6 +16,7 @@ import { renderDevicesDiscoveredView } from "./devices-discovered-view.js";
 import { renderDevicesListView } from "./devices-list-view.js";
 import { renderSystemGroupsView } from "./system-groups-view.js";
 import { renderSystemOverviewView } from "./system-overview-view.js";
+import { renderSystemPhotosView } from "./system-photos-view.js";
 import { renderSystemPresenceView } from "./system-presence-view.js";
 import { renderSystemRemotesView } from "./system-remotes-view.js";
 import { renderSystemSharedView } from "./system-shared-view.js";
@@ -26,6 +27,8 @@ export function renderActiveView(store: StudioStore): TemplateResult {
     switch (store.currentViewId) {
       case "shared_entities":
         return renderSystemSharedView(store);
+      case "photos":
+        return renderSystemPhotosView(store);
       case "remotes":
         return renderSystemRemotesView(store);
       case "system_sync":

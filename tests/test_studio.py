@@ -53,7 +53,7 @@ class TestPayloadDiet(unittest.TestCase):
         self.assertGreaterEqual(cmds.count("include_catalog=False"), 3)
         self.assertIn("_track_coordinators()", cmds)
         self.assertIn("_track_device_states()", cmds)
-        self.assertIn("_apply_wallpaper_config(", cmds)
+        self.assertIn("_cmd_set_device_photo_pool(", cmds)
         views_src = (LATTER_DIR / "http.py").read_text(encoding="utf-8")
         self.assertIn("esphome_inspector", payload_src)
         self.assertIn("self._cached_bytes", views_src)
@@ -167,8 +167,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("TRACKER_KIND_TOKENS", js)
         self.assertIn("ignoreDiscoveredDevice", discovered_view)
         self.assertIn("unignoreDiscoveredDevice", discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 38)
-        self.assertIn("STUDIO_REV = 38", js)
+        self.assertEqual(latter_const.STUDIO_REV, 39)
+        self.assertIn("STUDIO_REV = 39", js)
         self.assertIn(".card.handoff-active", js)
         self.assertIn(".area-presence-box.handoff-active", js)
         self.assertIn(".calibrate-target-box.handoff-active", js)
@@ -275,9 +275,14 @@ class TestViewLayout(unittest.TestCase):
             "card.calendars",
             "card.cameras_doorbell",
             "card.custom_colors",
-            "card.wallpapers",
         ):
             self.assertIn(f'store.t("{key}")', shared_entities)
+        self.assertNotIn("card-system-wallpapers", shared_entities)
+        photos_view = section("photos")
+        self.assertIn('id: "card-photo-library"', photos_view)
+        self.assertIn('store.t("card.photo_library")', photos_view)
+        self.assertIn('id="btn-photos-upload"', photos_view)
+        self.assertIn('id="btn-photos-import-media"', photos_view)
         self.assertIn('class="hub-domain-box"', shared_entities)
         display_key_order = (
             'store.t("card.screensaver")',
@@ -297,7 +302,7 @@ class TestViewLayout(unittest.TestCase):
         ):
             self.assertNotIn(retired_display_card, display_view)
             self.assertNotIn(retired_display_card, en_json)
-        self.assertIn('store.t("dev_display.wp_weather_bg_note")', js)
+        self.assertIn('id="wp-weather-override-note"', display_view)
         self.assertIn('store.t("dev_display.bedtime_brightness_override_note")', display_view)
         self.assertIn('store.t("card.home_screen")', interface_view)
         self.assertIn('store.t("card.app_dock")', interface_view)
@@ -340,8 +345,9 @@ class TestViewLayout(unittest.TestCase):
         ):
             self.assertNotIn(retired_group_ui, js)
         self.assertIn('"pocket_carry"', js)
-        self.assertIn('"btn-upload-wp"', js)
-        self.assertIn('"btn-upload-sys-wp"', js)
+        self.assertIn('id="btn-choose-wallpaper"', display_view)
+        self.assertIn('id="btn-manage-photo-library"', display_view)
+        self.assertIn('id="btn-photos-upload"', photos_view)
         self.assertIn('id="st-status-chip"', overview)
         self.assertIn('class="status-tiles"', overview)
         self.assertIn('id: "card-device-assignments"', overview)
@@ -402,7 +408,8 @@ class TestViewLayout(unittest.TestCase):
             'id="cap-cameras-calendars"',
             'id="cap-media-remotes"',
             'id="cap-device-groups"',
-            'id="cap-colors-wallpapers"',
+            'id="cap-photo-library"',
+            'id="cap-custom-colors"',
             'id="cap-perimeter-security"',
         ):
             self.assertIn(sys_ov_snippet, sys_overview)
@@ -444,7 +451,7 @@ class TestViewLayout(unittest.TestCase):
         disp_fn_start = js.index("function renderDeviceDisplayView(")
         disp_view = js[disp_fn_start:js.index("</section>", disp_fn_start)]
         self.assertNotIn("weather-celestial-bodies", disp_view)
-        self.assertIn('store.t("dev_display.wp_weather_bg_note")', disp_view)
+        self.assertIn('id="wp-weather-override-note"', disp_view)
         start = js.index('<section id="view-interface"')
         view = js[start:js.index("</section>", start)]
         self.assertIn('store.t("card.home_screen")', view)

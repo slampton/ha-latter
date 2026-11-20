@@ -1931,6 +1931,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "alert_camera_entity": alert_camera_entity,
         "local_tz_info": local_tz_info,
         "world_clocks_summary": world_clocks_summary,
+        "screensaver_photo_url": coordinator.build_screensaver_photo_url(),
     }
     area_rev, area_payload = coordinator._pack_domain_payload(
         "area_context",
@@ -1979,6 +1980,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         alarm_caps,
         camera_stream_url,
         alert_camera_entity,
+        area_attrs["screensaver_photo_url"],
     )
     area_attrs["rev"] = area_rev
     area_attrs["payload"] = area_payload

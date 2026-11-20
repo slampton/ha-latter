@@ -53,6 +53,7 @@ const EN_COMMON_STRINGS = {
   // View titles (HA Sentence case; proper/IT nouns preserved)
   "view.system_overview": "Overview",
   "view.shared_entities": "Shared entities",
+  "view.photos": "Photos",
   "view.remotes": "Media & remotes",
   "view.system_sync": "Device groups",
   "view.area_tracking": "BLE & Area presence",
@@ -380,13 +381,35 @@ const EN_DEVICES_STRINGS = {
   "dev_display.screensaver_preview_desc":
     "Starts the screensaver on this Device immediately.",
   "dev_display.preview_btn": "Preview",
+  "dev_display.screensaver_photo_clock_desc":
+    "Draws a compact subtle clock in the corner while displaying photos.",
+  "dev_display.screensaver_pool_label": "Photo frame photos",
+  "dev_display.screensaver_pool_empty": "No photos selected — choose photos or a collection.",
+  "dev_display.screensaver_choose_photos": "Choose photos…",
+  "dev_display.screensaver_shuffle_desc":
+    "Randomizes photo order instead of advancing alphabetically.",
   "dev_display.custom_color_label": "Custom color",
   "dev_display.custom_color_desc": "Used when Color profile is set to Custom.",
   "dev_display.current_color_option": "Current ({hex})",
   "dev_display.add_color_btn": "Add color",
   "dev_display.wallpapers_subtitle":
-    "Shared presets and uploaded photos cropped for this display.",
+    "Shared photo library and collections cropped automatically for this display.",
   "dev_display.active_wallpaper_label": "Active wallpaper",
+  "dev_display.choose_wallpaper": "Choose wallpaper…",
+  "dev_display.manage_photo_library": "Manage photo library",
+  "dev_display.pool_single_meta": "Single photo • {name}",
+  "dev_display.pool_collection_meta": "Collection: {collection} ({count} photos)",
+  "dev_display.pool_collection_one_meta": "Collection: {collection} (1 photo)",
+  "dev_display.pool_custom_meta": "Custom selection ({count} photos)",
+  "dev_display.pool_custom_one_meta": "Custom selection (1 photo)",
+  "dev_display.pool_off_meta": "Off — no photos selected.",
+  "dev_display.wp_override_home_and_weather":
+    "Live weather background is active on Home and Sky & weather — wallpapers appear on other screens.",
+  "dev_display.wp_override_home_only":
+    "Weather background is enabled on Home — wallpapers appear across other screens.",
+  "dev_display.wp_override_weather_only":
+    "Live weather background is active in Sky & weather — wallpapers appear on Home and other screens.",
+  "dev_display.open_interface": "Open Interface",
   "dev_display.wp_weather_bg_note":
     "Weather background is enabled on Home — wallpapers appear across other screens.",
   "dev_display.wp_rotating_named_starred_one":
@@ -474,6 +497,8 @@ const EN_DEVICES_STRINGS = {
   "dev_interface.remote_follow_area": "Follow the active Area",
   "dev_interface.remote_all": "All System remotes",
   "dev_interface.weather_meta": "Current, forecast, Sun & Moon",
+  "dev_interface.weather_meta_live_sky": "Live weather sky",
+  "dev_interface.weather_meta_wallpaper": "Uses device wallpaper",
   "dev_interface.time_utc_world_one": "UTC + 1 world clock",
   "dev_interface.time_utc_world_many": "UTC + {count} world clocks",
   "dev_interface.time_world_one": "1 world clock",
@@ -639,6 +664,7 @@ const EN_SYSTEM_STRINGS = {
   "card.calendars": "Calendars",
   "card.cameras_doorbell": "Cameras & doorbell audio",
   "card.custom_colors": "Custom colors",
+  "card.photo_library": "Photo library",
   "card.remote_controls": "Remote controls",
   "card.volume_overrides": "Speaker volume overrides",
   "card.remote_groups": "Remote control groups",
@@ -724,7 +750,7 @@ const EN_SYSTEM_STRINGS = {
   "sys_overview.unconfigured_areas_many":
     "+{count} additional Home Assistant Areas without Latter Devices or BLE coverage.",
   "sys_overview.capabilities_subtitle":
-    "Shared entities, media routing, Device groups, colors & wallpapers, and security policies.",
+    "Shared entities, photo library, media routing, Device groups, custom colors, and security policies.",
   "sys_overview.active_of_six": "{count} / 6 active",
   "sys_overview.hub_weather": "Weather",
   "sys_overview.hub_alarm": "Alarm",
@@ -761,6 +787,16 @@ const EN_SYSTEM_STRINGS = {
   "sys_overview.groups_meta_empty":
     "Shared baselines that keep assigned Devices aligned.",
   "sys_overview.custom_group_chip": "Custom: {count}",
+  "sys_overview.cap_photo_library": "Photo library",
+  "sys_overview.photos_count_one": "1 photo",
+  "sys_overview.photos_count_many": "{count} photos",
+  "sys_overview.defaults_one": "1 default",
+  "sys_overview.defaults_many": "{count} defaults",
+  "sys_overview.collections_one": "1 collection",
+  "sys_overview.collections_many": "{count} collections",
+  "sys_overview.photo_library_meta": "{defaults} • {photos} • {collections}",
+  "sys_overview.cap_custom_colors": "Custom colors",
+  "sys_overview.custom_colors_empty": "Add shared accent swatches for Custom color profiles.",
   "sys_overview.cap_colors_wallpapers": "Colors & wallpapers",
   "sys_overview.wallpapers_one": "1 wallpaper",
   "sys_overview.wallpapers_many": "{count} wallpapers",
@@ -1175,7 +1211,11 @@ const EN_SYSTEM_STRINGS = {
   "dialogs.app_area": "Area control",
   "dialogs.app_music": "Music",
   "dialogs.app_remote": "Remote control",
+  "dialogs.app_weather": "Sky & weather",
   "dialogs.app_time": "Time",
+  "dialogs.weather_bg_label": "Live weather background",
+  "dialogs.weather_bg_desc":
+    "Show the live animated weather sky inside the Sky & weather app. Turn off to use this Device's wallpaper instead.",
   "dialogs.app_calendar": "Calendar",
   "dialogs.app_clock": "Clock face",
   "dialogs.app_tools": "Tools",
@@ -1339,10 +1379,141 @@ const EN_SYSTEM_STRINGS = {
   "confirm.rotate_signing_key.body":
     "Invalidates active signed wallpaper, camera snapshot, and doorbell audio URLs until Devices receive the next state push.",
   "confirm.rotate_signing_key.confirm": "Rotate signing key",
-  "confirm.delete_wallpaper.title": "Delete wallpaper \"{name}\"?",
-  "confirm.delete_wallpaper.body":
-    "Permanently deletes this uploaded wallpaper. Devices using it revert to their fallback background.",
-  "confirm.delete_wallpaper.confirm": "Delete wallpaper",
+  "confirm.delete_photo.title": "Delete photo \"{name}\"?",
+  "confirm.delete_photo.body":
+    "Permanently deletes this photo from the System library and removes it from any Device wallpaper or Photo frame pools.",
+  "confirm.delete_photo.confirm": "Delete photo",
+  "confirm.delete_photos_bulk.title": "Delete {count} photos?",
+  "confirm.delete_photos_bulk.body":
+    "Permanently deletes the selected uploaded photos and prunes them from Device wallpaper and Photo frame pools.",
+  "confirm.delete_photos_bulk.confirm": "Delete photos",
+  "confirm.delete_collection.title": "Delete collection \"{name}\"?",
+  "confirm.delete_collection.body":
+    "Deletes this collection label. Photos inside stay in your Photo library.",
+  "confirm.delete_collection.confirm": "Delete collection",
+  // System -> Photos library, upload cropper, & HA Media import (D-072)
+  "photos.subtitle":
+    "Shared System photo library and collections used for Device wallpapers and Photo frame screensavers.",
+  "photos.upload_btn": "Upload photos",
+  "photos.import_media_btn": "Import from Media",
+  "photos.new_collection_btn": "New collection",
+  "photos.new_collection_placeholder": "Collection name (e.g. Family, Landscapes)…",
+  "photos.create_collection": "Create",
+  "photos.rename_collection_aria": "Rename collection {name}",
+  "photos.delete_collection_aria": "Delete collection {name}",
+  "photos.rename_collection_placeholder": "Collection name…",
+  "photos.filter_all": "All",
+  "photos.filter_defaults": "Defaults",
+  "photos.filter_my_photos": "My photos",
+  "photos.filter_uncategorized": "Uncategorized",
+  "photos.search_placeholder": "Search photos by name…",
+  "photos.search_aria": "Search photos",
+  "photos.select_mode_btn": "Select",
+  "photos.done_selecting_btn": "Done selecting",
+  "photos.selected_count_one": "1 selected",
+  "photos.selected_count_many": "{count} selected",
+  "photos.select_all_page": "Select page",
+  "photos.clear_selection": "Clear selection",
+  "photos.bulk_collection_aria": "Choose collection for selected photos",
+  "photos.bulk_choose_collection": "— Choose collection —",
+  "photos.bulk_add_to_collection": "Add to collection",
+  "photos.bulk_remove_from_collection": "Remove from collection",
+  "photos.bulk_delete_btn": "Delete selected",
+  "photos.badge_dynamic": "Dynamic",
+  "photos.badge_default": "Default",
+  "photos.badge_media": "Media",
+  "photos.edit_photo_aria": "Edit photo {name}",
+  "photos.select_photo_aria": "Select photo {name}",
+  "photos.empty_library":
+    "No photos match this filter. Upload photos or import from Home Assistant Media.",
+  "photos.page_status": "Showing {start}–{end} of {total}",
+  "photos.prev_page": "Previous",
+  "photos.next_page": "Next",
+  "photos.created_collection_toast": "Created collection \"{name}\"",
+  "photos.renamed_collection_toast": "Renamed collection to \"{name}\"",
+  "photos.deleted_collection_toast": "Deleted collection",
+  "photos.updated_photo_toast": "Saved photo changes",
+  "photos.deleted_photo_toast": "Deleted photo",
+  "photos.bulk_updated_toast": "Updated {count} photo(s)",
+  "photos.bulk_deleted_toast": "Deleted {count} photo(s)",
+  // Photo Editor & Crop modal
+  "photo_edit.title": "Edit photo",
+  "photo_edit.name_label": "Photo name",
+  "photo_edit.name_placeholder": "Enter a photo name…",
+  "photo_edit.crop_heading": "Framing & focal point",
+  "photo_edit.crop_hint":
+    "Drag to pan and use the slider to zoom. Originals are kept intact so every display shape stays sharp.",
+  "photo_edit.aspect_aria": "Preview display shape",
+  "photo_edit.aspect_square": "Square + circle",
+  "photo_edit.aspect_round": "Round",
+  "photo_edit.aspect_widescreen": "Widescreen",
+  "photo_edit.zoom_label": "Zoom",
+  "photo_edit.reset_crop": "Reset crop",
+  "photo_edit.collections_label": "Collections",
+  "photo_edit.collections_empty": "Create a collection in Photos to organize photos into albums.",
+  "photo_edit.dimensions_meta": "{width} × {height} px",
+  "photo_edit.source_media": "Imported from {path}",
+  // Multi-file Upload & Crop Staging modal
+  "photo_upload.title": "Upload photos",
+  "photo_upload.dropzone_title": "Drag & drop photos here, or browse",
+  "photo_upload.dropzone_hint": "JPEG, PNG, or WebP up to 15 MB each. Select multiple files at once.",
+  "photo_upload.choose_files": "Choose files",
+  "photo_upload.add_more": "Add more files",
+  "photo_upload.collection_label": "Add all to collection",
+  "photo_upload.no_collection": "— No collection —",
+  "photo_upload.upload_all_one": "Upload photo",
+  "photo_upload.upload_all_many": "Upload all ({count})",
+  "photo_upload.uploading_progress": "Uploading {current} of {total} — {percent}%",
+  "photo_upload.remove_staged_aria": "Remove {name} from upload queue",
+  "photo_upload.select_staged_aria": "Adjust crop for {name}",
+  "photo_upload.uploaded_one_toast": "Uploaded 1 photo",
+  "photo_upload.uploaded_many_toast": "Uploaded {count} photos",
+  "photo_upload.file_too_large": "Skipped \"{name}\" (exceeds 15 MB limit)",
+  // HA Media Folder Import modal
+  "media_import.title": "Import from Home Assistant Media",
+  "media_import.subtitle":
+    "Browse local Media folders and mounted NAS shares configured in Home Assistant.",
+  "media_import.root_label": "Media folder",
+  "media_import.up_folder": "Up",
+  "media_import.select_all_folder": "Select all in folder",
+  "media_import.clear_folder_selection": "Clear selection",
+  "media_import.already_imported": "Imported",
+  "media_import.too_large": "Over 15 MB",
+  "media_import.empty_folder": "No subfolders or supported images found in this folder.",
+  "media_import.empty_roots":
+    "No Home Assistant Media directories are configured.",
+  "media_import.collection_label": "Add to collection",
+  "media_import.new_from_folder": "New collection from folder name",
+  "media_import.new_collection_name": "New collection name",
+  "media_import.import_btn_one": "Import 1 photo",
+  "media_import.import_btn_many": "Import {count} photos",
+  "media_import.importing_btn": "Importing…",
+  "media_import.summary_toast":
+    "Imported {imported} photo(s){skippedSuffix}{failedSuffix}",
+  "media_import.skipped_suffix": " ({count} duplicate skipped)",
+  "media_import.failed_suffix": " ({count} failed)",
+  // Shared Photo Pool Picker modal
+  "photo_picker.title_wallpaper": "Choose wallpaper",
+  "photo_picker.title_screensaver": "Choose Photo frame photos",
+  "photo_picker.mode_aria": "Photo selection mode",
+  "photo_picker.mode_single": "Single photo",
+  "photo_picker.mode_collection": "Collection",
+  "photo_picker.mode_custom": "Custom selection",
+  "photo_picker.collection_label": "Photo collection",
+  "photo_picker.custom_hint": "Select one or more photos to rotate through.",
+  "photo_picker.custom_selected_one": "1 photo selected",
+  "photo_picker.custom_selected_many": "{count} photos selected",
+  "photo_picker.apply_btn": "Apply selection",
+  "photo_picker.empty": "No photos available for this mode yet. Upload photos to get started.",
+  // Group baseline photo pool options
+  "groups.pool_off": "Off",
+  "groups.pool_all": "All photos",
+  "groups.pool_defaults": "Built-in defaults",
+  "groups.pool_uploads": "My uploaded photos",
+  "groups.pool_collection_prefix": "Collection: {name}",
+  "groups.pool_photo_prefix": "Photo: {name}",
+  "groups.screensaver_pool_label": "Photo frame source",
+  "groups.wallpaper_pool_label": "Wallpaper source",
   "confirm.reset_dock.title": "Reset App Dock to default?",
   "confirm.reset_dock.body":
     "Restores the default native apps on the App Dock and removes custom dock shortcuts on this Device.",
@@ -1387,8 +1558,9 @@ const PREF_LABELS = {
   battery_screen_timeout: "Battery screen timeout",
   docked_idle_timeout: "Docked idle timeout",
   battery_hibernate_timeout: "Battery hibernate timeout",
-  docked_screensaver: "Docked screensaver",
+  screensaver_mode: "Screensaver mode",
   screensaver_style: "Screensaver style",
+  screensaver_photo_clock: "Show subtle clock",
   hold_crown_power_off: "Hold crown to power off",
   bedtime_active: "Bedtime mode",
   bedtime_display: "Idle display in bedtime",
@@ -1409,7 +1581,8 @@ const PREF_LABELS = {
   return_to_home_timeout: "Return to Home timeout",
   clock_face: "Clock face",
   time_format: "Time format",
-  weather_background: "Weather background",
+  weather_background: "Live weather background on Home",
+  weather_app_background: "Live weather background",
   home_sun: "Sun",
   home_moon: "Moon",
   wake_greeting: "Wake greeting",
@@ -1449,8 +1622,15 @@ const PREF_LABELS = {
   area_follow_dwell_s: "Area follow dwell",
   area_handoff: "Media Area handoff",
   security_pin_policy: "Perimeter security policy",
+  wallpaper_mode: "Wallpaper mode",
   wallpaper_source: "Wallpaper",
+  wallpaper_collection: "Wallpaper collection",
   wallpaper_cycle_minutes: "Wallpaper rotation",
+  screensaver_photo_mode: "Photo frame pool",
+  screensaver_photo_source: "Photo frame photo",
+  screensaver_photo_collection: "Photo frame collection",
+  screensaver_cycle_minutes: "Photo frame rotation",
+  screensaver_shuffle: "Shuffle photos",
   device_custom_color: "Custom color",
   device_remote_group: "Remote control scope",
   activity_card: "Show Activity card",
@@ -1487,6 +1667,7 @@ const PREF_OPTION_LABELS = {
   // Screensaver, brightness & colors
   "Screen Off": "Screen off",
   "Ambient Clock": "Ambient clock",
+  "Photo Frame": "Photo frame",
   Aurora: "Aurora",
   Starfield: "Starfield",
   "Digital Rain": "Digital rain",
@@ -1987,7 +2168,7 @@ __latterExp(__exports, { Directive: () => Directive, directive: () => directive,
 __latterDef("src/protocol-schema.ts", (__exports, __req) => {
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 const PROTOCOL_CONTRACT_VERSION = 3;
-const STUDIO_REV = 38;
+const STUDIO_REV = 39;
 const ALLOWED_DEVICE_ACTIONS = [
   "restart",
   "find_my",
@@ -2018,7 +2199,14 @@ const SYSTEM_WS_COMMANDS = new Set([
   "apply_batch_device_setting",
   "test_doorbell_speaker",
   "mint_camera_preview_url",
-  "delete_wallpaper",
+  "delete_photo",
+  "create_photo_collection",
+  "rename_photo_collection",
+  "delete_photo_collection",
+  "update_photo_metadata",
+  "bulk_update_photos",
+  "browse_media_folder",
+  "import_media_photos",
   "save_system_config",
   "rotate_signing_key",
   "set_security_pin",
@@ -2026,8 +2214,7 @@ const SYSTEM_WS_COMMANDS = new Set([
 const DEVICE_WS_COMMANDS = new Set([
   "esphome_entity_action",
   "device_action",
-  "select_wallpaper",
-  "toggle_wallpaper_favorite",
+  "set_device_photo_pool",
   "save_device_config",
 ]);
 const SHORTCUT_ROUTES_CATALOG = [
@@ -2203,8 +2390,8 @@ const DEVICE_PREF_SPECS_CATALOG = [
   {key: "battery_screen_timeout", label: "Battery Screen Timeout", domain: "select", default: "30s", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["10s", "15s", "30s", "1 min", "2 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display_battery" },
   {key: "docked_idle_timeout", label: "Docked Idle Timeout", domain: "select", default: "1 min", section: "display", esphome_section: "display", group_tier: "behavior", options: ["10s", "15s", "30s", "1 min", "2 min", "5 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "battery_hibernate_timeout", label: "Battery Hibernate Timeout", domain: "select", default: "15 min", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["5 min", "10 min", "15 min", "30 min", "Disabled"], min: null, max: null, step: null, unit: "", capability: "display_battery" },
-  {key: "docked_screensaver", label: "Docked Screensaver", domain: "switch", default: true, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "screensaver_style", label: "Screensaver Style", domain: "select", default: "Ambient Clock", section: "display", esphome_section: "display", group_tier: "display", options: ["Ambient Clock", "Aurora", "Starfield", "Digital Rain", "Fireworks"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "screensaver_mode", label: "Screensaver mode", domain: "select", default: "Docked Only", section: "display", esphome_section: "display", group_tier: "behavior", options: ["Docked Only", "Always", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "screensaver_style", label: "Screensaver Style", domain: "select", default: "Ambient Clock", section: "display", esphome_section: "display", group_tier: "display", options: ["Ambient Clock", "Photo Frame", "Aurora", "Starfield", "Digital Rain", "Fireworks"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "hold_crown_power_off", label: "Hold Crown to Power Off", domain: "switch", default: false, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display_battery" },
   {key: "auto_brightness_mode", label: "Auto Brightness Mode", domain: "select", default: "Sun Synchronized", section: "display", esphome_section: "display", group_tier: "behavior", options: ["Disabled", "Sun Synchronized", "Time Schedule"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "manual_brightness", label: "Manual Brightness", domain: "number", default: 80, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
@@ -2258,6 +2445,8 @@ const DEVICE_PREF_SPECS_CATALOG = [
   {key: "camera_framing", label: "Camera framing", domain: "select", default: "Uncropped", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Uncropped", "Fill"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "camera_stream_mode", label: "Camera stream mode", domain: "select", default: "Auto", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Auto", "Low Bandwidth", "Snapshots"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "camera_doorbell_popup", label: "Doorbell ring popup", domain: "select", default: "Snapshot", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Snapshot", "Live Video"], min: null, max: null, step: null, unit: "", capability: "hw_jpeg" },
+  {key: "screensaver_photo_clock", label: "Show subtle clock", domain: "switch", default: false, section: "display", esphome_section: "display", group_tier: "display", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "weather_app_background", label: "Weather app background", domain: "switch", default: true, section: "interface", esphome_section: "display", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
 ];
 const DEVICE_PREF_SPECS_MAP = Object.fromEntries(DEVICE_PREF_SPECS_CATALOG.map((s) => [s.key, s]));
 const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:cameras,app:area,app:remote,app:games,app:tools";
@@ -2352,6 +2541,7 @@ const NATIVE_DOCK_CONFIG_APP_MAP = {
   "app:cameras": "cameras",
   "app:area": "area",
   "app:remote": "remote",
+  "app:weather": "weather",
   "app:time": "time",
   "app:calendar": "calendar",
   "app:clock": "clock",
@@ -2365,6 +2555,7 @@ const START_SCREEN_CONFIG_APP_MAP = {
   Cameras: "cameras",
   "Area Controls": "area",
   Remote: "remote",
+  Weather: "weather",
   "Time App": "time",
   Calendar: "calendar",
   "Clock Face": "clock",
@@ -2372,6 +2563,11 @@ const START_SCREEN_CONFIG_APP_MAP = {
   Games: "games",
 };
 const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
+const PHOTO_LIBRARY_PAGE_SIZE = 36;
+const VIRTUAL_COLLECTION_ALL = "__all__";
+const VIRTUAL_COLLECTION_DEFAULTS = "__defaults__";
+const VIRTUAL_COLLECTION_UPLOADS = "__uploads__";
+const VIRTUAL_COLLECTION_UNCATEGORIZED = "__uncategorized__";
 const DEVICE_VIEW_SLUGS
   = {
   dashboard: "overview",
@@ -2385,6 +2581,7 @@ const DEVICE_VIEW_SLUGS
 const SYSTEM_VIEW_SLUGS = {
   system_overview: "overview",
   shared_entities: "shared",
+  photos: "photos",
   remotes: "remotes",
   system_sync: "groups",
   area_tracking: "presence",
@@ -2393,6 +2590,7 @@ const SYSTEM_VIEW_SLUGS = {
 const VIEW_TITLE_KEYS = {
   system_overview: "view.system_overview",
   shared_entities: "view.shared_entities",
+  photos: "view.photos",
   remotes: "view.remotes",
   system_sync: "view.system_sync",
   area_tracking: "view.area_tracking",
@@ -2455,8 +2653,17 @@ const GROUP_BEHAVIOR_NON_PREF_KEYS = [
   "security_pin_policy",
 ];
 const GROUP_DISPLAY_NON_PREF_KEYS = [
+  "wallpaper_mode",
   "wallpaper_source",
+  "wallpaper_collection",
+  "wallpaper_favorites",
   "wallpaper_cycle_minutes",
+  "screensaver_photo_mode",
+  "screensaver_photo_source",
+  "screensaver_photo_collection",
+  "screensaver_photo_ids",
+  "screensaver_cycle_minutes",
+  "screensaver_shuffle",
   "device_custom_color",
 ];
 const GROUP_INTERFACE_NON_PREF_KEYS = [
@@ -2511,7 +2718,7 @@ const LABEL_ACRONYMS = {
   wifi: "Wi-Fi",
   "wi-fi": "Wi-Fi",
 };
-__latterExp(__exports, { ACTIVITY_SOURCES_CATALOG: () => ACTIVITY_SOURCES_CATALOG, ALLOWED_DEVICE_ACTIONS: () => ALLOWED_DEVICE_ACTIONS, AREA_CATEGORIES_CATALOG: () => AREA_CATEGORIES_CATALOG, DEFAULT_ACTIVITY_SOURCES: () => DEFAULT_ACTIVITY_SOURCES, DEFAULT_ACTIVITY_SOURCES_TOKENS: () => DEFAULT_ACTIVITY_SOURCES_TOKENS, DEFAULT_AREA_CATEGORIES: () => DEFAULT_AREA_CATEGORIES, DEFAULT_AREA_CATEGORIES_TOKENS: () => DEFAULT_AREA_CATEGORIES_TOKENS, DEFAULT_DOCK_ROUTES: () => DEFAULT_DOCK_ROUTES, DEFAULT_DOCK_ROUTES_TOKENS: () => DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS: () => DEFAULT_GAMES_ITEMS, DEFAULT_GAMES_ITEMS_TOKENS: () => DEFAULT_GAMES_ITEMS_TOKENS, DEFAULT_HOME_CATEGORIES: () => DEFAULT_HOME_CATEGORIES, DEFAULT_HOME_CATEGORIES_TOKENS: () => DEFAULT_HOME_CATEGORIES_TOKENS, DEFAULT_TOOLS_ITEMS: () => DEFAULT_TOOLS_ITEMS, DEFAULT_TOOLS_ITEMS_TOKENS: () => DEFAULT_TOOLS_ITEMS_TOKENS, DEVICE_PREF_SPECS_CATALOG: () => DEVICE_PREF_SPECS_CATALOG, DEVICE_PREF_SPECS_MAP: () => DEVICE_PREF_SPECS_MAP, DEVICE_WS_COMMANDS: () => DEVICE_WS_COMMANDS, GAMES_ITEMS_CATALOG: () => GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG: () => HOME_CATEGORIES_CATALOG, SHORTCUT_ROUTES_CATALOG: () => SHORTCUT_ROUTES_CATALOG, STUDIO_REV: () => STUDIO_REV, SYSTEM_WS_COMMANDS: () => SYSTEM_WS_COMMANDS, TOOLS_ITEMS_CATALOG: () => TOOLS_ITEMS_CATALOG, WORLD_CLOCK_ZONES_CATALOG: () => WORLD_CLOCK_ZONES_CATALOG, MAX_DOCK_ITEMS: () => MAX_DOCK_ITEMS, MAX_PINNED_ITEMS: () => MAX_PINNED_ITEMS, SHORTCUT_LABEL_MAX: () => SHORTCUT_LABEL_MAX, NATIVE_DOCK_APP_TOKENS: () => NATIVE_DOCK_APP_TOKENS, NATIVE_DOCK_CONFIG_APP_MAP: () => NATIVE_DOCK_CONFIG_APP_MAP, START_SCREEN_CONFIG_APP_MAP: () => START_SCREEN_CONFIG_APP_MAP, MAX_WALLPAPER_UPLOAD_BYTES: () => MAX_WALLPAPER_UPLOAD_BYTES, DEVICE_VIEW_SLUGS: () => DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS: () => SYSTEM_VIEW_SLUGS, VIEW_TITLE_KEYS: () => VIEW_TITLE_KEYS, START_SCREEN_OPTIONS: () => START_SCREEN_OPTIONS, HOME_CLOCK_TAP_OPTIONS: () => HOME_CLOCK_TAP_OPTIONS, HOME_DATE_TAP_OPTIONS: () => HOME_DATE_TAP_OPTIONS, CALENDAR_LOOKAHEAD_OPTIONS: () => CALENDAR_LOOKAHEAD_OPTIONS, CALENDAR_WEEK_START_OPTIONS: () => CALENDAR_WEEK_START_OPTIONS, MAX_WORLD_CLOCKS: () => MAX_WORLD_CLOCKS, DEFAULT_ALARMS_SUMMARY: () => DEFAULT_ALARMS_SUMMARY, RETURN_TO_HOME_TIMEOUT_OPTIONS: () => RETURN_TO_HOME_TIMEOUT_OPTIONS, SECURITY_PIN_POLICY_OPTIONS: () => SECURITY_PIN_POLICY_OPTIONS, WALLPAPER_ROTATION_OPTIONS: () => WALLPAPER_ROTATION_OPTIONS, DEFAULT_DEVICE_GROUP_IDS: () => DEFAULT_DEVICE_GROUP_IDS, GROUP_BEHAVIOR_NON_PREF_KEYS: () => GROUP_BEHAVIOR_NON_PREF_KEYS, GROUP_DISPLAY_NON_PREF_KEYS: () => GROUP_DISPLAY_NON_PREF_KEYS, GROUP_INTERFACE_NON_PREF_KEYS: () => GROUP_INTERFACE_NON_PREF_KEYS, LABEL_ACRONYMS: () => LABEL_ACRONYMS });
+__latterExp(__exports, { ACTIVITY_SOURCES_CATALOG: () => ACTIVITY_SOURCES_CATALOG, ALLOWED_DEVICE_ACTIONS: () => ALLOWED_DEVICE_ACTIONS, AREA_CATEGORIES_CATALOG: () => AREA_CATEGORIES_CATALOG, DEFAULT_ACTIVITY_SOURCES: () => DEFAULT_ACTIVITY_SOURCES, DEFAULT_ACTIVITY_SOURCES_TOKENS: () => DEFAULT_ACTIVITY_SOURCES_TOKENS, DEFAULT_AREA_CATEGORIES: () => DEFAULT_AREA_CATEGORIES, DEFAULT_AREA_CATEGORIES_TOKENS: () => DEFAULT_AREA_CATEGORIES_TOKENS, DEFAULT_DOCK_ROUTES: () => DEFAULT_DOCK_ROUTES, DEFAULT_DOCK_ROUTES_TOKENS: () => DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS: () => DEFAULT_GAMES_ITEMS, DEFAULT_GAMES_ITEMS_TOKENS: () => DEFAULT_GAMES_ITEMS_TOKENS, DEFAULT_HOME_CATEGORIES: () => DEFAULT_HOME_CATEGORIES, DEFAULT_HOME_CATEGORIES_TOKENS: () => DEFAULT_HOME_CATEGORIES_TOKENS, DEFAULT_TOOLS_ITEMS: () => DEFAULT_TOOLS_ITEMS, DEFAULT_TOOLS_ITEMS_TOKENS: () => DEFAULT_TOOLS_ITEMS_TOKENS, DEVICE_PREF_SPECS_CATALOG: () => DEVICE_PREF_SPECS_CATALOG, DEVICE_PREF_SPECS_MAP: () => DEVICE_PREF_SPECS_MAP, DEVICE_WS_COMMANDS: () => DEVICE_WS_COMMANDS, GAMES_ITEMS_CATALOG: () => GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG: () => HOME_CATEGORIES_CATALOG, SHORTCUT_ROUTES_CATALOG: () => SHORTCUT_ROUTES_CATALOG, STUDIO_REV: () => STUDIO_REV, SYSTEM_WS_COMMANDS: () => SYSTEM_WS_COMMANDS, TOOLS_ITEMS_CATALOG: () => TOOLS_ITEMS_CATALOG, WORLD_CLOCK_ZONES_CATALOG: () => WORLD_CLOCK_ZONES_CATALOG, MAX_DOCK_ITEMS: () => MAX_DOCK_ITEMS, MAX_PINNED_ITEMS: () => MAX_PINNED_ITEMS, SHORTCUT_LABEL_MAX: () => SHORTCUT_LABEL_MAX, NATIVE_DOCK_APP_TOKENS: () => NATIVE_DOCK_APP_TOKENS, NATIVE_DOCK_CONFIG_APP_MAP: () => NATIVE_DOCK_CONFIG_APP_MAP, START_SCREEN_CONFIG_APP_MAP: () => START_SCREEN_CONFIG_APP_MAP, MAX_WALLPAPER_UPLOAD_BYTES: () => MAX_WALLPAPER_UPLOAD_BYTES, PHOTO_LIBRARY_PAGE_SIZE: () => PHOTO_LIBRARY_PAGE_SIZE, VIRTUAL_COLLECTION_ALL: () => VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS: () => VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UPLOADS: () => VIRTUAL_COLLECTION_UPLOADS, VIRTUAL_COLLECTION_UNCATEGORIZED: () => VIRTUAL_COLLECTION_UNCATEGORIZED, DEVICE_VIEW_SLUGS: () => DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS: () => SYSTEM_VIEW_SLUGS, VIEW_TITLE_KEYS: () => VIEW_TITLE_KEYS, START_SCREEN_OPTIONS: () => START_SCREEN_OPTIONS, HOME_CLOCK_TAP_OPTIONS: () => HOME_CLOCK_TAP_OPTIONS, HOME_DATE_TAP_OPTIONS: () => HOME_DATE_TAP_OPTIONS, CALENDAR_LOOKAHEAD_OPTIONS: () => CALENDAR_LOOKAHEAD_OPTIONS, CALENDAR_WEEK_START_OPTIONS: () => CALENDAR_WEEK_START_OPTIONS, MAX_WORLD_CLOCKS: () => MAX_WORLD_CLOCKS, DEFAULT_ALARMS_SUMMARY: () => DEFAULT_ALARMS_SUMMARY, RETURN_TO_HOME_TIMEOUT_OPTIONS: () => RETURN_TO_HOME_TIMEOUT_OPTIONS, SECURITY_PIN_POLICY_OPTIONS: () => SECURITY_PIN_POLICY_OPTIONS, WALLPAPER_ROTATION_OPTIONS: () => WALLPAPER_ROTATION_OPTIONS, DEFAULT_DEVICE_GROUP_IDS: () => DEFAULT_DEVICE_GROUP_IDS, GROUP_BEHAVIOR_NON_PREF_KEYS: () => GROUP_BEHAVIOR_NON_PREF_KEYS, GROUP_DISPLAY_NON_PREF_KEYS: () => GROUP_DISPLAY_NON_PREF_KEYS, GROUP_INTERFACE_NON_PREF_KEYS: () => GROUP_INTERFACE_NON_PREF_KEYS, LABEL_ACRONYMS: () => LABEL_ACRONYMS });
 //# sourceURL=latter-studio/src/constants.ts
 });
 __latterDef("src/utils/format.ts", (__exports, __req) => {
@@ -5366,7 +5573,9 @@ class StudioWsClient {
       throw new Error(`Unknown System command: ${cmd}`);
     }
     const timeoutMs =
-      cmd === "check_system_updates" ? WS_LONG_TIMEOUT_MS : WS_STANDARD_TIMEOUT_MS;
+      cmd === "check_system_updates" || cmd === "import_media_photos"
+        ? WS_LONG_TIMEOUT_MS
+        : WS_STANDARD_TIMEOUT_MS;
     return this.callWS (
       {
         type: "latter/system/command",
@@ -5377,6 +5586,21 @@ class StudioWsClient {
       },
       timeoutMs,
     );
+  }
+  async browseMediaFolder(root, subpath) {
+    if (!SYSTEM_WS_COMMANDS.has("browse_media_folder")) {
+      throw new Error("browse_media_folder is not registered in Studio protocol contract");
+    }
+    const payload = {};
+    if (root !== undefined && root !== "") payload.root = root;
+    if (subpath !== undefined && subpath !== "") payload.subpath = subpath;
+    return this.callWS ({
+      type: "latter/system/command",
+      command: "browse_media_folder",
+      subentry_id: null,
+      payload,
+      studio_rev: STUDIO_REV,
+    });
   }
   async mintCameraPreviewUrl(cameraEntity) {
     if (!SYSTEM_WS_COMMANDS.has("mint_camera_preview_url")) {
@@ -5497,17 +5721,28 @@ class StudioWsClient {
       throw new Error("Choose an image file first");
     }
     if (options.file.size > MAX_WALLPAPER_UPLOAD_BYTES) {
-      throw new Error("Wallpaper image must be 15 MB or smaller");
+      throw new Error("Photo must be 15 MB or smaller");
     }
     if (options.scope === "device" && !options.subentryId) {
       throw new Error("Choose a Device before uploading a Device wallpaper");
     }
     const UPLOAD_PATH = "/api/latter/wallpaper/upload";
     const form = new FormData();
-    form.append("file", options.file, options.file.name || "wallpaper.jpg");
+    form.append("file", options.file, options.file.name || "photo.jpg");
     form.append("scope", options.scope);
     if (options.subentryId) {
       form.append("subentry_id", options.subentryId);
+    }
+    if (options.name && options.name.trim()) {
+      form.append("name", options.name.trim());
+    }
+    if (options.crop) {
+      form.append("crop_x", String(options.crop.x));
+      form.append("crop_y", String(options.crop.y));
+      form.append("crop_zoom", String(options.crop.zoom));
+    }
+    if (options.collectionId && options.collectionId.trim()) {
+      form.append("collection_id", options.collectionId.trim());
     }
     const sendOnce = (bearerToken) =>
       new Promise ((resolve, reject) => {
@@ -5555,8 +5790,16 @@ class StudioWsClient {
       options.onProgress?.(100);
       return {
         ok: true,
+        photo_id: body?.photo_id ? String(body.photo_id) : undefined,
         filename: body?.filename ? String(body.filename) : undefined,
         source_id: body?.source_id ? String(body.source_id) : undefined,
+        photo:
+          body?.photo && typeof body.photo === "object"
+            ? (body.photo)
+            : undefined,
+        photo_collections: Array.isArray(body?.photo_collections)
+          ? (body.photo_collections)
+          : undefined,
         wallpapers: Array.isArray(body?.wallpapers) ? (body.wallpapers) : undefined,
         system_wallpapers: Array.isArray(body?.system_wallpapers)
           ? (body.system_wallpapers)
@@ -5573,6 +5816,922 @@ class StudioWsClient {
 }
 __latterExp(__exports, { DEVICE_WS_COMMANDS: () => DEVICE_WS_COMMANDS, SYSTEM_WS_COMMANDS: () => SYSTEM_WS_COMMANDS, WS_STANDARD_TIMEOUT_MS: () => WS_STANDARD_TIMEOUT_MS, WS_LONG_TIMEOUT_MS: () => WS_LONG_TIMEOUT_MS, isStudioRevMismatchError: () => isStudioRevMismatchError, isConflictError: () => isConflictError, formatWsError: () => formatWsError, StudioWsClient: () => StudioWsClient });
 //# sourceURL=latter-studio/src/api/ws-client.ts
+});
+__latterDef("src/utils/crop-math.ts", (__exports, __req) => {
+/**
+ * Pure non-destructive focal-point crop math shared by Photo Upload, Photo Editor,
+ * and preview thumbnails (`D-072`). Mirrors `wallpapers.py:crop_and_fit_image()`.
+ */
+const DEFAULT_PHOTO_CROP = {
+  x: 0.5,
+  y: 0.5,
+  zoom: 1,
+};
+function clampNum(val, min, max) {
+  if (!Number.isFinite(val)) return min;
+  if (val < min) return min;
+  if (val > max) return max;
+  return val;
+}
+function normalizePhotoCrop(raw) {
+  return {
+    x: clampNum(Number(raw?.x ?? 0.5), 0, 1),
+    y: clampNum(Number(raw?.y ?? 0.5), 0, 1),
+    zoom: clampNum(Number(raw?.zoom ?? 1), 1, 3),
+  };
+}
+/**
+ * Computes the source rectangle `[sx, sy, sw, sh]` within `(srcW, srcH)` that
+ * cover-fills `(dstW, dstH)` centered on `(crop.x, crop.y)` at `crop.zoom`,
+ * clamped strictly inside the source bounds so zero black bars ever appear.
+ */
+function computeCropSourceRect(
+  srcW,
+  srcH,
+  dstW,
+  dstH,
+  crop,
+) {
+  const safeSrcW = Math.max(1, srcW);
+  const safeSrcH = Math.max(1, srcH);
+  const safeDstW = Math.max(1, dstW);
+  const safeDstH = Math.max(1, dstH);
+  const zoom = clampNum(crop.zoom, 1, 3);
+  const srcAspect = safeSrcW / safeSrcH;
+  const dstAspect = safeDstW / safeDstH;
+  let baseW;
+  let baseH;
+  if (srcAspect > dstAspect) {
+    baseH = safeSrcH;
+    baseW = safeSrcH * dstAspect;
+  } else {
+    baseW = safeSrcW;
+    baseH = safeSrcW / dstAspect;
+  }
+  const sw = Math.min(safeSrcW, baseW / zoom);
+  const sh = Math.min(safeSrcH, baseH / zoom);
+  const cx = clampNum(crop.x, 0, 1) * safeSrcW;
+  const cy = clampNum(crop.y, 0, 1) * safeSrcH;
+  const sx = clampNum(cx - sw / 2, 0, Math.max(0, safeSrcW - sw));
+  const sy = clampNum(cy - sh / 2, 0, Math.max(0, safeSrcH - sh));
+  return { sx, sy, sw, sh };
+}
+/**
+ * Applies a pointer drag delta `(dxPx, dyPx)` in canvas coordinates to the
+ * normalized focal point `(crop.x, crop.y)`, clamping inside the reachable
+ * pan window so dragging never accumulates dead-zone slack past image edges.
+ */
+function applyCanvasPanDelta(
+  crop,
+  dxPx,
+  dyPx,
+  srcW,
+  srcH,
+  canvasW,
+  canvasH,
+) {
+  if (srcW <= 0 || srcH <= 0 || canvasW <= 0 || canvasH <= 0) {
+    return normalizePhotoCrop(crop);
+  }
+  const rect = computeCropSourceRect(srcW, srcH, canvasW, canvasH, crop);
+  const halfFracX = rect.sw / (2 * srcW);
+  const halfFracY = rect.sh / (2 * srcH);
+  const minX = Math.min(0.5, halfFracX);
+  const maxX = Math.max(0.5, 1 - halfFracX);
+  const minY = Math.min(0.5, halfFracY);
+  const maxY = Math.max(0.5, 1 - halfFracY);
+  const curCenterX = (rect.sx + rect.sw / 2) / srcW;
+  const curCenterY = (rect.sy + rect.sh / 2) / srcH;
+  const nextX = clampNum(curCenterX - (dxPx / canvasW) * (rect.sw / srcW), minX, maxX);
+  const nextY = clampNum(curCenterY - (dyPx / canvasH) * (rect.sh / srcH), minY, maxY);
+  return {
+    x: Math.round(nextX * 1000) / 1000,
+    y: Math.round(nextY * 1000) / 1000,
+    zoom: clampNum(crop.zoom, 1, 3),
+  };
+}
+/**
+ * Returns canvas pixel dimensions for a crop preview aspect preset.
+ */
+function cropPreviewCanvasSize(aspect) {
+  if (aspect === "widescreen") {
+    return { width: 320, height: 180 };
+  }
+  return { width: 260, height: 260 };
+}
+/**
+ * Paints an `HTMLImageElement` onto a `<canvas>` using `computeCropSourceRect`
+ * plus subtle safe-zone guides matching square/round/widescreen Latter panels.
+ */
+function paintCropCanvas(
+  canvas,
+  img,
+  crop,
+  aspect,
+  options,
+) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#111111";
+  ctx.fillRect(0, 0, w, h);
+  if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
+    const rect = computeCropSourceRect(img.naturalWidth, img.naturalHeight, w, h, crop);
+    ctx.save();
+    if (aspect === "round") {
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
+      ctx.clip();
+    }
+    ctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, w, h);
+    ctx.restore();
+  }
+  if (options?.showGuides === false) return;
+  ctx.save();
+  if (aspect === "square") {
+    // Subtle rule-of-thirds + inscribed circle safe-zone guide for round displays
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w / 3, 0);
+    ctx.lineTo(w / 3, h);
+    ctx.moveTo((2 * w) / 3, 0);
+    ctx.lineTo((2 * w) / 3, h);
+    ctx.moveTo(0, h / 3);
+    ctx.lineTo(w, h / 3);
+    ctx.moveTo(0, (2 * h) / 3);
+    ctx.lineTo(w, (2 * h) / 3);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.65)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, Math.min(w, h) / 2 - 2, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (aspect === "round") {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, Math.min(w, h) / 2 - 1, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w / 3, 0);
+    ctx.lineTo(w / 3, h);
+    ctx.moveTo((2 * w) / 3, 0);
+    ctx.lineTo((2 * w) / 3, h);
+    ctx.moveTo(0, h / 3);
+    ctx.lineTo(w, h / 3);
+    ctx.moveTo(0, (2 * h) / 3);
+    ctx.lineTo(w, (2 * h) / 3);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+__latterExp(__exports, { DEFAULT_PHOTO_CROP: () => DEFAULT_PHOTO_CROP, clampNum: () => clampNum, normalizePhotoCrop: () => normalizePhotoCrop, computeCropSourceRect: () => computeCropSourceRect, applyCanvasPanDelta: () => applyCanvasPanDelta, cropPreviewCanvasSize: () => cropPreviewCanvasSize, paintCropCanvas: () => paintCropCanvas });
+//# sourceURL=latter-studio/src/utils/crop-math.ts
+});
+__latterDef("src/state/photo-ops.ts", (__exports, __req) => {
+const { formatWsError } = __req("src/api/ws-client.ts");
+const { MAX_WALLPAPER_UPLOAD_BYTES, VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UNCATEGORIZED, VIRTUAL_COLLECTION_UPLOADS } = __req("src/constants.ts");
+const { DEFAULT_PHOTO_CROP, normalizePhotoCrop } = __req("src/utils/crop-math.ts");
+/**
+ * Photo Library, Collections, Non-Destructive Crop, HA Media Import, & Device Photo Pool
+ * operations (`D-072`, `STUDIO_REV = 39`).
+ */
+function emptyPhotoUploadModalState() {
+  return {
+    open: false,
+    files: [],
+    activeIndex: 0,
+    collectionId: "",
+    previewAspect: "square",
+    uploading: false,
+    currentIndex: 0,
+    currentPercent: 0,
+    draggingFiles: false,
+    onComplete: null,
+  };
+}
+function emptyPhotoEditModalState() {
+  return {
+    open: false,
+    photoId: "",
+    name: "",
+    crop: { ...DEFAULT_PHOTO_CROP },
+    collections: [],
+    previewAspect: "square",
+    busy: false,
+  };
+}
+function emptyMediaImportModalState() {
+  return {
+    open: false,
+    loading: false,
+    importing: false,
+    error: "",
+    roots: [],
+    root: "",
+    subpath: "",
+    parentSubpath: null,
+    folders: [],
+    images: [],
+    selectedPaths: [],
+    collectionId: "",
+    useNewFolderCollection: false,
+    newCollectionName: "",
+    deduplicate: true,
+  };
+}
+function emptyPhotoPickerModalState() {
+  return {
+    open: false,
+    target: "wallpaper",
+    mode: "single",
+    singleSource: "",
+    collectionId: VIRTUAL_COLLECTION_ALL,
+    customIds: [],
+    search: "",
+    filterCollection: VIRTUAL_COLLECTION_ALL,
+    busy: false,
+  };
+}
+function isPhotoUploaded(photo) {
+  return (
+    photo.kind === "uploaded" ||
+    photo.kind === "upload" ||
+    photo.source_kind === "upload" ||
+    photo.source_kind === "media_import" ||
+    Boolean(photo.deletable)
+  );
+}
+function isPhotoDynamic(photo) {
+  return photo.kind === "dynamic_preset" || photo.source_kind === "dynamic_preset";
+}
+function derivePhotoBaseName(filename) {
+  const clean = String(filename || "")
+    .replace(/^.*[\\/]/, "")
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  return clean || "Photo";
+}
+function filterLibraryPhotos(
+  photos,
+  filterCollection,
+  search,
+  options,
+) {
+  const q = String(search || "").trim().toLowerCase();
+  return photos.filter((p) => {
+    if (options?.excludeDynamic && isPhotoDynamic(p)) {
+      return false;
+    }
+    if (filterCollection === VIRTUAL_COLLECTION_DEFAULTS) {
+      if (isPhotoUploaded(p)) return false;
+    } else if (filterCollection === VIRTUAL_COLLECTION_UPLOADS) {
+      if (!isPhotoUploaded(p)) return false;
+    } else if (filterCollection === VIRTUAL_COLLECTION_UNCATEGORIZED) {
+      if ((p.collections || []).length > 0) return false;
+    } else if (filterCollection && filterCollection !== VIRTUAL_COLLECTION_ALL) {
+      if (!(p.collections || []).includes(filterCollection)) return false;
+    }
+    if (q) {
+      const hay = `${p.name || ""} ${p.id || ""} ${p.media_source_path || ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function resolveCollectionDisplayName(store, collectionId) {
+  if (!collectionId || collectionId === VIRTUAL_COLLECTION_ALL) {
+    return store.t("photos.filter_all");
+  }
+  if (collectionId === VIRTUAL_COLLECTION_DEFAULTS) {
+    return store.t("photos.filter_defaults");
+  }
+  if (collectionId === VIRTUAL_COLLECTION_UPLOADS) {
+    return store.t("photos.filter_my_photos");
+  }
+  if (collectionId === VIRTUAL_COLLECTION_UNCATEGORIZED) {
+    return store.t("photos.filter_uncategorized");
+  }
+  const found = (store.state?.photo_collections || []).find((c) => c.id === collectionId);
+  return found?.name || collectionId;
+}
+function resolvePoolPhotos(
+  photos,
+  mode,
+  singleSource,
+  collectionId,
+  customIds,
+  options,
+) {
+  const pool = options?.excludeDynamic ? photos.filter((p) => !isPhotoDynamic(p)) : [...photos];
+  if (mode === "off") return [];
+  if (mode === "single") {
+    const found = pool.find((p) => p.id === singleSource);
+    return found ? [found] : [];
+  }
+  if (mode === "collection") {
+    return filterLibraryPhotos(pool, collectionId || VIRTUAL_COLLECTION_ALL, "", options);
+  }
+  if (mode === "custom") {
+    const byId = new Map(pool.map((p) => [p.id, p]));
+    const out = [];
+    for (const id of customIds) {
+      const item = byId.get(id);
+      if (item && !out.includes(item)) out.push(item);
+    }
+    return out;
+  }
+  return [];
+}
+function revokeStagedUrls(files) {
+  if (typeof URL === "undefined" || typeof URL.revokeObjectURL !== "function") return;
+  for (const f of files) {
+    if (f.objectUrl) {
+      try {
+        URL.revokeObjectURL(f.objectUrl);
+      } catch {
+        // Ignore revoke errors in test shims.
+      }
+    }
+  }
+}
+let stagedUploadSeq = 0;
+function openPhotoUploadModalOp(
+  store,
+  options,
+) {
+  revokeStagedUrls(store.photoUploadModal.files);
+  const defaultCol =
+    options?.defaultCollectionId ??
+    (store.photosFilterCollection.startsWith("col_") ? store.photosFilterCollection : "");
+  store.photoUploadModal = {
+    ...emptyPhotoUploadModalState(),
+    open: true,
+    collectionId: defaultCol,
+    onComplete: options?.onComplete ?? null,
+  };
+  store.host.requestUpdate();
+}
+function closePhotoUploadModalOp(store) {
+  if (store.photoUploadModal.uploading) return;
+  revokeStagedUrls(store.photoUploadModal.files);
+  store.photoUploadModal = emptyPhotoUploadModalState();
+  store.host.requestUpdate();
+}
+function stageUploadFilesOp(store, fileList) {
+  const incoming = Array.from(fileList || []);
+  if (!incoming.length) return;
+  const nextFiles = [...store.photoUploadModal.files];
+  for (const file of incoming) {
+    if (!file) continue;
+    if (file.size > MAX_WALLPAPER_UPLOAD_BYTES) {
+      store.showToast(
+        store.t("photo_upload.file_too_large", { name: file.name || "image" }),
+        true,
+      );
+      continue;
+    }
+    const id = `staged_${++stagedUploadSeq}`;
+    const objectUrl =
+      typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+        ? URL.createObjectURL(file)
+        : "";
+    nextFiles.push({
+      id,
+      file,
+      name: derivePhotoBaseName(file.name),
+      crop: { ...DEFAULT_PHOTO_CROP },
+      objectUrl,
+      width: 0,
+      height: 0,
+    });
+  }
+  const activeIdx =
+    store.photoUploadModal.files.length === 0 && nextFiles.length > 0
+      ? 0
+      : Math.min(store.photoUploadModal.activeIndex, Math.max(0, nextFiles.length - 1));
+  store.photoUploadModal = {
+    ...store.photoUploadModal,
+    files: nextFiles,
+    activeIndex: activeIdx,
+    draggingFiles: false,
+  };
+  store.host.requestUpdate();
+}
+function removeStagedUploadOp(store, index) {
+  const files = store.photoUploadModal.files;
+  if (index < 0 || index >= files.length || store.photoUploadModal.uploading) return;
+  const removed = files[index];
+  if (removed) revokeStagedUrls([removed]);
+  const next = files.filter((_, i) => i !== index);
+  const nextActive = Math.min(store.photoUploadModal.activeIndex, Math.max(0, next.length - 1));
+  store.photoUploadModal = {
+    ...store.photoUploadModal,
+    files: next,
+    activeIndex: nextActive,
+  };
+  store.host.requestUpdate();
+}
+async function uploadAllStagedPhotosOp(store) {
+  const modal = store.photoUploadModal;
+  if (modal.uploading || modal.files.length === 0) return;
+  store.photoUploadModal = {
+    ...modal,
+    uploading: true,
+    currentIndex: 0,
+    currentPercent: 0,
+  };
+  store.host.requestUpdate();
+  const uploadedIds = [];
+  const total = modal.files.length;
+  const colId = modal.collectionId || "";
+  const onComplete = modal.onComplete;
+  try {
+    for (let i = 0; i < total; i += 1) {
+      const item = modal.files[i];
+      store.photoUploadModal = {
+        ...store.photoUploadModal,
+        currentIndex: i + 1,
+        currentPercent: 0,
+      };
+      store.host.requestUpdate();
+      const res = await store.ws.uploadWallpaperMultipart({
+        scope: "system",
+        file: item.file,
+        name: item.name.trim() || derivePhotoBaseName(item.file.name),
+        crop: normalizePhotoCrop(item.crop),
+        collectionId: colId || undefined,
+        onProgress: (pct) => {
+          store.photoUploadModal = {
+            ...store.photoUploadModal,
+            currentPercent: pct,
+          };
+          store.host.requestUpdate();
+        },
+      });
+      const createdId = res.photo_id || res.source_id || res.photo?.id || "";
+      if (createdId) uploadedIds.push(createdId);
+      if (store.state) {
+        if (res.system_wallpapers) {
+          store.state = {
+            ...store.state,
+            system_wallpapers: res.system_wallpapers,
+            photo_collections: res.photo_collections ?? store.state.photo_collections,
+          };
+        }
+      }
+    }
+    revokeStagedUrls(store.photoUploadModal.files);
+    store.photoUploadModal = emptyPhotoUploadModalState();
+    await store.refreshState();
+    store.showToast(
+      uploadedIds.length === 1
+        ? store.t("photo_upload.uploaded_one_toast")
+        : store.t("photo_upload.uploaded_many_toast", { count: uploadedIds.length }),
+    );
+    if (onComplete) {
+      onComplete(uploadedIds);
+    }
+  } catch (err) {
+    store.photoUploadModal = {
+      ...store.photoUploadModal,
+      uploading: false,
+    };
+    store.host.requestUpdate();
+    store.showToast(formatWsError(err, "Photo upload failed"), true);
+  }
+}
+// ---------- Photo Editor & Crop Modal ----------
+function openPhotoEditModalOp(store, photo) {
+  store.photoEditModal = {
+    open: true,
+    photoId: photo.id,
+    name: photo.name || photo.id,
+    crop: normalizePhotoCrop(photo.crop),
+    collections: [...(photo.collections || [])],
+    previewAspect: "square",
+    busy: false,
+  };
+  store.host.requestUpdate();
+}
+function closePhotoEditModalOp(store) {
+  if (store.photoEditModal.busy) return;
+  store.photoEditModal = emptyPhotoEditModalState();
+  store.host.requestUpdate();
+}
+async function savePhotoEditModalOp(store) {
+  const modal = store.photoEditModal;
+  if (!modal.open || !modal.photoId || modal.busy) return;
+  const photo = (store.state?.system_wallpapers || []).find((p) => p.id === modal.photoId);
+  const uploaded = photo ? isPhotoUploaded(photo) : modal.photoId.startsWith("photo:");
+  store.photoEditModal = { ...modal, busy: true };
+  store.host.requestUpdate();
+  try {
+    const payload = {
+      photo_id: modal.photoId,
+      collections: [...modal.collections],
+    };
+    if (uploaded) {
+      const cleanName = modal.name.trim();
+      if (cleanName) payload.name = cleanName;
+      payload.crop = normalizePhotoCrop(modal.crop);
+    }
+    const res = await store.ws.runSystemCommand(
+      "update_photo_metadata",
+      payload,
+      store.activeSubentryId || null,
+    );
+    store.photoEditModal = emptyPhotoEditModalState();
+    if (res) store.ingestPayload(res, false);
+    else store.host.requestUpdate();
+    store.showToast(store.t("photos.updated_photo_toast"));
+  } catch (err) {
+    store.photoEditModal = { ...store.photoEditModal, busy: false };
+    store.host.requestUpdate();
+    store.showToast(formatWsError(err, "Could not update photo"), true);
+  }
+}
+// ---------- Photo Library Collections & Bulk Actions ----------
+async function createPhotoCollectionOp(store, rawName) {
+  const name = String(rawName || "").trim();
+  if (!name) return;
+  try {
+    const res = await store.ws.runSystemCommand(
+      "create_photo_collection",
+      { name },
+      store.activeSubentryId || null,
+    );
+    store.photosNewCollectionOpen = false;
+    store.photosNewCollectionName = "";
+    if (res) store.ingestPayload(res, false);
+    store.showToast(store.t("photos.created_collection_toast", { name }));
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not create collection"), true);
+  }
+}
+async function renamePhotoCollectionOp(
+  store,
+  collectionId,
+  rawName,
+) {
+  const cleanId = String(collectionId || "").trim();
+  const name = String(rawName || "").trim();
+  if (!cleanId || !name) return;
+  try {
+    const res = await store.ws.runSystemCommand(
+      "rename_photo_collection",
+      { collection_id: cleanId, name },
+      store.activeSubentryId || null,
+    );
+    store.photosRenamingCollectionId = "";
+    store.photosRenamingCollectionName = "";
+    if (res) store.ingestPayload(res, false);
+    store.showToast(store.t("photos.renamed_collection_toast", { name }));
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not rename collection"), true);
+  }
+}
+function requestDeletePhotoCollectionOp(
+  store,
+  collectionId,
+  name,
+) {
+  const cleanId = String(collectionId || "").trim();
+  if (!cleanId) return;
+  store.openConfirm({
+    kind: "delete_collection",
+    title: store.t("confirm.delete_collection.title", { name }),
+    consequence: store.t("confirm.delete_collection.body"),
+    confirmLabel: store.t("confirm.delete_collection.confirm"),
+    danger: true,
+    onConfirm: async() => {
+      try {
+        const res = await store.ws.runSystemCommand(
+          "delete_photo_collection",
+          { collection_id: cleanId },
+          store.activeSubentryId || null,
+        );
+        if (store.photosFilterCollection === cleanId) {
+          store.photosFilterCollection = VIRTUAL_COLLECTION_ALL;
+          store.photosPage = 1;
+        }
+        if (res) store.ingestPayload(res, false);
+        store.showToast(store.t("photos.deleted_collection_toast"));
+      } catch (err) {
+        store.showToast(formatWsError(err, "Could not delete collection"), true);
+      }
+    },
+  });
+}
+async function deletePhotoOp(store, photoId) {
+  const cleanId = String(photoId || "").trim();
+  if (!cleanId) return;
+  try {
+    const res = await store.ws.runSystemCommand(
+      "delete_photo",
+      { photo_id: cleanId },
+      store.activeSubentryId || null,
+    );
+    store.photosSelectedIds.delete(cleanId);
+    if (store.photoEditModal.open && store.photoEditModal.photoId === cleanId) {
+      store.photoEditModal = emptyPhotoEditModalState();
+    }
+    if (res) store.ingestPayload(res, false);
+    store.showToast(store.t("photos.deleted_photo_toast"));
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not delete photo"), true);
+  }
+}
+function requestDeletePhotoOp(store, photoId, name) {
+  const cleanId = String(photoId || "").trim();
+  if (!cleanId) return;
+  const label = String(name || cleanId).trim();
+  store.openConfirm({
+    kind: "delete_photo",
+    title: store.t("confirm.delete_photo.title", { name: label }),
+    consequence: store.t("confirm.delete_photo.body"),
+    confirmLabel: store.t("confirm.delete_photo.confirm"),
+    danger: true,
+    onConfirm: async() => {
+      await deletePhotoOp(store, cleanId);
+    },
+  });
+}
+async function bulkUpdatePhotosOp(
+  store,
+  options,
+) {
+  const ids = Array.from(store.photosSelectedIds);
+  if (ids.length === 0) return;
+  const payload = { photo_ids: ids };
+  if (options.addCollection) payload.add_collection = options.addCollection;
+  if (options.removeCollection) payload.remove_collection = options.removeCollection;
+  if (options.deletePhotos) payload.delete = true;
+  try {
+    const res = await store.ws.runSystemCommand(
+      "bulk_update_photos",
+      payload,
+      store.activeSubentryId || null,
+    );
+    store.photosSelectedIds.clear();
+    if (options.deletePhotos) {
+      store.photosSelectMode = false;
+    }
+    if (res) store.ingestPayload(res, false);
+    const deletedCount = res?.bulk_result?.deleted_ids?.length ?? 0;
+    const updatedCount = res?.bulk_result?.updated ?? ids.length;
+    store.showToast(
+      options.deletePhotos
+        ? store.t("photos.bulk_deleted_toast", { count: deletedCount || ids.length })
+        : store.t("photos.bulk_updated_toast", { count: updatedCount }),
+    );
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not update selected photos"), true);
+  }
+}
+function requestBulkDeletePhotosOp(store) {
+  const deletableSelected = Array.from(store.photosSelectedIds).filter((id) => {
+    const item = (store.state?.system_wallpapers || []).find((p) => p.id === id);
+    return item ? isPhotoUploaded(item) : false;
+  });
+  if (deletableSelected.length === 0) return;
+  store.openConfirm({
+    kind: "bulk_delete_photos",
+    title: store.t("confirm.delete_photos_bulk.title", { count: deletableSelected.length }),
+    consequence: store.t("confirm.delete_photos_bulk.body"),
+    confirmLabel: store.t("confirm.delete_photos_bulk.confirm"),
+    danger: true,
+    onConfirm: async() => {
+      store.photosSelectedIds.clear();
+      for (const id of deletableSelected) {
+        store.photosSelectedIds.add(id);
+      }
+      await bulkUpdatePhotosOp(store, { deletePhotos: true });
+    },
+  });
+}
+// ---------- HA Media Folder Import Modal ----------
+async function browseMediaFolderOp(
+  store,
+  root,
+  subpath,
+) {
+  store.mediaImportModal = {
+    ...store.mediaImportModal,
+    loading: true,
+    error: "",
+    selectedPaths: [],
+  };
+  store.host.requestUpdate();
+  try {
+    const res = await store.ws.browseMediaFolder(root, subpath);
+    const folderLeaf = (res.subpath || "").split("/").filter(Boolean).pop() || res.root || "";
+    store.mediaImportModal = {
+      ...store.mediaImportModal,
+      loading: false,
+      error: "",
+      roots: res.roots || [],
+      root: res.root || "",
+      subpath: res.subpath || "",
+      parentSubpath: res.parent_subpath ?? null,
+      folders: res.folders || [],
+      images: res.images || [],
+      selectedPaths: [],
+      newCollectionName: store.mediaImportModal.useNewFolderCollection
+        ? folderLeaf
+        : store.mediaImportModal.newCollectionName,
+    };
+  } catch (err) {
+    store.mediaImportModal = {
+      ...store.mediaImportModal,
+      loading: false,
+      error: formatWsError(err, "Could not browse Home Assistant Media"),
+    };
+  }
+  store.host.requestUpdate();
+}
+function openMediaImportModalOp(store) {
+  const defaultCol = store.photosFilterCollection.startsWith("col_")
+    ? store.photosFilterCollection
+    : "";
+  store.mediaImportModal = {
+    ...emptyMediaImportModalState(),
+    open: true,
+    collectionId: defaultCol,
+  };
+  store.host.requestUpdate();
+  void browseMediaFolderOp(store);
+}
+function closeMediaImportModalOp(store) {
+  if (store.mediaImportModal.importing) return;
+  store.mediaImportModal = emptyMediaImportModalState();
+  store.host.requestUpdate();
+}
+async function importSelectedMediaOp(store) {
+  const modal = store.mediaImportModal;
+  if (modal.importing || !modal.root || modal.selectedPaths.length === 0) return;
+  store.mediaImportModal = { ...modal, importing: true };
+  store.host.requestUpdate();
+  try {
+    const payload = {
+      root: modal.root,
+      paths: [...modal.selectedPaths],
+      deduplicate: modal.deduplicate,
+    };
+    if (modal.useNewFolderCollection && modal.newCollectionName.trim()) {
+      payload.new_collection_name = modal.newCollectionName.trim();
+    } else if (modal.collectionId) {
+      payload.collection_id = modal.collectionId;
+    }
+    const res = await store.ws.runSystemCommand(
+      "import_media_photos",
+      payload,
+      store.activeSubentryId || null,
+    );
+    store.mediaImportModal = emptyMediaImportModalState();
+    if (res) store.ingestPayload(res, false);
+    else store.host.requestUpdate();
+    const imp = res?.import_result;
+    const imported = imp?.imported ?? modal.selectedPaths.length;
+    const skipped = imp?.skipped ?? 0;
+    const failed = imp?.failed?.length ?? 0;
+    store.showToast(
+      store.t("media_import.summary_toast", {
+        imported,
+        skippedSuffix: skipped > 0 ? store.t("media_import.skipped_suffix", { count: skipped }) : "",
+        failedSuffix: failed > 0 ? store.t("media_import.failed_suffix", { count: failed }) : "",
+      }),
+    );
+  } catch (err) {
+    store.mediaImportModal = { ...store.mediaImportModal, importing: false };
+    store.host.requestUpdate();
+    store.showToast(formatWsError(err, "Media import failed"), true);
+  }
+}
+// ---------- Device Photo Pool Picker & Command ----------
+async function setDevicePhotoPoolOp(
+  store,
+  options
+   ,
+  toastMessage,
+) {
+  const targetSubentryId = store.activeSubentryId;
+  if (!targetSubentryId) return false;
+  const payload = {
+    target: options.target,
+    mode: options.mode,
+  };
+  if (options.sourceId !== undefined) payload.source_id = options.sourceId;
+  if (options.collectionId !== undefined) payload.collection_id = options.collectionId;
+  if (options.photoIds !== undefined) payload.photo_ids = [...options.photoIds];
+  if (options.cycleMinutes !== undefined) payload.cycle_minutes = options.cycleMinutes;
+  if (options.shuffle !== undefined) payload.shuffle = options.shuffle;
+  try {
+    const res = await store.ws.runDeviceCommand(
+      targetSubentryId,
+      "set_device_photo_pool",
+      payload,
+    );
+    if (res && store.activeSubentryId === targetSubentryId) {
+      store.ingestPayload(res, false);
+    }
+    if (toastMessage) {
+      store.showToast(toastMessage);
+    } else {
+      store.announcePolite(store.t("shell.saved_status"));
+    }
+    return true;
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not update photo pool"), true);
+    return false;
+  }
+}
+function openPhotoPickerModalOp(store, target) {
+  const cfg = store.state?.config || {};
+  const isScreensaver = target === "screensaver";
+  const rawMode = String(
+    isScreensaver ? cfg.screensaver_photo_mode || "off" : cfg.wallpaper_mode || "off",
+  );
+  const mode =
+    rawMode === "collection" || rawMode === "custom" ? rawMode : "single";
+  const singleSource = String(
+    isScreensaver ? cfg.screensaver_photo_source || "" : cfg.wallpaper_source || "",
+  );
+  const collectionId = String(
+    isScreensaver
+      ? cfg.screensaver_photo_collection || VIRTUAL_COLLECTION_ALL
+      : cfg.wallpaper_collection || VIRTUAL_COLLECTION_ALL,
+  );
+  const customIds = Array.isArray(
+    isScreensaver ? cfg.screensaver_photo_ids : cfg.wallpaper_favorites,
+  )
+    ? [
+        ...((isScreensaver
+          ? cfg.screensaver_photo_ids
+          : cfg.wallpaper_favorites)),
+      ]
+    : [];
+  store.photoPickerModal = {
+    open: true,
+    target,
+    mode,
+    singleSource,
+    collectionId: collectionId || VIRTUAL_COLLECTION_ALL,
+    customIds,
+    search: "",
+    filterCollection: VIRTUAL_COLLECTION_ALL,
+    busy: false,
+  };
+  store.host.requestUpdate();
+}
+function closePhotoPickerModalOp(store) {
+  if (store.photoPickerModal.busy) return;
+  store.photoPickerModal = emptyPhotoPickerModalState();
+  store.host.requestUpdate();
+}
+async function applyPhotoPickerModalOp(store) {
+  const modal = store.photoPickerModal;
+  if (!modal.open || modal.busy) return;
+  store.photoPickerModal = { ...modal, busy: true };
+  store.host.requestUpdate();
+  const cfg = store.state?.config || {};
+  const isScreensaver = modal.target === "screensaver";
+  const currentCycle = Number(
+    isScreensaver ? cfg.screensaver_cycle_minutes ?? 15 : cfg.wallpaper_cycle_minutes ?? 0,
+  );
+  // If switching to multi-photo pool while wallpaper rotation was 0, default to 15 min so rotation works immediately.
+  const nextCycle =
+    modal.mode === "single"
+      ? currentCycle
+      : currentCycle > 0
+        ? currentCycle
+        : 15;
+  const ok = await setDevicePhotoPoolOp(store, {
+    target: modal.target,
+    mode: modal.mode,
+    sourceId: modal.mode === "single" ? modal.singleSource : undefined,
+    collectionId: modal.mode === "collection" ? modal.collectionId : undefined,
+    photoIds: modal.mode === "custom" ? modal.customIds : undefined,
+    cycleMinutes: nextCycle,
+    shuffle: isScreensaver ? Boolean(cfg.screensaver_shuffle) : undefined,
+  });
+  if (ok) {
+    store.photoPickerModal = emptyPhotoPickerModalState();
+  } else {
+    store.photoPickerModal = { ...store.photoPickerModal, busy: false };
+  }
+  store.host.requestUpdate();
+}
+__latterExp(__exports, { emptyPhotoUploadModalState: () => emptyPhotoUploadModalState, emptyPhotoEditModalState: () => emptyPhotoEditModalState, emptyMediaImportModalState: () => emptyMediaImportModalState, emptyPhotoPickerModalState: () => emptyPhotoPickerModalState, isPhotoUploaded: () => isPhotoUploaded, isPhotoDynamic: () => isPhotoDynamic, derivePhotoBaseName: () => derivePhotoBaseName, filterLibraryPhotos: () => filterLibraryPhotos, resolveCollectionDisplayName: () => resolveCollectionDisplayName, resolvePoolPhotos: () => resolvePoolPhotos, openPhotoUploadModalOp: () => openPhotoUploadModalOp, closePhotoUploadModalOp: () => closePhotoUploadModalOp, stageUploadFilesOp: () => stageUploadFilesOp, removeStagedUploadOp: () => removeStagedUploadOp, uploadAllStagedPhotosOp: () => uploadAllStagedPhotosOp, openPhotoEditModalOp: () => openPhotoEditModalOp, closePhotoEditModalOp: () => closePhotoEditModalOp, savePhotoEditModalOp: () => savePhotoEditModalOp, createPhotoCollectionOp: () => createPhotoCollectionOp, renamePhotoCollectionOp: () => renamePhotoCollectionOp, requestDeletePhotoCollectionOp: () => requestDeletePhotoCollectionOp, deletePhotoOp: () => deletePhotoOp, requestDeletePhotoOp: () => requestDeletePhotoOp, bulkUpdatePhotosOp: () => bulkUpdatePhotosOp, requestBulkDeletePhotosOp: () => requestBulkDeletePhotosOp, browseMediaFolderOp: () => browseMediaFolderOp, openMediaImportModalOp: () => openMediaImportModalOp, closeMediaImportModalOp: () => closeMediaImportModalOp, importSelectedMediaOp: () => importSelectedMediaOp, setDevicePhotoPoolOp: () => setDevicePhotoPoolOp, openPhotoPickerModalOp: () => openPhotoPickerModalOp, closePhotoPickerModalOp: () => closePhotoPickerModalOp, applyPhotoPickerModalOp: () => applyPhotoPickerModalOp });
+//# sourceURL=latter-studio/src/state/photo-ops.ts
 });
 __latterDef("src/state/shortcuts-lists-ops.ts", (__exports, __req) => {
 const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, DEFAULT_ACTIVITY_SOURCES_TOKENS, DEFAULT_AREA_CATEGORIES_TOKENS, DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS_TOKENS, DEFAULT_HOME_CATEGORIES_TOKENS, DEFAULT_TOOLS_ITEMS_TOKENS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, MAX_DOCK_ITEMS, MAX_PINNED_ITEMS, NATIVE_DOCK_APP_TOKENS, SHORTCUT_LABEL_MAX, SHORTCUT_ROUTES_CATALOG, TOOLS_ITEMS_CATALOG } = __req("src/constants.ts");
@@ -6448,6 +7607,7 @@ __latterDef("src/state/entity-controller.ts", (__exports, __req) => {
 const { formatWsError, isConflictError } = __req("src/api/ws-client.ts");
 const { ALLOWED_DEVICE_ACTIONS, DEVICE_PREF_SPECS_MAP, GROUP_BEHAVIOR_NON_PREF_KEYS, GROUP_DISPLAY_NON_PREF_KEYS, GROUP_INTERFACE_NON_PREF_KEYS, MAX_DOCK_ITEMS, NATIVE_DOCK_APP_TOKENS } = __req("src/constants.ts");
 const { isValidHexColor } = __req("src/utils/format.ts");
+const { applyPhotoPickerModalOp, browseMediaFolderOp, bulkUpdatePhotosOp, closeMediaImportModalOp, closePhotoEditModalOp, closePhotoPickerModalOp, closePhotoUploadModalOp, createPhotoCollectionOp, deletePhotoOp, importSelectedMediaOp, openMediaImportModalOp, openPhotoEditModalOp, openPhotoPickerModalOp, openPhotoUploadModalOp, removeStagedUploadOp, renamePhotoCollectionOp, requestBulkDeletePhotosOp, requestDeletePhotoCollectionOp, requestDeletePhotoOp, savePhotoEditModalOp, setDevicePhotoPoolOp, stageUploadFilesOp, uploadAllStagedPhotosOp } = __req("src/state/photo-ops.ts");
 const { addRemoteGroupRowOp, addStringListRowOp, addVolumeOverrideRowOp, cleanPersistedStringList, createTokenListOps, defaultDockShortcutItems, isCatalogItemSupported, isProtectedNativeDockItem, isStringListKey, normalizeShortcutArray, openShortcutModalOp, overlayPendingBlankListSlots, removeRemoteGroupRowOp, removeStringListRowOp, removeVolumeOverrideRowOp, reorderStringListRowsOp, saveShortcutModalOp, STRING_LIST_MAX_ITEMS, TOKEN_LIST_SPECS, toggleRemoteInGroupOp, updateRemoteGroupFieldOp, updateStringListRowOp, updateVolumeOverrideRowOp } = __req("src/state/shortcuts-lists-ops.ts");
 /**
  * `store.entity` Controller (`EntityController`, `D-062`, `D-064`, `D-065`):
@@ -7522,7 +8682,7 @@ class EntityController {
   saveShortcutModal() {
     saveShortcutModalOp(this.store);
   }
-  // ---------- Colors & Wallpapers ----------
+  // ---------- Colors, Photo Library, Media Import & Device Photo Pools ----------
   applyDeviceCustomColor(hex, switchColorProfile = true) {
     if (!isValidHexColor(hex)) return;
     this.stageDeviceSetting("device_custom_color", hex.toUpperCase());
@@ -7537,165 +8697,106 @@ class EntityController {
     );
     this.stageSystemSetting("custom_palettes", next);
   }
-  async uploadWallpaper(scope) {
-    const file =
-      scope === "device"
-        ? this.store.selectedDeviceWallpaperFile
-        : this.store.selectedSystemWallpaperFile;
-    if (!file) {
-      this.store.showToast("Choose an image file first", true);
-      return;
-    }
-    const targetSubentryId = scope === "device" ? this.store.activeSubentryId : undefined;
-    if (scope === "device" && !targetSubentryId) {
-      this.store.showToast("Choose a Device first", true);
-      return;
-    }
-    this.store.uploadScope = scope;
-    this.store.uploadBusy = true;
-    this.store.uploadPercent = 0;
-    this.store.host.requestUpdate();
-    try {
-      const result = await this.store.ws.uploadWallpaperMultipart({
-        scope,
-        subentryId: targetSubentryId,
-        file,
-        onProgress: (pct) => {
-          this.store.uploadPercent = pct;
-          this.store.host.requestUpdate();
-        },
-      });
-      if (scope === "device") {
-        this.store.selectedDeviceWallpaperFile = null;
-      } else {
-        this.store.selectedSystemWallpaperFile = null;
-      }
-      const inputId = scope === "device" ? "input-upload-wp" : "input-upload-sys-wp";
-      this.store.mergeDomRevert({ [inputId]: "" });
-      if (this.store.state) {
-        if (
-          result.wallpapers &&
-          scope === "device" &&
-          this.store.activeSubentryId === targetSubentryId
-        ) {
-          this.store.state = { ...this.store.state, wallpapers: result.wallpapers };
-        }
-        if (result.system_wallpapers) {
-          this.store.state = {
-            ...this.store.state,
-            system_wallpapers: result.system_wallpapers,
-          };
-        }
-      }
-      await this.store.refreshState();
-      this.store.showToast("Uploaded wallpaper");
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Wallpaper upload failed"), true);
-    } finally {
-      this.store.uploadBusy = false;
-      this.store.uploadScope = null;
-      this.store.uploadPercent = 0;
-      this.store.host.requestUpdate();
-    }
+  openPhotoUploadModal(options
+   ) {
+    openPhotoUploadModalOp(this.store, options);
   }
-          clearPendingWallpaperCycle(targetSubentryId) {
-    const bucket = this.store.pendingDeviceBuckets.get(targetSubentryId);
-    if (!bucket || !("wallpaper_cycle_minutes" in bucket.patch)) return;
-    delete bucket.patch.wallpaper_cycle_minutes;
-    delete bucket.previousValues.wallpaper_cycle_minutes;
-    delete bucket.previousValues["__dom:cfg-wallpaper_cycle_minutes"];
-    if (Object.keys(bucket.patch).length === 0) {
-      if (bucket.timer) clearTimeout(bucket.timer);
-      this.store.pendingDeviceBuckets.delete(targetSubentryId);
-    }
+  closePhotoUploadModal() {
+    closePhotoUploadModalOp(this.store);
   }
-  async selectWallpaperSource(sourceId) {
-    const targetSubentryId = this.store.activeSubentryId;
-    if (!targetSubentryId) return;
-    this.clearPendingWallpaperCycle(targetSubentryId);
-    try {
-      const res = await this.store.ws.runDeviceCommand(targetSubentryId, "select_wallpaper", {
-        source_id: sourceId,
-      });
-      if (res && this.store.activeSubentryId === targetSubentryId) {
-        this.store.ingestPayload(res, false);
-      }
-      this.store.showToast(sourceId ? "Wallpaper applied" : "Wallpaper turned off");
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not select wallpaper"), true);
-    }
+  stageUploadFiles(fileList) {
+    stageUploadFilesOp(this.store, fileList);
+  }
+  removeStagedUpload(index) {
+    removeStagedUploadOp(this.store, index);
+  }
+  async uploadAllStagedPhotos() {
+    await uploadAllStagedPhotosOp(this.store);
+  }
+  openPhotoEditModal(photo) {
+    openPhotoEditModalOp(this.store, photo);
+  }
+  closePhotoEditModal() {
+    closePhotoEditModalOp(this.store);
+  }
+  async savePhotoEditModal() {
+    await savePhotoEditModalOp(this.store);
+  }
+  async createPhotoCollection(name) {
+    await createPhotoCollectionOp(this.store, name);
+  }
+  async renamePhotoCollection(collectionId, name) {
+    await renamePhotoCollectionOp(this.store, collectionId, name);
+  }
+  requestDeletePhotoCollection(collectionId, name) {
+    requestDeletePhotoCollectionOp(this.store, collectionId, name);
+  }
+  async deletePhoto(photoId) {
+    await deletePhotoOp(this.store, photoId);
+  }
+  requestDeletePhoto(photoId, name) {
+    requestDeletePhotoOp(this.store, photoId, name);
+  }
+  async bulkUpdatePhotos(options
+   ) {
+    await bulkUpdatePhotosOp(this.store, options);
+  }
+  requestBulkDeletePhotos() {
+    requestBulkDeletePhotosOp(this.store);
+  }
+  openMediaImportModal() {
+    openMediaImportModalOp(this.store);
+  }
+  closeMediaImportModal() {
+    closeMediaImportModalOp(this.store);
+  }
+  async browseMediaFolder(root, subpath) {
+    await browseMediaFolderOp(this.store, root, subpath);
+  }
+  async importSelectedMedia() {
+    await importSelectedMediaOp(this.store);
+  }
+  openPhotoPickerModal(target) {
+    openPhotoPickerModalOp(this.store, target);
+  }
+  closePhotoPickerModal() {
+    closePhotoPickerModalOp(this.store);
+  }
+  async applyPhotoPickerModal() {
+    await applyPhotoPickerModalOp(this.store);
+  }
+  async setDevicePhotoPool(
+    options
+     ,
+    toastMessage,
+  ) {
+    return setDevicePhotoPoolOp(this.store, options, toastMessage);
   }
   async setWallpaperRotation(minutes) {
-    const targetSubentryId = this.store.activeSubentryId;
-    if (!targetSubentryId) return;
+    const cfg = this.store.state?.config || {};
     const cleanMins = Math.max(0, Math.round(Number(minutes) || 0));
-    this.clearPendingWallpaperCycle(targetSubentryId);
-    this.stageDeviceSetting("wallpaper_cycle_minutes", cleanMins, "cfg-wallpaper_cycle_minutes", 0);
-    await this.flushDeviceBucket(targetSubentryId);
+    const mode = String(cfg.wallpaper_mode || "off");
+    await setDevicePhotoPoolOp(this.store, {
+      target: "wallpaper",
+      mode,
+      sourceId: String(cfg.wallpaper_source || ""),
+      collectionId: String(cfg.wallpaper_collection || ""),
+      photoIds: Array.isArray(cfg.wallpaper_favorites) ? cfg.wallpaper_favorites : [],
+      cycleMinutes: cleanMins,
+    });
   }
-  async toggleWallpaperFav(sourceId) {
-    const targetSubentryId = this.store.activeSubentryId;
-    if (!targetSubentryId) return;
-    try {
-      const res = await this.store.ws.runDeviceCommand(
-        targetSubentryId,
-        "toggle_wallpaper_favorite",
-        { source_id: sourceId },
-      );
-      if (res && this.store.activeSubentryId === targetSubentryId) {
-        this.store.ingestPayload(res, false);
-      }
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not update favorite"), true);
-    }
-  }
-  async setAllWallpaperFavorites(sourceIds) {
-    const targetSubentryId = this.store.activeSubentryId;
-    if (!targetSubentryId) return;
-    try {
-      const res = await this.store.ws.runDeviceCommand(
-        targetSubentryId,
-        "toggle_wallpaper_favorite",
-        { source_ids: [...sourceIds] },
-      );
-      if (res && this.store.activeSubentryId === targetSubentryId) {
-        this.store.ingestPayload(res, false);
-      }
-      this.store.showToast(
-        sourceIds.length > 0 ? "Starred all wallpapers" : "Cleared starred wallpapers",
-      );
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not update favorites"), true);
-    }
-  }
-  async deleteWallpaper(sourceId) {
-    const cleanId = String(sourceId || "").trim();
-    if (!cleanId) return;
-    try {
-      const res = await this.store.ws.runSystemCommand(
-        "delete_wallpaper",
-        { source_id: cleanId },
-        this.store.activeSubentryId || null,
-      );
-      if (res) this.store.ingestPayload(res, false);
-      this.store.showToast("Deleted wallpaper");
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not delete wallpaper"), true);
-    }
-  }
-  requestDeleteWallpaper(sourceId, name) {
-    const cleanId = String(sourceId || "").trim();
-    if (!cleanId) return;
-    const label = String(name || cleanId).trim();
-    this.store.openConfirm({
-      kind: "delete_wallpaper",
-      title: this.store.t("confirm.delete_wallpaper.title", { name: label }),
-      consequence: this.store.t("confirm.delete_wallpaper.body"),
-      confirmLabel: this.store.t("confirm.delete_wallpaper.confirm"),
-      danger: true,
-      onConfirm: async() => {
-        await this.deleteWallpaper(cleanId);
-      },
+  async setScreensaverRotation(minutes, shuffle) {
+    const cfg = this.store.state?.config || {};
+    const cleanMins = Math.max(0, Math.round(Number(minutes) || 0));
+    const mode = String(cfg.screensaver_photo_mode || "off");
+    await setDevicePhotoPoolOp(this.store, {
+      target: "screensaver",
+      mode,
+      sourceId: String(cfg.screensaver_photo_source || ""),
+      collectionId: String(cfg.screensaver_photo_collection || ""),
+      photoIds: Array.isArray(cfg.screensaver_photo_ids) ? cfg.screensaver_photo_ids : [],
+      cycleMinutes: cleanMins,
+      shuffle: shuffle !== undefined ? shuffle : Boolean(cfg.screensaver_shuffle),
     });
   }
   // ---------- System String Lists, Volume Overrides, Remote Groups & Camera Preview ----------
@@ -9552,11 +10653,12 @@ __latterExp(__exports, { emptyConfirmModalState: () => emptyConfirmModalState, T
 });
 __latterDef("src/state/store.ts", (__exports, __req) => {
 const { formatWsError, isStudioRevMismatchError, StudioWsClient } = __req("src/api/ws-client.ts");
-const { DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS, VIEW_TITLE_KEYS } = __req("src/constants.ts");
+const { DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS, VIEW_TITLE_KEYS, VIRTUAL_COLLECTION_ALL } = __req("src/constants.ts");
 const { t, tPrefLabel, tPrefOption } = __req("src/i18n/index.ts");
 const { navigateHaPath } = __req("src/utils/format.ts");
 const { EntityController, isCatalogItemSupported, isProtectedNativeDockItem, overlayDevicePrefsOnSections, overlayPendingBlankListSlots, overlayPendingEntityStates } = __req("src/state/entity-controller.ts");
 const { GroupsController } = __req("src/state/groups-controller.ts");
+const { emptyMediaImportModalState, emptyPhotoEditModalState, emptyPhotoPickerModalState, emptyPhotoUploadModalState } = __req("src/state/photo-ops.ts");
 const { emptyConfirmModalState, ToolsController } = __req("src/state/tools-controller.ts");
 /**
  * Encapsulated Reactive Store for Latter Studio (`StudioStore`, `D-023`, `D-062`, `D-064`, `D-065`).
@@ -9638,12 +10740,7 @@ class StudioStore {
   // Local 1 Hz clock tick strictly for active Device Overview timer/stopwatch (`F-01`, `B-17`)
   liveClockNowMs = Date.now();
           liveClockTimer = null;
-  // Upload state (`XMLHttpRequest` multipart <= 15 MB)
-  uploadScope = null;
-  uploadBusy = false;
-  uploadPercent = 0;
-  selectedDeviceWallpaperFile = null;
-  selectedSystemWallpaperFile = null;
+  // Selected backup file state
   selectedBackupFile = null;
   // Devices table & Discovered UI state
   deviceSortField = "title";
@@ -9667,9 +10764,19 @@ class StudioStore {
   worldClockNewLabel = "";
   worldClockNewZone = "";
   overviewAlarmsOpen = false;
-  // System Shared Entities UI state
+  // System Shared Entities & Photo Library UI state
   activeCameraPreviewEntity = "";
   cameraPreviewUrl = "";
+  photosFilterCollection = VIRTUAL_COLLECTION_ALL;
+  photosSearch = "";
+  photosPage = 1;
+  photosSelectMode = false;
+           photosSelectedIds = new Set();
+  photosNewCollectionOpen = false;
+  photosNewCollectionName = "";
+  photosRenamingCollectionId = "";
+  photosRenamingCollectionName = "";
+  photosBulkTargetCollectionId = "";
   // System Device Groups & Staged Batch Controls UI state (`Q6`)
   newGroupFormOpen = false;
   newGroupName = "";
@@ -9756,6 +10863,10 @@ class StudioStore {
     open: false,
     app: null,
   };
+  photoUploadModal = emptyPhotoUploadModalState();
+  photoEditModal = emptyPhotoEditModalState();
+  mediaImportModal = emptyMediaImportModalState();
+  photoPickerModal = emptyPhotoPickerModalState();
   returnToPinnedModal = false;
   pendingScrollCardId = "";
            handoffTargetIds = new Set();
@@ -10215,8 +11326,8 @@ class StudioStore {
       this.worldClockNewLabel = "";
       this.worldClockNewZone = "";
       this.overviewAlarmsOpen = false;
-      this.selectedDeviceWallpaperFile = null;
       this.appConfigModal = { open: false, app: null };
+      this.photoPickerModal = emptyPhotoPickerModalState();
       this.shortcutModal = { ...this.shortcutModal, open: false };
       this.saveGroupModal = { ...this.saveGroupModal, open: false, busy: false };
       this.resetModal = { ...this.resetModal, open: false, busy: false };
@@ -10724,6 +11835,8 @@ class StudioStore {
     const mergedWorldClockZones = incoming.world_clock_zones ?? prev?.world_clock_zones;
     const mergedSystemWallpapers =
       incoming.system_wallpapers ?? prev?.system_wallpapers ?? [];
+    const mergedPhotoCollections =
+      incoming.photo_collections ?? prev?.photo_collections ?? [];
     const mergedBleSignatures =
       incoming.ble_area_signatures ?? prev?.ble_area_signatures;
     const mergedDiscoveredBle =
@@ -10753,6 +11866,7 @@ class StudioStore {
         ...incoming,
         system_devices: mergedSystemDevices,
         discovered_ble_devices: mergedDiscoveredBle,
+        photo_collections: mergedPhotoCollections,
         system_wallpapers: mergedSystemWallpapers,
         ble_area_signatures: mergedBleSignatures,
         catalog: mergedCatalog,
@@ -10801,6 +11915,7 @@ class StudioStore {
         device_groups: incoming.device_groups,
         system_config: incoming.system_config,
         has_security_pin: incoming.has_security_pin,
+        photo_collections: mergedPhotoCollections,
         system_wallpapers: mergedSystemWallpapers,
         doorbells: incoming.doorbells,
         catalog: mergedCatalog,
@@ -10852,6 +11967,7 @@ class StudioStore {
       ...incoming,
       system_devices: mergedSystemDevices,
       discovered_ble_devices: mergedDiscoveredBle,
+      photo_collections: mergedPhotoCollections,
       system_wallpapers: mergedSystemWallpapers,
       ble_area_signatures: mergedBleSignatures,
       catalog: mergedCatalog,
@@ -11464,7 +12580,7 @@ const { html, nothing } = __req("src/lib/lit.ts");
 const { ROUTE_PREVIEW_ICONS, shortcutActionLabel } = __req("src/mdi-catalog.ts");
 const { isCatalogItemSupported } = __req("src/state/store.ts");
 const { defaultLocaleTimeFormat, entityLabel } = __req("src/utils/format.ts");
-const { renderNativeControlRow, renderPillList, renderSelectRow, renderSettingsRow, renderSortableList, renderTrashIconButton } = __req("src/components/controls.ts");
+const { renderNativeControlRow, renderPillList, renderSelectRow, renderSettingsRow, renderSortableList, renderSwitchRow, renderTrashIconButton } = __req("src/components/controls.ts");
 const { renderTimeAppConfigBody } = __req("src/components/dialogs/world-clocks.ts");
 /**
  * Native App Configuration Modal (`#latter-app-config-modal`, `D-053`, `D-054`, `D-064`, `Q7`).
@@ -11481,6 +12597,7 @@ const APP_MODAL_TITLE_KEYS = {
   area: "dialogs.app_area",
   music: "dialogs.app_music",
   remote: "dialogs.app_remote",
+  weather: "dialogs.app_weather",
   time: "dialogs.app_time",
   calendar: "dialogs.app_calendar",
   clock: "dialogs.app_clock",
@@ -11901,6 +13018,40 @@ function renderAppConfigModalBody(store) {
       class="btn btn-text"
     >
       ${store.t("dialogs.manage_remote_groups")}
+    </button>`;
+  } else if (app === "weather") {
+    const weatherAppBgPref = store.entity.getPref("weather_app_background");
+    const weatherAppBgRaw = weatherAppBgPref?.value ?? cfg.weather_app_background;
+    const weatherAppBgOn =
+      weatherAppBgRaw !== undefined && weatherAppBgRaw !== null
+        ? typeof weatherAppBgRaw === "string"
+          ? !["", "0", "false", "off", "disabled"].includes(weatherAppBgRaw.trim().toLowerCase())
+          : Boolean(weatherAppBgRaw)
+        : true;
+    body = html`<div class="settings-list">
+      ${renderSwitchRow({
+        id: "cfg-weather_app_background",
+        label: store.t("dialogs.weather_bg_label"),
+        description: store.t("dialogs.weather_bg_desc"),
+        checked: weatherAppBgOn,
+        onChange: (checked) =>
+          store.entity.stageDeviceSetting(
+            "weather_app_background",
+            checked,
+            "cfg-weather_app_background",
+          ),
+      })}
+    </div>`;
+    extraAction = html`<button
+      type="button"
+      id="btn-weather-open-shared"
+      @click=${() => {
+        store.entity.closeAppConfigModal();
+        store.openSystemSection("shared_entities", "card-whole-home");
+      }}
+      class="btn btn-text"
+    >
+      ${store.t("action.open_shared_entities")}
     </button>`;
   } else if (app === "time") {
     donePrimary = false;
@@ -12594,6 +13745,1395 @@ function renderSaveGroupDialog(store) {
 __latterExp(__exports, { renderRemoveDeviceDialog: () => renderRemoveDeviceDialog, renderResetDeviceDialog: () => renderResetDeviceDialog, renderAddBleDialog: () => renderAddBleDialog, renderSaveGroupDialog: () => renderSaveGroupDialog });
 //# sourceURL=latter-studio/src/components/dialogs/device-modals.ts
 });
+__latterDef("src/components/dialogs/media-import-modal.ts", (__exports, __req) => {
+const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
+const { fmtNumber } = __req("src/utils/format.ts");
+const { renderSvgIcon } = __req("src/components/controls.ts");
+/**
+ * Home Assistant `/media` Folder Import Modal (`#latter-media-import-modal`, `D-072`).
+ * - Calls `browse_media_folder` to navigate `media_dirs` roots & NAS subdirectories with breadcrumbs
+ * - Lazy thumbnail grid with checkboxes, Select all in folder, 1-click "New collection from folder name",
+ *   and batch `import_media_photos` with summary toast.
+ */
+const ICON_FOLDER =
+  "M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z";
+function renderMediaImportDialog(store) {
+  const modal = store.mediaImportModal;
+  const close = () => store.entity.closeMediaImportModal();
+  const onBackdropClick = (ev) => {
+    if (ev.target === ev.currentTarget && !modal.importing) {
+      close();
+    }
+  };
+  if (!modal.open) {
+    return html`<dialog
+      id="latter-media-import-modal"
+      aria-labelledby="latter-media-import-title"
+      @cancel=${(ev) => {
+        if (modal.importing) ev.preventDefault();
+        else close();
+      }}
+      @click=${onBackdropClick}
+      class="studio-dialog photo-dialog"
+    >
+      ${nothing}
+    </dialog>`;
+  }
+  const collections = store.state?.photo_collections || [];
+  const selectableImages = modal.images.filter((img) => !img.too_large);
+  const selectedSet = new Set(modal.selectedPaths);
+  const allFolderSelected =
+    selectableImages.length > 0 && selectableImages.every((img) => selectedSet.has(img.relpath));
+  const crumbs = modal.subpath ? modal.subpath.split("/").filter(Boolean) : [];
+  const currentFolderName = crumbs.length > 0 ? crumbs[crumbs.length - 1] : modal.root || "Media";
+  const toggleImagePath = (relpath) => {
+    const next = selectedSet.has(relpath)
+      ? modal.selectedPaths.filter((p) => p !== relpath)
+      : [...modal.selectedPaths, relpath];
+    store.mediaImportModal = { ...store.mediaImportModal, selectedPaths: next };
+    store.host.requestUpdate();
+  };
+  const toggleSelectAllFolder = () => {
+    const next = allFolderSelected ? [] : selectableImages.map((img) => img.relpath);
+    store.mediaImportModal = { ...store.mediaImportModal, selectedPaths: next };
+    store.host.requestUpdate();
+  };
+  const importBtnLabel = modal.importing
+    ? store.t("media_import.importing_btn")
+    : modal.selectedPaths.length === 1
+      ? store.t("media_import.import_btn_one")
+      : store.t("media_import.import_btn_many", {
+          count: fmtNumber(modal.selectedPaths.length, store.hass, 0),
+        });
+  return html`<dialog
+    id="latter-media-import-modal"
+    aria-labelledby="latter-media-import-title"
+    @cancel=${(ev) => {
+      if (modal.importing) ev.preventDefault();
+      else close();
+    }}
+    @click=${onBackdropClick}
+    class="studio-dialog photo-dialog"
+  >
+    <div class="dialog-body">
+      <div class="dialog-header-row">
+        <h3 id="latter-media-import-title" class="dialog-title">
+          ${store.t("media_import.title")}
+        </h3>
+        ${modal.roots.length > 1
+          ? html`<select
+              id="media-import-root-select"
+              aria-label=${store.t("media_import.root_label")}
+              ?disabled=${modal.loading || modal.importing}
+              .value=${modal.root}
+              @change=${(ev) =>
+                void store.entity.browseMediaFolder(
+                  (ev.currentTarget).value,
+                  "",
+                )}
+            >
+              ${modal.roots.map(
+                (r) => html`<option value=${r.id} ?selected=${r.id === modal.root}>
+                  ${r.name}
+                </option>`,
+              )}
+            </select>`
+          : nothing}
+      </div>
+
+      <p class="dialog-text">${store.t("media_import.subtitle")}</p>
+
+      ${modal.error
+        ? html`<div role="alert" class="alert alert-error">
+            <span>${modal.error}</span>
+          </div>`
+        : nothing}
+
+      ${modal.roots.length > 0
+        ? html`<div class="media-breadcrumbs" aria-label=${store.t("media_import.root_label")}>
+            ${modal.parentSubpath !== null
+              ? html`<button
+                  type="button"
+                  id="btn-media-up"
+                  ?disabled=${modal.loading || modal.importing}
+                  @click=${() =>
+                    void store.entity.browseMediaFolder(modal.root, modal.parentSubpath || "")}
+                  class="btn btn-secondary btn-compact"
+                >
+                  ${store.t("media_import.up_folder")}
+                </button>`
+              : nothing}
+            <button
+              type="button"
+              ?disabled=${modal.loading || modal.importing || !modal.subpath}
+              @click=${() => void store.entity.browseMediaFolder(modal.root, "")}
+              class="btn btn-text btn-compact"
+            >
+              ${modal.roots.find((r) => r.id === modal.root)?.name || modal.root}
+            </button>
+            ${crumbs.map((seg, idx) => {
+              const targetSub = crumbs.slice(0, idx + 1).join("/");
+              const isLast = idx === crumbs.length - 1;
+              return html`<span aria-hidden="true">/</span>
+                <button
+                  type="button"
+                  ?disabled=${modal.loading || modal.importing || isLast}
+                  @click=${() => void store.entity.browseMediaFolder(modal.root, targetSub)}
+                  class="btn btn-text btn-compact"
+                >
+                  ${seg}
+                </button>`;
+            })}
+            ${selectableImages.length > 0
+              ? html`<button
+                  type="button"
+                  id="btn-media-select-all"
+                  ?disabled=${modal.loading || modal.importing}
+                  @click=${toggleSelectAllFolder}
+                  class="btn btn-secondary btn-compact"
+                >
+                  ${allFolderSelected
+                    ? store.t("media_import.clear_folder_selection")
+                    : store.t("media_import.select_all_folder")}
+                </button>`
+              : nothing}
+          </div>`
+        : nothing}
+
+      <div class="media-scroll-area">
+        ${modal.loading
+          ? html`<div role="status" class="loading-state">${store.t("common.loading")}</div>`
+          : modal.roots.length === 0 && !modal.error
+            ? html`<p class="empty-state">${store.t("media_import.empty_roots")}</p>`
+            : modal.folders.length === 0 && modal.images.length === 0
+              ? html`<p class="empty-state">${store.t("media_import.empty_folder")}</p>`
+              : html`${modal.folders.length > 0
+                    ? html`<div class="media-folder-list">
+                        ${modal.folders.map(
+                          (f) => html`<button
+                            type="button"
+                            ?disabled=${modal.importing}
+                            @click=${() =>
+                              void store.entity.browseMediaFolder(modal.root, f.subpath)}
+                            class="media-folder-btn"
+                          >
+                            ${renderSvgIcon(ICON_FOLDER)}
+                            <span>${f.name}</span>
+                          </button>`,
+                        )}
+                      </div>`
+                    : nothing}
+                  ${modal.images.length > 0
+                    ? html`<div class="photo-grid">
+                        ${modal.images.map((img) => {
+                          const isSelected = selectedSet.has(img.relpath);
+                          return html`<div class="photo-tile ${isSelected ? "selected" : ""}">
+                            <input
+                              type="checkbox"
+                              aria-label=${img.name}
+                              ?disabled=${img.too_large || modal.importing}
+                              .checked=${isSelected}
+                              @change=${() => toggleImagePath(img.relpath)}
+                              class="photo-tile-check"
+                            />
+                            <button
+                              type="button"
+                              ?disabled=${img.too_large || modal.importing}
+                              @click=${() => toggleImagePath(img.relpath)}
+                              class="photo-tile-thumb-btn"
+                            >
+                              ${img.thumb_url
+                                ? html`<img
+                                    src=${img.thumb_url}
+                                    alt=${img.name}
+                                    loading="lazy"
+                                    class="photo-tile-img"
+                                  />`
+                                : nothing}
+                              ${img.too_large
+                                ? html`<span class="photo-tile-badge">
+                                    ${store.t("media_import.too_large")}
+                                  </span>`
+                                : img.already_imported
+                                  ? html`<span class="photo-tile-badge">
+                                      ${store.t("media_import.already_imported")}
+                                    </span>`
+                                  : nothing}
+                            </button>
+                            <div class="photo-tile-meta">
+                              <span class="photo-tile-name">${img.name}</span>
+                            </div>
+                          </div>`;
+                        })}
+                      </div>`
+                    : nothing}`}
+      </div>
+
+      ${modal.images.length > 0
+        ? html`<div class="stack">
+            <div class="input-action-row">
+              <select
+                id="media-import-collection"
+                aria-label=${store.t("media_import.collection_label")}
+                ?disabled=${modal.importing || modal.useNewFolderCollection}
+                .value=${modal.collectionId}
+                @change=${(ev) => {
+                  store.mediaImportModal = {
+                    ...store.mediaImportModal,
+                    collectionId: (ev.currentTarget).value,
+                  };
+                  store.host.requestUpdate();
+                }}
+              >
+                <option value="" ?selected=${!modal.collectionId}>
+                  ${store.t("photo_upload.no_collection")}
+                </option>
+                ${collections.map(
+                  (col) => html`<option value=${col.id} ?selected=${modal.collectionId === col.id}>
+                    ${col.name}
+                  </option>`,
+                )}
+              </select>
+              <button
+                type="button"
+                id="btn-media-new-col-from-folder"
+                ?disabled=${modal.importing}
+                @click=${() => {
+                  const nextOn = !modal.useNewFolderCollection;
+                  store.mediaImportModal = {
+                    ...store.mediaImportModal,
+                    useNewFolderCollection: nextOn,
+                    newCollectionName: nextOn ? currentFolderName : "",
+                  };
+                  store.host.requestUpdate();
+                }}
+                class="btn ${modal.useNewFolderCollection ? "btn-primary" : "btn-secondary"} btn-compact"
+              >
+                ${store.t("media_import.new_from_folder")}
+              </button>
+            </div>
+            ${modal.useNewFolderCollection
+              ? html`<div class="stacked-field">
+                  <label for="media-import-new-col-name">
+                    ${store.t("media_import.new_collection_name")}
+                  </label>
+                  <input
+                    type="text"
+                    id="media-import-new-col-name"
+                    ?disabled=${modal.importing}
+                    .value=${focusSafe(modal.newCollectionName)}
+                    @input=${(ev) => {
+                      store.mediaImportModal = {
+                        ...store.mediaImportModal,
+                        newCollectionName: (ev.currentTarget).value,
+                      };
+                    }}
+                  />
+                </div>`
+              : nothing}
+          </div>`
+        : nothing}
+
+      <div class="dialog-actions">
+        <button
+          type="button"
+          ?disabled=${modal.importing}
+          @click=${close}
+          class="btn btn-secondary"
+        >
+          ${store.t("action.cancel")}
+        </button>
+        <button
+          type="button"
+          id="btn-media-import-confirm"
+          ?disabled=${modal.importing || modal.selectedPaths.length === 0}
+          @click=${() => void store.entity.importSelectedMedia()}
+          class="btn btn-primary"
+        >
+          ${importBtnLabel}
+        </button>
+      </div>
+    </div>
+  </dialog>`;
+}
+__latterExp(__exports, { renderMediaImportDialog: () => renderMediaImportDialog });
+//# sourceURL=latter-studio/src/components/dialogs/media-import-modal.ts
+});
+__latterDef("src/components/dialogs/photo-picker-modal.ts", (__exports, __req) => {
+const { VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UNCATEGORIZED, VIRTUAL_COLLECTION_UPLOADS } = __req("src/constants.ts");
+const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
+const { filterLibraryPhotos, isPhotoDynamic, resolveCollectionDisplayName } = __req("src/state/photo-ops.ts");
+const { fmtNumber } = __req("src/utils/format.ts");
+/**
+ * Shared Photo Pool Picker Modal (`#latter-photo-picker-modal`, `D-072`).
+ * Reused by both `Device -> Display -> Wallpaper` and `Device -> Display -> Screensaver (Photo Frame)`:
+ * - Modes: Single photo, Collection, Custom selection
+ * - Quick Upload photos trigger (re-opens/updates picker cleanly)
+ * - Filters `dynamic_preset` (such as `Day & Night Sky`) out of Photo Frame pickers
+ */
+function renderPhotoPickerDialog(store) {
+  const modal = store.photoPickerModal;
+  const close = () => store.entity.closePhotoPickerModal();
+  const onBackdropClick = (ev) => {
+    if (ev.target === ev.currentTarget && !modal.busy) {
+      close();
+    }
+  };
+  if (!modal.open) {
+    return html`<dialog
+      id="latter-photo-picker-modal"
+      aria-labelledby="latter-photo-picker-title"
+      @cancel=${close}
+      @click=${onBackdropClick}
+      class="studio-dialog photo-dialog"
+    >
+      ${nothing}
+    </dialog>`;
+  }
+  const isScreensaver = modal.target === "screensaver";
+  const shapeClass =
+    String(store.state?.config?.display_shape || "square") === "circle" ? "circle" : "";
+  const allPhotos =
+    (store.state?.wallpapers && store.state.wallpapers.length > 0
+      ? store.state.wallpapers
+      : store.state?.system_wallpapers) || [];
+  const collections = store.state?.photo_collections || [];
+  const filteredPhotos = filterLibraryPhotos(allPhotos, modal.filterCollection, modal.search, {
+    excludeDynamic: isScreensaver,
+  });
+  const collectionPreviewPhotos = filterLibraryPhotos(
+    allPhotos,
+    modal.collectionId || VIRTUAL_COLLECTION_ALL,
+    "",
+    { excludeDynamic: isScreensaver },
+  );
+  const customSet = new Set(modal.customIds);
+  const toggleCustomPhoto = (photoId) => {
+    const next = customSet.has(photoId)
+      ? modal.customIds.filter((id) => id !== photoId)
+      : [...modal.customIds, photoId];
+    store.photoPickerModal = { ...store.photoPickerModal, customIds: next };
+    store.host.requestUpdate();
+  };
+  const canApply =
+    !modal.busy &&
+    (modal.mode === "single"
+      ? Boolean(modal.singleSource)
+      : modal.mode === "collection"
+        ? Boolean(modal.collectionId)
+        : modal.customIds.length > 0);
+  const title = isScreensaver
+    ? store.t("photo_picker.title_screensaver")
+    : store.t("photo_picker.title_wallpaper");
+  const virtualCollectionOptions = [
+    { id: VIRTUAL_COLLECTION_ALL, label: store.t("photos.filter_all") },
+    { id: VIRTUAL_COLLECTION_DEFAULTS, label: store.t("photos.filter_defaults") },
+    { id: VIRTUAL_COLLECTION_UPLOADS, label: store.t("photos.filter_my_photos") },
+    { id: VIRTUAL_COLLECTION_UNCATEGORIZED, label: store.t("photos.filter_uncategorized") },
+  ];
+  const onQuickUpload = () => {
+    const resumeTarget = modal.target;
+    const resumeMode = modal.mode;
+    const resumeCustom = [...modal.customIds];
+    const resumeCollection = modal.collectionId;
+    close();
+    store.entity.openPhotoUploadModal({
+      defaultCollectionId: resumeCollection.startsWith("col_") ? resumeCollection : "",
+      onComplete: (uploadedIds) => {
+        store.entity.openPhotoPickerModal(resumeTarget);
+        if (uploadedIds.length > 0) {
+          if (resumeMode === "single" && uploadedIds.length === 1) {
+            store.photoPickerModal = {
+              ...store.photoPickerModal,
+              mode: "single",
+              singleSource: uploadedIds[0],
+            };
+          } else if (resumeMode === "custom") {
+            store.photoPickerModal = {
+              ...store.photoPickerModal,
+              mode: "custom",
+              customIds: Array.from(new Set([...resumeCustom, ...uploadedIds])),
+            };
+          }
+          store.host.requestUpdate();
+        }
+      },
+    });
+  };
+  return html`<dialog
+    id="latter-photo-picker-modal"
+    aria-labelledby="latter-photo-picker-title"
+    @cancel=${close}
+    @click=${onBackdropClick}
+    class="studio-dialog photo-dialog"
+  >
+    <div class="dialog-body">
+      <div class="dialog-header-row">
+        <h3 id="latter-photo-picker-title" class="dialog-title">${title}</h3>
+        <button
+          type="button"
+          id="btn-picker-quick-upload"
+          ?disabled=${modal.busy}
+          @click=${onQuickUpload}
+          class="btn btn-secondary btn-compact"
+        >
+          ${store.t("photos.upload_btn")}
+        </button>
+      </div>
+
+      <div
+        role="radiogroup"
+        aria-label=${store.t("photo_picker.mode_aria")}
+        class="segmented"
+      >
+        <button
+          type="button"
+          id="btn-picker-mode-single"
+          role="radio"
+          aria-checked=${modal.mode === "single" ? "true" : "false"}
+          @click=${() => {
+            store.photoPickerModal = { ...store.photoPickerModal, mode: "single" };
+            store.host.requestUpdate();
+          }}
+          class=${modal.mode === "single" ? "active" : ""}
+        >
+          ${store.t("photo_picker.mode_single")}
+        </button>
+        <button
+          type="button"
+          id="btn-picker-mode-collection"
+          role="radio"
+          aria-checked=${modal.mode === "collection" ? "true" : "false"}
+          @click=${() => {
+            store.photoPickerModal = { ...store.photoPickerModal, mode: "collection" };
+            store.host.requestUpdate();
+          }}
+          class=${modal.mode === "collection" ? "active" : ""}
+        >
+          ${store.t("photo_picker.mode_collection")}
+        </button>
+        <button
+          type="button"
+          id="btn-picker-mode-custom"
+          role="radio"
+          aria-checked=${modal.mode === "custom" ? "true" : "false"}
+          @click=${() => {
+            store.photoPickerModal = { ...store.photoPickerModal, mode: "custom" };
+            store.host.requestUpdate();
+          }}
+          class=${modal.mode === "custom" ? "active" : ""}
+        >
+          ${store.t("photo_picker.mode_custom")}
+        </button>
+      </div>
+
+      ${modal.mode === "collection"
+        ? html`<div class="stack">
+            <div class="stacked-field">
+              <label for="photo-picker-collection-select">
+                ${store.t("photo_picker.collection_label")}
+              </label>
+              <select
+                id="photo-picker-collection-select"
+                .value=${modal.collectionId}
+                @change=${(ev) => {
+                  store.photoPickerModal = {
+                    ...store.photoPickerModal,
+                    collectionId: (ev.currentTarget).value,
+                  };
+                  store.host.requestUpdate();
+                }}
+              >
+                ${virtualCollectionOptions.map(
+                  (v) => html`<option value=${v.id} ?selected=${modal.collectionId === v.id}>
+                    ${v.label}
+                  </option>`,
+                )}
+                ${collections.map(
+                  (col) => html`<option value=${col.id} ?selected=${modal.collectionId === col.id}>
+                    ${col.name} (${fmtNumber(col.count, store.hass, 0)})
+                  </option>`,
+                )}
+              </select>
+            </div>
+            <div class="photo-pool-preview">
+              ${collectionPreviewPhotos.length > 0
+                ? html`<div class="photo-pool-thumbs">
+                    ${collectionPreviewPhotos.slice(0, 5).map(
+                      (p) => html`<img
+                        src=${p.thumb_url || p.preview_url || ""}
+                        alt=${p.name || p.id}
+                        loading="lazy"
+                        class="photo-pool-thumb ${shapeClass}"
+                      />`,
+                    )}
+                  </div>`
+                : nothing}
+              <div class="photo-pool-info">
+                <span class="photo-pool-title">
+                  ${resolveCollectionDisplayName(store, modal.collectionId)}
+                </span>
+                <span class="photo-pool-meta">
+                  ${collectionPreviewPhotos.length === 1
+                    ? store.t("sys_overview.photos_count_one")
+                    : store.t("sys_overview.photos_count_many", {
+                        count: fmtNumber(collectionPreviewPhotos.length, store.hass, 0),
+                      })}
+                </span>
+              </div>
+            </div>
+          </div>`
+        : html`<div class="stack">
+            <div class="photo-toolbar">
+              <input
+                type="search"
+                id="photo-picker-search"
+                aria-label=${store.t("photos.search_aria")}
+                placeholder=${store.t("photos.search_placeholder")}
+                .value=${focusSafe(modal.search)}
+                @input=${(ev) => {
+                  store.photoPickerModal = {
+                    ...store.photoPickerModal,
+                    search: (ev.currentTarget).value,
+                  };
+                  store.host.requestUpdate();
+                }}
+                class="photo-search-input"
+              />
+              <select
+                id="photo-picker-filter-col"
+                aria-label=${store.t("photo_picker.collection_label")}
+                .value=${modal.filterCollection}
+                @change=${(ev) => {
+                  store.photoPickerModal = {
+                    ...store.photoPickerModal,
+                    filterCollection: (ev.currentTarget).value,
+                  };
+                  store.host.requestUpdate();
+                }}
+              >
+                ${virtualCollectionOptions.map(
+                  (v) => html`<option value=${v.id} ?selected=${modal.filterCollection === v.id}>
+                    ${v.label}
+                  </option>`,
+                )}
+                ${collections.map(
+                  (col) => html`<option
+                    value=${col.id}
+                    ?selected=${modal.filterCollection === col.id}
+                  >
+                    ${col.name}
+                  </option>`,
+                )}
+              </select>
+            </div>
+
+            ${modal.mode === "custom"
+              ? html`<div class="photo-toolbar">
+                  <span class="row-description">${store.t("photo_picker.custom_hint")}</span>
+                  <span class="chip chip-primary">
+                    ${modal.customIds.length === 1
+                      ? store.t("photo_picker.custom_selected_one")
+                      : store.t("photo_picker.custom_selected_many", {
+                          count: fmtNumber(modal.customIds.length, store.hass, 0),
+                        })}
+                  </span>
+                </div>`
+              : nothing}
+
+            ${filteredPhotos.length === 0
+              ? html`<p class="empty-state">${store.t("photo_picker.empty")}</p>`
+              : html`<div class="photo-picker-grid">
+                  ${filteredPhotos.map((photo) => {
+                    const isSelected =
+                      modal.mode === "single"
+                        ? modal.singleSource === photo.id
+                        : customSet.has(photo.id);
+                    const thumbSrc = photo.thumb_url || photo.preview_url || "";
+                    const onPick = () => {
+                      if (modal.mode === "single") {
+                        store.photoPickerModal = {
+                          ...store.photoPickerModal,
+                          singleSource: photo.id,
+                        };
+                        store.host.requestUpdate();
+                      } else {
+                        toggleCustomPhoto(photo.id);
+                      }
+                    };
+                    return html`<button
+                      type="button"
+                      data-photo-id=${photo.id}
+                      aria-pressed=${isSelected ? "true" : "false"}
+                      @click=${onPick}
+                      class="photo-picker-item ${isSelected ? "selected" : ""}"
+                    >
+                      ${thumbSrc
+                        ? html`<img
+                            src=${thumbSrc}
+                            alt=${photo.name || photo.id}
+                            loading="lazy"
+                            class="photo-picker-thumb ${shapeClass}"
+                          />`
+                        : html`<div class="photo-picker-thumb ${shapeClass}" aria-hidden="true"></div>`}
+                      <span class="photo-picker-name">${photo.name || photo.id}</span>
+                      ${isPhotoDynamic(photo)
+                        ? html`<span class="chip chip-primary">
+                            ${store.t("photos.badge_dynamic")}
+                          </span>`
+                        : nothing}
+                    </button>`;
+                  })}
+                </div>`}
+          </div>`}
+
+      <div class="dialog-actions">
+        <button
+          type="button"
+          ?disabled=${modal.busy}
+          @click=${close}
+          class="btn btn-secondary"
+        >
+          ${store.t("action.cancel")}
+        </button>
+        <button
+          type="button"
+          id="btn-picker-apply"
+          ?disabled=${!canApply}
+          @click=${() => void store.entity.applyPhotoPickerModal()}
+          class="btn btn-primary"
+        >
+          ${store.t("photo_picker.apply_btn")}
+        </button>
+      </div>
+    </div>
+  </dialog>`;
+}
+__latterExp(__exports, { renderPhotoPickerDialog: () => renderPhotoPickerDialog });
+//# sourceURL=latter-studio/src/components/dialogs/photo-picker-modal.ts
+});
+__latterDef("src/components/dialogs/photo-upload-modal.ts", (__exports, __req) => {
+const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
+const { isPhotoUploaded } = __req("src/state/photo-ops.ts");
+const { applyCanvasPanDelta, cropPreviewCanvasSize, DEFAULT_PHOTO_CROP, normalizePhotoCrop, paintCropCanvas } = __req("src/utils/crop-math.ts");
+const { fmtNumber } = __req("src/utils/format.ts");
+/**
+ * Multi-File Photo Upload & Interactive Crop Staging Modal (`#latter-photo-upload-modal`)
+ * and Photo Editor & Non-Destructive Crop Modal (`#latter-photo-edit-modal`) (`D-072`).
+ * - Native `<dialog>`, Pointer Events pan capture, zoom `1.0x-3.0x`, Square+Circle / Round / Widescreen switcher
+ * - Zero non-`--*` inline styles; canvas image cache scoped to WeakMap / bounded Map
+ */
+const loadedImageCache = new Map();
+const MAX_CACHED_CROP_IMAGES = 32;
+function getOrLoadImage(url, onLoad) {
+  if (!url || typeof Image === "undefined") return null;
+  const existing = loadedImageCache.get(url);
+  if (existing) {
+    if (existing.complete && existing.naturalWidth > 0) {
+      return existing;
+    }
+    return null;
+  }
+  if (loadedImageCache.size >= MAX_CACHED_CROP_IMAGES) {
+    const firstKey = loadedImageCache.keys().next().value;
+    if (firstKey) loadedImageCache.delete(firstKey);
+  }
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    onLoad();
+  };
+  img.src = url;
+  loadedImageCache.set(url, img);
+  return img.complete && img.naturalWidth > 0 ? img : null;
+}
+const activeDragMap = new WeakMap
+ ();
+function syncPhotoCropCanvases(renderRoot, store) {
+  // 1. Upload staging main crop canvas + filmstrip thumbs
+  if (store.photoUploadModal.open && store.photoUploadModal.files.length > 0) {
+    const modal = store.photoUploadModal;
+    const active = modal.files[modal.activeIndex] || modal.files[0];
+    const mainCanvas = renderRoot.getElementById(
+      "latter-upload-crop-canvas",
+    );
+    if (mainCanvas && active) {
+      const img = getOrLoadImage(active.objectUrl, () => store.host.requestUpdate());
+      if (img && (active.width !== img.naturalWidth || active.height !== img.naturalHeight)) {
+        active.width = img.naturalWidth;
+        active.height = img.naturalHeight;
+      }
+      paintCropCanvas(mainCanvas, img, active.crop, modal.previewAspect, { showGuides: true });
+    }
+    for (let i = 0; i < modal.files.length; i += 1) {
+      const staged = modal.files[i];
+      const thumbCanvas = renderRoot.getElementById(
+        `latter-upload-thumb-${staged.id}`,
+      );
+      if (!thumbCanvas) continue;
+      const img = getOrLoadImage(staged.objectUrl, () => store.host.requestUpdate());
+      paintCropCanvas(thumbCanvas, img, staged.crop, "square", { showGuides: false });
+    }
+  }
+  // 2. Photo Editor crop canvas
+  if (store.photoEditModal.open && store.photoEditModal.photoId) {
+    const modal = store.photoEditModal;
+    const photo = (store.state?.system_wallpapers || []).find((p) => p.id === modal.photoId);
+    const editCanvas = renderRoot.getElementById(
+      "latter-edit-crop-canvas",
+    );
+    if (editCanvas && photo) {
+      const srcUrl = photo.orig_url || photo.thumb_url || photo.preview_url || "";
+      const img = getOrLoadImage(srcUrl, () => store.host.requestUpdate());
+      paintCropCanvas(editCanvas, img, modal.crop, modal.previewAspect, { showGuides: true });
+    }
+  }
+}
+function attachCropPointerHandlers(
+  getCrop,
+  getSourceDims,
+  onCropChange,
+  disabled,
+)
+  {
+  return {
+    onPointerDown: (ev) => {
+      if (disabled) return;
+      const pev = ev;
+      const canvas = pev.currentTarget;
+      canvas.setPointerCapture?.(pev.pointerId);
+      canvas.classList.add("dragging");
+      activeDragMap.set(canvas, {
+        pointerId: pev.pointerId,
+        lastX: pev.clientX,
+        lastY: pev.clientY,
+      });
+    },
+    onPointerMove: (ev) => {
+      if (disabled) return;
+      const pev = ev;
+      const canvas = pev.currentTarget;
+      const drag = activeDragMap.get(canvas);
+      if (!drag || drag.pointerId !== pev.pointerId) return;
+      const dx = pev.clientX - drag.lastX;
+      const dy = pev.clientY - drag.lastY;
+      drag.lastX = pev.clientX;
+      drag.lastY = pev.clientY;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+      const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
+      const dims = getSourceDims();
+      const next = applyCanvasPanDelta(
+        getCrop(),
+        dx * scaleX,
+        dy * scaleY,
+        dims.width || canvas.width,
+        dims.height || canvas.height,
+        canvas.width,
+        canvas.height,
+      );
+      onCropChange(next);
+    },
+    onPointerUp: (ev) => {
+      const pev = ev;
+      const canvas = pev.currentTarget;
+      activeDragMap.delete(canvas);
+      canvas.classList.remove("dragging");
+      if (canvas.hasPointerCapture?.(pev.pointerId)) {
+        canvas.releasePointerCapture(pev.pointerId);
+      }
+    },
+  };
+}
+function renderAspectSwitcher(
+  store,
+  aspect,
+  onSelect,
+) {
+  const options = [
+    { id: "square", label: store.t("photo_edit.aspect_square") },
+    { id: "round", label: store.t("photo_edit.aspect_round") },
+    { id: "widescreen", label: store.t("photo_edit.aspect_widescreen") },
+  ];
+  return html`<div
+    role="radiogroup"
+    aria-label=${store.t("photo_edit.aspect_aria")}
+    class="segmented"
+  >
+    ${options.map(
+      (opt) => html`<button
+        type="button"
+        role="radio"
+        aria-checked=${aspect === opt.id ? "true" : "false"}
+        @click=${() => onSelect(opt.id)}
+        class=${aspect === opt.id ? "active" : ""}
+      >
+        ${opt.label}
+      </button>`,
+    )}
+  </div>`;
+}
+function renderPhotoUploadDialog(store) {
+  const modal = store.photoUploadModal;
+  const close = () => store.entity.closePhotoUploadModal();
+  const onBackdropClick = (ev) => {
+    if (ev.target === ev.currentTarget && !modal.uploading) {
+      close();
+    }
+  };
+  if (!modal.open) {
+    return html`<dialog
+      id="latter-photo-upload-modal"
+      aria-labelledby="latter-photo-upload-title"
+      @cancel=${(ev) => {
+        if (modal.uploading) ev.preventDefault();
+        else close();
+      }}
+      @click=${onBackdropClick}
+      class="studio-dialog photo-dialog"
+    >
+      ${nothing}
+    </dialog>`;
+  }
+  const collections = store.state?.photo_collections || [];
+  const active = modal.files[modal.activeIndex] || modal.files[0] || null;
+  const canvasSize = cropPreviewCanvasSize(modal.previewAspect);
+  const pctStyle = `--upload-pct:${modal.currentPercent}%`;
+  const updateActiveItem = (patch) => {
+    if (!active) return;
+    const nextFiles = modal.files.map((item, idx) =>
+      idx === modal.activeIndex ? { ...item, ...patch } : item,
+    );
+    store.photoUploadModal = { ...store.photoUploadModal, files: nextFiles };
+    store.host.requestUpdate();
+  };
+  const ptr = attachCropPointerHandlers(
+    () => active?.crop || { ...DEFAULT_PHOTO_CROP },
+    () => {
+      const cached = active?.objectUrl ? loadedImageCache.get(active.objectUrl) : null;
+      return {
+        width: cached?.naturalWidth || active?.width || canvasSize.width,
+        height: cached?.naturalHeight || active?.height || canvasSize.height,
+      };
+    },
+    (nextCrop) => updateActiveItem({ crop: nextCrop }),
+    modal.uploading,
+  );
+  const onFileInputChange = (ev) => {
+    const input = ev.currentTarget;
+    if (input.files && input.files.length > 0) {
+      store.entity.stageUploadFiles(input.files);
+      input.value = "";
+    }
+  };
+  const onTriggerFilePicker = (ev) => {
+    const root = (ev.currentTarget)?.closest(".dialog-body");
+    const fileInput = root?.querySelector("#input-photo-upload-files");
+    fileInput?.click();
+  };
+  const onDragOver = (ev) => {
+    ev.preventDefault();
+    if (!store.photoUploadModal.draggingFiles) {
+      store.photoUploadModal = { ...store.photoUploadModal, draggingFiles: true };
+      store.host.requestUpdate();
+    }
+  };
+  const onDragLeave = () => {
+    if (store.photoUploadModal.draggingFiles) {
+      store.photoUploadModal = { ...store.photoUploadModal, draggingFiles: false };
+      store.host.requestUpdate();
+    }
+  };
+  const onDrop = (ev) => {
+    ev.preventDefault();
+    const dev = ev;
+    store.photoUploadModal = { ...store.photoUploadModal, draggingFiles: false };
+    if (dev.dataTransfer?.files && dev.dataTransfer.files.length > 0) {
+      store.entity.stageUploadFiles(dev.dataTransfer.files);
+    } else {
+      store.host.requestUpdate();
+    }
+  };
+  const uploadBtnLabel =
+    modal.files.length === 1
+      ? store.t("photo_upload.upload_all_one")
+      : store.t("photo_upload.upload_all_many", {
+          count: fmtNumber(modal.files.length, store.hass, 0),
+        });
+  return html`<dialog
+    id="latter-photo-upload-modal"
+    aria-labelledby="latter-photo-upload-title"
+    @cancel=${(ev) => {
+      if (modal.uploading) ev.preventDefault();
+      else close();
+    }}
+    @click=${onBackdropClick}
+    class="studio-dialog photo-dialog"
+  >
+    <div class="dialog-body">
+      <div class="dialog-header-row">
+        <h3 id="latter-photo-upload-title" class="dialog-title">
+          ${store.t("photo_upload.title")}
+        </h3>
+        ${modal.files.length > 0 && !modal.uploading
+          ? html`<button
+              type="button"
+              id="btn-upload-add-more"
+              @click=${onTriggerFilePicker}
+              class="btn btn-secondary btn-compact"
+            >
+              ${store.t("photo_upload.add_more")}
+            </button>`
+          : nothing}
+      </div>
+
+      <input
+        type="file"
+        id="input-photo-upload-files"
+        accept="image/*"
+        multiple
+        aria-label=${store.t("photo_upload.choose_files")}
+        @change=${onFileInputChange}
+        class="offscreen"
+      />
+
+      ${modal.files.length === 0
+        ? html`<div
+            id="photo-upload-dropzone"
+            role="button"
+            tabindex="0"
+            @click=${onTriggerFilePicker}
+            @keydown=${(ev) => {
+              if (ev.key === "Enter" || ev.key === " ") {
+                ev.preventDefault();
+                onTriggerFilePicker(ev);
+              }
+            }}
+            @dragover=${onDragOver}
+            @dragleave=${onDragLeave}
+            @drop=${onDrop}
+            class="crop-dropzone ${modal.draggingFiles ? "dragging" : ""}"
+          >
+            <strong>${store.t("photo_upload.dropzone_title")}</strong>
+            <span class="row-description">${store.t("photo_upload.dropzone_hint")}</span>
+            <span class="btn btn-primary btn-compact">${store.t("photo_upload.choose_files")}</span>
+          </div>`
+        : html`<div
+            class="crop-stage-wrap"
+            @dragover=${onDragOver}
+            @dragleave=${onDragLeave}
+            @drop=${onDrop}
+          >
+            ${renderAspectSwitcher(store, modal.previewAspect, (nextAspect) => {
+              store.photoUploadModal = { ...store.photoUploadModal, previewAspect: nextAspect };
+              store.host.requestUpdate();
+            })}
+
+            <canvas
+              id="latter-upload-crop-canvas"
+              width=${String(canvasSize.width)}
+              height=${String(canvasSize.height)}
+              @pointerdown=${ptr.onPointerDown}
+              @pointermove=${ptr.onPointerMove}
+              @pointerup=${ptr.onPointerUp}
+              @pointercancel=${ptr.onPointerUp}
+              class="crop-canvas ${modal.previewAspect === "round" ? "round" : ""}"
+            ></canvas>
+
+            <p class="row-description">${store.t("photo_edit.crop_hint")}</p>
+
+            <div class="crop-controls-row">
+              <div class="crop-zoom-control">
+                <label for="upload-crop-zoom">${store.t("photo_edit.zoom_label")}</label>
+                <input
+                  type="range"
+                  id="upload-crop-zoom"
+                  min="1"
+                  max="3"
+                  step="0.05"
+                  ?disabled=${modal.uploading}
+                  .value=${String(active?.crop.zoom ?? 1)}
+                  @input=${(ev) => {
+                    const z = Number((ev.currentTarget).value) || 1;
+                    updateActiveItem({
+                      crop: normalizePhotoCrop({ ...(active?.crop || DEFAULT_PHOTO_CROP), zoom: z }),
+                    });
+                  }}
+                />
+                <span class="kv-value">${(active?.crop.zoom ?? 1).toFixed(2)}×</span>
+              </div>
+              <button
+                type="button"
+                id="btn-upload-reset-crop"
+                ?disabled=${modal.uploading}
+                @click=${() => updateActiveItem({ crop: { ...DEFAULT_PHOTO_CROP } })}
+                class="btn btn-text btn-compact"
+              >
+                ${store.t("photo_edit.reset_crop")}
+              </button>
+            </div>
+          </div>
+
+          <div class="stacked-field">
+            <label for="upload-photo-name">${store.t("photo_edit.name_label")}</label>
+            <input
+              type="text"
+              id="upload-photo-name"
+              placeholder=${store.t("photo_edit.name_placeholder")}
+              ?disabled=${modal.uploading}
+              .value=${focusSafe(active?.name || "")}
+              @input=${(ev) =>
+                updateActiveItem({ name: (ev.currentTarget).value })}
+            />
+          </div>
+
+          ${modal.files.length > 1
+            ? html`<div class="crop-filmstrip" role="list">
+                ${modal.files.map(
+                  (item, idx) => html`<div
+                    role="listitem"
+                    class="crop-filmstrip-item ${idx === modal.activeIndex ? "active" : ""}"
+                  >
+                    <button
+                      type="button"
+                      aria-label=${store.t("photo_upload.select_staged_aria", {
+                        name: item.name,
+                      })}
+                      ?disabled=${modal.uploading}
+                      @click=${() => {
+                        store.photoUploadModal = {
+                          ...store.photoUploadModal,
+                          activeIndex: idx,
+                        };
+                        store.host.requestUpdate();
+                      }}
+                      class="wp-thumb-btn"
+                    >
+                      <canvas
+                        id=${`latter-upload-thumb-${item.id}`}
+                        width="56"
+                        height="56"
+                        class="crop-filmstrip-thumb"
+                      ></canvas>
+                    </button>
+                    ${!modal.uploading
+                      ? html`<button
+                          type="button"
+                          aria-label=${store.t("photo_upload.remove_staged_aria", {
+                            name: item.name,
+                          })}
+                          @click=${() => store.entity.removeStagedUpload(idx)}
+                          class="crop-filmstrip-remove"
+                        >
+                          ×
+                        </button>`
+                      : nothing}
+                  </div>`,
+                )}
+              </div>`
+            : nothing}
+
+          <div class="stacked-field">
+            <label for="upload-photo-collection">${store.t("photo_upload.collection_label")}</label>
+            <select
+              id="upload-photo-collection"
+              ?disabled=${modal.uploading}
+              .value=${modal.collectionId}
+              @change=${(ev) => {
+                store.photoUploadModal = {
+                  ...store.photoUploadModal,
+                  collectionId: (ev.currentTarget).value,
+                };
+                store.host.requestUpdate();
+              }}
+            >
+              <option value="" ?selected=${!modal.collectionId}>
+                ${store.t("photo_upload.no_collection")}
+              </option>
+              ${collections.map(
+                (col) => html`<option value=${col.id} ?selected=${modal.collectionId === col.id}>
+                  ${col.name}
+                </option>`,
+              )}
+            </select>
+          </div>
+
+          ${modal.uploading
+            ? html`<div class="stack">
+                <div class="wp-upload-status">
+                  <span>
+                    ${store.t("photo_upload.uploading_progress", {
+                      current: fmtNumber(modal.currentIndex, store.hass, 0),
+                      total: fmtNumber(modal.files.length, store.hass, 0),
+                      percent: fmtNumber(modal.currentPercent, store.hass, 0),
+                    })}
+                  </span>
+                </div>
+                <div
+                  role="progressbar"
+                  aria-label=${store.t("wp_gallery.upload_progress_aria")}
+                  aria-valuenow=${String(modal.currentPercent)}
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  class="upload-progress"
+                >
+                  <div class="upload-progress-fill" style=${pctStyle}></div>
+                </div>
+              </div>`
+            : nothing}`}
+
+      <div class="dialog-actions">
+        <button
+          type="button"
+          ?disabled=${modal.uploading}
+          @click=${close}
+          class="btn btn-secondary"
+        >
+          ${store.t("action.cancel")}
+        </button>
+        <button
+          type="button"
+          id="btn-upload-submit-all"
+          ?disabled=${modal.uploading || modal.files.length === 0}
+          @click=${() => void store.entity.uploadAllStagedPhotos()}
+          class="btn btn-primary"
+        >
+          ${modal.uploading ? store.t("wp_gallery.uploading") : uploadBtnLabel}
+        </button>
+      </div>
+    </div>
+  </dialog>`;
+}
+function renderPhotoEditDialog(store) {
+  const modal = store.photoEditModal;
+  const close = () => store.entity.closePhotoEditModal();
+  const onBackdropClick = (ev) => {
+    if (ev.target === ev.currentTarget && !modal.busy) {
+      close();
+    }
+  };
+  if (!modal.open || !modal.photoId) {
+    return html`<dialog
+      id="latter-photo-edit-modal"
+      aria-labelledby="latter-photo-edit-title"
+      @cancel=${close}
+      @click=${onBackdropClick}
+      class="studio-dialog photo-dialog"
+    >
+      ${nothing}
+    </dialog>`;
+  }
+  const photo = (store.state?.system_wallpapers || []).find((p) => p.id === modal.photoId);
+  const uploaded = photo ? isPhotoUploaded(photo) : false;
+  const collections = store.state?.photo_collections || [];
+  const canvasSize = cropPreviewCanvasSize(modal.previewAspect);
+  const ptr = attachCropPointerHandlers(
+    () => modal.crop,
+    () => {
+      const srcUrl = photo?.orig_url || photo?.thumb_url || photo?.preview_url || "";
+      const cached = srcUrl ? loadedImageCache.get(srcUrl) : null;
+      return {
+        width: cached?.naturalWidth || photo?.width || canvasSize.width,
+        height: cached?.naturalHeight || photo?.height || canvasSize.height,
+      };
+    },
+    (nextCrop) => {
+      store.photoEditModal = { ...store.photoEditModal, crop: nextCrop };
+      store.host.requestUpdate();
+    },
+    modal.busy || !uploaded,
+  );
+  const toggleCollection = (colId) => {
+    const exists = modal.collections.includes(colId);
+    const next = exists
+      ? modal.collections.filter((id) => id !== colId)
+      : [...modal.collections, colId];
+    store.photoEditModal = { ...store.photoEditModal, collections: next };
+    store.host.requestUpdate();
+  };
+  return html`<dialog
+    id="latter-photo-edit-modal"
+    aria-labelledby="latter-photo-edit-title"
+    @cancel=${close}
+    @click=${onBackdropClick}
+    class="studio-dialog photo-dialog"
+  >
+    <div class="dialog-body">
+      <div class="dialog-header-row">
+        <h3 id="latter-photo-edit-title" class="dialog-title">
+          ${store.t("photo_edit.title")}
+        </h3>
+        ${photo?.width && photo?.height
+          ? html`<span class="chip">
+              ${store.t("photo_edit.dimensions_meta", {
+                width: fmtNumber(photo.width, store.hass, 0),
+                height: fmtNumber(photo.height, store.hass, 0),
+              })}
+            </span>`
+          : nothing}
+      </div>
+
+      ${uploaded
+        ? html`<div class="crop-stage-wrap">
+              ${renderAspectSwitcher(store, modal.previewAspect, (nextAspect) => {
+                store.photoEditModal = { ...store.photoEditModal, previewAspect: nextAspect };
+                store.host.requestUpdate();
+              })}
+
+              <canvas
+                id="latter-edit-crop-canvas"
+                width=${String(canvasSize.width)}
+                height=${String(canvasSize.height)}
+                @pointerdown=${ptr.onPointerDown}
+                @pointermove=${ptr.onPointerMove}
+                @pointerup=${ptr.onPointerUp}
+                @pointercancel=${ptr.onPointerUp}
+                class="crop-canvas ${modal.previewAspect === "round" ? "round" : ""}"
+              ></canvas>
+
+              <p class="row-description">${store.t("photo_edit.crop_hint")}</p>
+
+              <div class="crop-controls-row">
+                <div class="crop-zoom-control">
+                  <label for="edit-crop-zoom">${store.t("photo_edit.zoom_label")}</label>
+                  <input
+                    type="range"
+                    id="edit-crop-zoom"
+                    min="1"
+                    max="3"
+                    step="0.05"
+                    ?disabled=${modal.busy}
+                    .value=${String(modal.crop.zoom)}
+                    @input=${(ev) => {
+                      const z = Number((ev.currentTarget).value) || 1;
+                      store.photoEditModal = {
+                        ...store.photoEditModal,
+                        crop: normalizePhotoCrop({ ...modal.crop, zoom: z }),
+                      };
+                      store.host.requestUpdate();
+                    }}
+                  />
+                  <span class="kv-value">${modal.crop.zoom.toFixed(2)}×</span>
+                </div>
+                <button
+                  type="button"
+                  id="btn-edit-reset-crop"
+                  ?disabled=${modal.busy}
+                  @click=${() => {
+                    store.photoEditModal = {
+                      ...store.photoEditModal,
+                      crop: { ...DEFAULT_PHOTO_CROP },
+                    };
+                    store.host.requestUpdate();
+                  }}
+                  class="btn btn-text btn-compact"
+                >
+                  ${store.t("photo_edit.reset_crop")}
+                </button>
+              </div>
+            </div>
+
+            <div class="stacked-field">
+              <label for="edit-photo-name">${store.t("photo_edit.name_label")}</label>
+              <input
+                type="text"
+                id="edit-photo-name"
+                placeholder=${store.t("photo_edit.name_placeholder")}
+                ?disabled=${modal.busy}
+                .value=${focusSafe(modal.name)}
+                @input=${(ev) => {
+                  store.photoEditModal = {
+                    ...store.photoEditModal,
+                    name: (ev.currentTarget).value,
+                  };
+                }}
+              />
+            </div>`
+        : html`<div class="photo-pool-preview">
+            ${photo?.thumb_url
+              ? html`<img
+                  src=${photo.thumb_url}
+                  alt=${photo.name || photo.id}
+                  class="photo-pool-thumb"
+                />`
+              : nothing}
+            <div class="photo-pool-info">
+              <span class="photo-pool-title">${photo?.name || modal.photoId}</span>
+              <span class="photo-pool-meta">${store.t("wp_gallery.builtin")}</span>
+            </div>
+          </div>`}
+
+      ${photo?.media_source_path
+        ? html`<p class="help-text">
+            ${store.t("photo_edit.source_media", { path: photo.media_source_path })}
+          </p>`
+        : nothing}
+
+      <div class="stacked-field">
+        <span class="field-label">${store.t("photo_edit.collections_label")}</span>
+        ${collections.length > 0
+          ? html`<div role="group" aria-label=${store.t("photo_edit.collections_label")} class="pill-list">
+              ${collections.map((col) => {
+                const on = modal.collections.includes(col.id);
+                return html`<span class="pill ${on ? "enabled" : ""}">
+                  <button
+                    type="button"
+                    aria-pressed=${on ? "true" : "false"}
+                    ?disabled=${modal.busy}
+                    @click=${() => toggleCollection(col.id)}
+                    class="pill-toggle"
+                  >
+                    ${col.name}
+                  </button>
+                </span>`;
+              })}
+            </div>`
+          : html`<p class="row-description">${store.t("photo_edit.collections_empty")}</p>`}
+      </div>
+
+      <div class="dialog-actions ${uploaded ? "with-secondary" : ""}">
+        ${uploaded
+          ? html`<button
+              type="button"
+              id="btn-edit-delete-photo"
+              ?disabled=${modal.busy}
+              @click=${() => {
+                const pid = modal.photoId;
+                const pname = modal.name || photo?.name || pid;
+                close();
+                store.entity.requestDeletePhoto(pid, pname);
+              }}
+              class="btn btn-danger"
+            >
+              ${store.t("action.delete")}
+            </button>`
+          : nothing}
+        <div class="dialog-actions-end">
+          <button
+            type="button"
+            ?disabled=${modal.busy}
+            @click=${close}
+            class="btn btn-secondary"
+          >
+            ${store.t("action.cancel")}
+          </button>
+          <button
+            type="button"
+            id="btn-edit-save-photo"
+            ?disabled=${modal.busy}
+            @click=${() => void store.entity.savePhotoEditModal()}
+            class="btn btn-primary"
+          >
+            ${store.t("action.save")}
+          </button>
+        </div>
+      </div>
+    </div>
+  </dialog>`;
+}
+__latterExp(__exports, { syncPhotoCropCanvases: () => syncPhotoCropCanvases, renderPhotoUploadDialog: () => renderPhotoUploadDialog, renderPhotoEditDialog: () => renderPhotoEditDialog });
+//# sourceURL=latter-studio/src/components/dialogs/photo-upload-modal.ts
+});
 __latterDef("src/components/dialogs/shortcut-modal.ts", (__exports, __req) => {
 const { NATIVE_DOCK_APP_TOKENS, SHORTCUT_LABEL_MAX, SHORTCUT_ROUTES_CATALOG } = __req("src/constants.ts");
 const { formatHaEntityState } = __req("src/i18n/index.ts");
@@ -13075,6 +15615,9 @@ const { html } = __req("src/lib/lit.ts");
 const { renderAppConfigDialog, renderAppConfigModalBody } = __req("src/components/dialogs/app-config.ts");
 const { renderColorWheelDialog, syncColorWheelCanvas } = __req("src/components/dialogs/color-wheel.ts");
 const { renderAddBleDialog, renderRemoveDeviceDialog, renderResetDeviceDialog, renderSaveGroupDialog } = __req("src/components/dialogs/device-modals.ts");
+const { renderMediaImportDialog } = __req("src/components/dialogs/media-import-modal.ts");
+const { renderPhotoPickerDialog } = __req("src/components/dialogs/photo-picker-modal.ts");
+const { renderPhotoEditDialog, renderPhotoUploadDialog, syncPhotoCropCanvases } = __req("src/components/dialogs/photo-upload-modal.ts");
 const { renderShortcutDialog } = __req("src/components/dialogs/shortcut-modal.ts");
 /**
  * Modular Native `<dialog>` Orchestrator for Latter Studio (`D-053`, `D-062`, `D-064`).
@@ -13091,6 +15634,10 @@ function syncStudioDialogs(renderRoot, store) {
     ["latter-save-group-modal", store.saveGroupModal.open],
     ["latter-app-config-modal", store.appConfigModal.open],
     ["latter-shortcut-modal", store.shortcutModal.open],
+    ["latter-photo-upload-modal", store.photoUploadModal.open],
+    ["latter-photo-edit-modal", store.photoEditModal.open],
+    ["latter-media-import-modal", store.mediaImportModal.open],
+    ["latter-photo-picker-modal", store.photoPickerModal.open],
   ];
   // Pass 1: close any open dialog that should now be closed BEFORE opening another modal.
   for (const [id, wantOpen] of pairs) {
@@ -13109,6 +15656,7 @@ function syncStudioDialogs(renderRoot, store) {
     }
   }
   syncColorWheelCanvas(renderRoot, store);
+  syncPhotoCropCanvases(renderRoot, store);
 }
 function renderStudioDialogs(store) {
   return html`
@@ -13119,6 +15667,10 @@ function renderStudioDialogs(store) {
     ${renderSaveGroupDialog(store)}
     ${renderAppConfigDialog(store)}
     ${renderShortcutDialog(store)}
+    ${renderPhotoUploadDialog(store)}
+    ${renderPhotoEditDialog(store)}
+    ${renderMediaImportDialog(store)}
+    ${renderPhotoPickerDialog(store)}
   `;
 }
 __latterExp(__exports, { renderAppConfigModalBody: () => renderAppConfigModalBody, syncStudioDialogs: () => syncStudioDialogs, renderStudioDialogs: () => renderStudioDialogs });
@@ -13131,7 +15683,7 @@ const { css } = __req("src/lib/lit.ts");
  * (`docs/studio-design.md` §3, `D-061`, `D-066`).
  * Literal font sizes, pixel spacing, and colors appear ONLY inside `:host` / `:host([dark])`.
  */
-const BASE_STYLES = css`:host{--studio-font-family:var(--ha-font-family-body,inherit);--studio-font-code:var(--ha-font-family-code,monospace);--studio-font-title:var(--ha-font-size-xl,20px);--studio-font-section:var(--ha-font-size-l,16px);--studio-font-body:var(--ha-font-size-m,14px);--studio-font-secondary:var(--ha-font-size-s,12px);--studio-font-caption:var(--ha-font-size-s,12px);--studio-weight-regular:var(--ha-font-weight-normal,400);--studio-weight-medium:var(--ha-font-weight-medium,500);--studio-line-height:var(--ha-line-height-normal,1.6);--studio-line-height-condensed:var(--ha-line-height-condensed,1.2);--studio-font-card-title:var(--ha-card-header-font-size,var(--ha-font-size-2xl,24px));--studio-card-title-tracking:-0.012em;--studio-space-1:var(--ha-space-1,4px);--studio-space-2:var(--ha-space-2,8px);--studio-space-3:var(--ha-space-3,12px);--studio-space-4:var(--ha-space-4,16px);--studio-space-card-top:var(--ha-space-5,20px);--studio-space-5:var(--ha-space-6,24px);--studio-radius-card:var(--ha-card-border-radius,var(--ha-border-radius-lg,12px));--studio-radius-control:var(--ha-border-radius-md,8px);--studio-radius-field:var(--ha-border-radius-sm,4px);--studio-radius-button:var(--ha-button-border-radius,var(--ha-border-radius-pill,9999px));--studio-radius-dialog:var(--ha-dialog-border-radius,var(--ha-border-radius-3xl,24px));--studio-radius-pill:var(--ha-border-radius-pill,9999px);--studio-card-border-width:var(--ha-card-border-width,1px);--studio-control-height:var(--ha-button-height,40px);--studio-control-height-compact:32px;--studio-row-min-height:56px;--studio-header-height:var(--header-height,56px);--studio-sidebar-width:244px;--studio-bg:var(--primary-background-color,#fafafa);--studio-surface:var(--ha-card-background,var(--card-background-color,#ffffff));--studio-surface-alt:var(--secondary-background-color,#f0f0f0);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#ffffff));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#212121));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#616161));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(0,0,0,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#ffffff));--studio-input-bg:var(--input-fill-color,rgba(0,0,0,0.04));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#f5f5f5));--studio-field-bg-hover:var(--ha-color-form-background-hover,var(--studio-field-bg));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(0,0,0,0.42)));--studio-popup-bg:var(--card-background-color,#ffffff);--studio-divider:var(--divider-color,rgba(0,0,0,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(0,0,0,0.12)));--studio-text:var(--primary-text-color,#212121);--studio-text-secondary:var(--secondary-text-color,#5f6368);--studio-text-disabled:var(--disabled-text-color,#9e9e9e);--studio-primary:var(--primary-color,#009ac7);--studio-primary-tint:rgba(var(--rgb-primary-color,0,154,199),0.12);--studio-primary-tint-strong:rgba(var(--rgb-primary-color,0,154,199),0.24);--studio-hover:rgba(var(--rgb-primary-text-color,33,33,33),0.06);--studio-btn-accent-bg:var(--ha-color-fill-primary-loud-resting,var(--primary-color,#007da3));--studio-btn-accent-bg-hover:var(--ha-color-fill-primary-loud-hover,var(--studio-btn-accent-bg));--studio-btn-accent-text:var(--ha-color-on-primary-loud,var(--text-primary-color,#ffffff));--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#c2e6f2);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#005b78);--studio-btn-plain-hover:var(--ha-color-fill-primary-quiet-resting,var(--studio-primary-tint));--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-nav-active-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#dcf2df);--studio-chip-success-text:var(--ha-color-on-success-normal,#1b5e20);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#fff0d1);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#7a4900);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#c62828));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#e0e0e0));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#616161));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#d8eff7));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#005b78));--studio-switch-thumb-shadow:var(--ha-switch-thumb-box-shadow,var(--ha-box-shadow-s,0 1px 2px rgba(0,0,0,0.3)));--studio-toast-bg:var(--primary-text-color,#212121);--studio-toast-text:var(--card-background-color,#ffffff);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(140,140,140));--studio-success:var(--success-color,#2e7d32);--studio-warning:var(--warning-color,#ef6c00);--studio-error:var(--error-color,#c62828);--studio-info:var(--info-color,#0277bd);--studio-success-tint:color-mix(in srgb,var(--studio-success) 14%,transparent);--studio-warning-tint:color-mix(in srgb,var(--studio-warning) 14%,transparent);--studio-error-tint:color-mix(in srgb,var(--studio-error) 14%,transparent);--studio-info-tint:color-mix(in srgb,var(--studio-info) 14%,transparent);--studio-card-shadow:var(--ha-card-box-shadow,none);--studio-handoff-surface:color-mix(in srgb,var(--studio-primary) 8%,var(--studio-surface));--studio-handoff-ring:inset 0 0 0 1px var(--studio-primary);--studio-card-handoff-shadow:inset 0 0 0 1px var(--studio-primary),var(--studio-card-shadow);--studio-overlay-shadow:0 8px 24px rgba(0,0,0,0.35);--studio-scrim:rgba(0,0,0,0.5);--studio-media-bg:var(--secondary-background-color,#000000);--studio-nav-scroll-mask:linear-gradient( to right,transparent 0,#000000 12px,#000000 calc(100% - 16px),transparent 100% );display:block;min-height:100vh;min-height:100dvh;background:var(--studio-bg);color:var(--studio-text);font-family:var(--studio-font-family);font-size:var(--studio-font-body);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height);-webkit-tap-highlight-color:transparent;color-scheme:light;scrollbar-color:var(--studio-scrollbar-thumb) transparent;scrollbar-width:thin;}:host([dark]){--studio-bg:var(--primary-background-color,#111111);--studio-surface:var(--ha-card-background,var(--card-background-color,#1c1c1c));--studio-surface-alt:var(--secondary-background-color,#282828);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#1c1c1c));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#e1e1e1));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#9b9b9b));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(225,225,225,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#1c1c1c));--studio-input-bg:var(--input-fill-color,rgba(255,255,255,0.05));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#363636));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(255,255,255,0.42)));--studio-popup-bg:var(--card-background-color,#1c1c1c);--studio-divider:var(--divider-color,rgba(225,225,225,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(225,225,225,0.12)));--studio-text:var(--primary-text-color,#e1e1e1);--studio-text-secondary:var(--secondary-text-color,#a8a8a8);--studio-text-disabled:var(--disabled-text-color,#6f6f6f);--studio-hover:rgba(var(--rgb-primary-text-color,225,225,225),0.06);--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#104559);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-nav-active-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#143619);--studio-chip-success-text:var(--ha-color-on-success-normal,#81e287);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#3b2a07);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#ffd166);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#db4437));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#202020));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#989898));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#0b3545));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#7bd6f5));--studio-toast-bg:var(--primary-text-color,#e1e1e1);--studio-toast-text:var(--card-background-color,#1c1c1c);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(110,110,110));--studio-success:var(--success-color,#43a047);--studio-warning:var(--warning-color,#ffa600);--studio-error:var(--error-color,#db4437);--studio-info:var(--info-color,#039be5);color-scheme:dark;}*{box-sizing:border-box;}.hidden{display:none !important;}.studio-root{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--studio-bg);}h2,h3,h4,p{margin:0;}code,.mono{font-family:var(--studio-font-code);font-size:var(--studio-font-secondary);}a{color:var(--studio-primary);}.studio-rev-banner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-2) var(--studio-space-4);background:var(--studio-chip-warning-bg);border-block-end:1px solid var(--studio-warning);color:var(--studio-chip-warning-text);z-index:40;}.offline-banner{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-3) var(--studio-space-4);border:1px solid var(--studio-divider);border-inline-start:4px solid var(--studio-warning);border-radius:var(--studio-radius-control);background:var(--studio-surface);color:var(--studio-text);}.offline-banner-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 260px;}.offline-banner-body>span{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;scroll-behavior:auto !important;}}`;
+const BASE_STYLES = css`:host{--studio-font-family:var(--ha-font-family-body,inherit);--studio-font-code:var(--ha-font-family-code,monospace);--studio-font-title:var(--ha-font-size-xl,20px);--studio-font-section:var(--ha-font-size-l,16px);--studio-font-body:var(--ha-font-size-m,14px);--studio-font-secondary:var(--ha-font-size-s,12px);--studio-font-caption:var(--ha-font-size-s,12px);--studio-weight-regular:var(--ha-font-weight-normal,400);--studio-weight-medium:var(--ha-font-weight-medium,500);--studio-line-height:var(--ha-line-height-normal,1.6);--studio-line-height-condensed:var(--ha-line-height-condensed,1.2);--studio-font-card-title:var(--ha-card-header-font-size,var(--ha-font-size-2xl,24px));--studio-card-title-tracking:-0.012em;--studio-space-1:var(--ha-space-1,4px);--studio-space-2:var(--ha-space-2,8px);--studio-space-3:var(--ha-space-3,12px);--studio-space-4:var(--ha-space-4,16px);--studio-space-card-top:var(--ha-space-5,20px);--studio-space-5:var(--ha-space-6,24px);--studio-radius-card:var(--ha-card-border-radius,var(--ha-border-radius-lg,12px));--studio-radius-control:var(--ha-border-radius-md,8px);--studio-radius-field:var(--ha-border-radius-sm,4px);--studio-radius-button:var(--ha-button-border-radius,var(--ha-border-radius-pill,9999px));--studio-radius-dialog:var(--ha-dialog-border-radius,var(--ha-border-radius-3xl,24px));--studio-radius-pill:var(--ha-border-radius-pill,9999px);--studio-card-border-width:var(--ha-card-border-width,1px);--studio-control-height:var(--ha-button-height,40px);--studio-control-height-compact:32px;--studio-row-min-height:56px;--studio-header-height:var(--header-height,56px);--studio-sidebar-width:244px;--studio-bg:var(--primary-background-color,#fafafa);--studio-surface:var(--ha-card-background,var(--card-background-color,#ffffff));--studio-surface-alt:var(--secondary-background-color,#f0f0f0);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#ffffff));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#212121));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#616161));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(0,0,0,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#ffffff));--studio-input-bg:var(--input-fill-color,rgba(0,0,0,0.04));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#f5f5f5));--studio-field-bg-hover:var(--ha-color-form-background-hover,var(--studio-field-bg));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(0,0,0,0.42)));--studio-popup-bg:var(--card-background-color,#ffffff);--studio-divider:var(--divider-color,rgba(0,0,0,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(0,0,0,0.12)));--studio-text:var(--primary-text-color,#212121);--studio-text-secondary:var(--secondary-text-color,#5f6368);--studio-text-disabled:var(--disabled-text-color,#9e9e9e);--studio-primary:var(--primary-color,#009ac7);--studio-primary-tint:rgba(var(--rgb-primary-color,0,154,199),0.12);--studio-primary-tint-strong:rgba(var(--rgb-primary-color,0,154,199),0.24);--studio-hover:rgba(var(--rgb-primary-text-color,33,33,33),0.06);--studio-btn-accent-bg:var(--ha-color-fill-primary-loud-resting,var(--primary-color,#007da3));--studio-btn-accent-bg-hover:var(--ha-color-fill-primary-loud-hover,var(--studio-btn-accent-bg));--studio-btn-accent-text:var(--ha-color-on-primary-loud,var(--text-primary-color,#ffffff));--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#c2e6f2);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#005b78);--studio-btn-plain-hover:var(--ha-color-fill-primary-quiet-resting,var(--studio-primary-tint));--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-nav-active-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#dcf2df);--studio-chip-success-text:var(--ha-color-on-success-normal,#1b5e20);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#fff0d1);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#7a4900);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#c62828));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#e0e0e0));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#616161));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#d8eff7));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#005b78));--studio-switch-thumb-shadow:var(--ha-switch-thumb-box-shadow,var(--ha-box-shadow-s,0 1px 2px rgba(0,0,0,0.3)));--studio-toast-bg:var(--primary-text-color,#212121);--studio-toast-text:var(--card-background-color,#ffffff);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(140,140,140));--studio-success:var(--success-color,#2e7d32);--studio-warning:var(--warning-color,#ef6c00);--studio-error:var(--error-color,#c62828);--studio-info:var(--info-color,#0277bd);--studio-success-tint:color-mix(in srgb,var(--studio-success) 14%,transparent);--studio-warning-tint:color-mix(in srgb,var(--studio-warning) 14%,transparent);--studio-error-tint:color-mix(in srgb,var(--studio-error) 14%,transparent);--studio-info-tint:color-mix(in srgb,var(--studio-info) 14%,transparent);--studio-card-shadow:var(--ha-card-box-shadow,none);--studio-handoff-surface:color-mix(in srgb,var(--studio-primary) 8%,var(--studio-surface));--studio-handoff-ring:inset 0 0 0 1px var(--studio-primary);--studio-card-handoff-shadow:inset 0 0 0 1px var(--studio-primary),var(--studio-card-shadow);--studio-overlay-shadow:0 8px 24px rgba(0,0,0,0.35);--studio-scrim:rgba(0,0,0,0.5);--studio-media-bg:var(--secondary-background-color,#000000);--studio-photo-badge-bg:rgba(0,0,0,0.68);--studio-photo-badge-text:#ffffff;--studio-photo-ring-selected:0 0 0 2px var(--studio-primary);--studio-dropzone-bg:color-mix(in srgb,var(--studio-primary) 6%,var(--studio-input-bg));--studio-nav-scroll-mask:linear-gradient( to right,transparent 0,#000000 12px,#000000 calc(100% - 16px),transparent 100% );display:block;min-height:100vh;min-height:100dvh;background:var(--studio-bg);color:var(--studio-text);font-family:var(--studio-font-family);font-size:var(--studio-font-body);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height);-webkit-tap-highlight-color:transparent;color-scheme:light;scrollbar-color:var(--studio-scrollbar-thumb) transparent;scrollbar-width:thin;}:host([dark]){--studio-bg:var(--primary-background-color,#111111);--studio-surface:var(--ha-card-background,var(--card-background-color,#1c1c1c));--studio-surface-alt:var(--secondary-background-color,#282828);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#1c1c1c));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#e1e1e1));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#9b9b9b));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(225,225,225,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#1c1c1c));--studio-input-bg:var(--input-fill-color,rgba(255,255,255,0.05));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#363636));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(255,255,255,0.42)));--studio-popup-bg:var(--card-background-color,#1c1c1c);--studio-divider:var(--divider-color,rgba(225,225,225,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(225,225,225,0.12)));--studio-text:var(--primary-text-color,#e1e1e1);--studio-text-secondary:var(--secondary-text-color,#a8a8a8);--studio-text-disabled:var(--disabled-text-color,#6f6f6f);--studio-hover:rgba(var(--rgb-primary-text-color,225,225,225),0.06);--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#104559);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-nav-active-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#143619);--studio-chip-success-text:var(--ha-color-on-success-normal,#81e287);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#3b2a07);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#ffd166);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#db4437));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#202020));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#989898));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#0b3545));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#7bd6f5));--studio-toast-bg:var(--primary-text-color,#e1e1e1);--studio-toast-text:var(--card-background-color,#1c1c1c);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(110,110,110));--studio-success:var(--success-color,#43a047);--studio-warning:var(--warning-color,#ffa600);--studio-error:var(--error-color,#db4437);--studio-info:var(--info-color,#039be5);color-scheme:dark;}*{box-sizing:border-box;}.hidden{display:none !important;}.studio-root{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--studio-bg);}h2,h3,h4,p{margin:0;}code,.mono{font-family:var(--studio-font-code);font-size:var(--studio-font-secondary);}a{color:var(--studio-primary);}.studio-rev-banner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-2) var(--studio-space-4);background:var(--studio-chip-warning-bg);border-block-end:1px solid var(--studio-warning);color:var(--studio-chip-warning-text);z-index:40;}.offline-banner{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-3) var(--studio-space-4);border:1px solid var(--studio-divider);border-inline-start:4px solid var(--studio-warning);border-radius:var(--studio-radius-control);background:var(--studio-surface);color:var(--studio-text);}.offline-banner-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 260px;}.offline-banner-body>span{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;scroll-behavior:auto !important;}}`;
 __latterExp(__exports, { BASE_STYLES: () => BASE_STYLES });
 //# sourceURL=latter-studio/src/styles/base.ts
 });
@@ -13160,7 +15712,7 @@ const { css } = __req("src/lib/lit.ts");
  * Key-value lists, data tables, WCAG 2.2 AA chips, >= 32px pills, BLE signal bars,
  * wallpaper gallery, camera previews, logs, & alerts (`D-061`, `D-064`).
  */
-const DATA_STYLES = css`.kv-list{display:flex;flex-direction:column;gap:0;}.kv-row{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:0;}.kv-row>span:first-child{color:var(--studio-text-secondary);}.kv-row>strong,.kv-value{font-weight:var(--studio-weight-medium);font-variant-numeric:tabular-nums;text-align:end;}button.kv-row{inline-size:100%;border:none;border-radius:var(--studio-radius-control);background:transparent;color:inherit;font:inherit;text-align:start;cursor:pointer;}button.kv-row:hover{background:var(--studio-hover);}button.kv-row>strong::after{content:" ›";color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}:host(:dir(rtl)) button.kv-row>strong::after{content:" ‹";}.table-wrap{inline-size:100%;overflow-x:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}table.data-table{inline-size:100%;border-collapse:collapse;text-align:start;}table.data-table th{padding:0;border-block-end:1px solid var(--studio-divider);white-space:nowrap;}.sort-btn{inline-size:100%;padding:var(--studio-space-3);border:none;background:transparent;color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:start;cursor:pointer;}.sort-btn:hover{color:var(--studio-text);}th[aria-sort="ascending"] .sort-btn,th[aria-sort="descending"] .sort-btn{color:var(--studio-primary);}table.data-table td{padding:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);white-space:nowrap;}table.data-table tbody tr:last-child td{border-block-end:none;}table.data-table tbody tr{cursor:pointer;}table.data-table tbody tr:hover,table.data-table tbody tr:focus-visible{background:var(--studio-hover);}td.col-name{font-weight:var(--studio-weight-medium);}table.data-table a{color:inherit;text-decoration:none;}table.data-table a:hover{text-decoration:underline;}td.col-open{color:var(--studio-text-secondary);text-align:end;}.chip{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:22px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);white-space:nowrap;font-variant-numeric:tabular-nums;}.chip-primary{background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.chip-success{background:var(--studio-chip-success-bg);color:var(--studio-chip-success-text);}.chip-warning{background:var(--studio-chip-warning-bg);color:var(--studio-chip-warning-text);}.chip-error{background:var(--studio-chip-danger-bg);color:var(--studio-chip-danger-text);}.status-dot{display:inline-block;inline-size:8px;block-size:8px;margin-inline-end:var(--studio-space-2);border-radius:50%;background:var(--studio-text-disabled);}.chip>.status-dot{margin-inline-end:var(--studio-space-1);}.status-dot.online{background:var(--studio-success);}.status-dot.update{background:var(--studio-warning);}.status-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);}@container (max-width:260px){.status-tiles{grid-template-columns:minmax(0,1fr);}}.status-tile{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-1);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.status-tile{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.status-tile:hover{background:var(--studio-hover);border-color:var(--studio-primary);}button.status-tile:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.status-tile-head{display:flex;align-items:center;gap:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.status-tile-head svg{inline-size:16px;block-size:16px;fill:currentColor;flex-shrink:0;}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}.status-tile-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.status-tile>.signal-track{margin-block-start:var(--studio-space-1);}@container (max-width:420px){.status-tile{gap:0;padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);}.status-tile-head{gap:var(--studio-space-1);}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-body);}.status-tile-meta{margin-block-start:var(--studio-space-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}.overview-box{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-2);inline-size:100%;padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.overview-box{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.overview-box:hover{background:var(--studio-hover);border-color:var(--studio-primary);}.overview-box-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-title{display:inline-flex;align-items:center;gap:var(--studio-space-2);font-size:var(--studio-font-body);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.overview-box-title svg{inline-size:18px;block-size:18px;fill:currentColor;color:var(--studio-text-secondary);flex-shrink:0;}.overview-box-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-chevron{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.overview-box-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.overview-chips{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);}.swatch-strip{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);}.swatch.swatch-sm{inline-size:14px;block-size:14px;}.pill-list{display:flex;flex-wrap:wrap;gap:var(--studio-space-2);}.pill{display:inline-flex;align-items:center;gap:2px;min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);}.pill.enabled{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.pill-move{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-move:hover:not(:disabled){background:var(--studio-hover);color:var(--studio-primary);}.pill-move:disabled{opacity:0.4;cursor:not-allowed;}.pill-toggle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-toggle:disabled{opacity:0.5;cursor:not-allowed;}.pill .drag-handle{border-radius:var(--studio-radius-pill);color:inherit;}.swatch{display:inline-block;inline-size:20px;block-size:20px;border-radius:50%;border:1px solid var(--studio-divider);background:var(--swatch-color,var(--studio-primary));flex-shrink:0;}#card-ble-calibration{scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));}.calibrate-target-box{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.calibrate-target-box.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);background:var(--studio-primary-tint);}.calibrate-handoff-banner{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-weight:var(--studio-weight-medium);}.signal-row{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.signal-row.winner{border-color:var(--studio-primary);}.proxy-trim-details{padding-block-start:var(--studio-space-2);}.proxy-trim-details>summary{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.proxy-trim-details[open]>summary,.proxy-trim-details>summary:hover{color:var(--studio-text);}.proxy-trim-body{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);}.signal-row-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-row-title{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.signal-track,.upload-progress{block-size:6px;border-radius:var(--studio-radius-pill);background:var(--studio-surface-alt);overflow:hidden;}.signal-fill{inline-size:var(--signal-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.25s ease,width 0.25s ease;}.signal-fill.low{background:var(--studio-error);}.upload-progress-fill{inline-size:var(--upload-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.15s ease,width 0.15s ease;}.wp-upload-trigger{display:inline-flex;align-items:center;}.wp-upload-status{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);}.wp-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--studio-space-3);}.wp-card{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;}.wp-gallery>.empty-state{grid-column:1 / -1;}.wp-card.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.wp-thumb-btn{padding:0;border:none;background:transparent;border-radius:var(--studio-radius-control);cursor:pointer;line-height:0;}.wp-thumb-btn.circle{border-radius:50%;}.wp-thumb-btn:hover .wp-thumb{border-color:var(--studio-primary);}.wp-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.wp-thumb{inline-size:104px;block-size:104px;object-fit:cover;background:var(--studio-media-bg);border:1px solid var(--studio-divider);}.wp-thumb.circle{border-radius:50%;}.wp-thumb.square{border-radius:var(--studio-radius-control);}.wp-title{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow-wrap:anywhere;}.wp-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--studio-space-1);margin-block-start:auto;inline-size:100%;}.btn-icon.wp-star-btn{inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);}.btn-icon.wp-star-btn:hover{color:var(--studio-warning);background:var(--studio-warning-tint);}.btn-icon.wp-star-btn.starred{color:var(--studio-warning);}.cam-preview{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.cam-preview img{inline-size:100%;max-inline-size:360px;aspect-ratio:16 / 9;object-fit:cover;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);}.log-output{max-block-size:380px;margin:0;padding:var(--studio-space-3);overflow:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);white-space:pre-wrap;}.empty-state{padding-block:var(--studio-space-3);padding-inline:0;color:var(--studio-text-secondary);}.loading-state{display:flex;align-items:center;gap:var(--studio-space-3);padding-block:var(--studio-space-5);padding-inline:0;color:var(--studio-text-secondary);}.loading-state::before{content:"";inline-size:20px;block-size:20px;border:2px solid var(--studio-divider);border-block-start-color:var(--studio-primary);border-radius:50%;animation:studio-spin 0.8s linear infinite;}.studio-root:not(.is-loading) #studio-loading{display:none;}@keyframes studio-spin{to{transform:rotate(360deg);}}.alert{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-info-tint);}.alert-error{background:var(--studio-error-tint);}.alert-warning{background:var(--studio-warning-tint);}.alert-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.alert-list{margin:0;padding-inline-start:var(--studio-space-5);}.toast{position:fixed;inset-inline-start:50%;inset-block-end:var(--studio-space-5);transform:translateX(-50%);z-index:50;max-inline-size:min(560px,calc(100vw - 32px));padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-toast-bg);color:var(--studio-toast-text);box-shadow:var(--studio-overlay-shadow);}.toast.error{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.offscreen,.sr-only{position:fixed;inset-block-start:0;inset-inline-start:0;inline-size:1px;block-size:1px;padding:0;margin:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:none;opacity:0;pointer-events:none;}`;
+const DATA_STYLES = css`.kv-list{display:flex;flex-direction:column;gap:0;}.kv-row{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:0;}.kv-row>span:first-child{color:var(--studio-text-secondary);}.kv-row>strong,.kv-value{font-weight:var(--studio-weight-medium);font-variant-numeric:tabular-nums;text-align:end;}button.kv-row{inline-size:100%;border:none;border-radius:var(--studio-radius-control);background:transparent;color:inherit;font:inherit;text-align:start;cursor:pointer;}button.kv-row:hover{background:var(--studio-hover);}button.kv-row>strong::after{content:" ›";color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}:host(:dir(rtl)) button.kv-row>strong::after{content:" ‹";}.table-wrap{inline-size:100%;overflow-x:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}table.data-table{inline-size:100%;border-collapse:collapse;text-align:start;}table.data-table th{padding:0;border-block-end:1px solid var(--studio-divider);white-space:nowrap;}.sort-btn{inline-size:100%;padding:var(--studio-space-3);border:none;background:transparent;color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:start;cursor:pointer;}.sort-btn:hover{color:var(--studio-text);}th[aria-sort="ascending"] .sort-btn,th[aria-sort="descending"] .sort-btn{color:var(--studio-primary);}table.data-table td{padding:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);white-space:nowrap;}table.data-table tbody tr:last-child td{border-block-end:none;}table.data-table tbody tr{cursor:pointer;}table.data-table tbody tr:hover,table.data-table tbody tr:focus-visible{background:var(--studio-hover);}td.col-name{font-weight:var(--studio-weight-medium);}table.data-table a{color:inherit;text-decoration:none;}table.data-table a:hover{text-decoration:underline;}td.col-open{color:var(--studio-text-secondary);text-align:end;}.chip{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:22px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);white-space:nowrap;font-variant-numeric:tabular-nums;}.chip-primary{background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.chip-success{background:var(--studio-chip-success-bg);color:var(--studio-chip-success-text);}.chip-warning{background:var(--studio-chip-warning-bg);color:var(--studio-chip-warning-text);}.chip-error{background:var(--studio-chip-danger-bg);color:var(--studio-chip-danger-text);}.status-dot{display:inline-block;inline-size:8px;block-size:8px;margin-inline-end:var(--studio-space-2);border-radius:50%;background:var(--studio-text-disabled);}.chip>.status-dot{margin-inline-end:var(--studio-space-1);}.status-dot.online{background:var(--studio-success);}.status-dot.update{background:var(--studio-warning);}.status-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);}@container (max-width:260px){.status-tiles{grid-template-columns:minmax(0,1fr);}}.status-tile{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-1);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.status-tile{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.status-tile:hover{background:var(--studio-hover);border-color:var(--studio-primary);}button.status-tile:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.status-tile-head{display:flex;align-items:center;gap:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.status-tile-head svg{inline-size:16px;block-size:16px;fill:currentColor;flex-shrink:0;}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}.status-tile-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.status-tile>.signal-track{margin-block-start:var(--studio-space-1);}@container (max-width:420px){.status-tile{gap:0;padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);}.status-tile-head{gap:var(--studio-space-1);}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-body);}.status-tile-meta{margin-block-start:var(--studio-space-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}.overview-box{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-2);inline-size:100%;padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.overview-box{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.overview-box:hover{background:var(--studio-hover);border-color:var(--studio-primary);}.overview-box-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-title{display:inline-flex;align-items:center;gap:var(--studio-space-2);font-size:var(--studio-font-body);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.overview-box-title svg{inline-size:18px;block-size:18px;fill:currentColor;color:var(--studio-text-secondary);flex-shrink:0;}.overview-box-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-chevron{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.overview-box-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.overview-chips{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);}.swatch-strip{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);}.swatch.swatch-sm{inline-size:14px;block-size:14px;}.pill-list{display:flex;flex-wrap:wrap;gap:var(--studio-space-2);}.pill{display:inline-flex;align-items:center;gap:2px;min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);}.pill.enabled{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.pill-move{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-move:hover:not(:disabled){background:var(--studio-hover);color:var(--studio-primary);}.pill-move:disabled{opacity:0.4;cursor:not-allowed;}.pill-toggle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-toggle:disabled{opacity:0.5;cursor:not-allowed;}.pill .drag-handle{border-radius:var(--studio-radius-pill);color:inherit;}.swatch{display:inline-block;inline-size:20px;block-size:20px;border-radius:50%;border:1px solid var(--studio-divider);background:var(--swatch-color,var(--studio-primary));flex-shrink:0;}#card-ble-calibration{scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));}.calibrate-target-box{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.calibrate-target-box.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);background:var(--studio-primary-tint);}.calibrate-handoff-banner{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-weight:var(--studio-weight-medium);}.signal-row{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.signal-row.winner{border-color:var(--studio-primary);}.proxy-trim-details{padding-block-start:var(--studio-space-2);}.proxy-trim-details>summary{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.proxy-trim-details[open]>summary,.proxy-trim-details>summary:hover{color:var(--studio-text);}.proxy-trim-body{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);}.signal-row-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-row-title{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.signal-track,.upload-progress{block-size:6px;border-radius:var(--studio-radius-pill);background:var(--studio-surface-alt);overflow:hidden;}.signal-fill{inline-size:var(--signal-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.25s ease,width 0.25s ease;}.signal-fill.low{background:var(--studio-error);}.upload-progress-fill{inline-size:var(--upload-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.15s ease,width 0.15s ease;}.wp-upload-trigger{display:inline-flex;align-items:center;}.wp-upload-status{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);}.wp-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--studio-space-3);}.wp-card{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;}.wp-gallery>.empty-state{grid-column:1 / -1;}.wp-card.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.wp-thumb-btn{padding:0;border:none;background:transparent;border-radius:var(--studio-radius-control);cursor:pointer;line-height:0;}.wp-thumb-btn.circle{border-radius:50%;}.wp-thumb-btn:hover .wp-thumb{border-color:var(--studio-primary);}.wp-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.wp-thumb{inline-size:104px;block-size:104px;object-fit:cover;background:var(--studio-media-bg);border:1px solid var(--studio-divider);}.wp-thumb.circle{border-radius:50%;}.wp-thumb.square{border-radius:var(--studio-radius-control);}.wp-title{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow-wrap:anywhere;}.wp-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--studio-space-1);margin-block-start:auto;inline-size:100%;}.btn-icon.wp-star-btn{inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);}.btn-icon.wp-star-btn:hover{color:var(--studio-warning);background:var(--studio-warning-tint);}.btn-icon.wp-star-btn.starred{color:var(--studio-warning);}.photo-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-toolbar-start,.photo-toolbar-end{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-search-input{min-inline-size:200px;flex:1 1 220px;}.collection-strip{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.collection-chip-wrap{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);}.collection-chip-wrap.active{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.collection-chip-btn{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);cursor:pointer;}.collection-chip-action{display:inline-flex;align-items:center;justify-content:center;min-inline-size:28px;min-block-size:28px;padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;cursor:pointer;}.collection-chip-action:hover{background:var(--studio-hover);}.collection-chip-action svg{inline-size:14px;block-size:14px;fill:currentColor;}.photo-bulk-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-primary);border-radius:var(--studio-radius-control);background:var(--studio-primary-tint);}.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:var(--studio-space-3);}.photo-grid>.empty-state{grid-column:1 / -1;}.photo-tile{position:relative;display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);content-visibility:auto;contain-intrinsic-size:180px 220px;transition:border-color 0.15s ease,background-color 0.15s ease,box-shadow 0.15s ease;}.photo-tile:hover{border-color:var(--studio-primary);}.photo-tile.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-tile-thumb-btn{position:relative;display:block;inline-size:100%;padding:0;border:none;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);overflow:hidden;cursor:pointer;aspect-ratio:1 / 1;line-height:0;}.photo-tile-thumb-btn.circle{border-radius:50%;}.photo-tile-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.photo-tile-img{inline-size:100%;block-size:100%;object-fit:cover;display:block;}.photo-tile-check{position:absolute;inset-block-start:var(--studio-space-2);inset-inline-start:var(--studio-space-2);z-index:2;inline-size:20px;block-size:20px;accent-color:var(--studio-primary);cursor:pointer;}.photo-tile-badge{position:absolute;inset-block-end:var(--studio-space-1);inset-inline-end:var(--studio-space-1);padding-block:2px;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-photo-badge-bg);color:var(--studio-photo-badge-text);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.photo-tile-meta{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.photo-tile-name{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.photo-tile-sub{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);}.photo-pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);border-block-start:1px solid var(--studio-divider);}.photo-pool-preview{display:flex;align-items:center;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.photo-pool-thumbs{display:flex;align-items:center;gap:var(--studio-space-1);flex-shrink:0;}.photo-pool-thumb{inline-size:48px;block-size:48px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-pool-thumb.circle{border-radius:50%;}.photo-pool-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1;}.photo-pool-title{font-weight:var(--studio-weight-medium);overflow-wrap:anywhere;}.photo-pool-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.photo-pool-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);flex-shrink:0;}.cam-preview{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.cam-preview img{inline-size:100%;max-inline-size:360px;aspect-ratio:16 / 9;object-fit:cover;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);}.log-output{max-block-size:380px;margin:0;padding:var(--studio-space-3);overflow:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);white-space:pre-wrap;}.empty-state{padding-block:var(--studio-space-3);padding-inline:0;color:var(--studio-text-secondary);}.loading-state{display:flex;align-items:center;gap:var(--studio-space-3);padding-block:var(--studio-space-5);padding-inline:0;color:var(--studio-text-secondary);}.loading-state::before{content:"";inline-size:20px;block-size:20px;border:2px solid var(--studio-divider);border-block-start-color:var(--studio-primary);border-radius:50%;animation:studio-spin 0.8s linear infinite;}.studio-root:not(.is-loading) #studio-loading{display:none;}@keyframes studio-spin{to{transform:rotate(360deg);}}.alert{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-info-tint);}.alert-error{background:var(--studio-error-tint);}.alert-warning{background:var(--studio-warning-tint);}.alert-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.alert-list{margin:0;padding-inline-start:var(--studio-space-5);}.toast{position:fixed;inset-inline-start:50%;inset-block-end:var(--studio-space-5);transform:translateX(-50%);z-index:50;max-inline-size:min(560px,calc(100vw - 32px));padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-toast-bg);color:var(--studio-toast-text);box-shadow:var(--studio-overlay-shadow);}.toast.error{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.offscreen,.sr-only{position:fixed;inset-block-start:0;inset-inline-start:0;inline-size:1px;block-size:1px;padding:0;margin:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:none;opacity:0;pointer-events:none;}`;
 __latterExp(__exports, { DATA_STYLES: () => DATA_STYLES });
 //# sourceURL=latter-studio/src/styles/data.ts
 });
@@ -13170,7 +15722,7 @@ const { css } = __req("src/lib/lit.ts");
  * Native `<dialog>` modals, confirmation modal (`Q5`), non-truncating `.dock-row`,
  * shortcut/MDI picker grids, and HSV color wheel (`D-053`, `D-064`).
  */
-const DIALOG_STYLES = css`dialog.studio-dialog{inline-size:min(460px,calc(100vw - 32px));max-block-size:calc(100vh - 32px);max-block-size:calc(100dvh - 32px);padding:var(--studio-space-5);border:none;border-radius:var(--studio-radius-dialog);background:var(--studio-surface);color:var(--studio-text);box-shadow:var(--studio-overlay-shadow);overflow-y:auto;}dialog.studio-dialog::backdrop{background:var(--studio-scrim);}dialog.studio-dialog.confirm-dialog{inline-size:min(480px,calc(100vw - 32px));}.dialog-body{display:flex;flex-direction:column;gap:var(--studio-space-3);}.dialog-header-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.dialog-title{font-size:var(--studio-font-card-title);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height-condensed);}.dialog-text{color:var(--studio-text-secondary);}.dialog-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);margin-block-start:var(--studio-space-2);}.dialog-actions.with-secondary{justify-content:space-between;}.dialog-actions-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);margin-inline-start:auto;}dialog.studio-dialog.shortcut-dialog{inline-size:min(560px,calc(100vw - 32px));}.shortcut-item-row,.dock-row{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.dock-row{flex-wrap:wrap;}.dock-row .shortcut-item-info{flex:1 1 180px;}.dock-row .shortcut-item-title,.dock-row .shortcut-item-meta{white-space:normal;overflow-wrap:anywhere;}.shortcut-item-row.shortcut-item-locked,.dock-row.shortcut-item-locked{border-style:dashed;background:transparent;}.shortcut-item-row.shortcut-item-locked .shortcut-icon-badge,.shortcut-item-row.shortcut-item-hidden .shortcut-icon-badge,.dock-row.shortcut-item-locked .shortcut-icon-badge,.dock-row.shortcut-item-hidden .shortcut-icon-badge{background:var(--studio-surface-alt);color:var(--studio-text-secondary);}.shortcut-icon-badge{display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);border-radius:var(--studio-radius-pill);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);flex-shrink:0;}.shortcut-item-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1;}.shortcut-item-title{font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-item-meta{font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-page-group{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-surface-alt);}.shortcut-page-header{display:flex;align-items:center;justify-content:space-between;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);color:var(--studio-text-secondary);}.shortcut-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.shortcut-icon-row{display:flex;align-items:center;gap:var(--studio-space-2);}.shortcut-icon-row input[type="text"]{flex:1;min-inline-size:0;}.mdi-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:var(--studio-space-1);max-block-size:168px;overflow-y:auto;padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.mdi-picker-btn{display:inline-flex;align-items:center;justify-content:center;block-size:var(--studio-control-height);border:1px solid transparent;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text);cursor:pointer;}.mdi-picker-btn:hover{background:var(--studio-hover);}.mdi-picker-btn.selected{background:var(--studio-chip-primary-bg);border-color:var(--studio-primary);color:var(--studio-chip-primary-text);}.color-wheel{display:flex;justify-content:center;}.color-wheel canvas{border-radius:50%;cursor:crosshair;touch-action:none;}.color-hex-row{display:flex;align-items:center;justify-content:center;gap:var(--studio-space-2);}.color-hex-row input[type="text"]{inline-size:120px;font-family:var(--studio-font-code);text-align:center;}.color-hex-row input[type="color"]{inline-size:var(--studio-control-height);block-size:var(--studio-control-height);padding:0;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:none;cursor:pointer;}`;
+const DIALOG_STYLES = css`dialog.studio-dialog{inline-size:min(460px,calc(100vw - 32px));max-block-size:calc(100vh - 32px);max-block-size:calc(100dvh - 32px);padding:var(--studio-space-5);border:none;border-radius:var(--studio-radius-dialog);background:var(--studio-surface);color:var(--studio-text);box-shadow:var(--studio-overlay-shadow);overflow-y:auto;}dialog.studio-dialog::backdrop{background:var(--studio-scrim);}dialog.studio-dialog.confirm-dialog{inline-size:min(480px,calc(100vw - 32px));}.dialog-body{display:flex;flex-direction:column;gap:var(--studio-space-3);}.dialog-header-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.dialog-title{font-size:var(--studio-font-card-title);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height-condensed);}.dialog-text{color:var(--studio-text-secondary);}.dialog-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);margin-block-start:var(--studio-space-2);}.dialog-actions.with-secondary{justify-content:space-between;}.dialog-actions-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);margin-inline-start:auto;}dialog.studio-dialog.shortcut-dialog{inline-size:min(560px,calc(100vw - 32px));}dialog.studio-dialog.photo-dialog{inline-size:min(680px,calc(100vw - 32px));}.crop-dropzone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--studio-space-2);padding:var(--studio-space-5);border:2px dashed var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;cursor:pointer;transition:border-color 0.15s ease,background-color 0.15s ease;}.crop-dropzone.dragging,.crop-dropzone:hover{border-color:var(--studio-primary);background:var(--studio-dropzone-bg);}.crop-stage-wrap{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-surface-alt);}.crop-canvas{max-inline-size:100%;block-size:auto;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);cursor:grab;touch-action:none;display:block;}.crop-canvas.dragging{cursor:grabbing;}.crop-canvas.round{border-radius:50%;}.crop-controls-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-3);inline-size:100%;}.crop-zoom-control{display:flex;align-items:center;gap:var(--studio-space-2);flex:1 1 200px;}.crop-zoom-control input[type="range"]{flex:1;min-inline-size:120px;}.crop-filmstrip{display:flex;align-items:center;gap:var(--studio-space-2);overflow-x:auto;padding-block:var(--studio-space-1);inline-size:100%;}.crop-filmstrip-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-1);padding:var(--studio-space-1);border:2px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);cursor:pointer;flex-shrink:0;}.crop-filmstrip-item.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.crop-filmstrip-thumb{inline-size:56px;block-size:56px;object-fit:cover;border-radius:var(--studio-radius-field);background:var(--studio-media-bg);display:block;}.crop-filmstrip-remove{position:absolute;inset-block-start:-6px;inset-inline-end:-6px;inline-size:22px;block-size:22px;border-radius:var(--studio-radius-pill);border:1px solid var(--studio-divider);background:var(--studio-surface);color:var(--studio-text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:var(--studio-font-caption);}.crop-filmstrip-remove:hover{background:var(--studio-danger-tonal-bg);color:var(--studio-danger-tonal-text);border-color:var(--studio-error);}.media-breadcrumbs{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);padding-block:var(--studio-space-1);}.media-folder-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--studio-space-2);}.media-folder-btn{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:var(--studio-text);font:inherit;text-align:start;cursor:pointer;min-inline-size:0;}.media-folder-btn:hover{border-color:var(--studio-primary);background:var(--studio-hover);}.media-folder-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.media-scroll-area{max-block-size:360px;overflow-y:auto;padding:var(--studio-space-1);display:flex;flex-direction:column;gap:var(--studio-space-3);}.photo-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:var(--studio-space-2);max-block-size:320px;overflow-y:auto;padding:var(--studio-space-1);}.photo-picker-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-1);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;cursor:pointer;text-align:center;}.photo-picker-item:hover{border-color:var(--studio-primary);}.photo-picker-item.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-picker-thumb{inline-size:88px;block-size:88px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-picker-thumb.circle{border-radius:50%;}.photo-picker-name{font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);inline-size:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-item-row,.dock-row{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.dock-row{flex-wrap:wrap;}.dock-row .shortcut-item-info{flex:1 1 180px;}.dock-row .shortcut-item-title,.dock-row .shortcut-item-meta{white-space:normal;overflow-wrap:anywhere;}.shortcut-item-row.shortcut-item-locked,.dock-row.shortcut-item-locked{border-style:dashed;background:transparent;}.shortcut-item-row.shortcut-item-locked .shortcut-icon-badge,.shortcut-item-row.shortcut-item-hidden .shortcut-icon-badge,.dock-row.shortcut-item-locked .shortcut-icon-badge,.dock-row.shortcut-item-hidden .shortcut-icon-badge{background:var(--studio-surface-alt);color:var(--studio-text-secondary);}.shortcut-icon-badge{display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);border-radius:var(--studio-radius-pill);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);flex-shrink:0;}.shortcut-item-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1;}.shortcut-item-title{font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-item-meta{font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-page-group{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-surface-alt);}.shortcut-page-header{display:flex;align-items:center;justify-content:space-between;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);color:var(--studio-text-secondary);}.shortcut-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.shortcut-icon-row{display:flex;align-items:center;gap:var(--studio-space-2);}.shortcut-icon-row input[type="text"]{flex:1;min-inline-size:0;}.mdi-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:var(--studio-space-1);max-block-size:168px;overflow-y:auto;padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.mdi-picker-btn{display:inline-flex;align-items:center;justify-content:center;block-size:var(--studio-control-height);border:1px solid transparent;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text);cursor:pointer;}.mdi-picker-btn:hover{background:var(--studio-hover);}.mdi-picker-btn.selected{background:var(--studio-chip-primary-bg);border-color:var(--studio-primary);color:var(--studio-chip-primary-text);}.color-wheel{display:flex;justify-content:center;}.color-wheel canvas{border-radius:50%;cursor:crosshair;touch-action:none;}.color-hex-row{display:flex;align-items:center;justify-content:center;gap:var(--studio-space-2);}.color-hex-row input[type="text"]{inline-size:120px;font-family:var(--studio-font-code);text-align:center;}.color-hex-row input[type="color"]{inline-size:var(--studio-control-height);block-size:var(--studio-control-height);padding:0;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:none;cursor:pointer;}`;
 __latterExp(__exports, { DIALOG_STYLES: () => DIALOG_STYLES });
 //# sourceURL=latter-studio/src/styles/dialogs.ts
 });
@@ -14404,217 +16956,92 @@ function renderDeviceAudioView(store) {
 __latterExp(__exports, { renderDeviceAudioView: () => renderDeviceAudioView });
 //# sourceURL=latter-studio/src/views/device-audio-view.ts
 });
-__latterDef("src/components/wallpaper-gallery.ts", (__exports, __req) => {
-const { html, nothing, repeat } = __req("src/lib/lit.ts");
-const { fmtNumber } = __req("src/utils/format.ts");
-const { renderTrashIconButton } = __req("src/components/controls.ts");
-/**
- * Wallpaper Gallery & Multipart XHR Upload Component (Device & System scopes, `D-25`, `Q5`, `Q9a`).
- */
-function renderStarIcon(filled) {
-  if (filled) {
-    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.45 4.73L5.82 21 12 17.27Z"
-      />
-    </svg>`;
-  }
-  return html`<svg viewBox="0 0 24 24" aria-hidden="true">
-    <path
-      d="M12 15.39l-3.76 2.27.99-4.28-3.32-2.88 4.38-.38L12 6.09l1.71 4.03 4.38.38-3.32 2.88.99 4.28L12 15.39M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.45 4.73L5.82 21 12 17.27 18.18 21l-1.64-7.03L22 9.24Z"
-    />
-  </svg>`;
-}
-function renderWallpaperGalleryItems(
-  store,
-  scope,
-  items,
-  displayShape,
-) {
-  if (!items.length) {
-    return html`<p class="empty-state">${store.t("wp_gallery.empty")}</p>`;
-  }
-  const shapeClass = displayShape === "circle" ? "circle" : "square";
-  return html`${repeat(
-    items,
-    (wp, idx) => `${wp.id}::${idx}`,
-    (wp) => {
-      const label = wp.name || wp.id;
-      const isActive = Boolean(wp.active);
-      const isFav = Boolean(wp.favorite);
-      const canDelete = Boolean(wp.deletable ?? wp.kind === "upload");
-      const thumbSrc = wp.thumb_url || wp.preview_url || "";
-      const activeCls = isActive ? "wp-card active" : "wp-card";
-      const onUse = () => {
-        void store.entity.selectWallpaperSource(wp.id);
-      };
-      const onFav = () => {
-        void store.entity.toggleWallpaperFav(wp.id);
-      };
-      const onDel = () => {
-        store.entity.requestDeleteWallpaper(wp.id, label);
-      };
-      const clickableThumb = scope === "device" && !isActive;
-      const thumbImg = thumbSrc
-        ? html`<img
-            src=${thumbSrc}
-            alt=${clickableThumb ? "" : label}
-            loading="lazy"
-            class="wp-thumb ${shapeClass}"
-          />`
-        : html`<div class="wp-thumb ${shapeClass}" aria-hidden="true"></div>`;
-      return html`<div class=${activeCls}>
-        ${clickableThumb
-          ? html`<button
-              type="button"
-              tabindex="-1"
-              aria-hidden="true"
-              @click=${onUse}
-              class="wp-thumb-btn ${shapeClass}"
-            >
-              ${thumbImg}
-            </button>`
-          : thumbImg}
-        <div class="wp-title">${label}</div>
-        <div class="wp-actions">
-          ${scope === "device"
-            ? html`${isActive
-                  ? html`<span class="chip chip-primary">${store.t("common.active")}</span>`
-                  : html`<button
-                      type="button"
-                      aria-label=${store.t("wp_gallery.use_aria", { name: label })}
-                      @click=${onUse}
-                      class="btn btn-secondary btn-compact"
-                    >
-                      ${store.t("action.use")}
-                    </button>`}
-                <button
-                  type="button"
-                  aria-label=${isFav
-                    ? store.t("wp_gallery.star_remove_aria", { name: label })
-                    : store.t("wp_gallery.star_add_aria", { name: label })}
-                  aria-pressed=${String(isFav)}
-                  title=${isFav
-                    ? store.t("wp_gallery.star_active_title")
-                    : store.t("wp_gallery.star_inactive_title")}
-                  @click=${onFav}
-                  class="btn-icon wp-star-btn${isFav ? " starred" : ""}"
-                >
-                  ${renderStarIcon(isFav)}
-                </button>
-                ${canDelete
-                  ? renderTrashIconButton(
-                      store.t("wp_gallery.delete_aria", { name: label }),
-                      onDel,
-                    )
-                  : nothing}`
-            : canDelete
-              ? html`<span class="chip chip-primary">${store.t("wp_gallery.uploaded")}</span>
-                  ${renderTrashIconButton(
-                    store.t("wp_gallery.delete_aria", { name: label }),
-                    onDel,
-                  )}`
-              : html`<span class="chip">${store.t("wp_gallery.builtin")}</span>`}
-        </div>
-      </div>`;
-    },
-  )}`;
-}
-function renderWallpaperUploadTrigger(
-  store,
-  scope,
-) {
-  const isUploadingThisScope = store.uploadBusy && store.uploadScope === scope;
-  const inputId = scope === "device" ? "input-upload-wp" : "input-upload-sys-wp";
-  const btnId = scope === "device" ? "btn-upload-wp" : "btn-upload-sys-wp";
-  const onFilePick = (ev) => {
-    const input = ev.currentTarget;
-    const f = input.files && input.files[0] ? input.files[0] : null;
-    if (scope === "device") {
-      store.selectedDeviceWallpaperFile = f;
-    } else {
-      store.selectedSystemWallpaperFile = f;
-    }
-    if (f) {
-      void store.entity.uploadWallpaper(scope);
-    } else {
-      store.host.requestUpdate();
-    }
-  };
-  const onTriggerPick = (ev) => {
-    const btn = ev.currentTarget;
-    const fileInput = btn?.parentElement?.querySelector("input[type='file']")
-            ;
-    fileInput?.click();
-  };
-  return html`<span class="wp-upload-trigger">
-    <input
-      type="file"
-      id=${inputId}
-      accept="image/*"
-      aria-label=${store.t("wp_gallery.file_aria")}
-      @change=${onFilePick}
-      class="offscreen"
-    />
-    <button
-      type="button"
-      id=${btnId}
-      ?disabled=${store.uploadBusy}
-      @click=${onTriggerPick}
-      class="btn btn-secondary btn-compact"
-    >
-      ${isUploadingThisScope ? store.t("wp_gallery.uploading") : store.t("wp_gallery.upload_photo")}
-    </button>
-  </span>`;
-}
-function renderWallpaperUploadProgress(
-  store,
-  scope,
-) {
-  const isUploadingThisScope = store.uploadBusy && store.uploadScope === scope;
-  if (!isUploadingThisScope) return nothing;
-  const pctStyle = `--upload-pct:${store.uploadPercent}%`;
-  return html`<div class="stack">
-    <div class="wp-upload-status">
-      <span>${store.t("wp_gallery.uploading_photo")}</span>
-      <span class="chip chip-primary">${fmtNumber(store.uploadPercent, store.hass, 0)}%</span>
-    </div>
-    <div
-      role="progressbar"
-      aria-label=${store.t("wp_gallery.upload_progress_aria")}
-      aria-valuenow=${String(store.uploadPercent)}
-      aria-valuemin="0"
-      aria-valuemax="100"
-      class="upload-progress"
-    >
-      <div class="upload-progress-fill" style=${pctStyle}></div>
-    </div>
-  </div>`;
-}
-__latterExp(__exports, { renderWallpaperGalleryItems: () => renderWallpaperGalleryItems, renderWallpaperUploadTrigger: () => renderWallpaperUploadTrigger, renderWallpaperUploadProgress: () => renderWallpaperUploadProgress });
-//# sourceURL=latter-studio/src/components/wallpaper-gallery.ts
-});
 __latterDef("src/views/device-display-view.ts", (__exports, __req) => {
-const { renderCard, renderPrefControlRow, renderSettingsRow } = __req("src/components/controls.ts");
-const { renderWallpaperGalleryItems, renderWallpaperUploadProgress, renderWallpaperUploadTrigger } = __req("src/components/wallpaper-gallery.ts");
+const { renderCard, renderPrefControlRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
 const { WALLPAPER_ROTATION_OPTIONS } = __req("src/constants.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
+const { resolveCollectionDisplayName, resolvePoolPhotos } = __req("src/state/photo-ops.ts");
 const { defaultThemeHex, entityLabel, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
 const { renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
 /**
- * Device Display View (`display`, `D-027`, `D-029`, `D-034`, `D-036`, `D-069`):
+ * Device Display View (`display`, `D-027`, `D-029`, `D-034`, `D-036`, `D-069`, `D-072`):
  * Hardware & OS surface aesthetics across screens:
- * - Column 1: Screensaver, Voice assistant, & Brightness.
- * - Column 2: Colors (`isValidHexColor` validation) & Wallpapers (with Home weather-background hint).
+ * - Column 1: Screensaver (`screensaver_mode`, `screensaver_style`, `docked_idle_timeout`,
+ *   conditional Photo Frame pool preview / rotation / shuffle / `screensaver_photo_clock`, Preview),
+ *   Voice assistant, & Brightness.
+ * - Column 2: Colors & Wallpapers (compact active pool preview + Choose wallpaper… / Turn off,
+ *   rotation interval, clear Home + Sky & weather live-background override note, & Manage photo library).
  */
 function rotationLabel(store, minutes, fallback) {
   const key = `dev_display.rot_${minutes}`;
   const translated = store.t(key);
   return translated === key ? fallback : translated;
 }
+function parseBoolPref(raw, fallback) {
+  if (raw === undefined || raw === null) return fallback;
+  if (typeof raw === "string") {
+    return !["", "0", "false", "off", "disabled"].includes(raw.trim().toLowerCase());
+  }
+  return Boolean(raw);
+}
+function describePoolSummary(
+  store,
+  mode,
+  singleSource,
+  collectionId,
+  poolPhotos,
+  allPhotos,
+) {
+  if (mode === "off" || (mode === "single" && !singleSource)) {
+    return {
+      title: store.t("common.disabled"),
+      meta: store.t("dev_display.pool_off_meta"),
+    };
+  }
+  if (mode === "single") {
+    const found =
+      poolPhotos[0] || allPhotos.find((p) => p.id === singleSource) || null;
+    const name = found?.name || singleSource;
+    return {
+      title: name,
+      meta: store.t("dev_display.pool_single_meta", { name }),
+    };
+  }
+  if (mode === "collection") {
+    const colName = resolveCollectionDisplayName(store, collectionId);
+    const count = poolPhotos.length;
+    return {
+      title: colName,
+      meta:
+        count === 1
+          ? store.t("dev_display.pool_collection_one_meta", { collection: colName })
+          : store.t("dev_display.pool_collection_meta", {
+              collection: colName,
+              count: fmtNumber(count, store.hass, 0),
+            }),
+    };
+  }
+  const count = poolPhotos.length;
+  return {
+    title:
+      count === 1
+        ? store.t("dev_display.pool_custom_one_meta")
+        : store.t("dev_display.pool_custom_meta", {
+            count: fmtNumber(count, store.hass, 0),
+          }),
+    meta:
+      count > 0
+        ? poolPhotos
+            .slice(0, 3)
+            .map((p) => p.name || p.id)
+            .join(", ") + (count > 3 ? "…" : "")
+        : store.t("dev_display.pool_off_meta"),
+  };
+}
 function renderDeviceDisplayView(store) {
   const data = store.state;
   const cfg = data?.config || {};
+  const live = data?.live || {};
   const palettes = (data?.system_config?.custom_palettes || []).filter((p) =>
     isValidHexColor(p.hex),
   );
@@ -14622,12 +17049,56 @@ function renderDeviceDisplayView(store) {
     (data?.system_devices || []).find((d) => d.subentry_id === store.activeSubentryId) ||
     (data?.system_devices || []).find((d) => d.is_current);
   const isOffline = curDevEntry?.is_online === false;
+  const shapeClass = String(cfg.display_shape || "square") === "circle" ? "circle" : "";
+  const allPhotos =
+    (data?.wallpapers && data.wallpapers.length > 0
+      ? data.wallpapers
+      : data?.system_wallpapers) || [];
   // Screensaver card
-  const screensaverPrefs = store.entity.getPrefs([
-    "docked_screensaver",
-    "screensaver_style",
-    "docked_idle_timeout",
-  ]);
+  const ssModePref = store.entity.getPref("screensaver_mode");
+  const ssStylePref = store.entity.getPref("screensaver_style");
+  const ssIdlePref = store.entity.getPref("docked_idle_timeout");
+  const ssPhotoClockPref = store.entity.getPref("screensaver_photo_clock");
+  const ssModeVal = String(ssModePref?.value ?? cfg.screensaver_mode ?? "Docked Only");
+  const ssNever = ssModeVal === "Never";
+  const ssStyleVal = String(ssStylePref?.value ?? cfg.screensaver_style ?? "Ambient Clock");
+  const ssIsPhotoFrame = !ssNever && ssStyleVal === "Photo Frame";
+  const ssPhotoClockOn = parseBoolPref(
+    ssPhotoClockPref?.value ?? cfg.screensaver_photo_clock,
+    false,
+  );
+  const ssModePool = String(cfg.screensaver_photo_mode || "off");
+  const ssSingleSource = String(cfg.screensaver_photo_source || "");
+  const ssCollection = String(cfg.screensaver_photo_collection || "");
+  const ssCustomIds = Array.isArray(cfg.screensaver_photo_ids) ? cfg.screensaver_photo_ids : [];
+  const ssCycle = Number(cfg.screensaver_cycle_minutes ?? 15);
+  const ssShuffle = Boolean(cfg.screensaver_shuffle);
+  const ssPoolPhotos = resolvePoolPhotos(
+    allPhotos,
+    ssModePool,
+    ssSingleSource,
+    ssCollection,
+    ssCustomIds,
+    { excludeDynamic: true },
+  );
+  const ssSummary = describePoolSummary(
+    store,
+    ssModePool,
+    ssSingleSource,
+    ssCollection,
+    ssPoolPhotos,
+    allPhotos,
+  );
+  const ssPreviewThumbs = [];
+  if (live.active_screensaver_photo_thumb_url) {
+    ssPreviewThumbs.push(live.active_screensaver_photo_thumb_url);
+  }
+  for (const p of ssPoolPhotos) {
+    const u = p.thumb_url || p.preview_url || "";
+    if (u && !ssPreviewThumbs.includes(u) && ssPreviewThumbs.length < 3) {
+      ssPreviewThumbs.push(u);
+    }
+  }
   const activateScreensaverBtn = store.entity
     .getSectionItems("actions")
     .find(
@@ -14637,6 +17108,9 @@ function renderDeviceDisplayView(store) {
           it.key === "activate_screensaver" ||
           it.entity_id?.endsWith("_activate_screensaver")),
     );
+  const hasScreensaverCard = Boolean(
+    ssModePref || ssStylePref || ssIdlePref || activateScreensaverBtn,
+  );
   // Voice assistant card
   const voiceVisualPref = store.entity.getPref("va_visual_profile");
   const bedtimeActive = Boolean(
@@ -14679,120 +17153,208 @@ function renderDeviceDisplayView(store) {
     ? String(cfg.device_custom_color).toUpperCase()
     : safeThemeHex;
   const swatchStyle = `--swatch-color:${curHex}`;
-  // Column 2: Wallpapers + cross-tab Home weather-background hint (`D-069`)
-  const weatherBgRaw =
-    store.entity.getPref("weather_background")?.value ?? cfg.weather_background;
-  const weatherBgOn =
-    weatherBgRaw !== undefined && weatherBgRaw !== null
-      ? typeof weatherBgRaw === "string"
-        ? !["", "0", "false", "off", "disabled"].includes(weatherBgRaw.trim().toLowerCase())
-        : Boolean(weatherBgRaw)
-      : true;
-  const homeScreenRaw =
-    store.entity.getPref("home_screen_enabled")?.value ?? cfg.home_screen_enabled;
-  const homeScreenEnabled = homeScreenRaw !== false;
-  const curCycle = Number(cfg.wallpaper_cycle_minutes || 0);
-  const wallpapers = data?.wallpapers || [];
-  const activeWp = wallpapers.find((wp) => Boolean(wp.active)) || null;
-  const hasActiveWallpaper = Boolean(activeWp);
-  const isRotating = curCycle > 0;
-  const starredCount = wallpapers.filter((wp) => Boolean(wp.favorite)).length;
-  const allStarred = wallpapers.length > 0 && starredCount === wallpapers.length;
-  let wpStatusBase;
-  if (isRotating) {
-    if (activeWp) {
-      if (starredCount === 1) {
-        wpStatusBase = store.t("dev_display.wp_rotating_named_starred_one", {
-          name: activeWp.name,
-        });
-      } else if (starredCount > 1) {
-        wpStatusBase = store.t("dev_display.wp_rotating_named_starred_many", {
-          name: activeWp.name,
-          count: fmtNumber(starredCount, store.hass, 0),
-        });
-      } else {
-        wpStatusBase = store.t("dev_display.wp_rotating_named_all", {
-          name: activeWp.name,
-          count: fmtNumber(wallpapers.length, store.hass, 0),
-        });
-      }
-    } else if (starredCount === 1) {
-      wpStatusBase = store.t("dev_display.wp_rotating_starred_one");
-    } else if (starredCount > 1) {
-      wpStatusBase = store.t("dev_display.wp_rotating_starred_many", {
-        count: fmtNumber(starredCount, store.hass, 0),
-      });
-    } else {
-      wpStatusBase = store.t("dev_display.wp_rotating_all", {
-        count: fmtNumber(wallpapers.length, store.hass, 0),
-      });
-    }
-  } else if (hasActiveWallpaper) {
-    wpStatusBase = store.t("dev_display.wp_static_named", {
-      name: activeWp?.name || store.t("common.active"),
-    });
-  } else {
-    wpStatusBase = store.t("dev_display.wp_off");
+  // Column 2: Wallpaper card + clear Home & Sky & weather override note (`D-069`, `D-072`)
+  const homeScreenEnabled =
+    (store.entity.getPref("home_screen_enabled")?.value ?? cfg.home_screen_enabled) !== false;
+  const homeWeatherBgOn = parseBoolPref(
+    store.entity.getPref("weather_background")?.value ?? cfg.weather_background,
+    true,
+  );
+  const weatherAppBgOn = parseBoolPref(
+    store.entity.getPref("weather_app_background")?.value ?? cfg.weather_app_background,
+    true,
+  );
+  const wpRawMode = String(cfg.wallpaper_mode || "");
+  const wpSingleSource = String(cfg.wallpaper_source || "");
+  const wpCollection = String(cfg.wallpaper_collection || "");
+  const wpCustomIds = Array.isArray(cfg.wallpaper_favorites) ? cfg.wallpaper_favorites : [];
+  const wpCycle = Number(cfg.wallpaper_cycle_minutes || 0);
+  const wpMode =
+    wpRawMode ||
+    (wpSingleSource ? "single" : wpCustomIds.length > 0 && wpCycle > 0 ? "custom" : "off");
+  const wpPoolPhotos = resolvePoolPhotos(
+    allPhotos,
+    wpMode,
+    wpSingleSource,
+    wpCollection,
+    wpCustomIds,
+  );
+  const wpActiveItem =
+    allPhotos.find((w) => w.id === live.active_wallpaper_id) ||
+    allPhotos.find((w) => Boolean(w.active)) ||
+    wpPoolPhotos[0] ||
+    null;
+  const wpIsActive = wpMode !== "off" && (Boolean(wpActiveItem) || wpPoolPhotos.length > 0);
+  const wpSummary = describePoolSummary(
+    store,
+    wpMode,
+    wpSingleSource || wpActiveItem?.id || "",
+    wpCollection,
+    wpPoolPhotos,
+    allPhotos,
+  );
+  const wpPreviewThumbs = [];
+  if (live.active_wallpaper_thumb_url) {
+    wpPreviewThumbs.push(live.active_wallpaper_thumb_url);
+  } else if (wpActiveItem?.thumb_url || wpActiveItem?.preview_url) {
+    wpPreviewThumbs.push(wpActiveItem.thumb_url || wpActiveItem.preview_url || "");
   }
-  const wpStatusText =
-    (isRotating || hasActiveWallpaper) && homeScreenEnabled && weatherBgOn
-      ? `${wpStatusBase} ${store.t("dev_display.wp_weather_bg_note")}`
-      : wpStatusBase;
-  const wpRotationHint =
-    starredCount === 0
-      ? store.t("dev_display.wp_hint_none")
-      : starredCount === 1
-        ? store.t("dev_display.wp_hint_one")
-        : store.t("dev_display.wp_hint_many", {
-            starred: fmtNumber(starredCount, store.hass, 0),
-            total: fmtNumber(wallpapers.length, store.hass, 0),
-          });
+  for (const p of wpPoolPhotos) {
+    const u = p.thumb_url || p.preview_url || "";
+    if (u && !wpPreviewThumbs.includes(u) && wpPreviewThumbs.length < 3) {
+      wpPreviewThumbs.push(u);
+    }
+  }
+  let wpOverrideNote = "";
+  if (wpIsActive) {
+    const homeOverride = homeScreenEnabled && homeWeatherBgOn;
+    if (homeOverride && weatherAppBgOn) {
+      wpOverrideNote = store.t("dev_display.wp_override_home_and_weather");
+    } else if (homeOverride) {
+      wpOverrideNote = store.t("dev_display.wp_override_home_only");
+    } else if (weatherAppBgOn) {
+      wpOverrideNote = store.t("dev_display.wp_override_weather_only");
+    }
+  }
   return html`<section id="view-display">
     ${renderDeviceOfflineBanner(store)}
 
     <div class="columns">
       <div class="column">
-        ${screensaverPrefs.length || activateScreensaverBtn
+        ${hasScreensaverCard
           ? renderCard({
+              id: "card-screensaver",
               heading: html`<h3 class="card-title">${store.t("card.screensaver")}</h3>`,
-              contentClass: "settings-list",
-              body: html`${screensaverPrefs.map((p) => renderPrefControlRow(store, p))}
-                ${activateScreensaverBtn
-                  ? renderSettingsRow({
-                      label: entityLabel(
-                        activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
-                      ),
-                      description: store.t("dev_display.screensaver_preview_desc"),
-                      control: html`<button
-                        type="button"
-                        ?disabled=${isOffline ||
-                        String(activateScreensaverBtn.state ?? "") === "unavailable"}
-                        @click=${() => {
-                          const btnLabel = entityLabel(
-                            activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
-                          );
-                          const toastMsg = store.t("sync.triggered_action", {
-                            label: btnLabel,
-                          });
-                          if (activateScreensaverBtn.device_command) {
-                            void store.entity.runDeviceAction(
-                              activateScreensaverBtn.device_command,
-                              toastMsg,
+              contentClass: "stack",
+              body: html`<div class="settings-list">
+                  ${ssModePref ? renderPrefControlRow(store, ssModePref) : nothing}
+                  ${!ssNever && ssStylePref ? renderPrefControlRow(store, ssStylePref) : nothing}
+                  ${!ssNever && ssIdlePref ? renderPrefControlRow(store, ssIdlePref) : nothing}
+                </div>
+
+                ${ssIsPhotoFrame
+                  ? html`<div id="screensaver-photo-frame-section" class="stack">
+                      <div class="photo-pool-preview">
+                        ${ssPreviewThumbs.length > 0
+                          ? html`<div class="photo-pool-thumbs">
+                              ${ssPreviewThumbs.map(
+                                (src) => html`<img
+                                  src=${src}
+                                  alt=""
+                                  loading="lazy"
+                                  class="photo-pool-thumb ${shapeClass}"
+                                />`,
+                              )}
+                            </div>`
+                          : nothing}
+                        <div class="photo-pool-info">
+                          <span class="photo-pool-title">
+                            ${store.t("dev_display.screensaver_pool_label")}
+                          </span>
+                          <span class="photo-pool-meta">
+                            ${ssPoolPhotos.length > 0
+                              ? ssSummary.meta
+                              : store.t("dev_display.screensaver_pool_empty")}
+                          </span>
+                        </div>
+                        <div class="photo-pool-actions">
+                          <button
+                            type="button"
+                            id="btn-choose-ss-photos"
+                            @click=${() => store.entity.openPhotoPickerModal("screensaver")}
+                            class="btn btn-secondary btn-compact"
+                          >
+                            ${store.t("dev_display.screensaver_choose_photos")}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="settings-list">
+                        ${renderSettingsRow({
+                          label: store.tPrefLabel("screensaver_cycle_minutes"),
+                          forId: "cfg-screensaver_cycle_minutes",
+                          control: html`<select
+                            id="cfg-screensaver_cycle_minutes"
+                            .value=${String(ssCycle)}
+                            @change=${(ev) =>
+                              void store.entity.setScreensaverRotation(
+                                Number((ev.currentTarget).value) || 0,
+                              )}
+                          >
+                            ${WALLPAPER_ROTATION_OPTIONS.map(
+                              (opt) => html`<option
+                                value=${String(opt.value)}
+                                ?selected=${opt.value === ssCycle}
+                              >
+                                ${rotationLabel(store, opt.value, opt.label)}
+                              </option>`,
+                            )}
+                          </select>`,
+                        })}
+                        ${renderSwitchRow({
+                          id: "cfg-screensaver_shuffle",
+                          label: store.tPrefLabel("screensaver_shuffle"),
+                          description: store.t("dev_display.screensaver_shuffle_desc"),
+                          checked: ssShuffle,
+                          onChange: (checked) =>
+                            void store.entity.setScreensaverRotation(ssCycle, checked),
+                        })}
+                        ${ssPhotoClockPref
+                          ? renderPrefControlRow(store, ssPhotoClockPref)
+                          : renderSwitchRow({
+                              id: "cfg-screensaver_photo_clock",
+                              label: store.tPrefLabel("screensaver_photo_clock"),
+                              description: store.t("dev_display.screensaver_photo_clock_desc"),
+                              checked: ssPhotoClockOn,
+                              onChange: (checked) =>
+                                store.entity.stageDeviceSetting(
+                                  "screensaver_photo_clock",
+                                  checked,
+                                  "cfg-screensaver_photo_clock",
+                                ),
+                            })}
+                      </div>
+                    </div>`
+                  : nothing}
+
+                ${!ssNever && activateScreensaverBtn
+                  ? html`<div class="settings-list">
+                      ${renderSettingsRow({
+                        label: entityLabel(
+                          activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
+                        ),
+                        description: store.t("dev_display.screensaver_preview_desc"),
+                        control: html`<button
+                          type="button"
+                          ?disabled=${isOffline ||
+                          String(activateScreensaverBtn.state ?? "") === "unavailable"}
+                          @click=${() => {
+                            const btnLabel = entityLabel(
+                              activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
                             );
-                          } else {
-                            void store.entity.espAction(
-                              activateScreensaverBtn.entity_id,
-                              "press",
-                              undefined,
-                              toastMsg,
-                            );
-                          }
-                        }}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        ${store.t("dev_display.preview_btn")}
-                      </button>`,
-                    })
+                            const toastMsg = store.t("sync.triggered_action", {
+                              label: btnLabel,
+                            });
+                            if (activateScreensaverBtn.device_command) {
+                              void store.entity.runDeviceAction(
+                                activateScreensaverBtn.device_command,
+                                toastMsg,
+                              );
+                            } else {
+                              void store.entity.espAction(
+                                activateScreensaverBtn.entity_id,
+                                "press",
+                                undefined,
+                                toastMsg,
+                              );
+                            }
+                          }}
+                          class="btn btn-secondary btn-compact"
+                        >
+                          ${store.t("dev_display.preview_btn")}
+                        </button>`,
+                      })}
+                    </div>`
                   : nothing}`,
             })
           : nothing}
@@ -14869,117 +17431,104 @@ function renderDeviceDisplayView(store) {
         })}
 
         ${renderCard({
+          id: "card-device-wallpapers",
           heading: html`<h3 class="card-title">${store.t("card.wallpapers")}</h3>`,
           subtitle: store.t("dev_display.wallpapers_subtitle"),
-          headerActions: renderWallpaperUploadTrigger(store, "device"),
+          headerActions: html`<button
+            type="button"
+            id="btn-manage-photo-library"
+            @click=${() => store.openSystemSection("photos")}
+            class="btn btn-text btn-compact"
+          >
+            ${store.t("dev_display.manage_photo_library")}
+          </button>`,
           contentClass: "stack",
-          body: html`${renderWallpaperUploadProgress(store, "device")}
-            <div class="settings-list">
-              ${renderSettingsRow({
-                id: "wp-status-row",
-                label: store.t("dev_display.active_wallpaper_label"),
-                description: wpStatusText,
-                control: isRotating
+          body: html`<div id="wp-status-row" class="photo-pool-preview">
+              ${wpPreviewThumbs.length > 0
+                ? html`<div class="photo-pool-thumbs">
+                    ${wpPreviewThumbs.map(
+                      (src) => html`<img
+                        src=${src}
+                        alt=""
+                        loading="lazy"
+                        class="photo-pool-thumb ${shapeClass}"
+                      />`,
+                    )}
+                  </div>`
+                : nothing}
+              <div class="photo-pool-info">
+                <span class="photo-pool-title">${wpSummary.title}</span>
+                <span class="photo-pool-meta">${wpSummary.meta}</span>
+              </div>
+              <div class="photo-pool-actions">
+                <button
+                  type="button"
+                  id="btn-choose-wallpaper"
+                  @click=${() => store.entity.openPhotoPickerModal("wallpaper")}
+                  class="btn btn-primary btn-compact"
+                >
+                  ${store.t("dev_display.choose_wallpaper")}
+                </button>
+                ${wpIsActive
                   ? html`<button
-                        type="button"
-                        id="btn-stop-wp-rotation"
-                        @click=${() => void store.entity.setWallpaperRotation(0)}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        ${store.t("dev_display.stop_rotation")}
-                      </button>
-                      <button
-                        type="button"
-                        id="btn-turn-off-wp"
-                        @click=${() => void store.entity.selectWallpaperSource("")}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        ${store.t("dev_display.turn_off_wallpaper")}
-                      </button>`
-                  : hasActiveWallpaper
-                    ? html`${wallpapers.length >= 2
-                          ? html`<button
-                              type="button"
-                              id="btn-enable-wp-rotation"
-                              @click=${() => void store.entity.setWallpaperRotation(15)}
-                              class="btn btn-secondary btn-compact"
-                            >
-                              ${store.t("dev_display.enable_rotation")}
-                            </button>`
-                          : nothing}
-                        <button
-                          type="button"
-                          id="btn-turn-off-wp"
-                          @click=${() => void store.entity.selectWallpaperSource("")}
-                          class="btn btn-secondary btn-compact"
+                      type="button"
+                      id="btn-turn-off-wp"
+                      @click=${() =>
+                        void store.entity.setDevicePhotoPool(
+                          { target: "wallpaper", mode: "off", cycleMinutes: 0 },
+                          store.t("dev_display.turn_off_wallpaper"),
+                        )}
+                      class="btn btn-secondary btn-compact"
+                    >
+                      ${store.t("dev_display.turn_off_wallpaper")}
+                    </button>`
+                  : nothing}
+              </div>
+            </div>
+
+            ${wpMode === "collection" || wpMode === "custom" || wpCycle > 0
+              ? html`<div class="settings-list">
+                  ${renderSettingsRow({
+                    id: "wp-rotation-row",
+                    label: store.t("dev_display.rotation_interval_label"),
+                    forId: "cfg-wallpaper_cycle_minutes",
+                    control: html`<select
+                      id="cfg-wallpaper_cycle_minutes"
+                      aria-label=${store.t("dev_display.rotation_interval_aria")}
+                      .value=${String(wpCycle)}
+                      @change=${(ev) =>
+                        void store.entity.setWallpaperRotation(
+                          Number((ev.currentTarget).value) || 0,
+                        )}
+                    >
+                      ${WALLPAPER_ROTATION_OPTIONS.map(
+                        (opt) => html`<option
+                          value=${String(opt.value)}
+                          ?selected=${opt.value === wpCycle}
                         >
-                          ${store.t("dev_display.turn_off_wallpaper")}
-                        </button>`
-                    : wallpapers.length >= 2
-                      ? html`<button
-                          type="button"
-                          id="btn-enable-wp-rotation"
-                          @click=${() => void store.entity.setWallpaperRotation(15)}
-                          class="btn btn-primary btn-compact"
-                        >
-                          ${store.t("dev_display.enable_rotation")}
-                        </button>`
-                      : nothing,
-              })}
-              ${renderSettingsRow({
-                id: "wp-rotation-row",
-                label: store.t("dev_display.rotation_interval_label"),
-                forId: "cfg-wallpaper_cycle_minutes",
-                description: wpRotationHint,
-                control: html`<select
-                    id="cfg-wallpaper_cycle_minutes"
-                    aria-label=${store.t("dev_display.rotation_interval_aria")}
-                    .value=${String(curCycle)}
-                    @change=${(ev) =>
-                      void store.entity.setWallpaperRotation(
-                        Number((ev.currentTarget).value) || 0,
-                      )}
-                  >
-                    ${WALLPAPER_ROTATION_OPTIONS.map(
-                      (opt) =>
-                        html`<option value=${String(opt.value)} ?selected=${opt.value === curCycle}>
                           ${rotationLabel(store, opt.value, opt.label)}
                         </option>`,
-                    )}
-                  </select>
-                  ${wallpapers.length > 0 && !allStarred
-                    ? html`<button
-                        type="button"
-                        id="btn-star-all-wp"
-                        @click=${() =>
-                          void store.entity.setAllWallpaperFavorites(
-                            wallpapers.map((w) => w.id),
-                          )}
-                        class="btn btn-text btn-compact"
-                      >
-                        ${store.t("dev_display.star_all")}
-                      </button>`
-                    : nothing}
-                  ${starredCount > 0
-                    ? html`<button
-                        type="button"
-                        id="btn-clear-stars-wp"
-                        @click=${() => void store.entity.setAllWallpaperFavorites([])}
-                        class="btn btn-text btn-compact"
-                      >
-                        ${store.t("dev_display.clear_stars")}
-                      </button>`
-                    : nothing}`,
-              })}
-            </div>
-            <div class="wp-gallery">
-              ${renderWallpaperGalleryItems(
-                store,
-                "device",
-                wallpapers,
-                String(cfg.display_shape || "square"),
-              )}
-            </div>`,
+                      )}
+                    </select>`,
+                  })}
+                </div>`
+              : nothing}
+
+            ${wpOverrideNote
+              ? html`<div id="wp-weather-override-note" class="alert">
+                  <div class="alert-body">
+                    <span>${wpOverrideNote}</span>
+                  </div>
+                  <button
+                    type="button"
+                    id="btn-wp-open-interface"
+                    @click=${() => store.openDeviceSection("interface", "card-home-screen")}
+                    class="btn btn-text btn-compact"
+                  >
+                    ${store.t("dev_display.open_interface")}
+                  </button>
+                </div>`
+              : nothing}`,
         })}
       </div>
     </div>
@@ -15279,6 +17828,14 @@ function renderDeviceInterfaceView(store) {
   const camFramingPref = store.entity.getPref("camera_framing");
   const camFramingRaw = String(camFramingPref?.value ?? cfg.camera_framing ?? "Uncropped");
   const camFramingVal = store.tPrefOption("camera_framing", camFramingRaw);
+  const weatherAppBgPref = store.entity.getPref("weather_app_background");
+  const weatherAppBgRaw = weatherAppBgPref?.value ?? cfg.weather_app_background;
+  const weatherAppBgOn =
+    weatherAppBgRaw !== undefined && weatherAppBgRaw !== null
+      ? typeof weatherAppBgRaw === "string"
+        ? !["", "0", "false", "off", "disabled"].includes(weatherAppBgRaw.trim().toLowerCase())
+        : Boolean(weatherAppBgRaw)
+      : true;
   const describeNativeDockApp = (routeToken) => {
     switch (routeToken) {
       case "app:pinned": {
@@ -15339,7 +17896,9 @@ function renderDeviceInterfaceView(store) {
         return store.t("dev_interface.remote_follow_area");
       }
       case "app:weather":
-        return store.t("dev_interface.weather_meta");
+        return weatherAppBgOn
+          ? store.t("dev_interface.weather_meta_live_sky")
+          : store.t("dev_interface.weather_meta_wallpaper");
       case "app:time":
         if (showUtcClock && worldClockCount > 0) {
           return worldClockCount === 1
@@ -15824,9 +18383,10 @@ const { renderDeviceEntityRow, renderDeviceOfflineBanner } = __req("src/views/de
  * Sleep & wake controls, Bedtime mode, and Power & battery telemetry.
  */
 const SCREENSAVER_KEYS = new Set([
-  "docked_screensaver",
+  "screensaver_mode",
   "screensaver_style",
   "docked_idle_timeout",
+  "screensaver_photo_clock",
 ]);
 const BEDTIME_KEYS = new Set([
   "bedtime_active",
@@ -17915,8 +20475,9 @@ __latterExp(__exports, { renderBatchControlsCard: () => renderBatchControlsCard 
 });
 __latterDef("src/views/groups/group-baseline-drawer.ts", (__exports, __req) => {
 const { renderHourSelectRow, renderRangeRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
-const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, CALENDAR_LOOKAHEAD_OPTIONS, DEFAULT_ACTIVITY_SOURCES, DEFAULT_AREA_CATEGORIES, DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS, DEFAULT_HOME_CATEGORIES, DEFAULT_TOOLS_ITEMS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, SECURITY_PIN_POLICY_OPTIONS, TOOLS_ITEMS_CATALOG, WALLPAPER_ROTATION_OPTIONS } = __req("src/constants.ts");
+const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, CALENDAR_LOOKAHEAD_OPTIONS, DEFAULT_ACTIVITY_SOURCES, DEFAULT_AREA_CATEGORIES, DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS, DEFAULT_HOME_CATEGORIES, DEFAULT_TOOLS_ITEMS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, SECURITY_PIN_POLICY_OPTIONS, TOOLS_ITEMS_CATALOG, VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UPLOADS, WALLPAPER_ROTATION_OPTIONS } = __req("src/constants.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
+const { isPhotoDynamic } = __req("src/state/photo-ops.ts");
 const { isCatalogItemSupported } = __req("src/state/store.ts");
 const { defaultLocaleTimeFormat, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
 /**
@@ -18270,10 +20831,59 @@ function renderGroupBaselineDrawer(
     latterDevices[0]?.subentry_id ||
     "";
   const sysWallpapers = store.state?.system_wallpapers || [];
-  const wallpaperOptions = [
-    { value: "", label: store.t("groups.wallpaper_none") },
-    ...sysWallpapers.map((wp) => ({ value: wp.id, label: wp.name || wp.id })),
-  ];
+  const photoCollections = store.state?.photo_collections || [];
+  const buildCompactPoolOptions = (excludeDynamic) => {
+    const photos = excludeDynamic
+      ? sysWallpapers.filter((wp) => !isPhotoDynamic(wp))
+      : sysWallpapers;
+    return [
+      { value: "off", label: store.t("groups.pool_off") },
+      { value: `collection:${VIRTUAL_COLLECTION_ALL}`, label: store.t("groups.pool_all") },
+      {
+        value: `collection:${VIRTUAL_COLLECTION_DEFAULTS}`,
+        label: store.t("groups.pool_defaults"),
+      },
+      {
+        value: `collection:${VIRTUAL_COLLECTION_UPLOADS}`,
+        label: store.t("groups.pool_uploads"),
+      },
+      ...photoCollections.map((c) => ({
+        value: `collection:${c.id}`,
+        label: store.t("groups.pool_collection_prefix", { name: c.name }),
+      })),
+      ...photos.map((wp) => ({
+        value: `single:${wp.id}`,
+        label: store.t("groups.pool_photo_prefix", { name: wp.name || wp.id }),
+      })),
+    ];
+  };
+  const encodePoolSelectValue = (
+    modeVal,
+    sourceVal,
+    colVal,
+  ) => {
+    const mode = String(modeVal || "");
+    const src = String(sourceVal || "");
+    const col = String(colVal || "");
+    if (mode === "collection" && col) return `collection:${col}`;
+    if (mode === "single" && src) return `single:${src}`;
+    if (!mode && src) return `single:${src}`;
+    return "off";
+  };
+  const wpPoolOptions = buildCompactPoolOptions(false);
+  const wpPoolCurrent = encodePoolSelectValue(
+    cfg.wallpaper_mode,
+    cfg.wallpaper_source,
+    cfg.wallpaper_collection,
+  );
+  const ssPoolOptions = buildCompactPoolOptions(true);
+  const ssPoolCurrent = encodePoolSelectValue(
+    cfg.screensaver_photo_mode,
+    cfg.screensaver_photo_source,
+    cfg.screensaver_photo_collection,
+  );
+  const groupSsMode = String(cfg.screensaver_mode ?? "Docked Only");
+  const groupSsStyle = String(cfg.screensaver_style ?? "Ambient Clock");
   const rotationOptions = WALLPAPER_ROTATION_OPTIONS.map(
     (o) => ({ value: String(o.value), label: o.label }),
   );
@@ -18351,8 +20961,8 @@ function renderGroupBaselineDrawer(
             cfg.battery_hibernate_timeout,
             caps,
           )}
-          ${renderSpecSwitch(store, group, "docked_screensaver", cfg.docked_screensaver, caps)}
-          ${caps.has_battery !== false || cfg.docked_screensaver !== false
+          ${renderSpecSelect(store, group, "screensaver_mode", cfg.screensaver_mode, caps)}
+          ${caps.has_battery !== false || groupSsMode !== "Never"
             ? renderSpecSelect(store, group, "docked_idle_timeout", cfg.docked_idle_timeout, caps)
             : nothing}
           ${renderSpecSwitch(
@@ -18530,14 +21140,44 @@ function renderGroupBaselineDrawer(
         ? html`<details class="sub-collapsible" open>
             <summary>${store.t("groups.section_display")}</summary>
             <div class="card-content settings-list">
-              ${renderBaselineLabeledSelect(
-                store,
-                group,
-                "wallpaper_source",
-                cfg.wallpaper_source,
-                wallpaperOptions,
-                "",
-              )}
+              ${renderSettingsRow({
+                label: store.t("groups.wallpaper_pool_label"),
+                control: html`<select
+                  aria-label=${store.t("groups.for_group_aria", {
+                    label: store.t("groups.wallpaper_pool_label"),
+                    group: group.name,
+                  })}
+                  .value=${wpPoolCurrent}
+                  @change=${(ev) => {
+                    const raw = (ev.currentTarget).value;
+                    if (raw.startsWith("collection:")) {
+                      void store.groups.updateGroupBaseline(gid, {
+                        wallpaper_mode: "collection",
+                        wallpaper_collection: raw.slice(11),
+                        wallpaper_source: "",
+                      });
+                    } else if (raw.startsWith("single:")) {
+                      void store.groups.updateGroupBaseline(gid, {
+                        wallpaper_mode: "single",
+                        wallpaper_source: raw.slice(7),
+                        wallpaper_collection: "",
+                      });
+                    } else {
+                      void store.groups.updateGroupBaseline(gid, {
+                        wallpaper_mode: "off",
+                        wallpaper_source: "",
+                        wallpaper_collection: "",
+                      });
+                    }
+                  }}
+                >
+                  ${wpPoolOptions.map(
+                    (opt) => html`<option value=${opt.value} ?selected=${opt.value === wpPoolCurrent}>
+                      ${opt.label}
+                    </option>`,
+                  )}
+                </select>`,
+              })}
               ${renderBaselineLabeledSelect(
                 store,
                 group,
@@ -18548,6 +21188,77 @@ function renderGroupBaselineDrawer(
                 true,
               )}
               ${renderSpecSelect(store, group, "screensaver_style", cfg.screensaver_style, caps)}
+              ${groupSsStyle === "Photo Frame"
+                ? html`${renderSettingsRow({
+                      label: store.t("groups.screensaver_pool_label"),
+                      control: html`<select
+                        aria-label=${store.t("groups.for_group_aria", {
+                          label: store.t("groups.screensaver_pool_label"),
+                          group: group.name,
+                        })}
+                        .value=${ssPoolCurrent}
+                        @change=${(ev) => {
+                          const raw = (ev.currentTarget).value;
+                          if (raw.startsWith("collection:")) {
+                            void store.groups.updateGroupBaseline(gid, {
+                              screensaver_photo_mode: "collection",
+                              screensaver_photo_collection: raw.slice(11),
+                              screensaver_photo_source: "",
+                            });
+                          } else if (raw.startsWith("single:")) {
+                            void store.groups.updateGroupBaseline(gid, {
+                              screensaver_photo_mode: "single",
+                              screensaver_photo_source: raw.slice(7),
+                              screensaver_photo_collection: "",
+                            });
+                          } else {
+                            void store.groups.updateGroupBaseline(gid, {
+                              screensaver_photo_mode: "off",
+                              screensaver_photo_source: "",
+                              screensaver_photo_collection: "",
+                            });
+                          }
+                        }}
+                      >
+                        ${ssPoolOptions.map(
+                          (opt) => html`<option
+                            value=${opt.value}
+                            ?selected=${opt.value === ssPoolCurrent}
+                          >
+                            ${opt.label}
+                          </option>`,
+                        )}
+                      </select>`,
+                    })}
+                    ${renderBaselineLabeledSelect(
+                      store,
+                      group,
+                      "screensaver_cycle_minutes",
+                      cfg.screensaver_cycle_minutes,
+                      rotationOptions,
+                      "15",
+                      true,
+                    )}
+                    ${renderSwitchRow({
+                      label: store.tPrefLabel("screensaver_shuffle"),
+                      ariaLabel: store.t("groups.for_group_aria", {
+                        label: store.tPrefLabel("screensaver_shuffle"),
+                        group: group.name,
+                      }),
+                      checked: Boolean(cfg.screensaver_shuffle),
+                      onChange: (checked) =>
+                        void store.groups.updateGroupBaseline(gid, {
+                          screensaver_shuffle: checked,
+                        }),
+                    })}
+                    ${renderSpecSwitch(
+                      store,
+                      group,
+                      "screensaver_photo_clock",
+                      cfg.screensaver_photo_clock,
+                      caps,
+                    )}`
+                : nothing}
               ${renderSpecSelect(store, group, "color_profile", cfg.color_profile, caps)}
               ${colorProfile === "Custom"
                 ? renderSettingsRow({
@@ -18617,6 +21328,13 @@ function renderGroupBaselineDrawer(
                 group,
                 "weather_background",
                 cfg.weather_background,
+                caps,
+              )}
+              ${renderSpecSwitch(
+                store,
+                group,
+                "weather_app_background",
+                cfg.weather_app_background,
                 caps,
               )}
               ${renderSpecSwitch(store, group, "home_sun", cfg.home_sun, caps)}
@@ -19160,6 +21878,7 @@ __latterExp(__exports, { renderSystemGroupsView: () => renderSystemGroupsView })
 __latterDef("src/views/system-overview-view.ts", (__exports, __req) => {
 const { renderCard, renderSvgIcon } = __req("src/components/controls.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
+const { isPhotoUploaded } = __req("src/state/photo-ops.ts");
 const { fmtNumber, issueMessage, isValidHexColor } = __req("src/utils/format.ts");
 /**
  * System Overview View (`system_overview`, `D-003`, `D-004`, `D-051`, `D-061`, `D-066`):
@@ -19188,6 +21907,8 @@ const SYS_ICON_GROUPS =
   "M3,3H11V11H3V3M13,3H21V11H13V3M3,13H11V21H3V13M13,13H21V21H13V13M5,5V9H9V5H5M15,5V9H19V5H15M5,15V19H9V15H5M15,15V19H19V15H15Z";
 const SYS_ICON_PALETTE =
   "M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z";
+const SYS_ICON_PHOTOS =
+  "M22,16V4A2,2 0 0,0 20,2H8A2,2 0 0,0 6,4V16A2,2 0 0,0 8,18H20A2,2 0 0,0 22,16M11,12L13.03,14.71L16,11L20,16H8M2,6V20A2,2 0 0,0 4,22H18V20H4V6";
 const SYS_ICON_SHIELD =
   "M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M12,7C13.4,7 14.8,8.1 14.8,9.5V11C15.4,11 16,11.6 16,12.3V15.8C16,16.4 15.4,17 14.7,17H9.2C8.6,17 8,16.4 8,15.7V12.2C8,11.6 8.6,11 9.2,11V9.5C9.2,8.1 10.6,7 12,7M12,8.2C11.2,8.2 10.5,8.7 10.5,9.5V11H13.5V9.5C13.5,8.7 12.8,8.2 12,8.2Z";
 function renderSystemOverviewView(store) {
@@ -19447,10 +22168,9 @@ function renderSystemOverviewView(store) {
   const colorsCount = validPalettes.length;
   const wallpapers = data?.system_wallpapers || [];
   const wallpapersCount = wallpapers.length;
-  const uploadedWallpapersCount = wallpapers.filter(
-    (w) => w.kind === "upload" || w.deletable,
-  ).length;
+  const uploadedWallpapersCount = wallpapers.filter((w) => isPhotoUploaded(w)).length;
   const presetWallpapersCount = Math.max(0, wallpapersCount - uploadedWallpapersCount);
+  const photoCollectionsCount = (data?.photo_collections || []).length;
   const hasSystemPin = Boolean(data?.has_security_pin);
   const latterHardwareDevices = allDevices.filter((d) => d.kind !== "ble_tag");
   const populatedGroupChips = [];
@@ -20031,26 +22751,68 @@ function renderSystemOverviewView(store) {
 
             <button
               type="button"
-              id="cap-colors-wallpapers"
+              id="cap-photo-library"
+              @click=${() => store.openSystemSection("photos")}
+              class="overview-box"
+            >
+              <div class="overview-box-head">
+                <span class="overview-box-title">
+                  ${renderSvgIcon(SYS_ICON_PHOTOS)}
+                  <span>${store.t("sys_overview.cap_photo_library")}</span>
+                </span>
+                <span class="overview-box-end">
+                  <span class="chip ${uploadedWallpapersCount > 0 ? "chip-primary" : ""}">
+                    ${wallpapersCount === 1
+                      ? store.t("sys_overview.photos_count_one")
+                      : store.t("sys_overview.photos_count_many", {
+                          count: fmtNumber(wallpapersCount, store.hass, 0),
+                        })}
+                  </span>
+                  <span class="overview-box-chevron" aria-hidden="true">›</span>
+                </span>
+              </div>
+              <span class="overview-box-meta">
+                ${store.t("sys_overview.photo_library_meta", {
+                  defaults:
+                    presetWallpapersCount === 1
+                      ? store.t("sys_overview.defaults_one")
+                      : store.t("sys_overview.defaults_many", {
+                          count: fmtNumber(presetWallpapersCount, store.hass, 0),
+                        }),
+                  photos:
+                    uploadedWallpapersCount === 1
+                      ? store.t("sys_overview.photos_count_one")
+                      : store.t("sys_overview.photos_count_many", {
+                          count: fmtNumber(uploadedWallpapersCount, store.hass, 0),
+                        }),
+                  collections:
+                    photoCollectionsCount === 1
+                      ? store.t("sys_overview.collections_one")
+                      : store.t("sys_overview.collections_many", {
+                          count: fmtNumber(photoCollectionsCount, store.hass, 0),
+                        }),
+                })}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              id="cap-custom-colors"
               @click=${() =>
-                store.openSystemSection(
-                  "shared_entities",
-                  colorsCount > 0 ? "card-custom-colors" : "card-system-wallpapers",
-                  ["card-custom-colors", "card-system-wallpapers"],
-                )}
+                store.openSystemSection("shared_entities", "card-custom-colors")}
               class="overview-box"
             >
               <div class="overview-box-head">
                 <span class="overview-box-title">
                   ${renderSvgIcon(SYS_ICON_PALETTE)}
-                  <span>${store.t("sys_overview.cap_colors_wallpapers")}</span>
+                  <span>${store.t("sys_overview.cap_custom_colors")}</span>
                 </span>
                 <span class="overview-box-end">
-                  <span class="chip">
-                    ${wallpapersCount === 1
-                      ? store.t("sys_overview.wallpapers_one")
-                      : store.t("sys_overview.wallpapers_many", {
-                          count: fmtNumber(wallpapersCount, store.hass, 0),
+                  <span class="chip ${colorsCount > 0 ? "chip-primary" : ""}">
+                    ${colorsCount === 1
+                      ? store.t("sys_overview.custom_colors_one")
+                      : store.t("sys_overview.custom_colors_many", {
+                          count: fmtNumber(colorsCount, store.hass, 0),
                         })}
                   </span>
                   <span class="overview-box-chevron" aria-hidden="true">›</span>
@@ -20068,29 +22830,9 @@ function renderSystemOverviewView(store) {
                         </span>`
                       : nothing}
                   </div>`
-                : nothing}
-              <span class="overview-box-meta">
-                ${store.t("sys_overview.colors_wallpapers_meta", {
-                  colors:
-                    colorsCount === 1
-                      ? store.t("sys_overview.custom_colors_one")
-                      : store.t("sys_overview.custom_colors_many", {
-                          count: fmtNumber(colorsCount, store.hass, 0),
-                        }),
-                  presets:
-                    presetWallpapersCount === 1
-                      ? store.t("sys_overview.presets_one")
-                      : store.t("sys_overview.presets_many", {
-                          count: fmtNumber(presetWallpapersCount, store.hass, 0),
-                        }),
-                  uploaded:
-                    uploadedWallpapersCount > 0
-                      ? store.t("sys_overview.uploaded_suffix", {
-                          count: fmtNumber(uploadedWallpapersCount, store.hass, 0),
-                        })
-                      : "",
-                })}
-              </span>
+                : html`<span class="overview-box-meta">
+                    ${store.t("sys_overview.custom_colors_empty")}
+                  </span>`}
             </button>
 
             <button
@@ -20126,6 +22868,525 @@ function renderSystemOverviewView(store) {
 }
 __latterExp(__exports, { renderSystemOverviewView: () => renderSystemOverviewView });
 //# sourceURL=latter-studio/src/views/system-overview-view.ts
+});
+__latterDef("src/views/system-photos-view.ts", (__exports, __req) => {
+const { renderCard } = __req("src/components/controls.ts");
+const { PHOTO_LIBRARY_PAGE_SIZE, VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UNCATEGORIZED, VIRTUAL_COLLECTION_UPLOADS } = __req("src/constants.ts");
+const { focusSafe, html, nothing, repeat } = __req("src/lib/lit.ts");
+const { filterLibraryPhotos, isPhotoDynamic, isPhotoUploaded } = __req("src/state/photo-ops.ts");
+const { fmtNumber } = __req("src/utils/format.ts");
+/**
+ * System Photo Library View (`photos`, `/latter/system/photos`, `D-072`):
+ * - Full-width Photo library card with Upload photos (`.btn-primary`), Import from Media (`.btn-secondary`),
+ *   and New collection (`.btn-secondary`) header actions
+ * - Collection filter strip (All, Defaults, My photos, Uncategorized + user collections with Rename/Delete)
+ * - Live name search, pagination (36/page), Select bulk mode (assign/remove collection, confirmed batch delete),
+ *   and click-to-edit Photo Editor & Crop Modal.
+ */
+const ICON_EDIT =
+  "M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z";
+const ICON_CLOSE =
+  "M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z";
+function renderSystemPhotosView(store) {
+  const data = store.state;
+  const allPhotos = data?.system_wallpapers || [];
+  const collections = data?.photo_collections || [];
+  const collectionNameMap = new Map(collections.map((c) => [c.id, c.name]));
+  const defaultsCount = allPhotos.filter((p) => !isPhotoUploaded(p)).length;
+  const uploadedCount = allPhotos.filter((p) => isPhotoUploaded(p)).length;
+  const uncategorizedCount = allPhotos.filter((p) => (p.collections || []).length === 0).length;
+  const activeFilter =
+    store.photosFilterCollection === VIRTUAL_COLLECTION_ALL ||
+    store.photosFilterCollection === VIRTUAL_COLLECTION_DEFAULTS ||
+    store.photosFilterCollection === VIRTUAL_COLLECTION_UPLOADS ||
+    store.photosFilterCollection === VIRTUAL_COLLECTION_UNCATEGORIZED ||
+    collections.some((c) => c.id === store.photosFilterCollection)
+      ? store.photosFilterCollection
+      : VIRTUAL_COLLECTION_ALL;
+  const filtered = filterLibraryPhotos(allPhotos, activeFilter, store.photosSearch);
+  const totalFiltered = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PHOTO_LIBRARY_PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, store.photosPage || 1), totalPages);
+  const startIdx = (currentPage - 1) * PHOTO_LIBRARY_PAGE_SIZE;
+  const pageItems = filtered.slice(startIdx, startIdx + PHOTO_LIBRARY_PAGE_SIZE);
+  const selectedCount = store.photosSelectedIds.size;
+  const deletableSelectedCount = Array.from(store.photosSelectedIds).filter((id) => {
+    const item = allPhotos.find((p) => p.id === id);
+    return item ? isPhotoUploaded(item) : false;
+  }).length;
+  const setFilter = (nextFilter) => {
+    store.photosFilterCollection = nextFilter;
+    store.photosPage = 1;
+    store.host.requestUpdate();
+  };
+  const toggleSelectPhoto = (photoId) => {
+    if (store.photosSelectedIds.has(photoId)) {
+      store.photosSelectedIds.delete(photoId);
+    } else {
+      store.photosSelectedIds.add(photoId);
+    }
+    store.host.requestUpdate();
+  };
+  const virtualChips = [
+    { id: VIRTUAL_COLLECTION_ALL, label: store.t("photos.filter_all"), count: allPhotos.length },
+    {
+      id: VIRTUAL_COLLECTION_DEFAULTS,
+      label: store.t("photos.filter_defaults"),
+      count: defaultsCount,
+    },
+    {
+      id: VIRTUAL_COLLECTION_UPLOADS,
+      label: store.t("photos.filter_my_photos"),
+      count: uploadedCount,
+    },
+    {
+      id: VIRTUAL_COLLECTION_UNCATEGORIZED,
+      label: store.t("photos.filter_uncategorized"),
+      count: uncategorizedCount,
+    },
+  ];
+  return html`<section id="view-photos" class="stack">
+    ${renderCard({
+      id: "card-photo-library",
+      handoffActive: store.isHandoffTarget("card-photo-library"),
+      title: store.t("card.photo_library"),
+      subtitle: store.t("photos.subtitle"),
+      headerActions: html`<button
+          type="button"
+          id="btn-photos-upload"
+          @click=${() => store.entity.openPhotoUploadModal()}
+          class="btn btn-primary btn-compact"
+        >
+          ${store.t("photos.upload_btn")}
+        </button>
+        <button
+          type="button"
+          id="btn-photos-import-media"
+          @click=${() => store.entity.openMediaImportModal()}
+          class="btn btn-secondary btn-compact"
+        >
+          ${store.t("photos.import_media_btn")}
+        </button>
+        <button
+          type="button"
+          id="btn-photos-new-collection"
+          @click=${() => {
+            store.photosNewCollectionOpen = !store.photosNewCollectionOpen;
+            if (!store.photosNewCollectionOpen) store.photosNewCollectionName = "";
+            store.host.requestUpdate();
+          }}
+          class="btn btn-secondary btn-compact"
+        >
+          ${store.t("photos.new_collection_btn")}
+        </button>`,
+      contentClass: "stack",
+      body: html`${store.photosNewCollectionOpen
+          ? html`<div id="photos-new-collection-bar" class="input-action-row">
+              <input
+                type="text"
+                id="input-new-collection-name"
+                aria-label=${store.t("photos.new_collection_btn")}
+                placeholder=${store.t("photos.new_collection_placeholder")}
+                .value=${focusSafe(store.photosNewCollectionName)}
+                @input=${(ev) => {
+                  store.photosNewCollectionName = (ev.currentTarget).value;
+                }}
+                @keydown=${(ev) => {
+                  if (ev.key === "Enter") {
+                    ev.preventDefault();
+                    void store.entity.createPhotoCollection(store.photosNewCollectionName);
+                  } else if (ev.key === "Escape") {
+                    store.photosNewCollectionOpen = false;
+                    store.photosNewCollectionName = "";
+                    store.host.requestUpdate();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                id="btn-create-collection-submit"
+                @click=${() => void store.entity.createPhotoCollection(store.photosNewCollectionName)}
+                class="btn btn-primary btn-compact"
+              >
+                ${store.t("photos.create_collection")}
+              </button>
+              <button
+                type="button"
+                @click=${() => {
+                  store.photosNewCollectionOpen = false;
+                  store.photosNewCollectionName = "";
+                  store.host.requestUpdate();
+                }}
+                class="btn btn-text btn-compact"
+              >
+                ${store.t("action.cancel")}
+              </button>
+            </div>`
+          : nothing}
+
+        <div id="photos-collection-strip" class="collection-strip" role="group" aria-label=${store.t("photo_edit.collections_label")}>
+          ${virtualChips.map((chip) => {
+            const isActive = activeFilter === chip.id;
+            return html`<div class="collection-chip-wrap ${isActive ? "active" : ""}">
+              <button
+                type="button"
+                data-collection-filter=${chip.id}
+                aria-pressed=${isActive ? "true" : "false"}
+                @click=${() => setFilter(chip.id)}
+                class="collection-chip-btn"
+              >
+                <span>${chip.label}</span>
+                <span>(${fmtNumber(chip.count, store.hass, 0)})</span>
+              </button>
+            </div>`;
+          })}
+
+          ${collections.map((col) => {
+            const isActive = activeFilter === col.id;
+            const isRenaming = store.photosRenamingCollectionId === col.id;
+            if (isRenaming) {
+              return html`<div class="input-action-row">
+                <input
+                  type="text"
+                  id="input-rename-collection"
+                  aria-label=${store.t("photos.rename_collection_aria", { name: col.name })}
+                  placeholder=${store.t("photos.rename_collection_placeholder")}
+                  .value=${focusSafe(store.photosRenamingCollectionName)}
+                  @input=${(ev) => {
+                    store.photosRenamingCollectionName = (ev.currentTarget).value;
+                  }}
+                  @keydown=${(ev) => {
+                    if (ev.key === "Enter") {
+                      ev.preventDefault();
+                      void store.entity.renamePhotoCollection(
+                        col.id,
+                        store.photosRenamingCollectionName,
+                      );
+                    } else if (ev.key === "Escape") {
+                      store.photosRenamingCollectionId = "";
+                      store.photosRenamingCollectionName = "";
+                      store.host.requestUpdate();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  @click=${() =>
+                    void store.entity.renamePhotoCollection(
+                      col.id,
+                      store.photosRenamingCollectionName,
+                    )}
+                  class="btn btn-secondary btn-compact"
+                >
+                  ${store.t("action.save")}
+                </button>
+                <button
+                  type="button"
+                  @click=${() => {
+                    store.photosRenamingCollectionId = "";
+                    store.photosRenamingCollectionName = "";
+                    store.host.requestUpdate();
+                  }}
+                  class="btn btn-text btn-compact"
+                >
+                  ${store.t("action.cancel")}
+                </button>
+              </div>`;
+            }
+            return html`<div class="collection-chip-wrap ${isActive ? "active" : ""}">
+              <button
+                type="button"
+                data-collection-filter=${col.id}
+                aria-pressed=${isActive ? "true" : "false"}
+                @click=${() => setFilter(col.id)}
+                class="collection-chip-btn"
+              >
+                <span>${col.name}</span>
+                <span>(${fmtNumber(col.count, store.hass, 0)})</span>
+              </button>
+              <button
+                type="button"
+                aria-label=${store.t("photos.rename_collection_aria", { name: col.name })}
+                @click=${() => {
+                  store.photosRenamingCollectionId = col.id;
+                  store.photosRenamingCollectionName = col.name;
+                  store.host.requestUpdate();
+                }}
+                class="collection-chip-action"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d=${ICON_EDIT} /></svg>
+              </button>
+              <button
+                type="button"
+                aria-label=${store.t("photos.delete_collection_aria", { name: col.name })}
+                @click=${() => store.entity.requestDeletePhotoCollection(col.id, col.name)}
+                class="collection-chip-action"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d=${ICON_CLOSE} /></svg>
+              </button>
+            </div>`;
+          })}
+        </div>
+
+        <div class="photo-toolbar">
+          <div class="photo-toolbar-start">
+            <input
+              type="search"
+              id="input-photos-search"
+              aria-label=${store.t("photos.search_aria")}
+              placeholder=${store.t("photos.search_placeholder")}
+              .value=${focusSafe(store.photosSearch)}
+              @input=${(ev) => {
+                store.photosSearch = (ev.currentTarget).value;
+                store.photosPage = 1;
+                store.host.requestUpdate();
+              }}
+              class="photo-search-input"
+            />
+          </div>
+          <div class="photo-toolbar-end">
+            <button
+              type="button"
+              id="btn-photos-toggle-select"
+              @click=${() => {
+                store.photosSelectMode = !store.photosSelectMode;
+                if (!store.photosSelectMode) {
+                  store.photosSelectedIds.clear();
+                }
+                store.host.requestUpdate();
+              }}
+              class="btn btn-secondary btn-compact"
+            >
+              ${store.photosSelectMode
+                ? store.t("photos.done_selecting_btn")
+                : store.t("photos.select_mode_btn")}
+            </button>
+          </div>
+        </div>
+
+        ${store.photosSelectMode
+          ? html`<div id="photos-bulk-bar" class="photo-bulk-bar">
+              <div class="photo-toolbar-start">
+                <span class="chip chip-primary">
+                  ${selectedCount === 1
+                    ? store.t("photos.selected_count_one")
+                    : store.t("photos.selected_count_many", {
+                        count: fmtNumber(selectedCount, store.hass, 0),
+                      })}
+                </span>
+                <button
+                  type="button"
+                  id="btn-photos-select-page"
+                  @click=${() => {
+                    for (const p of pageItems) store.photosSelectedIds.add(p.id);
+                    store.host.requestUpdate();
+                  }}
+                  class="btn btn-text btn-compact"
+                >
+                  ${store.t("photos.select_all_page")}
+                </button>
+                ${selectedCount > 0
+                  ? html`<button
+                      type="button"
+                      id="btn-photos-clear-selection"
+                      @click=${() => {
+                        store.photosSelectedIds.clear();
+                        store.host.requestUpdate();
+                      }}
+                      class="btn btn-text btn-compact"
+                    >
+                      ${store.t("photos.clear_selection")}
+                    </button>`
+                  : nothing}
+              </div>
+
+              <div class="photo-toolbar-end">
+                ${collections.length > 0
+                  ? html`<select
+                        id="select-bulk-collection"
+                        aria-label=${store.t("photos.bulk_collection_aria")}
+                        .value=${store.photosBulkTargetCollectionId}
+                        @change=${(ev) => {
+                          store.photosBulkTargetCollectionId = (
+                            ev.currentTarget
+                          ).value;
+                          store.host.requestUpdate();
+                        }}
+                      >
+                        <option value="" ?selected=${!store.photosBulkTargetCollectionId}>
+                          ${store.t("photos.bulk_choose_collection")}
+                        </option>
+                        ${collections.map(
+                          (col) => html`<option
+                            value=${col.id}
+                            ?selected=${store.photosBulkTargetCollectionId === col.id}
+                          >
+                            ${col.name}
+                          </option>`,
+                        )}
+                      </select>
+                      <button
+                        type="button"
+                        id="btn-bulk-add-collection"
+                        ?disabled=${selectedCount === 0 || !store.photosBulkTargetCollectionId}
+                        @click=${() =>
+                          void store.entity.bulkUpdatePhotos({
+                            addCollection: store.photosBulkTargetCollectionId,
+                          })}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        ${store.t("photos.bulk_add_to_collection")}
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-bulk-remove-collection"
+                        ?disabled=${selectedCount === 0 || !store.photosBulkTargetCollectionId}
+                        @click=${() =>
+                          void store.entity.bulkUpdatePhotos({
+                            removeCollection: store.photosBulkTargetCollectionId,
+                          })}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        ${store.t("photos.bulk_remove_from_collection")}
+                      </button>`
+                  : nothing}
+                <button
+                  type="button"
+                  id="btn-bulk-delete-photos"
+                  ?disabled=${deletableSelectedCount === 0}
+                  @click=${() => store.entity.requestBulkDeletePhotos()}
+                  class="btn btn-danger btn-compact"
+                >
+                  ${store.t("photos.bulk_delete_btn")}
+                </button>
+              </div>
+            </div>`
+          : nothing}
+
+        <div id="photos-grid" class="photo-grid">
+          ${pageItems.length === 0
+            ? html`<p class="empty-state">${store.t("photos.empty_library")}</p>`
+            : repeat(
+                pageItems,
+                (p) => p.id,
+                (photo) => {
+                  const isSelected = store.photosSelectedIds.has(photo.id);
+                  const isDynamic = isPhotoDynamic(photo);
+                  const isUploaded = isPhotoUploaded(photo);
+                  const thumbSrc = photo.thumb_url || photo.preview_url || "";
+                  const photoCols = (photo.collections || [])
+                    .map((cid) => collectionNameMap.get(cid))
+                    .filter((n) => Boolean(n));
+                  const onTileClick = () => {
+                    if (store.photosSelectMode) {
+                      toggleSelectPhoto(photo.id);
+                    } else {
+                      store.entity.openPhotoEditModal(photo);
+                    }
+                  };
+                  return html`<div
+                    data-photo-id=${photo.id}
+                    class="photo-tile ${isSelected ? "selected" : ""}"
+                  >
+                    ${store.photosSelectMode
+                      ? html`<input
+                          type="checkbox"
+                          aria-label=${store.t("photos.select_photo_aria", {
+                            name: photo.name || photo.id,
+                          })}
+                          .checked=${isSelected}
+                          @change=${() => toggleSelectPhoto(photo.id)}
+                          class="photo-tile-check"
+                        />`
+                      : nothing}
+                    <button
+                      type="button"
+                      aria-label=${store.photosSelectMode
+                        ? store.t("photos.select_photo_aria", { name: photo.name || photo.id })
+                        : store.t("photos.edit_photo_aria", { name: photo.name || photo.id })}
+                      @click=${onTileClick}
+                      class="photo-tile-thumb-btn"
+                    >
+                      ${thumbSrc
+                        ? html`<img
+                            src=${thumbSrc}
+                            alt=${photo.name || photo.id}
+                            loading="lazy"
+                            class="photo-tile-img"
+                          />`
+                        : nothing}
+                      ${isDynamic
+                        ? html`<span class="photo-tile-badge">
+                            ${store.t("photos.badge_dynamic")}
+                          </span>`
+                        : !isUploaded
+                          ? html`<span class="photo-tile-badge">
+                              ${store.t("photos.badge_default")}
+                            </span>`
+                          : photo.source_kind === "media_import"
+                            ? html`<span class="photo-tile-badge">
+                                ${store.t("photos.badge_media")}
+                              </span>`
+                            : nothing}
+                    </button>
+                    <div class="photo-tile-meta">
+                      <span class="photo-tile-name">${photo.name || photo.id}</span>
+                      ${photoCols.length > 0
+                        ? html`<div class="photo-tile-sub">
+                            ${photoCols.slice(0, 2).map((cn) => html`<span class="chip">${cn}</span>`)}
+                            ${photoCols.length > 2
+                              ? html`<span class="chip">+${photoCols.length - 2}</span>`
+                              : nothing}
+                          </div>`
+                        : nothing}
+                    </div>
+                  </div>`;
+                },
+              )}
+        </div>
+
+        ${totalFiltered > PHOTO_LIBRARY_PAGE_SIZE
+          ? html`<div class="photo-pagination">
+              <span class="row-description">
+                ${store.t("photos.page_status", {
+                  start: fmtNumber(startIdx + 1, store.hass, 0),
+                  end: fmtNumber(Math.min(startIdx + pageItems.length, totalFiltered), store.hass, 0),
+                  total: fmtNumber(totalFiltered, store.hass, 0),
+                })}
+              </span>
+              <div class="photo-toolbar-end">
+                <button
+                  type="button"
+                  id="btn-photos-prev-page"
+                  ?disabled=${currentPage <= 1}
+                  @click=${() => {
+                    store.photosPage = Math.max(1, currentPage - 1);
+                    store.host.requestUpdate();
+                  }}
+                  class="btn btn-secondary btn-compact"
+                >
+                  ${store.t("photos.prev_page")}
+                </button>
+                <button
+                  type="button"
+                  id="btn-photos-next-page"
+                  ?disabled=${currentPage >= totalPages}
+                  @click=${() => {
+                    store.photosPage = Math.min(totalPages, currentPage + 1);
+                    store.host.requestUpdate();
+                  }}
+                  class="btn btn-secondary btn-compact"
+                >
+                  ${store.t("photos.next_page")}
+                </button>
+              </div>
+            </div>`
+          : nothing}`,
+    })}
+  </section>`;
+}
+__latterExp(__exports, { renderSystemPhotosView: () => renderSystemPhotosView });
+//# sourceURL=latter-studio/src/views/system-photos-view.ts
 });
 __latterDef("src/views/system-presence-view.ts", (__exports, __req) => {
 const { renderCard, renderRangeRow, renderSettingsRow } = __req("src/components/controls.ts");
@@ -21052,7 +24313,6 @@ __latterExp(__exports, { renderSystemRemotesView: () => renderSystemRemotesView 
 });
 __latterDef("src/views/system-shared-view.ts", (__exports, __req) => {
 const { renderCard, renderEntityCombobox, renderEntitySlotList, renderSelectOptions, renderSelectRow, renderSettingsRow, renderSortableList, renderSvgIcon, renderTrashIconButton } = __req("src/components/controls.ts");
-const { renderWallpaperGalleryItems, renderWallpaperUploadProgress, renderWallpaperUploadTrigger } = __req("src/components/wallpaper-gallery.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
 const { entityLabel, fmtAgo, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
 /**
@@ -21086,7 +24346,6 @@ function renderSystemSharedView(store) {
   const calendars = sc?.calendar_entities || [];
   const palettes = (sc?.custom_palettes || []).filter((p) => isValidHexColor(p.hex));
   const doorbells = data?.doorbells || [];
-  const wallpapers = data?.system_wallpapers || [];
   const noiseRed = sc?.doorbell_noise_reduction || "strong";
   const doorbellFilterOptions = [
     { value: "strong", label: store.t("shared.filter_strong") },
@@ -21290,19 +24549,6 @@ function renderSystemSharedView(store) {
               store.entity.updateStringListRow("calendar_entities", idx, val),
             onRemove: (idx) => store.entity.removeStringListRow("calendar_entities", idx),
           }),
-        })}
-
-        ${renderCard({
-          id: "card-system-wallpapers",
-          handoffActive: store.isHandoffTarget("card-system-wallpapers"),
-          title: store.t("card.wallpapers"),
-          subtitle: store.t("shared.wallpapers_subtitle"),
-          headerActions: renderWallpaperUploadTrigger(store, "system"),
-          contentClass: "stack",
-          body: html`${renderWallpaperUploadProgress(store, "system")}
-            <div class="wp-gallery">
-              ${renderWallpaperGalleryItems(store, "system", wallpapers, "square")}
-            </div>`,
         })}
       </div>
 
@@ -22101,6 +25347,7 @@ const { renderDevicesDiscoveredView } = __req("src/views/devices-discovered-view
 const { renderDevicesListView } = __req("src/views/devices-list-view.ts");
 const { renderSystemGroupsView } = __req("src/views/system-groups-view.ts");
 const { renderSystemOverviewView } = __req("src/views/system-overview-view.ts");
+const { renderSystemPhotosView } = __req("src/views/system-photos-view.ts");
 const { renderSystemPresenceView } = __req("src/views/system-presence-view.ts");
 const { renderSystemRemotesView } = __req("src/views/system-remotes-view.ts");
 const { renderSystemSharedView } = __req("src/views/system-shared-view.ts");
@@ -22114,6 +25361,8 @@ function renderActiveView(store) {
     switch (store.currentViewId) {
       case "shared_entities":
         return renderSystemSharedView(store);
+      case "photos":
+        return renderSystemPhotosView(store);
       case "remotes":
         return renderSystemRemotesView(store);
       case "system_sync":
@@ -22188,6 +25437,7 @@ const SYSTEM_NAV_ITEMS
    = [
   { viewId: "system_overview", labelKey: "view.system_overview" },
   { viewId: "shared_entities", labelKey: "view.shared_entities" },
+  { viewId: "photos", labelKey: "view.photos" },
   { viewId: "remotes", labelKey: "view.remotes" },
   { viewId: "system_sync", labelKey: "view.system_sync" },
   { viewId: "area_tracking", labelKey: "view.area_tracking" },

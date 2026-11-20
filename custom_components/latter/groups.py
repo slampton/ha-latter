@@ -29,10 +29,17 @@ from .const import (
     CONF_HOME_CATEGORIES,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PINNED_ITEMS,
+    CONF_SCREENSAVER_CYCLE_MINUTES,
+    CONF_SCREENSAVER_PHOTO_COLLECTION,
+    CONF_SCREENSAVER_PHOTO_MODE,
+    CONF_SCREENSAVER_PHOTO_SOURCE,
+    CONF_SCREENSAVER_SHUFFLE,
     CONF_SECURITY_PIN_POLICY,
     CONF_SYNC_DEVICE_AREA,
     CONF_TOOLS_ITEMS,
+    CONF_WALLPAPER_COLLECTION,
     CONF_WALLPAPER_CYCLE_MINUTES,
+    CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
     DEFAULT_ACTIVITY_CARD,
@@ -42,8 +49,14 @@ from .const import (
     DEFAULT_DEVICE_REMOTE_GROUP,
     DEFAULT_GAMES_ITEMS,
     DEFAULT_HOME_CATEGORIES,
+    DEFAULT_SCREENSAVER_CYCLE_MINUTES,
+    DEFAULT_SCREENSAVER_PHOTO_COLLECTION,
+    DEFAULT_SCREENSAVER_PHOTO_MODE,
+    DEFAULT_SCREENSAVER_SHUFFLE,
     DEFAULT_TOOLS_ITEMS,
+    DEFAULT_WALLPAPER_COLLECTION,
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
+    DEFAULT_WALLPAPER_MODE,
     DOMAIN,
 )
 from .identity import device_entities, esphome_service, get_bound_esphome_device
@@ -489,8 +502,15 @@ GROUP_BEHAVIOR_DEVICE_KEYS: tuple[str, ...] = (
 
 # Optional Display styling keys synced when a Group opts into `include_display`.
 GROUP_DISPLAY_DEVICE_KEYS: tuple[str, ...] = (
+    CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
+    CONF_WALLPAPER_COLLECTION,
     CONF_WALLPAPER_CYCLE_MINUTES,
+    CONF_SCREENSAVER_PHOTO_MODE,
+    CONF_SCREENSAVER_PHOTO_SOURCE,
+    CONF_SCREENSAVER_PHOTO_COLLECTION,
+    CONF_SCREENSAVER_CYCLE_MINUTES,
+    CONF_SCREENSAVER_SHUFFLE,
     CONF_DEVICE_CUSTOM_COLOR,
     *tuple(s.key for s in DEVICE_PREF_SPECS if s.group_tier == "display"),
 )
@@ -528,8 +548,15 @@ GROUP_ALL_DEVICE_KEYS: tuple[str, ...] = (
 
 _DISPLAY_CAPABILITY_NON_PREF_KEYS: frozenset[str] = frozenset(
     {
+        CONF_WALLPAPER_MODE,
         CONF_WALLPAPER_SOURCE,
+        CONF_WALLPAPER_COLLECTION,
         CONF_WALLPAPER_CYCLE_MINUTES,
+        CONF_SCREENSAVER_PHOTO_MODE,
+        CONF_SCREENSAVER_PHOTO_SOURCE,
+        CONF_SCREENSAVER_PHOTO_COLLECTION,
+        CONF_SCREENSAVER_CYCLE_MINUTES,
+        CONF_SCREENSAVER_SHUFFLE,
         CONF_DEVICE_CUSTOM_COLOR,
         *GROUP_INTERFACE_NON_PREF_KEYS,
     }
@@ -580,8 +607,15 @@ def default_group_baseline_config(
         if spec.group_tier == "behavior":
             base[spec.key] = spec.default
     if include_display:
+        base[CONF_WALLPAPER_MODE] = DEFAULT_WALLPAPER_MODE
         base[CONF_WALLPAPER_SOURCE] = ""
+        base[CONF_WALLPAPER_COLLECTION] = DEFAULT_WALLPAPER_COLLECTION
         base[CONF_WALLPAPER_CYCLE_MINUTES] = DEFAULT_WALLPAPER_CYCLE_MINUTES
+        base[CONF_SCREENSAVER_PHOTO_MODE] = DEFAULT_SCREENSAVER_PHOTO_MODE
+        base[CONF_SCREENSAVER_PHOTO_SOURCE] = ""
+        base[CONF_SCREENSAVER_PHOTO_COLLECTION] = DEFAULT_SCREENSAVER_PHOTO_COLLECTION
+        base[CONF_SCREENSAVER_CYCLE_MINUTES] = DEFAULT_SCREENSAVER_CYCLE_MINUTES
+        base[CONF_SCREENSAVER_SHUFFLE] = DEFAULT_SCREENSAVER_SHUFFLE
         base[CONF_DEVICE_CUSTOM_COLOR] = "#3898FF"
         for spec in DEVICE_PREF_SPECS:
             if spec.group_tier == "display":
@@ -631,8 +665,15 @@ def resolve_behavior_key_value(data: Mapping[str, Any], key: str) -> Any:
     if key == CONF_SECURITY_PIN_POLICY:
         pol = str(data.get(CONF_SECURITY_PIN_POLICY) or "auto").strip().lower()
         return pol if pol in ("auto", "allow", "require_pin", "block") else "auto"
+    if key == CONF_WALLPAPER_MODE:
+        raw_wm = str(data.get(CONF_WALLPAPER_MODE) or "").strip().lower()
+        if raw_wm in ("off", "single", "collection", "custom"):
+            return raw_wm
+        return "single" if str(data.get(CONF_WALLPAPER_SOURCE) or "").strip() else DEFAULT_WALLPAPER_MODE
     if key == CONF_WALLPAPER_SOURCE:
         return str(data.get(CONF_WALLPAPER_SOURCE) or "").strip()
+    if key == CONF_WALLPAPER_COLLECTION:
+        return str(data.get(CONF_WALLPAPER_COLLECTION) or DEFAULT_WALLPAPER_COLLECTION).strip()
     if key == CONF_WALLPAPER_CYCLE_MINUTES:
         try:
             return max(
@@ -646,6 +687,33 @@ def resolve_behavior_key_value(data: Mapping[str, Any], key: str) -> Any:
             )
         except (TypeError, ValueError):
             return 0
+    if key == CONF_SCREENSAVER_PHOTO_MODE:
+        raw_sm = str(data.get(CONF_SCREENSAVER_PHOTO_MODE) or "").strip().lower()
+        return raw_sm if raw_sm in ("off", "single", "collection", "custom") else DEFAULT_SCREENSAVER_PHOTO_MODE
+    if key == CONF_SCREENSAVER_PHOTO_SOURCE:
+        return str(data.get(CONF_SCREENSAVER_PHOTO_SOURCE) or "").strip()
+    if key == CONF_SCREENSAVER_PHOTO_COLLECTION:
+        return str(
+            data.get(CONF_SCREENSAVER_PHOTO_COLLECTION, DEFAULT_SCREENSAVER_PHOTO_COLLECTION)
+            or DEFAULT_SCREENSAVER_PHOTO_COLLECTION
+        ).strip()
+    if key == CONF_SCREENSAVER_CYCLE_MINUTES:
+        try:
+            return max(
+                0,
+                int(
+                    data.get(
+                        CONF_SCREENSAVER_CYCLE_MINUTES, DEFAULT_SCREENSAVER_CYCLE_MINUTES
+                    )
+                ),
+            )
+        except (TypeError, ValueError):
+            return DEFAULT_SCREENSAVER_CYCLE_MINUTES
+    if key == CONF_SCREENSAVER_SHUFFLE:
+        raw_sh = data.get(CONF_SCREENSAVER_SHUFFLE, DEFAULT_SCREENSAVER_SHUFFLE)
+        if isinstance(raw_sh, str):
+            return raw_sh.strip().lower() in ("1", "true", "on", "yes")
+        return bool(raw_sh)
     if key == CONF_DEVICE_CUSTOM_COLOR:
         raw_c = str(data.get(CONF_DEVICE_CUSTOM_COLOR) or "").strip().upper()
         return raw_c if raw_c.startswith("#") and len(raw_c) == 7 else "#3898FF"
@@ -711,7 +779,7 @@ def resolve_behavior_key_value(data: Mapping[str, Any], key: str) -> Any:
     return data.get(key)
 
 
-BUILTIN_GROUP_PRESET_VERSION = 3
+BUILTIN_GROUP_PRESET_VERSION = 4
 CONF_BUILTIN_GROUP_PRESET_VERSION = "builtin_group_preset_version"
 
 DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
@@ -734,7 +802,7 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             "battery_screen_timeout": "30s",
             "docked_idle_timeout": "1 min",
             "battery_hibernate_timeout": "15 min",
-            "docked_screensaver": True,
+            "screensaver_mode": "Docked Only",
             "wake_word_mode": "Docked Only",
             "auto_brightness_mode": "Sun Synchronized",
             "day_brightness": 90,
@@ -762,7 +830,7 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             "battery_screen_timeout": "30s",
             "docked_idle_timeout": "1 min",
             "battery_hibernate_timeout": "30 min",
-            "docked_screensaver": True,
+            "screensaver_mode": "Docked Only",
             "wake_word_mode": "Docked Only",
             "auto_brightness_mode": "Sun Synchronized",
             "day_brightness": 90,
@@ -790,7 +858,7 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             "battery_screen_timeout": "15s",
             "docked_idle_timeout": "1 min",
             "battery_hibernate_timeout": "15 min",
-            "docked_screensaver": True,
+            "screensaver_mode": "Docked Only",
             "wake_word_mode": "Docked Only",
             "auto_brightness_mode": "Sun Synchronized",
             "day_brightness": 80,
@@ -818,7 +886,7 @@ DEFAULT_DEVICE_GROUPS: list[dict[str, Any]] = [
             "battery_screen_timeout": "Never",
             "docked_idle_timeout": "Never",
             "battery_hibernate_timeout": "Disabled",
-            "docked_screensaver": False,
+            "screensaver_mode": "Never",
             "wake_word_mode": "Always On",
             "auto_brightness_mode": "Sun Synchronized",
             "day_brightness": 90,
@@ -1026,7 +1094,9 @@ def device_matches_group_baseline(
             want_v = "Minimal Digital"
         cur_v = resolve_behavior_key_value(dev_data, k)
         if k == CONF_WALLPAPER_SOURCE and candidate_data is None:
-            cur_v = str(getattr(coordinator, "wallpaper_source", cur_v) or "").strip()
+            cur_v = str(
+                getattr(coordinator, "configured_wallpaper_source", cur_v) or ""
+            ).strip()
         if isinstance(want_v, bool):
             if bool(cur_v) != want_v:
                 return False
@@ -1102,7 +1172,7 @@ def seed_group_baseline_from_coordinator(
             dev_cfg[k] = str(
                 getattr(
                     coordinator,
-                    "wallpaper_source",
+                    "configured_wallpaper_source",
                     resolve_behavior_key_value(dev_data, k),
                 )
                 or ""
@@ -1149,7 +1219,9 @@ async def async_apply_group_baseline_to_coordinators(
                 want_v = "Minimal Digital"
             cur_v = resolve_behavior_key_value(cur_data, k)
             if k == CONF_WALLPAPER_SOURCE:
-                cur_v = str(getattr(coord, "wallpaper_source", cur_v) or "").strip()
+                cur_v = str(
+                    getattr(coord, "configured_wallpaper_source", cur_v) or ""
+                ).strip()
             if not _same_control_val(cur_v, want_v) or k not in cur_data:
                 updates[k] = want_v
         cleaned = (
@@ -1175,6 +1247,8 @@ async def async_apply_group_baseline_to_coordinators(
             await coord.async_apply_options()
             if hasattr(coord, "_bind_wallpaper_cycle_timer"):
                 coord._bind_wallpaper_cycle_timer()
+            if hasattr(coord, "_bind_screensaver_cycle_timer"):
+                coord._bind_screensaver_cycle_timer()
         if hasattr(coord, "async_update_listeners"):
             coord.async_update_listeners()
         coord.async_notify_listeners()
@@ -1290,6 +1364,7 @@ async def async_reset_device(
         )
         await coordinator.async_apply_options()
         coordinator._bind_wallpaper_cycle_timer()
+        coordinator._bind_screensaver_cycle_timer()
         coordinator.async_notify_listeners()
         _LOGGER.info("Reset the Latter options of '%s' to defaults", coordinator.device_slug)
 

@@ -33,14 +33,22 @@ from .const import (
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PINNED_ITEMS,
+    CONF_SCREENSAVER_CYCLE_MINUTES,
+    CONF_SCREENSAVER_PHOTO_COLLECTION,
+    CONF_SCREENSAVER_PHOTO_IDS,
+    CONF_SCREENSAVER_PHOTO_MODE,
+    CONF_SCREENSAVER_PHOTO_SOURCE,
+    CONF_SCREENSAVER_SHUFFLE,
     CONF_SECURITY_PIN_HASH,
     CONF_SECURITY_PIN_POLICY,
     CONF_SITE_ID,
     CONF_SYNC_DEVICE_AREA,
     CONF_SYSTEM_CONFIG_REV,
     CONF_TOOLS_ITEMS,
+    CONF_WALLPAPER_COLLECTION,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
+    CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
@@ -63,6 +71,10 @@ from .studio.settings import (
     clean_device_settings,
     clean_system_settings,
     resolve_device_pref_value,
+)
+from .wallpapers import (
+    export_photo_library_metadata,
+    restore_photo_library_metadata,
 )
 
 DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
@@ -91,9 +103,17 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_GAMES_ITEMS,
     CONF_ACTIVITY_CARD,
     CONF_ACTIVITY_SOURCES,
+    CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
+    CONF_WALLPAPER_COLLECTION,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_CYCLE_MINUTES,
+    CONF_SCREENSAVER_PHOTO_MODE,
+    CONF_SCREENSAVER_PHOTO_SOURCE,
+    CONF_SCREENSAVER_PHOTO_COLLECTION,
+    CONF_SCREENSAVER_PHOTO_IDS,
+    CONF_SCREENSAVER_CYCLE_MINUTES,
+    CONF_SCREENSAVER_SHUFFLE,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_SECURITY_PIN_POLICY,
     "device_remote_group",
@@ -189,6 +209,7 @@ def build_backup_bundle(
             name.strip()
             or f"System Backup ({dt_util.now().strftime('%Y-%m-%d %H:%M')})"
         )
+        photo_lib = export_photo_library_metadata()
         return {
             "id": backup_id,
             "schema": "latter.backup.v3",
@@ -199,6 +220,9 @@ def build_backup_bundle(
             "target_device": "all",
             "device_count": len(devices_map),
             "global_config": global_export,
+            "photo_collections": photo_lib["photo_collections"],
+            "photo_metadata": photo_lib["photo_metadata"],
+            "preset_collections": photo_lib["preset_collections"],
             "devices": devices_map,
         }
 
@@ -276,6 +300,8 @@ async def _async_apply_device_snapshot_to_coordinator(
         coord.active_remote_slot = max(1, min(10, int(dev_snap["active_remote_slot"])))
 
     coord._bind_wallpaper_cycle_timer()
+    if hasattr(coord, "_bind_screensaver_cycle_timer"):
+        coord._bind_screensaver_cycle_timer()
     coord._schedule_persist_runtime_state()
     coord.async_notify_listeners()
     return 0
@@ -327,6 +353,18 @@ async def async_restore_backup_bundle(
                 store = domain_data.get(DATA_GLOBAL_STORE)
                 if store is not None:
                     await store.async_save(global_cfg)
+
+        if any(
+            k in bundle
+            for k in ("photo_collections", "photo_metadata", "preset_collections")
+        ):
+            await hass.async_add_executor_job(
+                restore_photo_library_metadata,
+                hass,
+                bundle.get("photo_collections"),
+                bundle.get("photo_metadata"),
+                bundle.get("preset_collections"),
+            )
 
         devices_map = bundle.get("devices") or {}
         if isinstance(devices_map, dict):

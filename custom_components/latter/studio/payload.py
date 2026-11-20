@@ -47,11 +47,20 @@ from ..const import (
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PINNED_ITEMS,
+    CONF_SCREENSAVER_CYCLE_MINUTES,
+    CONF_SCREENSAVER_PHOTO_COLLECTION,
+    CONF_SCREENSAVER_PHOTO_IDS,
+    CONF_SCREENSAVER_PHOTO_MODE,
+    CONF_SCREENSAVER_PHOTO_SOURCE,
+    CONF_SCREENSAVER_SHUFFLE,
     CONF_SECURITY_PIN_HASH,
     CONF_SECURITY_PIN_POLICY,
     CONF_SYNC_DEVICE_AREA,
     CONF_TOOLS_ITEMS,
+    CONF_WALLPAPER_COLLECTION,
     CONF_WALLPAPER_CYCLE_MINUTES,
+    CONF_WALLPAPER_FAVORITES,
+    CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
     DEFAULT_DEVICE_GROUP,
@@ -91,7 +100,14 @@ from ..protocol import (
     resolve_shortcut_entity_icon,
 )
 from ..repairs import parse_device_issue_id
-from ..wallpapers import list_wallpaper_catalog
+from ..wallpapers import (
+    VIRTUAL_COLLECTION_ALL,
+    VIRTUAL_COLLECTION_DEFAULTS,
+    VIRTUAL_COLLECTION_UNCATEGORIZED,
+    VIRTUAL_COLLECTION_UPLOADS,
+    list_photo_collections,
+    list_wallpaper_catalog,
+)
 from .settings import (
     ACTIVITY_SOURCES_CATALOG,
     AREA_CATEGORIES_CATALOG,
@@ -732,6 +748,134 @@ def _build_system_shared_controls(
                 "step": None,
                 "unit": "",
                 "targets": wp_rot_targets,
+            }
+        )
+
+    col_opts = [
+        VIRTUAL_COLLECTION_ALL,
+        VIRTUAL_COLLECTION_DEFAULTS,
+        VIRTUAL_COLLECTION_UPLOADS,
+        VIRTUAL_COLLECTION_UNCATEGORIZED,
+    ]
+    col_labels: dict[str, str] = {
+        VIRTUAL_COLLECTION_ALL: "All photos",
+        VIRTUAL_COLLECTION_DEFAULTS: "Defaults",
+        VIRTUAL_COLLECTION_UPLOADS: "My photos",
+        VIRTUAL_COLLECTION_UNCATEGORIZED: "Uncategorized",
+    }
+    for col in list_photo_collections():
+        cid = str(col.get("id") or "").strip()
+        if cid and cid not in col_labels:
+            col_opts.append(cid)
+            col_labels[cid] = str(col.get("name") or cid)
+
+    wp_col_targets = _targets_for(
+        CONF_WALLPAPER_COLLECTION,
+        display_only=True,
+        state_fn=lambda c: c.wallpaper_collection,
+    )
+    if wp_col_targets:
+        controls.append(
+            {
+                "key": "display:select:wallpaper collection",
+                "pref_key": CONF_WALLPAPER_COLLECTION,
+                "tier": "display",
+                "section": "display",
+                "section_title": _SHARED_SECTION_TITLES["display"],
+                "name": "Wallpaper collection",
+                "domain": "select",
+                "state": "",
+                "options": ["", *col_opts],
+                "option_labels": {"": "Not using a collection", **col_labels},
+                "min": None,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": wp_col_targets,
+            }
+        )
+
+    ss_col_targets = _targets_for(
+        CONF_SCREENSAVER_PHOTO_COLLECTION,
+        display_only=True,
+        state_fn=lambda c: c.screensaver_photo_collection,
+    )
+    if ss_col_targets:
+        controls.append(
+            {
+                "key": "display:select:photo frame collection",
+                "pref_key": CONF_SCREENSAVER_PHOTO_COLLECTION,
+                "tier": "display",
+                "section": "display",
+                "section_title": _SHARED_SECTION_TITLES["display"],
+                "name": "Photo Frame collection",
+                "domain": "select",
+                "state": VIRTUAL_COLLECTION_ALL,
+                "options": col_opts,
+                "option_labels": col_labels,
+                "min": None,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": ss_col_targets,
+            }
+        )
+
+    ss_rot_targets = _targets_for(
+        CONF_SCREENSAVER_CYCLE_MINUTES,
+        display_only=True,
+        state_fn=lambda c: str(c.screensaver_cycle_minutes),
+    )
+    if ss_rot_targets:
+        controls.append(
+            {
+                "key": "display:select:photo frame rotation",
+                "pref_key": CONF_SCREENSAVER_CYCLE_MINUTES,
+                "tier": "display",
+                "section": "display",
+                "section_title": _SHARED_SECTION_TITLES["display"],
+                "name": "Photo Frame rotation",
+                "domain": "select",
+                "state": "5",
+                "options": ["0", "1", "5", "15", "30", "60"],
+                "option_labels": {
+                    "0": "Off (Static)",
+                    "1": "Every 1 min",
+                    "5": "Every 5 min",
+                    "15": "Every 15 min",
+                    "30": "Every 30 min",
+                    "60": "Every 1 hr",
+                },
+                "min": None,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": ss_rot_targets,
+            }
+        )
+
+    ss_shuf_targets = _targets_for(
+        CONF_SCREENSAVER_SHUFFLE,
+        display_only=True,
+        state_fn=lambda c: "on" if c.screensaver_shuffle else "off",
+    )
+    if ss_shuf_targets:
+        controls.append(
+            {
+                "key": "display:switch:photo frame shuffle",
+                "pref_key": CONF_SCREENSAVER_SHUFFLE,
+                "tier": "display",
+                "section": "display",
+                "section_title": _SHARED_SECTION_TITLES["display"],
+                "name": "Shuffle Photo Frame photos",
+                "domain": "switch",
+                "state": "off",
+                "options": [],
+                "min": None,
+                "max": None,
+                "step": None,
+                "unit": "",
+                "targets": ss_shuf_targets,
             }
         )
 
@@ -1529,6 +1673,8 @@ def _build_system_section(
                 if c.ble_target_address
             },
         )
+    if "photo_collections" not in skip_sections:
+        section["photo_collections"] = list_photo_collections()
     if "system_wallpapers" not in skip_sections:
         section["system_wallpapers"] = list_wallpaper_catalog(
             hass,
@@ -1714,8 +1860,17 @@ def build_studio_state_payload(
         CONF_GAMES_ITEMS: coordinator.games_items_csv,
         CONF_ACTIVITY_CARD: coordinator.activity_card_enabled,
         CONF_ACTIVITY_SOURCES: coordinator.activity_sources_csv,
+        CONF_WALLPAPER_MODE: coordinator.wallpaper_mode,
         CONF_WALLPAPER_SOURCE: coordinator.wallpaper_source,
+        CONF_WALLPAPER_COLLECTION: coordinator.wallpaper_collection,
+        CONF_WALLPAPER_FAVORITES: coordinator.wallpaper_favorites,
         CONF_WALLPAPER_CYCLE_MINUTES: coordinator.wallpaper_cycle_minutes,
+        CONF_SCREENSAVER_PHOTO_MODE: coordinator.screensaver_photo_mode,
+        CONF_SCREENSAVER_PHOTO_SOURCE: coordinator.configured_screensaver_photo_source,
+        CONF_SCREENSAVER_PHOTO_COLLECTION: coordinator.screensaver_photo_collection,
+        CONF_SCREENSAVER_PHOTO_IDS: coordinator.screensaver_photo_ids,
+        CONF_SCREENSAVER_CYCLE_MINUTES: coordinator.screensaver_cycle_minutes,
+        CONF_SCREENSAVER_SHUFFLE: coordinator.screensaver_shuffle,
         CONF_SECURITY_PIN_POLICY: coordinator.configured_security_pin_policy,
         "has_security_pin": coordinator.has_security_pin,
         **{
@@ -1757,6 +1912,15 @@ def build_studio_state_payload(
         None,
     )
 
+    wp_thumb_by_id = {
+        str(item.get("id") or ""): str(item.get("thumb_url") or "")
+        for item in wallpapers_catalog
+    }
+    wp_pool = coordinator.resolve_wallpaper_rotation_pool()
+    ss_pool = coordinator.resolve_screensaver_photo_pool()
+    active_wp_id = coordinator.wallpaper_source
+    active_ss_id = coordinator.screensaver_photo_source
+
     return {
         **base,
         "capabilities": device_capabilities,
@@ -1772,6 +1936,12 @@ def build_studio_state_payload(
             "latter_device_id": latter_dev.id if latter_dev is not None else "",
         },
         "live": {
+            "active_wallpaper_id": active_wp_id,
+            "active_wallpaper_thumb_url": wp_thumb_by_id.get(active_wp_id, ""),
+            "wallpaper_pool_count": len(wp_pool),
+            "active_screensaver_photo_id": active_ss_id,
+            "active_screensaver_photo_thumb_url": wp_thumb_by_id.get(active_ss_id, ""),
+            "screensaver_pool_count": len(ss_pool),
             "active_area_name": (
                 coordinator.get_current_area_and_distance()[0]
                 if coordinator.is_ble_tag

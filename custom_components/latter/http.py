@@ -17,7 +17,7 @@ import shutil
 import socket
 import time
 from typing import TYPE_CHECKING
-from urllib.parse import quote_plus, urlparse, urlsplit
+from urllib.parse import quote, quote_plus, urlparse, urlsplit
 import wave
 
 from aiohttp import ClientTimeout, web
@@ -38,7 +38,7 @@ from .const import (
     API_MAP_PROXY_PATH,
     API_WALLPAPER_PROXY_PATH,
     API_WALLPAPER_UPLOAD_PATH,
-    CONF_WALLPAPER_FAVORITES,
+    CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
     DEFAULT_ART_SIZE,
     DOMAIN,
@@ -47,13 +47,20 @@ from .const import (
     normalize_noise_reduction,
 )
 from .wallpapers import (
+    DAY_NIGHT_SKY_NATIVE_URL,
+    DAY_NIGHT_SKY_PRESET_ID,
     MAX_WALLPAPER_UPLOAD_BYTES,
+    crop_and_fit_image,
+    get_photo_crop,
+    get_photo_crop_hash,
     get_wallpaper_root,
+    list_photo_collections,
     list_wallpaper_catalog,
-    parse_upload_source,
-    read_upload_bytes,
+    parse_photo_source,
+    read_photo_bytes,
     render_builtin_preset_image,
-    save_uploaded_wallpaper_bytes,
+    resolve_media_path,
+    save_uploaded_photo_bytes,
 )
 
 if TYPE_CHECKING:
@@ -326,21 +333,60 @@ class UrlSigner:
         width: int,
         height: int,
         shape: str,
+        *,
+        mode: str = "wallpaper",
+        crop_hash: str = "",
     ) -> str:
-        """Build the device-scoped Baseline-JPEG photo wallpaper URL."""
+        """Build the device-scoped Baseline-JPEG wallpaper or screensaver photo URL."""
         clean_src = (wallpaper_source or "").strip()
         if not clean_src:
             return ""
+        clean_mode = (
+            "screensaver"
+            if str(mode or "").strip().lower() == "screensaver"
+            else "wallpaper"
+        )
+        if clean_mode == "wallpaper" and clean_src == DAY_NIGHT_SKY_PRESET_ID:
+            return DAY_NIGHT_SKY_NATIVE_URL
         base_url = self.get_lan_base_url()
         sig = self.sign_payload_resource(
-            f"wallpaper:{clean_src}|{width}|{height}|{shape}"
+            f"wallpaper:{clean_src}|{width}|{height}|{shape}|{clean_mode}"
+        )
+        c_hash = crop_hash or (
+            get_photo_crop_hash(clean_src) if parse_photo_source(clean_src) else ""
         )
         digest = hashlib.md5(
-            f"{clean_src}|{shape}|{width}x{height}".encode()
+            f"{clean_src}|{shape}|{width}x{height}|{clean_mode}|{c_hash}".encode()
         ).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/wallpaper/{device_slug}"
-            f"?w={width}&h={height}&shape={shape}&sig={sig}&v={digest}"
+            f"?w={width}&h={height}&shape={shape}&mode={clean_mode}"
+            f"&src={quote(clean_src, safe='')}&sig={sig}&v={digest}"
+        )
+
+    def build_media_preview_url(
+        self,
+        root: str,
+        relpath: str,
+        width: int = 160,
+        height: int = 160,
+    ) -> str:
+        """Build a short-lived (600 s) signed thumbnail URL for an HA `/media` file."""
+        clean_root = str(root or "").strip()
+        clean_rel = str(relpath or "").strip()
+        if not clean_root or not clean_rel:
+            return ""
+        w = max(32, min(240, int(width)))
+        h = max(32, min(240, int(height)))
+        sig = self.sign_on_demand_resource(
+            f"media_preview:{clean_root}|{clean_rel}|{w}|{h}",
+            ttl_s=ON_DEMAND_TTL_SECONDS,
+        )
+        return (
+            f"/api/latter/wallpaper/system"
+            f"?media_root={quote(clean_root, safe='')}"
+            f"&media_path={quote(clean_rel, safe='')}"
+            f"&w={w}&h={h}&sig={sig}"
         )
 
     def build_proxy_art_url(
@@ -370,8 +416,11 @@ HTTP_USER_AGENT = (
 )
 
 MAX_ART_CACHE_ENTRIES = 24
+MAX_THUMB_CACHE_ENTRIES = 128
+THUMB_CACHE_MAX_DIM = 240
 MAX_UPSTREAM_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB hard stream cap on upstream artwork downloads
 _ARTWORK_LRU_CACHE: OrderedDict[tuple[str, int, int, bool, float], bytes] = OrderedDict()
+_THUMB_LRU_CACHE: OrderedDict[tuple[str, int, int, bool, float], bytes] = OrderedDict()
 
 _CIRCULAR_MASK_CACHE: dict[tuple[int, int], tuple[Image.Image, Image.Image]] = {}
 
@@ -387,8 +436,9 @@ _ACTIVE_DEVICE_STREAMS: dict[str, asyncio.subprocess.Process] = {}
 
 
 def clear_http_caches() -> None:
-    """Clear in-memory LRU caches for artwork, maps, and circular masks."""
+    """Clear in-memory LRU caches for artwork, thumbnails, maps, and circular masks."""
     _ARTWORK_LRU_CACHE.clear()
+    _THUMB_LRU_CACHE.clear()
     _MAP_GEOCODE_CACHE.clear()
     _MAP_JPEG_CACHE.clear()
     _OSM_TILE_CACHE.clear()
@@ -516,17 +566,101 @@ def _transcode_to_baseline_jpeg(
         return out.getvalue()
 
 
+def _transcode_photo_to_baseline_jpeg(
+    raw_bytes: bytes,
+    width: int,
+    height: int,
+    *,
+    circular_mask: bool = False,
+    darken: float = 0.78,
+    crop_x: float = 0.5,
+    crop_y: float = 0.5,
+    crop_zoom: float = 1.0,
+    original_aspect: bool = False,
+) -> bytes:
+    """Decode a library photo, apply non-destructive crop (or preserve original aspect), and encode Baseline JPEG."""
+    with Image.open(io.BytesIO(raw_bytes)) as img:
+        rgb = img.convert("RGB")
+        if original_aspect:
+            max_edge = max(64, min(1600, max(int(width), int(height))))
+            w, h = rgb.size
+            if max(w, h) > max_edge:
+                scale = float(max_edge) / float(max(w, h))
+                fitted = rgb.resize(
+                    (max(1, round(w * scale)), max(1, round(h * scale))),
+                    resample=Image.Resampling.LANCZOS,
+                )
+            else:
+                fitted = rgb.copy()
+        else:
+            fitted = crop_and_fit_image(rgb, width, height, crop_x, crop_y, crop_zoom)
+            if darken < 1.0:
+                fitted = ImageEnhance.Brightness(fitted).enhance(darken)
+            if circular_mask:
+                mask, black_bg = _get_circular_mask_surfaces(width, height)
+                fitted = Image.composite(fitted, black_bg, mask)
+
+        out = io.BytesIO()
+        fitted.save(
+            out,
+            format="JPEG",
+            quality=88 if original_aspect else 85,
+            optimize=True,
+            progressive=False,
+            subsampling=2,
+        )
+        return out.getvalue()
+
+
+def _transcode_media_preview_jpeg(
+    file_path: Path, width: int, height: int
+) -> bytes:
+    """Read an HA `/media` image (<= 15 MB), EXIF-transpose, and encode a thumbnail Baseline JPEG."""
+    size = file_path.stat().st_size
+    if size <= 0 or size > MAX_WALLPAPER_UPLOAD_BYTES:
+        raise ValueError("Media file exceeds 15 MB preview cap")
+    raw_bytes = file_path.read_bytes()
+    with Image.open(io.BytesIO(raw_bytes)) as img:
+        rgb = ImageOps.exif_transpose(img).convert("RGB")
+        fitted = ImageOps.fit(
+            rgb,
+            (width, height),
+            method=Image.Resampling.LANCZOS,
+            centering=(0.5, 0.5),
+        )
+        out = io.BytesIO()
+        fitted.save(
+            out,
+            format="JPEG",
+            quality=80,
+            optimize=True,
+            progressive=False,
+            subsampling=2,
+        )
+        return out.getvalue()
+
+
 def _render_preset_to_baseline_jpeg(
     preset_id: str,
     width: int,
     height: int,
     circular_mask: bool = False,
     darken: float = 0.78,
+    *,
+    mode: str = "wallpaper",
+    is_night: bool = False,
 ) -> bytes:
-    """Render a bundled default wallpaper directly to Baseline JPEG in a single pass."""
-    fitted = render_builtin_preset_image(preset_id, width, height)
-    if darken < 1.0:
-        fitted = ImageEnhance.Brightness(fitted).enhance(darken)
+    """Render a bundled default wallpaper or Day & Night Sky directly to Baseline JPEG."""
+    fitted = render_builtin_preset_image(
+        preset_id, width, height, mode=mode, is_night=is_night
+    )
+    eff_darken = (
+        1.0
+        if preset_id == DAY_NIGHT_SKY_PRESET_ID and mode != "screensaver"
+        else darken
+    )
+    if eff_darken < 1.0:
+        fitted = ImageEnhance.Brightness(fitted).enhance(eff_darken)
     if circular_mask:
         mask, black_bg = _get_circular_mask_surfaces(width, height)
         fitted = Image.composite(fitted, black_bg, mask)
@@ -542,12 +676,24 @@ def _render_preset_to_baseline_jpeg(
     return out.getvalue()
 
 
+def _cache_for_dims(
+    width: int, height: int
+) -> tuple[OrderedDict[tuple[str, int, int, bool, float], bytes], int]:
+    """Select the 128-entry thumbnail cache (<= 240 px) or 24-entry full-size art cache."""
+    if max(int(width), int(height)) <= THUMB_CACHE_MAX_DIM:
+        return _THUMB_LRU_CACHE, MAX_THUMB_CACHE_ENTRIES
+    return _ARTWORK_LRU_CACHE, MAX_ART_CACHE_ENTRIES
+
+
 def evict_wallpaper_lru_cache(source_id: str) -> None:
-    """Evict all cached resolutions/shapes for a deleted or updated wallpaper source."""
+    """Evict all cached full-size and thumbnail entries for a deleted or recropped photo."""
     prefix = f"wp:{source_id}"
-    stale_keys = [k for k in _ARTWORK_LRU_CACHE if k[0] == prefix]
-    for k in stale_keys:
-        _ARTWORK_LRU_CACHE.pop(k, None)
+    for cache in (_ARTWORK_LRU_CACHE, _THUMB_LRU_CACHE):
+        stale_keys = [
+            k for k in cache if k[0] == prefix or k[0].startswith(f"{prefix}:")
+        ]
+        for k in stale_keys:
+            cache.pop(k, None)
 
 
 def _parse_dimensions_and_shape(
@@ -796,7 +942,7 @@ class LatterArtworkTranscoderView(HomeAssistantView):
 
 
 class LatterWallpaperProxyView(HomeAssistantView):
-    """Serves signed Baseline-JPEG wallpapers (/api/latter/wallpaper/{target_device}), including zero-device 'system' scope."""
+    """Serves signed Baseline-JPEG wallpapers, Photo Frame screensavers, originals, and `/media` previews."""
 
     requires_auth = False
     url = API_WALLPAPER_PROXY_PATH
@@ -807,15 +953,95 @@ class LatterWallpaperProxyView(HomeAssistantView):
         self.hass = hass
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
-        """Handle GET /api/latter/wallpaper/{target_device}?w=...&h=...&src=..."""
+        """Handle GET /api/latter/wallpaper/{target_device}?w=...&h=...&mode=...&src=..."""
         from .coordinator import resolve_coordinator
         from .hub import get_latter_system
 
+        # On-demand signed `/media` preview thumbnail path (`system` scope only)
+        media_root = str(request.query.get("media_root") or "").strip()
+        media_path = str(request.query.get("media_path") or "").strip()
+        if media_root or media_path:
+            if normalize_device_slug(target_device) != "system":
+                return web.Response(
+                    status=HTTPStatus.FORBIDDEN,
+                    text="Media previews require system scope",
+                )
+            sys_obj = get_latter_system(self.hass)
+            if sys_obj is None:
+                return web.Response(
+                    status=HTTPStatus.NOT_FOUND, text="Latter System not initialized"
+                )
+            width, height, _is_circle, _shape_str = _parse_dimensions_and_shape(
+                request,
+                160,
+                160,
+                min_dim=32,
+                max_dim=THUMB_CACHE_MAX_DIM,
+                default_circle=False,
+            )
+            if not sys_obj.url_signer.verify_resource(
+                f"media_preview:{media_root}|{media_path}|{width}|{height}",
+                sig=request.query.get("sig"),
+            ):
+                return web.Response(
+                    status=HTTPStatus.FORBIDDEN, text="Invalid signature"
+                )
+            media_dirs = getattr(self.hass.config, "media_dirs", None)
+            resolved = await self.hass.async_add_executor_job(
+                resolve_media_path, media_dirs, media_root, media_path
+            )
+            if resolved is None or not resolved.is_file():
+                return web.Response(
+                    status=HTTPStatus.NOT_FOUND, text="Media file not found"
+                )
+            m_key = (f"media:{media_root}/{media_path}", width, height, False, 1.0)
+            cached_m = _THUMB_LRU_CACHE.get(m_key)
+            if cached_m is not None:
+                _THUMB_LRU_CACHE.move_to_end(m_key)
+                return web.Response(
+                    body=cached_m,
+                    content_type="image/jpeg",
+                    headers={
+                        "Cache-Control": "private, max-age=300",
+                        "X-Latter-Cache": "HIT",
+                    },
+                )
+            try:
+                jpeg_bytes = await self.hass.async_add_executor_job(
+                    _transcode_media_preview_jpeg, resolved, width, height
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Media preview transcode failed: %s", err)
+                return web.Response(
+                    status=HTTPStatus.UNPROCESSABLE_ENTITY,
+                    text="Media preview error",
+                )
+            _THUMB_LRU_CACHE[m_key] = jpeg_bytes
+            if len(_THUMB_LRU_CACHE) > MAX_THUMB_CACHE_ENTRIES:
+                _THUMB_LRU_CACHE.popitem(last=False)
+            return web.Response(
+                body=jpeg_bytes,
+                content_type="image/jpeg",
+                headers={
+                    "Cache-Control": "private, max-age=300",
+                    "X-Latter-Cache": "MISS",
+                },
+            )
+
+        mode_raw = str(request.query.get("mode") or "wallpaper").strip().lower()
+        if mode_raw not in ("wallpaper", "screensaver", "original"):
+            return web.Response(
+                status=HTTPStatus.BAD_REQUEST, text="Invalid wallpaper mode"
+            )
+
         coordinator = resolve_coordinator(self.hass, target_device)
         if coordinator is not None:
-            wp_source = str(
-                request.query.get("src") or coordinator.wallpaper_source
-            ).strip()
+            fallback_src = (
+                coordinator.screensaver_photo_source
+                if mode_raw == "screensaver"
+                else coordinator.wallpaper_source
+            )
+            wp_source = str(request.query.get("src") or fallback_src).strip()
             if not wp_source:
                 return web.Response(
                     status=HTTPStatus.NOT_FOUND, text="No wallpaper configured"
@@ -828,7 +1054,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
                 default_circle=(coordinator.display_shape == "circle"),
             )
             verified = coordinator.verify_resource(
-                f"wallpaper:{wp_source}|{width}|{height}|{shape_str}",
+                f"wallpaper:{wp_source}|{width}|{height}|{shape_str}|{mode_raw}",
                 sig=request.query.get("sig"),
             )
         elif normalize_device_slug(target_device) == "system":
@@ -849,7 +1075,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
                 default_circle=False,
             )
             verified = sys_obj.url_signer.verify_resource(
-                f"wallpaper:{wp_source}|{width}|{height}|{shape_str}",
+                f"wallpaper:{wp_source}|{width}|{height}|{shape_str}|{mode_raw}",
                 sig=request.query.get("sig"),
             )
         else:
@@ -860,11 +1086,20 @@ class LatterWallpaperProxyView(HomeAssistantView):
         if not verified:
             return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
-        darken_factor = 0.78
-        cache_key = (f"wp:{wp_source}", width, height, is_circle, darken_factor)
-        cached_bytes = _ARTWORK_LRU_CACHE.get(cache_key)
+        darken_factor = 0.78 if mode_raw == "wallpaper" else 1.0
+        sun_state = self.hass.states.get("sun.sun")
+        is_night = bool(sun_state is not None and sun_state.state == "below_horizon")
+        cache_tag = f"wp:{wp_source}"
+        if mode_raw == "original":
+            cache_tag = f"wp:{wp_source}:orig"
+        elif wp_source == DAY_NIGHT_SKY_PRESET_ID and mode_raw == "screensaver":
+            cache_tag = f"wp:{wp_source}:{'night' if is_night else 'day'}"
+
+        cache_bucket, cache_limit = _cache_for_dims(width, height)
+        cache_key = (cache_tag, width, height, is_circle, darken_factor)
+        cached_bytes = cache_bucket.get(cache_key)
         if cached_bytes is not None:
-            _ARTWORK_LRU_CACHE.move_to_end(cache_key)
+            cache_bucket.move_to_end(cache_key)
             return web.Response(
                 body=cached_bytes,
                 content_type="image/jpeg",
@@ -877,12 +1112,15 @@ class LatterWallpaperProxyView(HomeAssistantView):
         if wp_source.startswith("preset:"):
             try:
                 jpeg_bytes = await self.hass.async_add_executor_job(
-                    _render_preset_to_baseline_jpeg,
-                    wp_source,
-                    width,
-                    height,
-                    is_circle,
-                    darken_factor,
+                    lambda: _render_preset_to_baseline_jpeg(
+                        wp_source,
+                        width,
+                        height,
+                        is_circle if mode_raw != "original" else False,
+                        darken_factor,
+                        mode=mode_raw,
+                        is_night=is_night,
+                    )
                 )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Wallpaper preset rendering failed: %s", err)
@@ -890,22 +1128,28 @@ class LatterWallpaperProxyView(HomeAssistantView):
                     status=HTTPStatus.UNPROCESSABLE_ENTITY,
                     text="Wallpaper processing error",
                 )
-        elif parse_upload_source(wp_source) is not None:
+        elif parse_photo_source(wp_source) is not None:
             raw_bytes = await self.hass.async_add_executor_job(
-                read_upload_bytes, get_wallpaper_root(self.hass), wp_source
+                read_photo_bytes, get_wallpaper_root(self.hass), wp_source
             )
             if not raw_bytes:
                 return web.Response(
                     status=HTTPStatus.NOT_FOUND, text="Wallpaper source unreadable"
                 )
+            crop = get_photo_crop(wp_source)
             try:
                 jpeg_bytes = await self.hass.async_add_executor_job(
-                    _transcode_to_baseline_jpeg,
-                    raw_bytes,
-                    width,
-                    height,
-                    is_circle,
-                    darken_factor,
+                    lambda: _transcode_photo_to_baseline_jpeg(
+                        raw_bytes,
+                        width,
+                        height,
+                        circular_mask=(is_circle and mode_raw != "original"),
+                        darken=darken_factor,
+                        crop_x=crop.x,
+                        crop_y=crop.y,
+                        crop_zoom=crop.zoom,
+                        original_aspect=(mode_raw == "original"),
+                    )
                 )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Wallpaper Pillow processing failed: %s", err)
@@ -918,9 +1162,9 @@ class LatterWallpaperProxyView(HomeAssistantView):
                 status=HTTPStatus.FORBIDDEN, text="Unsupported wallpaper source"
             )
 
-        _ARTWORK_LRU_CACHE[cache_key] = jpeg_bytes
-        if len(_ARTWORK_LRU_CACHE) > MAX_ART_CACHE_ENTRIES:
-            _ARTWORK_LRU_CACHE.popitem(last=False)
+        cache_bucket[cache_key] = jpeg_bytes
+        if len(cache_bucket) > cache_limit:
+            cache_bucket.popitem(last=False)
 
         return web.Response(
             body=jpeg_bytes,
@@ -929,19 +1173,27 @@ class LatterWallpaperProxyView(HomeAssistantView):
         )
 
 
+def _parse_multipart_float(raw: str, default: float) -> float:
+    try:
+        val = float(raw)
+        return val if math.isfinite(val) else default
+    except (TypeError, ValueError):
+        return default
+
+
 class LatterWallpaperUploadView(HomeAssistantView):
-    """Admin-authenticated multipart wallpaper upload endpoint (`POST /api/latter/wallpaper/upload`, <= 15 MB)."""
+    """Admin-authenticated multipart photo upload endpoint (`POST /api/latter/wallpaper/upload`, <= 15 MB)."""
 
     requires_auth = True
     url = API_WALLPAPER_UPLOAD_PATH
     name = "api:latter:wallpaper_upload"
 
     def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the multipart wallpaper upload view."""
+        """Initialize the multipart photo upload view."""
         self.hass = hass
 
     async def post(self, request: web.Request) -> web.Response:
-        """Handle admin multipart/form-data upload (`file` <= 15 MB, optional `device_slug` / `subentry_id`)."""
+        """Handle admin multipart/form-data upload (`file` <= 15 MB, optional crop/name/collection/device)."""
         from .coordinator import resolve_coordinator
         from .hub import get_latter_system, iter_coordinators
         from .presence import get_ble_fabric
@@ -967,8 +1219,13 @@ class LatterWallpaperUploadView(HomeAssistantView):
         explicit_device_slug = str(request.query.get("device_slug") or "").strip()
         target_slug = normalize_device_slug(explicit_device_slug or "system")
         subentry_id = str(request.query.get("subentry_id") or "").strip()
-        filename = "wallpaper.jpg"
+        filename = "photo.jpg"
         raw_bytes: bytes | None = None
+        crop_x = 0.5
+        crop_y = 0.5
+        crop_zoom = 1.0
+        photo_name: str | None = None
+        collection_id: str | None = None
 
         try:
             reader = await request.multipart()
@@ -994,6 +1251,20 @@ class LatterWallpaperUploadView(HomeAssistantView):
                 val = (await part.text()).strip()
                 if val:
                     subentry_id = val
+            elif field_name == "crop_x":
+                crop_x = _parse_multipart_float((await part.text()).strip(), 0.5)
+            elif field_name == "crop_y":
+                crop_y = _parse_multipart_float((await part.text()).strip(), 0.5)
+            elif field_name == "crop_zoom":
+                crop_zoom = _parse_multipart_float((await part.text()).strip(), 1.0)
+            elif field_name == "name":
+                val = (await part.text()).strip()
+                if val:
+                    photo_name = val
+            elif field_name == "collection_id":
+                val = (await part.text()).strip()
+                if val:
+                    collection_id = val
             elif field_name == "file":
                 filename = str(getattr(part, "filename", None) or filename)
                 chunks = bytearray()
@@ -1027,7 +1298,6 @@ class LatterWallpaperUploadView(HomeAssistantView):
                     {"error": f"Unknown subentry_id: {subentry_id}"},
                     status=HTTPStatus.NOT_FOUND,
                 )
-            target_slug = coord.device_slug
         elif explicit_device_slug and target_slug != "system":
             coord = resolve_coordinator(self.hass, target_slug)
             if coord is None:
@@ -1035,22 +1305,29 @@ class LatterWallpaperUploadView(HomeAssistantView):
                     {"error": f"Unknown device_slug: {target_slug}"},
                     status=HTTPStatus.NOT_FOUND,
                 )
-            target_slug = coord.device_slug
 
         try:
-            source_id, out_filename = await self.hass.async_add_executor_job(
-                save_uploaded_wallpaper_bytes,
-                self.hass,
-                target_slug,
-                filename,
-                raw_bytes,
+            saved_photo = await self.hass.async_add_executor_job(
+                lambda: save_uploaded_photo_bytes(
+                    self.hass,
+                    filename,
+                    raw_bytes,
+                    crop_x=crop_x,
+                    crop_y=crop_y,
+                    crop_zoom=crop_zoom,
+                    name=photo_name,
+                    collection_id=collection_id,
+                )
             )
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Wallpaper multipart upload failed: %s", err)
+            _LOGGER.debug("Photo multipart upload failed: %s", err)
             return web.json_response(
                 {"error": f"Invalid image upload: {err}"},
                 status=HTTPStatus.UNPROCESSABLE_ENTITY,
             )
+
+        source_id = str(saved_photo["id"])
+        out_filename = str(saved_photo["filename"])
 
         sys_obj = get_latter_system(self.hass)
         sys_signer = (
@@ -1066,16 +1343,14 @@ class LatterWallpaperUploadView(HomeAssistantView):
             sign_resource=sys_signer,
             display_shape="square",
         )
+        photo_collections = list_photo_collections()
 
         if coord is not None:
             async with coord.config_lock:
-                favs = list(coord.wallpaper_favorites)
-                if source_id not in favs:
-                    favs.append(source_id)
                 merged = {
                     **coord.device_data,
+                    CONF_WALLPAPER_MODE: "single",
                     CONF_WALLPAPER_SOURCE: source_id,
-                    CONF_WALLPAPER_FAVORITES: favs,
                 }
                 coord.current_wallpaper = source_id
                 coord._configured_wallpaper_source = source_id
@@ -1095,11 +1370,17 @@ class LatterWallpaperUploadView(HomeAssistantView):
             wallpapers = system_wallpapers
             get_ble_fabric(self.hass).notify_occupancy_listeners()
 
+        photo_entry = next(
+            (w for w in system_wallpapers if w.get("id") == source_id), saved_photo
+        )
         return web.json_response(
             {
                 "ok": True,
+                "photo_id": source_id,
                 "filename": out_filename,
                 "source_id": source_id,
+                "photo": photo_entry,
+                "photo_collections": photo_collections,
                 "wallpapers": wallpapers,
                 "system_wallpapers": system_wallpapers,
             }

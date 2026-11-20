@@ -24,12 +24,39 @@ import type {
   DeviceConfig,
   DevicePrefItem,
   EspHomeEntityItem,
+  PhotoItem,
+  PhotoPoolMode,
+  PhotoPoolTarget,
   ShortcutItem,
-  StudioScope,
   StudioStatePayload,
   SystemConfig,
 } from "../types.js";
 import { isValidHexColor } from "../utils/format.js";
+import {
+  applyPhotoPickerModalOp,
+  browseMediaFolderOp,
+  bulkUpdatePhotosOp,
+  closeMediaImportModalOp,
+  closePhotoEditModalOp,
+  closePhotoPickerModalOp,
+  closePhotoUploadModalOp,
+  createPhotoCollectionOp,
+  deletePhotoOp,
+  importSelectedMediaOp,
+  openMediaImportModalOp,
+  openPhotoEditModalOp,
+  openPhotoPickerModalOp,
+  openPhotoUploadModalOp,
+  removeStagedUploadOp,
+  renamePhotoCollectionOp,
+  requestBulkDeletePhotosOp,
+  requestDeletePhotoCollectionOp,
+  requestDeletePhotoOp,
+  savePhotoEditModalOp,
+  setDevicePhotoPoolOp,
+  stageUploadFilesOp,
+  uploadAllStagedPhotosOp,
+} from "./photo-ops.js";
 import {
   addRemoteGroupRowOp,
   addStringListRowOp,
@@ -1246,7 +1273,7 @@ export class EntityController {
     saveShortcutModalOp(this.store);
   }
 
-  // ---------- Colors & Wallpapers ----------
+  // ---------- Colors, Photo Library, Media Import & Device Photo Pools ----------
 
   applyDeviceCustomColor(hex: string, switchColorProfile = true): void {
     if (!isValidHexColor(hex)) return;
@@ -1264,174 +1291,142 @@ export class EntityController {
     this.stageSystemSetting("custom_palettes", next);
   }
 
-  async uploadWallpaper(scope: StudioScope): Promise<void> {
-    const file =
-      scope === "device"
-        ? this.store.selectedDeviceWallpaperFile
-        : this.store.selectedSystemWallpaperFile;
-    if (!file) {
-      this.store.showToast("Choose an image file first", true);
-      return;
-    }
-    const targetSubentryId = scope === "device" ? this.store.activeSubentryId : undefined;
-    if (scope === "device" && !targetSubentryId) {
-      this.store.showToast("Choose a Device first", true);
-      return;
-    }
-
-    this.store.uploadScope = scope;
-    this.store.uploadBusy = true;
-    this.store.uploadPercent = 0;
-    this.store.host.requestUpdate();
-
-    try {
-      const result = await this.store.ws.uploadWallpaperMultipart({
-        scope,
-        subentryId: targetSubentryId,
-        file,
-        onProgress: (pct) => {
-          this.store.uploadPercent = pct;
-          this.store.host.requestUpdate();
-        },
-      });
-      if (scope === "device") {
-        this.store.selectedDeviceWallpaperFile = null;
-      } else {
-        this.store.selectedSystemWallpaperFile = null;
-      }
-      const inputId = scope === "device" ? "input-upload-wp" : "input-upload-sys-wp";
-      this.store.mergeDomRevert({ [inputId]: "" });
-      if (this.store.state) {
-        if (
-          result.wallpapers &&
-          scope === "device" &&
-          this.store.activeSubentryId === targetSubentryId
-        ) {
-          this.store.state = { ...this.store.state, wallpapers: result.wallpapers };
-        }
-        if (result.system_wallpapers) {
-          this.store.state = {
-            ...this.store.state,
-            system_wallpapers: result.system_wallpapers,
-          };
-        }
-      }
-      await this.store.refreshState();
-      this.store.showToast("Uploaded wallpaper");
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Wallpaper upload failed"), true);
-    } finally {
-      this.store.uploadBusy = false;
-      this.store.uploadScope = null;
-      this.store.uploadPercent = 0;
-      this.store.host.requestUpdate();
-    }
+  openPhotoUploadModal(options?: {
+    defaultCollectionId?: string;
+    onComplete?: (uploadedIds: string[]) => void;
+  }): void {
+    openPhotoUploadModalOp(this.store, options);
   }
 
-  private clearPendingWallpaperCycle(targetSubentryId: string): void {
-    const bucket = this.store.pendingDeviceBuckets.get(targetSubentryId);
-    if (!bucket || !("wallpaper_cycle_minutes" in bucket.patch)) return;
-    delete bucket.patch.wallpaper_cycle_minutes;
-    delete bucket.previousValues.wallpaper_cycle_minutes;
-    delete bucket.previousValues["__dom:cfg-wallpaper_cycle_minutes"];
-    if (Object.keys(bucket.patch).length === 0) {
-      if (bucket.timer) clearTimeout(bucket.timer);
-      this.store.pendingDeviceBuckets.delete(targetSubentryId);
-    }
+  closePhotoUploadModal(): void {
+    closePhotoUploadModalOp(this.store);
   }
 
-  async selectWallpaperSource(sourceId: string): Promise<void> {
-    const targetSubentryId = this.store.activeSubentryId;
-    if (!targetSubentryId) return;
-    this.clearPendingWallpaperCycle(targetSubentryId);
-    try {
-      const res = await this.store.ws.runDeviceCommand(targetSubentryId, "select_wallpaper", {
-        source_id: sourceId,
-      });
-      if (res && this.store.activeSubentryId === targetSubentryId) {
-        this.store.ingestPayload(res, false);
-      }
-      this.store.showToast(sourceId ? "Wallpaper applied" : "Wallpaper turned off");
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not select wallpaper"), true);
-    }
+  stageUploadFiles(fileList: FileList | readonly File[]): void {
+    stageUploadFilesOp(this.store, fileList);
+  }
+
+  removeStagedUpload(index: number): void {
+    removeStagedUploadOp(this.store, index);
+  }
+
+  async uploadAllStagedPhotos(): Promise<void> {
+    await uploadAllStagedPhotosOp(this.store);
+  }
+
+  openPhotoEditModal(photo: PhotoItem): void {
+    openPhotoEditModalOp(this.store, photo);
+  }
+
+  closePhotoEditModal(): void {
+    closePhotoEditModalOp(this.store);
+  }
+
+  async savePhotoEditModal(): Promise<void> {
+    await savePhotoEditModalOp(this.store);
+  }
+
+  async createPhotoCollection(name: string): Promise<void> {
+    await createPhotoCollectionOp(this.store, name);
+  }
+
+  async renamePhotoCollection(collectionId: string, name: string): Promise<void> {
+    await renamePhotoCollectionOp(this.store, collectionId, name);
+  }
+
+  requestDeletePhotoCollection(collectionId: string, name: string): void {
+    requestDeletePhotoCollectionOp(this.store, collectionId, name);
+  }
+
+  async deletePhoto(photoId: string): Promise<void> {
+    await deletePhotoOp(this.store, photoId);
+  }
+
+  requestDeletePhoto(photoId: string, name?: string): void {
+    requestDeletePhotoOp(this.store, photoId, name);
+  }
+
+  async bulkUpdatePhotos(options: {
+    addCollection?: string;
+    removeCollection?: string;
+    deletePhotos?: boolean;
+  }): Promise<void> {
+    await bulkUpdatePhotosOp(this.store, options);
+  }
+
+  requestBulkDeletePhotos(): void {
+    requestBulkDeletePhotosOp(this.store);
+  }
+
+  openMediaImportModal(): void {
+    openMediaImportModalOp(this.store);
+  }
+
+  closeMediaImportModal(): void {
+    closeMediaImportModalOp(this.store);
+  }
+
+  async browseMediaFolder(root?: string, subpath?: string): Promise<void> {
+    await browseMediaFolderOp(this.store, root, subpath);
+  }
+
+  async importSelectedMedia(): Promise<void> {
+    await importSelectedMediaOp(this.store);
+  }
+
+  openPhotoPickerModal(target: PhotoPoolTarget): void {
+    openPhotoPickerModalOp(this.store, target);
+  }
+
+  closePhotoPickerModal(): void {
+    closePhotoPickerModalOp(this.store);
+  }
+
+  async applyPhotoPickerModal(): Promise<void> {
+    await applyPhotoPickerModalOp(this.store);
+  }
+
+  async setDevicePhotoPool(
+    options: {
+      target: PhotoPoolTarget;
+      mode: PhotoPoolMode;
+      sourceId?: string;
+      collectionId?: string;
+      photoIds?: readonly string[];
+      cycleMinutes?: number;
+      shuffle?: boolean;
+    },
+    toastMessage?: string,
+  ): Promise<boolean> {
+    return setDevicePhotoPoolOp(this.store, options, toastMessage);
   }
 
   async setWallpaperRotation(minutes: number): Promise<void> {
-    const targetSubentryId = this.store.activeSubentryId;
-    if (!targetSubentryId) return;
+    const cfg = this.store.state?.config || {};
     const cleanMins = Math.max(0, Math.round(Number(minutes) || 0));
-    this.clearPendingWallpaperCycle(targetSubentryId);
-    this.stageDeviceSetting("wallpaper_cycle_minutes", cleanMins, "cfg-wallpaper_cycle_minutes", 0);
-    await this.flushDeviceBucket(targetSubentryId);
+    const mode = String(cfg.wallpaper_mode || "off") as PhotoPoolMode;
+    await setDevicePhotoPoolOp(this.store, {
+      target: "wallpaper",
+      mode,
+      sourceId: String(cfg.wallpaper_source || ""),
+      collectionId: String(cfg.wallpaper_collection || ""),
+      photoIds: Array.isArray(cfg.wallpaper_favorites) ? cfg.wallpaper_favorites : [],
+      cycleMinutes: cleanMins,
+    });
   }
 
-  async toggleWallpaperFav(sourceId: string): Promise<void> {
-    const targetSubentryId = this.store.activeSubentryId;
-    if (!targetSubentryId) return;
-    try {
-      const res = await this.store.ws.runDeviceCommand(
-        targetSubentryId,
-        "toggle_wallpaper_favorite",
-        { source_id: sourceId },
-      );
-      if (res && this.store.activeSubentryId === targetSubentryId) {
-        this.store.ingestPayload(res, false);
-      }
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not update favorite"), true);
-    }
-  }
-
-  async setAllWallpaperFavorites(sourceIds: readonly string[]): Promise<void> {
-    const targetSubentryId = this.store.activeSubentryId;
-    if (!targetSubentryId) return;
-    try {
-      const res = await this.store.ws.runDeviceCommand(
-        targetSubentryId,
-        "toggle_wallpaper_favorite",
-        { source_ids: [...sourceIds] },
-      );
-      if (res && this.store.activeSubentryId === targetSubentryId) {
-        this.store.ingestPayload(res, false);
-      }
-      this.store.showToast(
-        sourceIds.length > 0 ? "Starred all wallpapers" : "Cleared starred wallpapers",
-      );
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not update favorites"), true);
-    }
-  }
-
-  async deleteWallpaper(sourceId: string): Promise<void> {
-    const cleanId = String(sourceId || "").trim();
-    if (!cleanId) return;
-    try {
-      const res = await this.store.ws.runSystemCommand(
-        "delete_wallpaper",
-        { source_id: cleanId },
-        this.store.activeSubentryId || null,
-      );
-      if (res) this.store.ingestPayload(res, false);
-      this.store.showToast("Deleted wallpaper");
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not delete wallpaper"), true);
-    }
-  }
-
-  requestDeleteWallpaper(sourceId: string, name?: string): void {
-    const cleanId = String(sourceId || "").trim();
-    if (!cleanId) return;
-    const label = String(name || cleanId).trim();
-    this.store.openConfirm({
-      kind: "delete_wallpaper",
-      title: this.store.t("confirm.delete_wallpaper.title", { name: label }),
-      consequence: this.store.t("confirm.delete_wallpaper.body"),
-      confirmLabel: this.store.t("confirm.delete_wallpaper.confirm"),
-      danger: true,
-      onConfirm: async () => {
-        await this.deleteWallpaper(cleanId);
-      },
+  async setScreensaverRotation(minutes: number, shuffle?: boolean): Promise<void> {
+    const cfg = this.store.state?.config || {};
+    const cleanMins = Math.max(0, Math.round(Number(minutes) || 0));
+    const mode = String(cfg.screensaver_photo_mode || "off") as PhotoPoolMode;
+    await setDevicePhotoPoolOp(this.store, {
+      target: "screensaver",
+      mode,
+      sourceId: String(cfg.screensaver_photo_source || ""),
+      collectionId: String(cfg.screensaver_photo_collection || ""),
+      photoIds: Array.isArray(cfg.screensaver_photo_ids) ? cfg.screensaver_photo_ids : [],
+      cycleMinutes: cleanMins,
+      shuffle: shuffle !== undefined ? shuffle : Boolean(cfg.screensaver_shuffle),
     });
   }
 

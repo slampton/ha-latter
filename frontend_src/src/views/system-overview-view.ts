@@ -10,6 +10,7 @@
 
 import { renderCard, renderSvgIcon } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
+import { isPhotoUploaded } from "../state/photo-ops.js";
 import type { StudioStore } from "../state/store.js";
 import type { AreaPresenceRow, BleAreaSignatureSummary } from "../types.js";
 import { fmtNumber, issueMessage, isValidHexColor } from "../utils/format.js";
@@ -32,6 +33,8 @@ const SYS_ICON_GROUPS =
   "M3,3H11V11H3V3M13,3H21V11H13V3M3,13H11V21H3V13M13,13H21V21H13V13M5,5V9H9V5H5M15,5V9H19V5H15M5,15V19H9V15H5M15,15V19H19V15H15Z";
 const SYS_ICON_PALETTE =
   "M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z";
+const SYS_ICON_PHOTOS =
+  "M22,16V4A2,2 0 0,0 20,2H8A2,2 0 0,0 6,4V16A2,2 0 0,0 8,18H20A2,2 0 0,0 22,16M11,12L13.03,14.71L16,11L20,16H8M2,6V20A2,2 0 0,0 4,22H18V20H4V6";
 const SYS_ICON_SHIELD =
   "M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M12,7C13.4,7 14.8,8.1 14.8,9.5V11C15.4,11 16,11.6 16,12.3V15.8C16,16.4 15.4,17 14.7,17H9.2C8.6,17 8,16.4 8,15.7V12.2C8,11.6 8.6,11 9.2,11V9.5C9.2,8.1 10.6,7 12,7M12,8.2C11.2,8.2 10.5,8.7 10.5,9.5V11H13.5V9.5C13.5,8.7 12.8,8.2 12,8.2Z";
 
@@ -329,10 +332,9 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
   const colorsCount = validPalettes.length;
   const wallpapers = data?.system_wallpapers || [];
   const wallpapersCount = wallpapers.length;
-  const uploadedWallpapersCount = wallpapers.filter(
-    (w) => w.kind === "upload" || w.deletable,
-  ).length;
+  const uploadedWallpapersCount = wallpapers.filter((w) => isPhotoUploaded(w)).length;
   const presetWallpapersCount = Math.max(0, wallpapersCount - uploadedWallpapersCount);
+  const photoCollectionsCount = (data?.photo_collections || []).length;
 
   const hasSystemPin = Boolean(data?.has_security_pin);
 
@@ -919,26 +921,68 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
 
             <button
               type="button"
-              id="cap-colors-wallpapers"
+              id="cap-photo-library"
+              @click=${() => store.openSystemSection("photos")}
+              class="overview-box"
+            >
+              <div class="overview-box-head">
+                <span class="overview-box-title">
+                  ${renderSvgIcon(SYS_ICON_PHOTOS)}
+                  <span>${store.t("sys_overview.cap_photo_library")}</span>
+                </span>
+                <span class="overview-box-end">
+                  <span class="chip ${uploadedWallpapersCount > 0 ? "chip-primary" : ""}">
+                    ${wallpapersCount === 1
+                      ? store.t("sys_overview.photos_count_one")
+                      : store.t("sys_overview.photos_count_many", {
+                          count: fmtNumber(wallpapersCount, store.hass, 0),
+                        })}
+                  </span>
+                  <span class="overview-box-chevron" aria-hidden="true">›</span>
+                </span>
+              </div>
+              <span class="overview-box-meta">
+                ${store.t("sys_overview.photo_library_meta", {
+                  defaults:
+                    presetWallpapersCount === 1
+                      ? store.t("sys_overview.defaults_one")
+                      : store.t("sys_overview.defaults_many", {
+                          count: fmtNumber(presetWallpapersCount, store.hass, 0),
+                        }),
+                  photos:
+                    uploadedWallpapersCount === 1
+                      ? store.t("sys_overview.photos_count_one")
+                      : store.t("sys_overview.photos_count_many", {
+                          count: fmtNumber(uploadedWallpapersCount, store.hass, 0),
+                        }),
+                  collections:
+                    photoCollectionsCount === 1
+                      ? store.t("sys_overview.collections_one")
+                      : store.t("sys_overview.collections_many", {
+                          count: fmtNumber(photoCollectionsCount, store.hass, 0),
+                        }),
+                })}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              id="cap-custom-colors"
               @click=${() =>
-                store.openSystemSection(
-                  "shared_entities",
-                  colorsCount > 0 ? "card-custom-colors" : "card-system-wallpapers",
-                  ["card-custom-colors", "card-system-wallpapers"],
-                )}
+                store.openSystemSection("shared_entities", "card-custom-colors")}
               class="overview-box"
             >
               <div class="overview-box-head">
                 <span class="overview-box-title">
                   ${renderSvgIcon(SYS_ICON_PALETTE)}
-                  <span>${store.t("sys_overview.cap_colors_wallpapers")}</span>
+                  <span>${store.t("sys_overview.cap_custom_colors")}</span>
                 </span>
                 <span class="overview-box-end">
-                  <span class="chip">
-                    ${wallpapersCount === 1
-                      ? store.t("sys_overview.wallpapers_one")
-                      : store.t("sys_overview.wallpapers_many", {
-                          count: fmtNumber(wallpapersCount, store.hass, 0),
+                  <span class="chip ${colorsCount > 0 ? "chip-primary" : ""}">
+                    ${colorsCount === 1
+                      ? store.t("sys_overview.custom_colors_one")
+                      : store.t("sys_overview.custom_colors_many", {
+                          count: fmtNumber(colorsCount, store.hass, 0),
                         })}
                   </span>
                   <span class="overview-box-chevron" aria-hidden="true">›</span>
@@ -956,29 +1000,9 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
                         </span>`
                       : nothing}
                   </div>`
-                : nothing}
-              <span class="overview-box-meta">
-                ${store.t("sys_overview.colors_wallpapers_meta", {
-                  colors:
-                    colorsCount === 1
-                      ? store.t("sys_overview.custom_colors_one")
-                      : store.t("sys_overview.custom_colors_many", {
-                          count: fmtNumber(colorsCount, store.hass, 0),
-                        }),
-                  presets:
-                    presetWallpapersCount === 1
-                      ? store.t("sys_overview.presets_one")
-                      : store.t("sys_overview.presets_many", {
-                          count: fmtNumber(presetWallpapersCount, store.hass, 0),
-                        }),
-                  uploaded:
-                    uploadedWallpapersCount > 0
-                      ? store.t("sys_overview.uploaded_suffix", {
-                          count: fmtNumber(uploadedWallpapersCount, store.hass, 0),
-                        })
-                      : "",
-                })}
-              </span>
+                : html`<span class="overview-box-meta">
+                    ${store.t("sys_overview.custom_colors_empty")}
+                  </span>`}
             </button>
 
             <button

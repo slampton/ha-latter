@@ -24,6 +24,7 @@ const SYSTEM_NAV_ITEMS: ReadonlyArray<{
 }> = [
   { viewId: "system_overview", labelKey: "view.system_overview" },
   { viewId: "shared_entities", labelKey: "view.shared_entities" },
+  { viewId: "photos", labelKey: "view.photos" },
   { viewId: "remotes", labelKey: "view.remotes" },
   { viewId: "system_sync", labelKey: "view.system_sync" },
   { viewId: "area_tracking", labelKey: "view.area_tracking" },

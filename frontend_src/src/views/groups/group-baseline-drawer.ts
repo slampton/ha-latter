@@ -27,9 +27,13 @@ import {
   HOME_CATEGORIES_CATALOG,
   SECURITY_PIN_POLICY_OPTIONS,
   TOOLS_ITEMS_CATALOG,
+  VIRTUAL_COLLECTION_ALL,
+  VIRTUAL_COLLECTION_DEFAULTS,
+  VIRTUAL_COLLECTION_UPLOADS,
   WALLPAPER_ROTATION_OPTIONS,
 } from "../../constants.js";
 import { html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { isPhotoDynamic } from "../../state/photo-ops.js";
 import { isCatalogItemSupported, type StudioStore } from "../../state/store.js";
 import type {
   DeviceCapabilities,
@@ -399,10 +403,62 @@ export function renderGroupBaselineDrawer(
     "";
 
   const sysWallpapers = store.state?.system_wallpapers || [];
-  const wallpaperOptions: Array<{ value: string; label: string }> = [
-    { value: "", label: store.t("groups.wallpaper_none") },
-    ...sysWallpapers.map((wp) => ({ value: wp.id, label: wp.name || wp.id })),
-  ];
+  const photoCollections = store.state?.photo_collections || [];
+
+  const buildCompactPoolOptions = (excludeDynamic: boolean): Array<{ value: string; label: string }> => {
+    const photos = excludeDynamic
+      ? sysWallpapers.filter((wp) => !isPhotoDynamic(wp))
+      : sysWallpapers;
+    return [
+      { value: "off", label: store.t("groups.pool_off") },
+      { value: `collection:${VIRTUAL_COLLECTION_ALL}`, label: store.t("groups.pool_all") },
+      {
+        value: `collection:${VIRTUAL_COLLECTION_DEFAULTS}`,
+        label: store.t("groups.pool_defaults"),
+      },
+      {
+        value: `collection:${VIRTUAL_COLLECTION_UPLOADS}`,
+        label: store.t("groups.pool_uploads"),
+      },
+      ...photoCollections.map((c) => ({
+        value: `collection:${c.id}`,
+        label: store.t("groups.pool_collection_prefix", { name: c.name }),
+      })),
+      ...photos.map((wp) => ({
+        value: `single:${wp.id}`,
+        label: store.t("groups.pool_photo_prefix", { name: wp.name || wp.id }),
+      })),
+    ];
+  };
+
+  const encodePoolSelectValue = (
+    modeVal: unknown,
+    sourceVal: unknown,
+    colVal: unknown,
+  ): string => {
+    const mode = String(modeVal || "");
+    const src = String(sourceVal || "");
+    const col = String(colVal || "");
+    if (mode === "collection" && col) return `collection:${col}`;
+    if (mode === "single" && src) return `single:${src}`;
+    if (!mode && src) return `single:${src}`;
+    return "off";
+  };
+
+  const wpPoolOptions = buildCompactPoolOptions(false);
+  const wpPoolCurrent = encodePoolSelectValue(
+    cfg.wallpaper_mode,
+    cfg.wallpaper_source,
+    cfg.wallpaper_collection,
+  );
+  const ssPoolOptions = buildCompactPoolOptions(true);
+  const ssPoolCurrent = encodePoolSelectValue(
+    cfg.screensaver_photo_mode,
+    cfg.screensaver_photo_source,
+    cfg.screensaver_photo_collection,
+  );
+  const groupSsMode = String(cfg.screensaver_mode ?? "Docked Only");
+  const groupSsStyle = String(cfg.screensaver_style ?? "Ambient Clock");
   const rotationOptions: Array<{ value: string; label: string }> = WALLPAPER_ROTATION_OPTIONS.map(
     (o) => ({ value: String(o.value), label: o.label }),
   );
@@ -482,8 +538,8 @@ export function renderGroupBaselineDrawer(
             cfg.battery_hibernate_timeout,
             caps,
           )}
-          ${renderSpecSwitch(store, group, "docked_screensaver", cfg.docked_screensaver, caps)}
-          ${caps.has_battery !== false || cfg.docked_screensaver !== false
+          ${renderSpecSelect(store, group, "screensaver_mode", cfg.screensaver_mode, caps)}
+          ${caps.has_battery !== false || groupSsMode !== "Never"
             ? renderSpecSelect(store, group, "docked_idle_timeout", cfg.docked_idle_timeout, caps)
             : nothing}
           ${renderSpecSwitch(
@@ -661,14 +717,44 @@ export function renderGroupBaselineDrawer(
         ? html`<details class="sub-collapsible" open>
             <summary>${store.t("groups.section_display")}</summary>
             <div class="card-content settings-list">
-              ${renderBaselineLabeledSelect(
-                store,
-                group,
-                "wallpaper_source",
-                cfg.wallpaper_source,
-                wallpaperOptions,
-                "",
-              )}
+              ${renderSettingsRow({
+                label: store.t("groups.wallpaper_pool_label"),
+                control: html`<select
+                  aria-label=${store.t("groups.for_group_aria", {
+                    label: store.t("groups.wallpaper_pool_label"),
+                    group: group.name,
+                  })}
+                  .value=${wpPoolCurrent}
+                  @change=${(ev: Event) => {
+                    const raw = (ev.currentTarget as HTMLSelectElement).value;
+                    if (raw.startsWith("collection:")) {
+                      void store.groups.updateGroupBaseline(gid, {
+                        wallpaper_mode: "collection",
+                        wallpaper_collection: raw.slice(11),
+                        wallpaper_source: "",
+                      });
+                    } else if (raw.startsWith("single:")) {
+                      void store.groups.updateGroupBaseline(gid, {
+                        wallpaper_mode: "single",
+                        wallpaper_source: raw.slice(7),
+                        wallpaper_collection: "",
+                      });
+                    } else {
+                      void store.groups.updateGroupBaseline(gid, {
+                        wallpaper_mode: "off",
+                        wallpaper_source: "",
+                        wallpaper_collection: "",
+                      });
+                    }
+                  }}
+                >
+                  ${wpPoolOptions.map(
+                    (opt) => html`<option value=${opt.value} ?selected=${opt.value === wpPoolCurrent}>
+                      ${opt.label}
+                    </option>`,
+                  )}
+                </select>`,
+              })}
               ${renderBaselineLabeledSelect(
                 store,
                 group,
@@ -679,6 +765,77 @@ export function renderGroupBaselineDrawer(
                 true,
               )}
               ${renderSpecSelect(store, group, "screensaver_style", cfg.screensaver_style, caps)}
+              ${groupSsStyle === "Photo Frame"
+                ? html`${renderSettingsRow({
+                      label: store.t("groups.screensaver_pool_label"),
+                      control: html`<select
+                        aria-label=${store.t("groups.for_group_aria", {
+                          label: store.t("groups.screensaver_pool_label"),
+                          group: group.name,
+                        })}
+                        .value=${ssPoolCurrent}
+                        @change=${(ev: Event) => {
+                          const raw = (ev.currentTarget as HTMLSelectElement).value;
+                          if (raw.startsWith("collection:")) {
+                            void store.groups.updateGroupBaseline(gid, {
+                              screensaver_photo_mode: "collection",
+                              screensaver_photo_collection: raw.slice(11),
+                              screensaver_photo_source: "",
+                            });
+                          } else if (raw.startsWith("single:")) {
+                            void store.groups.updateGroupBaseline(gid, {
+                              screensaver_photo_mode: "single",
+                              screensaver_photo_source: raw.slice(7),
+                              screensaver_photo_collection: "",
+                            });
+                          } else {
+                            void store.groups.updateGroupBaseline(gid, {
+                              screensaver_photo_mode: "off",
+                              screensaver_photo_source: "",
+                              screensaver_photo_collection: "",
+                            });
+                          }
+                        }}
+                      >
+                        ${ssPoolOptions.map(
+                          (opt) => html`<option
+                            value=${opt.value}
+                            ?selected=${opt.value === ssPoolCurrent}
+                          >
+                            ${opt.label}
+                          </option>`,
+                        )}
+                      </select>`,
+                    })}
+                    ${renderBaselineLabeledSelect(
+                      store,
+                      group,
+                      "screensaver_cycle_minutes",
+                      cfg.screensaver_cycle_minutes,
+                      rotationOptions,
+                      "15",
+                      true,
+                    )}
+                    ${renderSwitchRow({
+                      label: store.tPrefLabel("screensaver_shuffle"),
+                      ariaLabel: store.t("groups.for_group_aria", {
+                        label: store.tPrefLabel("screensaver_shuffle"),
+                        group: group.name,
+                      }),
+                      checked: Boolean(cfg.screensaver_shuffle),
+                      onChange: (checked) =>
+                        void store.groups.updateGroupBaseline(gid, {
+                          screensaver_shuffle: checked,
+                        }),
+                    })}
+                    ${renderSpecSwitch(
+                      store,
+                      group,
+                      "screensaver_photo_clock",
+                      cfg.screensaver_photo_clock,
+                      caps,
+                    )}`
+                : nothing}
               ${renderSpecSelect(store, group, "color_profile", cfg.color_profile, caps)}
               ${colorProfile === "Custom"
                 ? renderSettingsRow({
@@ -748,6 +905,13 @@ export function renderGroupBaselineDrawer(
                 group,
                 "weather_background",
                 cfg.weather_background,
+                caps,
+              )}
+              ${renderSpecSwitch(
+                store,
+                group,
+                "weather_app_background",
+                cfg.weather_app_background,
                 caps,
               )}
               ${renderSpecSwitch(store, group, "home_sun", cfg.home_sun, caps)}

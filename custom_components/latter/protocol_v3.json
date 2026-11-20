@@ -74,7 +74,7 @@
           "name": "wallpaper_url",
           "cpp_enum": "WALLPAPER_URL",
           "type": "url",
-          "description": "Signed HTTP URL for active wallpaper"
+          "description": "Signed HTTP URL for active wallpaper, or \"latter://day_night_sky\" to select the native Day & Night Sky wallpaper"
         },
         {
           "index": 8,
@@ -306,6 +306,13 @@
           "cpp_enum": "ALERT_CAMERA_ENTITY",
           "type": "entity_id",
           "description": "Camera entity ID associated with the active alert or doorbell notification"
+        },
+        {
+          "index": 41,
+          "name": "screensaver_photo_url",
+          "cpp_enum": "SCREENSAVER_PHOTO_URL",
+          "type": "url",
+          "description": "Signed HTTP URL for the active Photo Frame screensaver image (un-dimmed, darken=1.0); empty when screensaver_style is not Photo Frame or the photo pool is empty"
         }
       ]
     },
@@ -687,17 +694,17 @@
         },
         {
           "index": 10,
-          "name": "docked_screensaver",
-          "cpp_enum": "DOCKED_SCREENSAVER",
-          "type": "bool",
-          "description": "1 = launch screensaver instead of sleeping when docked idle timeout expires, else 0"
+          "name": "screensaver_mode",
+          "cpp_enum": "SCREENSAVER_MODE",
+          "type": "string",
+          "description": "Screensaver activation policy when idle (Docked Only|Always|Never)"
         },
         {
           "index": 11,
           "name": "screensaver_style",
           "cpp_enum": "SCREENSAVER_STYLE",
           "type": "string",
-          "description": "Ambient screensaver style (Ambient Clock|Aurora|Starfield|Digital Rain|Fireworks)"
+          "description": "Ambient screensaver style (Ambient Clock|Photo Frame|Aurora|Starfield|Digital Rain|Fireworks)"
         },
         {
           "index": 12,
@@ -1097,6 +1104,20 @@
           "cpp_enum": "CAMERA_DOORBELL_POPUP",
           "type": "string",
           "description": "Doorbell ring popup media mode on hardware-JPEG devices (Snapshot|Live Video)"
+        },
+        {
+          "index": 69,
+          "name": "screensaver_photo_clock",
+          "cpp_enum": "SCREENSAVER_PHOTO_CLOCK",
+          "type": "bool",
+          "description": "1 = show subtle clock overlay on Photo Frame screensaver, else 0"
+        },
+        {
+          "index": 70,
+          "name": "weather_app_background",
+          "cpp_enum": "WEATHER_APP_BACKGROUND",
+          "type": "bool",
+          "description": "1 = show live animated weather sky background in the Sky & Weather app, else 0"
         }
       ]
     },
@@ -2824,14 +2845,18 @@
       "capability": "display_battery"
     },
     {
-      "key": "docked_screensaver",
-      "label": "Docked Screensaver",
-      "domain": "switch",
-      "default": true,
+      "key": "screensaver_mode",
+      "label": "Screensaver mode",
+      "domain": "select",
+      "default": "Docked Only",
       "section": "display",
       "esphome_section": "display",
       "group_tier": "behavior",
-      "options": [],
+      "options": [
+        "Docked Only",
+        "Always",
+        "Never"
+      ],
       "min": null,
       "max": null,
       "step": null,
@@ -2848,6 +2873,7 @@
       "group_tier": "display",
       "options": [
         "Ambient Clock",
+        "Photo Frame",
         "Aurora",
         "Starfield",
         "Digital Rain",
@@ -3791,10 +3817,40 @@
       "step": null,
       "unit": "",
       "capability": "hw_jpeg"
+    },
+    {
+      "key": "screensaver_photo_clock",
+      "label": "Show subtle clock",
+      "domain": "switch",
+      "default": false,
+      "section": "display",
+      "esphome_section": "display",
+      "group_tier": "display",
+      "options": [],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "display"
+    },
+    {
+      "key": "weather_app_background",
+      "label": "Weather app background",
+      "domain": "switch",
+      "default": true,
+      "section": "interface",
+      "esphome_section": "display",
+      "group_tier": "interface",
+      "options": [],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "display"
     }
   ],
   "studio_contract": {
-    "studio_rev": 38,
+    "studio_rev": 39,
     "allowed_device_actions": [
       "restart",
       "find_my",
@@ -3825,7 +3881,14 @@
       "apply_batch_device_setting",
       "test_doorbell_speaker",
       "mint_camera_preview_url",
-      "delete_wallpaper",
+      "delete_photo",
+      "create_photo_collection",
+      "rename_photo_collection",
+      "delete_photo_collection",
+      "update_photo_metadata",
+      "bulk_update_photos",
+      "browse_media_folder",
+      "import_media_photos",
       "save_system_config",
       "rotate_signing_key",
       "set_security_pin"
@@ -3833,8 +3896,7 @@
     "device_commands": [
       "esphome_entity_action",
       "device_action",
-      "select_wallpaper",
-      "toggle_wallpaper_favorite",
+      "set_device_photo_pool",
       "save_device_config"
     ]
   }

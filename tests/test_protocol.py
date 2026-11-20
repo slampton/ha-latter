@@ -65,12 +65,12 @@ class TestProtocolV3Contract(unittest.TestCase):
     def test_domain_field_counts_and_contiguous_indices(self) -> None:
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
-            "area_context": 38,
+            "area_context": 39,
             "active_media": 21,
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 4,
-            "device_prefs": 66,
+            "device_prefs": 68,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})
@@ -1093,7 +1093,9 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             [
                 "alert_volume=65",
                 "ble_beacon_enabled=0",
-                "docked_screensaver=1",
+                "screensaver_mode=Always",
+                "screensaver_photo_clock=1",
+                "weather_app_background=0",
                 "color_profile=NotARealProfile",
                 "clock_face=Hybrid Digital",
                 "home_clock_tap_action=Clock Face",
@@ -1112,7 +1114,9 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             {
                 "alert_volume": 65,
                 "native_ble_tracking": False,
-                "docked_screensaver": True,
+                "screensaver_mode": "Always",
+                "screensaver_photo_clock": True,
+                "weather_app_background": False,
                 "clock_face": "Hybrid Digital",
                 "home_clock_tap_action": "Clock Face",
                 "local_clock_label": "Oakland Studio",
@@ -1127,12 +1131,12 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         self.assertEqual(_PAYLOADS_MOD.parse_dirty_prefs_records(bad_raw), {})
 
     def test_power_profile_retired_and_activity_sources_in_scope(self) -> None:
-        for retired_key in ("power_profile", "show_speaker_shortcut", "show_library_shortcut"):
+        for retired_key in ("power_profile", "show_speaker_shortcut", "show_library_shortcut", "docked_screensaver"):
             self.assertNotIn(retired_key, studio_scope.DEVICE_PREF_KEYS)
             self.assertNotIn(retired_key, studio_scope.DEVICE_SETTING_KEYS)
             with self.assertRaises(studio_scope.SettingsScopeError):
                 studio_scope.clean_device_settings({retired_key: "1"})
-        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 61)
+        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 63)
 
         for key, default_val in (
             ("manual_brightness", 80),

@@ -20,6 +20,7 @@ import {
   DEVICE_VIEW_SLUGS,
   SYSTEM_VIEW_SLUGS,
   VIEW_TITLE_KEYS,
+  VIRTUAL_COLLECTION_ALL,
 } from "../constants.js";
 import {
   type StudioTranslationKey,
@@ -62,6 +63,17 @@ import {
 } from "./entity-controller.js";
 import { type BatchPillState, GroupsController } from "./groups-controller.js";
 import {
+  emptyMediaImportModalState,
+  emptyPhotoEditModalState,
+  emptyPhotoPickerModalState,
+  emptyPhotoUploadModalState,
+  type MediaImportModalState,
+  type PhotoEditModalState,
+  type PhotoPickerModalState,
+  type PhotoUploadModalState,
+  type StagedUploadPhoto,
+} from "./photo-ops.js";
+import {
   type ConfirmModalState,
   emptyConfirmModalState,
   type OpenConfirmOptions,
@@ -76,10 +88,15 @@ export {
   GroupsController,
   isCatalogItemSupported,
   isProtectedNativeDockItem,
+  type MediaImportModalState,
   type OpenConfirmOptions,
   overlayDevicePrefsOnSections,
   overlayPendingEntityStates,
   type PendingEntityEntry,
+  type PhotoEditModalState,
+  type PhotoPickerModalState,
+  type PhotoUploadModalState,
+  type StagedUploadPhoto,
   type StringListKey,
   type TokenListKey,
   type TokenListOps,
@@ -167,12 +184,7 @@ export class StudioStore implements ReactiveController {
   liveClockNowMs = Date.now();
   private liveClockTimer: ReturnType<typeof setInterval> | null = null;
 
-  // Upload state (`XMLHttpRequest` multipart <= 15 MB)
-  uploadScope: StudioScope | null = null;
-  uploadBusy = false;
-  uploadPercent = 0;
-  selectedDeviceWallpaperFile: File | null = null;
-  selectedSystemWallpaperFile: File | null = null;
+  // Selected backup file state
   selectedBackupFile: File | null = null;
 
   // Devices table & Discovered UI state
@@ -201,9 +213,19 @@ export class StudioStore implements ReactiveController {
   worldClockNewZone = "";
   overviewAlarmsOpen = false;
 
-  // System Shared Entities UI state
+  // System Shared Entities & Photo Library UI state
   activeCameraPreviewEntity = "";
   cameraPreviewUrl = "";
+  photosFilterCollection = VIRTUAL_COLLECTION_ALL;
+  photosSearch = "";
+  photosPage = 1;
+  photosSelectMode = false;
+  readonly photosSelectedIds = new Set<string>();
+  photosNewCollectionOpen = false;
+  photosNewCollectionName = "";
+  photosRenamingCollectionId = "";
+  photosRenamingCollectionName = "";
+  photosBulkTargetCollectionId = "";
 
   // System Device Groups & Staged Batch Controls UI state (`Q6`)
   newGroupFormOpen = false;
@@ -296,6 +318,10 @@ export class StudioStore implements ReactiveController {
     open: false,
     app: null,
   };
+  photoUploadModal: PhotoUploadModalState = emptyPhotoUploadModalState();
+  photoEditModal: PhotoEditModalState = emptyPhotoEditModalState();
+  mediaImportModal: MediaImportModalState = emptyMediaImportModalState();
+  photoPickerModal: PhotoPickerModalState = emptyPhotoPickerModalState();
   returnToPinnedModal = false;
 
   pendingScrollCardId = "";
@@ -806,8 +832,8 @@ export class StudioStore implements ReactiveController {
       this.worldClockNewLabel = "";
       this.worldClockNewZone = "";
       this.overviewAlarmsOpen = false;
-      this.selectedDeviceWallpaperFile = null;
       this.appConfigModal = { open: false, app: null };
+      this.photoPickerModal = emptyPhotoPickerModalState();
       this.shortcutModal = { ...this.shortcutModal, open: false };
       this.saveGroupModal = { ...this.saveGroupModal, open: false, busy: false };
       this.resetModal = { ...this.resetModal, open: false, busy: false };
@@ -1349,6 +1375,8 @@ export class StudioStore implements ReactiveController {
     const mergedWorldClockZones = incoming.world_clock_zones ?? prev?.world_clock_zones;
     const mergedSystemWallpapers =
       incoming.system_wallpapers ?? prev?.system_wallpapers ?? [];
+    const mergedPhotoCollections =
+      incoming.photo_collections ?? prev?.photo_collections ?? [];
     const mergedBleSignatures =
       incoming.ble_area_signatures ?? prev?.ble_area_signatures;
     const mergedDiscoveredBle =
@@ -1380,6 +1408,7 @@ export class StudioStore implements ReactiveController {
         ...incoming,
         system_devices: mergedSystemDevices,
         discovered_ble_devices: mergedDiscoveredBle,
+        photo_collections: mergedPhotoCollections,
         system_wallpapers: mergedSystemWallpapers,
         ble_area_signatures: mergedBleSignatures,
         catalog: mergedCatalog,
@@ -1429,6 +1458,7 @@ export class StudioStore implements ReactiveController {
         device_groups: incoming.device_groups,
         system_config: incoming.system_config,
         has_security_pin: incoming.has_security_pin,
+        photo_collections: mergedPhotoCollections,
         system_wallpapers: mergedSystemWallpapers,
         doorbells: incoming.doorbells,
         catalog: mergedCatalog,
@@ -1483,6 +1513,7 @@ export class StudioStore implements ReactiveController {
       ...incoming,
       system_devices: mergedSystemDevices,
       discovered_ble_devices: mergedDiscoveredBle,
+      photo_collections: mergedPhotoCollections,
       system_wallpapers: mergedSystemWallpapers,
       ble_area_signatures: mergedBleSignatures,
       catalog: mergedCatalog,

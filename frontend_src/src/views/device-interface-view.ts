@@ -336,6 +336,15 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
   const camFramingRaw = String(camFramingPref?.value ?? cfg.camera_framing ?? "Uncropped");
   const camFramingVal = store.tPrefOption("camera_framing", camFramingRaw);
 
+  const weatherAppBgPref = store.entity.getPref("weather_app_background");
+  const weatherAppBgRaw = weatherAppBgPref?.value ?? cfg.weather_app_background;
+  const weatherAppBgOn =
+    weatherAppBgRaw !== undefined && weatherAppBgRaw !== null
+      ? typeof weatherAppBgRaw === "string"
+        ? !["", "0", "false", "off", "disabled"].includes(weatherAppBgRaw.trim().toLowerCase())
+        : Boolean(weatherAppBgRaw)
+      : true;
+
   const describeNativeDockApp = (routeToken: string): string => {
     switch (routeToken) {
       case "app:pinned": {
@@ -396,7 +405,9 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
         return store.t("dev_interface.remote_follow_area");
       }
       case "app:weather":
-        return store.t("dev_interface.weather_meta");
+        return weatherAppBgOn
+          ? store.t("dev_interface.weather_meta_live_sky")
+          : store.t("dev_interface.weather_meta_wallpaper");
       case "app:time":
         if (showUtcClock && worldClockCount > 0) {
           return worldClockCount === 1

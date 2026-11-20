@@ -15,7 +15,11 @@ from custom_components.latter.const import CONF_SECURITY_PIN_HASH
 from custom_components.latter.presence import get_ble_fabric
 from custom_components.latter.studio.commands import STUDIO_REV
 from custom_components.latter.studio.payload import log_studio_event
-from custom_components.latter.wallpapers import save_uploaded_wallpaper_bytes
+from custom_components.latter.wallpapers import (
+    DAY_NIGHT_SKY_NATIVE_URL,
+    DAY_NIGHT_SKY_PRESET_ID,
+    save_uploaded_photo_bytes,
+)
 
 
 def _make_jpeg_bytes() -> bytes:
@@ -38,10 +42,10 @@ async def _call_ws(
 async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify mandatory studio_rev=38 schema validation and studio_rev_mismatch on all 9 WS endpoints."""
+    """Verify mandatory studio_rev=39 schema validation and studio_rev_mismatch on all 9 WS endpoints."""
     import voluptuous as vol
 
-    assert STUDIO_REV == 38
+    assert STUDIO_REV == 39
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -398,100 +402,236 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     await _sys_cmd("check_system_updates", {})
     await _sys_cmd("clear_internal_logs", {})
 
-    # Retired base64 WS wallpaper upload commands must be rejected as unknown_command
+    # Retired wallpaper WS commands must be rejected as unknown_command
+    for retired_scope, retired_cmd in (
+        ("device", "upload_wallpaper"),
+        ("device", "select_wallpaper"),
+        ("device", "toggle_wallpaper_favorite"),
+        ("system", "delete_wallpaper"),
+    ):
+        msg_seq += 1
+        await _call_ws(
+            hass,
+            conn,
+            msg_seq,
+            f"latter/{retired_scope}/command",
+            command=retired_cmd,
+            **({"subentry_id": coord.subentry_id} if retired_scope == "device" else {}),
+            payload={},
+            studio_rev=STUDIO_REV,
+        )
+        assert conn.errors[-1][1] == "unknown_command"
+        conn.errors.clear()
+
+    # Photo Library Collections + Metadata + Bulk + Device Photo Pool (`STUDIO_REV = 39`)
+    col_created = await _sys_cmd("create_photo_collection", {"name": "Family"})
+    col_id = col_created["collection"]["id"]
+    assert any(c["id"] == col_id and c["name"] == "Family" for c in col_created["photo_collections"])
+    col_renamed = await _sys_cmd(
+        "rename_photo_collection", {"collection_id": col_id, "name": "Favorites"}
+    )
+    assert col_renamed["collection"]["name"] == "Favorites"
+
+    dev_photo_rec = save_uploaded_photo_bytes(
+        hass, "dev_bg.jpg", _make_jpeg_bytes(), collection_id=col_id
+    )
+    dev_wp_id = dev_photo_rec["id"]
+    assert dev_wp_id.startswith("photo:")
+
+    upd_meta = await _sys_cmd(
+        "update_photo_metadata",
+        {
+            "photo_id": dev_wp_id,
+            "name": "Living Wall",
+            "crop": {"x": 0.4, "y": 0.6, "zoom": 1.4},
+            "collections": [col_id],
+        },
+    )
+    assert upd_meta["photo"]["name"] == "Living Wall"
+    assert upd_meta["photo"]["crop"] == {"x": 0.4, "y": 0.6, "zoom": 1.4}
+
+    # Select single uploaded photo on Device wallpaper pool
+    await _dev_cmd(
+        "set_device_photo_pool",
+        {"target": "wallpaper", "mode": "single", "source_id": dev_wp_id},
+    )
+    assert coord.wallpaper_mode == "single"
+    assert coord.wallpaper_source == dev_wp_id
+    assert "mode=wallpaper" in coord.build_wallpaper_url()
+
+    # Select Day & Night Sky -> native sentinel `latter://day_night_sky` pushed in `area_context`
+    await _dev_cmd(
+        "set_device_photo_pool",
+        {
+            "target": "wallpaper",
+            "mode": "single",
+            "source_id": DAY_NIGHT_SKY_PRESET_ID,
+        },
+    )
+    assert coord.build_wallpaper_url() == DAY_NIGHT_SKY_NATIVE_URL
+    _, area_attrs = coord.get_area_context_payload()
+    assert area_attrs["wallpaper_url"] == DAY_NIGHT_SKY_NATIVE_URL
+    assert area_attrs["screensaver_photo_url"] == ""
+
+    # Screensaver Photo Frame pool + area_context field 41 (`screensaver_photo_url`)
+    await _dev_cmd(
+        "save_device_config",
+        {
+            "config": {
+                "screensaver_mode": "Always",
+                "screensaver_style": "Photo Frame",
+                "screensaver_photo_clock": True,
+                "weather_app_background": False,
+            }
+        },
+    )
+    ss_pool_state = await _dev_cmd(
+        "set_device_photo_pool",
+        {
+            "target": "screensaver",
+            "mode": "custom",
+            "photo_ids": ["preset:ocean_waves", dev_wp_id],
+            "cycle_minutes": 5,
+            "shuffle": True,
+        },
+    )
+    assert coord.screensaver_photo_mode == "custom"
+    assert coord.screensaver_shuffle is True
+    assert coord.screensaver_cycle_minutes == 5
+    assert coord._unsub_screensaver_timer is not None
+    assert ss_pool_state["live"]["screensaver_pool_count"] == 2
+    _, area_attrs_ss = coord.get_area_context_payload()
+    assert "mode=screensaver" in area_attrs_ss["screensaver_photo_url"]
+    assert area_attrs_ss["payload"].split("\x1f")[41] == area_attrs_ss["screensaver_photo_url"]
+
+    # Dynamic preset rejected on screensaver pool
     msg_seq += 1
     await _call_ws(
         hass,
         conn,
         msg_seq,
         "latter/device/command",
-        command="upload_wallpaper",
+        command="set_device_photo_pool",
         subentry_id=coord.subentry_id,
-        payload={"filename": "dev_bg.jpg", "data_b64": ""},
+        payload={
+            "target": "screensaver",
+            "mode": "single",
+            "source_id": DAY_NIGHT_SKY_PRESET_ID,
+        },
         studio_rev=STUDIO_REV,
     )
-    assert conn.errors[-1][1] == "unknown_command"
+    assert conn.errors[-1][1] == "not_allowed"
     conn.errors.clear()
 
-    dev_wp_id, _ = save_uploaded_wallpaper_bytes(hass, coord.device_slug, "dev_bg.jpg", _make_jpeg_bytes())
-    assert dev_wp_id.startswith("upload:")
-    await _dev_cmd("select_wallpaper", {"source_id": dev_wp_id})
-    assert coord.wallpaper_source == dev_wp_id
-    await _dev_cmd("toggle_wallpaper_favorite", {"source_id": "preset:forest_mountains"})
-    await _dev_cmd("select_wallpaper", {"source_id": "preset:forest_mountains"})
-
-    # `delete_wallpaper` is canonical on System scope; calling it on Device scope fails with `wrong_scope`
+    # `delete_photo` is canonical on System scope; calling it on Device scope fails with `wrong_scope`
     msg_seq += 1
     await _call_ws(
         hass,
         conn,
         msg_seq,
         "latter/device/command",
-        command="delete_wallpaper",
+        command="delete_photo",
         subentry_id=coord.subentry_id,
-        payload={"source_id": dev_wp_id},
+        payload={"photo_id": dev_wp_id},
         studio_rev=STUDIO_REV,
     )
     assert conn.errors[-1][1] == "wrong_scope"
     conn.errors.clear()
-    await _sys_cmd("delete_wallpaper", {"source_id": dev_wp_id})
 
-    # Wallpaper rotation state machine: Off -> bulk star -> enable rotation seeds active photo -> Turn Off resets both
-    off_state = await _dev_cmd("select_wallpaper", {"source_id": ""})
-    assert coord.wallpaper_source == ""
-    assert coord.wallpaper_cycle_minutes == 0
-    assert coord._unsub_wallpaper_timer is None
-    assert not any(w["active"] for w in off_state["wallpapers"])
+    # Deleting `dev_wp_id` prunes it cleanly from the Device's screensaver custom pool
+    await _sys_cmd("delete_photo", {"photo_id": dev_wp_id})
+    assert dev_wp_id not in coord.screensaver_photo_ids
+    assert coord.screensaver_photo_ids == ["preset:ocean_waves"]
 
-    starred_state = await _dev_cmd(
-        "toggle_wallpaper_favorite",
-        {"source_ids": ["preset:ocean_waves", "preset:mars_crater"]},
-    )
-    assert coord.wallpaper_favorites == ["preset:ocean_waves", "preset:mars_crater"]
-    assert coord.wallpaper_source == ""
-    assert [w["id"] for w in starred_state["wallpapers"] if w["favorite"]] == [
-        "preset:ocean_waves",
-        "preset:mars_crater",
-    ]
-
+    # Wallpaper pool rotation state machine: custom -> collection -> delete collection prunes -> off
     rot_state = await _dev_cmd(
-        "save_device_config",
-        {"config": {"wallpaper_cycle_minutes": 5}},
+        "set_device_photo_pool",
+        {
+            "target": "wallpaper",
+            "mode": "custom",
+            "photo_ids": ["preset:ocean_waves", "preset:mars_crater"],
+            "cycle_minutes": 5,
+        },
     )
     assert coord.wallpaper_cycle_minutes == 5
     assert coord.wallpaper_source == "preset:ocean_waves"
     assert coord._unsub_wallpaper_timer is not None
-    assert [w["id"] for w in rot_state["wallpapers"] if w["active"]] == [
-        "preset:ocean_waves"
-    ]
+    assert rot_state["live"]["wallpaper_pool_count"] == 2
 
-    # Selecting an unstarred photo explicitly pauses starred rotation so that photo stays displayed
-    unstarred_state = await _dev_cmd(
-        "select_wallpaper",
-        {"source_id": "preset:sahara_dunes"},
+    await _sys_cmd(
+        "bulk_update_photos",
+        {"photo_ids": ["preset:forest_mountains", "preset:wheat_field"], "add_collection": col_id},
     )
-    assert coord.wallpaper_source == "preset:sahara_dunes"
-    assert coord.wallpaper_cycle_minutes == 0
-    assert coord._unsub_wallpaper_timer is None
-    assert unstarred_state["config"]["wallpaper_cycle_minutes"] == 0
-
-    # Enabling rotation with zero starred photos rotates through all gallery items starting at first preset
-    await _dev_cmd("toggle_wallpaper_favorite", {"source_ids": []})
-    await _dev_cmd("select_wallpaper", {"source_id": ""})
-    all_rot_state = await _dev_cmd(
-        "save_device_config",
-        {"config": {"wallpaper_cycle_minutes": 15}},
+    await _dev_cmd(
+        "set_device_photo_pool",
+        {
+            "target": "wallpaper",
+            "mode": "collection",
+            "collection_id": col_id,
+            "cycle_minutes": 15,
+        },
     )
-    assert coord.wallpaper_favorites == []
-    assert coord.wallpaper_cycle_minutes == 15
+    assert coord.wallpaper_mode == "collection"
+    assert coord.wallpaper_collection == col_id
     assert coord.wallpaper_source == "preset:forest_mountains"
-    assert coord._unsub_wallpaper_timer is not None
-    assert [w["id"] for w in all_rot_state["wallpapers"] if w["active"]] == [
-        "preset:forest_mountains"
-    ]
 
-    # Turn Off Wallpaper resets both active source and rotation interval
-    final_off = await _dev_cmd("select_wallpaper", {"source_id": ""})
+    # Deleting the active collection cleanly resets wallpaper pool to off
+    await _sys_cmd("delete_photo_collection", {"collection_id": col_id})
+    assert coord.wallpaper_mode == "off"
+    assert coord.wallpaper_collection == ""
+    assert coord.wallpaper_source == ""
+
+    # HA `/media` browse & import WS commands
+    from pathlib import Path
+
+    media_dir = Path(hass.config.config_dir) / "ws_media"
+    (media_dir / "trip").mkdir(parents=True, exist_ok=True)
+    (media_dir / "trip" / "a.jpg").write_bytes(_make_jpeg_bytes())
+    hass.config.media_dirs = {"local": str(media_dir)}
+
+    msg_seq += 1
+    await _call_ws(
+        hass,
+        conn,
+        msg_seq,
+        "latter/system/command",
+        command="browse_media_folder",
+        payload={"root": "local", "subpath": "trip"},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    browse_res = conn.results[-1][1]
+    assert browse_res["root"] == "local"
+    assert len(browse_res["images"]) == 1
+    assert browse_res["images"][0]["thumb_url"].startswith("/api/latter/wallpaper/system?")
+
+    import_res = await _sys_cmd(
+        "import_media_photos",
+        {
+            "root": "local",
+            "paths": ["trip/a.jpg"],
+            "new_collection_name": "Trip Import",
+            "deduplicate": True,
+        },
+    )
+    assert import_res["import_result"]["imported"] == 1
+    assert import_res["import_result"]["collection_id"].startswith("col_")
+
+    # Reset screensaver style back to default for downstream group tests
+    await _dev_cmd(
+        "save_device_config",
+        {
+            "config": {
+                "screensaver_mode": "Docked Only",
+                "screensaver_style": "Ambient Clock",
+            }
+        },
+    )
+
+    # Turn Off Wallpaper resets active source & rotation timer
+    final_off = await _dev_cmd(
+        "set_device_photo_pool", {"target": "wallpaper", "mode": "off"}
+    )
     assert coord.wallpaper_source == ""
     assert coord.wallpaper_cycle_minutes == 0
     assert coord._unsub_wallpaper_timer is None
@@ -613,6 +753,8 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
     await _call_ws(hass, conn, msg_seq, "latter/system/export", studio_rev=STUDIO_REV)
     sys_bundle = conn.results[-1][1]["bundle"]
     assert sys_bundle["scope"] == "system"
+    assert "photo_collections" in sys_bundle
+    assert "photo_metadata" in sys_bundle
     assert secret_pin not in json.dumps(sys_bundle)
 
     msg_seq += 1
@@ -964,6 +1106,7 @@ async def test_v3_subscribe_diet_concurrency_and_on_demand_camera_preview(
     assert "pref_specs" in initial_evt
     assert "world_clock_zones" in initial_evt
     assert "system_wallpapers" in initial_evt
+    assert "photo_collections" in initial_evt
     assert "ble_area_signatures" in initial_evt
 
     # Without `survey_subentry_id`, BLE survey deltas are NOT streamed on this subscription
@@ -987,6 +1130,7 @@ async def test_v3_subscribe_diet_concurrency_and_on_demand_camera_preview(
         "world_clock_zones",
         "discovered_ble_devices",
         "system_wallpapers",
+        "photo_collections",
         "ble_area_signatures",
     ):
         assert omitted_key not in push_evt
@@ -1171,7 +1315,7 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     entry, _sys_obj, coord = await setup_latter_hub(hass, stationary=1)
     conn = websocket_api.ActiveConnection()
 
-    # Wall & Desk Panels default: `docked_screensaver == False`, `docked_idle_timeout == "Never"`
+    # Wall & Desk Panels default: `screensaver_mode == "Never"`, `docked_idle_timeout == "Never"`
     await _call_ws(
         hass,
         conn,
@@ -1184,7 +1328,7 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     )
     assert not conn.errors
     assert coord.device_group == "wall_panels"
-    assert coord.get_device_pref("docked_screensaver") is False
+    assert coord.get_device_pref("screensaver_mode") == "Never"
     assert coord.get_device_pref("docked_idle_timeout") == "Never"
 
     # Mutate `wall_panels` baseline, then reset it via `reset_to_default: True`
@@ -1197,12 +1341,12 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
         payload={
             "group_id": "wall_panels",
             "include_display": True,
-            "config": {"docked_screensaver": True, "docked_idle_timeout": "5 min"},
+            "config": {"screensaver_mode": "Always", "docked_idle_timeout": "5 min"},
         },
         studio_rev=STUDIO_REV,
     )
     assert not conn.errors
-    assert coord.get_device_pref("docked_screensaver") is True
+    assert coord.get_device_pref("screensaver_mode") == "Always"
     assert coord.get_device_pref("docked_idle_timeout") == "5 min"
 
     await _call_ws(
@@ -1216,7 +1360,7 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     )
     assert not conn.errors
     assert coord.device_group == "wall_panels"
-    assert coord.get_device_pref("docked_screensaver") is False
+    assert coord.get_device_pref("screensaver_mode") == "Never"
     assert coord.get_device_pref("docked_idle_timeout") == "Never"
 
     # Custom groups reject `reset_to_default: True` with `not_allowed`
@@ -1280,7 +1424,7 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     }
 
     assert await async_setup_entry(hass, entry) is True
-    assert BUILTIN_GROUP_PRESET_VERSION == 3
+    assert BUILTIN_GROUP_PRESET_VERSION == 4
     assert global_cfg[CONF_BUILTIN_GROUP_PRESET_VERSION] == BUILTIN_GROUP_PRESET_VERSION
     upgraded_groups = {g["id"]: g for g in get_device_groups(hass)}
     assert upgraded_groups["handhelds"]["device_config"]["wake_word_mode"] == "Docked Only"

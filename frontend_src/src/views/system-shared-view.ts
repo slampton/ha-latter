@@ -17,11 +17,6 @@ import {
   renderSvgIcon,
   renderTrashIconButton,
 } from "../components/controls.js";
-import {
-  renderWallpaperGalleryItems,
-  renderWallpaperUploadProgress,
-  renderWallpaperUploadTrigger,
-} from "../components/wallpaper-gallery.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StringListKey, StudioStore } from "../state/store.js";
 import type { CatalogChoice, SystemConfig } from "../types.js";
@@ -53,7 +48,6 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
   const calendars = sc?.calendar_entities || [];
   const palettes = (sc?.custom_palettes || []).filter((p) => isValidHexColor(p.hex));
   const doorbells = data?.doorbells || [];
-  const wallpapers = data?.system_wallpapers || [];
   const noiseRed = sc?.doorbell_noise_reduction || "strong";
 
   const doorbellFilterOptions = [
@@ -277,19 +271,6 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
               store.entity.updateStringListRow("calendar_entities", idx, val),
             onRemove: (idx) => store.entity.removeStringListRow("calendar_entities", idx),
           }),
-        })}
-
-        ${renderCard({
-          id: "card-system-wallpapers",
-          handoffActive: store.isHandoffTarget("card-system-wallpapers"),
-          title: store.t("card.wallpapers"),
-          subtitle: store.t("shared.wallpapers_subtitle"),
-          headerActions: renderWallpaperUploadTrigger(store, "system"),
-          contentClass: "stack",
-          body: html`${renderWallpaperUploadProgress(store, "system")}
-            <div class="wp-gallery">
-              ${renderWallpaperGalleryItems(store, "system", wallpapers, "square")}
-            </div>`,
         })}
       </div>
 

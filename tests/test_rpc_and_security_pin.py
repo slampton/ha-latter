@@ -907,7 +907,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     assert area_attrs["vacuums"][0]["caps"] == 11
     assert area_attrs["home_categories"] == "alarm,intercom,thermostat,entry,vacuum"
     wire_fields = area_attrs["payload"].split("\x1f")
-    assert len(wire_fields) == 41  # 3 header fields + 38 body fields (indices 3..40)
+    assert len(wire_fields) == 42  # 3 header fields + 39 body fields (indices 3..41)
     assert "climate.main_thermostat|Main Thermostat||heat|70|68.5|79" in wire_fields[15]
     assert "lock.front_door|Front Door||locked" in wire_fields[16]
     assert "cover.main_garage|Main Garage||closed" in wire_fields[17]

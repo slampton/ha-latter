@@ -726,7 +726,7 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
         coord._cached_area_payload = None
         _st, area_attrs = coord.get_area_context_payload()
         wire = area_attrs["payload"].split("\x1f")
-        assert len(wire) == 41
+        assert len(wire) == 42
         assert "camera.front_door|Front Door||9" in wire[21]  # 1 (audio) | 8 (in_carousel)
         assert "camera.backyard|Backyard||0" in wire[21]
         assert "/api/latter/camera_stream/" in wire[39]

@@ -21,6 +21,13 @@ import {
   renderResetDeviceDialog,
   renderSaveGroupDialog,
 } from "./dialogs/device-modals.js";
+import { renderMediaImportDialog } from "./dialogs/media-import-modal.js";
+import { renderPhotoPickerDialog } from "./dialogs/photo-picker-modal.js";
+import {
+  renderPhotoEditDialog,
+  renderPhotoUploadDialog,
+  syncPhotoCropCanvases,
+} from "./dialogs/photo-upload-modal.js";
 import { renderShortcutDialog } from "./dialogs/shortcut-modal.js";
 
 export { renderAppConfigModalBody };
@@ -34,6 +41,10 @@ export function syncStudioDialogs(renderRoot: ShadowRoot, store: StudioStore): v
     ["latter-save-group-modal", store.saveGroupModal.open],
     ["latter-app-config-modal", store.appConfigModal.open],
     ["latter-shortcut-modal", store.shortcutModal.open],
+    ["latter-photo-upload-modal", store.photoUploadModal.open],
+    ["latter-photo-edit-modal", store.photoEditModal.open],
+    ["latter-media-import-modal", store.mediaImportModal.open],
+    ["latter-photo-picker-modal", store.photoPickerModal.open],
   ];
 
   // Pass 1: close any open dialog that should now be closed BEFORE opening another modal.
@@ -55,6 +66,7 @@ export function syncStudioDialogs(renderRoot: ShadowRoot, store: StudioStore): v
   }
 
   syncColorWheelCanvas(renderRoot, store);
+  syncPhotoCropCanvases(renderRoot, store);
 }
 
 export function renderStudioDialogs(store: StudioStore): TemplateResult {
@@ -66,5 +78,9 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
     ${renderSaveGroupDialog(store)}
     ${renderAppConfigDialog(store)}
     ${renderShortcutDialog(store)}
+    ${renderPhotoUploadDialog(store)}
+    ${renderPhotoEditDialog(store)}
+    ${renderMediaImportDialog(store)}
+    ${renderPhotoPickerDialog(store)}
   `;
 }

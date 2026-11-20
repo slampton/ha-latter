@@ -48,10 +48,18 @@ from ..const import (
     CONF_ESPHOME_DEVICE_ID,
     CONF_IGNORED_DISCOVERED_DEVICES,
     CONF_MA_PLAYER_ENTITY,
+    CONF_SCREENSAVER_CYCLE_MINUTES,
+    CONF_SCREENSAVER_PHOTO_COLLECTION,
+    CONF_SCREENSAVER_PHOTO_IDS,
+    CONF_SCREENSAVER_PHOTO_MODE,
+    CONF_SCREENSAVER_PHOTO_SOURCE,
+    CONF_SCREENSAVER_SHUFFLE,
     CONF_SECURITY_PIN,
     CONF_SECURITY_PIN_HASH,
+    CONF_WALLPAPER_COLLECTION,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
+    CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
     DATA_GLOBAL_CONFIG,
     DEFAULT_BLE_CATEGORY,
@@ -101,8 +109,17 @@ from ..presence import (
 )
 from ..protocol import hash_security_pin, normalize_activity_sources
 from ..wallpapers import (
-    delete_uploaded_wallpaper,
+    VIRTUAL_COLLECTION_IDS,
+    bulk_update_photos,
+    create_collection,
+    delete_collection,
+    delete_photo,
+    import_media_photos_sync,
+    known_collection_ids,
     known_wallpaper_ids,
+    list_media_folder_sync,
+    rename_collection,
+    update_photo_metadata,
     wallpaper_snapshot_token,
 )
 from .payload import (
@@ -231,19 +248,70 @@ _COMMAND_PAYLOAD_SCHEMAS: dict[str, vol.Schema] = {
     ),
     "check_system_updates": vol.Schema({}, extra=vol.PREVENT_EXTRA),
     "clear_internal_logs": vol.Schema({}, extra=vol.PREVENT_EXTRA),
-    "select_wallpaper": vol.Schema(
-        {vol.Optional("source_id"): _str_cap(128)},
+    "create_photo_collection": vol.Schema(
+        {vol.Optional("name"): _str_cap(64)},
         extra=vol.PREVENT_EXTRA,
     ),
-    "toggle_wallpaper_favorite": vol.Schema(
+    "rename_photo_collection": vol.Schema(
         {
-            vol.Optional("source_id"): _str_cap(128),
-            vol.Optional("source_ids"): [_str_cap(128)],
+            vol.Optional("collection_id"): _str_cap(64),
+            vol.Optional("name"): _str_cap(64),
         },
         extra=vol.PREVENT_EXTRA,
     ),
-    "delete_wallpaper": vol.Schema(
-        {vol.Optional("source_id"): _str_cap(128)},
+    "delete_photo_collection": vol.Schema(
+        {vol.Optional("collection_id"): _str_cap(64)},
+        extra=vol.PREVENT_EXTRA,
+    ),
+    "update_photo_metadata": vol.Schema(
+        {
+            vol.Optional("photo_id"): _str_cap(128),
+            vol.Optional("name"): _str_cap(96),
+            vol.Optional("crop"): dict,
+            vol.Optional("collections"): [_str_cap(64)],
+        },
+        extra=vol.PREVENT_EXTRA,
+    ),
+    "bulk_update_photos": vol.Schema(
+        {
+            vol.Optional("photo_ids"): [_str_cap(128)],
+            vol.Optional("add_collection"): vol.Any(_str_cap(64), None),
+            vol.Optional("remove_collection"): vol.Any(_str_cap(64), None),
+            vol.Optional("delete"): bool,
+        },
+        extra=vol.PREVENT_EXTRA,
+    ),
+    "delete_photo": vol.Schema(
+        {vol.Optional("photo_id"): _str_cap(128)},
+        extra=vol.PREVENT_EXTRA,
+    ),
+    "browse_media_folder": vol.Schema(
+        {
+            vol.Optional("root"): _str_cap(64),
+            vol.Optional("subpath"): _str_cap(512),
+        },
+        extra=vol.PREVENT_EXTRA,
+    ),
+    "import_media_photos": vol.Schema(
+        {
+            vol.Optional("root"): _str_cap(64),
+            vol.Optional("paths"): [_str_cap(512)],
+            vol.Optional("collection_id"): vol.Any(_str_cap(64), None),
+            vol.Optional("new_collection_name"): vol.Any(_str_cap(64), None),
+            vol.Optional("deduplicate"): bool,
+        },
+        extra=vol.PREVENT_EXTRA,
+    ),
+    "set_device_photo_pool": vol.Schema(
+        {
+            vol.Optional("target"): _str_cap(32),
+            vol.Optional("mode"): _str_cap(32),
+            vol.Optional("source_id"): vol.Any(_str_cap(128), None),
+            vol.Optional("collection_id"): vol.Any(_str_cap(64), None),
+            vol.Optional("photo_ids"): [_str_cap(128)],
+            vol.Optional("cycle_minutes"): vol.Any(_non_bool_int, None),
+            vol.Optional("shuffle"): vol.Any(bool, None),
+        },
         extra=vol.PREVENT_EXTRA,
     ),
     "mint_camera_preview_url": vol.Schema(
@@ -396,31 +464,6 @@ def _optional_level(body: dict[str, Any]) -> int | None:
 def _optional_option(body: dict[str, Any]) -> str | None:
     option = body.get("option")
     return str(option)[:128] if option is not None else None
-
-
-def _apply_wallpaper_config(
-    coordinator: LatterCoordinator,
-    *,
-    source: str | None = None,
-    favorites: list[str] | None = None,
-    cycle_minutes: int | None = None,
-) -> None:
-    """Persist wallpaper source/favorites/rotation, re-bind the rotation timer, and notify listeners."""
-    merged: dict[str, Any] = dict(coordinator.device_data)
-    if source is not None:
-        merged[CONF_WALLPAPER_SOURCE] = source
-        coordinator.current_wallpaper = source
-        coordinator._configured_wallpaper_source = source
-        coordinator._schedule_persist_runtime_state()
-    if favorites is not None:
-        merged[CONF_WALLPAPER_FAVORITES] = favorites
-    if cycle_minutes is not None:
-        merged[CONF_WALLPAPER_CYCLE_MINUTES] = max(0, int(cycle_minutes))
-    coordinator.update_device_config(merged)
-    if coordinator.wallpaper_cycle_minutes > 0 and source != "":
-        coordinator.ensure_active_wallpaper_for_rotation()
-    coordinator._bind_wallpaper_cycle_timer()
-    coordinator.async_notify_listeners()
 
 
 # ---------------------------------------------------------------------------
@@ -767,119 +810,479 @@ async def _cmd_check_system_updates(
     }
 
 
-async def _cmd_select_wallpaper(
-    _hass: HomeAssistant,
-    coordinator: LatterCoordinator | None,
-    body: dict[str, Any],
-    _global_cfg: dict[str, Any],
-    _extra: dict[str, Any],
+def _prune_deleted_photos_from_coordinators(
+    hass: HomeAssistant, deleted_ids: set[str]
 ) -> None:
-    assert coordinator is not None
-    source_id = str(body.get("source_id") or "").strip()
-    async with coordinator.config_lock:
-        if not source_id:
-            _apply_wallpaper_config(coordinator, source="", cycle_minutes=0)
-            return
-        known = known_wallpaper_ids()
-        if source_id not in known:
-            raise StudioCommandError(
-                "not_allowed", "Unknown wallpaper: pick one from this Device's gallery"
-            )
-        valid_favs = [f for f in coordinator.wallpaper_favorites if f in known]
-        next_cycle: int | None = None
-        if (
-            coordinator.wallpaper_cycle_minutes > 0
-            and valid_favs
-            and source_id not in valid_favs
-        ):
-            next_cycle = 0
-        _apply_wallpaper_config(
-            coordinator, source=source_id, cycle_minutes=next_cycle
-        )
-
-
-async def _cmd_toggle_wallpaper_favorite(
-    _hass: HomeAssistant,
-    coordinator: LatterCoordinator | None,
-    body: dict[str, Any],
-    _global_cfg: dict[str, Any],
-    _extra: dict[str, Any],
-) -> None:
-    assert coordinator is not None
-    async with coordinator.config_lock:
-        known = known_wallpaper_ids()
-        if "source_ids" in body:
-            raw_ids = body.get("source_ids")
-            if not isinstance(raw_ids, list):
-                raise StudioCommandError("invalid_format", "source_ids must be a list")
-            cleaned: list[str] = []
-            seen: set[str] = set()
-            for item in raw_ids:
-                sid = str(item or "").strip()
-                if sid and sid not in seen:
-                    seen.add(sid)
-                    cleaned.append(sid)
-            if cleaned and any(sid not in known for sid in cleaned):
-                raise StudioCommandError(
-                    "not_allowed",
-                    "Unknown wallpaper: pick one from this Device's gallery",
-                )
-            _apply_wallpaper_config(coordinator, favorites=cleaned)
-            return
-
-        source_id = str(body.get("source_id") or "").strip()
-        favs = list(coordinator.wallpaper_favorites)
-        if source_id in favs:
-            favs.remove(source_id)
-        else:
-            if source_id not in known:
-                raise StudioCommandError(
-                    "not_allowed",
-                    "Unknown wallpaper: pick one from this Device's gallery",
-                )
-            favs.append(source_id)
-        _apply_wallpaper_config(coordinator, favorites=favs)
-
-
-def _prune_deleted_wallpaper_from_coordinators(
-    hass: HomeAssistant, source_id: str
-) -> None:
-    """Remove a deleted wallpaper from favorites and advance rotation (or clear static source)."""
+    """Remove deleted photo IDs from all Devices' wallpaper & screensaver pools and re-seed active photos."""
+    if not deleted_ids:
+        return
     for c in iter_coordinators(hass):
-        if source_id not in c.wallpaper_favorites and c.wallpaper_source != source_id:
+        if c.is_ble_tag:
             continue
-        favs = [f for f in c.wallpaper_favorites if f != source_id]
-        was_active = c.wallpaper_source == source_id
-        if was_active and c.wallpaper_cycle_minutes > 0:
-            _apply_wallpaper_config(c, source="", favorites=favs)
-            if c.ensure_active_wallpaper_for_rotation():
-                c._bind_wallpaper_cycle_timer()
-                c.async_notify_listeners()
-            else:
-                _apply_wallpaper_config(c, source="", favorites=favs, cycle_minutes=0)
-        else:
-            new_active = "" if was_active else c.wallpaper_source
-            _apply_wallpaper_config(c, source=new_active, favorites=favs)
+        merged = dict(c.device_data)
+        changed = False
+
+        # Wallpaper pool pruning
+        wp_favs = [f for f in c.wallpaper_favorites if f not in deleted_ids]
+        if wp_favs != c.wallpaper_favorites:
+            merged[CONF_WALLPAPER_FAVORITES] = wp_favs
+            changed = True
+        if c.wallpaper_mode == "single" and c.configured_wallpaper_source in deleted_ids:
+            merged[CONF_WALLPAPER_MODE] = "off"
+            merged[CONF_WALLPAPER_SOURCE] = ""
+            c.current_wallpaper = ""
+            c._configured_wallpaper_source = ""
+            changed = True
+        elif c.wallpaper_mode == "custom" and not wp_favs:
+            merged[CONF_WALLPAPER_MODE] = "off"
+            merged[CONF_WALLPAPER_SOURCE] = ""
+            merged[CONF_WALLPAPER_CYCLE_MINUTES] = 0
+            c.current_wallpaper = ""
+            changed = True
+        elif c.current_wallpaper in deleted_ids or c.wallpaper_source in deleted_ids:
+            c.current_wallpaper = ""
+            changed = True
+
+        # Screensaver Photo Frame pool pruning
+        ss_ids = [f for f in c.screensaver_photo_ids if f not in deleted_ids]
+        if ss_ids != c.screensaver_photo_ids:
+            merged[CONF_SCREENSAVER_PHOTO_IDS] = ss_ids
+            changed = True
+        if (
+            c.screensaver_photo_mode == "single"
+            and c.configured_screensaver_photo_source in deleted_ids
+        ) or (c.screensaver_photo_mode == "custom" and not ss_ids):
+            merged[CONF_SCREENSAVER_PHOTO_MODE] = "off"
+            merged[CONF_SCREENSAVER_PHOTO_SOURCE] = ""
+            c.current_screensaver_photo = ""
+            changed = True
+        elif (
+            c.current_screensaver_photo in deleted_ids
+            or c.screensaver_photo_source in deleted_ids
+        ):
+            c.current_screensaver_photo = ""
+            changed = True
+
+        if changed:
+            if merged != c.device_data:
+                c.update_device_config(merged)
+            c._bind_wallpaper_cycle_timer()
+            c._bind_screensaver_cycle_timer()
+            c.async_notify_listeners()
 
 
-async def _cmd_delete_wallpaper(
+def _prune_deleted_collection_from_coordinators(
+    hass: HomeAssistant, collection_id: str
+) -> None:
+    """Clear references to a deleted collection from all Devices' wallpaper & screensaver pools."""
+    for c in iter_coordinators(hass):
+        if c.is_ble_tag:
+            continue
+        merged = dict(c.device_data)
+        changed = False
+        if (
+            c.wallpaper_mode == "collection"
+            and c.wallpaper_collection == collection_id
+        ):
+            merged[CONF_WALLPAPER_MODE] = "off"
+            merged[CONF_WALLPAPER_COLLECTION] = ""
+            merged[CONF_WALLPAPER_SOURCE] = ""
+            c.current_wallpaper = ""
+            c._configured_wallpaper_source = ""
+            changed = True
+        if (
+            c.screensaver_photo_mode == "collection"
+            and c.screensaver_photo_collection == collection_id
+        ):
+            merged[CONF_SCREENSAVER_PHOTO_MODE] = "off"
+            merged[CONF_SCREENSAVER_PHOTO_COLLECTION] = ""
+            c.current_screensaver_photo = ""
+            changed = True
+        if changed:
+            c.update_device_config(merged)
+            c._bind_wallpaper_cycle_timer()
+            c._bind_screensaver_cycle_timer()
+            c.async_notify_listeners()
+
+
+async def _cmd_create_photo_collection(
     hass: HomeAssistant,
     _coordinator: LatterCoordinator | None,
     body: dict[str, Any],
     _global_cfg: dict[str, Any],
+    extra: dict[str, Any],
+) -> None:
+    raw_name = str(body.get("name") or "").strip()
+    if not raw_name:
+        raise StudioCommandError("invalid_format", "Collection name is required")
+    try:
+        col = await hass.async_add_executor_job(create_collection, hass, raw_name)
+    except ValueError as err:
+        raise StudioCommandError("invalid_format", str(err)) from err
+    extra["collection"] = col
+    get_ble_fabric(hass).notify_occupancy_listeners()
+
+
+async def _cmd_rename_photo_collection(
+    hass: HomeAssistant,
+    _coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
+    extra: dict[str, Any],
+) -> None:
+    col_id = str(body.get("collection_id") or "").strip()
+    raw_name = str(body.get("name") or "").strip()
+    if not col_id or not raw_name:
+        raise StudioCommandError(
+            "invalid_format", "collection_id and name are required"
+        )
+    try:
+        col = await hass.async_add_executor_job(
+            rename_collection, hass, col_id, raw_name
+        )
+    except ValueError as err:
+        code = "not_found" if "Unknown collection" in str(err) else "invalid_format"
+        raise StudioCommandError(code, str(err)) from err
+    extra["collection"] = col
+    get_ble_fabric(hass).notify_occupancy_listeners()
+
+
+async def _cmd_delete_photo_collection(
+    hass: HomeAssistant,
+    _coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
+    extra: dict[str, Any],
+) -> None:
+    col_id = str(body.get("collection_id") or "").strip()
+    if not col_id:
+        raise StudioCommandError("invalid_format", "collection_id is required")
+    deleted = await hass.async_add_executor_job(delete_collection, hass, col_id)
+    if not deleted:
+        raise StudioCommandError("not_found", f"Unknown collection '{col_id}'")
+    _prune_deleted_collection_from_coordinators(hass, col_id)
+    extra["deleted_collection_id"] = col_id
+    get_ble_fabric(hass).notify_occupancy_listeners()
+
+
+async def _cmd_update_photo_metadata(
+    hass: HomeAssistant,
+    _coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
+    extra: dict[str, Any],
+) -> None:
+    photo_id = str(body.get("photo_id") or "").strip()
+    if not photo_id:
+        raise StudioCommandError("invalid_format", "photo_id is required")
+    name = body.get("name") if "name" in body else None
+    crop = body.get("crop") if "crop" in body else None
+    collections = body.get("collections") if "collections" in body else None
+    if name is None and crop is None and collections is None:
+        raise StudioCommandError(
+            "invalid_format", "Provide name, crop, or collections to update"
+        )
+    try:
+        res = await hass.async_add_executor_job(
+            lambda: update_photo_metadata(
+                hass,
+                photo_id,
+                name=name,
+                crop=crop,
+                collections=collections,
+            )
+        )
+    except ValueError as err:
+        code = "not_found" if "Unknown photo" in str(err) else "invalid_format"
+        raise StudioCommandError(code, str(err)) from err
+    crop_changed = bool(res.pop("crop_changed", False))
+    extra["photo"] = res
+    if crop_changed or collections is not None:
+        for c in iter_coordinators(hass):
+            if c.is_ble_tag:
+                continue
+            if (
+                c.wallpaper_source == photo_id
+                or c.screensaver_photo_source == photo_id
+                or (
+                    collections is not None
+                    and (
+                        c.wallpaper_mode == "collection"
+                        or c.screensaver_photo_mode == "collection"
+                    )
+                )
+            ):
+                c._bind_wallpaper_cycle_timer()
+                c._bind_screensaver_cycle_timer()
+                c.async_notify_listeners()
+    get_ble_fabric(hass).notify_occupancy_listeners()
+
+
+async def _cmd_bulk_update_photos(
+    hass: HomeAssistant,
+    _coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
+    extra: dict[str, Any],
+) -> None:
+    photo_ids = body.get("photo_ids")
+    if not isinstance(photo_ids, list) or not photo_ids:
+        raise StudioCommandError("invalid_format", "photo_ids must be a non-empty list")
+    add_col = body.get("add_collection")
+    rem_col = body.get("remove_collection")
+    do_delete = bool(body.get("delete", False))
+    if not do_delete and not add_col and not rem_col:
+        raise StudioCommandError(
+            "invalid_format",
+            "Specify add_collection, remove_collection, or delete",
+        )
+    try:
+        res = await hass.async_add_executor_job(
+            lambda: bulk_update_photos(
+                hass,
+                photo_ids,
+                add_collection=add_col,
+                remove_collection=rem_col,
+                delete=do_delete,
+            )
+        )
+    except ValueError as err:
+        raise StudioCommandError("invalid_format", str(err)) from err
+    if res["deleted_ids"]:
+        _prune_deleted_photos_from_coordinators(hass, set(res["deleted_ids"]))
+    elif res["updated"] > 0:
+        for c in iter_coordinators(hass):
+            if not c.is_ble_tag and (
+                c.wallpaper_mode == "collection"
+                or c.screensaver_photo_mode == "collection"
+            ):
+                c._bind_wallpaper_cycle_timer()
+                c._bind_screensaver_cycle_timer()
+                c.async_notify_listeners()
+    extra["bulk_result"] = res
+    get_ble_fabric(hass).notify_occupancy_listeners()
+
+
+async def _cmd_delete_photo(
+    hass: HomeAssistant,
+    _coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
+    extra: dict[str, Any],
+) -> None:
+    photo_id = str(body.get("photo_id") or "").strip()
+    if not photo_id:
+        raise StudioCommandError("invalid_format", "photo_id is required")
+    deleted = await hass.async_add_executor_job(delete_photo, hass, photo_id)
+    if not deleted:
+        raise StudioCommandError("not_found", "That photo isn't a deletable custom photo")
+    _prune_deleted_photos_from_coordinators(hass, {photo_id})
+    extra["deleted_photo_id"] = photo_id
+    get_ble_fabric(hass).notify_occupancy_listeners()
+
+
+async def _cmd_browse_media_folder(
+    hass: HomeAssistant,
+    _coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
+    extra: dict[str, Any],
+) -> None:
+    root = str(body.get("root") or "").strip()
+    subpath = str(body.get("subpath") or "").strip()
+    media_dirs = getattr(hass.config, "media_dirs", None)
+    try:
+        listing = await hass.async_add_executor_job(
+            list_media_folder_sync, media_dirs, root, subpath
+        )
+    except ValueError as err:
+        raise StudioCommandError("invalid_format", str(err)) from err
+    sys_obj = get_latter_system(hass)
+    used_root = str(listing.get("root") or "")
+    for img in listing.get("images") or []:
+        rel = str(img.get("relpath") or "")
+        img["thumb_url"] = (
+            sys_obj.url_signer.build_media_preview_url(used_root, rel, 160, 160)
+            if (sys_obj is not None and used_root and rel and not img.get("too_large"))
+            else ""
+        )
+    extra.update(listing)
+
+
+async def _cmd_import_media_photos(
+    hass: HomeAssistant,
+    _coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
+    extra: dict[str, Any],
+) -> None:
+    root = str(body.get("root") or "").strip()
+    paths = body.get("paths")
+    if not root:
+        raise StudioCommandError("invalid_format", "root is required")
+    if not isinstance(paths, list) or not paths:
+        raise StudioCommandError("invalid_format", "Select at least one photo to import")
+    collection_id = str(body.get("collection_id") or "").strip()
+    new_col_name = str(body.get("new_collection_name") or "").strip()
+    deduplicate = bool(body.get("deduplicate", True))
+    if not collection_id and new_col_name:
+        try:
+            created = await hass.async_add_executor_job(
+                create_collection, hass, new_col_name
+            )
+            collection_id = str(created["id"])
+        except ValueError as err:
+            raise StudioCommandError("invalid_format", str(err)) from err
+
+    media_dirs = getattr(hass.config, "media_dirs", None)
+    try:
+        result = await hass.async_add_executor_job(
+            lambda: import_media_photos_sync(
+                hass,
+                media_dirs,
+                root,
+                paths,
+                collection_id=collection_id or None,
+                deduplicate=deduplicate,
+            )
+        )
+    except ValueError as err:
+        raise StudioCommandError("invalid_format", str(err)) from err
+    extra["import_result"] = {
+        "imported": result["imported"],
+        "skipped": result["skipped"],
+        "failed": result["failed"],
+        "collection_id": collection_id,
+    }
+    if result["imported"] > 0:
+        for c in iter_coordinators(hass):
+            if not c.is_ble_tag and (
+                c.wallpaper_mode == "collection"
+                or c.screensaver_photo_mode == "collection"
+            ):
+                c._bind_wallpaper_cycle_timer()
+                c._bind_screensaver_cycle_timer()
+                c.async_notify_listeners()
+    get_ble_fabric(hass).notify_occupancy_listeners()
+
+
+async def _cmd_set_device_photo_pool(
+    _hass: HomeAssistant,
+    coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
     _extra: dict[str, Any],
 ) -> None:
+    assert coordinator is not None
+    target = str(body.get("target") or "").strip().lower()
+    if target not in ("wallpaper", "screensaver"):
+        raise StudioCommandError(
+            "invalid_format", "target must be 'wallpaper' or 'screensaver'"
+        )
+    mode = str(body.get("mode") or "").strip().lower()
+    if mode not in ("off", "single", "collection", "custom"):
+        raise StudioCommandError(
+            "invalid_format", "mode must be one of off, single, collection, custom"
+        )
+    include_dynamic = target == "wallpaper"
+    known_ids = known_wallpaper_ids(include_dynamic=include_dynamic)
+    valid_collections = VIRTUAL_COLLECTION_IDS | known_collection_ids()
+
     source_id = str(body.get("source_id") or "").strip()
-    if not source_id:
-        raise StudioCommandError("invalid_format", "source_id is required")
-    deleted = await hass.async_add_executor_job(
-        delete_uploaded_wallpaper,
-        hass,
-        source_id,
-    )
-    if not deleted:
-        raise StudioCommandError("not_found", "That wallpaper isn't an uploaded photo")
-    _prune_deleted_wallpaper_from_coordinators(hass, source_id)
+    collection_id = str(body.get("collection_id") or "").strip()
+    raw_photo_ids = body.get("photo_ids")
+    cycle_minutes = body.get("cycle_minutes")
+    shuffle = body.get("shuffle")
+
+    if mode == "single":
+        if not source_id or source_id not in known_ids:
+            raise StudioCommandError(
+                "not_allowed",
+                "Choose a valid photo from the Photo Library",
+            )
+    elif mode == "collection":
+        if not collection_id or collection_id not in valid_collections:
+            raise StudioCommandError(
+                "not_found",
+                f"Unknown photo collection '{collection_id or '(empty)'}'",
+            )
+    elif mode == "custom":
+        if not isinstance(raw_photo_ids, list):
+            raise StudioCommandError("invalid_format", "photo_ids must be a list")
+        cleaned_ids: list[str] = []
+        for item in raw_photo_ids:
+            pid = str(item or "").strip()
+            if pid and pid not in cleaned_ids:
+                if pid not in known_ids:
+                    raise StudioCommandError(
+                        "not_allowed", f"Unknown photo '{pid}'"
+                    )
+                cleaned_ids.append(pid)
+        if not cleaned_ids:
+            raise StudioCommandError(
+                "invalid_format", "Select at least one photo for custom mode"
+            )
+        raw_photo_ids = cleaned_ids
+
+    async with coordinator.config_lock:
+        merged = dict(coordinator.device_data)
+        if target == "wallpaper":
+            merged[CONF_WALLPAPER_MODE] = mode
+            if mode == "off":
+                merged[CONF_WALLPAPER_SOURCE] = ""
+                merged[CONF_WALLPAPER_COLLECTION] = ""
+                merged[CONF_WALLPAPER_CYCLE_MINUTES] = 0
+                coordinator.current_wallpaper = ""
+                coordinator._configured_wallpaper_source = ""
+            elif mode == "single":
+                merged[CONF_WALLPAPER_SOURCE] = source_id
+                merged[CONF_WALLPAPER_COLLECTION] = ""
+                coordinator.current_wallpaper = source_id
+                coordinator._configured_wallpaper_source = source_id
+                if cycle_minutes is None:
+                    merged[CONF_WALLPAPER_CYCLE_MINUTES] = 0
+            elif mode == "collection":
+                merged[CONF_WALLPAPER_COLLECTION] = collection_id
+                merged[CONF_WALLPAPER_SOURCE] = ""
+                coordinator.current_wallpaper = ""
+                coordinator._configured_wallpaper_source = ""
+            elif mode == "custom":
+                merged[CONF_WALLPAPER_FAVORITES] = list(raw_photo_ids or [])
+                merged[CONF_WALLPAPER_COLLECTION] = ""
+                merged[CONF_WALLPAPER_SOURCE] = ""
+                coordinator.current_wallpaper = ""
+                coordinator._configured_wallpaper_source = ""
+            if cycle_minutes is not None:
+                merged[CONF_WALLPAPER_CYCLE_MINUTES] = max(0, int(cycle_minutes))
+            coordinator.update_device_config(merged)
+            coordinator._bind_wallpaper_cycle_timer()
+        else:
+            merged[CONF_SCREENSAVER_PHOTO_MODE] = mode
+            if mode == "off":
+                merged[CONF_SCREENSAVER_PHOTO_SOURCE] = ""
+                merged[CONF_SCREENSAVER_PHOTO_COLLECTION] = ""
+                coordinator.current_screensaver_photo = ""
+            elif mode == "single":
+                merged[CONF_SCREENSAVER_PHOTO_SOURCE] = source_id
+                merged[CONF_SCREENSAVER_PHOTO_COLLECTION] = ""
+                coordinator.current_screensaver_photo = source_id
+            elif mode == "collection":
+                merged[CONF_SCREENSAVER_PHOTO_COLLECTION] = collection_id
+                merged[CONF_SCREENSAVER_PHOTO_SOURCE] = ""
+                coordinator.current_screensaver_photo = ""
+            elif mode == "custom":
+                merged[CONF_SCREENSAVER_PHOTO_IDS] = list(raw_photo_ids or [])
+                merged[CONF_SCREENSAVER_PHOTO_COLLECTION] = ""
+                merged[CONF_SCREENSAVER_PHOTO_SOURCE] = ""
+                coordinator.current_screensaver_photo = ""
+            if cycle_minutes is not None:
+                merged[CONF_SCREENSAVER_CYCLE_MINUTES] = max(0, int(cycle_minutes))
+            if shuffle is not None:
+                merged[CONF_SCREENSAVER_SHUFFLE] = bool(shuffle)
+            coordinator.update_device_config(merged)
+            coordinator._bind_screensaver_cycle_timer()
+        coordinator._schedule_persist_runtime_state()
+        coordinator.async_notify_listeners()
 
 
 async def _cmd_mint_camera_preview_url(
@@ -1109,6 +1512,7 @@ async def _cmd_save_device_config(
         if ma_link_changed:
             async_refresh_ma_link(hass, coordinator)
         coordinator._bind_wallpaper_cycle_timer()
+        coordinator._bind_screensaver_cycle_timer()
         coordinator.async_notify_listeners()
     if (sys_obj := get_latter_system(hass)) is not None:
         await sys_obj.async_evaluate_bedtime_schedules()
@@ -1633,6 +2037,24 @@ async def _cmd_apply_batch_device_setting(
             )
             merged = {**c.device_data, **dev_cleaned}
             wp_override = CONF_WALLPAPER_SOURCE in dev_cleaned
+            if (
+                wp_override
+                and CONF_WALLPAPER_MODE not in dev_cleaned
+            ):
+                wp_val = str(merged.get(CONF_WALLPAPER_SOURCE) or "").strip()
+                merged[CONF_WALLPAPER_MODE] = "single" if wp_val else "off"
+            if (
+                CONF_WALLPAPER_COLLECTION in dev_cleaned
+                and CONF_WALLPAPER_MODE not in dev_cleaned
+            ):
+                col_val = str(merged.get(CONF_WALLPAPER_COLLECTION) or "").strip()
+                merged[CONF_WALLPAPER_MODE] = "collection" if col_val else "off"
+            if (
+                CONF_SCREENSAVER_PHOTO_COLLECTION in dev_cleaned
+                and CONF_SCREENSAVER_PHOTO_MODE not in dev_cleaned
+            ):
+                ss_col = str(merged.get(CONF_SCREENSAVER_PHOTO_COLLECTION) or "").strip()
+                merged[CONF_SCREENSAVER_PHOTO_MODE] = "collection" if ss_col else "off"
             if merged != c.device_data or wp_override:
                 if wp_override:
                     wp_val = str(merged.get(CONF_WALLPAPER_SOURCE) or "").strip()
@@ -1641,6 +2063,7 @@ async def _cmd_apply_batch_device_setting(
                 c.update_device_config(merged)
                 await c.async_apply_options()
                 c._bind_wallpaper_cycle_timer()
+                c._bind_screensaver_cycle_timer()
                 c.async_notify_listeners()
     if (sys_obj := get_latter_system(hass)) is not None:
         await sys_obj.async_evaluate_bedtime_schedules()
@@ -1733,9 +2156,15 @@ _STUDIO_COMMAND_HANDLERS: dict[str, _CommandHandler] = {
     "test_doorbell_speaker": _cmd_test_doorbell_speaker,
     "send_announcement": _cmd_send_announcement,
     "check_system_updates": _cmd_check_system_updates,
-    "select_wallpaper": _cmd_select_wallpaper,
-    "toggle_wallpaper_favorite": _cmd_toggle_wallpaper_favorite,
-    "delete_wallpaper": _cmd_delete_wallpaper,
+    "create_photo_collection": _cmd_create_photo_collection,
+    "rename_photo_collection": _cmd_rename_photo_collection,
+    "delete_photo_collection": _cmd_delete_photo_collection,
+    "update_photo_metadata": _cmd_update_photo_metadata,
+    "bulk_update_photos": _cmd_bulk_update_photos,
+    "delete_photo": _cmd_delete_photo,
+    "browse_media_folder": _cmd_browse_media_folder,
+    "import_media_photos": _cmd_import_media_photos,
+    "set_device_photo_pool": _cmd_set_device_photo_pool,
     "mint_camera_preview_url": _cmd_mint_camera_preview_url,
     "ignore_discovered_device": _cmd_ignore_discovered_device,
     "unignore_discovered_device": _cmd_unignore_discovered_device,
@@ -1871,8 +2300,10 @@ async def ws_handle_subscribe(
             cur_wp_tok == last_wp_token[0]
             and cur_hmac == last_hmac[0]
             and section_gate.has_sent("system_wallpapers")
+            and section_gate.has_sent("photo_collections")
         ):
             skip.add("system_wallpapers")
+            skip.add("photo_collections")
         else:
             last_wp_token[0] = cur_wp_tok
             last_hmac[0] = cur_hmac
@@ -2105,7 +2536,7 @@ async def _async_handle_ws_command_impl(
         connection.send_error(msg["id"], "command_failed", str(err))
         return
 
-    if cmd == "mint_camera_preview_url":
+    if cmd in ("mint_camera_preview_url", "browse_media_folder"):
         connection.send_result(msg["id"], extra)
         return
 

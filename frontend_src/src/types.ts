@@ -1,5 +1,5 @@
 /**
- * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 38`).
+ * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 39`).
  */
 
 import type {
@@ -7,8 +7,15 @@ import type {
   DevicePrefSpecItem,
   WorldClockZoneItem,
 } from "./protocol-schema.js";
+import type { CropPreviewAspect, PhotoCrop } from "./utils/crop-math.js";
 
-export type { CatalogItem, DevicePrefSpecItem, WorldClockZoneItem };
+export type {
+  CatalogItem,
+  CropPreviewAspect,
+  DevicePrefSpecItem,
+  PhotoCrop,
+  WorldClockZoneItem,
+};
 
 export type StudioScope = "device" | "system";
 
@@ -26,6 +33,7 @@ export type DeviceViewId =
 export type SystemViewId =
   | "system_overview"
   | "shared_entities"
+  | "photos"
   | "remotes"
   | "system_sync"
   | "area_tracking"
@@ -44,11 +52,15 @@ export type ConfigurableAppId =
   | "cameras"
   | "area"
   | "remote"
+  | "weather"
   | "time"
   | "calendar"
   | "tools"
   | "games"
   | "clock";
+
+export type PhotoPoolMode = "off" | "single" | "collection" | "custom";
+export type PhotoPoolTarget = "wallpaper" | "screensaver";
 
 export interface HassEntityState {
   entity_id: string;
@@ -339,8 +351,17 @@ export interface DeviceConfig {
   camera_framing?: string;
   camera_stream_mode?: string;
   camera_doorbell_popup?: string;
+  wallpaper_mode?: PhotoPoolMode | string;
   wallpaper_source?: string;
+  wallpaper_collection?: string;
+  wallpaper_favorites?: string[];
   wallpaper_cycle_minutes?: number;
+  screensaver_photo_mode?: PhotoPoolMode | string;
+  screensaver_photo_source?: string;
+  screensaver_photo_collection?: string;
+  screensaver_photo_ids?: string[];
+  screensaver_cycle_minutes?: number;
+  screensaver_shuffle?: boolean;
   security_pin_policy?: SecurityPinPolicy | string;
   security_pin?: string;
   has_security_pin?: boolean;
@@ -397,16 +418,73 @@ interface EspHomeInspector {
   sections?: EspHomeSection[];
 }
 
-export interface WallpaperItem {
+export interface PhotoCollection {
   id: string;
   name: string;
+  count: number;
+}
+
+export interface PhotoItem {
+  id: string;
+  name: string;
+  filename?: string;
   thumb_url?: string;
   preview_url?: string;
+  orig_url?: string;
   active?: boolean;
   favorite?: boolean;
   deletable?: boolean;
-  kind?: "preset" | "upload" | string;
+  kind?: "preset" | "dynamic_preset" | "uploaded" | "upload" | string;
   scope?: "device" | "system" | string;
+  width?: number;
+  height?: number;
+  crop?: PhotoCrop;
+  collections?: string[];
+  source_kind?: "preset" | "dynamic_preset" | "upload" | "media_import" | string;
+  media_source_path?: string;
+  added_at?: string;
+}
+
+export type WallpaperItem = PhotoItem;
+
+export interface MediaBrowseRoot {
+  id: string;
+  name: string;
+}
+
+export interface MediaBrowseFolder {
+  name: string;
+  subpath: string;
+}
+
+export interface MediaBrowseImage {
+  name: string;
+  relpath: string;
+  size_bytes: number;
+  too_large: boolean;
+  already_imported: boolean;
+  thumb_url: string;
+}
+
+export interface MediaBrowseResult {
+  roots: MediaBrowseRoot[];
+  root: string;
+  subpath: string;
+  parent_subpath: string | null;
+  folders: MediaBrowseFolder[];
+  images: MediaBrowseImage[];
+}
+
+export interface MediaImportResult {
+  imported: number;
+  skipped: number;
+  failed: Array<{ path: string; error: string }>;
+  collection_id?: string | null;
+}
+
+export interface BulkPhotoUpdateResult {
+  updated: number;
+  deleted_ids: string[];
 }
 
 interface DoorbellTalkEntry {
@@ -542,6 +620,12 @@ export interface LiveDeviceTelemetry {
   stopwatch_elapsed_sec?: number;
   stopwatch_started_at?: string;
   alarm_ringing?: boolean;
+  active_wallpaper_id?: string;
+  active_wallpaper_thumb_url?: string;
+  wallpaper_pool_count?: number;
+  active_screensaver_photo_id?: string;
+  active_screensaver_photo_thumb_url?: string;
+  screensaver_pool_count?: number;
 }
 
 interface QuickActionPayloadItem {
@@ -588,7 +672,8 @@ export interface StudioStatePayload {
   device_groups: DeviceGroup[];
   system_config: SystemConfig;
   has_security_pin?: boolean;
-  system_wallpapers: WallpaperItem[];
+  photo_collections?: PhotoCollection[];
+  system_wallpapers: PhotoItem[];
   doorbells: DoorbellStatusItem[];
   catalog?: EntityCatalog;
   pref_specs?: DevicePrefSpecItem[];
@@ -599,10 +684,16 @@ export interface StudioStatePayload {
   quick_actions?: QuickActionPayloadItem[];
   speaker_volume?: EspHomeEntityItem | null;
   esphome: EspHomeInspector;
-  wallpapers: WallpaperItem[];
+  wallpapers: PhotoItem[];
   links?: DeviceLinks;
   live: LiveDeviceTelemetry;
   update_check?: { checked: number; available: number };
+  collection?: { id: string; name: string };
+  deleted_collection_id?: string;
+  photo?: PhotoItem;
+  bulk_result?: BulkPhotoUpdateResult;
+  deleted_photo_id?: string;
+  import_result?: MediaImportResult;
   removed?: boolean;
   removed_subentry_id?: string;
   adopted_subentry_id?: string;

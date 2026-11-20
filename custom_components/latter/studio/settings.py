@@ -34,6 +34,7 @@ _PROTOCOL_V3_DATA: dict[str, Any] = json.loads(
 HEAVY_SUBSCRIPTION_SECTIONS: tuple[str, ...] = (
     "discovered_ble_devices",
     "system_wallpapers",
+    "photo_collections",
     "ble_area_signatures",
 )
 
@@ -1052,7 +1053,12 @@ DEVICE_TEXT_KEYS: tuple[str, ...] = (
     "tools_items",
     "games_items",
     "activity_sources",
+    "wallpaper_mode",
     "wallpaper_source",
+    "wallpaper_collection",
+    "screensaver_photo_mode",
+    "screensaver_photo_source",
+    "screensaver_photo_collection",
     "security_pin_policy",
 )
 DEVICE_BOOL_KEYS: tuple[str, ...] = (
@@ -1061,6 +1067,7 @@ DEVICE_BOOL_KEYS: tuple[str, ...] = (
     "sync_device_area",
     "area_handoff",
     "activity_card",
+    "screensaver_shuffle",
 )
 DEVICE_SETTING_KEYS: tuple[str, ...] = (
     *DEVICE_TEXT_KEYS,
@@ -1069,12 +1076,18 @@ DEVICE_SETTING_KEYS: tuple[str, ...] = (
     "pinned_items",
     "camera_visible_entities",
     "camera_carousel_entities",
+    "wallpaper_favorites",
     "wallpaper_cycle_minutes",
+    "screensaver_photo_ids",
+    "screensaver_cycle_minutes",
     "device_custom_color",
     "area_follow_dwell_s",
     "ble_ref_power",
     *DEVICE_PREF_KEYS,
 )
+
+PHOTO_POOL_MODES: tuple[str, ...] = ("off", "single", "collection", "custom")
+MAX_PHOTO_POOL_IDS = 100
 
 MAX_LIST_ITEMS = 10
 MAX_THERMOSTATS = 8
@@ -1483,8 +1496,16 @@ def clean_device_settings(
                 out[key] = bool(raw_b)
     try:
         if "wallpaper_cycle_minutes" in incoming:
+            if isinstance(incoming["wallpaper_cycle_minutes"], bool):
+                raise ValueError("boolean")
             out["wallpaper_cycle_minutes"] = max(
                 0, int(incoming["wallpaper_cycle_minutes"])
+            )
+        if "screensaver_cycle_minutes" in incoming:
+            if isinstance(incoming["screensaver_cycle_minutes"], bool):
+                raise ValueError("boolean")
+            out["screensaver_cycle_minutes"] = max(
+                0, int(incoming["screensaver_cycle_minutes"])
             )
         if "area_follow_dwell_s" in incoming:
             out["area_follow_dwell_s"] = max(
@@ -1492,6 +1513,29 @@ def clean_device_settings(
             )
     except (TypeError, ValueError) as err:
         raise SettingsScopeError(f"Not a whole number: {err}") from None
+
+    for pool_mode_key in ("wallpaper_mode", "screensaver_photo_mode"):
+        if pool_mode_key in out:
+            pm = out[pool_mode_key].lower()
+            if pm not in PHOTO_POOL_MODES:
+                raise SettingsScopeError(
+                    f"Unknown {pool_mode_key}: {pm or '(empty)'}"
+                )
+            out[pool_mode_key] = pm
+
+    for pool_ids_key in ("wallpaper_favorites", "screensaver_photo_ids"):
+        if pool_ids_key in incoming:
+            raw_pids = incoming[pool_ids_key]
+            if not isinstance(raw_pids, (list, tuple)):
+                raise SettingsScopeError(f"{pool_ids_key} must be a list of photo IDs")
+            cleaned_pids: list[str] = []
+            for item in raw_pids:
+                pid = _text(item)[:128]
+                if pid and pid not in cleaned_pids:
+                    cleaned_pids.append(pid)
+                if len(cleaned_pids) >= MAX_PHOTO_POOL_IDS:
+                    break
+            out[pool_ids_key] = cleaned_pids
 
     if "ble_ref_power" in incoming:
         raw_ref = incoming["ble_ref_power"]

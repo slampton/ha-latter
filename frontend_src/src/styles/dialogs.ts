@@ -62,6 +62,220 @@ export const DIALOG_STYLES = css`
   dialog.studio-dialog.shortcut-dialog {
     inline-size: min(560px, calc(100vw - 32px));
   }
+  dialog.studio-dialog.photo-dialog {
+    inline-size: min(680px, calc(100vw - 32px));
+  }
+  .crop-dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-5);
+    border: 2px dashed var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .crop-dropzone.dragging,
+  .crop-dropzone:hover {
+    border-color: var(--studio-primary);
+    background: var(--studio-dropzone-bg);
+  }
+  .crop-stage-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--studio-space-2);
+    padding: var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-surface-alt);
+  }
+  .crop-canvas {
+    max-inline-size: 100%;
+    block-size: auto;
+    border-radius: var(--studio-radius-control);
+    border: 1px solid var(--studio-divider);
+    background: var(--studio-media-bg);
+    cursor: grab;
+    touch-action: none;
+    display: block;
+  }
+  .crop-canvas.dragging {
+    cursor: grabbing;
+  }
+  .crop-canvas.round {
+    border-radius: 50%;
+  }
+  .crop-controls-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-3);
+    inline-size: 100%;
+  }
+  .crop-zoom-control {
+    display: flex;
+    align-items: center;
+    gap: var(--studio-space-2);
+    flex: 1 1 200px;
+  }
+  .crop-zoom-control input[type="range"] {
+    flex: 1;
+    min-inline-size: 120px;
+  }
+  .crop-filmstrip {
+    display: flex;
+    align-items: center;
+    gap: var(--studio-space-2);
+    overflow-x: auto;
+    padding-block: var(--studio-space-1);
+    inline-size: 100%;
+  }
+  .crop-filmstrip-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--studio-space-1);
+    padding: var(--studio-space-1);
+    border: 2px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .crop-filmstrip-item.active {
+    border-color: var(--studio-primary);
+    background: var(--studio-primary-tint);
+  }
+  .crop-filmstrip-thumb {
+    inline-size: 56px;
+    block-size: 56px;
+    object-fit: cover;
+    border-radius: var(--studio-radius-field);
+    background: var(--studio-media-bg);
+    display: block;
+  }
+  .crop-filmstrip-remove {
+    position: absolute;
+    inset-block-start: -6px;
+    inset-inline-end: -6px;
+    inline-size: 22px;
+    block-size: 22px;
+    border-radius: var(--studio-radius-pill);
+    border: 1px solid var(--studio-divider);
+    background: var(--studio-surface);
+    color: var(--studio-text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    font-size:var(--studio-font-caption);
+  }
+  .crop-filmstrip-remove:hover {
+    background: var(--studio-danger-tonal-bg);
+    color: var(--studio-danger-tonal-text);
+    border-color: var(--studio-error);
+  }
+  .media-breadcrumbs {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-1);
+    padding-block: var(--studio-space-1);
+  }
+  .media-folder-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--studio-space-2);
+  }
+  .media-folder-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--studio-space-2);
+    padding-block: var(--studio-space-2);
+    padding-inline: var(--studio-space-3);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+    color: var(--studio-text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    min-inline-size: 0;
+  }
+  .media-folder-btn:hover {
+    border-color: var(--studio-primary);
+    background: var(--studio-hover);
+  }
+  .media-folder-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .media-scroll-area {
+    max-block-size: 360px;
+    overflow-y: auto;
+    padding: var(--studio-space-1);
+    display: flex;
+    flex-direction: column;
+    gap: var(--studio-space-3);
+  }
+  .photo-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: var(--studio-space-2);
+    max-block-size: 320px;
+    overflow-y: auto;
+    padding: var(--studio-space-1);
+  }
+  .photo-picker-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--studio-space-1);
+    padding: var(--studio-space-2);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-control);
+    background: var(--studio-input-bg);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: center;
+  }
+  .photo-picker-item:hover {
+    border-color: var(--studio-primary);
+  }
+  .photo-picker-item.selected {
+    border-color: var(--studio-primary);
+    background: var(--studio-primary-tint);
+    box-shadow: var(--studio-photo-ring-selected);
+  }
+  .photo-picker-thumb {
+    inline-size: 88px;
+    block-size: 88px;
+    object-fit: cover;
+    border-radius: var(--studio-radius-control);
+    border: 1px solid var(--studio-divider);
+    background: var(--studio-media-bg);
+  }
+  .photo-picker-thumb.circle {
+    border-radius: 50%;
+  }
+  .photo-picker-name {
+    font-size:var(--studio-font-caption);
+    font-weight: var(--studio-weight-medium);
+    inline-size: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .shortcut-item-row,
   .dock-row {
     display: flex;

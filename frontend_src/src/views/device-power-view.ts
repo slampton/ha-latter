@@ -9,9 +9,10 @@ import type { StudioStore } from "../state/store.js";
 import { renderDeviceEntityRow, renderDeviceOfflineBanner } from "./device-overview-view.js";
 
 const SCREENSAVER_KEYS = new Set([
-  "docked_screensaver",
+  "screensaver_mode",
   "screensaver_style",
   "docked_idle_timeout",
+  "screensaver_photo_clock",
 ]);
 
 const BEDTIME_KEYS = new Set([

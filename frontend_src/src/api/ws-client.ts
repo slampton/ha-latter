@@ -12,7 +12,15 @@ import {
   STUDIO_REV,
   SYSTEM_WS_COMMANDS,
 } from "../protocol-schema.js";
-import type { HomeAssistant, StudioScope, StudioStatePayload, WallpaperItem } from "../types.js";
+import type {
+  HomeAssistant,
+  MediaBrowseResult,
+  PhotoCollection,
+  PhotoCrop,
+  PhotoItem,
+  StudioScope,
+  StudioStatePayload,
+} from "../types.js";
 
 export { DEVICE_WS_COMMANDS, SYSTEM_WS_COMMANDS };
 
@@ -39,7 +47,14 @@ export type SystemWsCommand =
   | "apply_batch_device_setting"
   | "test_doorbell_speaker"
   | "mint_camera_preview_url"
-  | "delete_wallpaper"
+  | "delete_photo"
+  | "create_photo_collection"
+  | "rename_photo_collection"
+  | "delete_photo_collection"
+  | "update_photo_metadata"
+  | "bulk_update_photos"
+  | "browse_media_folder"
+  | "import_media_photos"
   | "save_system_config"
   | "rotate_signing_key"
   | "set_security_pin";
@@ -47,8 +62,7 @@ export type SystemWsCommand =
 export type DeviceWsCommand =
   | "esphome_entity_action"
   | "device_action"
-  | "select_wallpaper"
-  | "toggle_wallpaper_favorite"
+  | "set_device_photo_pool"
   | "save_device_config";
 
 export interface WsErrorLike {
@@ -84,10 +98,13 @@ export interface MintCameraPreviewResult {
 
 export interface UploadWallpaperResult {
   ok: boolean;
+  photo_id?: string;
   filename?: string;
   source_id?: string;
-  wallpapers?: WallpaperItem[];
-  system_wallpapers?: WallpaperItem[];
+  photo?: PhotoItem;
+  photo_collections?: PhotoCollection[];
+  wallpapers?: PhotoItem[];
+  system_wallpapers?: PhotoItem[];
 }
 
 function withWsTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
@@ -193,7 +210,7 @@ export class StudioWsClient {
   }
 
   async runSystemCommand(
-    cmd: Exclude<SystemWsCommand, "mint_camera_preview_url">,
+    cmd: Exclude<SystemWsCommand, "mint_camera_preview_url" | "browse_media_folder">,
     payload: Record<string, unknown> = {},
     selectedSubentryId?: string | null,
   ): Promise<StudioStatePayload> {
@@ -201,7 +218,9 @@ export class StudioWsClient {
       throw new Error(`Unknown System command: ${cmd}`);
     }
     const timeoutMs =
-      cmd === "check_system_updates" ? WS_LONG_TIMEOUT_MS : WS_STANDARD_TIMEOUT_MS;
+      cmd === "check_system_updates" || cmd === "import_media_photos"
+        ? WS_LONG_TIMEOUT_MS
+        : WS_STANDARD_TIMEOUT_MS;
     return this.callWS<StudioStatePayload>(
       {
         type: "latter/system/command",
@@ -212,6 +231,22 @@ export class StudioWsClient {
       },
       timeoutMs,
     );
+  }
+
+  async browseMediaFolder(root?: string, subpath?: string): Promise<MediaBrowseResult> {
+    if (!SYSTEM_WS_COMMANDS.has("browse_media_folder")) {
+      throw new Error("browse_media_folder is not registered in Studio protocol contract");
+    }
+    const payload: Record<string, unknown> = {};
+    if (root !== undefined && root !== "") payload.root = root;
+    if (subpath !== undefined && subpath !== "") payload.subpath = subpath;
+    return this.callWS<MediaBrowseResult>({
+      type: "latter/system/command",
+      command: "browse_media_folder",
+      subentry_id: null,
+      payload,
+      studio_rev: STUDIO_REV,
+    });
   }
 
   async mintCameraPreviewUrl(cameraEntity: string): Promise<MintCameraPreviewResult> {
@@ -345,13 +380,16 @@ export class StudioWsClient {
     scope: StudioScope;
     subentryId?: string;
     file: File;
+    name?: string;
+    crop?: PhotoCrop;
+    collectionId?: string;
     onProgress?: (percent: number) => void;
   }): Promise<UploadWallpaperResult> {
     if (!options.file) {
       throw new Error("Choose an image file first");
     }
     if (options.file.size > MAX_WALLPAPER_UPLOAD_BYTES) {
-      throw new Error("Wallpaper image must be 15 MB or smaller");
+      throw new Error("Photo must be 15 MB or smaller");
     }
     if (options.scope === "device" && !options.subentryId) {
       throw new Error("Choose a Device before uploading a Device wallpaper");
@@ -359,10 +397,21 @@ export class StudioWsClient {
 
     const UPLOAD_PATH = "/api/latter/wallpaper/upload";
     const form = new FormData();
-    form.append("file", options.file, options.file.name || "wallpaper.jpg");
+    form.append("file", options.file, options.file.name || "photo.jpg");
     form.append("scope", options.scope);
     if (options.subentryId) {
       form.append("subentry_id", options.subentryId);
+    }
+    if (options.name && options.name.trim()) {
+      form.append("name", options.name.trim());
+    }
+    if (options.crop) {
+      form.append("crop_x", String(options.crop.x));
+      form.append("crop_y", String(options.crop.y));
+      form.append("crop_zoom", String(options.crop.zoom));
+    }
+    if (options.collectionId && options.collectionId.trim()) {
+      form.append("collection_id", options.collectionId.trim());
     }
 
     const sendOnce = (bearerToken: string) =>
@@ -413,11 +462,19 @@ export class StudioWsClient {
       options.onProgress?.(100);
       return {
         ok: true,
+        photo_id: body?.photo_id ? String(body.photo_id) : undefined,
         filename: body?.filename ? String(body.filename) : undefined,
         source_id: body?.source_id ? String(body.source_id) : undefined,
-        wallpapers: Array.isArray(body?.wallpapers) ? (body.wallpapers as WallpaperItem[]) : undefined,
+        photo:
+          body?.photo && typeof body.photo === "object"
+            ? (body.photo as PhotoItem)
+            : undefined,
+        photo_collections: Array.isArray(body?.photo_collections)
+          ? (body.photo_collections as PhotoCollection[])
+          : undefined,
+        wallpapers: Array.isArray(body?.wallpapers) ? (body.wallpapers as PhotoItem[]) : undefined,
         system_wallpapers: Array.isArray(body?.system_wallpapers)
-          ? (body.system_wallpapers as WallpaperItem[])
+          ? (body.system_wallpapers as PhotoItem[])
           : undefined,
       };
     }

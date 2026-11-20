@@ -118,6 +118,10 @@ export const BASE_STYLES = css`
     --studio-overlay-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     --studio-scrim: rgba(0, 0, 0, 0.5);
     --studio-media-bg: var(--secondary-background-color, #000000);
+    --studio-photo-badge-bg: rgba(0, 0, 0, 0.68);
+    --studio-photo-badge-text: #ffffff;
+    --studio-photo-ring-selected: 0 0 0 2px var(--studio-primary);
+    --studio-dropzone-bg: color-mix(in srgb, var(--studio-primary) 6%, var(--studio-input-bg));
     --studio-nav-scroll-mask: linear-gradient(
       to right,
       transparent 0,

@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
 import json
 import logging
+import random
 import time
 from typing import Any
 
@@ -84,6 +85,12 @@ from .const import (
     CONF_PINNED_ITEMS,
     CONF_REMOTE_GROUPS,
     CONF_REMOTES_LIST,
+    CONF_SCREENSAVER_CYCLE_MINUTES,
+    CONF_SCREENSAVER_PHOTO_COLLECTION,
+    CONF_SCREENSAVER_PHOTO_IDS,
+    CONF_SCREENSAVER_PHOTO_MODE,
+    CONF_SCREENSAVER_PHOTO_SOURCE,
+    CONF_SCREENSAVER_SHUFFLE,
     CONF_SECURITY_PIN_HASH,
     CONF_SECURITY_PIN_POLICY,
     CONF_SITE_ID,
@@ -93,8 +100,10 @@ from .const import (
     CONF_TOOLS_ITEMS,
     CONF_VACUUM_ENTITIES,
     CONF_VOLUME_OVERRIDES,
+    CONF_WALLPAPER_COLLECTION,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
+    CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
     CONF_WEATHER_ENTITY,
     DATA_GLOBAL_CONFIG,
@@ -119,11 +128,17 @@ from .const import (
     DEFAULT_HOME_CATEGORIES,
     DEFAULT_LIST_SLOT_COUNT,
     DEFAULT_NATIVE_BLE_TRACKING,
+    DEFAULT_SCREENSAVER_CYCLE_MINUTES,
+    DEFAULT_SCREENSAVER_PHOTO_COLLECTION,
+    DEFAULT_SCREENSAVER_PHOTO_MODE,
+    DEFAULT_SCREENSAVER_SHUFFLE,
     DEFAULT_SECURITY_PIN_POLICY,
     DEFAULT_SITE_ID,
     DEFAULT_SYNC_DEVICE_AREA,
     DEFAULT_TOOLS_ITEMS,
+    DEFAULT_WALLPAPER_COLLECTION,
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
+    DEFAULT_WALLPAPER_MODE,
     DOMAIN,
     EVENT_LATTER,
     GLOBAL_CONFIG_KEYS,
@@ -224,7 +239,11 @@ from .studio.settings import (
     clean_device_settings,
     resolve_device_pref_value,
 )
-from .wallpapers import ordered_wallpaper_ids
+from .wallpapers import (
+    DAY_NIGHT_SKY_NATIVE_URL,
+    DAY_NIGHT_SKY_PRESET_ID,
+    resolve_photo_pool,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -485,6 +504,7 @@ class LatterCoordinator:
         self._unsub_area_entities_state: Callable[[], None] | None = None
         self._unsub_area_debounce: Callable[[], None] | None = None
         self._unsub_wallpaper_timer: Callable[[], None] | None = None
+        self._unsub_screensaver_timer: Callable[[], None] | None = None
         self._unsub_doorbell_ring_state: Callable[[], None] | None = None
         self._unsub_link_report_state: Callable[[], None] | None = None
         self._unsub_ble_radio_state: Callable[[], None] | None = None
@@ -560,6 +580,7 @@ class LatterCoordinator:
         self._last_esp_area: str = ""
         self._last_latter_area: str = ""
         self.current_wallpaper: str = ""
+        self.current_screensaver_photo: str = ""
         self._structural_snapshot: dict[str, Any] = self._capture_structural_snapshot()
 
     # -----------------------------------------------------------------------
@@ -994,11 +1015,38 @@ class LatterCoordinator:
             return DEFAULT_ACTIVITY_SOURCES
 
     @property
+    def wallpaper_mode(self) -> str:
+        raw = str(self.get_opt(CONF_WALLPAPER_MODE, "") or "").strip().lower()
+        if raw in ("off", "single", "collection", "custom"):
+            return raw
+        if str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip():
+            return "single"
+        return DEFAULT_WALLPAPER_MODE
+
+    @property
+    def wallpaper_collection(self) -> str:
+        return str(
+            self.get_opt(CONF_WALLPAPER_COLLECTION, DEFAULT_WALLPAPER_COLLECTION) or ""
+        ).strip()
+
+    @property
+    def configured_wallpaper_source(self) -> str:
+        return str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip()
+
+    @property
     def wallpaper_source(self) -> str:
-        return (
-            self.current_wallpaper
-            or str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip()
-        )
+        mode = self.wallpaper_mode
+        if mode == "off":
+            return ""
+        pool = self.resolve_wallpaper_rotation_pool()
+        if not pool:
+            return ""
+        if self.current_wallpaper in pool:
+            return self.current_wallpaper
+        cfg_src = self.configured_wallpaper_source
+        if cfg_src in pool:
+            return cfg_src
+        return pool[0]
 
     @property
     def wallpaper_favorites(self) -> list[str]:
@@ -1018,6 +1066,72 @@ class LatterCoordinator:
             )
         except (ValueError, TypeError):
             return 0
+
+    @property
+    def screensaver_photo_mode(self) -> str:
+        raw = str(self.get_opt(CONF_SCREENSAVER_PHOTO_MODE, "") or "").strip().lower()
+        if raw in ("off", "single", "collection", "custom"):
+            return raw
+        return DEFAULT_SCREENSAVER_PHOTO_MODE
+
+    @property
+    def screensaver_photo_collection(self) -> str:
+        return str(
+            self.get_opt(
+                CONF_SCREENSAVER_PHOTO_COLLECTION, DEFAULT_SCREENSAVER_PHOTO_COLLECTION
+            )
+            or DEFAULT_SCREENSAVER_PHOTO_COLLECTION
+        ).strip()
+
+    @property
+    def configured_screensaver_photo_source(self) -> str:
+        return str(self.get_opt(CONF_SCREENSAVER_PHOTO_SOURCE, "") or "").strip()
+
+    @property
+    def screensaver_photo_ids(self) -> list[str]:
+        val = self.get_opt(CONF_SCREENSAVER_PHOTO_IDS, [])
+        return [str(x) for x in val] if isinstance(val, (list, tuple)) else []
+
+    @property
+    def screensaver_cycle_minutes(self) -> int:
+        try:
+            return max(
+                0,
+                int(
+                    self.get_opt(
+                        CONF_SCREENSAVER_CYCLE_MINUTES,
+                        DEFAULT_SCREENSAVER_CYCLE_MINUTES,
+                    )
+                ),
+            )
+        except (ValueError, TypeError):
+            return DEFAULT_SCREENSAVER_CYCLE_MINUTES
+
+    @property
+    def screensaver_shuffle(self) -> bool:
+        return bool(
+            self.get_opt(CONF_SCREENSAVER_SHUFFLE, DEFAULT_SCREENSAVER_SHUFFLE)
+        )
+
+    @property
+    def screensaver_photo_frame_active(self) -> bool:
+        return bool(
+            self.has_display
+            and self.get_device_pref("screensaver_style") == "Photo Frame"
+            and self.get_device_pref("screensaver_mode") != "Never"
+        )
+
+    @property
+    def screensaver_photo_source(self) -> str:
+        pool = self.resolve_screensaver_photo_pool()
+        if not pool:
+            return ""
+        if self.current_screensaver_photo in pool:
+            return self.current_screensaver_photo
+        cfg_src = self.configured_screensaver_photo_source
+        if cfg_src in pool:
+            return cfg_src
+        return pool[0]
 
     @property
     def custom_palettes(self) -> list[dict[str, str]]:
@@ -1504,9 +1618,25 @@ class LatterCoordinator:
         )
 
     def build_wallpaper_url(self) -> str:
+        src = self.wallpaper_source
+        if not src:
+            return ""
+        if src == DAY_NIGHT_SKY_PRESET_ID:
+            return DAY_NIGHT_SKY_NATIVE_URL
         w, h = self.wallpaper_dimensions
         return self._url_signer.build_wallpaper_url(
-            self.device_slug, self.wallpaper_source, w, h, self.display_shape
+            self.device_slug, src, w, h, self.display_shape, mode="wallpaper"
+        )
+
+    def build_screensaver_photo_url(self) -> str:
+        if not self.screensaver_photo_frame_active:
+            return ""
+        src = self.screensaver_photo_source
+        if not src:
+            return ""
+        w, h = self.wallpaper_dimensions
+        return self._url_signer.build_wallpaper_url(
+            self.device_slug, src, w, h, self.display_shape, mode="screensaver"
         )
 
     def build_proxy_art_url(self, cache_bust: str) -> str:
@@ -1528,6 +1658,7 @@ class LatterCoordinator:
             "active_area_id": self.active_area_id or "",
             "active_remote_slot": self.active_remote_slot,
             "current_wallpaper": self.current_wallpaper,
+            "current_screensaver_photo": self.current_screensaver_photo,
             "last_media_uri": self.last_media_uri,
             "last_media_type": self.last_media_type,
             "last_media_title": self.last_media_title,
@@ -1561,6 +1692,8 @@ class LatterCoordinator:
             self.active_remote_slot = saved_slot
         if saved_wp := str(stored.get("current_wallpaper") or "").strip():
             self.current_wallpaper = saved_wp
+        if saved_ss := str(stored.get("current_screensaver_photo") or "").strip():
+            self.current_screensaver_photo = saved_ss
         self.last_media_uri = str(stored.get("last_media_uri") or "")
         self.last_media_type = str(stored.get("last_media_type") or "music")
         self.last_media_title = str(stored.get("last_media_title") or "")
@@ -1741,13 +1874,20 @@ class LatterCoordinator:
 
     async def async_apply_options(self) -> None:
         new_conf_wp = str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip()
+        wp_pool = self.resolve_wallpaper_rotation_pool()
         if new_conf_wp != self._configured_wallpaper_source or (
-            self.current_wallpaper
-            and self.wallpaper_favorites
-            and self.current_wallpaper not in self.wallpaper_favorites
-            and self.current_wallpaper != new_conf_wp
+            self.current_wallpaper and self.current_wallpaper not in wp_pool
         ):
-            self._configured_wallpaper_source = self.current_wallpaper = new_conf_wp
+            self._configured_wallpaper_source = new_conf_wp
+            self.current_wallpaper = (
+                new_conf_wp
+                if new_conf_wp in wp_pool
+                else (wp_pool[0] if wp_pool else "")
+            )
+            self._schedule_persist_runtime_state()
+        ss_pool = self.resolve_screensaver_photo_pool()
+        if self.current_screensaver_photo and self.current_screensaver_photo not in ss_pool:
+            self.current_screensaver_photo = ss_pool[0] if ss_pool else ""
             self._schedule_persist_runtime_state()
         self.doorbell_noise_reduction = normalize_noise_reduction(
             self.get_opt(
@@ -1948,35 +2088,68 @@ class LatterCoordinator:
         self._bind_link_report_listener()
         self._bind_ble_radio_listener()
         self._bind_wallpaper_cycle_timer()
+        self._bind_screensaver_cycle_timer()
 
     def resolve_wallpaper_rotation_pool(self) -> list[str]:
-        """Return valid starred wallpaper IDs, or the full gallery when none are starred."""
-        all_ids = ordered_wallpaper_ids()
-        known = set(all_ids)
-        valid_favs = [f for f in self.wallpaper_favorites if f in known]
-        return valid_favs if valid_favs else all_ids
+        """Return valid photo IDs in the Device's active Wallpaper pool."""
+        return resolve_photo_pool(
+            self.wallpaper_mode,
+            self.configured_wallpaper_source,
+            self.wallpaper_collection,
+            self.wallpaper_favorites,
+            include_dynamic=True,
+        )
+
+    def resolve_screensaver_photo_pool(self) -> list[str]:
+        """Return valid photo IDs in the Device's Photo Frame Screensaver pool (dynamic presets excluded)."""
+        return resolve_photo_pool(
+            self.screensaver_photo_mode,
+            self.configured_screensaver_photo_source,
+            self.screensaver_photo_collection,
+            self.screensaver_photo_ids,
+            include_dynamic=False,
+        )
 
     @callback
     def ensure_active_wallpaper_for_rotation(self) -> bool:
-        """Seed an active wallpaper from the rotation pool when rotation is enabled."""
-        if self.is_ble_tag or self.wallpaper_cycle_minutes <= 0:
+        """Seed an active wallpaper from the configured wallpaper pool."""
+        if self.is_ble_tag:
             return False
-        all_ids = ordered_wallpaper_ids()
-        known = set(all_ids)
-        valid_favs = [f for f in self.wallpaper_favorites if f in known]
-        pool = valid_favs if valid_favs else all_ids
+        pool = self.resolve_wallpaper_rotation_pool()
         if not pool:
+            if self.current_wallpaper:
+                self.current_wallpaper = ""
+                self._schedule_persist_runtime_state()
             return False
-        cur = self.wallpaper_source
-        if cur and cur in known and (not valid_favs or cur in valid_favs):
+        if self.current_wallpaper in pool:
             return False
-        picked = pool[0]
+        cfg_src = self.configured_wallpaper_source
+        picked = cfg_src if cfg_src in pool else pool[0]
         self.current_wallpaper = picked
-        self._configured_wallpaper_source = picked
-        merged = dict(self.device_data)
-        if merged.get(CONF_WALLPAPER_SOURCE) != picked:
-            merged[CONF_WALLPAPER_SOURCE] = picked
-            self.update_device_config(merged)
+        self._schedule_persist_runtime_state()
+        return True
+
+    @callback
+    def ensure_active_screensaver_photo(self) -> bool:
+        """Seed an active Photo Frame screensaver photo from the configured screensaver pool."""
+        if self.is_ble_tag or not self.screensaver_photo_frame_active:
+            return False
+        pool = self.resolve_screensaver_photo_pool()
+        if not pool:
+            if self.current_screensaver_photo:
+                self.current_screensaver_photo = ""
+                self._schedule_persist_runtime_state()
+            return False
+        if self.current_screensaver_photo in pool:
+            return False
+        cfg_src = self.configured_screensaver_photo_source
+        if cfg_src in pool:
+            picked = cfg_src
+        elif self.screensaver_shuffle and len(pool) > 1:
+            picked = random.choice(pool)
+        else:
+            picked = pool[0]
+        self.current_screensaver_photo = picked
         self._schedule_persist_runtime_state()
         return True
 
@@ -1986,11 +2159,11 @@ class LatterCoordinator:
             self._unsub_wallpaper_timer()
             self._unsub_wallpaper_timer = None
 
+        self.ensure_active_wallpaper_for_rotation()
         mins = self.wallpaper_cycle_minutes
         if mins <= 0:
             return
 
-        self.ensure_active_wallpaper_for_rotation()
         pool = self.resolve_wallpaper_rotation_pool()
         if self.wallpaper_source and len(pool) >= 2:
 
@@ -2010,6 +2183,49 @@ class LatterCoordinator:
 
             self._unsub_wallpaper_timer = async_track_time_interval(
                 self.hass, _on_wallpaper_tick, timedelta(minutes=mins)
+            )
+
+    @callback
+    def _bind_screensaver_cycle_timer(self) -> None:
+        if self._unsub_screensaver_timer is not None:
+            self._unsub_screensaver_timer()
+            self._unsub_screensaver_timer = None
+
+        if not self.screensaver_photo_frame_active:
+            return
+
+        self.ensure_active_screensaver_photo()
+        mins = self.screensaver_cycle_minutes
+        if mins <= 0:
+            return
+
+        pool = self.resolve_screensaver_photo_pool()
+        if self.screensaver_photo_source and len(pool) >= 2:
+
+            @callback
+            def _on_screensaver_tick(_now: datetime) -> None:
+                if not self.screensaver_photo_frame_active:
+                    return
+                tick_pool = self.resolve_screensaver_photo_pool()
+                if len(tick_pool) < 2:
+                    return
+                cur = self.screensaver_photo_source
+                if self.screensaver_shuffle:
+                    candidates = [p for p in tick_pool if p != cur]
+                    self.current_screensaver_photo = random.choice(
+                        candidates or tick_pool
+                    )
+                else:
+                    try:
+                        idx = (tick_pool.index(cur) + 1) % len(tick_pool)
+                    except ValueError:
+                        idx = 0
+                    self.current_screensaver_photo = tick_pool[idx]
+                self._schedule_persist_runtime_state()
+                self.async_notify_listeners()
+
+            self._unsub_screensaver_timer = async_track_time_interval(
+                self.hass, _on_screensaver_tick, timedelta(minutes=mins)
             )
 
     @callback
@@ -2094,6 +2310,7 @@ class LatterCoordinator:
             "_unsub_area_entities_state",
             "_unsub_area_debounce",
             "_unsub_wallpaper_timer",
+            "_unsub_screensaver_timer",
             "_unsub_doorbell_ring_state",
             "_unsub_link_report_state",
             "_unsub_ble_radio_state",
@@ -2310,6 +2527,8 @@ class LatterCoordinator:
             self._cached_prefs_payload = None
             self._schedule_persist_runtime_state()
         self._cached_prefs_payload = None
+        if "screensaver_mode" in cleaned or "screensaver_style" in cleaned:
+            self._bind_screensaver_cycle_timer()
         if CONF_NATIVE_BLE_TRACKING in cleaned:
             await self.async_apply_options()
             self.async_update_listeners()

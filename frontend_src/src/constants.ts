@@ -99,6 +99,7 @@ export const NATIVE_DOCK_CONFIG_APP_MAP: Readonly<Partial<Record<string, Configu
   "app:cameras": "cameras",
   "app:area": "area",
   "app:remote": "remote",
+  "app:weather": "weather",
   "app:time": "time",
   "app:calendar": "calendar",
   "app:clock": "clock",
@@ -113,6 +114,7 @@ export const START_SCREEN_CONFIG_APP_MAP: Readonly<Partial<Record<string, Config
   Cameras: "cameras",
   "Area Controls": "area",
   Remote: "remote",
+  Weather: "weather",
   "Time App": "time",
   Calendar: "calendar",
   "Clock Face": "clock",
@@ -121,6 +123,12 @@ export const START_SCREEN_CONFIG_APP_MAP: Readonly<Partial<Record<string, Config
 };
 
 export const MAX_WALLPAPER_UPLOAD_BYTES = 15 * 1024 * 1024;
+export const PHOTO_LIBRARY_PAGE_SIZE = 36;
+
+export const VIRTUAL_COLLECTION_ALL = "__all__";
+export const VIRTUAL_COLLECTION_DEFAULTS = "__defaults__";
+export const VIRTUAL_COLLECTION_UPLOADS = "__uploads__";
+export const VIRTUAL_COLLECTION_UNCATEGORIZED = "__uncategorized__";
 
 export const DEVICE_VIEW_SLUGS: Readonly<
   Record<Exclude<DeviceViewId, "select_device_prompt" | "discovered_devices">, string>
@@ -137,6 +145,7 @@ export const DEVICE_VIEW_SLUGS: Readonly<
 export const SYSTEM_VIEW_SLUGS: Readonly<Record<SystemViewId, string>> = {
   system_overview: "overview",
   shared_entities: "shared",
+  photos: "photos",
   remotes: "remotes",
   system_sync: "groups",
   area_tracking: "presence",
@@ -146,6 +155,7 @@ export const SYSTEM_VIEW_SLUGS: Readonly<Record<SystemViewId, string>> = {
 export const VIEW_TITLE_KEYS: Readonly<Record<StudioViewId, StudioTranslationKey>> = {
   system_overview: "view.system_overview",
   shared_entities: "view.shared_entities",
+  photos: "view.photos",
   remotes: "view.remotes",
   system_sync: "view.system_sync",
   area_tracking: "view.area_tracking",
@@ -220,8 +230,17 @@ export const GROUP_BEHAVIOR_NON_PREF_KEYS: ReadonlyArray<string> = [
 ];
 
 export const GROUP_DISPLAY_NON_PREF_KEYS: ReadonlyArray<string> = [
+  "wallpaper_mode",
   "wallpaper_source",
+  "wallpaper_collection",
+  "wallpaper_favorites",
   "wallpaper_cycle_minutes",
+  "screensaver_photo_mode",
+  "screensaver_photo_source",
+  "screensaver_photo_collection",
+  "screensaver_photo_ids",
+  "screensaver_cycle_minutes",
+  "screensaver_shuffle",
   "device_custom_color",
 ];
 
