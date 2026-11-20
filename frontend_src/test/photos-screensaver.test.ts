@@ -23,6 +23,7 @@ import {
 import { tPrefLabel, tPrefOption } from "../src/i18n/index.js";
 import { render } from "../src/lib/lit.js";
 import { DIALOG_STYLES } from "../src/styles/dialogs.js";
+import { DATA_STYLES } from "../src/styles/data.js";
 import type { DeviceGroup, PhotoCollection, PhotoItem } from "../src/types.js";
 import { applyCanvasPanDelta, computeCropSourceRect } from "../src/utils/crop-math.js";
 import { renderDeviceDisplayView } from "../src/views/device-display-view.js";
@@ -391,7 +392,7 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
     assert.ok(wpPickerHtml.includes("Day &amp; Night Sky"));
 
     store.entity.openPhotoPickerModal("screensaver");
-    store.photoPickerModal = { ...store.photoPickerModal, mode: "single" };
+    store.photoPickerModal = { ...store.photoPickerModal, mode: "photos" };
     const ssPickerHtml = renderToHtml(renderPhotoPickerDialog(store));
     assert.equal(ssPickerHtml.includes("Day &amp; Night Sky"), false);
     assert.ok(ssPickerHtml.includes("Sunset Beach"));
@@ -474,6 +475,14 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
       activeSubentryId: "sub_1",
       deviceSelected: true,
       state: {
+        system_devices: [
+          {
+            subentry_id: "sub_1",
+            title: "Desk Display",
+            subentry_type: "device",
+            online: true,
+          },
+        ],
         wallpapers: samplePhotos(),
         system_wallpapers: samplePhotos(),
         photo_collections: sampleCollections(),
@@ -493,14 +502,38 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
 
     // 1. Stale legacy IDs are filtered on open -> count is 1, not 3; Clear empties selection
     store.entity.openPhotoPickerModal("wallpaper");
-    assert.deepEqual(store.photoPickerModal.customIds, ["photo:beach_01"]);
+    assert.equal(store.photoPickerModal.mode, "photos");
+    assert.deepEqual(store.photoPickerModal.selectedIds, ["photo:beach_01"]);
     const pickerContainer = simDocument.createElement("div");
     render(renderPhotoPickerDialog(store), pickerContainer);
     assert.ok(pickerContainer.innerHTML.includes("1 photo selected"));
+    assert.ok(pickerContainer.querySelector("#btn-picker-mode-photos"));
+    assert.ok(pickerContainer.querySelector("#btn-picker-mode-collection"));
+
+    // Applying 1 selected photo sends mode="single"; applying 2 sends mode="custom"
+    await store.entity.applyPhotoPickerModal();
+    assert.equal(harness.devCalls[0].payload.mode, "single");
+    assert.equal(harness.devCalls[0].payload.source_id, "photo:beach_01");
+
+    store.entity.openPhotoPickerModal("wallpaper");
+    store.photoPickerModal = {
+      ...store.photoPickerModal,
+      selectedIds: ["photo:beach_01", "preset:forest_mountains"],
+    };
+    await store.entity.applyPhotoPickerModal();
+    assert.equal(harness.devCalls[1].payload.mode, "custom");
+    assert.deepEqual(harness.devCalls[1].payload.photo_ids, [
+      "photo:beach_01",
+      "preset:forest_mountains",
+    ]);
+
+    store.entity.openPhotoPickerModal("wallpaper");
+    store.photoPickerModal = { ...store.photoPickerModal, selectedIds: ["photo:beach_01"] };
+    render(renderPhotoPickerDialog(store), pickerContainer);
     const clearBtn = pickerContainer.querySelector("#btn-picker-clear-custom") as unknown as HTMLButtonElement;
     assert.ok(clearBtn);
     clearBtn.click();
-    assert.deepEqual(store.photoPickerModal.customIds, []);
+    assert.deepEqual(store.photoPickerModal.selectedIds, []);
     render(renderPhotoPickerDialog(store), pickerContainer);
     assert.ok(pickerContainer.innerHTML.includes("0 photos selected"));
 
@@ -536,7 +569,8 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
     assert.equal(store.photoUploadModal.newCollectionOpen, false);
     assert.equal(store.photoUploadModal.files.length, 1);
 
-    // 3. Dialog & photo picker grid prevent scroll chaining to background window
+    // 3. Dialog & photo picker grid prevent scroll chaining; photo-pool-preview wraps cleanly
     assert.ok(DIALOG_STYLES.styleSheetText.includes("overscroll-behavior: contain"));
+    assert.ok(DATA_STYLES.styleSheetText.includes("flex: 1 1 160px"));
   });
 });

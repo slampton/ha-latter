@@ -1,7 +1,7 @@
 /**
  * Shared Photo Pool Picker Modal (`#latter-photo-picker-modal`, `D-072`).
  * Reused by both `Device -> Display -> Wallpaper` and `Device -> Display -> Screensaver (Photo Frame)`:
- * - Modes: Single photo, Collection, Custom selection
+ * - Modes: Photos (select 1 for static or multiple to rotate) & Collection (follows an album dynamically)
  * - Quick Upload photos trigger (re-opens/updates picker cleanly)
  * - Filters `dynamic_preset` (such as `Day & Night Sky`) out of Photo Frame pickers
  */
@@ -63,24 +63,20 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
     { excludeDynamic: isScreensaver },
   );
 
-  const validCustomIds = filterEligiblePhotoIds(modal.customIds, allPhotos, isScreensaver);
-  const customSet = new Set(validCustomIds);
+  const validSelectedIds = filterEligiblePhotoIds(modal.selectedIds, allPhotos, isScreensaver);
+  const selectedSet = new Set(validSelectedIds);
 
-  const toggleCustomPhoto = (photoId: string): void => {
-    const next = customSet.has(photoId)
-      ? validCustomIds.filter((id) => id !== photoId)
-      : [...validCustomIds, photoId];
-    store.photoPickerModal = { ...store.photoPickerModal, customIds: next };
+  const togglePhoto = (photoId: string): void => {
+    const next = selectedSet.has(photoId)
+      ? validSelectedIds.filter((id) => id !== photoId)
+      : [...validSelectedIds, photoId];
+    store.photoPickerModal = { ...store.photoPickerModal, selectedIds: next };
     store.host.requestUpdate();
   };
 
   const canApply =
     !modal.busy &&
-    (modal.mode === "single"
-      ? Boolean(modal.singleSource)
-      : modal.mode === "collection"
-        ? Boolean(modal.collectionId)
-        : validCustomIds.length > 0);
+    (modal.mode === "collection" ? Boolean(modal.collectionId) : validSelectedIds.length > 0);
 
   const title = isScreensaver
     ? store.t("photo_picker.title_screensaver")
@@ -96,27 +92,19 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
   const onQuickUpload = (): void => {
     const resumeTarget = modal.target;
     const resumeMode = modal.mode;
-    const resumeCustom = [...modal.customIds];
+    const resumeSelected = [...validSelectedIds];
     const resumeCollection = modal.collectionId;
     close();
     store.entity.openPhotoUploadModal({
       defaultCollectionId: resumeCollection.startsWith("col_") ? resumeCollection : "",
       onComplete: (uploadedIds) => {
         store.entity.openPhotoPickerModal(resumeTarget);
-        if (uploadedIds.length > 0) {
-          if (resumeMode === "single" && uploadedIds.length === 1) {
-            store.photoPickerModal = {
-              ...store.photoPickerModal,
-              mode: "single",
-              singleSource: uploadedIds[0],
-            };
-          } else if (resumeMode === "custom") {
-            store.photoPickerModal = {
-              ...store.photoPickerModal,
-              mode: "custom",
-              customIds: Array.from(new Set([...resumeCustom, ...uploadedIds])),
-            };
-          }
+        if (uploadedIds.length > 0 && resumeMode === "photos") {
+          store.photoPickerModal = {
+            ...store.photoPickerModal,
+            mode: "photos",
+            selectedIds: Array.from(new Set([...resumeSelected, ...uploadedIds])),
+          };
           store.host.requestUpdate();
         }
       },
@@ -151,16 +139,16 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
       >
         <button
           type="button"
-          id="btn-picker-mode-single"
+          id="btn-picker-mode-photos"
           role="radio"
-          aria-checked=${modal.mode === "single" ? "true" : "false"}
+          aria-checked=${modal.mode === "photos" ? "true" : "false"}
           @click=${() => {
-            store.photoPickerModal = { ...store.photoPickerModal, mode: "single" };
+            store.photoPickerModal = { ...store.photoPickerModal, mode: "photos" };
             store.host.requestUpdate();
           }}
-          class=${modal.mode === "single" ? "active" : ""}
+          class=${modal.mode === "photos" ? "active" : ""}
         >
-          ${store.t("photo_picker.mode_single")}
+          ${store.t("photo_picker.mode_photos")}
         </button>
         <button
           type="button"
@@ -174,19 +162,6 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
           class=${modal.mode === "collection" ? "active" : ""}
         >
           ${store.t("photo_picker.mode_collection")}
-        </button>
-        <button
-          type="button"
-          id="btn-picker-mode-custom"
-          role="radio"
-          aria-checked=${modal.mode === "custom" ? "true" : "false"}
-          @click=${() => {
-            store.photoPickerModal = { ...store.photoPickerModal, mode: "custom" };
-            store.host.requestUpdate();
-          }}
-          class=${modal.mode === "custom" ? "active" : ""}
-        >
-          ${store.t("photo_picker.mode_custom")}
         </button>
       </div>
 
@@ -291,58 +266,42 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
               </select>
             </div>
 
-            ${modal.mode === "custom"
-              ? html`<div class="photo-toolbar">
-                  <span class="row-description">${store.t("photo_picker.custom_hint")}</span>
-                  <span class="chip chip-primary">
-                    ${validCustomIds.length === 1
-                      ? store.t("photo_picker.custom_selected_one")
-                      : store.t("photo_picker.custom_selected_many", {
-                          count: fmtNumber(validCustomIds.length, store.hass, 0),
-                        })}
-                  </span>
-                  ${validCustomIds.length > 0
-                    ? html`<button
-                        type="button"
-                        id="btn-picker-clear-custom"
-                        ?disabled=${modal.busy}
-                        @click=${() => {
-                          store.photoPickerModal = { ...store.photoPickerModal, customIds: [] };
-                          store.host.requestUpdate();
-                        }}
-                        class="btn btn-text btn-compact"
-                      >
-                        ${store.t("photos.clear_selection")}
-                      </button>`
-                    : nothing}
-                </div>`
-              : nothing}
+            <div class="photo-toolbar">
+              <span class="row-description">${store.t("photo_picker.custom_hint")}</span>
+              <span class="chip chip-primary">
+                ${validSelectedIds.length === 1
+                  ? store.t("photo_picker.custom_selected_one")
+                  : store.t("photo_picker.custom_selected_many", {
+                      count: fmtNumber(validSelectedIds.length, store.hass, 0),
+                    })}
+              </span>
+              ${validSelectedIds.length > 0
+                ? html`<button
+                    type="button"
+                    id="btn-picker-clear-custom"
+                    ?disabled=${modal.busy}
+                    @click=${() => {
+                      store.photoPickerModal = { ...store.photoPickerModal, selectedIds: [] };
+                      store.host.requestUpdate();
+                    }}
+                    class="btn btn-text btn-compact"
+                  >
+                    ${store.t("photos.clear_selection")}
+                  </button>`
+                : nothing}
+            </div>
 
             ${filteredPhotos.length === 0
               ? html`<p class="empty-state">${store.t("photo_picker.empty")}</p>`
               : html`<div class="photo-picker-grid">
                   ${filteredPhotos.map((photo) => {
-                    const isSelected =
-                      modal.mode === "single"
-                        ? modal.singleSource === photo.id
-                        : customSet.has(photo.id);
+                    const isSelected = selectedSet.has(photo.id);
                     const thumbSrc = photo.thumb_url || photo.preview_url || "";
-                    const onPick = (): void => {
-                      if (modal.mode === "single") {
-                        store.photoPickerModal = {
-                          ...store.photoPickerModal,
-                          singleSource: photo.id,
-                        };
-                        store.host.requestUpdate();
-                      } else {
-                        toggleCustomPhoto(photo.id);
-                      }
-                    };
                     return html`<button
                       type="button"
                       data-photo-id=${photo.id}
                       aria-pressed=${isSelected ? "true" : "false"}
-                      @click=${onPick}
+                      @click=${() => togglePhoto(photo.id)}
                       class="photo-picker-item ${isSelected ? "selected" : ""}"
                     >
                       ${thumbSrc

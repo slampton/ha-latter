@@ -81,10 +81,9 @@ export interface MediaImportModalState {
 export interface PhotoPickerModalState {
   open: boolean;
   target: PhotoPoolTarget;
-  mode: Exclude<PhotoPoolMode, "off">;
-  singleSource: string;
+  mode: "photos" | "collection";
   collectionId: string;
-  customIds: string[];
+  selectedIds: string[];
   search: string;
   filterCollection: string;
   busy: boolean;
@@ -144,10 +143,9 @@ export function emptyPhotoPickerModalState(): PhotoPickerModalState {
   return {
     open: false,
     target: "wallpaper",
-    mode: "single",
-    singleSource: "",
+    mode: "photos",
     collectionId: VIRTUAL_COLLECTION_ALL,
-    customIds: [],
+    selectedIds: [],
     search: "",
     filterCollection: VIRTUAL_COLLECTION_ALL,
     busy: false,
@@ -866,14 +864,10 @@ export function openPhotoPickerModalOp(store: StudioStore, target: PhotoPoolTarg
   const rawMode = String(
     isScreensaver ? cfg.screensaver_photo_mode || "off" : cfg.wallpaper_mode || "off",
   );
-  const mode: Exclude<PhotoPoolMode, "off"> =
-    rawMode === "collection" || rawMode === "custom" ? rawMode : "single";
+  const mode: "photos" | "collection" = rawMode === "collection" ? "collection" : "photos";
   const rawSingleSource = String(
     isScreensaver ? cfg.screensaver_photo_source || "" : cfg.wallpaper_source || "",
   );
-  const singleSource =
-    filterEligiblePhotoIds(rawSingleSource ? [rawSingleSource] : [], allPhotos, isScreensaver)[0] ||
-    "";
   const collectionId = String(
     isScreensaver
       ? cfg.screensaver_photo_collection || VIRTUAL_COLLECTION_ALL
@@ -884,15 +878,26 @@ export function openPhotoPickerModalOp(store: StudioStore, target: PhotoPoolTarg
   )
     ? ((isScreensaver ? cfg.screensaver_photo_ids : cfg.wallpaper_favorites) as string[])
     : [];
-  const customIds = filterEligiblePhotoIds(rawCustomIds, allPhotos, isScreensaver);
+  const initialIds =
+    rawMode === "single"
+      ? rawSingleSource
+        ? [rawSingleSource]
+        : []
+      : rawMode === "custom"
+        ? rawCustomIds
+        : rawCustomIds.length > 0
+          ? rawCustomIds
+          : rawSingleSource
+            ? [rawSingleSource]
+            : [];
+  const selectedIds = filterEligiblePhotoIds(initialIds, allPhotos, isScreensaver);
 
   store.photoPickerModal = {
     open: true,
     target,
     mode,
-    singleSource,
     collectionId: collectionId || VIRTUAL_COLLECTION_ALL,
-    customIds,
+    selectedIds,
     search: "",
     filterCollection: VIRTUAL_COLLECTION_ALL,
     busy: false,
@@ -915,29 +920,35 @@ export async function applyPhotoPickerModalOp(store: StudioStore): Promise<void>
     (store.state?.wallpapers && store.state.wallpapers.length > 0
       ? store.state.wallpapers
       : store.state?.system_wallpapers) || [];
-  const cleanCustomIds = filterEligiblePhotoIds(modal.customIds, allPhotos, isScreensaver);
+  const cleanSelectedIds = filterEligiblePhotoIds(modal.selectedIds, allPhotos, isScreensaver);
 
-  store.photoPickerModal = { ...modal, customIds: cleanCustomIds, busy: true };
+  store.photoPickerModal = { ...modal, selectedIds: cleanSelectedIds, busy: true };
   store.host.requestUpdate();
 
   const cfg = store.state?.config || {};
   const currentCycle = Number(
     isScreensaver ? cfg.screensaver_cycle_minutes ?? 15 : cfg.wallpaper_cycle_minutes ?? 0,
   );
-  // If switching to multi-photo pool while wallpaper rotation was 0, default to 15 min so rotation works immediately.
+  const wireMode: Exclude<PhotoPoolMode, "off"> =
+    modal.mode === "collection"
+      ? "collection"
+      : cleanSelectedIds.length === 1
+        ? "single"
+        : "custom";
+  // Picking 1 photo sets a static image (0 min); picking a Collection or 2+ photos defaults to 15 min if off.
   const nextCycle =
-    modal.mode === "single"
-      ? currentCycle
+    wireMode === "single"
+      ? 0
       : currentCycle > 0
         ? currentCycle
         : 15;
 
   const ok = await setDevicePhotoPoolOp(store, {
     target: modal.target,
-    mode: modal.mode,
-    sourceId: modal.mode === "single" ? modal.singleSource : undefined,
-    collectionId: modal.mode === "collection" ? modal.collectionId : undefined,
-    photoIds: modal.mode === "custom" ? cleanCustomIds : undefined,
+    mode: wireMode,
+    sourceId: wireMode === "single" ? cleanSelectedIds[0] : undefined,
+    collectionId: wireMode === "collection" ? modal.collectionId : undefined,
+    photoIds: wireMode === "custom" ? cleanSelectedIds : undefined,
     cycleMinutes: nextCycle,
     shuffle: isScreensaver ? Boolean(cfg.screensaver_shuffle) : undefined,
   });

@@ -735,6 +735,7 @@ export const DATA_STYLES = css`
   }
   .photo-pool-preview {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--studio-space-3);
     padding: var(--studio-space-3);
@@ -764,15 +765,16 @@ export const DATA_STYLES = css`
     flex-direction: column;
     gap: var(--studio-space-1);
     min-inline-size: 0;
-    flex: 1;
+    flex: 1 1 160px;
   }
   .photo-pool-title {
     font-weight: var(--studio-weight-medium);
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
   .photo-pool-meta {
     color: var(--studio-text-secondary);
     font-size:var(--studio-font-secondary);
+    overflow-wrap: break-word;
   }
   .photo-pool-actions {
     display: flex;
