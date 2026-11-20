@@ -211,6 +211,11 @@ export const EN_SYSTEM_STRINGS = {
   "shared.preview": "Preview",
   "shared.preview_heading": "Preview: {entity}",
   "shared.camera_preview_alt": "Camera preview",
+  "shared.cam_cap_rtsp": "RTSP",
+  "shared.cam_cap_mjpeg": "MJPEG",
+  "shared.cam_cap_snapshot": "Snapshot",
+  "shared.cam_cap_audio": "Audio",
+  "shared.cam_cap_doorbell": "Doorbell",
   "shared.doorbells_heading": "Doorbells",
   "shared.no_ring_sensor": "No ring sensor found",
   "shared.last_ring": "last ring {when}",
@@ -555,6 +560,7 @@ export const EN_SYSTEM_STRINGS = {
   // Dialogs (`src/components/dialogs/*`, D-047 / D-053 / D-062 / D-064)
   "dialogs.app_pinned": "Pinned app",
   "dialogs.app_home_hub": "Home hub",
+  "dialogs.app_cameras": "Cameras",
   "dialogs.app_area": "Area control",
   "dialogs.app_music": "Music",
   "dialogs.app_remote": "Remote control",
@@ -576,6 +582,20 @@ export const EN_SYSTEM_STRINGS = {
   "dialogs.home_cats_label": "Home categories",
   "dialogs.home_cats_desc":
     "Toggle and reorder categories shown in the Home hub. The first available category opens by default; categories with no configured entity are not displayed.",
+  "dialogs.camera_default_view_desc": "Layout shown when opening the Cameras app.",
+  "dialogs.camera_framing_desc": "Show the full frame uncropped or fill the display.",
+  "dialogs.camera_carousel_interval_desc": "How often Carousel advances to the next camera.",
+  "dialogs.camera_stream_mode_desc":
+    "Balances live video frame rate against network bandwidth and battery.",
+  "dialogs.camera_doorbell_popup_desc":
+    "Choose whether doorbell rings open a still snapshot or live video.",
+  "dialogs.camera_visible_label": "Visible cameras",
+  "dialogs.camera_visible_desc":
+    "Toggle and reorder cameras shown in the Cameras app on this Device. Leave all enabled to follow Shared entities automatically.",
+  "dialogs.camera_carousel_label": "Carousel cameras",
+  "dialogs.camera_carousel_desc":
+    "Choose and reorder which visible cameras rotate in Carousel view.",
+  "dialogs.cameras_empty_system": "No cameras configured in Shared entities yet.",
   "dialogs.area_cats_label": "Area categories",
   "dialogs.area_cats_desc":
     "Toggle and reorder categories shown on the Area screen. The first available category opens by default; categories with no entities in the active Area are not displayed.",

@@ -4,11 +4,11 @@
   "record_separator": "\u001e",
   "absent_value": "A field with no value is the empty string, never a placeholder (none, NONE, None, unknown, unavailable, Idle, Unassigned) or a made-up number. A state field carries only the values its description lists.",
   "defaults": {
-    "dock_routes": "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools",
+    "dock_routes": "app:pinned,app:music,app:home_hub,app:cameras,app:area,app:remote,app:games,app:tools",
     "activity_card": "1",
     "activity_sources": "calendar,music_queue,stopwatch,alarms,timers",
     "area_categories": "scene,light,cover,fan,switch,climate,media",
-    "home_categories": "alarm,cameras,intercom,thermostat,entry,vacuum",
+    "home_categories": "alarm,intercom,thermostat,entry,vacuum",
     "tools_items": "stopwatch,level,flashlight,calculator,dice,coin_flip",
     "games_items": "marbles,archery,bricks,chomp,2048,memory"
   },
@@ -172,7 +172,7 @@
           "name": "cameras_summary",
           "cpp_enum": "CAMERAS_SUMMARY",
           "type": "records",
-          "description": "0x1E-joined entity_id|name|area_id|snapshot_url camera records (up to 10, in configured order; area_id empty when the camera has no Area)"
+          "description": "0x1E-joined entity_id|name|area_id|caps camera records (up to 10, in configured order; area_id empty when unassigned; caps u16 bitmask: 1=has_audio, 2=has_talkback, 4=is_doorbell, 8=in_carousel)"
         },
         {
           "index": 22,
@@ -263,7 +263,7 @@
           "name": "home_categories",
           "cpp_enum": "HOME_CATEGORIES",
           "type": "csv",
-          "description": "Comma-separated enabled Home Hub categories with >= 1 configured entity, in configured order (alarm, cameras, intercom, thermostat, entry, vacuum); empty when no categories have entities"
+          "description": "Comma-separated enabled Home Hub categories with >= 1 configured entity, in configured order (alarm, intercom, thermostat, entry, vacuum); empty when no categories have entities"
         },
         {
           "index": 35,
@@ -292,6 +292,20 @@
           "cpp_enum": "ALARM_CAPS",
           "type": "u16",
           "description": "Alarm capability & code bitmask (1=code_disarm_required, 2=code_arm_required, 4=supports_arm_home, 8=supports_arm_away, 16=supports_arm_night, 32=supports_arm_vacation)"
+        },
+        {
+          "index": 39,
+          "name": "camera_stream_url",
+          "cpp_enum": "CAMERA_STREAM_URL",
+          "type": "url",
+          "description": "Signed device-scoped base URL for live MJPEG single and 2x2 grid camera streaming"
+        },
+        {
+          "index": 40,
+          "name": "alert_camera_entity",
+          "cpp_enum": "ALERT_CAMERA_ENTITY",
+          "type": "entity_id",
+          "description": "Camera entity ID associated with the active alert or doorbell notification"
         }
       ]
     },
@@ -1048,6 +1062,41 @@
           "cpp_enum": "BEDTIME_BRIGHTNESS",
           "type": "u16",
           "description": "Bedtime Mode active wake brightness percentage (1..100%)"
+        },
+        {
+          "index": 64,
+          "name": "camera_default_view",
+          "cpp_enum": "CAMERA_DEFAULT_VIEW",
+          "type": "string",
+          "description": "Default view when opening the Cameras app (Grid|Single|Carousel)"
+        },
+        {
+          "index": 65,
+          "name": "camera_carousel_interval",
+          "cpp_enum": "CAMERA_CAROUSEL_INTERVAL",
+          "type": "string",
+          "description": "Auto-cycle interval in Cameras Carousel view (10s|15s|30s|60s)"
+        },
+        {
+          "index": 66,
+          "name": "camera_framing",
+          "cpp_enum": "CAMERA_FRAMING",
+          "type": "string",
+          "description": "Camera video framing mode (Uncropped|Fill)"
+        },
+        {
+          "index": 67,
+          "name": "camera_stream_mode",
+          "cpp_enum": "CAMERA_STREAM_MODE",
+          "type": "string",
+          "description": "Camera live streaming quality and bandwidth mode (Auto|Low Bandwidth|Snapshots)"
+        },
+        {
+          "index": 68,
+          "name": "camera_doorbell_popup",
+          "cpp_enum": "CAMERA_DOORBELL_POPUP",
+          "type": "string",
+          "description": "Doorbell ring popup media mode on hardware-JPEG devices (Snapshot|Live Video)"
         }
       ]
     },
@@ -1157,7 +1206,7 @@
       }
     },
     "latter_show_notification": {
-      "description": "Wake display, show an on-screen alert banner (priority normal|warning|critical, duration 3-60 s, default 10), optionally play the embedded WAV chime and show a camera snapshot; alert_id > 0 deduplicates repeats",
+      "description": "Wake display, show an on-screen alert banner (priority normal|warning|critical, duration 3-60 s, default 10), optionally play the embedded WAV chime and show a camera snapshot or live doorbell video; alert_id > 0 deduplicates repeats",
       "variables": {
         "title": "string",
         "message": "string",
@@ -1165,6 +1214,7 @@
         "duration": "int",
         "chime": "bool",
         "camera_url": "string",
+        "camera_entity": "string",
         "alert_id": "int"
       }
     },
@@ -1192,6 +1242,11 @@
       {
         "token": "app:home_hub",
         "label": "Home Hub",
+        "group": "Apps"
+      },
+      {
+        "token": "app:cameras",
+        "label": "Cameras",
         "group": "Apps"
       },
       {
@@ -1240,11 +1295,6 @@
         "group": "Home Hub"
       },
       {
-        "token": "home_hub:cameras",
-        "label": "Cameras",
-        "group": "Home Hub"
-      },
-      {
         "token": "home_hub:intercom",
         "label": "Intercom",
         "group": "Home Hub"
@@ -1263,6 +1313,26 @@
         "token": "home_hub:vacuum",
         "label": "Robot Vacuum",
         "group": "Home Hub"
+      },
+      {
+        "token": "cameras:grid",
+        "label": "Cameras: Grid",
+        "group": "Cameras"
+      },
+      {
+        "token": "cameras:single",
+        "label": "Cameras: Live",
+        "group": "Cameras"
+      },
+      {
+        "token": "cameras:carousel",
+        "label": "Cameras: Carousel",
+        "group": "Cameras"
+      },
+      {
+        "token": "cameras:settings",
+        "label": "Cameras: Settings",
+        "group": "Cameras"
       },
       {
         "token": "area:picker",
@@ -1582,10 +1652,6 @@
       {
         "token": "alarm",
         "label": "Security Alarm"
-      },
-      {
-        "token": "cameras",
-        "label": "Cameras"
       },
       {
         "token": "intercom",
@@ -3631,10 +3697,104 @@
       "step": 1,
       "unit": "%",
       "capability": "display"
+    },
+    {
+      "key": "camera_default_view",
+      "label": "Default camera view",
+      "domain": "select",
+      "default": "Grid",
+      "section": "interface",
+      "esphome_section": "cameras",
+      "group_tier": "interface",
+      "options": [
+        "Grid",
+        "Single",
+        "Carousel"
+      ],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "display"
+    },
+    {
+      "key": "camera_carousel_interval",
+      "label": "Carousel interval",
+      "domain": "select",
+      "default": "15s",
+      "section": "interface",
+      "esphome_section": "cameras",
+      "group_tier": "interface",
+      "options": [
+        "10s",
+        "15s",
+        "30s",
+        "60s"
+      ],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "display"
+    },
+    {
+      "key": "camera_framing",
+      "label": "Camera framing",
+      "domain": "select",
+      "default": "Uncropped",
+      "section": "interface",
+      "esphome_section": "cameras",
+      "group_tier": "interface",
+      "options": [
+        "Uncropped",
+        "Fill"
+      ],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "display"
+    },
+    {
+      "key": "camera_stream_mode",
+      "label": "Camera stream mode",
+      "domain": "select",
+      "default": "Auto",
+      "section": "interface",
+      "esphome_section": "cameras",
+      "group_tier": "interface",
+      "options": [
+        "Auto",
+        "Low Bandwidth",
+        "Snapshots"
+      ],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "display"
+    },
+    {
+      "key": "camera_doorbell_popup",
+      "label": "Doorbell ring popup",
+      "domain": "select",
+      "default": "Snapshot",
+      "section": "interface",
+      "esphome_section": "cameras",
+      "group_tier": "interface",
+      "options": [
+        "Snapshot",
+        "Live Video"
+      ],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "hw_jpeg"
     }
   ],
   "studio_contract": {
-    "studio_rev": 37,
+    "studio_rev": 38,
     "allowed_device_actions": [
       "restart",
       "find_my",

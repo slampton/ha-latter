@@ -54,7 +54,9 @@ from .http import (
     LatterArtworkTranscoderView,
     LatterBrandIconView,
     LatterCameraAudioStreamView,
+    LatterCameraGridView,
     LatterCameraSnapshotView,
+    LatterCameraStreamView,
     LatterMapSnapshotView,
     LatterWallpaperProxyView,
     LatterWallpaperUploadView,
@@ -341,6 +343,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         hass.http.register_view(LatterWallpaperProxyView(hass))
         hass.http.register_view(LatterWallpaperUploadView(hass))
         hass.http.register_view(LatterCameraSnapshotView(hass))
+        hass.http.register_view(LatterCameraStreamView(hass))
+        hass.http.register_view(LatterCameraGridView(hass))
         hass.http.register_view(LatterCameraAudioStreamView(hass))
         hass.http.register_view(LatterMapSnapshotView(hass))
         hass.http.register_view(LatterBrandIconView(hass))
@@ -462,7 +466,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
     """Unload the Latter System hub entry and all its device subentry coordinators."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        await async_shutdown_camera_feeds()
+        await async_shutdown_camera_feeds(hass)
         await async_shutdown_doorbell_streams(hass)
         clear_browse_cache()
         clear_ma_counterpart_cache(hass)

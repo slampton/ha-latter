@@ -113,7 +113,9 @@ async def async_execute_doorbell_intercom(
         if nr_val in DOORBELL_NOISE_REDUCTION_LEVELS:
             coordinator.doorbell_noise_reduction = nr_val
 
-    cams = coordinator.camera_entities
+    cams = getattr(
+        coordinator, "visible_camera_entities", coordinator.camera_entities
+    ) or coordinator.camera_entities
     if camera_index is not None and cams:
         idx = max(0, min(len(cams) - 1, int(camera_index)))
         coordinator.active_carousel_camera = cams[idx]
@@ -537,6 +539,7 @@ def bind_coordinator_doorbell_listener(coordinator: Any) -> None:
                         "duration": 20,
                         "chime": True,
                         "camera_url": coordinator.alert_camera_url,
+                        "camera_entity": coordinator.alert_camera_entity,
                         "alert_id": coordinator.alert_id,
                     },
                     blocking=False,

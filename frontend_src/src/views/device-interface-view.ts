@@ -327,6 +327,15 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     effectiveWeekStart === "Monday" ? "Monday" : "Sunday",
   );
 
+  const sysCameras = store.entity.getSystemCameraEntities();
+  const visibleCameras = store.entity.getVisibleCameras();
+  const camViewPref = store.entity.getPref("camera_default_view");
+  const camViewRaw = String(camViewPref?.value ?? cfg.camera_default_view ?? "Grid");
+  const camViewVal = store.tPrefOption("camera_default_view", camViewRaw);
+  const camFramingPref = store.entity.getPref("camera_framing");
+  const camFramingRaw = String(camFramingPref?.value ?? cfg.camera_framing ?? "Uncropped");
+  const camFramingVal = store.tPrefOption("camera_framing", camFramingRaw);
+
   const describeNativeDockApp = (routeToken: string): string => {
     switch (routeToken) {
       case "app:pinned": {
@@ -357,6 +366,20 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
           ? store.t("dev_interface.categories_enabled_one")
           : store.t("dev_interface.categories_enabled_many", {
               count: fmtNumber(enabledHomeCats.length, store.hass, 0),
+            });
+      case "app:cameras":
+        if (sysCameras.length === 0) {
+          return store.t("dev_interface.cameras_empty_meta");
+        }
+        return visibleCameras.length === 1
+          ? store.t("dev_interface.cameras_meta_one", {
+              view: camViewVal,
+              framing: camFramingVal,
+            })
+          : store.t("dev_interface.cameras_meta_many", {
+              view: camViewVal,
+              framing: camFramingVal,
+              count: fmtNumber(visibleCameras.length, store.hass, 0),
             });
       case "app:area":
         return enabledAreaCats.length === 1

@@ -14,8 +14,8 @@ from custom_components.latter import (
     async_unload_entry,
 )
 from custom_components.latter.backup import async_post_backup, async_pre_backup
+from custom_components.latter.cameras import _CameraIngest, get_camera_stream_hub
 from custom_components.latter.const import CONF_DEFAULT_AREA, CONF_DEVICE_SLUG, DOMAIN
-from custom_components.latter.http import _LiveCameraFeed, _LiveCameraFeeds
 from custom_components.latter.repairs import (
     LinkMaPlayerRepairFlow,
     async_audit_coordinator_health,
@@ -95,10 +95,12 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     await async_pre_backup(hass)
     await async_post_backup(hass)
 
-    # Seed a live camera feed background task and verify unload cancels it cleanly
-    live_feeds = _LiveCameraFeeds(hass)
+    # Seed a live camera ingest background task and verify unload cancels it cleanly
+    cam_hub = get_camera_stream_hub(hass)
     dummy_task = hass.async_create_task(asyncio.sleep(60), name="live_cam_dummy")
-    live_feeds._feeds[("camera.front_door", 240, 240, False, 0)] = _LiveCameraFeed(task=dummy_task)
+    cam_hub._ingests["camera.front_door"] = _CameraIngest(
+        entity_id="camera.front_door", _task=dummy_task
+    )
 
     assert await async_unload_entry(hass, entry) is True
     await hass.async_block_till_done()

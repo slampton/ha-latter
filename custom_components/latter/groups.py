@@ -19,6 +19,8 @@ from .const import (
     CONF_AREA_HANDOFF,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_TARGET_ADDRESS,
+    CONF_CAMERA_CAROUSEL_ENTITIES,
+    CONF_CAMERA_VISIBLE_ENTITIES,
     CONF_DEVICE_CUSTOM_COLOR,
     CONF_DEVICE_GROUPS,
     CONF_DEVICE_REMOTE_GROUP,
@@ -457,6 +459,10 @@ def coordinator_supports_pref(coordinator: Any, spec: DevicePrefSpec) -> bool:
         return bool(getattr(coordinator, "has_display", True)) and bool(
             getattr(coordinator, "has_battery", True)
         )
+    if cap == "hw_jpeg":
+        return bool(getattr(coordinator, "has_display", True)) and bool(
+            getattr(coordinator, "supports_hw_jpeg", False)
+        )
     if cap == "mic":
         return bool(getattr(coordinator, "has_mic", True))
     if cap == "speaker":
@@ -494,6 +500,8 @@ GROUP_INTERFACE_NON_PREF_KEYS: tuple[str, ...] = (
     CONF_PINNED_ITEMS,
     CONF_AREA_CATEGORIES,
     CONF_HOME_CATEGORIES,
+    CONF_CAMERA_VISIBLE_ENTITIES,
+    CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_TOOLS_ITEMS,
     CONF_GAMES_ITEMS,
     CONF_ACTIVITY_CARD,
@@ -583,6 +591,8 @@ def default_group_baseline_config(
         base[CONF_PINNED_ITEMS] = []
         base[CONF_AREA_CATEGORIES] = DEFAULT_AREA_CATEGORIES
         base[CONF_HOME_CATEGORIES] = DEFAULT_HOME_CATEGORIES
+        base[CONF_CAMERA_VISIBLE_ENTITIES] = []
+        base[CONF_CAMERA_CAROUSEL_ENTITIES] = []
         base[CONF_TOOLS_ITEMS] = DEFAULT_TOOLS_ITEMS
         base[CONF_GAMES_ITEMS] = DEFAULT_GAMES_ITEMS
         base[CONF_ACTIVITY_CARD] = DEFAULT_ACTIVITY_CARD
@@ -657,6 +667,16 @@ def resolve_behavior_key_value(data: Mapping[str, Any], key: str) -> Any:
             )
         except ValueError:
             return DEFAULT_HOME_CATEGORIES
+    if key in (CONF_CAMERA_VISIBLE_ENTITIES, CONF_CAMERA_CAROUSEL_ENTITIES):
+        raw_cams = data.get(key)
+        if not isinstance(raw_cams, (list, tuple)):
+            return []
+        cleaned_cams: list[str] = []
+        for item in raw_cams:
+            cid = str(item or "").strip()
+            if cid.startswith("camera.") and cid not in cleaned_cams:
+                cleaned_cams.append(cid)
+        return cleaned_cams[:10]
     if key == CONF_TOOLS_ITEMS:
         try:
             return normalize_tools_items(
@@ -1133,7 +1153,12 @@ async def async_apply_group_baseline_to_coordinators(
             if not _same_control_val(cur_v, want_v) or k not in cur_data:
                 updates[k] = want_v
         cleaned = (
-            clean_device_settings(updates, current=cur_data, is_round_display=is_round)
+            clean_device_settings(
+                updates,
+                current=cur_data,
+                is_round_display=is_round,
+                supports_hw_jpeg=bool(getattr(coord, "supports_hw_jpeg", False)),
+            )
             if updates
             else {}
         )

@@ -28,6 +28,7 @@ from homeassistant.helpers import (
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
+from .cameras import resolve_camera_capabilities
 from .const import (
     CONF_ALARM_ENTITY,
     CONF_DEFAULT_AREA,
@@ -958,23 +959,11 @@ def get_available_home_categories(
     *,
     coordinator: Any = None,
     hass: HomeAssistant | None = None,
-    has_cameras: bool | None = None,
     has_intercom: bool | None = None,
 ) -> str:
     """Return comma-separated enabled Home Hub categories that have at least one configured/discovered entity."""
     configured = parse_home_categories(home_categories) or list(
         parse_home_categories(DEFAULT_HOME_CATEGORIES)
-    )
-    cams_ok = (
-        has_cameras
-        if has_cameras is not None
-        else (
-            bool(hub_info.get("camera_entities"))
-            or (
-                coordinator is not None
-                and len(getattr(coordinator, "camera_entities", ()) or ()) > 0
-            )
-        )
     )
     intercom_ok = (
         has_intercom
@@ -985,8 +974,6 @@ def get_available_home_categories(
     for tok in configured:
         if tok == "alarm" and alarm_info.get("entity_id"):
             ordered.append("alarm")
-        elif tok == "cameras" and cams_ok:
-            ordered.append("cameras")
         elif tok == "intercom" and intercom_ok:
             ordered.append("intercom")
         elif tok == "thermostat" and hub_info.get("thermostats"):
@@ -1748,17 +1735,28 @@ def _build_intercom_targets_summary(coordinator: Any) -> V3Records:
 
 
 def _build_cameras_summary(coordinator: Any) -> V3Records:
-    """Build camera records (entity_id, name, area_id, signed snapshot URL) for up to 10 cameras."""
-    rows: list[dict[str, str]] = []
-    for ent_id in coordinator.camera_entities[:CAMERAS_MAX_RECORDS]:
-        st = coordinator.hass.states.get(ent_id)
-        friendly = str(st.attributes.get("friendly_name") or "") if st else ""
+    """Build camera records (`entity_id|name|area_id|caps`) for up to 10 visible cameras."""
+    visible_cams = getattr(
+        coordinator, "visible_camera_entities", coordinator.camera_entities
+    )
+    carousel_cams = getattr(coordinator, "carousel_camera_entities", visible_cams)
+    ring_map = getattr(coordinator, "_doorbell_ring_map", None)
+    vol_overrides = getattr(coordinator, "volume_overrides", None)
+    rows: list[dict[str, Any]] = []
+    for ent_id in visible_cams[:CAMERAS_MAX_RECORDS]:
+        meta = resolve_camera_capabilities(
+            coordinator.hass,
+            ent_id,
+            doorbell_ring_map=ring_map,
+            carousel_entities=carousel_cams,
+            volume_overrides=vol_overrides,
+        )
         rows.append(
             {
-                "entity_id": ent_id,
-                "name": friendly or ent_id.split(".", 1)[-1].replace("_", " ").title(),
-                "area_id": resolve_entity_area_id(coordinator.hass, ent_id) or "",
-                "snapshot_url": coordinator.build_camera_snapshot_url(ent_id),
+                "entity_id": meta["entity_id"],
+                "name": meta["name"],
+                "area_id": meta["area_id"],
+                "caps": meta["caps"],
             }
         )
     return camera_records(rows)
@@ -1866,7 +1864,13 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
     )
     active_cam = coordinator.active_carousel_camera or coordinator.camera_entity
     camera_snapshot_url = (
-        coordinator.build_camera_snapshot_url(active_cam) if active_cam else ""
+        coordinator.build_camera_allowlist_snapshot_url(active_cam)
+        if active_cam
+        else ""
+    )
+    camera_stream_url = coordinator.build_camera_stream_url()
+    alert_camera_entity = (
+        coordinator.alert_camera_entity if coordinator.alert_id else ""
     )
 
     eff_pin_policy = coordinator.security_pin_policy
@@ -1913,6 +1917,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "vacuums_summary": hub_info["vacuums_summary"],
         "area_climates_summary": area_climates_summary,
         "camera_snapshot_url": camera_snapshot_url,
+        "camera_stream_url": camera_stream_url,
         "cameras_summary": _build_cameras_summary(coordinator),
         "doorbell_talk_state": coordinator.doorbell_talk_state,
         "intercom_targets_summary": _build_intercom_targets_summary(coordinator),
@@ -1923,6 +1928,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "alert_duration": coordinator.alert_duration,
         "alert_chime": coordinator.alert_chime,
         "alert_camera_url": coordinator.alert_camera_url,
+        "alert_camera_entity": alert_camera_entity,
         "local_tz_info": local_tz_info,
         "world_clocks_summary": world_clocks_summary,
     }
@@ -1971,6 +1977,8 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         local_tz_info,
         world_clocks_summary,
         alarm_caps,
+        camera_stream_url,
+        alert_camera_entity,
     )
     area_attrs["rev"] = area_rev
     area_attrs["payload"] = area_payload

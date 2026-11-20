@@ -1,11 +1,10 @@
-"""HMAC-SHA256 resource signing, LAN URL builders, and all 7 signed HTTP views for Latter."""
+"""HMAC-SHA256 resource signing, LAN URL builders, and all 9 signed HTTP views for Latter."""
 
 from __future__ import annotations
 
 import asyncio
 from collections import OrderedDict
-import contextlib
-from dataclasses import dataclass, field
+from collections.abc import Iterable
 import hashlib
 import hmac
 from http import HTTPStatus
@@ -33,7 +32,9 @@ from .const import (
     API_ARTWORK_PROXY_PATH,
     API_BRAND_ICON_PATH,
     API_CAMERA_AUDIO_STREAM_PATH,
+    API_CAMERA_GRID_PATH,
     API_CAMERA_PROXY_PATH,
+    API_CAMERA_STREAM_PATH,
     API_MAP_PROXY_PATH,
     API_WALLPAPER_PROXY_PATH,
     API_WALLPAPER_UPLOAD_PATH,
@@ -109,6 +110,12 @@ def verify(
         return False
     expected = _mac(secret, scope, resource, exp_s)
     return hmac.compare_digest(mac.encode("utf-8"), expected.encode("utf-8"))
+
+
+def camera_allowlist_hash(allowed_cameras: Iterable[str]) -> str:
+    """Return an 8-hex-char digest binding a Device's ordered visible camera allow-list."""
+    joined = ",".join(str(c).strip() for c in allowed_cameras if str(c).strip())
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:8]
 
 
 class UrlSigner:
@@ -225,6 +232,51 @@ class UrlSigner:
             f"?entity_id={cam_ent}&w={width}&h={height}&shape={shape}&sig={sig}&v={v_tag}"
         )
 
+    def build_camera_allowlist_snapshot_url(
+        self,
+        device_slug: str,
+        allowed_cameras: Iterable[str],
+        camera_entity_id: str | None,
+        width: int,
+        height: int,
+        shape: str,
+        cache_bust: str = "",
+    ) -> str:
+        """Build an allowlist-scoped Baseline-JPEG snapshot URL permitting switching across visible cameras."""
+        cams = [str(c).strip() for c in allowed_cameras if str(c).strip()]
+        if not cams:
+            return ""
+        cam_ent = (camera_entity_id or cams[0]).strip()
+        base_url = self.get_lan_base_url()
+        allow_hash = camera_allowlist_hash(cams)
+        sig = self.sign_payload_resource(
+            f"camera_allow:{allow_hash}|{width}|{height}|{shape}"
+        )
+        v_tag = cache_bust or sig[:8]
+        return (
+            f"{base_url}/api/latter/camera/{device_slug}"
+            f"?entity_id={cam_ent}&w={width}&h={height}&shape={shape}&sig={sig}&v={v_tag}"
+        )
+
+    def build_camera_stream_url(
+        self,
+        device_slug: str,
+        allowed_cameras: Iterable[str],
+        max_w: int,
+        max_h: int,
+        max_fps: int,
+    ) -> str:
+        """Build the 48h signed base URL for live MJPEG single and 2x2 grid camera streaming."""
+        cams = [str(c).strip() for c in allowed_cameras if str(c).strip()]
+        if not cams or int(max_w) <= 0 or int(max_h) <= 0:
+            return ""
+        base_url = self.get_lan_base_url()
+        allow_hash = camera_allowlist_hash(cams)
+        sig = self.sign_payload_resource(
+            f"camera_stream:{allow_hash}|{int(max_w)}|{int(max_h)}|{int(max_fps)}"
+        )
+        return f"{base_url}/api/latter/camera_stream/{device_slug}?sig={sig}"
+
     def build_camera_audio_url(
         self,
         device_slug: str,
@@ -321,15 +373,7 @@ MAX_ART_CACHE_ENTRIES = 24
 MAX_UPSTREAM_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB hard stream cap on upstream artwork downloads
 _ARTWORK_LRU_CACHE: OrderedDict[tuple[str, int, int, bool, float], bytes] = OrderedDict()
 
-CAMERA_LIVE_IDLE_SECONDS = 3.0
-CAMERA_LIVE_MAX_AGE_SECONDS = 2.0
-CAMERA_LIVE_LEAD_SECONDS = 0.1
-CAMERA_LIVE_MIN_GAP_SECONDS = 0.2
-CAMERA_LIVE_ERROR_BACKOFF_SECONDS = 1.0
-CAMERA_LIVE_MAX_VIEWS = 8
-
 _CIRCULAR_MASK_CACHE: dict[tuple[int, int], tuple[Image.Image, Image.Image]] = {}
-_LIVE_CAMERA_FEEDS_INSTANCES: set[_LiveCameraFeeds] = set()
 
 _MAP_GEOCODE_CACHE: OrderedDict[str, tuple[float, float]] = OrderedDict()
 MAX_MAP_GEOCODE_CACHE = 64
@@ -351,10 +395,12 @@ def clear_http_caches() -> None:
     _CIRCULAR_MASK_CACHE.clear()
 
 
-async def async_shutdown_camera_feeds() -> None:
-    """Cancel and await all active `_LiveCameraFeeds` background tasks on integration unload."""
-    for feeds in list(_LIVE_CAMERA_FEEDS_INSTANCES):
-        await feeds.async_shutdown()
+async def async_shutdown_camera_feeds(hass: HomeAssistant | None = None) -> None:
+    """Shut down shared camera video ingests and clear HTTP caches on integration unload."""
+    if hass is not None:
+        from .cameras import async_shutdown_camera_stream_hub
+
+        await async_shutdown_camera_stream_hub(hass)
     clear_http_caches()
 
 
@@ -1060,196 +1106,6 @@ class LatterWallpaperUploadView(HomeAssistantView):
         )
 
 
-class _CameraFetchError(Exception):
-    """The camera entity did not return a frame."""
-
-
-class _CameraTranscodeError(Exception):
-    """Pillow could not transcode the camera frame."""
-
-
-def _retrieve_task_exception(task: asyncio.Task[bytes]) -> None:
-    """Mark a shared fetch's failure as retrieved when every waiter has gone away."""
-    if not task.cancelled():
-        task.exception()
-
-
-CameraViewKey = tuple[str, int, int, bool, int]
-
-
-@dataclass
-class _LiveCameraFeed:
-    """One polled camera view and the frame prepared for its next poll."""
-
-    frame: bytes | None = None
-    frame_ts: float = 0.0
-    started_ts: float = 0.0
-    unserved: bool = False
-    inflight_late: bool = False
-    last_request: float = 0.0
-    last_served: float = 0.0
-    poll_gap: float | None = None
-    refresh_cost: float = 0.3
-    inflight: asyncio.Task[bytes] | None = None
-    task: asyncio.Task[None] | None = None
-    wake: asyncio.Event = field(default_factory=asyncio.Event)
-
-
-class _LiveCameraFeeds:
-    """Keep the next frame of each polled camera view ready ahead of the Device's poll."""
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the live camera feed registry."""
-        self.hass = hass
-        self._feeds: dict[CameraViewKey, _LiveCameraFeed] = {}
-        _LIVE_CAMERA_FEEDS_INSTANCES.add(self)
-
-    async def async_shutdown(self) -> None:
-        """Cancel and await all running camera feed tasks and in-flight fetches on unload."""
-        feeds = list(self._feeds.values())
-        self._feeds.clear()
-        tasks_to_await: list[asyncio.Task[object]] = []
-        for feed in feeds:
-            feed.wake.set()
-            if feed.task is not None and not feed.task.done():
-                feed.task.cancel()
-                tasks_to_await.append(feed.task)
-            if feed.inflight is not None and not feed.inflight.done():
-                feed.inflight.cancel()
-                tasks_to_await.append(feed.inflight)
-        if tasks_to_await:
-            await asyncio.gather(*tasks_to_await, return_exceptions=True)
-
-    async def async_get_frame(self, key: CameraViewKey) -> tuple[bytes, bool]:
-        """Return (jpeg_bytes, served_from_memory) for a poll of the camera view."""
-        now = time.monotonic()
-        feed = self._feeds.get(key)
-        if feed is None:
-            feed = self._add_feed(key)
-        elif 0.0 < now - feed.last_served < CAMERA_LIVE_IDLE_SECONDS:
-            gap = now - feed.last_served
-            feed.poll_gap = (
-                gap if feed.poll_gap is None else 0.7 * feed.poll_gap + 0.3 * gap
-            )
-        feed.last_request = now
-
-        if feed.frame is not None and now - feed.frame_ts <= CAMERA_LIVE_MAX_AGE_SECONDS:
-            frame, from_memory = feed.frame, True
-            feed.inflight_late = feed.inflight is not None
-        else:
-            frame, from_memory = await self._async_refresh(key, feed), False
-
-        feed.unserved = False
-        feed.last_served = time.monotonic()
-        feed.wake.set()
-        if feed.task is None and self._feeds.get(key) is feed:
-            feed.task = self.hass.async_create_background_task(
-                self._async_run_feed(key, feed), name=f"latter_camera_live_{key[0]}"
-            )
-        return frame, from_memory
-
-    def _add_feed(self, key: CameraViewKey) -> _LiveCameraFeed:
-        if len(self._feeds) >= CAMERA_LIVE_MAX_VIEWS:
-            oldest = min(self._feeds, key=lambda k: self._feeds[k].last_request)
-            self._feeds.pop(oldest).wake.set()
-        feed = _LiveCameraFeed()
-        self._feeds[key] = feed
-        return feed
-
-    async def _async_refresh(
-        self, key: CameraViewKey, feed: _LiveCameraFeed
-    ) -> bytes:
-        """Fetch and transcode one frame; concurrent callers share the in-flight refresh."""
-        if feed.inflight is None:
-            feed.started_ts = time.monotonic()
-            feed.inflight_late = False
-            feed.inflight = self.hass.async_create_background_task(
-                self._async_fetch_into(key, feed),
-                name=f"latter_camera_fetch_{key[0]}",
-            )
-            feed.inflight.add_done_callback(_retrieve_task_exception)
-        return await asyncio.shield(feed.inflight)
-
-    async def _async_fetch_into(
-        self, key: CameraViewKey, feed: _LiveCameraFeed
-    ) -> bytes:
-        started = feed.started_ts
-        try:
-            frame = await self._async_fetch_frame(key)
-        finally:
-            feed.inflight = None
-        finished = time.monotonic()
-        feed.frame = frame
-        feed.frame_ts = finished
-        feed.unserved = not feed.inflight_late
-        cost = finished - started
-        feed.refresh_cost = max(cost, 0.9 * feed.refresh_cost + 0.1 * cost)
-        return frame
-
-    async def _async_fetch_frame(self, key: CameraViewKey) -> bytes:
-        from homeassistant.components import camera
-
-        cam_entity, width, height, is_circle, rotate_deg = key
-        try:
-            image_obj = await camera.async_get_image(
-                self.hass, cam_entity, width=width, height=height, timeout=8
-            )
-        except Exception as err:
-            raise _CameraFetchError(str(err)) from err
-        try:
-            return await self.hass.async_add_executor_job(
-                _transcode_to_baseline_jpeg,
-                image_obj.content,
-                width,
-                height,
-                is_circle,
-                1.0,
-                rotate_deg,
-                True,
-            )
-        except Exception as err:
-            raise _CameraTranscodeError(str(err)) from err
-
-    @staticmethod
-    async def _async_wait_for_poll(feed: _LiveCameraFeed, timeout_s: float) -> None:
-        with contextlib.suppress(TimeoutError):
-            async with asyncio.timeout(timeout_s):
-                await feed.wake.wait()
-
-    async def _async_run_feed(
-        self, key: CameraViewKey, feed: _LiveCameraFeed
-    ) -> None:
-        """Refresh the frame once per poll, timed to finish just before the poll is due."""
-        try:
-            while self._feeds.get(key) is feed:
-                feed.wake.clear()
-                now = time.monotonic()
-                if now - feed.last_request > CAMERA_LIVE_IDLE_SECONDS:
-                    return
-                if feed.unserved or feed.inflight is not None:
-                    await self._async_wait_for_poll(feed, CAMERA_LIVE_IDLE_SECONDS)
-                    continue
-                next_poll = feed.last_served + (feed.poll_gap or 0.0)
-                start_at = max(
-                    next_poll - feed.refresh_cost - CAMERA_LIVE_LEAD_SECONDS,
-                    feed.started_ts + CAMERA_LIVE_MIN_GAP_SECONDS,
-                )
-                if start_at > now:
-                    await self._async_wait_for_poll(feed, start_at - now)
-                    continue
-                try:
-                    await self._async_refresh(key, feed)
-                except (_CameraFetchError, _CameraTranscodeError) as err:
-                    _LOGGER.debug("Live camera refresh failed for %s: %s", key[0], err)
-                    await asyncio.sleep(CAMERA_LIVE_ERROR_BACKOFF_SECONDS)
-        finally:
-            feed.task = None
-            if self._feeds.get(key) is feed and (
-                time.monotonic() - feed.last_request > CAMERA_LIVE_IDLE_SECONDS
-            ):
-                self._feeds.pop(key, None)
-
-
 class LatterCameraSnapshotView(HomeAssistantView):
     """Fetches a live frame from an allow-listed camera.* entity and transcodes to Baseline JPEG."""
 
@@ -1260,10 +1116,15 @@ class LatterCameraSnapshotView(HomeAssistantView):
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialize the camera snapshot transcoder view."""
         self.hass = hass
-        self._live = _LiveCameraFeeds(hass)
 
     async def get(self, request: web.Request, target_device: str) -> web.Response:
-        """Handle GET /api/latter/camera/{target_device}?entity_id=camera.front_door&w=466&h=466&shape=circle"""
+        """Handle GET /api/latter/camera/{target_device}?entity_id=camera.front_door&w=466&h=466&shape=circle&fit=contain"""
+        from .cameras import (
+            CameraFetchError,
+            CameraTranscodeError,
+            get_camera_stream_hub,
+            normalize_fit_mode,
+        )
         from .coordinator import resolve_coordinator
         from .hub import get_latter_system
 
@@ -1281,17 +1142,39 @@ class LatterCameraSnapshotView(HomeAssistantView):
                 coordinator,
                 default_circle=(coordinator.display_shape == "circle"),
             )
-            if not coordinator.verify_resource(
+            visible_cams = coordinator.visible_camera_entities
+            visible_set = set(visible_cams)
+            allow_hash = camera_allowlist_hash(visible_cams)
+            sig = request.query.get("sig")
+            allow_sig_ok = bool(visible_cams) and coordinator.verify_resource(
+                f"camera_allow:{allow_hash}|{width}|{height}|{shape_str}",
+                sig=sig,
+            )
+            single_sig_ok = coordinator.verify_resource(
                 f"camera:{cam_entity}|{width}|{height}|{shape_str}",
-                sig=request.query.get("sig"),
-            ):
+                sig=sig,
+            )
+            if not (allow_sig_ok or single_sig_ok):
                 return web.Response(
                     status=HTTPStatus.FORBIDDEN, text="Invalid signature"
                 )
-            if cam_entity not in set(coordinator.camera_entities):
-                return web.Response(
-                    status=HTTPStatus.NOT_FOUND, text="Camera entity not in allow-list"
+            if allow_sig_ok:
+                if cam_entity not in visible_set:
+                    return web.Response(
+                        status=HTTPStatus.FORBIDDEN,
+                        text="Camera entity not in allow-list",
+                    )
+            else:
+                allowed_single = visible_set | (
+                    {coordinator.alert_camera_entity}
+                    if coordinator.alert_camera_entity
+                    else set()
                 )
+                if cam_entity not in allowed_single:
+                    return web.Response(
+                        status=HTTPStatus.NOT_FOUND,
+                        text="Camera entity not in allow-list",
+                    )
         elif normalize_device_slug(target_device) == "system":
             sys_obj = get_latter_system(self.hass)
             if sys_obj is None:
@@ -1332,16 +1215,26 @@ class LatterCameraSnapshotView(HomeAssistantView):
             )
         rotate_deg = int(rot_str)
 
+        raw_fit = request.query.get("fit")
+        fit_mode = normalize_fit_mode(raw_fit) if raw_fit is not None else "contain"
+
         try:
-            jpeg_bytes, from_memory = await self._live.async_get_frame(
-                (cam_entity, width, height, is_circle, rotate_deg)
+            jpeg_bytes, from_memory = await get_camera_stream_hub(
+                self.hass
+            ).async_get_snapshot(
+                cam_entity,
+                width,
+                height,
+                fit=fit_mode,
+                rot=rotate_deg,
+                circular_mask=(is_circle and fit_mode == "fill"),
             )
-        except _CameraFetchError as err:
+        except CameraFetchError as err:
             _LOGGER.debug("Camera snapshot fetch failed for %s: %s", cam_entity, err)
             return web.Response(
                 status=HTTPStatus.BAD_GATEWAY, text="Camera snapshot unavailable"
             )
-        except _CameraTranscodeError as err:
+        except CameraTranscodeError as err:
             _LOGGER.debug("Camera snapshot Pillow transcode failed: %s", err)
             return web.Response(
                 status=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -1356,6 +1249,268 @@ class LatterCameraSnapshotView(HomeAssistantView):
                 "X-Latter-Cam-Cache": "HIT" if from_memory else "MISS",
             },
         )
+
+
+def _clamp_video_query_dim(raw: str | None, max_dim: int) -> int:
+    """Parse an integer query dimension, clamp to `[64, max_dim]`, and align down to 16px."""
+    from .cameras import align16
+
+    try:
+        parsed = int(raw) if raw is not None and str(raw).strip() else max_dim
+    except (TypeError, ValueError):
+        parsed = max_dim
+    return align16(min(max_dim, parsed), maximum=max_dim)
+
+
+class LatterCameraStreamView(HomeAssistantView):
+    """Streams live 16px-aligned Baseline 4:2:0 MJPEG video for a single allow-listed camera."""
+
+    requires_auth = False
+    url = API_CAMERA_STREAM_PATH
+    name = "api:latter:camera_stream"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the single-camera MJPEG stream view."""
+        self.hass = hass
+
+    async def get(
+        self, request: web.Request, target_device: str
+    ) -> web.StreamResponse:
+        """Handle GET /api/latter/camera_stream/{target_device}?entity_id=...&w=...&h=...&fps=...&fit=contain&rot=0&sig=..."""
+        from .cameras import (
+            MJPEG_CONTENT_TYPE,
+            CameraFetchError,
+            CameraIngestLimitError,
+            get_camera_stream_hub,
+            normalize_fit_mode,
+            normalize_fps,
+        )
+        from .coordinator import resolve_coordinator
+
+        coord = resolve_coordinator(self.hass, target_device)
+        if coord is None:
+            return web.Response(
+                status=HTTPStatus.NOT_FOUND, text="Unknown target device"
+            )
+
+        allowed = coord.visible_camera_entities
+        max_w, max_h = coord.video_max_dims
+        max_fps = coord.video_max_fps
+        allow_hash = camera_allowlist_hash(allowed)
+        if not coord.verify_resource(
+            f"camera_stream:{allow_hash}|{max_w}|{max_h}|{max_fps}",
+            sig=request.query.get("sig"),
+        ):
+            return web.Response(
+                status=HTTPStatus.FORBIDDEN, text="Invalid or missing signature"
+            )
+
+        if max_w <= 0 or max_h <= 0:
+            return web.Response(
+                status=HTTPStatus.BAD_REQUEST, text="Device does not support video"
+            )
+
+        cam_entity = (
+            request.query.get("entity_id")
+            or coord.active_carousel_camera
+            or (allowed[0] if allowed else "")
+        ).strip()
+        if not cam_entity or not cam_entity.startswith("camera."):
+            return web.Response(
+                status=HTTPStatus.NOT_FOUND, text="No camera entity configured"
+            )
+        if cam_entity not in set(allowed):
+            return web.Response(
+                status=HTTPStatus.FORBIDDEN, text="Camera entity not in allow-list"
+            )
+
+        rot_str = (request.query.get("rot") or "0").strip()
+        if rot_str not in ("0", "90", "180", "270"):
+            return web.Response(
+                status=HTTPStatus.BAD_REQUEST, text="Invalid rotation angle"
+            )
+        rotate_deg = int(rot_str)
+
+        req_w = _clamp_video_query_dim(request.query.get("w"), max_w)
+        req_h = _clamp_video_query_dim(request.query.get("h"), max_h)
+        req_fps = min(max_fps, normalize_fps(request.query.get("fps"), default=max_fps))
+        fit_mode = normalize_fit_mode(request.query.get("fit"))
+        is_circle = (request.query.get("shape") or "").strip().lower() == "circle"
+
+        hub = get_camera_stream_hub(self.hass)
+        stream_iter = hub.async_iter_mjpeg_chunks(
+            cam_entity,
+            req_w,
+            req_h,
+            fps=req_fps,
+            fit=fit_mode,
+            rot=rotate_deg,
+            circular_mask=(is_circle and fit_mode == "fill"),
+        )
+        try:
+            try:
+                first_chunk = await anext(stream_iter)
+            except StopAsyncIteration:
+                return web.Response(
+                    status=HTTPStatus.BAD_GATEWAY, text="Camera stream unavailable"
+                )
+            except CameraIngestLimitError:
+                return web.Response(
+                    status=HTTPStatus.TOO_MANY_REQUESTS,
+                    text="Maximum concurrent camera streams reached",
+                )
+            except CameraFetchError as err:
+                _LOGGER.debug("Camera stream start failed for %s: %s", cam_entity, err)
+                return web.Response(
+                    status=HTTPStatus.BAD_GATEWAY, text="Camera stream unavailable"
+                )
+
+            resp = web.StreamResponse(
+                status=HTTPStatus.OK,
+                headers={
+                    "Content-Type": MJPEG_CONTENT_TYPE,
+                    "Cache-Control": "no-store, no-cache, must-revalidate",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+            await resp.prepare(request)
+            try:
+                await resp.write(first_chunk)
+                async for chunk in stream_iter:
+                    await resp.write(chunk)
+            except (asyncio.CancelledError, ConnectionResetError):
+                pass
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Camera stream closed for %s: %s", cam_entity, err)
+            return resp
+        finally:
+            await stream_iter.aclose()
+
+
+class LatterCameraGridView(HomeAssistantView):
+    """Streams a server-side 2x2 composited Baseline 4:2:0 MJPEG grid for up to 4 allow-listed cameras."""
+
+    requires_auth = False
+    url = API_CAMERA_GRID_PATH
+    name = "api:latter:camera_grid"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the 2x2 camera grid MJPEG stream view."""
+        self.hass = hass
+
+    async def get(
+        self, request: web.Request, target_device: str
+    ) -> web.StreamResponse:
+        """Handle GET /api/latter/camera_grid/{target_device}?cameras=cam1,cam2,...&w=...&h=...&fps=...&fit=contain&sig=..."""
+        from .cameras import (
+            MJPEG_CONTENT_TYPE,
+            CameraFetchError,
+            CameraIngestLimitError,
+            get_camera_stream_hub,
+            normalize_fit_mode,
+            normalize_fps,
+        )
+        from .coordinator import resolve_coordinator
+
+        coord = resolve_coordinator(self.hass, target_device)
+        if coord is None:
+            return web.Response(
+                status=HTTPStatus.NOT_FOUND, text="Unknown target device"
+            )
+
+        allowed = coord.visible_camera_entities
+        allowed_set = set(allowed)
+        max_w, max_h = coord.video_max_dims
+        max_fps = coord.video_max_fps
+        grid_fps = min(max_fps, coord.video_grid_fps)
+        allow_hash = camera_allowlist_hash(allowed)
+        if not coord.verify_resource(
+            f"camera_stream:{allow_hash}|{max_w}|{max_h}|{max_fps}",
+            sig=request.query.get("sig"),
+        ):
+            return web.Response(
+                status=HTTPStatus.FORBIDDEN, text="Invalid or missing signature"
+            )
+
+        if max_w <= 0 or max_h <= 0:
+            return web.Response(
+                status=HTTPStatus.BAD_REQUEST, text="Device does not support video"
+            )
+
+        raw_csv = str(request.query.get("cameras") or "").strip()
+        if raw_csv:
+            requested: list[str] = []
+            for tok in raw_csv.split(","):
+                cid = tok.strip()
+                if cid and cid not in requested:
+                    requested.append(cid)
+            requested = requested[:4]
+        else:
+            requested = list(allowed[:4])
+
+        if not requested:
+            return web.Response(
+                status=HTTPStatus.NOT_FOUND, text="No cameras configured for grid"
+            )
+        if any(
+            not cid.startswith("camera.") or cid not in allowed_set for cid in requested
+        ):
+            return web.Response(
+                status=HTTPStatus.FORBIDDEN,
+                text="One or more camera entities not in allow-list",
+            )
+
+        req_w = _clamp_video_query_dim(request.query.get("w"), max_w)
+        req_h = _clamp_video_query_dim(request.query.get("h"), max_h)
+        req_fps = min(grid_fps, normalize_fps(request.query.get("fps"), default=grid_fps))
+        fit_mode = normalize_fit_mode(request.query.get("fit"))
+
+        hub = get_camera_stream_hub(self.hass)
+        stream_iter = hub.async_iter_grid_mjpeg_chunks(
+            requested,
+            req_w,
+            req_h,
+            fps=req_fps,
+            fit=fit_mode,
+        )
+        try:
+            try:
+                first_chunk = await anext(stream_iter)
+            except StopAsyncIteration:
+                return web.Response(
+                    status=HTTPStatus.BAD_GATEWAY, text="Camera grid stream unavailable"
+                )
+            except CameraIngestLimitError:
+                return web.Response(
+                    status=HTTPStatus.TOO_MANY_REQUESTS,
+                    text="Maximum concurrent camera streams reached",
+                )
+            except CameraFetchError as err:
+                _LOGGER.debug("Camera grid start failed: %s", err)
+                return web.Response(
+                    status=HTTPStatus.BAD_GATEWAY, text="Camera grid stream unavailable"
+                )
+
+            resp = web.StreamResponse(
+                status=HTTPStatus.OK,
+                headers={
+                    "Content-Type": MJPEG_CONTENT_TYPE,
+                    "Cache-Control": "no-store, no-cache, must-revalidate",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+            await resp.prepare(request)
+            try:
+                await resp.write(first_chunk)
+                async for chunk in stream_iter:
+                    await resp.write(chunk)
+            except (asyncio.CancelledError, ConnectionResetError):
+                pass
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Camera grid stream closed: %s", err)
+            return resp
+        finally:
+            await stream_iter.aclose()
 
 
 class LatterCameraAudioStreamView(HomeAssistantView):

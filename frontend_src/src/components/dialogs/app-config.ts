@@ -23,7 +23,7 @@ import { html, nothing, type TemplateResult } from "../../lib/lit.js";
 import { ROUTE_PREVIEW_ICONS, shortcutActionLabel } from "../../mdi-catalog.js";
 import { isCatalogItemSupported, type StudioStore } from "../../state/store.js";
 import type { ConfigurableAppId, DeviceCapabilities, ShortcutItem } from "../../types.js";
-import { defaultLocaleTimeFormat } from "../../utils/format.js";
+import { defaultLocaleTimeFormat, entityLabel } from "../../utils/format.js";
 import {
   type PillListItem,
   renderNativeControlRow,
@@ -38,6 +38,7 @@ import { renderTimeAppConfigBody } from "./world-clocks.js";
 const APP_MODAL_TITLE_KEYS: Readonly<Record<ConfigurableAppId, StudioTranslationKey>> = {
   pinned: "dialogs.app_pinned",
   home_hub: "dialogs.app_home_hub",
+  cameras: "dialogs.app_cameras",
   area: "dialogs.app_area",
   music: "dialogs.app_music",
   remote: "dialogs.app_remote",
@@ -116,6 +117,7 @@ function renderEditableSelectPref(
   key: string,
   domId: string,
   caps?: DeviceCapabilities,
+  description?: string,
 ): TemplateResult | typeof nothing {
   const options = resolvePrefOptions(store, key, caps);
   if (options.length === 0) return nothing;
@@ -123,6 +125,7 @@ function renderEditableSelectPref(
   return renderSelectRow({
     id: domId || undefined,
     label: store.tPrefLabel(key),
+    description,
     value: curVal,
     rawOptions: options.map((opt) => ({
       value: opt,
@@ -264,10 +267,132 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
       type="button"
       @click=${() => {
         store.entity.closeAppConfigModal();
-        store.openSystemSection("shared_entities", "card-whole-home", [
-          "card-whole-home",
-          "card-cameras-doorbell",
-        ]);
+        store.openSystemSection("shared_entities", "card-whole-home");
+      }}
+      class="btn btn-text"
+    >
+      ${store.t("action.open_shared_entities")}
+    </button>`;
+  } else if (app === "cameras") {
+    const sysCameras = store.entity.getSystemCameraEntities();
+    const visibleCameras = store.entity.getVisibleCameras();
+    const carouselCameras = store.entity.getCarouselCameras();
+    const camCatalogMap = new Map((data?.catalog?.cameras || []).map((c) => [c.id, c]));
+    const cameraPillLabel = (entityId: string): string => {
+      const meta = camCatalogMap.get(entityId);
+      return meta?.name ? entityLabel(meta.name) : entityId;
+    };
+
+    const visibleSet = new Set(visibleCameras);
+    const visiblePillItems: PillListItem[] = [
+      ...visibleCameras.map((id) => ({
+        token: id,
+        label: cameraPillLabel(id),
+        enabled: true,
+      })),
+      ...sysCameras
+        .filter((id) => !visibleSet.has(id))
+        .map((id) => ({
+          token: id,
+          label: cameraPillLabel(id),
+          enabled: false,
+        })),
+    ];
+
+    const carouselSet = new Set(carouselCameras);
+    const carouselPillItems: PillListItem[] = [
+      ...carouselCameras.map((id) => ({
+        token: id,
+        label: cameraPillLabel(id),
+        enabled: true,
+      })),
+      ...visibleCameras
+        .filter((id) => !carouselSet.has(id))
+        .map((id) => ({
+          token: id,
+          label: cameraPillLabel(id),
+          enabled: false,
+        })),
+    ];
+
+    body = html`<div class="settings-list">
+      ${renderEditableSelectPref(
+        store,
+        "camera_default_view",
+        "cfg-camera_default_view",
+        caps,
+        store.t("dialogs.camera_default_view_desc"),
+      )}
+      ${renderEditableSelectPref(
+        store,
+        "camera_framing",
+        "cfg-camera_framing",
+        caps,
+        store.t("dialogs.camera_framing_desc"),
+      )}
+      ${renderEditableSelectPref(
+        store,
+        "camera_carousel_interval",
+        "cfg-camera_carousel_interval",
+        caps,
+        store.t("dialogs.camera_carousel_interval_desc"),
+      )}
+      ${renderEditableSelectPref(
+        store,
+        "camera_stream_mode",
+        "cfg-camera_stream_mode",
+        caps,
+        store.t("dialogs.camera_stream_mode_desc"),
+      )}
+      ${caps?.hw_jpeg === true
+        ? renderEditableSelectPref(
+            store,
+            "camera_doorbell_popup",
+            "cfg-camera_doorbell_popup",
+            caps,
+            store.t("dialogs.camera_doorbell_popup_desc"),
+          )
+        : nothing}
+      ${renderSettingsRow({
+        id: "camera-visible-row",
+        label: store.t("dialogs.camera_visible_label"),
+        description: store.t("dialogs.camera_visible_desc"),
+        stacked: true,
+        control:
+          sysCameras.length > 0
+            ? renderPillList({
+                id: "camera-visible-pills",
+                ariaLabel: store.t("dialogs.camera_visible_label"),
+                items: visiblePillItems,
+                onToggle: (tok, next) => store.entity.toggleVisibleCamera(tok, next),
+                onReorder: (fromIdx, toIdx) => store.entity.reorderVisibleCameras(fromIdx, toIdx),
+                overlay: store.localeOverlay,
+              })
+            : html`<p class="empty-state">${store.t("dialogs.cameras_empty_system")}</p>`,
+      })}
+      ${sysCameras.length > 0
+        ? renderSettingsRow({
+            id: "camera-carousel-row",
+            label: store.t("dialogs.camera_carousel_label"),
+            description: store.t("dialogs.camera_carousel_desc"),
+            stacked: true,
+            control: renderPillList({
+              id: "camera-carousel-pills",
+              ariaLabel: store.t("dialogs.camera_carousel_label"),
+              items: carouselPillItems,
+              onToggle: (tok, next) => store.entity.toggleCarouselCamera(tok, next),
+              onReorder: (fromIdx, toIdx) => store.entity.reorderCarouselCameras(fromIdx, toIdx),
+              overlay: store.localeOverlay,
+            }),
+          })
+        : nothing}
+    </div>`;
+    extraAction = html`<button
+      type="button"
+      id="btn-cameras-open-shared"
+      @click=${() => {
+        store.entity.closeAppConfigModal();
+        store.openSystemSection("shared_entities", "card-cameras-doorbell");
       }}
       class="btn btn-text"
     >

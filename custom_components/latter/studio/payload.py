@@ -19,6 +19,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.util import dt as dt_util
 
+from ..cameras import resolve_camera_capabilities
 from ..config_flow import get_discovered_latter_devices
 from ..const import (
     CONF_ACTIVITY_CARD,
@@ -32,6 +33,8 @@ from ..const import (
     CONF_BLE_CATEGORY,
     CONF_BLE_REF_POWER,
     CONF_BLE_TARGET_ADDRESS,
+    CONF_CAMERA_CAROUSEL_ENTITIES,
+    CONF_CAMERA_VISIBLE_ENTITIES,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_CUSTOM_COLOR,
@@ -58,6 +61,7 @@ from ..const import (
     STUDIO_REV,
 )
 from ..coordinator import LatterCoordinator
+from ..doorbell import resolve_doorbell_ring_entities
 from ..groups import (
     coordinator_supports_pref,
     get_device_groups,
@@ -1001,6 +1005,25 @@ def _build_entity_catalog(
     for dom in _CATALOG_DOMAINS:
         catalog_states.extend(idx.states_for_domain(dom))
 
+    all_cam_ids = [s.entity_id for s in catalog_states if s.domain == "camera"]
+    doorbell_ring_map = (
+        resolve_doorbell_ring_entities(hass, all_cam_ids) if all_cam_ids else {}
+    )
+    global_cfg = (hass.data.get(DOMAIN, {}) or {}).get(DATA_GLOBAL_CONFIG) or {}
+    raw_vol_ov = global_cfg.get("volume_overrides")
+    vol_overrides_map: dict[str, str] = {}
+    if isinstance(raw_vol_ov, list):
+        for ov in raw_vol_ov:
+            if isinstance(ov, dict):
+                spk = str(ov.get("speaker") or "").strip()
+                tgt = str(ov.get("target") or "").strip()
+                if spk and tgt:
+                    vol_overrides_map[spk] = tgt
+    elif isinstance(raw_vol_ov, dict):
+        for k, v in raw_vol_ov.items():
+            if k and v:
+                vol_overrides_map[str(k).strip()] = str(v).strip()
+
     for state_obj in sorted(catalog_states, key=lambda s: s.entity_id):
         ent_id = state_obj.entity_id
         domain = state_obj.domain
@@ -1048,7 +1071,18 @@ def _build_entity_catalog(
         elif domain == "alarm_control_panel":
             alarms_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
         elif domain == "camera":
-            cameras_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
+            enriched_cam = _enrich_hub_catalog_item(item, state_obj, idx, area_reg)
+            cam_caps = resolve_camera_capabilities(
+                hass,
+                ent_id,
+                doorbell_ring_map=doorbell_ring_map,
+                volume_overrides=vol_overrides_map,
+            )
+            enriched_cam["stream_kind"] = cam_caps["stream_kind"]
+            enriched_cam["has_audio"] = cam_caps["has_audio"]
+            enriched_cam["has_talkback"] = cam_caps["has_talkback"]
+            enriched_cam["is_doorbell"] = cam_caps["is_doorbell"]
+            cameras_list.append(enriched_cam)
         elif domain == "climate":
             climates_list.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
         elif domain == "lock":
@@ -1415,6 +1449,7 @@ def _build_system_section(
                 "has_display": c.has_display,
                 "has_battery": c.has_battery,
                 "is_roaming": c.is_roaming_device,
+                "hw_jpeg": c.supports_hw_jpeg,
                 "device_group": c_grp,
                 "device_remote_group": c.device_remote_group,
                 "device_group_name": (
@@ -1616,6 +1651,9 @@ def build_studio_state_payload(
         ),
         "has_ble_beacon": coordinator.has_ble_beacon,
         "is_roaming_device": coordinator.is_roaming_device,
+        "hw_jpeg": coordinator.supports_hw_jpeg,
+        "video_max_fps": coordinator.video_max_fps,
+        "video_grid_fps": coordinator.video_grid_fps,
     }
 
     raw_def_spk = str(coordinator.get_opt(CONF_DEFAULT_SPEAKER, "") or "").strip()
@@ -1670,6 +1708,8 @@ def build_studio_state_payload(
         CONF_PINNED_ITEMS: coordinator.pinned_items,
         CONF_AREA_CATEGORIES: coordinator.area_categories_csv,
         CONF_HOME_CATEGORIES: coordinator.home_categories_csv,
+        CONF_CAMERA_VISIBLE_ENTITIES: coordinator.configured_camera_visible_entities,
+        CONF_CAMERA_CAROUSEL_ENTITIES: coordinator.configured_camera_carousel_entities,
         CONF_TOOLS_ITEMS: coordinator.tools_items_csv,
         CONF_GAMES_ITEMS: coordinator.games_items_csv,
         CONF_ACTIVITY_CARD: coordinator.activity_card_enabled,
@@ -1688,6 +1728,11 @@ def build_studio_state_payload(
         and config_data.get("start_screen") == "Home"
     ):
         config_data["start_screen"] = "Time App"
+    if (
+        not coordinator.supports_hw_jpeg
+        and config_data.get("camera_doorbell_popup") == "Live Video"
+    ):
+        config_data["camera_doorbell_popup"] = "Snapshot"
 
     fw_st = coordinator.device_state("sensor", "_firmware_version")
     fw_version = (

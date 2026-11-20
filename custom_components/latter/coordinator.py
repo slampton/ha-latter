@@ -63,7 +63,9 @@ from .const import (
     CONF_BLE_SCANNER_OFFSETS,
     CONF_BLE_TARGET_ADDRESS,
     CONF_CALENDAR_ENTITIES,
+    CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_CAMERA_ENTITIES,
+    CONF_CAMERA_VISIBLE_ENTITIES,
     CONF_CUSTOM_PALETTES,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
@@ -159,6 +161,8 @@ from .identity import (
     manifest_is_roaming,
     manifest_is_round,
     manifest_is_wearable,
+    manifest_supports_hw_jpeg,
+    manifest_video_caps,
     read_device_hardware_manifest,
     resolve_bound_esphome_device_id,
 )
@@ -535,6 +539,7 @@ class LatterCoordinator:
         self.alert_duration: int = 8
         self.alert_chime: bool = True
         self.alert_camera_url: str = ""
+        self.alert_camera_entity: str = ""
         self.active_carousel_camera: str = ""
         self.doorbell_talk_state: str = "idle"
         self.last_device_health: dict[str, Any] | None = None
@@ -847,6 +852,29 @@ class LatterCoordinator:
     def is_round_display(self) -> bool:
         return self.has_display and manifest_is_round(self.hardware_manifest)
 
+    @property
+    def supports_hw_jpeg(self) -> bool:
+        return not self.is_ble_tag and manifest_supports_hw_jpeg(self.hardware_manifest)
+
+    @property
+    def video_max_dims(self) -> tuple[int, int]:
+        if self.is_ble_tag or not self.has_display:
+            return (0, 0)
+        caps = manifest_video_caps(self.hardware_manifest)
+        return (int(caps["max_w"]), int(caps["max_h"]))
+
+    @property
+    def video_max_fps(self) -> int:
+        if self.is_ble_tag or not self.has_display:
+            return 0
+        return int(manifest_video_caps(self.hardware_manifest)["max_fps"])
+
+    @property
+    def video_grid_fps(self) -> int:
+        if self.is_ble_tag or not self.has_display:
+            return 0
+        return int(manifest_video_caps(self.hardware_manifest)["grid_fps"])
+
     def get_device_pref(self, key: str) -> Any:
         return resolve_device_pref_value(self._live_subentry().data, key)
 
@@ -1031,8 +1059,44 @@ class LatterCoordinator:
         )
 
     @property
+    def configured_camera_visible_entities(self) -> list[str]:
+        raw = self._live_subentry().data.get(CONF_CAMERA_VISIBLE_ENTITIES)
+        if not isinstance(raw, (list, tuple)):
+            return []
+        system_set = set(self.camera_entities)
+        out: list[str] = []
+        for item in raw:
+            cid = str(item or "").strip()
+            if cid and cid in system_set and cid not in out:
+                out.append(cid)
+        return out[:10]
+
+    @property
+    def visible_camera_entities(self) -> list[str]:
+        configured = self.configured_camera_visible_entities
+        return configured if configured else self.camera_entities
+
+    @property
+    def configured_camera_carousel_entities(self) -> list[str]:
+        raw = self._live_subentry().data.get(CONF_CAMERA_CAROUSEL_ENTITIES)
+        if not isinstance(raw, (list, tuple)):
+            return []
+        visible_set = set(self.visible_camera_entities)
+        out: list[str] = []
+        for item in raw:
+            cid = str(item or "").strip()
+            if cid and cid in visible_set and cid not in out:
+                out.append(cid)
+        return out[:10]
+
+    @property
+    def carousel_camera_entities(self) -> list[str]:
+        configured = self.configured_camera_carousel_entities
+        return configured if configured else self.visible_camera_entities
+
+    @property
     def camera_entity(self) -> str | None:
-        cams = self.camera_entities
+        cams = self.visible_camera_entities
         return cams[0] if cams else None
 
     def _clean_entity_list_opt(self, key: str, prefix: str, limit: int) -> list[str]:
@@ -1396,6 +1460,30 @@ class LatterCoordinator:
             cache_bust=cache_bust,
         )
 
+    def build_camera_allowlist_snapshot_url(
+        self, camera_entity_id: str | None = None, cache_bust: str = ""
+    ) -> str:
+        w, h = self.art_dimensions
+        return self._url_signer.build_camera_allowlist_snapshot_url(
+            self.device_slug,
+            self.visible_camera_entities,
+            (camera_entity_id or self.camera_entity or "").strip(),
+            w,
+            h,
+            self.display_shape,
+            cache_bust=cache_bust,
+        )
+
+    def build_camera_stream_url(self) -> str:
+        max_w, max_h = self.video_max_dims
+        return self._url_signer.build_camera_stream_url(
+            self.device_slug,
+            self.visible_camera_entities,
+            max_w,
+            max_h,
+            self.video_max_fps,
+        )
+
     def build_camera_audio_url(
         self,
         camera_entity_id: str | None = None,
@@ -1540,11 +1628,13 @@ class LatterCoordinator:
         self.alert_priority = priority.strip().lower() or "normal"
         self.alert_duration = max(2, min(60, int(duration)))
         self.alert_chime = bool(chime)
+        clean_cam = str(camera_entity or "").strip()
+        self.alert_camera_entity = clean_cam
         self.alert_camera_url = (
             self.build_camera_snapshot_url(
-                camera_entity, cache_bust=f"{self.alert_id}_{int(time.time())}"
+                clean_cam, cache_bust=f"{self.alert_id}_{int(time.time())}"
             )
-            if camera_entity
+            if clean_cam
             else ""
         )
         self.hass.bus.async_fire(
@@ -1556,6 +1646,7 @@ class LatterCoordinator:
                 "message": self.alert_message,
                 "priority": self.alert_priority,
                 "camera_url": self.alert_camera_url,
+                "camera_entity": self.alert_camera_entity,
             },
         )
         self._schedule_persist_runtime_state()
@@ -2126,7 +2217,12 @@ class LatterCoordinator:
             raw_sub = self._live_subentry().data
             seeded = {k: v for k, v in incoming_prefs.items() if k not in raw_sub}
             if seeded:
-                cleaned = clean_device_settings(seeded, current=self.device_data)
+                cleaned = clean_device_settings(
+                    seeded,
+                    current=self.device_data,
+                    is_round_display=self.is_round_display,
+                    supports_hw_jpeg=self.supports_hw_jpeg,
+                )
                 if cleaned:
                     merged = {**self.device_data, **cleaned}
                     self.update_device_config(merged, bump_prefs_seq=False)
@@ -2157,6 +2253,7 @@ class LatterCoordinator:
                         accepted,
                         current=self.device_data,
                         is_round_display=self.is_round_display,
+                        supports_hw_jpeg=self.supports_hw_jpeg,
                     )
                     if cleaned:
                         merged = {**self.device_data, **cleaned}
@@ -2192,6 +2289,7 @@ class LatterCoordinator:
             dict(updates),
             current=self.device_data,
             is_round_display=self.is_round_display,
+            supports_hw_jpeg=self.supports_hw_jpeg,
         )
         if not cleaned and not force_bump:
             return {}
@@ -3012,6 +3110,7 @@ class LatterCoordinator:
             native_ble_tracking=self.native_ble_tracking_enabled,
             custom_color_hex=self.device_custom_color,
             is_round_display=self.is_round_display,
+            supports_hw_jpeg=self.supports_hw_jpeg,
         )
         cur_rev, packed = self._pack_domain_payload("device_prefs", *fields)
         res = (

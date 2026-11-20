@@ -67,6 +67,8 @@ export function isCatalogItemSupported(
       return caps.has_voice !== false;
     case "speaker":
       return caps.has_audio !== false;
+    case "hw_jpeg":
+      return caps.hw_jpeg === true;
     default:
       return true;
   }

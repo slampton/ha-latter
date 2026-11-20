@@ -1,5 +1,5 @@
 /**
- * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 34`).
+ * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 38`).
  */
 
 import type {
@@ -41,6 +41,7 @@ export type ConfigurableAppId =
   | "pinned"
   | "music"
   | "home_hub"
+  | "cameras"
   | "area"
   | "remote"
   | "time"
@@ -125,6 +126,10 @@ export interface CatalogChoice {
   id: string;
   name: string;
   area_name?: string;
+  stream_kind?: "rtsp" | "mjpeg" | "snapshot" | string;
+  has_audio?: boolean;
+  has_talkback?: boolean;
+  is_doorbell?: boolean;
 }
 
 interface AreaChoice {
@@ -210,6 +215,7 @@ export interface SystemDeviceEntry {
   ble_category?: "phone" | "ble_tag" | "" | string;
   has_display: boolean;
   has_battery: boolean;
+  hw_jpeg?: boolean;
   is_roaming: boolean;
   device_group: string;
   device_remote_group: string;
@@ -326,6 +332,13 @@ export interface DeviceConfig {
   games_items?: string;
   activity_card?: boolean;
   activity_sources?: string;
+  camera_visible_entities?: string[];
+  camera_carousel_entities?: string[];
+  camera_default_view?: string;
+  camera_carousel_interval?: string;
+  camera_framing?: string;
+  camera_stream_mode?: string;
+  camera_doorbell_popup?: string;
   wallpaper_source?: string;
   wallpaper_cycle_minutes?: number;
   security_pin_policy?: SecurityPinPolicy | string;
@@ -344,6 +357,9 @@ export interface DeviceCapabilities {
   has_audio?: boolean;
   has_ble_beacon?: boolean;
   is_roaming_device?: boolean;
+  hw_jpeg?: boolean;
+  video_max_fps?: number;
+  video_grid_fps?: number;
 }
 
 export interface EspHomeEntityItem {

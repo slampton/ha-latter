@@ -19,6 +19,7 @@ import {
   type CatalogItem,
   DEFAULT_ACTIVITY_SOURCES,
   DEFAULT_AREA_CATEGORIES,
+  DEFAULT_DOCK_ROUTES_TOKENS,
   DEFAULT_GAMES_ITEMS,
   DEFAULT_HOME_CATEGORIES,
   DEFAULT_TOOLS_ITEMS,
@@ -55,9 +56,10 @@ function deriveGroupCapabilities(
       has_voice: true,
       has_audio: true,
       is_roaming_device: true,
+      hw_jpeg: false,
     };
   }
-  if (group.id === "handhelds" || group.id === "wearables") {
+  if (group.id === "handhelds") {
     return {
       has_display: true,
       is_round: false,
@@ -67,6 +69,20 @@ function deriveGroupCapabilities(
       has_voice: true,
       has_audio: true,
       is_roaming_device: true,
+      hw_jpeg: members.length > 0 ? members.some((m) => m.hw_jpeg === true) : true,
+    };
+  }
+  if (group.id === "wearables") {
+    return {
+      has_display: true,
+      is_round: false,
+      has_imu: true,
+      has_battery: true,
+      has_ble_beacon: true,
+      has_voice: true,
+      has_audio: true,
+      is_roaming_device: true,
+      hw_jpeg: false,
     };
   }
   if (group.id === "wall_panels") {
@@ -79,6 +95,7 @@ function deriveGroupCapabilities(
       has_voice: true,
       has_audio: true,
       is_roaming_device: false,
+      hw_jpeg: true,
     };
   }
   if (members.length > 0) {
@@ -87,9 +104,10 @@ function deriveGroupCapabilities(
       has_battery: members.some((m) => m.has_battery !== false),
       has_ble_beacon: members.some((m) => m.has_ble !== false),
       is_roaming_device: members.some((m) => m.is_roaming !== false),
+      hw_jpeg: members.some((m) => m.hw_jpeg === true),
     };
   }
-  return {};
+  return { hw_jpeg: true };
 }
 
 function renderSpecSelect(
@@ -401,7 +419,9 @@ export function renderGroupBaselineDrawer(
     { value: "all", label: store.t("groups.remote_all_system") },
   ];
 
-  const dockCount = Array.isArray(cfg.dock_items) ? cfg.dock_items.length : 7;
+  const dockCount = Array.isArray(cfg.dock_items)
+    ? cfg.dock_items.length
+    : DEFAULT_DOCK_ROUTES_TOKENS.length;
   const pinnedCount = Array.isArray(cfg.pinned_items) ? cfg.pinned_items.length : 0;
   const worldClocksStr = typeof cfg.world_clocks === "string" ? cfg.world_clocks.trim() : "";
   const clockCount = worldClocksStr ? worldClocksStr.split(";").filter(Boolean).length : 0;
@@ -838,6 +858,35 @@ export function renderGroupBaselineDrawer(
                 group,
                 "podcast_sort_order",
                 cfg.podcast_sort_order,
+                caps,
+              )}
+              ${renderSpecSelect(
+                store,
+                group,
+                "camera_default_view",
+                cfg.camera_default_view,
+                caps,
+              )}
+              ${renderSpecSelect(store, group, "camera_framing", cfg.camera_framing, caps)}
+              ${renderSpecSelect(
+                store,
+                group,
+                "camera_carousel_interval",
+                cfg.camera_carousel_interval,
+                caps,
+              )}
+              ${renderSpecSelect(
+                store,
+                group,
+                "camera_stream_mode",
+                cfg.camera_stream_mode,
+                caps,
+              )}
+              ${renderSpecSelect(
+                store,
+                group,
+                "camera_doorbell_popup",
+                cfg.camera_doorbell_popup,
                 caps,
               )}
               ${latterDevices.length

@@ -230,6 +230,7 @@ class DevicePrefSpec:
         "display",
         "display_imu",
         "display_battery",
+        "hw_jpeg",
         "mic",
         "speaker",
         "beacon",
@@ -1066,6 +1067,8 @@ DEVICE_SETTING_KEYS: tuple[str, ...] = (
     *DEVICE_BOOL_KEYS,
     "dock_items",
     "pinned_items",
+    "camera_visible_entities",
+    "camera_carousel_entities",
     "wallpaper_cycle_minutes",
     "device_custom_color",
     "area_follow_dwell_s",
@@ -1462,6 +1465,7 @@ def clean_device_settings(
     current: Mapping[str, Any] | None = None,
     *,
     is_round_display: bool | None = None,
+    supports_hw_jpeg: bool | None = None,
     strict_traits: bool = False,
 ) -> dict[str, Any]:
     """Validate and normalize a Device save."""
@@ -1555,6 +1559,22 @@ def clean_device_settings(
         except ValueError as err:
             raise SettingsScopeError(str(err)) from None
 
+    if "camera_visible_entities" in incoming:
+        out["camera_visible_entities"] = _domain_entity_list(
+            incoming["camera_visible_entities"],
+            "camera.",
+            MAX_LIST_ITEMS,
+            "camera_visible_entities",
+        )
+
+    if "camera_carousel_entities" in incoming:
+        out["camera_carousel_entities"] = _domain_entity_list(
+            incoming["camera_carousel_entities"],
+            "camera.",
+            MAX_LIST_ITEMS,
+            "camera_carousel_entities",
+        )
+
     for spec in DEVICE_PREF_SPECS:
         if spec.key not in incoming:
             continue
@@ -1618,6 +1638,13 @@ def clean_device_settings(
                 "Modern Analog clock face is only supported on round displays"
             )
         out["clock_face"] = "Minimal Digital"
+
+    if supports_hw_jpeg is False and out.get("camera_doorbell_popup") == "Live Video":
+        if strict_traits:
+            raise SettingsScopeError(
+                "Live Video doorbell popup requires hardware JPEG decoding"
+            )
+        out["camera_doorbell_popup"] = "Snapshot"
 
     if (
         out.get("native_ble_tracking") is True

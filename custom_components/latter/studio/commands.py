@@ -40,6 +40,8 @@ from ..const import (
     CONF_BLE_CATEGORY,
     CONF_BLE_SCANNER_OFFSETS,
     CONF_BLE_TARGET_ADDRESS,
+    CONF_CAMERA_CAROUSEL_ENTITIES,
+    CONF_CAMERA_VISIBLE_ENTITIES,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_GROUPS,
     CONF_DEVICE_REMOTE_GROUP,
@@ -995,6 +997,27 @@ async def _cmd_save_system_config(
     log_studio_event(hass, "INFO", "studio", "Saved System settings")
 
 
+def _validate_device_camera_lists(
+    updates: dict[str, Any], global_cfg: dict[str, Any]
+) -> None:
+    """Ensure per-Device visible/carousel camera selections reference configured System cameras."""
+    if (
+        CONF_CAMERA_VISIBLE_ENTITIES not in updates
+        and CONF_CAMERA_CAROUSEL_ENTITIES not in updates
+    ):
+        return
+    system_cameras = set(system_settings_view(global_cfg)["camera_entities"])
+    for key in (CONF_CAMERA_VISIBLE_ENTITIES, CONF_CAMERA_CAROUSEL_ENTITIES):
+        if key not in updates:
+            continue
+        for cam_id in updates[key]:
+            if cam_id not in system_cameras:
+                raise StudioCommandError(
+                    "not_found",
+                    f"Camera '{cam_id}' is not configured in System shared entities",
+                )
+
+
 async def _cmd_save_device_config(
     hass: HomeAssistant,
     coordinator: LatterCoordinator | None,
@@ -1016,6 +1039,7 @@ async def _cmd_save_device_config(
             raw_cfg,
             current=current,
             is_round_display=coordinator.is_round_display,
+            supports_hw_jpeg=coordinator.supports_hw_jpeg,
             strict_traits=True,
         )
 
@@ -1028,6 +1052,7 @@ async def _cmd_save_device_config(
                 raise StudioCommandError(
                     "not_found", "Unknown remote group: save the System settings first"
                 )
+        _validate_device_camera_lists(updates, global_cfg)
 
         try:
             if CONF_ACTIVITY_SOURCES in updates:
@@ -1483,6 +1508,7 @@ async def _cmd_update_group_baseline(
                         "not_found",
                         "Unknown remote group: save the System settings first",
                     )
+            _validate_device_camera_lists(cleaned, global_cfg)
             group_updates = {
                 k: v for k, v in cleaned.items() if k in GROUP_ALL_DEVICE_KEYS
             }
@@ -1572,6 +1598,7 @@ async def _cmd_apply_batch_device_setting(
             raise StudioCommandError(
                 "not_found", "Unknown remote group: save the System settings first"
             )
+    _validate_device_camera_lists(validated_once, global_cfg)
 
     if raw_target == "all":
         targets = all_coords
@@ -1602,6 +1629,7 @@ async def _cmd_apply_batch_device_setting(
                 dev_filtered,
                 current=c.device_data,
                 is_round_display=c.is_round_display,
+                supports_hw_jpeg=c.supports_hw_jpeg,
             )
             merged = {**c.device_data, **dev_cleaned}
             wp_override = CONF_WALLPAPER_SOURCE in dev_cleaned

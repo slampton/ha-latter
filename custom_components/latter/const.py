@@ -16,8 +16,8 @@ _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = json.loads(
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 37
-MIN_FIRMWARE_SDK_REV: Final = 2026111903
+STUDIO_REV: Final = 38
+MIN_FIRMWARE_SDK_REV: Final = 2026111904
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -77,6 +77,8 @@ CONF_DOCK_ITEMS: Final = "dock_items"
 CONF_PINNED_ITEMS: Final = "pinned_items"
 CONF_AREA_CATEGORIES: Final = "area_categories"
 CONF_HOME_CATEGORIES: Final = "home_categories"
+CONF_CAMERA_VISIBLE_ENTITIES: Final = "camera_visible_entities"
+CONF_CAMERA_CAROUSEL_ENTITIES: Final = "camera_carousel_entities"
 CONF_TOOLS_ITEMS: Final = "tools_items"
 CONF_GAMES_ITEMS: Final = "games_items"
 CONF_ACTIVITY_CARD: Final = "activity_card"
@@ -151,6 +153,11 @@ CONF_VOLUME_STEP_SIZE: Final = "volume_step_size"
 CONF_GAME_SOUND_EFFECTS: Final = "game_sound_effects"
 CONF_BLE_BEACON_MODE: Final = "ble_beacon_mode"
 CONF_WEATHER_SIM_CONDITION: Final = "weather_sim_condition"
+CONF_CAMERA_DEFAULT_VIEW: Final = "camera_default_view"
+CONF_CAMERA_CAROUSEL_INTERVAL: Final = "camera_carousel_interval"
+CONF_CAMERA_FRAMING: Final = "camera_framing"
+CONF_CAMERA_STREAM_MODE: Final = "camera_stream_mode"
+CONF_CAMERA_DOORBELL_POPUP: Final = "camera_doorbell_popup"
 
 # Defaults
 DEFAULT_SECURITY_PIN_POLICY: Final = "auto"
@@ -170,9 +177,9 @@ DEFAULT_BLE_AUTO_SWITCH: Final = True
 DEFAULT_SYNC_DEVICE_AREA: Final = True
 DEFAULT_AREA_FOLLOW_DWELL_S: Final = 10
 DEFAULT_AREA_HANDOFF: Final = False
-DEFAULT_DOCK_ROUTES: Final = "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools"
+DEFAULT_DOCK_ROUTES: Final = "app:pinned,app:music,app:home_hub,app:cameras,app:area,app:remote,app:games,app:tools"
 DEFAULT_AREA_CATEGORIES: Final = "scene,light,cover,fan,switch,climate,media"
-DEFAULT_HOME_CATEGORIES: Final = "alarm,cameras,intercom,thermostat,entry,vacuum"
+DEFAULT_HOME_CATEGORIES: Final = "alarm,intercom,thermostat,entry,vacuum"
 DEFAULT_TOOLS_ITEMS: Final = str(_PROTOCOL_DEFAULTS["tools_items"])
 DEFAULT_GAMES_ITEMS: Final = str(_PROTOCOL_DEFAULTS["games_items"])
 # Home Activity Card: protocol_v3.json defaults.activity_card / defaults.activity_sources (checked by the tests)
@@ -209,6 +216,8 @@ API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"
 API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{target_device}"
 API_WALLPAPER_UPLOAD_PATH: Final = "/api/latter/wallpaper/upload"
 API_CAMERA_PROXY_PATH: Final = "/api/latter/camera/{target_device}"
+API_CAMERA_STREAM_PATH: Final = "/api/latter/camera_stream/{target_device}"
+API_CAMERA_GRID_PATH: Final = "/api/latter/camera_grid/{target_device}"
 API_CAMERA_AUDIO_STREAM_PATH: Final = "/api/latter/camera_audio/{target_device}"
 API_MAP_PROXY_PATH: Final = "/api/latter/map/{target_device}"
 API_BRAND_ICON_PATH: Final = "/api/latter/brand/icon.png"

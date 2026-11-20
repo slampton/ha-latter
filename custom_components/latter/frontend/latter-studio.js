@@ -466,6 +466,9 @@ const EN_DEVICES_STRINGS = {
   "dev_interface.word_page_one": "page",
   "dev_interface.word_page_many": "pages",
   "dev_interface.music_meta": "Art: {art} • Albums: {albums}",
+  "dev_interface.cameras_empty_meta": "No cameras configured",
+  "dev_interface.cameras_meta_one": "{view} • {framing} • 1 camera",
+  "dev_interface.cameras_meta_many": "{view} • {framing} • {count} cameras",
   "dev_interface.categories_enabled_one": "1 category enabled",
   "dev_interface.categories_enabled_many": "{count} categories enabled",
   "dev_interface.remote_follow_area": "Follow the active Area",
@@ -825,6 +828,11 @@ const EN_SYSTEM_STRINGS = {
   "shared.preview": "Preview",
   "shared.preview_heading": "Preview: {entity}",
   "shared.camera_preview_alt": "Camera preview",
+  "shared.cam_cap_rtsp": "RTSP",
+  "shared.cam_cap_mjpeg": "MJPEG",
+  "shared.cam_cap_snapshot": "Snapshot",
+  "shared.cam_cap_audio": "Audio",
+  "shared.cam_cap_doorbell": "Doorbell",
   "shared.doorbells_heading": "Doorbells",
   "shared.no_ring_sensor": "No ring sensor found",
   "shared.last_ring": "last ring {when}",
@@ -1163,6 +1171,7 @@ const EN_SYSTEM_STRINGS = {
   // Dialogs (`src/components/dialogs/*`, D-047 / D-053 / D-062 / D-064)
   "dialogs.app_pinned": "Pinned app",
   "dialogs.app_home_hub": "Home hub",
+  "dialogs.app_cameras": "Cameras",
   "dialogs.app_area": "Area control",
   "dialogs.app_music": "Music",
   "dialogs.app_remote": "Remote control",
@@ -1184,6 +1193,20 @@ const EN_SYSTEM_STRINGS = {
   "dialogs.home_cats_label": "Home categories",
   "dialogs.home_cats_desc":
     "Toggle and reorder categories shown in the Home hub. The first available category opens by default; categories with no configured entity are not displayed.",
+  "dialogs.camera_default_view_desc": "Layout shown when opening the Cameras app.",
+  "dialogs.camera_framing_desc": "Show the full frame uncropped or fill the display.",
+  "dialogs.camera_carousel_interval_desc": "How often Carousel advances to the next camera.",
+  "dialogs.camera_stream_mode_desc":
+    "Balances live video frame rate against network bandwidth and battery.",
+  "dialogs.camera_doorbell_popup_desc":
+    "Choose whether doorbell rings open a still snapshot or live video.",
+  "dialogs.camera_visible_label": "Visible cameras",
+  "dialogs.camera_visible_desc":
+    "Toggle and reorder cameras shown in the Cameras app on this Device. Leave all enabled to follow Shared entities automatically.",
+  "dialogs.camera_carousel_label": "Carousel cameras",
+  "dialogs.camera_carousel_desc":
+    "Choose and reorder which visible cameras rotate in Carousel view.",
+  "dialogs.cameras_empty_system": "No cameras configured in Shared entities yet.",
   "dialogs.area_cats_label": "Area categories",
   "dialogs.area_cats_desc":
     "Toggle and reorder categories shown on the Area screen. The first available category opens by default; categories with no entities in the active Area are not displayed.",
@@ -1355,7 +1378,7 @@ const EN_STRINGS = {
   ...EN_DEVICES_STRINGS,
 };
 /**
- * Sentence-case labels for all 56 `DevicePrefSpec` keys + group/device setting keys.
+ * Sentence-case labels for all 61 `DevicePrefSpec` keys + group/device setting keys.
  */
 const PREF_LABELS = {
   wake_word_mode: "Wake word mode",
@@ -1414,6 +1437,11 @@ const PREF_LABELS = {
   alarms_summary: "Alarms",
   calendar_lookahead_days: "Overview lookahead",
   calendar_week_start: "Start week on",
+  camera_default_view: "Default view",
+  camera_carousel_interval: "Carousel interval",
+  camera_framing: "Video framing",
+  camera_stream_mode: "Stream mode",
+  camera_doorbell_popup: "Doorbell ring popup",
   // Non-pref group & Device config keys
   native_ble_tracking: "BLE Area tracking",
   ble_auto_switch: "Auto-switch active Area",
@@ -1431,6 +1459,8 @@ const PREF_LABELS = {
   home_categories: "Home categories",
   tools_items: "Enabled tools",
   games_items: "Enabled games",
+  camera_visible_entities: "Visible cameras",
+  camera_carousel_entities: "Carousel cameras",
 };
 /**
  * Maps canonical wire option strings (`protocol_v3.json` / ESPHome select options) to
@@ -1447,6 +1477,7 @@ const PREF_OPTION_LABELS = {
   "10s": "10 seconds",
   "15s": "15 seconds",
   "30s": "30 seconds",
+  "60s": "60 seconds",
   "1 min": "1 minute",
   "2 min": "2 minutes",
   "5 min": "5 minutes",
@@ -1531,6 +1562,17 @@ const PREF_OPTION_LABELS = {
   "Thunderstorm (Day)": "Thunderstorm (day)",
   "Thunderstorm (Night)": "Thunderstorm (night)",
   Windy: "Windy",
+  // Cameras & live video
+  Grid: "Grid",
+  Single: "Single",
+  Carousel: "Carousel",
+  Uncropped: "Uncropped",
+  Fill: "Fill",
+  Auto: "Auto",
+  "Low Bandwidth": "Low bandwidth",
+  Snapshots: "Snapshots",
+  Snapshot: "Snapshot",
+  "Live Video": "Live video",
   // Security PIN policy wire tokens
   auto: "Auto (recommended)",
   allow: "Allow without PIN",
@@ -1945,7 +1987,7 @@ __latterExp(__exports, { Directive: () => Directive, directive: () => directive,
 __latterDef("src/protocol-schema.ts", (__exports, __req) => {
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 const PROTOCOL_CONTRACT_VERSION = 3;
-const STUDIO_REV = 37;
+const STUDIO_REV = 38;
 const ALLOWED_DEVICE_ACTIONS = [
   "restart",
   "find_my",
@@ -1992,6 +2034,7 @@ const SHORTCUT_ROUTES_CATALOG = [
   {token: "app:pinned", label: "Pinned", group: "Apps", dockOnly: true},
   {token: "app:music", label: "Music", group: "Apps"},
   {token: "app:home_hub", label: "Home Hub", group: "Apps"},
+  {token: "app:cameras", label: "Cameras", group: "Apps"},
   {token: "app:area", label: "Area Control", group: "Apps"},
   {token: "app:remote", label: "Remote", group: "Apps"},
   {token: "app:weather", label: "Sky & Weather", group: "Apps"},
@@ -2001,11 +2044,14 @@ const SHORTCUT_ROUTES_CATALOG = [
   {token: "app:games", label: "Games", group: "Apps"},
   {token: "app:clock", label: "Clock Face", group: "Apps"},
   {token: "home_hub:alarm", label: "Security Alarm", group: "Home Hub"},
-  {token: "home_hub:cameras", label: "Cameras", group: "Home Hub"},
   {token: "home_hub:intercom", label: "Intercom", group: "Home Hub"},
   {token: "home_hub:thermostat", label: "Thermostat", group: "Home Hub"},
   {token: "home_hub:entry", label: "Entry & Garage", group: "Home Hub"},
   {token: "home_hub:vacuum", label: "Robot Vacuum", group: "Home Hub"},
+  {token: "cameras:grid", label: "Cameras: Grid", group: "Cameras"},
+  {token: "cameras:single", label: "Cameras: Live", group: "Cameras"},
+  {token: "cameras:carousel", label: "Cameras: Carousel", group: "Cameras"},
+  {token: "cameras:settings", label: "Cameras: Settings", group: "Cameras"},
   {token: "area:picker", label: "Switch Area", group: "Area Control"},
   {token: "area:scene", label: "Area: Scenes", group: "Area Control"},
   {token: "area:light", label: "Area: Lights", group: "Area Control"},
@@ -2077,7 +2123,6 @@ const AREA_CATEGORIES_CATALOG = [
 ];
 const HOME_CATEGORIES_CATALOG = [
   {token: "alarm", label: "Security Alarm"},
-  {token: "cameras", label: "Cameras"},
   {token: "intercom", label: "Intercom"},
   {token: "thermostat", label: "Thermostat"},
   {token: "entry", label: "Entry & Garage"},
@@ -2208,13 +2253,19 @@ const DEVICE_PREF_SPECS_CATALOG = [
   {key: "bedtime_start_hour", label: "Bedtime Starts", domain: "number", default: 22, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
   {key: "bedtime_end_hour", label: "Bedtime Ends", domain: "number", default: 7, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
   {key: "bedtime_brightness", label: "Bedtime Brightness", domain: "number", default: 15, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
+  {key: "camera_default_view", label: "Default camera view", domain: "select", default: "Grid", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Grid", "Single", "Carousel"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_carousel_interval", label: "Carousel interval", domain: "select", default: "15s", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["10s", "15s", "30s", "60s"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_framing", label: "Camera framing", domain: "select", default: "Uncropped", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Uncropped", "Fill"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_stream_mode", label: "Camera stream mode", domain: "select", default: "Auto", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Auto", "Low Bandwidth", "Snapshots"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_doorbell_popup", label: "Doorbell ring popup", domain: "select", default: "Snapshot", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Snapshot", "Live Video"], min: null, max: null, step: null, unit: "", capability: "hw_jpeg" },
 ];
 const DEVICE_PREF_SPECS_MAP = Object.fromEntries(DEVICE_PREF_SPECS_CATALOG.map((s) => [s.key, s]));
-const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools";
+const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:cameras,app:area,app:remote,app:games,app:tools";
 const DEFAULT_DOCK_ROUTES_TOKENS = [
   "app:pinned",
   "app:music",
   "app:home_hub",
+  "app:cameras",
   "app:area",
   "app:remote",
   "app:games",
@@ -2242,10 +2293,9 @@ const DEFAULT_AREA_CATEGORIES_TOKENS = [
   "climate",
   "media",
 ];
-const DEFAULT_HOME_CATEGORIES = "alarm,cameras,intercom,thermostat,entry,vacuum";
+const DEFAULT_HOME_CATEGORIES = "alarm,intercom,thermostat,entry,vacuum";
 const DEFAULT_HOME_CATEGORIES_TOKENS = [
   "alarm",
-  "cameras",
   "intercom",
   "thermostat",
   "entry",
@@ -2285,6 +2335,7 @@ const NATIVE_DOCK_APP_TOKENS = [
   "app:pinned",
   "app:music",
   "app:home_hub",
+  "app:cameras",
   "app:area",
   "app:remote",
   "app:weather",
@@ -2298,6 +2349,7 @@ const NATIVE_DOCK_CONFIG_APP_MAP = {
   "app:pinned": "pinned",
   "app:music": "music",
   "app:home_hub": "home_hub",
+  "app:cameras": "cameras",
   "app:area": "area",
   "app:remote": "remote",
   "app:time": "time",
@@ -2310,7 +2362,7 @@ const START_SCREEN_CONFIG_APP_MAP = {
   Pinned: "pinned",
   Media: "music",
   "Home Hub": "home_hub",
-  Cameras: "home_hub",
+  Cameras: "cameras",
   "Area Controls": "area",
   Remote: "remote",
   "Time App": "time",
@@ -2417,6 +2469,8 @@ const GROUP_INTERFACE_NON_PREF_KEYS = [
   "activity_card",
   "activity_sources",
   "device_remote_group",
+  "camera_visible_entities",
+  "camera_carousel_entities",
 ];
 const LABEL_ACRONYMS = {
   ble: "BLE",
@@ -2436,6 +2490,7 @@ const LABEL_ACRONYMS = {
   ma: "MA",
   mac: "MAC",
   mic: "Mic",
+  mjpeg: "MJPEG",
   ota: "OTA",
   pin: "PIN",
   pmu: "PMU",
@@ -2443,6 +2498,7 @@ const LABEL_ACRONYMS = {
   ram: "RAM",
   rgb: "RGB",
   rssi: "RSSI",
+  rtsp: "RTSP",
   sdk: "SDK",
   sram: "SRAM",
   ssid: "SSID",
@@ -4133,6 +4189,7 @@ function renderEntitySlotList(opts) {
         >
           ${renderSelectOptions(opts.choices, val, opts.emptyOptionLabel)}
         </select>`}
+    ${opts.slotMeta ? opts.slotMeta(val, idx) : nothing}
   </div>`;
   if (opts.onReorder) {
     return renderSortableList({
@@ -4767,11 +4824,15 @@ const ROUTE_PREVIEW_ICONS = {
   "music:info": "mdi:information-outline",
   "app:home_hub": "mdi:home",
   "home_hub:alarm": "mdi:shield-home",
-  "home_hub:cameras": "mdi:cctv",
   "home_hub:intercom": "mdi:phone-in-talk",
   "home_hub:thermostat": "mdi:thermostat",
   "home_hub:entry": "mdi:lock",
   "home_hub:vacuum": "mdi:robot-vacuum",
+  "app:cameras": "mdi:cctv",
+  "cameras:grid": "mdi:view-grid",
+  "cameras:single": "mdi:video",
+  "cameras:carousel": "mdi:view-carousel",
+  "cameras:settings": "mdi:cog-outline",
   "app:area": "mdi:sofa",
   "area:picker": "mdi:floor-plan",
   "area:scene": "mdi:shimmer",
@@ -5549,6 +5610,8 @@ function isCatalogItemSupported(
       return caps.has_voice !== false;
     case "speaker":
       return caps.has_audio !== false;
+    case "hw_jpeg":
+      return caps.hw_jpeg === true;
     default:
       return true;
   }
@@ -7200,6 +7263,147 @@ class EntityController {
   }
   reorderActivitySources(fromIndex, toIndex) {
     this.tokenLists.activity_sources.reorder(fromIndex, toIndex);
+  }
+  // ---------- Per-Device Cameras Visibility & Carousel Lists ----------
+  getSystemCameraEntities() {
+    const out = [];
+    for (const raw of this.store.state?.system_config?.camera_entities || []) {
+      const id = String(raw || "").trim();
+      if (id && !out.includes(id)) {
+        out.push(id);
+      }
+    }
+    return out;
+  }
+  getVisibleCameras() {
+    const sys = this.getSystemCameraEntities();
+    if (sys.length === 0) return [];
+    const raw = this.store.state?.config?.camera_visible_entities;
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return [...sys];
+    }
+    const filtered = [];
+    for (const item of raw) {
+      const id = String(item || "").trim();
+      if (id && sys.includes(id) && !filtered.includes(id)) {
+        filtered.push(id);
+      }
+    }
+    return filtered.length > 0 ? filtered : [...sys];
+  }
+  toggleVisibleCamera(entityId, forceEnabled) {
+    const cleanId = String(entityId || "").trim();
+    const sys = this.getSystemCameraEntities();
+    if (!cleanId || !sys.includes(cleanId)) return;
+    const current = this.getVisibleCameras();
+    const idx = current.indexOf(cleanId);
+    const currentlyOn = idx >= 0;
+    const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
+    if (wantOn === currentlyOn) return;
+    let next;
+    if (!wantOn) {
+      if (current.length <= 1) {
+        this.store.showToast(this.store.t("common.keep_one_enabled", { noun: "camera" }), true);
+        return;
+      }
+      next = current.filter((id) => id !== cleanId);
+    } else {
+      next = [...current, cleanId];
+    }
+    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+    this.stageDeviceSetting("camera_visible_entities", sameAsSys ? [] : next);
+    if (!wantOn) {
+      const rawCarousel = Array.isArray(this.store.state?.config?.camera_carousel_entities)
+        ? this.store.state.config.camera_carousel_entities
+            .map((c) => String(c || "").trim())
+            .filter(Boolean)
+        : [];
+      if (rawCarousel.length > 0 && rawCarousel.includes(cleanId)) {
+        const pruned = rawCarousel.filter((id) => next.includes(id));
+        const sameAsVisible =
+          pruned.length === next.length && pruned.every((id, i) => id === next[i]);
+        this.stageDeviceSetting(
+          "camera_carousel_entities",
+          pruned.length === 0 || sameAsVisible ? [] : pruned,
+        );
+      }
+    }
+  }
+  reorderVisibleCameras(fromIndex, toIndex) {
+    const sys = this.getSystemCameraEntities();
+    const current = this.getVisibleCameras();
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= current.length ||
+      toIndex >= current.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+    const next = [...current];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+    this.stageDeviceSetting("camera_visible_entities", sameAsSys ? [] : next);
+  }
+  getCarouselCameras() {
+    const visible = this.getVisibleCameras();
+    if (visible.length === 0) return [];
+    const raw = this.store.state?.config?.camera_carousel_entities;
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return [...visible];
+    }
+    const filtered = [];
+    for (const item of raw) {
+      const id = String(item || "").trim();
+      if (id && visible.includes(id) && !filtered.includes(id)) {
+        filtered.push(id);
+      }
+    }
+    return filtered.length > 0 ? filtered : [...visible];
+  }
+  toggleCarouselCamera(entityId, forceEnabled) {
+    const cleanId = String(entityId || "").trim();
+    const visible = this.getVisibleCameras();
+    if (!cleanId || !visible.includes(cleanId)) return;
+    const current = this.getCarouselCameras();
+    const idx = current.indexOf(cleanId);
+    const currentlyOn = idx >= 0;
+    const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
+    if (wantOn === currentlyOn) return;
+    let next;
+    if (!wantOn) {
+      if (current.length <= 1) {
+        this.store.showToast(this.store.t("common.keep_one_enabled", { noun: "camera" }), true);
+        return;
+      }
+      next = current.filter((id) => id !== cleanId);
+    } else {
+      next = [...current, cleanId];
+    }
+    const sameAsVisible =
+      next.length === visible.length && next.every((id, i) => id === visible[i]);
+    this.stageDeviceSetting("camera_carousel_entities", sameAsVisible ? [] : next);
+  }
+  reorderCarouselCameras(fromIndex, toIndex) {
+    const visible = this.getVisibleCameras();
+    const current = this.getCarouselCameras();
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= current.length ||
+      toIndex >= current.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+    const next = [...current];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    const sameAsVisible =
+      next.length === visible.length && next.every((id, i) => id === visible[i]);
+    this.stageDeviceSetting("camera_carousel_entities", sameAsVisible ? [] : next);
   }
   // ---------- Shortcuts (`dock_items` & `pinned_items`) + App Config Modal ----------
   getDockItems() {
@@ -11259,7 +11463,7 @@ const { AREA_CATEGORIES_CATALOG, CALENDAR_LOOKAHEAD_OPTIONS, CALENDAR_WEEK_START
 const { html, nothing } = __req("src/lib/lit.ts");
 const { ROUTE_PREVIEW_ICONS, shortcutActionLabel } = __req("src/mdi-catalog.ts");
 const { isCatalogItemSupported } = __req("src/state/store.ts");
-const { defaultLocaleTimeFormat } = __req("src/utils/format.ts");
+const { defaultLocaleTimeFormat, entityLabel } = __req("src/utils/format.ts");
 const { renderNativeControlRow, renderPillList, renderSelectRow, renderSettingsRow, renderSortableList, renderTrashIconButton } = __req("src/components/controls.ts");
 const { renderTimeAppConfigBody } = __req("src/components/dialogs/world-clocks.ts");
 /**
@@ -11273,6 +11477,7 @@ const { renderTimeAppConfigBody } = __req("src/components/dialogs/world-clocks.t
 const APP_MODAL_TITLE_KEYS = {
   pinned: "dialogs.app_pinned",
   home_hub: "dialogs.app_home_hub",
+  cameras: "dialogs.app_cameras",
   area: "dialogs.app_area",
   music: "dialogs.app_music",
   remote: "dialogs.app_remote",
@@ -11346,6 +11551,7 @@ function renderEditableSelectPref(
   key,
   domId,
   caps,
+  description,
 ) {
   const options = resolvePrefOptions(store, key, caps);
   if (options.length === 0) return nothing;
@@ -11353,6 +11559,7 @@ function renderEditableSelectPref(
   return renderSelectRow({
     id: domId || undefined,
     label: store.tPrefLabel(key),
+    description,
     value: curVal,
     rawOptions: options.map((opt) => ({
       value: opt,
@@ -11488,10 +11695,129 @@ function renderAppConfigModalBody(store) {
       type="button"
       @click=${() => {
         store.entity.closeAppConfigModal();
-        store.openSystemSection("shared_entities", "card-whole-home", [
-          "card-whole-home",
-          "card-cameras-doorbell",
-        ]);
+        store.openSystemSection("shared_entities", "card-whole-home");
+      }}
+      class="btn btn-text"
+    >
+      ${store.t("action.open_shared_entities")}
+    </button>`;
+  } else if (app === "cameras") {
+    const sysCameras = store.entity.getSystemCameraEntities();
+    const visibleCameras = store.entity.getVisibleCameras();
+    const carouselCameras = store.entity.getCarouselCameras();
+    const camCatalogMap = new Map((data?.catalog?.cameras || []).map((c) => [c.id, c]));
+    const cameraPillLabel = (entityId) => {
+      const meta = camCatalogMap.get(entityId);
+      return meta?.name ? entityLabel(meta.name) : entityId;
+    };
+    const visibleSet = new Set(visibleCameras);
+    const visiblePillItems = [
+      ...visibleCameras.map((id) => ({
+        token: id,
+        label: cameraPillLabel(id),
+        enabled: true,
+      })),
+      ...sysCameras
+        .filter((id) => !visibleSet.has(id))
+        .map((id) => ({
+          token: id,
+          label: cameraPillLabel(id),
+          enabled: false,
+        })),
+    ];
+    const carouselSet = new Set(carouselCameras);
+    const carouselPillItems = [
+      ...carouselCameras.map((id) => ({
+        token: id,
+        label: cameraPillLabel(id),
+        enabled: true,
+      })),
+      ...visibleCameras
+        .filter((id) => !carouselSet.has(id))
+        .map((id) => ({
+          token: id,
+          label: cameraPillLabel(id),
+          enabled: false,
+        })),
+    ];
+    body = html`<div class="settings-list">
+      ${renderEditableSelectPref(
+        store,
+        "camera_default_view",
+        "cfg-camera_default_view",
+        caps,
+        store.t("dialogs.camera_default_view_desc"),
+      )}
+      ${renderEditableSelectPref(
+        store,
+        "camera_framing",
+        "cfg-camera_framing",
+        caps,
+        store.t("dialogs.camera_framing_desc"),
+      )}
+      ${renderEditableSelectPref(
+        store,
+        "camera_carousel_interval",
+        "cfg-camera_carousel_interval",
+        caps,
+        store.t("dialogs.camera_carousel_interval_desc"),
+      )}
+      ${renderEditableSelectPref(
+        store,
+        "camera_stream_mode",
+        "cfg-camera_stream_mode",
+        caps,
+        store.t("dialogs.camera_stream_mode_desc"),
+      )}
+      ${caps?.hw_jpeg === true
+        ? renderEditableSelectPref(
+            store,
+            "camera_doorbell_popup",
+            "cfg-camera_doorbell_popup",
+            caps,
+            store.t("dialogs.camera_doorbell_popup_desc"),
+          )
+        : nothing}
+      ${renderSettingsRow({
+        id: "camera-visible-row",
+        label: store.t("dialogs.camera_visible_label"),
+        description: store.t("dialogs.camera_visible_desc"),
+        stacked: true,
+        control:
+          sysCameras.length > 0
+            ? renderPillList({
+                id: "camera-visible-pills",
+                ariaLabel: store.t("dialogs.camera_visible_label"),
+                items: visiblePillItems,
+                onToggle: (tok, next) => store.entity.toggleVisibleCamera(tok, next),
+                onReorder: (fromIdx, toIdx) => store.entity.reorderVisibleCameras(fromIdx, toIdx),
+                overlay: store.localeOverlay,
+              })
+            : html`<p class="empty-state">${store.t("dialogs.cameras_empty_system")}</p>`,
+      })}
+      ${sysCameras.length > 0
+        ? renderSettingsRow({
+            id: "camera-carousel-row",
+            label: store.t("dialogs.camera_carousel_label"),
+            description: store.t("dialogs.camera_carousel_desc"),
+            stacked: true,
+            control: renderPillList({
+              id: "camera-carousel-pills",
+              ariaLabel: store.t("dialogs.camera_carousel_label"),
+              items: carouselPillItems,
+              onToggle: (tok, next) => store.entity.toggleCarouselCamera(tok, next),
+              onReorder: (fromIdx, toIdx) => store.entity.reorderCarouselCameras(fromIdx, toIdx),
+              overlay: store.localeOverlay,
+            }),
+          })
+        : nothing}
+    </div>`;
+    extraAction = html`<button
+      type="button"
+      id="btn-cameras-open-shared"
+      @click=${() => {
+        store.entity.closeAppConfigModal();
+        store.openSystemSection("shared_entities", "card-cameras-doorbell");
       }}
       class="btn btn-text"
     >
@@ -14945,6 +15271,14 @@ function renderDeviceInterfaceView(store) {
     "calendar_week_start",
     effectiveWeekStart === "Monday" ? "Monday" : "Sunday",
   );
+  const sysCameras = store.entity.getSystemCameraEntities();
+  const visibleCameras = store.entity.getVisibleCameras();
+  const camViewPref = store.entity.getPref("camera_default_view");
+  const camViewRaw = String(camViewPref?.value ?? cfg.camera_default_view ?? "Grid");
+  const camViewVal = store.tPrefOption("camera_default_view", camViewRaw);
+  const camFramingPref = store.entity.getPref("camera_framing");
+  const camFramingRaw = String(camFramingPref?.value ?? cfg.camera_framing ?? "Uncropped");
+  const camFramingVal = store.tPrefOption("camera_framing", camFramingRaw);
   const describeNativeDockApp = (routeToken) => {
     switch (routeToken) {
       case "app:pinned": {
@@ -14975,6 +15309,20 @@ function renderDeviceInterfaceView(store) {
           ? store.t("dev_interface.categories_enabled_one")
           : store.t("dev_interface.categories_enabled_many", {
               count: fmtNumber(enabledHomeCats.length, store.hass, 0),
+            });
+      case "app:cameras":
+        if (sysCameras.length === 0) {
+          return store.t("dev_interface.cameras_empty_meta");
+        }
+        return visibleCameras.length === 1
+          ? store.t("dev_interface.cameras_meta_one", {
+              view: camViewVal,
+              framing: camFramingVal,
+            })
+          : store.t("dev_interface.cameras_meta_many", {
+              view: camViewVal,
+              framing: camFramingVal,
+              count: fmtNumber(visibleCameras.length, store.hass, 0),
             });
       case "app:area":
         return enabledAreaCats.length === 1
@@ -17567,7 +17915,7 @@ __latterExp(__exports, { renderBatchControlsCard: () => renderBatchControlsCard 
 });
 __latterDef("src/views/groups/group-baseline-drawer.ts", (__exports, __req) => {
 const { renderHourSelectRow, renderRangeRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
-const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, CALENDAR_LOOKAHEAD_OPTIONS, DEFAULT_ACTIVITY_SOURCES, DEFAULT_AREA_CATEGORIES, DEFAULT_GAMES_ITEMS, DEFAULT_HOME_CATEGORIES, DEFAULT_TOOLS_ITEMS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, SECURITY_PIN_POLICY_OPTIONS, TOOLS_ITEMS_CATALOG, WALLPAPER_ROTATION_OPTIONS } = __req("src/constants.ts");
+const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, CALENDAR_LOOKAHEAD_OPTIONS, DEFAULT_ACTIVITY_SOURCES, DEFAULT_AREA_CATEGORIES, DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS, DEFAULT_HOME_CATEGORIES, DEFAULT_TOOLS_ITEMS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, SECURITY_PIN_POLICY_OPTIONS, TOOLS_ITEMS_CATALOG, WALLPAPER_ROTATION_OPTIONS } = __req("src/constants.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
 const { isCatalogItemSupported } = __req("src/state/store.ts");
 const { defaultLocaleTimeFormat, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
@@ -17592,9 +17940,10 @@ function deriveGroupCapabilities(
       has_voice: true,
       has_audio: true,
       is_roaming_device: true,
+      hw_jpeg: false,
     };
   }
-  if (group.id === "handhelds" || group.id === "wearables") {
+  if (group.id === "handhelds") {
     return {
       has_display: true,
       is_round: false,
@@ -17604,6 +17953,20 @@ function deriveGroupCapabilities(
       has_voice: true,
       has_audio: true,
       is_roaming_device: true,
+      hw_jpeg: members.length > 0 ? members.some((m) => m.hw_jpeg === true) : true,
+    };
+  }
+  if (group.id === "wearables") {
+    return {
+      has_display: true,
+      is_round: false,
+      has_imu: true,
+      has_battery: true,
+      has_ble_beacon: true,
+      has_voice: true,
+      has_audio: true,
+      is_roaming_device: true,
+      hw_jpeg: false,
     };
   }
   if (group.id === "wall_panels") {
@@ -17616,6 +17979,7 @@ function deriveGroupCapabilities(
       has_voice: true,
       has_audio: true,
       is_roaming_device: false,
+      hw_jpeg: true,
     };
   }
   if (members.length > 0) {
@@ -17624,9 +17988,10 @@ function deriveGroupCapabilities(
       has_battery: members.some((m) => m.has_battery !== false),
       has_ble_beacon: members.some((m) => m.has_ble !== false),
       is_roaming_device: members.some((m) => m.is_roaming !== false),
+      hw_jpeg: members.some((m) => m.hw_jpeg === true),
     };
   }
-  return {};
+  return { hw_jpeg: true };
 }
 function renderSpecSelect(
   store,
@@ -17924,7 +18289,9 @@ function renderGroupBaselineDrawer(
     })),
     { value: "all", label: store.t("groups.remote_all_system") },
   ];
-  const dockCount = Array.isArray(cfg.dock_items) ? cfg.dock_items.length : 7;
+  const dockCount = Array.isArray(cfg.dock_items)
+    ? cfg.dock_items.length
+    : DEFAULT_DOCK_ROUTES_TOKENS.length;
   const pinnedCount = Array.isArray(cfg.pinned_items) ? cfg.pinned_items.length : 0;
   const worldClocksStr = typeof cfg.world_clocks === "string" ? cfg.world_clocks.trim() : "";
   const clockCount = worldClocksStr ? worldClocksStr.split(";").filter(Boolean).length : 0;
@@ -18360,6 +18727,35 @@ function renderGroupBaselineDrawer(
                 group,
                 "podcast_sort_order",
                 cfg.podcast_sort_order,
+                caps,
+              )}
+              ${renderSpecSelect(
+                store,
+                group,
+                "camera_default_view",
+                cfg.camera_default_view,
+                caps,
+              )}
+              ${renderSpecSelect(store, group, "camera_framing", cfg.camera_framing, caps)}
+              ${renderSpecSelect(
+                store,
+                group,
+                "camera_carousel_interval",
+                cfg.camera_carousel_interval,
+                caps,
+              )}
+              ${renderSpecSelect(
+                store,
+                group,
+                "camera_stream_mode",
+                cfg.camera_stream_mode,
+                caps,
+              )}
+              ${renderSpecSelect(
+                store,
+                group,
+                "camera_doorbell_popup",
+                cfg.camera_doorbell_popup,
                 caps,
               )}
               ${latterDevices.length
@@ -20954,6 +21350,36 @@ function renderSystemSharedView(store) {
                 idx === 0
                   ? store.t("shared.camera_slot_primary")
                   : store.t("shared.camera_slot_n", { index: idx + 1 }),
+              slotMeta: (camId) => {
+                const meta = findCatalogChoice(cat.cameras, camId);
+                if (!meta) return nothing;
+                const chips = [];
+                const kind = String(meta.stream_kind || "").trim().toLowerCase();
+                if (kind === "rtsp") {
+                  chips.push(
+                    html`<span class="chip chip-primary">${store.t("shared.cam_cap_rtsp")}</span>`,
+                  );
+                } else if (kind === "mjpeg") {
+                  chips.push(
+                    html`<span class="chip chip-primary">${store.t("shared.cam_cap_mjpeg")}</span>`,
+                  );
+                } else if (kind === "snapshot") {
+                  chips.push(
+                    html`<span class="chip">${store.t("shared.cam_cap_snapshot")}</span>`,
+                  );
+                }
+                if (meta.has_audio || meta.has_talkback) {
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_audio")}</span>`);
+                }
+                if (meta.is_doorbell) {
+                  chips.push(
+                    html`<span class="chip chip-primary">${store.t("shared.cam_cap_doorbell")}</span>`,
+                  );
+                }
+                return chips.length > 0
+                  ? html`<span class="hub-slot-meta">${chips}</span>`
+                  : nothing;
+              },
               extraActions: (camId) => html`<button
                 type="button"
                 ?disabled=${!camId}

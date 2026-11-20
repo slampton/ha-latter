@@ -96,6 +96,50 @@ def manifest_is_round(manifest: Mapping[str, Any]) -> bool:
     return str(manifest.get("shape") or "circle").strip().lower() != "square"
 
 
+def manifest_video_caps(manifest: Mapping[str, Any]) -> dict[str, Any]:
+    """Parse hardware manifest `video` capabilities with trait-based fallback."""
+    has_disp = manifest_has_display(manifest)
+    has_batt = manifest_has_battery(manifest)
+    chip = str(manifest.get("chip") or "").strip().upper()
+    is_p4 = chip == "ESP32-P4" or "P4" in chip
+
+    raw_video = manifest.get("video")
+    if isinstance(raw_video, Mapping):
+        hw_jpeg = has_disp and bool(int(raw_video.get("hw_jpeg") or 0))
+        default_w = (int(manifest.get("w") or 466) & ~15) if has_disp else 0
+        default_h = (int(manifest.get("h") or 466) & ~15) if has_disp else 0
+        max_w = int(raw_video.get("max_w") if raw_video.get("max_w") is not None else default_w)
+        max_h = int(raw_video.get("max_h") if raw_video.get("max_h") is not None else default_h)
+        max_fps = int(raw_video.get("max_fps") or ((10 if has_batt else 15) if hw_jpeg else 5))
+        grid_fps = int(raw_video.get("grid_fps") or ((5 if has_batt else 8) if hw_jpeg else 2))
+    else:
+        hw_jpeg = has_disp and is_p4
+        max_w = (int(manifest.get("w") or 466) & ~15) if has_disp else 0
+        max_h = (int(manifest.get("h") or 466) & ~15) if has_disp else 0
+        max_fps = (10 if has_batt else 15) if is_p4 else 5
+        grid_fps = (5 if has_batt else 8) if is_p4 else 2
+
+    if not has_disp:
+        max_w = 0
+        max_h = 0
+    else:
+        max_w = max(64, (max_w // 16) * 16) if max_w > 0 else 464
+        max_h = max(64, (max_h // 16) * 16) if max_h > 0 else 464
+
+    return {
+        "hw_jpeg": hw_jpeg,
+        "max_w": max_w,
+        "max_h": max_h,
+        "max_fps": max(1, min(15, max_fps)),
+        "grid_fps": max(1, min(15, grid_fps)),
+    }
+
+
+def manifest_supports_hw_jpeg(manifest: Mapping[str, Any]) -> bool:
+    """Return True when the hardware manifest reports an ESP32-P4 HW JPEG decoder."""
+    return bool(manifest_video_caps(manifest)["hw_jpeg"])
+
+
 # ---------------------------------------------------------------------------
 # Bound ESPHome Device Identity & Service Resolution
 # ---------------------------------------------------------------------------

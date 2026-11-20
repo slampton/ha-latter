@@ -20,6 +20,8 @@ from .const import (
     CONF_BLE_CATEGORY,
     CONF_BLE_REF_POWER,
     CONF_BLE_TARGET_ADDRESS,
+    CONF_CAMERA_CAROUSEL_ENTITIES,
+    CONF_CAMERA_VISIBLE_ENTITIES,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_CUSTOM_COLOR,
@@ -83,6 +85,8 @@ DEVICE_CONFIG_EXPORT_KEYS: tuple[str, ...] = (
     CONF_PINNED_ITEMS,
     CONF_AREA_CATEGORIES,
     CONF_HOME_CATEGORIES,
+    CONF_CAMERA_VISIBLE_ENTITIES,
+    CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_TOOLS_ITEMS,
     CONF_GAMES_ITEMS,
     CONF_ACTIVITY_CARD,
@@ -242,6 +246,7 @@ async def _async_apply_device_snapshot_to_coordinator(
                 cleanable,
                 current=merged,
                 is_round_display=bool(getattr(coord, "is_round_display", True)),
+                supports_hw_jpeg=bool(getattr(coord, "supports_hw_jpeg", False)),
             )
         except SettingsScopeError as err:
             raise ValueError(str(err)) from err

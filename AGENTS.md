@@ -4,16 +4,17 @@
 
 ---
 
-## 1. Exact 32-Module Architecture (`custom_components/latter/`)
+## 1. Exact 33-Module Architecture (`custom_components/latter/`)
 
-Do **not** create backward-compatibility shims, `try/except ImportError` wrappers, or splinter subpackages. Every subsystem has one canonical owner across **28 flat root modules** + **4 `studio/` modules**:
+Do **not** create backward-compatibility shims, `try/except ImportError` wrappers, or splinter subpackages. Every subsystem has one canonical owner across **29 flat root modules** + **4 `studio/` modules**:
 
-### Root Integration Modules (28)
+### Root Integration Modules (29)
 - `__init__.py` — Integration lifecycle (`LatterConfigEntry = ConfigEntry[LatterSystemHub]`), HTTP view & Studio registration, and `latter_ping` handshake (`async_ping_bound_devices`).
 - `areas.py` — Area curation, exact normalized Area matching (`match_area_by_name_or_id`), roaming *Voice Follows Me* `area_id` sync (`sync_esphome_device_area`), Person Area distance, and `area_context` v3 payloads.
 - `backup.py` — Home Assistant `backup` hooks (`async_pre_backup` / `async_post_backup`) and System/Device JSON bundle export/restore.
 - `binary_sensor.py` — Per-Area `binary_sensor.<area>_ble_occupancy` driven by `LatterBleFabric` plus display-gated per-Device `timer_active` and `alarm_ringing` binary sensors.
 - `button.py` — Curated Tier 2 action buttons (`find_my_device`, `activate_screensaver`) forwarding via `latter_device_command`.
+- `cameras.py` — `LatterCameraStreamHub` (shared 1-ingest-per-camera RTSP/MJPEG/Snapshot cascade, zero-copy primary + fast-downscale secondary fan-out, 16px-aligned uncropped `contain`/`fill` framing, server-side 2x2 grid compositor, warm snapshots, dedicated 6-slot video semaphore, and camera capability resolver).
 - `config_flow.py` — Single-instance hub `ConfigFlow`, options flow, and Device / BLE Tag `ConfigSubentryFlow`s.
 - `const.py` — Domain constants, config keys, service target helpers, `INTEGRATION_VERSION = "3.0.0"`, and `MIN_FIRMWARE_SDK_REV`.
 - `coordinator.py` — Pure local-push `LatterCoordinator` (per-Device runtime, sleep-safe `device_prefs` two-way sync, local 1 Hz timer tick, state listeners, Protocol v3 push dispatch, and target resolution).
@@ -22,7 +23,7 @@ Do **not** create backward-compatibility shims, `try/except ImportError` wrapper
 - `doorbell.py` — Auto-detected doorbell ring reflexes, exact `device_id` sibling speaker resolution, noise-reduced RTSP audio URL minting, and PTT TTS replies.
 - `feeds.py` — Weather forecast, sun/sky elevation, moon phase, `calendar_agenda` (`calendars_meta` + `locations_catalog`), and `latter_set_calendar_view` window event builders.
 - `groups.py` — Sleep-safe subentry-backed Device Groups (4 built-in hardware presets plus custom groups with opt-in Display & Interface scope), Studio entity section classifier, and Device factory/option reset (`async_reset_device`).
-- `http.py` — Constant-time HMAC `UrlSigner` (`sign_payload_resource`, `sign_on_demand_resource`, `verify_resource`) and all 7 `HomeAssistantView` endpoints (`/api/latter/*`).
+- `http.py` — Constant-time HMAC `UrlSigner` (`sign_payload_resource`, `sign_on_demand_resource`, `verify_resource`) and all 9 `HomeAssistantView` endpoints (`/api/latter/*`).
 - `hub.py` — `LatterSystemHub`, `iter_coordinators`, `AreaStateIndex` (incremental O(1) Area state index; never call `hass.states.async_all()`), and global config persistence.
 - `identity.py` — Bound ESPHome device/entity resolution (`esphome_device_id` + MAC + `via_device_id`), hardware capability manifest parser, and chunked `latter_rpc_outbox` receiver.
 - `media.py` — Active media player controller, volume routing, and exact `device_id`/MAC Music Assistant linking (`resolve_ma_counterpart_entity`) with container track expansion.

@@ -1516,6 +1516,7 @@ export interface EntitySlotListOptions {
   selectAriaLabel: string;
   removeAriaLabel: string;
   slotLabel?: (idx: number) => string;
+  slotMeta?: (item: string, idx: number) => TemplateResult | typeof nothing;
   extraActions?: (item: string, idx: number) => TemplateResult | typeof nothing;
   useCombobox?: boolean;
   host?: { requestUpdate(): void } | null;
@@ -1553,6 +1554,7 @@ export function renderEntitySlotList(opts: EntitySlotListOptions): TemplateResul
         >
           ${renderSelectOptions(opts.choices, val, opts.emptyOptionLabel)}
         </select>`}
+    ${opts.slotMeta ? opts.slotMeta(val, idx) : nothing}
   </div>`;
 
   if (opts.onReorder) {

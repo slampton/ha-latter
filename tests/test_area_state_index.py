@@ -732,11 +732,13 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     assert area_state == "Living Area"
     assert area_attrs["area_icon"] == "mdi:sofa"
     wire_tokens = area_attrs["payload"].split("\x1f")
-    assert len(wire_tokens) == 39
+    assert len(wire_tokens) == 41
     assert wire_tokens[35] == "mdi:sofa"
     assert wire_tokens[36].startswith("America/Los_Angeles|Los Angeles|")
     assert wire_tokens[37] == ""
     assert wire_tokens[38] == "0"
+    assert wire_tokens[39] == ""
+    assert wire_tokens[40] == ""
 
     # Live Area registry icon edit invalidates cached payload and updates wire index 35
     area_reg.async_update("living", icon="mdi:television-classic")
@@ -874,13 +876,16 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
 
     global_cfg[CONF_CAMERA_ENTITIES] = ["camera.unassigned_cam"]
     coord._cached_area_payload = None
-    assert coord.get_area_context_payload()[1]["home_categories"] == "alarm,cameras"
+    cam_attrs = coord.get_area_context_payload()[1]
+    assert cam_attrs["home_categories"] == "alarm"
+    assert "/api/latter/camera_stream/" in cam_attrs["camera_stream_url"]
+    assert cam_attrs["cameras_summary"][0][0] == "camera.unassigned_cam"
 
     global_cfg[CONF_THERMOSTAT_ENTITIES] = ["climate.unassigned_hvac"]
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
-        == "alarm,cameras,thermostat"
+        == "alarm,thermostat"
     )
 
     # Assigning lock/garage enables 'entry' ONLY (never 'intercom' by itself)
@@ -888,21 +893,21 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
-        == "alarm,cameras,thermostat,entry"
+        == "alarm,thermostat,entry"
     )
     global_cfg.pop(CONF_LOCK_ENTITIES)
     global_cfg[CONF_GARAGE_ENTITIES] = ["cover.unassigned_garage"]
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
-        == "alarm,cameras,thermostat,entry"
+        == "alarm,thermostat,entry"
     )
 
     global_cfg[CONF_VACUUM_ENTITIES] = ["vacuum.unassigned_vac"]
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
-        == "alarm,cameras,thermostat,entry,vacuum"
+        == "alarm,thermostat,entry,vacuum"
     )
     await async_execute_area_action(hass, "vacuum.unassigned_vac", "dock")
     assert dispatched == [
@@ -914,14 +919,14 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
-        == "alarm,cameras,intercom,thermostat,entry,vacuum"
+        == "alarm,intercom,thermostat,entry,vacuum"
     )
 
     global_cfg.pop("doorbell_media_player")
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
-        == "alarm,cameras,thermostat,entry,vacuum"
+        == "alarm,thermostat,entry,vacuum"
     )
 
     esp_dev_2, mac_2 = make_esphome_device(
@@ -946,7 +951,7 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
-        == "alarm,cameras,intercom,thermostat,entry,vacuum"
+        == "alarm,intercom,thermostat,entry,vacuum"
     )
 
     assert await async_unload_entry(hass, entry) is True

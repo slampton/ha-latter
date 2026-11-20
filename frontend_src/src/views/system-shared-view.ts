@@ -337,6 +337,36 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
                 idx === 0
                   ? store.t("shared.camera_slot_primary")
                   : store.t("shared.camera_slot_n", { index: idx + 1 }),
+              slotMeta: (camId) => {
+                const meta = findCatalogChoice(cat.cameras, camId);
+                if (!meta) return nothing;
+                const chips: TemplateResult[] = [];
+                const kind = String(meta.stream_kind || "").trim().toLowerCase();
+                if (kind === "rtsp") {
+                  chips.push(
+                    html`<span class="chip chip-primary">${store.t("shared.cam_cap_rtsp")}</span>`,
+                  );
+                } else if (kind === "mjpeg") {
+                  chips.push(
+                    html`<span class="chip chip-primary">${store.t("shared.cam_cap_mjpeg")}</span>`,
+                  );
+                } else if (kind === "snapshot") {
+                  chips.push(
+                    html`<span class="chip">${store.t("shared.cam_cap_snapshot")}</span>`,
+                  );
+                }
+                if (meta.has_audio || meta.has_talkback) {
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_audio")}</span>`);
+                }
+                if (meta.is_doorbell) {
+                  chips.push(
+                    html`<span class="chip chip-primary">${store.t("shared.cam_cap_doorbell")}</span>`,
+                  );
+                }
+                return chips.length > 0
+                  ? html`<span class="hub-slot-meta">${chips}</span>`
+                  : nothing;
+              },
               extraActions: (camId) => html`<button
                 type="button"
                 ?disabled=${!camId}

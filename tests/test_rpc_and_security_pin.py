@@ -899,21 +899,22 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     assert compute_climate_caps(None) == 0
     assert compute_vacuum_caps(None) == 0
 
-    # Verify area_context wire indices 15..19 (summaries), 34 (home_categories), 38 (alarm_caps="13")
+    # Verify area_context wire indices 15..19 (summaries), 34 (home_categories), 38 (alarm_caps="13"), 39..40 (camera stream & alert entity)
     coord._cached_area_payload = None
     _area_st, area_attrs = coord.get_area_context_payload()
     assert area_attrs["alarm_caps"] == 13
     assert area_attrs["thermostats"][0]["caps"] == 79
     assert area_attrs["vacuums"][0]["caps"] == 11
-    assert area_attrs["home_categories"] == "alarm,cameras,intercom,thermostat,entry,vacuum"
+    assert area_attrs["home_categories"] == "alarm,intercom,thermostat,entry,vacuum"
     wire_fields = area_attrs["payload"].split("\x1f")
-    assert len(wire_fields) == 39  # 3 header fields + 36 body fields (indices 3..38)
+    assert len(wire_fields) == 41  # 3 header fields + 38 body fields (indices 3..40)
     assert "climate.main_thermostat|Main Thermostat||heat|70|68.5|79" in wire_fields[15]
     assert "lock.front_door|Front Door||locked" in wire_fields[16]
     assert "cover.main_garage|Main Garage||closed" in wire_fields[17]
     assert "vacuum.robo_vac|Robo Vac||docked|11" in wire_fields[18]
-    assert wire_fields[34] == "alarm,cameras,intercom,thermostat,entry,vacuum"
+    assert wire_fields[34] == "alarm,intercom,thermostat,entry,vacuum"
     assert wire_fields[38] == "13"
+    assert "/api/latter/camera_stream/" in wire_fields[39]
 
     # Custom category ordering is preserved
     hub_sum = get_home_hub_summary(
@@ -927,13 +928,13 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         get_available_home_categories(
             alarm_sum,
             hub_sum,
-            home_categories="vacuum,cameras,intercom,alarm,entry,thermostat",
+            home_categories="vacuum,intercom,alarm,entry,thermostat",
             coordinator=coord,
             hass=hass,
         )
-        == "vacuum,cameras,intercom,alarm,entry,thermostat"
+        == "vacuum,intercom,alarm,entry,thermostat"
     )
-    assert coord.home_categories_csv == "alarm,cameras,intercom,thermostat,entry,vacuum"
+    assert coord.home_categories_csv == "alarm,intercom,thermostat,entry,vacuum"
     assert CONF_HOME_CATEGORIES == "home_categories"
 
     # Register service recorders

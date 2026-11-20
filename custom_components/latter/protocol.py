@@ -169,7 +169,7 @@ def _whole_number(val: Any) -> str:
         return ""
 
 
-# area_context.cameras_summary: entity_id|name|area_id|snapshot_url
+# area_context.cameras_summary: entity_id|name|area_id|caps
 CAMERAS_MAX_RECORDS = 10
 CAMERA_NAME_MAX = 32
 HUB_ENTITY_NAME_MAX = 32
@@ -261,9 +261,17 @@ def area_climate_records(climates: Iterable[Mapping[str, Any]]) -> V3Records:
 
 
 def camera_records(cameras: Iterable[Mapping[str, Any]]) -> V3Records:
-    """Records for the configured cameras, in configured order (`entity_id`, `name`, `area_id`, `snapshot_url`)."""
+    """Records for configured cameras, in configured order (`entity_id|name|area_id|caps`)."""
     return build_v3_records(
-        ((c.get("entity_id"), c.get("name"), c.get("area_id"), c.get("snapshot_url")) for c in cameras),
+        (
+            (
+                c.get("entity_id"),
+                c.get("name"),
+                c.get("area_id"),
+                int(c.get("caps") or 0),
+            )
+            for c in cameras
+        ),
         (None, CAMERA_NAME_MAX, None, None),
         CAMERAS_MAX_RECORDS,
     )
@@ -597,8 +605,9 @@ def pack_device_prefs_fields(
     native_ble_tracking: bool,
     custom_color_hex: str,
     is_round_display: bool = True,
+    supports_hw_jpeg: bool = True,
 ) -> tuple[Any, ...]:
-    """Return the 57 ordered body fields (wire indices 3..59) for Protocol v3 `device_prefs`."""
+    """Return the ordered body fields for Protocol v3 `device_prefs`."""
     home_enabled = bool(resolve_device_pref_value(cfg, "home_screen_enabled"))
     clean_hex = str(custom_color_hex or "").strip().upper()
     out: list[Any] = []
@@ -629,6 +638,8 @@ def pack_device_prefs_fields(
                 val = "Time App"
             elif name == "clock_face" and not is_round_display and val == "Modern Analog":
                 val = "Minimal Digital"
+            elif name == "camera_doorbell_popup" and not supports_hw_jpeg:
+                val = "Snapshot"
             out.append(val)
     return tuple(out)
 

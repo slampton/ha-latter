@@ -1,7 +1,7 @@
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 
 export const PROTOCOL_CONTRACT_VERSION = 3;
-export const STUDIO_REV = 37;
+export const STUDIO_REV = 38;
 
 export const ALLOWED_DEVICE_ACTIONS: ReadonlyArray<string> = [
   "restart",
@@ -60,6 +60,7 @@ export const SHORTCUT_ROUTES_CATALOG: ReadonlyArray<CatalogItem> = [
   {token: "app:pinned", label: "Pinned", group: "Apps", dockOnly: true},
   {token: "app:music", label: "Music", group: "Apps"},
   {token: "app:home_hub", label: "Home Hub", group: "Apps"},
+  {token: "app:cameras", label: "Cameras", group: "Apps"},
   {token: "app:area", label: "Area Control", group: "Apps"},
   {token: "app:remote", label: "Remote", group: "Apps"},
   {token: "app:weather", label: "Sky & Weather", group: "Apps"},
@@ -69,11 +70,14 @@ export const SHORTCUT_ROUTES_CATALOG: ReadonlyArray<CatalogItem> = [
   {token: "app:games", label: "Games", group: "Apps"},
   {token: "app:clock", label: "Clock Face", group: "Apps"},
   {token: "home_hub:alarm", label: "Security Alarm", group: "Home Hub"},
-  {token: "home_hub:cameras", label: "Cameras", group: "Home Hub"},
   {token: "home_hub:intercom", label: "Intercom", group: "Home Hub"},
   {token: "home_hub:thermostat", label: "Thermostat", group: "Home Hub"},
   {token: "home_hub:entry", label: "Entry & Garage", group: "Home Hub"},
   {token: "home_hub:vacuum", label: "Robot Vacuum", group: "Home Hub"},
+  {token: "cameras:grid", label: "Cameras: Grid", group: "Cameras"},
+  {token: "cameras:single", label: "Cameras: Live", group: "Cameras"},
+  {token: "cameras:carousel", label: "Cameras: Carousel", group: "Cameras"},
+  {token: "cameras:settings", label: "Cameras: Settings", group: "Cameras"},
   {token: "area:picker", label: "Switch Area", group: "Area Control"},
   {token: "area:scene", label: "Area: Scenes", group: "Area Control"},
   {token: "area:light", label: "Area: Lights", group: "Area Control"},
@@ -148,7 +152,6 @@ export const AREA_CATEGORIES_CATALOG: ReadonlyArray<CatalogItem> = [
 
 export const HOME_CATEGORIES_CATALOG: ReadonlyArray<CatalogItem> = [
   {token: "alarm", label: "Security Alarm"},
-  {token: "cameras", label: "Cameras"},
   {token: "intercom", label: "Intercom"},
   {token: "thermostat", label: "Thermostat"},
   {token: "entry", label: "Entry & Garage"},
@@ -310,15 +313,21 @@ export const DEVICE_PREF_SPECS_CATALOG: ReadonlyArray<DevicePrefSpecItem> = [
   {key: "bedtime_start_hour", label: "Bedtime Starts", domain: "number", default: 22, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
   {key: "bedtime_end_hour", label: "Bedtime Ends", domain: "number", default: 7, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
   {key: "bedtime_brightness", label: "Bedtime Brightness", domain: "number", default: 15, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
+  {key: "camera_default_view", label: "Default camera view", domain: "select", default: "Grid", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Grid", "Single", "Carousel"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_carousel_interval", label: "Carousel interval", domain: "select", default: "15s", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["10s", "15s", "30s", "60s"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_framing", label: "Camera framing", domain: "select", default: "Uncropped", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Uncropped", "Fill"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_stream_mode", label: "Camera stream mode", domain: "select", default: "Auto", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Auto", "Low Bandwidth", "Snapshots"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_doorbell_popup", label: "Doorbell ring popup", domain: "select", default: "Snapshot", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Snapshot", "Live Video"], min: null, max: null, step: null, unit: "", capability: "hw_jpeg" },
 ];
 
 export const DEVICE_PREF_SPECS_MAP: Readonly<Record<string, DevicePrefSpecItem>> = Object.fromEntries(DEVICE_PREF_SPECS_CATALOG.map((s) => [s.key, s]));
 
-export const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:area,app:remote,app:games,app:tools";
+export const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:cameras,app:area,app:remote,app:games,app:tools";
 export const DEFAULT_DOCK_ROUTES_TOKENS: ReadonlyArray<string> = [
   "app:pinned",
   "app:music",
   "app:home_hub",
+  "app:cameras",
   "app:area",
   "app:remote",
   "app:games",
@@ -350,10 +359,9 @@ export const DEFAULT_AREA_CATEGORIES_TOKENS: ReadonlyArray<string> = [
   "media",
 ];
 
-export const DEFAULT_HOME_CATEGORIES = "alarm,cameras,intercom,thermostat,entry,vacuum";
+export const DEFAULT_HOME_CATEGORIES = "alarm,intercom,thermostat,entry,vacuum";
 export const DEFAULT_HOME_CATEGORIES_TOKENS: ReadonlyArray<string> = [
   "alarm",
-  "cameras",
   "intercom",
   "thermostat",
   "entry",

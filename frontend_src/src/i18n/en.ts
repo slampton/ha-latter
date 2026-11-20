@@ -19,7 +19,7 @@ export const EN_STRINGS = {
 export type StudioTranslationKey = keyof typeof EN_STRINGS;
 
 /**
- * Sentence-case labels for all 56 `DevicePrefSpec` keys + group/device setting keys.
+ * Sentence-case labels for all 61 `DevicePrefSpec` keys + group/device setting keys.
  */
 export const PREF_LABELS: Readonly<Record<string, string>> = {
   wake_word_mode: "Wake word mode",
@@ -78,6 +78,11 @@ export const PREF_LABELS: Readonly<Record<string, string>> = {
   alarms_summary: "Alarms",
   calendar_lookahead_days: "Overview lookahead",
   calendar_week_start: "Start week on",
+  camera_default_view: "Default view",
+  camera_carousel_interval: "Carousel interval",
+  camera_framing: "Video framing",
+  camera_stream_mode: "Stream mode",
+  camera_doorbell_popup: "Doorbell ring popup",
   // Non-pref group & Device config keys
   native_ble_tracking: "BLE Area tracking",
   ble_auto_switch: "Auto-switch active Area",
@@ -95,6 +100,8 @@ export const PREF_LABELS: Readonly<Record<string, string>> = {
   home_categories: "Home categories",
   tools_items: "Enabled tools",
   games_items: "Enabled games",
+  camera_visible_entities: "Visible cameras",
+  camera_carousel_entities: "Carousel cameras",
 };
 
 /**
@@ -112,6 +119,7 @@ export const PREF_OPTION_LABELS: Readonly<Record<string, string>> = {
   "10s": "10 seconds",
   "15s": "15 seconds",
   "30s": "30 seconds",
+  "60s": "60 seconds",
   "1 min": "1 minute",
   "2 min": "2 minutes",
   "5 min": "5 minutes",
@@ -201,6 +209,18 @@ export const PREF_OPTION_LABELS: Readonly<Record<string, string>> = {
   "Thunderstorm (Day)": "Thunderstorm (day)",
   "Thunderstorm (Night)": "Thunderstorm (night)",
   Windy: "Windy",
+
+  // Cameras & live video
+  Grid: "Grid",
+  Single: "Single",
+  Carousel: "Carousel",
+  Uncropped: "Uncropped",
+  Fill: "Fill",
+  Auto: "Auto",
+  "Low Bandwidth": "Low bandwidth",
+  Snapshots: "Snapshots",
+  Snapshot: "Snapshot",
+  "Live Video": "Live video",
 
   // Security PIN policy wire tokens
   auto: "Auto (recommended)",

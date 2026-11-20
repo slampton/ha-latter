@@ -963,6 +963,158 @@ export class EntityController {
     this.tokenLists.activity_sources.reorder(fromIndex, toIndex);
   }
 
+  // ---------- Per-Device Cameras Visibility & Carousel Lists ----------
+
+  getSystemCameraEntities(): string[] {
+    const out: string[] = [];
+    for (const raw of this.store.state?.system_config?.camera_entities || []) {
+      const id = String(raw || "").trim();
+      if (id && !out.includes(id)) {
+        out.push(id);
+      }
+    }
+    return out;
+  }
+
+  getVisibleCameras(): string[] {
+    const sys = this.getSystemCameraEntities();
+    if (sys.length === 0) return [];
+    const raw = this.store.state?.config?.camera_visible_entities;
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return [...sys];
+    }
+    const filtered: string[] = [];
+    for (const item of raw) {
+      const id = String(item || "").trim();
+      if (id && sys.includes(id) && !filtered.includes(id)) {
+        filtered.push(id);
+      }
+    }
+    return filtered.length > 0 ? filtered : [...sys];
+  }
+
+  toggleVisibleCamera(entityId: string, forceEnabled?: boolean): void {
+    const cleanId = String(entityId || "").trim();
+    const sys = this.getSystemCameraEntities();
+    if (!cleanId || !sys.includes(cleanId)) return;
+    const current = this.getVisibleCameras();
+    const idx = current.indexOf(cleanId);
+    const currentlyOn = idx >= 0;
+    const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
+    if (wantOn === currentlyOn) return;
+
+    let next: string[];
+    if (!wantOn) {
+      if (current.length <= 1) {
+        this.store.showToast(this.store.t("common.keep_one_enabled", { noun: "camera" }), true);
+        return;
+      }
+      next = current.filter((id) => id !== cleanId);
+    } else {
+      next = [...current, cleanId];
+    }
+    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+    this.stageDeviceSetting("camera_visible_entities", sameAsSys ? [] : next);
+
+    if (!wantOn) {
+      const rawCarousel = Array.isArray(this.store.state?.config?.camera_carousel_entities)
+        ? this.store.state.config.camera_carousel_entities
+            .map((c) => String(c || "").trim())
+            .filter(Boolean)
+        : [];
+      if (rawCarousel.length > 0 && rawCarousel.includes(cleanId)) {
+        const pruned = rawCarousel.filter((id) => next.includes(id));
+        const sameAsVisible =
+          pruned.length === next.length && pruned.every((id, i) => id === next[i]);
+        this.stageDeviceSetting(
+          "camera_carousel_entities",
+          pruned.length === 0 || sameAsVisible ? [] : pruned,
+        );
+      }
+    }
+  }
+
+  reorderVisibleCameras(fromIndex: number, toIndex: number): void {
+    const sys = this.getSystemCameraEntities();
+    const current = this.getVisibleCameras();
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= current.length ||
+      toIndex >= current.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+    const next = [...current];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+    this.stageDeviceSetting("camera_visible_entities", sameAsSys ? [] : next);
+  }
+
+  getCarouselCameras(): string[] {
+    const visible = this.getVisibleCameras();
+    if (visible.length === 0) return [];
+    const raw = this.store.state?.config?.camera_carousel_entities;
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return [...visible];
+    }
+    const filtered: string[] = [];
+    for (const item of raw) {
+      const id = String(item || "").trim();
+      if (id && visible.includes(id) && !filtered.includes(id)) {
+        filtered.push(id);
+      }
+    }
+    return filtered.length > 0 ? filtered : [...visible];
+  }
+
+  toggleCarouselCamera(entityId: string, forceEnabled?: boolean): void {
+    const cleanId = String(entityId || "").trim();
+    const visible = this.getVisibleCameras();
+    if (!cleanId || !visible.includes(cleanId)) return;
+    const current = this.getCarouselCameras();
+    const idx = current.indexOf(cleanId);
+    const currentlyOn = idx >= 0;
+    const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
+    if (wantOn === currentlyOn) return;
+
+    let next: string[];
+    if (!wantOn) {
+      if (current.length <= 1) {
+        this.store.showToast(this.store.t("common.keep_one_enabled", { noun: "camera" }), true);
+        return;
+      }
+      next = current.filter((id) => id !== cleanId);
+    } else {
+      next = [...current, cleanId];
+    }
+    const sameAsVisible =
+      next.length === visible.length && next.every((id, i) => id === visible[i]);
+    this.stageDeviceSetting("camera_carousel_entities", sameAsVisible ? [] : next);
+  }
+
+  reorderCarouselCameras(fromIndex: number, toIndex: number): void {
+    const visible = this.getVisibleCameras();
+    const current = this.getCarouselCameras();
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= current.length ||
+      toIndex >= current.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+    const next = [...current];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    const sameAsVisible =
+      next.length === visible.length && next.every((id, i) => id === visible[i]);
+    this.stageDeviceSetting("camera_carousel_entities", sameAsVisible ? [] : next);
+  }
+
   // ---------- Shortcuts (`dock_items` & `pinned_items`) + App Config Modal ----------
 
   getDockItems(): ShortcutItem[] {

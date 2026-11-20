@@ -1519,6 +1519,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                             "duration": duration,
                             "chime": coord_chime,
                             "camera_url": coord.alert_camera_url,
+                            "camera_entity": coord.alert_camera_entity,
                             "alert_id": coord.alert_id,
                         },
                         blocking=True,

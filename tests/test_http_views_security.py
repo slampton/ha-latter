@@ -12,6 +12,7 @@ from PIL import Image
 import pytest
 
 from custom_components.latter import async_unload_entry
+from custom_components.latter.cameras import DATA_CAMERA_HUB
 from custom_components.latter.const import (
     CONF_CAMERA_ENTITIES,
     DATA_GLOBAL_CONFIG,
@@ -24,7 +25,9 @@ from custom_components.latter.http import (
     PAYLOAD_TTL_DAYS,
     LatterArtworkTranscoderView,
     LatterBrandIconView,
+    LatterCameraGridView,
     LatterCameraSnapshotView,
+    LatterCameraStreamView,
     LatterMapSnapshotView,
     LatterWallpaperProxyView,
     LatterWallpaperUploadView,
@@ -482,6 +485,53 @@ async def test_artwork_camera_map_and_brand_icon_views(
     assert r_icon.status == 200
     assert r_icon.content_type == "image/png"
 
-    # Unload shuts down _LiveCameraFeeds cleanly
+    # 5) Camera Stream & 2x2 Grid Views: signed allow-list, bad sig, unauthorized camera rejection, and MJPEG framing
+    stream_view = LatterCameraStreamView(hass)
+    grid_view = LatterCameraGridView(hass)
+    stream_url = coord.build_camera_stream_url()
+    assert "/api/latter/camera_stream/" in stream_url
+    stream_sig = parse_qs(urlsplit(stream_url).query)["sig"][0]
+
+    r_stream_bad_sig = await stream_view.get(
+        _make_get_request(
+            f"/api/latter/camera_stream/{coord.device_slug}?entity_id=camera.porch&sig=bad.sig"
+        ),
+        coord.device_slug,
+    )
+    assert r_stream_bad_sig.status == 403
+
+    r_stream_unlisted = await stream_view.get(
+        _make_get_request(
+            f"/api/latter/camera_stream/{coord.device_slug}?entity_id=camera.hidden&sig={stream_sig}"
+        ),
+        coord.device_slug,
+    )
+    assert r_stream_unlisted.status == 403
+
+    r_stream_bad_rot = await stream_view.get(
+        _make_get_request(
+            f"/api/latter/camera_stream/{coord.device_slug}?entity_id=camera.porch&rot=45&sig={stream_sig}"
+        ),
+        coord.device_slug,
+    )
+    assert r_stream_bad_rot.status == 400
+
+    r_grid_bad_sig = await grid_view.get(
+        _make_get_request(
+            f"/api/latter/camera_grid/{coord.device_slug}?cameras=camera.porch&sig=bad.sig"
+        ),
+        coord.device_slug,
+    )
+    assert r_grid_bad_sig.status == 403
+
+    r_grid_unlisted = await grid_view.get(
+        _make_get_request(
+            f"/api/latter/camera_grid/{coord.device_slug}?cameras=camera.porch,camera.hidden&sig={stream_sig}"
+        ),
+        coord.device_slug,
+    )
+    assert r_grid_unlisted.status == 403
+
+    # Unload shuts down LatterCameraStreamHub cleanly
     assert await async_unload_entry(hass, entry) is True
-    assert cam_view._live._feeds == {}
+    assert DATA_CAMERA_HUB not in hass.data.get(DOMAIN, {})

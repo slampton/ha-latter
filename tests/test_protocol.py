@@ -65,12 +65,12 @@ class TestProtocolV3Contract(unittest.TestCase):
     def test_domain_field_counts_and_contiguous_indices(self) -> None:
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
-            "area_context": 36,
+            "area_context": 38,
             "active_media": 21,
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 4,
-            "device_prefs": 61,
+            "device_prefs": 66,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})
@@ -321,18 +321,19 @@ class TestRecordsFields(unittest.TestCase):
         self.assertIn("shortcut_records(", coord_src)
 
     def test_cameras(self) -> None:
-        self.assertEqual(self.layout("area_context", "cameras_summary"), ["entity_id", "name", "area_id", "snapshot_url"])
+        self.assertEqual(self.layout("area_context", "cameras_summary"), ["entity_id", "name", "area_id", "caps"])
         recs = self.p.camera_records(
             [
-                {"entity_id": "camera.front", "name": "Front | Door\n", "area_id": "porch", "snapshot_url": "http://h/x?sig=1"},
-                {"entity_id": "camera.yard", "name": "Y" * 80, "area_id": "", "snapshot_url": "http://h/y"},
+                {"entity_id": "camera.front", "name": "Front | Door\n", "area_id": "porch", "caps": 15},
+                {"entity_id": "camera.yard", "name": "Y" * 80, "area_id": "", "caps": 1},
             ]
         )
-        self.assertEqual(recs[0], ("camera.front", "Front / Door", "porch", "http://h/x?sig=1"))
+        self.assertEqual(recs[0], ("camera.front", "Front / Door", "porch", "15"))
         self.assertEqual(recs[1][1], "Y" * self.p.CAMERA_NAME_MAX)
         self.assertEqual(recs[1][2], "")
+        self.assertEqual(recs[1][3], "1")
         self.assertEqual(self.p.encode_v3_records(recs).count("\x1e"), 1)
-        many = [{"entity_id": f"camera.c{i}", "name": "c", "area_id": "", "snapshot_url": ""} for i in range(15)]
+        many = [{"entity_id": f"camera.c{i}", "name": "c", "area_id": "", "caps": 0} for i in range(15)]
         self.assertEqual(len(self.p.camera_records(many)), self.p.CAMERAS_MAX_RECORDS)
         self.assertEqual(self.p.encode_v3_records(self.p.camera_records([])), "")
 
@@ -1131,7 +1132,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             self.assertNotIn(retired_key, studio_scope.DEVICE_SETTING_KEYS)
             with self.assertRaises(studio_scope.SettingsScopeError):
                 studio_scope.clean_device_settings({retired_key: "1"})
-        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 56)
+        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 61)
 
         for key, default_val in (
             ("manual_brightness", 80),
@@ -1243,7 +1244,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         self.assertEqual(_PAYLOADS_MOD.parse_home_categories(None), [])
         self.assertEqual(
             _PAYLOADS_MOD.parse_home_categories(_PAYLOADS_MOD.DEFAULT_HOME_CATEGORIES),
-            ["alarm", "cameras", "intercom", "thermostat", "entry", "vacuum"],
+            ["alarm", "intercom", "thermostat", "entry", "vacuum"],
         )
         self.assertEqual(
             _PAYLOADS_MOD.parse_home_categories("entry, alarm, bogus, entry"),

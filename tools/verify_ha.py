@@ -2,7 +2,7 @@
 """Cross-platform static architecture, security, Studio, and HA compliance verifier for ha-latter.
 
 Runs in <1 second with Python 3.11+ standard library only (zero third-party dependencies),
-enforcing the 32-module topology, AST security/identity invariants, pyproject/manifest parity,
+enforcing the 33-module topology, AST security/identity invariants, pyproject/manifest parity,
 and Latter Studio guardrails identically in local development and GitHub Actions CI.
 """
 
@@ -53,6 +53,7 @@ EXPECTED_ROOT_MODULES: frozenset[str] = frozenset(
         "backup.py",
         "binary_sensor.py",
         "button.py",
+        "cameras.py",
         "config_flow.py",
         "const.py",
         "coordinator.py",
@@ -375,7 +376,7 @@ def main() -> int:
             if m:
                 failures.append(f"[TERMINOLOGY] {rel} contains banned term {m.group(0)!r}")
 
-    # 2. [32-MODULE TOPOLOGY] & pure-stdlib leaf enforcement
+    # 2. [33-MODULE TOPOLOGY] & pure-stdlib leaf enforcement
     actual_root_py = {p.name for p in LATTER_DIR.glob("*.py")}
     actual_studio_py = {p.name for p in STUDIO_DIR.glob("*.py")} if STUDIO_DIR.is_dir() else set()
     all_latter_py = [p for p in iter_repo_files(LATTER_DIR) if p.suffix == ".py"]
@@ -386,13 +387,13 @@ def main() -> int:
     extra_studio = actual_studio_py - EXPECTED_STUDIO_MODULES
 
     if missing_root:
-        failures.append(f"[32-MODULE TOPOLOGY] Missing root module(s): {sorted(missing_root)}")
+        failures.append(f"[33-MODULE TOPOLOGY] Missing root module(s): {sorted(missing_root)}")
     if extra_root:
-        failures.append(f"[32-MODULE TOPOLOGY] Unexpected root module(s): {sorted(extra_root)}")
+        failures.append(f"[33-MODULE TOPOLOGY] Unexpected root module(s): {sorted(extra_root)}")
     if missing_studio:
-        failures.append(f"[32-MODULE TOPOLOGY] Missing studio/ module(s): {sorted(missing_studio)}")
+        failures.append(f"[33-MODULE TOPOLOGY] Missing studio/ module(s): {sorted(missing_studio)}")
     if extra_studio:
-        failures.append(f"[32-MODULE TOPOLOGY] Unexpected studio/ module(s): {sorted(extra_studio)}")
+        failures.append(f"[33-MODULE TOPOLOGY] Unexpected studio/ module(s): {sorted(extra_studio)}")
 
     unexpected_nested = [
         p.relative_to(LATTER_DIR).as_posix()
@@ -401,11 +402,11 @@ def main() -> int:
     ]
     if unexpected_nested:
         failures.append(
-            f"[32-MODULE TOPOLOGY] Legacy nested subpackage file(s) present: {sorted(unexpected_nested)}"
+            f"[33-MODULE TOPOLOGY] Legacy nested subpackage file(s) present: {sorted(unexpected_nested)}"
         )
-    if len(all_latter_py) != 32:
+    if len(all_latter_py) != 33:
         failures.append(
-            f"[32-MODULE TOPOLOGY] Expected exact 32 .py modules in custom_components/latter, found {len(all_latter_py)}"
+            f"[33-MODULE TOPOLOGY] Expected exact 33 .py modules in custom_components/latter, found {len(all_latter_py)}"
         )
 
     for std_rel in STDLIB_ONLY_MODULES:
