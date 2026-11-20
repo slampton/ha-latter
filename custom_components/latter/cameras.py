@@ -30,7 +30,8 @@ _LOGGER = logging.getLogger(__name__)
 DATA_CAMERA_HUB = "camera_stream_hub"
 
 MAX_CONCURRENT_VIDEO_INGESTS: int = 6
-VIDEO_INGEST_IDLE_SECONDS: float = 3.0
+VIDEO_INGEST_IDLE_SECONDS: float = 15.0
+SNAPSHOT_PRIMER_TIMEOUT_SECONDS: float = 3.0
 MIN_ALIGNED_DIM: int = 64
 MAX_VIDEO_DIM: int = 1280
 MIN_VIDEO_FPS: int = 1
@@ -57,6 +58,8 @@ CAMERA_CAP_HAS_AUDIO: int = 1
 CAMERA_CAP_HAS_TALKBACK: int = 2
 CAMERA_CAP_IS_DOORBELL: int = 4
 CAMERA_CAP_IN_CAROUSEL: int = 8
+CAMERA_CAP_SHOW_REPLY: int = 16
+CAMERA_CAP_SHOW_UNLOCK: int = 32
 
 _CAMERA_FEATURE_STREAM: int = 2  # homeassistant.components.camera.CameraEntityFeature.STREAM
 _CIRCULAR_MASK_CACHE: dict[tuple[int, int], tuple[Image.Image, Image.Image]] = {}
@@ -406,7 +409,6 @@ def build_ffmpeg_video_cmd(
         vf_parts.append("hflip,vflip")
     elif rot_deg == 270:
         vf_parts.append("transpose=2")
-    vf_parts.append(f"fps={target_fps}")
     if fit_mode == "fill":
         vf_parts.append(
             f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase,"
@@ -425,16 +427,20 @@ def build_ffmpeg_video_cmd(
     cmd.extend(
         [
             "-fflags",
-            "nobuffer",
+            "+nobuffer+discardcorrupt",
             "-flags",
             "low_delay",
+            "-flags2",
+            "+fast",
             "-analyzeduration",
-            "500000",
+            "250000",
             "-probesize",
-            "500000",
+            "200000",
             "-i",
             stream_url,
             "-an",
+            "-r",
+            str(target_fps),
             "-vf",
             ",".join(vf_parts),
             "-pix_fmt",
@@ -443,6 +449,8 @@ def build_ffmpeg_video_cmd(
             "mjpeg",
             "-q:v",
             str(q_val),
+            "-flush_packets",
+            "1",
             "-f",
             "mpjpeg",
             "pipe:1",
@@ -594,11 +602,14 @@ class _CameraIngest:
     latest_frame: bytes | None = None
     latest_frame_ts: float = 0.0
     latest_seq: int = 0
+    live_seq: int = 0
     latest_error: Exception | None = None
     _next_frame_event: asyncio.Event = field(default_factory=asyncio.Event)
     _restart_event: asyncio.Event = field(default_factory=asyncio.Event)
     _task: asyncio.Task[None] | None = None
     _idle_task: asyncio.Task[None] | None = None
+    _prime_task: asyncio.Task[None] | None = None
+    _idle_since: float = 0.0
     _proc: asyncio.subprocess.Process | None = None
     _sem_acquired: bool = False
     _closed: bool = False
@@ -612,11 +623,14 @@ class _CameraIngest:
         fit: str,
         rot: int,
         is_baseline_420: bool = True,
+        is_primer: bool = False,
     ) -> None:
         """Store `frame` as the latest warm frame and wake every waiting subscriber."""
         self.latest_frame = frame
         self.latest_frame_ts = time.monotonic()
         self.latest_seq += 1
+        if not is_primer:
+            self.live_seq += 1
         self.latest_error = None
         self.stream_w = width
         self.stream_h = height
@@ -759,6 +773,15 @@ class LatterCameraStreamHub:
         )
         ingest = self._ingests.get(entity_id)
         if ingest is None or ingest._closed:
+            if self._video_semaphore.locked():
+                idle_candidates = [
+                    ing
+                    for ing in self._ingests.values()
+                    if not ing._closed and not ing.subscribers
+                ]
+                if idle_candidates:
+                    victim = min(idle_candidates, key=lambda ing: ing._idle_since)
+                    await self._async_stop_ingest(victim)
             try:
                 await asyncio.wait_for(self._video_semaphore.acquire(), timeout=0.25)
             except TimeoutError as err:
@@ -785,6 +808,7 @@ class LatterCameraStreamHub:
         if ingest._idle_task is not None and not ingest._idle_task.done():
             ingest._idle_task.cancel()
             ingest._idle_task = None
+        ingest._idle_since = 0.0
 
         prev_w, prev_h, prev_fps, prev_fit, prev_rot = ingest.desired_profile()
         ingest.subscribers.add(sub)
@@ -808,6 +832,7 @@ class LatterCameraStreamHub:
             and not ingest._closed
             and (ingest._idle_task is None or ingest._idle_task.done())
         ):
+            ingest._idle_since = time.monotonic()
             ingest._idle_task = self.hass.async_create_background_task(
                 self._async_idle_teardown(ingest),
                 name=f"latter_camera_idle_{ingest.entity_id}",
@@ -837,6 +862,15 @@ class LatterCameraStreamHub:
             and idle_task is not asyncio.current_task()
         ):
             idle_task.cancel()
+
+        prime_task = ingest._prime_task
+        ingest._prime_task = None
+        if (
+            prime_task is not None
+            and not prime_task.done()
+            and prime_task is not asyncio.current_task()
+        ):
+            prime_task.cancel()
 
         proc = ingest._proc
         ingest._proc = None
@@ -870,6 +904,57 @@ class LatterCameraStreamHub:
         self._stream_source_cache.clear()
         _CIRCULAR_MASK_CACHE.clear()
 
+    async def _async_prime_snapshot(
+        self,
+        ingest: _CameraIngest,
+        width: int,
+        height: int,
+        fit: str,
+        rot: int,
+    ) -> None:
+        """Fetch one fast snapshot in parallel while cold RTSP/MJPEG connects to cut time-to-first-frame."""
+        try:
+            from homeassistant.components import camera as ha_camera
+
+            get_img = getattr(ha_camera, "async_get_image", None)
+            if not callable(get_img):
+                return
+            image_obj = await get_img(
+                self.hass,
+                ingest.entity_id,
+                width=width,
+                height=height,
+                timeout=SNAPSHOT_PRIMER_TIMEOUT_SECONDS,
+            )
+            if ingest._closed or ingest.latest_seq > 0 or not getattr(image_obj, "content", None):
+                return
+            encoded = await self.hass.async_add_executor_job(
+                partial(
+                    transcode_camera_frame,
+                    image_obj.content,
+                    width,
+                    height,
+                    fit=fit,
+                    rot=rot,
+                    circular_mask=False,
+                    fast_live=True,
+                )
+            )
+            if not ingest._closed and ingest.latest_seq == 0:
+                ingest.publish(
+                    encoded,
+                    width=width,
+                    height=height,
+                    fit=fit,
+                    rot=rot,
+                    is_baseline_420=True,
+                    is_primer=True,
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Snapshot primer skipped for %s: %s", ingest.entity_id, err)
+
     async def _async_run_ingest(self, ingest: _CameraIngest) -> None:
         """Run the 3-tier camera source cascade (RTSP FFmpeg -> Native MJPEG -> Snapshot)."""
         rtsp_empty_attempts = 0
@@ -887,8 +972,19 @@ class LatterCameraStreamHub:
                     await self._async_resolve_ffmpeg_binary() if stream_url else None
                 )
                 if stream_url and ffmpeg_bin:
+                    # Fire a fast parallel snapshot primer while cold RTSP awaits its first IDR keyframe
+                    if (
+                        ingest.latest_frame is None
+                        and (ingest._prime_task is None or ingest._prime_task.done())
+                    ):
+                        ingest._prime_task = self.hass.async_create_background_task(
+                            self._async_prime_snapshot(
+                                ingest, target_w, target_h, target_fit, target_rot
+                            ),
+                            name=f"latter_camera_prime_{ingest.entity_id}",
+                        )
                     ingest.source_tier = "rtsp"
-                    seq_before = ingest.latest_seq
+                    live_seq_before = ingest.live_seq
                     restarted = await self._async_run_rtsp_tier(
                         ingest,
                         ffmpeg_bin,
@@ -904,13 +1000,13 @@ class LatterCameraStreamHub:
                     if restarted:
                         rtsp_empty_attempts = 0
                         continue
-                    if ingest.latest_seq > seq_before:
+                    if ingest.live_seq > live_seq_before:
                         rtsp_empty_attempts = 0
                         await asyncio.sleep(0.5)
                         continue
                     rtsp_empty_attempts += 1
                     if (
-                        ingest.latest_frame is not None
+                        ingest.live_seq > 0
                         and rtsp_empty_attempts <= MAX_RTSP_EMPTY_RETRIES
                     ):
                         await asyncio.sleep(0.5)
@@ -1002,6 +1098,9 @@ class LatterCameraStreamHub:
                 if not chunk:
                     return False
                 for frame in parser.feed(chunk):
+                    if ingest._prime_task is not None and not ingest._prime_task.done():
+                        ingest._prime_task.cancel()
+                        ingest._prime_task = None
                     ingest.publish(
                         frame,
                         width=width,
@@ -1415,6 +1514,7 @@ class LatterCameraStreamHub:
         fps: int = 5,
         fit: str = "contain",
         stale_after_s: float = GRID_STALE_FRAME_SECONDS,
+        label_overrides: Mapping[str, str] | None = None,
     ) -> AsyncIterator[bytes]:
         """Subscribe to up to 4 shared camera ingests and yield composited 2x2 Baseline JPEG frames."""
         cams = [c.strip() for c in entity_ids if c and c.strip()][:4]
@@ -1425,8 +1525,13 @@ class LatterCameraStreamHub:
         quad_w = align16((out_w - GRID_GUTTER_PX) // 2)
         quad_h = align16((out_h - GRID_GUTTER_PX) // 2)
 
+        overrides = label_overrides or {}
         labels: list[str] = []
         for cam in cams:
+            custom_lbl = str(overrides.get(cam) or "").strip()
+            if custom_lbl:
+                labels.append(custom_lbl)
+                continue
             st = self.hass.states.get(cam)
             friendly = (
                 str(st.attributes.get("friendly_name") or "").strip()
@@ -1527,10 +1632,16 @@ class LatterCameraStreamHub:
         *,
         fps: int = 5,
         fit: str = "contain",
+        label_overrides: Mapping[str, str] | None = None,
     ) -> AsyncIterator[bytes]:
         """Yield multipart MJPEG chunks for the server-side 2x2 camera grid."""
         async for frame in self.async_iter_grid_frames(
-            entity_ids, width, height, fps=fps, fit=fit
+            entity_ids,
+            width,
+            height,
+            fps=fps,
+            fit=fit,
+            label_overrides=label_overrides,
         ):
             yield format_mjpeg_chunk(frame)
 
@@ -1547,6 +1658,7 @@ def resolve_camera_capabilities(
     doorbell_ring_map: Mapping[str, str] | Collection[str] | None = None,
     carousel_entities: Collection[str] | None = None,
     volume_overrides: dict[str, str] | None = None,
+    camera_config: Mapping[str, Any] | None = None,
     stream_source: str | None = None,
     has_mjpeg_stream: bool = False,
 ) -> dict[str, Any]:
@@ -1602,23 +1714,48 @@ def resolve_camera_capabilities(
     else:
         stream_kind = "snapshot"
 
+    cfg = camera_config if isinstance(camera_config, Mapping) else {}
+    custom_label = str(cfg.get("label") or "").strip()[:32]
+    display_name = custom_label or friendly_name
+
+    # Smart defaults: Listen/Talk/Reply default ON only for detected doorbells (when hardware-capable),
+    # OFF for regular cameras; Unlock always defaults None until explicitly bound to a Lock/Garage entity.
+    raw_listen = cfg.get("show_listen")
+    show_listen = bool(raw_listen) if isinstance(raw_listen, bool) else bool(is_doorbell and has_audio)
+    raw_talk = cfg.get("show_talk")
+    show_talk = bool(raw_talk) if isinstance(raw_talk, bool) else bool(is_doorbell and has_talkback)
+    raw_reply = cfg.get("show_reply")
+    show_reply = bool(raw_reply) if isinstance(raw_reply, bool) else bool(is_doorbell and has_talkback)
+    raw_unlock = str(cfg.get("unlock_entity") or "").strip()
+    unlock_entity = raw_unlock if raw_unlock.startswith(("lock.", "cover.")) else ""
+
     caps = 0
-    if has_audio:
+    if show_listen:
         caps |= CAMERA_CAP_HAS_AUDIO
-    if has_talkback:
+    if show_talk:
         caps |= CAMERA_CAP_HAS_TALKBACK
     if is_doorbell:
         caps |= CAMERA_CAP_IS_DOORBELL
     if in_carousel:
         caps |= CAMERA_CAP_IN_CAROUSEL
+    if show_reply:
+        caps |= CAMERA_CAP_SHOW_REPLY
+    if unlock_entity:
+        caps |= CAMERA_CAP_SHOW_UNLOCK
 
     return {
         "entity_id": cam_ent,
-        "name": friendly_name,
+        "name": display_name,
+        "friendly_name": friendly_name,
+        "label": custom_label,
         "area_id": area_id,
         "caps": caps,
         "has_audio": has_audio,
         "has_talkback": has_talkback,
+        "show_listen": show_listen,
+        "show_talk": show_talk,
+        "show_reply": show_reply,
+        "unlock_entity": unlock_entity,
         "is_doorbell": is_doorbell,
         "in_carousel": in_carousel,
         "stream_kind": stream_kind,
@@ -1633,6 +1770,7 @@ async def async_resolve_camera_capabilities(
     doorbell_ring_map: Mapping[str, str] | Collection[str] | None = None,
     carousel_entities: Collection[str] | None = None,
     volume_overrides: dict[str, str] | None = None,
+    camera_config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Probe stream source asynchronously (cached) and return full camera capability metadata."""
     hub = get_camera_stream_hub(hass)
@@ -1643,6 +1781,7 @@ async def async_resolve_camera_capabilities(
         doorbell_ring_map=doorbell_ring_map,
         carousel_entities=carousel_entities,
         volume_overrides=volume_overrides,
+        camera_config=camera_config,
         stream_source=stream_source,
     )
 

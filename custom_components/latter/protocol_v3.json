@@ -172,7 +172,7 @@
           "name": "cameras_summary",
           "cpp_enum": "CAMERAS_SUMMARY",
           "type": "records",
-          "description": "0x1E-joined entity_id|name|area_id|caps camera records (up to 10, in configured order; area_id empty when unassigned; caps u16 bitmask: 1=has_audio, 2=has_talkback, 4=is_doorbell, 8=in_carousel)"
+          "description": "0x1E-joined entity_id|name|area_id|caps|unlock_entity camera records (up to 10, in configured order; name uses custom label when configured; area_id and unlock_entity empty when unassigned; caps u16 bitmask: 1=show_listen, 2=show_talk, 4=is_doorbell, 8=in_carousel, 16=show_reply, 32=show_unlock)"
         },
         {
           "index": 22,
@@ -3850,7 +3850,7 @@
     }
   ],
   "studio_contract": {
-    "studio_rev": 39,
+    "studio_rev": 40,
     "allowed_device_actions": [
       "restart",
       "find_my",

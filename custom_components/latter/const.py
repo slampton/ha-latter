@@ -16,8 +16,8 @@ _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = json.loads(
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 39
-MIN_FIRMWARE_SDK_REV: Final = 2026111905
+STUDIO_REV: Final = 40
+MIN_FIRMWARE_SDK_REV: Final = 2026111906
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -42,6 +42,7 @@ CONF_ESPHOME_DEVICE_ID: Final = "esphome_device_id"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_ALARM_ENTITY: Final = "alarm_entity"
 CONF_CAMERA_ENTITIES: Final = "camera_entities"
+CONF_CAMERA_CONFIGS: Final = "camera_configs"
 CONF_THERMOSTAT_ENTITIES: Final = "thermostat_entities"
 CONF_LOCK_ENTITIES: Final = "lock_entities"
 CONF_GARAGE_ENTITIES: Final = "garage_entities"
@@ -264,6 +265,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_WEATHER_ENTITY,
     CONF_ALARM_ENTITY,
     CONF_CAMERA_ENTITIES,
+    CONF_CAMERA_CONFIGS,
     CONF_THERMOSTAT_ENTITIES,
     CONF_LOCK_ENTITIES,
     CONF_GARAGE_ENTITIES,

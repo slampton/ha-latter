@@ -280,7 +280,10 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
     const visibleCameras = store.entity.getVisibleCameras();
     const carouselCameras = store.entity.getCarouselCameras();
     const camCatalogMap = new Map((data?.catalog?.cameras || []).map((c) => [c.id, c]));
+    const camConfigs = data?.system_config?.camera_configs || {};
     const cameraPillLabel = (entityId: string): string => {
+      const customLbl = String(camConfigs[entityId]?.label || "").trim();
+      if (customLbl) return customLbl;
       const meta = camCatalogMap.get(entityId);
       return meta?.name ? entityLabel(meta.name) : entityId;
     };

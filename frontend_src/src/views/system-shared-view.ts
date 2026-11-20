@@ -17,6 +17,10 @@ import {
   renderSvgIcon,
   renderTrashIconButton,
 } from "../components/controls.js";
+import {
+  openCameraConfigModal,
+  resolveEffectiveCameraConfig,
+} from "../components/dialogs/camera-config-modal.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StringListKey, StudioStore } from "../state/store.js";
 import type { CatalogChoice, SystemConfig } from "../types.js";
@@ -319,29 +323,47 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
                   ? store.t("shared.camera_slot_primary")
                   : store.t("shared.camera_slot_n", { index: idx + 1 }),
               slotMeta: (camId) => {
-                const meta = findCatalogChoice(cat.cameras, camId);
-                if (!meta) return nothing;
+                const eff = resolveEffectiveCameraConfig(store, camId);
+                const meta = eff.meta;
                 const chips: TemplateResult[] = [];
-                const kind = String(meta.stream_kind || "").trim().toLowerCase();
+                if (eff.label) {
+                  chips.push(
+                    html`<span class="chip chip-primary">
+                      ${store.t("shared.cam_cap_label", { label: eff.label })}
+                    </span>`,
+                  );
+                }
+                const kind = String(meta?.stream_kind || "").trim().toLowerCase();
                 if (kind === "rtsp") {
-                  chips.push(
-                    html`<span class="chip chip-primary">${store.t("shared.cam_cap_rtsp")}</span>`,
-                  );
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_rtsp")}</span>`);
                 } else if (kind === "mjpeg") {
-                  chips.push(
-                    html`<span class="chip chip-primary">${store.t("shared.cam_cap_mjpeg")}</span>`,
-                  );
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_mjpeg")}</span>`);
                 } else if (kind === "snapshot") {
-                  chips.push(
-                    html`<span class="chip">${store.t("shared.cam_cap_snapshot")}</span>`,
-                  );
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_snapshot")}</span>`);
                 }
-                if (meta.has_audio || meta.has_talkback) {
-                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_audio")}</span>`);
-                }
-                if (meta.is_doorbell) {
+                if (meta?.is_doorbell) {
                   chips.push(
                     html`<span class="chip chip-primary">${store.t("shared.cam_cap_doorbell")}</span>`,
+                  );
+                }
+                if (eff.showListen) {
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_listen")}</span>`);
+                }
+                if (eff.showTalk) {
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_talk")}</span>`);
+                }
+                if (eff.showReply) {
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_reply")}</span>`);
+                }
+                if (eff.unlockEntity) {
+                  const lockMeta =
+                    findCatalogChoice(cat.locks, eff.unlockEntity) ||
+                    findCatalogChoice(cat.garages, eff.unlockEntity);
+                  const targetName = lockMeta?.name ? entityLabel(lockMeta.name) : eff.unlockEntity;
+                  chips.push(
+                    html`<span class="chip">
+                      ${store.t("shared.cam_cap_unlock", { entity: targetName })}
+                    </span>`,
                   );
                 }
                 return chips.length > 0
@@ -349,13 +371,21 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
                   : nothing;
               },
               extraActions: (camId) => html`<button
-                type="button"
-                ?disabled=${!camId}
-                @click=${() => void store.entity.previewCamera(camId)}
-                class="btn btn-text btn-compact"
-              >
-                ${store.t("shared.preview")}
-              </button>`,
+                  type="button"
+                  ?disabled=${!camId}
+                  @click=${() => openCameraConfigModal(store, camId)}
+                  class="btn btn-text btn-compact"
+                >
+                  ${store.t("action.configure")}
+                </button>
+                <button
+                  type="button"
+                  ?disabled=${!camId}
+                  @click=${() => void store.entity.previewCamera(camId)}
+                  class="btn btn-text btn-compact"
+                >
+                  ${store.t("shared.preview")}
+                </button>`,
               onReorder: (fromIdx, toIdx) =>
                 store.entity.reorderStringListRows("camera_entities", fromIdx, toIdx),
               onChange: (idx, val) =>

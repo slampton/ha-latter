@@ -96,8 +96,8 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
     resetDomBody();
   });
 
-  it("registers STUDIO_REV 39, photos System view, Weather app modal, and Sentence-case labels", () => {
-    assert.equal(STUDIO_REV, 39);
+  it("registers STUDIO_REV >= 39, photos System view, Weather app modal, and Sentence-case labels", () => {
+    assert.ok(STUDIO_REV >= 39);
     assert.equal(SYSTEM_VIEW_SLUGS.photos, "photos");
     assert.equal(NATIVE_DOCK_CONFIG_APP_MAP["app:weather"], "weather");
     assert.equal(START_SCREEN_CONFIG_APP_MAP.Weather, "weather");

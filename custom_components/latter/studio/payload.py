@@ -1360,13 +1360,17 @@ def _build_issues(
 
 
 def _build_doorbells(
-    hass: HomeAssistant, coords: list[LatterCoordinator], cameras: list[str]
+    hass: HomeAssistant,
+    coords: list[LatterCoordinator],
+    cameras: list[str],
+    camera_configs: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Return each System camera's doorbell ring entity (if one was found) and who is talking on it."""
     ring_for_cam: dict[str, str] = {}
     for coord in coords:
         for ring_ent, cam in coord.doorbell_ring_map.items():
             ring_for_cam.setdefault(cam, ring_ent)
+    cam_cfgs = camera_configs if isinstance(camera_configs, dict) else {}
     out: list[dict[str, Any]] = []
     for cam in cameras:
         cam_st = hass.states.get(cam)
@@ -1379,10 +1383,13 @@ def _build_doorbells(
             ring_at = ring_st.last_changed.isoformat(timespec="seconds")
         else:
             ring_at = ""
+        cfg_entry = cam_cfgs.get(cam) if isinstance(cam_cfgs.get(cam), dict) else {}
+        custom_lbl = str(cfg_entry.get("label") or "").strip()
+        friendly = str((cam_st.attributes.get("friendly_name") if cam_st else "") or cam)
         out.append(
             {
                 "camera_entity": cam,
-                "camera_name": str((cam_st.attributes.get("friendly_name") if cam_st else "") or cam),
+                "camera_name": custom_lbl or friendly,
                 "ring_entity": ring_ent,
                 "ring_name": str((ring_st.attributes.get("friendly_name") if ring_st else "") or ring_ent),
                 "ring_state": str(ring_st.state) if ring_known else "",
@@ -1654,7 +1661,9 @@ def _build_system_section(
         "device_groups": device_groups,
         "system_config": system_view,
         "has_security_pin": bool(raw_global_cfg.get(CONF_SECURITY_PIN_HASH)),
-        "doorbells": _build_doorbells(hass, coords, system_view["camera_entities"]),
+        "doorbells": _build_doorbells(
+            hass, coords, system_view["camera_entities"], system_view.get("camera_configs")
+        ),
     }
     if "ble_area_signatures" not in skip_sections:
         section["ble_area_signatures"] = get_area_signatures_summary(hass)

@@ -154,6 +154,24 @@ async def async_execute_doorbell_intercom(
                 translation_domain=DOMAIN,
                 translation_key=err_key,
             )
+        cam_configs = getattr(coordinator, "camera_configs", None) or {}
+        explicit_unlock = (
+            str((cam_configs.get(cam_ent) or {}).get("unlock_entity") or "").strip()
+            if cam_ent
+            else ""
+        )
+        if explicit_unlock and hass.states.get(explicit_unlock) is not None:
+            if explicit_unlock.startswith("lock."):
+                await hass.services.async_call(
+                    "lock", "unlock", {ATTR_ENTITY_ID: explicit_unlock}, blocking=True
+                )
+                return target_info
+            if explicit_unlock.startswith("cover."):
+                await hass.services.async_call(
+                    "cover", "open_cover", {ATTR_ENTITY_ID: explicit_unlock}, blocking=True
+                )
+                return target_info
+
         idx_areas = get_area_state_index(hass)
         cam_area = str(target_info.get("area_id") or "")
         lock_ent = str(target_info.get("lock_entity") or "").strip()

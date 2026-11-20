@@ -169,7 +169,7 @@ def _whole_number(val: Any) -> str:
         return ""
 
 
-# area_context.cameras_summary: entity_id|name|area_id|caps
+# area_context.cameras_summary: entity_id|name|area_id|caps|unlock_entity
 CAMERAS_MAX_RECORDS = 10
 CAMERA_NAME_MAX = 32
 HUB_ENTITY_NAME_MAX = 32
@@ -261,7 +261,7 @@ def area_climate_records(climates: Iterable[Mapping[str, Any]]) -> V3Records:
 
 
 def camera_records(cameras: Iterable[Mapping[str, Any]]) -> V3Records:
-    """Records for configured cameras, in configured order (`entity_id|name|area_id|caps`)."""
+    """Records for configured cameras, in configured order (`entity_id|name|area_id|caps|unlock_entity`)."""
     return build_v3_records(
         (
             (
@@ -269,10 +269,11 @@ def camera_records(cameras: Iterable[Mapping[str, Any]]) -> V3Records:
                 c.get("name"),
                 c.get("area_id"),
                 int(c.get("caps") or 0),
+                c.get("unlock_entity") or "",
             )
             for c in cameras
         ),
-        (None, CAMERA_NAME_MAX, None, None),
+        (None, CAMERA_NAME_MAX, None, None, None),
         CAMERAS_MAX_RECORDS,
     )
 

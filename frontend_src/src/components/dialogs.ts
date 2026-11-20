@@ -11,6 +11,7 @@ import {
   renderAppConfigDialog,
   renderAppConfigModalBody,
 } from "./dialogs/app-config.js";
+import { renderCameraConfigDialog } from "./dialogs/camera-config-modal.js";
 import {
   renderColorWheelDialog,
   syncColorWheelCanvas,
@@ -40,6 +41,7 @@ export function syncStudioDialogs(renderRoot: ShadowRoot, store: StudioStore): v
     ["latter-cw-modal", store.colorWheelModal.open],
     ["latter-save-group-modal", store.saveGroupModal.open],
     ["latter-app-config-modal", store.appConfigModal.open],
+    ["latter-camera-config-modal", store.cameraConfigModal.open],
     ["latter-shortcut-modal", store.shortcutModal.open],
     ["latter-photo-upload-modal", store.photoUploadModal.open],
     ["latter-photo-edit-modal", store.photoEditModal.open],
@@ -77,6 +79,7 @@ export function renderStudioDialogs(store: StudioStore): TemplateResult {
     ${renderColorWheelDialog(store)}
     ${renderSaveGroupDialog(store)}
     ${renderAppConfigDialog(store)}
+    ${renderCameraConfigDialog(store)}
     ${renderShortcutDialog(store)}
     ${renderPhotoUploadDialog(store)}
     ${renderPhotoEditDialog(store)}

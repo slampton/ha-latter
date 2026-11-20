@@ -321,17 +321,29 @@ class TestRecordsFields(unittest.TestCase):
         self.assertIn("shortcut_records(", coord_src)
 
     def test_cameras(self) -> None:
-        self.assertEqual(self.layout("area_context", "cameras_summary"), ["entity_id", "name", "area_id", "caps"])
+        self.assertEqual(
+            self.layout("area_context", "cameras_summary"),
+            ["entity_id", "name", "area_id", "caps", "unlock_entity"],
+        )
         recs = self.p.camera_records(
             [
-                {"entity_id": "camera.front", "name": "Front | Door\n", "area_id": "porch", "caps": 15},
+                {
+                    "entity_id": "camera.front",
+                    "name": "Front | Door\n",
+                    "area_id": "porch",
+                    "caps": 63,
+                    "unlock_entity": "lock.front_door",
+                },
                 {"entity_id": "camera.yard", "name": "Y" * 80, "area_id": "", "caps": 1},
             ]
         )
-        self.assertEqual(recs[0], ("camera.front", "Front / Door", "porch", "15"))
+        self.assertEqual(
+            recs[0], ("camera.front", "Front / Door", "porch", "63", "lock.front_door")
+        )
         self.assertEqual(recs[1][1], "Y" * self.p.CAMERA_NAME_MAX)
         self.assertEqual(recs[1][2], "")
         self.assertEqual(recs[1][3], "1")
+        self.assertEqual(recs[1][4], "")
         self.assertEqual(self.p.encode_v3_records(recs).count("\x1e"), 1)
         many = [{"entity_id": f"camera.c{i}", "name": "c", "area_id": "", "caps": 0} for i in range(15)]
         self.assertEqual(len(self.p.camera_records(many)), self.p.CAMERAS_MAX_RECORDS)

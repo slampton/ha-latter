@@ -66,6 +66,7 @@ from .const import (
     CONF_BLE_TARGET_ADDRESS,
     CONF_CALENDAR_ENTITIES,
     CONF_CAMERA_CAROUSEL_ENTITIES,
+    CONF_CAMERA_CONFIGS,
     CONF_CAMERA_ENTITIES,
     CONF_CAMERA_VISIBLE_ENTITIES,
     CONF_CUSTOM_PALETTES,
@@ -1179,6 +1180,19 @@ class LatterCoordinator:
             if isinstance(raw_list, list)
             else []
         )
+
+    @property
+    def camera_configs(self) -> dict[str, dict[str, Any]]:
+        """Return sanitized per-camera configuration map (`label`, action toggles, `unlock_entity`)."""
+        raw = self.get_opt(CONF_CAMERA_CONFIGS)
+        if not isinstance(raw, dict):
+            return {}
+        out: dict[str, dict[str, Any]] = {}
+        for cam_id, entry in raw.items():
+            cid = str(cam_id or "").strip()
+            if cid.startswith("camera.") and isinstance(entry, dict):
+                out[cid] = dict(entry)
+        return out
 
     @property
     def configured_camera_visible_entities(self) -> list[str]:

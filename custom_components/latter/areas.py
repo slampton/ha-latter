@@ -1735,13 +1735,14 @@ def _build_intercom_targets_summary(coordinator: Any) -> V3Records:
 
 
 def _build_cameras_summary(coordinator: Any) -> V3Records:
-    """Build camera records (`entity_id|name|area_id|caps`) for up to 10 visible cameras."""
+    """Build camera records (`entity_id|name|area_id|caps|unlock_entity`) for up to 10 visible cameras."""
     visible_cams = getattr(
         coordinator, "visible_camera_entities", coordinator.camera_entities
     )
     carousel_cams = getattr(coordinator, "carousel_camera_entities", visible_cams)
     ring_map = getattr(coordinator, "_doorbell_ring_map", None)
     vol_overrides = getattr(coordinator, "volume_overrides", None)
+    cam_configs = getattr(coordinator, "camera_configs", None) or {}
     rows: list[dict[str, Any]] = []
     for ent_id in visible_cams[:CAMERAS_MAX_RECORDS]:
         meta = resolve_camera_capabilities(
@@ -1750,6 +1751,7 @@ def _build_cameras_summary(coordinator: Any) -> V3Records:
             doorbell_ring_map=ring_map,
             carousel_entities=carousel_cams,
             volume_overrides=vol_overrides,
+            camera_config=cam_configs.get(ent_id),
         )
         rows.append(
             {
@@ -1757,6 +1759,7 @@ def _build_cameras_summary(coordinator: Any) -> V3Records:
                 "name": meta["name"],
                 "area_id": meta["area_id"],
                 "caps": meta["caps"],
+                "unlock_entity": meta["unlock_entity"],
             }
         )
     return camera_records(rows)

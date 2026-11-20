@@ -327,13 +327,24 @@ describe("Dedicated Cameras App (D-071 / STUDIO_REV 38)", () => {
     );
   });
 
-  it("renders declarative camera capability chips in System -> Shared entities", () => {
+  it("renders declarative camera capability chips, Configure dialog, and custom labels (D-073)", async () => {
+    const { openCameraConfigModal, renderCameraConfigDialog, saveCameraConfigModal } =
+      await import("../src/components/dialogs/camera-config-modal.js");
     const { store } = makeFakeStore({
       currentScope: "system",
       currentViewId: "shared_entities",
       state: {
         system_config: {
           camera_entities: ["camera.front_door", "camera.driveway", "camera.nursery"],
+          camera_configs: {
+            "camera.driveway": {
+              label: "Driveway",
+              show_listen: false,
+              show_talk: false,
+              show_reply: false,
+              unlock_entity: "cover.garage_door",
+            },
+          },
         },
         catalog: {
           cameras: [
@@ -342,13 +353,14 @@ describe("Dedicated Cameras App (D-071 / STUDIO_REV 38)", () => {
               name: "Front Door",
               stream_kind: "rtsp",
               has_audio: true,
+              has_talkback: true,
               is_doorbell: true,
             },
             {
               id: "camera.driveway",
-              name: "Driveway",
+              name: "Driveway Camera Medium resolution channel",
               stream_kind: "mjpeg",
-              has_audio: false,
+              has_audio: true,
               is_doorbell: false,
             },
             {
@@ -357,6 +369,8 @@ describe("Dedicated Cameras App (D-071 / STUDIO_REV 38)", () => {
               stream_kind: "snapshot",
             },
           ],
+          locks: [{ id: "lock.front_door", name: "Front Lock" }],
+          garages: [{ id: "cover.garage_door", name: "Main Garage" }],
         },
       },
     });
@@ -365,7 +379,39 @@ describe("Dedicated Cameras App (D-071 / STUDIO_REV 38)", () => {
     assert.ok(htmlOut.includes("RTSP"));
     assert.ok(htmlOut.includes("MJPEG"));
     assert.ok(htmlOut.includes("Snapshot"));
-    assert.ok(htmlOut.includes("Audio"));
     assert.ok(htmlOut.includes("Doorbell"));
+    assert.ok(htmlOut.includes("Listen"));
+    assert.ok(htmlOut.includes("Talk"));
+    assert.ok(htmlOut.includes("Reply"));
+    assert.ok(htmlOut.includes("Label: Driveway"));
+    assert.ok(htmlOut.includes("Unlock: Main Garage"));
+    assert.ok(htmlOut.includes("Configure"));
+
+    // Open Camera Options modal for Driveway, edit label + bind Front Lock, and save
+    openCameraConfigModal(store, "camera.driveway");
+    assert.equal(store.cameraConfigModal.open, true);
+    assert.equal(store.cameraConfigModal.label, "Driveway");
+    assert.equal(store.cameraConfigModal.unlockEntity, "cover.garage_door");
+    const dlgHtml = renderToHtml(renderCameraConfigDialog(store));
+    assert.ok(dlgHtml.includes("Camera options"));
+    assert.ok(dlgHtml.includes("Front Lock"));
+    assert.ok(dlgHtml.includes("Main Garage"));
+
+    store.cameraConfigModal = {
+      ...store.cameraConfigModal,
+      label: "Driveway Cam",
+      showListen: true,
+      unlockEntity: "lock.front_door",
+    };
+    saveCameraConfigModal(store);
+    assert.equal(store.cameraConfigModal.open, false);
+    assert.equal(
+      (store.state?.system_config?.camera_configs || {})["camera.driveway"]?.label,
+      "Driveway Cam",
+    );
+    assert.equal(
+      (store.state?.system_config?.camera_configs || {})["camera.driveway"]?.unlock_entity,
+      "lock.front_door",
+    );
   });
 });

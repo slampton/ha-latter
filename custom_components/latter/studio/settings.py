@@ -205,6 +205,7 @@ SYSTEM_SETTING_KEYS: tuple[str, ...] = (
     "garage_entities",
     "vacuum_entities",
     "camera_entities",
+    "camera_configs",
     "remotes_list",
     "remote_groups",
     "volume_overrides",
@@ -1156,6 +1157,59 @@ def _entity_list(val: Any, limit: int = MAX_LIST_ITEMS) -> list[str]:
     return out[:limit]
 
 
+def _camera_configs(val: Any, *, strict: bool = False) -> dict[str, dict[str, Any]]:
+    """Validate and normalize per-camera display labels, action toggles, and unlock entity bindings."""
+    if val is None:
+        return {}
+    if not isinstance(val, Mapping):
+        if strict:
+            raise SettingsScopeError("camera_configs must be a mapping keyed by camera entity ID")
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for raw_key, raw_entry in list(val.items())[:MAX_LIST_ITEMS]:
+        cam_id = _text(raw_key)[:128]
+        if not cam_id.startswith("camera."):
+            if strict:
+                raise SettingsScopeError(f"Expected a camera.* key in camera_configs, got {cam_id}")
+            continue
+        if not isinstance(raw_entry, Mapping):
+            if strict:
+                raise SettingsScopeError(f"camera_configs[{cam_id}] must be an object")
+            continue
+        raw_label = _text(raw_entry.get("label"))
+        clean_label = (
+            raw_label.replace("|", " ")
+            .replace("\x1e", " ")
+            .replace("\x1f", " ")
+            .replace("\r", " ")
+            .replace("\n", " ")
+            .strip()[:32]
+        )
+        unlock_ent = _text(raw_entry.get("unlock_entity"))[:128]
+        if unlock_ent and not unlock_ent.startswith(("lock.", "cover.")):
+            if strict:
+                raise SettingsScopeError(
+                    f"Expected a lock.* or cover.* entity for camera_configs[{cam_id}].unlock_entity, got {unlock_ent}"
+                )
+            unlock_ent = ""
+        entry: dict[str, Any] = {}
+        if clean_label:
+            entry["label"] = clean_label
+        for flag_key in ("show_listen", "show_talk", "show_reply"):
+            raw_flag = raw_entry.get(flag_key)
+            if isinstance(raw_flag, bool):
+                entry[flag_key] = raw_flag
+            elif raw_flag is not None and strict:
+                raise SettingsScopeError(
+                    f"camera_configs[{cam_id}].{flag_key} must be a boolean or null"
+                )
+        if unlock_ent:
+            entry["unlock_entity"] = unlock_ent
+        if entry:
+            out[cam_id] = entry
+    return out
+
+
 def _volume_overrides(val: Any) -> list[dict[str, str]]:
     if not isinstance(val, (list, tuple)):
         return []
@@ -1412,6 +1466,8 @@ def clean_system_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
             MAX_LIST_ITEMS,
             "camera_entities",
         )
+    if "camera_configs" in incoming:
+        out["camera_configs"] = _camera_configs(incoming["camera_configs"], strict=True)
     if "remotes_list" in incoming:
         out["remotes_list"] = _entity_list(incoming["remotes_list"])
     if "calendar_entities" in incoming:
@@ -1750,6 +1806,7 @@ def system_settings_view(global_cfg: Mapping[str, Any]) -> dict[str, Any]:
                 global_cfg.get("vacuum_entities"), "vacuum.", MAX_VACUUMS
             ),
             "camera_entities": cams,
+            "camera_configs": _camera_configs(global_cfg.get("camera_configs")),
             "remotes_list": _entity_list(global_cfg.get("remotes_list")),
             "remote_groups": _remote_groups(global_cfg.get("remote_groups")),
             "volume_overrides": _volume_overrides(global_cfg.get("volume_overrides")),

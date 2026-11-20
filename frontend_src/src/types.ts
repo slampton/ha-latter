@@ -293,6 +293,14 @@ export interface CustomPalette {
   hex: string;
 }
 
+export interface CameraConfig {
+  label?: string;
+  show_listen?: boolean;
+  show_talk?: boolean;
+  show_reply?: boolean;
+  unlock_entity?: string;
+}
+
 export interface SystemConfig {
   weather_entity: string;
   alarm_entity: string;
@@ -301,6 +309,7 @@ export interface SystemConfig {
   garage_entities: string[];
   vacuum_entities: string[];
   camera_entities: string[];
+  camera_configs?: Record<string, CameraConfig>;
   remotes_list: string[];
   remote_groups: RemoteGroup[];
   volume_overrides: VolumeOverride[];

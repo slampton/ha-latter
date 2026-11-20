@@ -17,6 +17,8 @@ from custom_components.latter.cameras import (
     CAMERA_CAP_HAS_TALKBACK,
     CAMERA_CAP_IN_CAROUSEL,
     CAMERA_CAP_IS_DOORBELL,
+    CAMERA_CAP_SHOW_REPLY,
+    CAMERA_CAP_SHOW_UNLOCK,
     MAX_CONCURRENT_VIDEO_INGESTS,
     CameraFetchError,
     CameraIngestLimitError,
@@ -230,18 +232,20 @@ def test_build_ffmpeg_video_cmd_flags() -> None:
         rot=90,
     )
     assert "-rtsp_transport" in cmd and cmd[cmd.index("-rtsp_transport") + 1] == "tcp"
-    assert "-fflags" in cmd and "nobuffer" in cmd
+    assert "-fflags" in cmd and "+nobuffer+discardcorrupt" in cmd
     assert "-flags" in cmd and "low_delay" in cmd
-    assert "-analyzeduration" in cmd and "500000" in cmd
-    assert "-probesize" in cmd and "500000" in cmd
+    assert "-flags2" in cmd and "+fast" in cmd
+    assert "-analyzeduration" in cmd and "250000" in cmd
+    assert "-probesize" in cmd and "200000" in cmd
     assert "-an" in cmd
+    assert "-r" in cmd and cmd[cmd.index("-r") + 1] == "15"
     assert "-pix_fmt" in cmd and cmd[cmd.index("-pix_fmt") + 1] == "yuvj420p"
     assert "-c:v" in cmd and cmd[cmd.index("-c:v") + 1] == "mjpeg"
+    assert "-flush_packets" in cmd and cmd[cmd.index("-flush_packets") + 1] == "1"
     assert "-f" in cmd and cmd[cmd.index("-f") + 1] == "mpjpeg"
     assert cmd[-1] == "pipe:1"
     vf = cmd[cmd.index("-vf") + 1]
     assert "transpose=1" in vf
-    assert "fps=15" in vf
     assert "scale=464:464:force_original_aspect_ratio=decrease:force_divisible_by=16" in vf
 
     cmd_fill = build_ffmpeg_video_cmd("ffmpeg", "http://cam/live", 480, 320, 8, fit="fill")
@@ -275,6 +279,9 @@ async def test_rtsp_tier_1_ingest_fanout_and_zero_copy(
         return proc
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_exec)
+    # Disable parallel snapshot primer on this test so frame #1 strictly exercises zero-copy RTSP pass-through
+    cam_mod = sys.modules["homeassistant.components.camera"]
+    monkeypatch.setattr(cam_mod, "async_get_image", None, raising=False)
 
     transcode_calls: list[tuple[int, int]] = []
     orig_transcode = cameras_mod.transcode_camera_frame
@@ -569,14 +576,48 @@ async def test_resolve_camera_capabilities_and_singleton_lifecycle(hass: Any) ->
         | CAMERA_CAP_HAS_TALKBACK
         | CAMERA_CAP_IS_DOORBELL
         | CAMERA_CAP_IN_CAROUSEL
+        | CAMERA_CAP_SHOW_REPLY
     )
     assert caps_doorbell["stream_kind"] == "rtsp"
     assert caps_doorbell["has_audio"] is True
     assert caps_doorbell["has_talkback"] is True
+    assert caps_doorbell["show_listen"] is True
+    assert caps_doorbell["show_talk"] is True
+    assert caps_doorbell["show_reply"] is True
+    assert caps_doorbell["unlock_entity"] == ""
     assert caps_doorbell["is_doorbell"] is True
     assert caps_doorbell["in_carousel"] is True
     assert caps_doorbell["door_speaker"] == "media_player.front_door_speaker"
     assert caps_doorbell["area_id"] == "entryway"
+
+    # Non-doorbell RTSP camera defaults Listen/Talk/Reply/Unlock OFF even when hardware has audio/speaker
+    caps_regular = resolve_camera_capabilities(hass, "camera.front_door")
+    assert caps_regular["has_audio"] is True
+    assert caps_regular["has_talkback"] is True
+    assert caps_regular["show_listen"] is False
+    assert caps_regular["show_talk"] is False
+    assert caps_regular["show_reply"] is False
+    assert caps_regular["unlock_entity"] == ""
+    assert caps_regular["caps"] == 0
+
+    # Explicit per-camera config overrides label, toggles, and explicit unlock_entity
+    caps_custom = resolve_camera_capabilities(
+        hass,
+        "camera.front_door",
+        camera_config={
+            "label": "Driveway",
+            "show_listen": True,
+            "show_talk": False,
+            "show_reply": True,
+            "unlock_entity": "lock.front_door",
+        },
+    )
+    assert caps_custom["name"] == "Driveway"
+    assert caps_custom["label"] == "Driveway"
+    assert caps_custom["unlock_entity"] == "lock.front_door"
+    assert caps_custom["caps"] == (
+        CAMERA_CAP_HAS_AUDIO | CAMERA_CAP_SHOW_REPLY | CAMERA_CAP_SHOW_UNLOCK
+    )
 
     caps_mjpeg = resolve_camera_capabilities(hass, "camera.mjpeg_cam")
     assert caps_mjpeg["stream_kind"] == "mjpeg"
@@ -591,6 +632,84 @@ async def test_resolve_camera_capabilities_and_singleton_lifecycle(hass: Any) ->
     await async_shutdown_camera_stream_hub(hass)
     assert get_camera_stream_hub(hass) is not hub
     await async_shutdown_camera_stream_hub(hass)
+
+
+async def test_cold_rtsp_snapshot_primer_and_lru_idle_eviction(
+    hass: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cold RTSP emits an instant parallel snapshot primer, and idle warm ingests evict LRU when full."""
+    hass.data.setdefault("_camera_streams", {})["camera.slow_rtsp"] = "rtsp://10.0.0.99/slow"
+    hass.data["_camera_streams"]["camera.cam_two"] = "rtsp://10.0.0.99/two"
+    live_jpeg = _make_baseline_420_jpeg(464, 256)
+    snap_jpeg = _make_baseline_420_jpeg(464, 256)
+
+    release_rtsp = asyncio.Event()
+
+    class _DelayedStdout:
+        def __init__(self) -> None:
+            self._sent = False
+
+        async def read(self, _n: int = 32768) -> bytes:
+            if not self._sent:
+                await release_rtsp.wait()
+                self._sent = True
+                return format_mjpeg_chunk(live_jpeg)
+            await asyncio.sleep(3600)
+            return b""
+
+        def close(self) -> None:
+            pass
+
+    class _DelayedProc:
+        def __init__(self) -> None:
+            self.stdout = _DelayedStdout()
+            self.returncode: int | None = None
+
+        def terminate(self) -> None:
+            self.returncode = 0
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+        async def wait(self) -> int:
+            return 0
+
+    async def _fake_exec(*_cmd: str, **_kwargs: Any) -> _DelayedProc:
+        return _DelayedProc()
+
+    cam_mod = sys.modules["homeassistant.components.camera"]
+
+    async def _fast_snap(*_a: Any, **_kw: Any) -> Any:
+        return SimpleNamespace(content=snap_jpeg)
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(cam_mod, "async_get_image", _fast_snap, raising=False)
+
+    # Cap at 1 ingest with a long 10s idle timer to test LRU idle eviction
+    hub = LatterCameraStreamHub(hass, max_concurrent_ingests=1, idle_timeout_s=10.0)
+    try:
+        gen1 = hub.async_iter_stream_frames("camera.slow_rtsp", 464, 256, fps=10, fit="contain")
+        # Primer delivers frame #0 immediately even while RTSP is still blocked waiting for IDR keyframe!
+        primer_frame = await asyncio.wait_for(anext(gen1), timeout=1.0)
+        assert primer_frame.startswith(b"\xff\xd8")
+        # Now release RTSP live frame and confirm seamless live handover
+        release_rtsp.set()
+        live_frame = await asyncio.wait_for(anext(gen1), timeout=1.0)
+        assert live_frame == live_jpeg
+        await gen1.aclose()
+        await asyncio.sleep(0.02)
+        # Ingest #1 is warm and idle in its 10s window
+        assert hub.active_ingest_count == 1
+
+        # Subscribing to camera #2 immediately evicts idle camera #1 instead of raising CameraIngestLimitError
+        gen2 = hub.async_iter_stream_frames("camera.cam_two", 464, 256, fps=10, fit="contain")
+        frame2 = await asyncio.wait_for(anext(gen2), timeout=1.0)
+        assert frame2.startswith(b"\xff\xd8")
+        assert hub.get_ingest("camera.slow_rtsp") is None
+        assert hub.get_ingest("camera.cam_two") is not None
+        await gen2.aclose()
+    finally:
+        await hub.async_shutdown()
 
 
 async def test_stage2_manifest_video_caps_studio_and_http_streaming(
@@ -616,6 +735,7 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
     from custom_components.latter.studio.commands import (
         StudioCommandError,
         _cmd_save_device_config,
+        _cmd_save_system_config,
     )
     from custom_components.latter.studio.payload import build_studio_state_payload
 
@@ -727,10 +847,37 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
         _st, area_attrs = coord.get_area_context_payload()
         wire = area_attrs["payload"].split("\x1f")
         assert len(wire) == 42
-        assert "camera.front_door|Front Door||9" in wire[21]  # 1 (audio) | 8 (in_carousel)
-        assert "camera.backyard|Backyard||0" in wire[21]
+        # Non-doorbell cameras default Listen/Talk/Reply/Unlock OFF -> front_door has only in_carousel (8)
+        assert "camera.front_door|Front Door||8|" in wire[21]
+        assert "camera.backyard|Backyard||0|" in wire[21]
         assert "/api/latter/camera_stream/" in wire[39]
         assert wire[40] == "camera.front_door"
+
+        # Save per-camera label, action toggles, and explicit unlock_entity via System settings
+        await _cmd_save_system_config(
+            hass,
+            None,
+            {
+                "config": {
+                    "camera_configs": {
+                        "camera.front_door": {
+                            "label": "Porch",
+                            "show_listen": True,
+                            "show_talk": False,
+                            "show_reply": True,
+                            "unlock_entity": "lock.front_door",
+                        }
+                    }
+                }
+            },
+            global_cfg,
+            {},
+        )
+        coord._cached_area_payload = None
+        _st2, area_attrs2 = coord.get_area_context_payload()
+        wire2 = area_attrs2["payload"].split("\x1f")
+        # 1 (listen) | 8 (in_carousel) | 16 (reply) | 32 (unlock) = 57
+        assert "camera.front_door|Porch||57|lock.front_door" in wire2[21]
 
         # Stream 1 chunk from LatterCameraStreamView & LatterCameraGridView
         stream_sig = parse_qs(urlsplit(wire[39]).query)["sig"][0]

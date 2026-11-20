@@ -318,6 +318,15 @@ export class StudioStore implements ReactiveController {
     open: false,
     app: null,
   };
+  cameraConfigModal = {
+    open: false,
+    cameraId: "",
+    label: "",
+    showListen: false,
+    showTalk: false,
+    showReply: false,
+    unlockEntity: "",
+  };
   photoUploadModal: PhotoUploadModalState = emptyPhotoUploadModalState();
   photoEditModal: PhotoEditModalState = emptyPhotoEditModalState();
   mediaImportModal: MediaImportModalState = emptyMediaImportModalState();
@@ -833,6 +842,7 @@ export class StudioStore implements ReactiveController {
       this.worldClockNewZone = "";
       this.overviewAlarmsOpen = false;
       this.appConfigModal = { open: false, app: null };
+      this.cameraConfigModal = { ...this.cameraConfigModal, open: false };
       this.photoPickerModal = emptyPhotoPickerModalState();
       this.shortcutModal = { ...this.shortcutModal, open: false };
       this.saveGroupModal = { ...this.saveGroupModal, open: false, busy: false };

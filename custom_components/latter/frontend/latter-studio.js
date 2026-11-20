@@ -869,6 +869,24 @@ const EN_SYSTEM_STRINGS = {
   "shared.cam_cap_snapshot": "Snapshot",
   "shared.cam_cap_audio": "Audio",
   "shared.cam_cap_doorbell": "Doorbell",
+  "shared.cam_cap_label": "Label: {label}",
+  "shared.cam_cap_listen": "Listen",
+  "shared.cam_cap_talk": "Talk",
+  "shared.cam_cap_reply": "Reply",
+  "shared.cam_cap_unlock": "Unlock: {entity}",
+  "shared.cam_cfg_title": "Camera options",
+  "shared.cam_cfg_label": "Display label",
+  "shared.cam_cfg_label_desc": "Short name shown on Latter displays (leave blank to use Home Assistant's name).",
+  "shared.cam_cfg_listen": "Show Listen button",
+  "shared.cam_cfg_listen_desc": "Allow monitoring camera audio from the camera view and doorbell popup.",
+  "shared.cam_cfg_talk": "Show Talk button",
+  "shared.cam_cfg_talk_desc": "Allow push-to-talk voice replies through this camera's speaker.",
+  "shared.cam_cfg_talk_no_speaker_desc": "No paired speaker was auto-detected for this camera, but you can still enable Talk manually.",
+  "shared.cam_cfg_reply": "Show Quick Reply button",
+  "shared.cam_cfg_reply_desc": "Show quick spoken reply presets on the camera view and doorbell popup.",
+  "shared.cam_cfg_unlock": "Unlock / Open button",
+  "shared.cam_cfg_unlock_desc": "Optionally link a specific door lock or garage door to show an Unlock/Open button on this camera.",
+  "shared.cam_cfg_unlock_none": "None (hide button)",
   "shared.doorbells_heading": "Doorbells",
   "shared.no_ring_sensor": "No ring sensor found",
   "shared.last_ring": "last ring {when}",
@@ -2168,7 +2186,7 @@ __latterExp(__exports, { Directive: () => Directive, directive: () => directive,
 __latterDef("src/protocol-schema.ts", (__exports, __req) => {
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 const PROTOCOL_CONTRACT_VERSION = 3;
-const STUDIO_REV = 39;
+const STUDIO_REV = 40;
 const ALLOWED_DEVICE_ACTIONS = [
   "restart",
   "find_my",
@@ -10931,6 +10949,15 @@ class StudioStore {
     open: false,
     app: null,
   };
+  cameraConfigModal = {
+    open: false,
+    cameraId: "",
+    label: "",
+    showListen: false,
+    showTalk: false,
+    showReply: false,
+    unlockEntity: "",
+  };
   photoUploadModal = emptyPhotoUploadModalState();
   photoEditModal = emptyPhotoEditModalState();
   mediaImportModal = emptyMediaImportModalState();
@@ -11395,6 +11422,7 @@ class StudioStore {
       this.worldClockNewZone = "";
       this.overviewAlarmsOpen = false;
       this.appConfigModal = { open: false, app: null };
+      this.cameraConfigModal = { ...this.cameraConfigModal, open: false };
       this.photoPickerModal = emptyPhotoPickerModalState();
       this.shortcutModal = { ...this.shortcutModal, open: false };
       this.saveGroupModal = { ...this.saveGroupModal, open: false, busy: false };
@@ -12891,7 +12919,10 @@ function renderAppConfigModalBody(store) {
     const visibleCameras = store.entity.getVisibleCameras();
     const carouselCameras = store.entity.getCarouselCameras();
     const camCatalogMap = new Map((data?.catalog?.cameras || []).map((c) => [c.id, c]));
+    const camConfigs = data?.system_config?.camera_configs || {};
     const cameraPillLabel = (entityId) => {
+      const customLbl = String(camConfigs[entityId]?.label || "").trim();
+      if (customLbl) return customLbl;
       const meta = camCatalogMap.get(entityId);
       return meta?.name ? entityLabel(meta.name) : entityId;
     };
@@ -13253,6 +13284,245 @@ function renderAppConfigDialog(store) {
 }
 __latterExp(__exports, { renderAppConfigModalBody: () => renderAppConfigModalBody, renderAppConfigDialog: () => renderAppConfigDialog });
 //# sourceURL=latter-studio/src/components/dialogs/app-config.ts
+});
+__latterDef("src/components/dialogs/camera-config-modal.ts", (__exports, __req) => {
+const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
+const { entityLabel } = __req("src/utils/format.ts");
+const { renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
+/**
+ * Per-Camera Options Modal (`#latter-camera-config-modal`, `D-073`):
+ * - Custom display label override (blank uses Home Assistant friendly name)
+ * - Independent on-device action button toggles: Listen, Talk, Quick Reply
+ * - Explicit Unlock / Open Lock or Garage Door entity binding (`None` hides button)
+ */
+function bindBackdropClose(ev, closeFn) {
+  if (ev.target === ev.currentTarget) {
+    closeFn();
+  }
+}
+function resolveEffectiveCameraConfig(
+  store,
+  cameraId,
+)
+  {
+  const catCams = store.state?.catalog?.cameras || [];
+  const meta = catCams.find((c) => c.id === cameraId);
+  const stored = (store.state?.system_config?.camera_configs || {})[cameraId] || {};
+  const isDoorbell = Boolean(meta?.is_doorbell);
+  const hwAudio = Boolean(meta?.has_audio);
+  const hwTalk = Boolean(meta?.has_talkback);
+  return {
+    label: String(stored.label || "").trim(),
+    showListen:
+      typeof stored.show_listen === "boolean" ? stored.show_listen : isDoorbell && hwAudio,
+    showTalk: typeof stored.show_talk === "boolean" ? stored.show_talk : isDoorbell && hwTalk,
+    showReply: typeof stored.show_reply === "boolean" ? stored.show_reply : isDoorbell && hwTalk,
+    unlockEntity: String(stored.unlock_entity || "").trim(),
+    meta,
+  };
+}
+function openCameraConfigModal(store, cameraId) {
+  const cleanId = String(cameraId || "").trim();
+  if (!cleanId) return;
+  const eff = resolveEffectiveCameraConfig(store, cleanId);
+  store.cameraConfigModal = {
+    open: true,
+    cameraId: cleanId,
+    label: eff.label,
+    showListen: eff.showListen,
+    showTalk: eff.showTalk,
+    showReply: eff.showReply,
+    unlockEntity: eff.unlockEntity,
+  };
+  store.host.requestUpdate();
+}
+function closeCameraConfigModal(store) {
+  if (!store.cameraConfigModal.open) return;
+  store.cameraConfigModal = { ...store.cameraConfigModal, open: false };
+  store.host.requestUpdate();
+}
+function saveCameraConfigModal(store) {
+  const m = store.cameraConfigModal;
+  const camId = String(m.cameraId || "").trim();
+  if (!camId) {
+    closeCameraConfigModal(store);
+    return;
+  }
+  const existing = { ...(store.state?.system_config?.camera_configs || {}) };
+  const nextEntry = {
+    show_listen: Boolean(m.showListen),
+    show_talk: Boolean(m.showTalk),
+    show_reply: Boolean(m.showReply),
+  };
+  const cleanLabel = String(m.label || "")
+    .replace(/[|\x1e\x1f\r\n]/g, " ")
+    .trim()
+    .slice(0, 32);
+  if (cleanLabel) {
+    nextEntry.label = cleanLabel;
+  }
+  const cleanUnlock = String(m.unlockEntity || "").trim();
+  if (cleanUnlock.startsWith("lock.") || cleanUnlock.startsWith("cover.")) {
+    nextEntry.unlock_entity = cleanUnlock;
+  }
+  existing[camId] = nextEntry;
+  store.entity.stageSystemSetting("camera_configs", existing);
+  closeCameraConfigModal(store);
+}
+function renderCameraConfigDialog(store) {
+  const m = store.cameraConfigModal;
+  const close = () => closeCameraConfigModal(store);
+  if (!m.open || !m.cameraId) {
+    return html`<dialog
+      id="latter-camera-config-modal"
+      aria-labelledby="latter-cam-cfg-title"
+      @cancel=${close}
+      @click=${(ev) => bindBackdropClose(ev, close)}
+      class="studio-dialog"
+    >
+      ${nothing}
+    </dialog>`;
+  }
+  const cat = store.state?.catalog || {};
+  const meta = (cat.cameras || []).find((c) => c.id === m.cameraId);
+  const haName = meta?.name ? entityLabel(meta.name) : m.cameraId;
+  const locks = cat.locks || [];
+  const garages = cat.garages || [];
+  const hasUnlockChoice =
+    !m.unlockEntity ||
+    locks.some((l) => l.id === m.unlockEntity) ||
+    garages.some((g) => g.id === m.unlockEntity);
+  return html`<dialog
+    id="latter-camera-config-modal"
+    aria-labelledby="latter-cam-cfg-title"
+    @cancel=${close}
+    @click=${(ev) => bindBackdropClose(ev, close)}
+    class="studio-dialog"
+  >
+    <div class="dialog-body">
+      <div class="dialog-header-row">
+        <h3 id="latter-cam-cfg-title" class="dialog-title">
+          ${store.t("shared.cam_cfg_title")}
+        </h3>
+      </div>
+      <p class="dialog-text">${haName} (${m.cameraId})</p>
+
+      <div class="settings-list">
+        ${renderSettingsRow({
+          label: store.t("shared.cam_cfg_label"),
+          description: store.t("shared.cam_cfg_label_desc"),
+          forId: "cam-cfg-label",
+          control: html`<input
+            id="cam-cfg-label"
+            type="text"
+            maxlength="32"
+            placeholder=${haName}
+            .value=${focusSafe(m.label)}
+            @input=${(ev) => {
+              store.cameraConfigModal = {
+                ...store.cameraConfigModal,
+                label: (ev.currentTarget).value,
+              };
+            }}
+          />`,
+        })}
+
+        ${renderSwitchRow({
+          id: "cam-cfg-listen",
+          label: store.t("shared.cam_cfg_listen"),
+          description: store.t("shared.cam_cfg_listen_desc"),
+          checked: m.showListen,
+          onChange: (checked) => {
+            store.cameraConfigModal = { ...store.cameraConfigModal, showListen: checked };
+            store.host.requestUpdate();
+          },
+        })}
+
+        ${renderSwitchRow({
+          id: "cam-cfg-talk",
+          label: store.t("shared.cam_cfg_talk"),
+          description: meta?.has_talkback
+            ? store.t("shared.cam_cfg_talk_desc")
+            : store.t("shared.cam_cfg_talk_no_speaker_desc"),
+          checked: m.showTalk,
+          onChange: (checked) => {
+            store.cameraConfigModal = { ...store.cameraConfigModal, showTalk: checked };
+            store.host.requestUpdate();
+          },
+        })}
+
+        ${renderSwitchRow({
+          id: "cam-cfg-reply",
+          label: store.t("shared.cam_cfg_reply"),
+          description: store.t("shared.cam_cfg_reply_desc"),
+          checked: m.showReply,
+          onChange: (checked) => {
+            store.cameraConfigModal = { ...store.cameraConfigModal, showReply: checked };
+            store.host.requestUpdate();
+          },
+        })}
+
+        ${renderSettingsRow({
+          label: store.t("shared.cam_cfg_unlock"),
+          description: store.t("shared.cam_cfg_unlock_desc"),
+          forId: "cam-cfg-unlock",
+          control: html`<select
+            id="cam-cfg-unlock"
+            .value=${m.unlockEntity}
+            @change=${(ev) => {
+              store.cameraConfigModal = {
+                ...store.cameraConfigModal,
+                unlockEntity: (ev.currentTarget).value,
+              };
+              store.host.requestUpdate();
+            }}
+          >
+            <option value="" ?selected=${!m.unlockEntity}>
+              ${store.t("shared.cam_cfg_unlock_none")}
+            </option>
+            ${!hasUnlockChoice && m.unlockEntity
+              ? html`<option value=${m.unlockEntity} selected>${m.unlockEntity}</option>`
+              : nothing}
+            ${locks.length
+              ? html`<optgroup label=${store.t("shared.door_locks")}>
+                  ${locks.map(
+                    (l) => html`<option value=${l.id} ?selected=${m.unlockEntity === l.id}>
+                      ${entityLabel(l.name)}
+                    </option>`,
+                  )}
+                </optgroup>`
+              : nothing}
+            ${garages.length
+              ? html`<optgroup label=${store.t("shared.garage_doors")}>
+                  ${garages.map(
+                    (g) => html`<option value=${g.id} ?selected=${m.unlockEntity === g.id}>
+                      ${entityLabel(g.name)}
+                    </option>`,
+                  )}
+                </optgroup>`
+              : nothing}
+          </select>`,
+        })}
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" @click=${close} class="btn btn-secondary">
+          ${store.t("action.cancel")}
+        </button>
+        <button
+          id="cam-cfg-save"
+          type="button"
+          @click=${() => saveCameraConfigModal(store)}
+          class="btn btn-primary"
+        >
+          ${store.t("action.save")}
+        </button>
+      </div>
+    </div>
+  </dialog>`;
+}
+__latterExp(__exports, { resolveEffectiveCameraConfig: () => resolveEffectiveCameraConfig, openCameraConfigModal: () => openCameraConfigModal, closeCameraConfigModal: () => closeCameraConfigModal, saveCameraConfigModal: () => saveCameraConfigModal, renderCameraConfigDialog: () => renderCameraConfigDialog });
+//# sourceURL=latter-studio/src/components/dialogs/camera-config-modal.ts
 });
 __latterDef("src/components/dialogs/color-wheel.ts", (__exports, __req) => {
 const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
@@ -15777,6 +16047,7 @@ __latterExp(__exports, { renderShortcutDialog: () => renderShortcutDialog });
 __latterDef("src/components/dialogs.ts", (__exports, __req) => {
 const { html } = __req("src/lib/lit.ts");
 const { renderAppConfigDialog, renderAppConfigModalBody } = __req("src/components/dialogs/app-config.ts");
+const { renderCameraConfigDialog } = __req("src/components/dialogs/camera-config-modal.ts");
 const { renderColorWheelDialog, syncColorWheelCanvas } = __req("src/components/dialogs/color-wheel.ts");
 const { renderAddBleDialog, renderRemoveDeviceDialog, renderResetDeviceDialog, renderSaveGroupDialog } = __req("src/components/dialogs/device-modals.ts");
 const { renderMediaImportDialog } = __req("src/components/dialogs/media-import-modal.ts");
@@ -15797,6 +16068,7 @@ function syncStudioDialogs(renderRoot, store) {
     ["latter-cw-modal", store.colorWheelModal.open],
     ["latter-save-group-modal", store.saveGroupModal.open],
     ["latter-app-config-modal", store.appConfigModal.open],
+    ["latter-camera-config-modal", store.cameraConfigModal.open],
     ["latter-shortcut-modal", store.shortcutModal.open],
     ["latter-photo-upload-modal", store.photoUploadModal.open],
     ["latter-photo-edit-modal", store.photoEditModal.open],
@@ -15830,6 +16102,7 @@ function renderStudioDialogs(store) {
     ${renderColorWheelDialog(store)}
     ${renderSaveGroupDialog(store)}
     ${renderAppConfigDialog(store)}
+    ${renderCameraConfigDialog(store)}
     ${renderShortcutDialog(store)}
     ${renderPhotoUploadDialog(store)}
     ${renderPhotoEditDialog(store)}
@@ -24480,6 +24753,7 @@ __latterExp(__exports, { renderSystemRemotesView: () => renderSystemRemotesView 
 });
 __latterDef("src/views/system-shared-view.ts", (__exports, __req) => {
 const { renderCard, renderEntityCombobox, renderEntitySlotList, renderSelectOptions, renderSelectRow, renderSettingsRow, renderSortableList, renderSvgIcon, renderTrashIconButton } = __req("src/components/controls.ts");
+const { openCameraConfigModal, resolveEffectiveCameraConfig } = __req("src/components/dialogs/camera-config-modal.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
 const { entityLabel, fmtAgo, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
 /**
@@ -24764,29 +25038,47 @@ function renderSystemSharedView(store) {
                   ? store.t("shared.camera_slot_primary")
                   : store.t("shared.camera_slot_n", { index: idx + 1 }),
               slotMeta: (camId) => {
-                const meta = findCatalogChoice(cat.cameras, camId);
-                if (!meta) return nothing;
+                const eff = resolveEffectiveCameraConfig(store, camId);
+                const meta = eff.meta;
                 const chips = [];
-                const kind = String(meta.stream_kind || "").trim().toLowerCase();
+                if (eff.label) {
+                  chips.push(
+                    html`<span class="chip chip-primary">
+                      ${store.t("shared.cam_cap_label", { label: eff.label })}
+                    </span>`,
+                  );
+                }
+                const kind = String(meta?.stream_kind || "").trim().toLowerCase();
                 if (kind === "rtsp") {
-                  chips.push(
-                    html`<span class="chip chip-primary">${store.t("shared.cam_cap_rtsp")}</span>`,
-                  );
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_rtsp")}</span>`);
                 } else if (kind === "mjpeg") {
-                  chips.push(
-                    html`<span class="chip chip-primary">${store.t("shared.cam_cap_mjpeg")}</span>`,
-                  );
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_mjpeg")}</span>`);
                 } else if (kind === "snapshot") {
-                  chips.push(
-                    html`<span class="chip">${store.t("shared.cam_cap_snapshot")}</span>`,
-                  );
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_snapshot")}</span>`);
                 }
-                if (meta.has_audio || meta.has_talkback) {
-                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_audio")}</span>`);
-                }
-                if (meta.is_doorbell) {
+                if (meta?.is_doorbell) {
                   chips.push(
                     html`<span class="chip chip-primary">${store.t("shared.cam_cap_doorbell")}</span>`,
+                  );
+                }
+                if (eff.showListen) {
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_listen")}</span>`);
+                }
+                if (eff.showTalk) {
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_talk")}</span>`);
+                }
+                if (eff.showReply) {
+                  chips.push(html`<span class="chip">${store.t("shared.cam_cap_reply")}</span>`);
+                }
+                if (eff.unlockEntity) {
+                  const lockMeta =
+                    findCatalogChoice(cat.locks, eff.unlockEntity) ||
+                    findCatalogChoice(cat.garages, eff.unlockEntity);
+                  const targetName = lockMeta?.name ? entityLabel(lockMeta.name) : eff.unlockEntity;
+                  chips.push(
+                    html`<span class="chip">
+                      ${store.t("shared.cam_cap_unlock", { entity: targetName })}
+                    </span>`,
                   );
                 }
                 return chips.length > 0
@@ -24794,13 +25086,21 @@ function renderSystemSharedView(store) {
                   : nothing;
               },
               extraActions: (camId) => html`<button
-                type="button"
-                ?disabled=${!camId}
-                @click=${() => void store.entity.previewCamera(camId)}
-                class="btn btn-text btn-compact"
-              >
-                ${store.t("shared.preview")}
-              </button>`,
+                  type="button"
+                  ?disabled=${!camId}
+                  @click=${() => openCameraConfigModal(store, camId)}
+                  class="btn btn-text btn-compact"
+                >
+                  ${store.t("action.configure")}
+                </button>
+                <button
+                  type="button"
+                  ?disabled=${!camId}
+                  @click=${() => void store.entity.previewCamera(camId)}
+                  class="btn btn-text btn-compact"
+                >
+                  ${store.t("shared.preview")}
+                </button>`,
               onReorder: (fromIdx, toIdx) =>
                 store.entity.reorderStringListRows("camera_entities", fromIdx, toIdx),
               onChange: (idx, val) =>

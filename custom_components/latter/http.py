@@ -1746,6 +1746,13 @@ class LatterCameraGridView(HomeAssistantView):
         req_fps = min(grid_fps, normalize_fps(request.query.get("fps"), default=grid_fps))
         fit_mode = normalize_fit_mode(request.query.get("fit"))
 
+        cam_configs = getattr(coord, "camera_configs", None) or {}
+        label_overrides = {
+            cid: str(cfg.get("label") or "").strip()
+            for cid, cfg in cam_configs.items()
+            if isinstance(cfg, dict) and str(cfg.get("label") or "").strip()
+        }
+
         hub = get_camera_stream_hub(self.hass)
         stream_iter = hub.async_iter_grid_mjpeg_chunks(
             requested,
@@ -1753,6 +1760,7 @@ class LatterCameraGridView(HomeAssistantView):
             req_h,
             fps=req_fps,
             fit=fit_mode,
+            label_overrides=label_overrides or None,
         )
         try:
             try:
