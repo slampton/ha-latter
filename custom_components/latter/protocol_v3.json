@@ -708,412 +708,405 @@
         },
         {
           "index": 12,
-          "name": "hold_crown_power_off",
-          "cpp_enum": "HOLD_CROWN_POWER_OFF",
-          "type": "bool",
-          "description": "1 = long-holding rotary crown enters deep sleep / power off, else 0"
-        },
-        {
-          "index": 13,
           "name": "auto_brightness_mode",
           "cpp_enum": "AUTO_BRIGHTNESS_MODE",
           "type": "string",
           "description": "Automatic brightness mode (Disabled|Sun Synchronized|Time Schedule)"
         },
         {
-          "index": 14,
+          "index": 13,
           "name": "manual_brightness",
           "cpp_enum": "MANUAL_BRIGHTNESS",
           "type": "u16",
           "description": "Manual brightness target when auto brightness is Disabled (1..100%)"
         },
         {
-          "index": 15,
+          "index": 14,
           "name": "day_brightness",
           "cpp_enum": "DAY_BRIGHTNESS",
           "type": "u16",
           "description": "Daytime brightness target (1..100%)"
         },
         {
-          "index": 16,
+          "index": 15,
           "name": "night_brightness",
           "cpp_enum": "NIGHT_BRIGHTNESS",
           "type": "u16",
           "description": "Nighttime brightness target (1..100%)"
         },
         {
-          "index": 17,
+          "index": 16,
           "name": "day_start_hour",
           "cpp_enum": "DAY_START_HOUR",
           "type": "u16",
           "description": "Time schedule daytime start hour (0..23)"
         },
         {
-          "index": 18,
+          "index": 17,
           "name": "night_start_hour",
           "cpp_enum": "NIGHT_START_HOUR",
           "type": "u16",
           "description": "Time schedule nighttime start hour (0..23)"
         },
         {
-          "index": 19,
+          "index": 18,
           "name": "color_profile",
           "cpp_enum": "COLOR_PROFILE",
           "type": "string",
           "description": "Theme accent preset (Steel Blue|Pink|Blue|Green|Custom)"
         },
         {
-          "index": 20,
+          "index": 19,
           "name": "va_visual_profile",
           "cpp_enum": "VA_VISUAL_PROFILE",
           "type": "string",
           "description": "Voice assistant visual overlay style (Nebula|Solaris|Rings|Light Bar|Dot Wave)"
         },
         {
-          "index": 21,
+          "index": 20,
           "name": "home_screen_enabled",
           "cpp_enum": "HOME_SCREEN_ENABLED",
           "type": "bool",
           "description": "1 = enable the Home Screen and App Dock, 0 = single-app mode locked to start_screen"
         },
         {
-          "index": 22,
+          "index": 21,
           "name": "start_screen",
           "cpp_enum": "START_SCREEN",
           "type": "string",
           "description": "Boot / single-app start screen (Home|Pinned|Time App|Calendar|Clock Face|Media|Home Hub|Area Controls|Remote|Weather|Cameras|Games|Tools)"
         },
         {
-          "index": 23,
+          "index": 22,
           "name": "return_to_home_timeout",
           "cpp_enum": "RETURN_TO_HOME_TIMEOUT",
           "type": "string",
           "description": "Idle timeout before resetting navigation back to the Home Screen (15s|30s|1 min|2 min|5 min|10 min|Never)"
         },
         {
-          "index": 24,
+          "index": 23,
           "name": "clock_face",
           "cpp_enum": "CLOCK_FACE",
           "type": "string",
           "description": "Clock face style (Minimal Digital|Modern Analog|Hybrid Digital)"
         },
         {
-          "index": 25,
+          "index": 24,
           "name": "time_format",
           "cpp_enum": "TIME_FORMAT",
           "type": "string",
           "description": "Clock time format (12-Hour (AM/PM)|24-Hour)"
         },
         {
-          "index": 26,
+          "index": 25,
           "name": "weather_background",
           "cpp_enum": "WEATHER_BACKGROUND",
           "type": "bool",
           "description": "1 = animate ambient weather particles on Home screen, else 0"
         },
         {
-          "index": 27,
+          "index": 26,
           "name": "home_sun",
           "cpp_enum": "HOME_SUN",
           "type": "bool",
           "description": "1 = show daytime solar disc on Home screen, else 0"
         },
         {
-          "index": 28,
+          "index": 27,
           "name": "home_moon",
           "cpp_enum": "HOME_MOON",
           "type": "bool",
           "description": "1 = show nighttime lunar phase disc on Home screen, else 0"
         },
         {
-          "index": 29,
+          "index": 28,
           "name": "wake_greeting",
           "cpp_enum": "WAKE_GREETING",
           "type": "bool",
           "description": "1 = show time-of-day wake greeting toast, else 0"
         },
         {
-          "index": 30,
+          "index": 29,
           "name": "album_art_style",
           "cpp_enum": "ALBUM_ART_STYLE",
           "type": "string",
           "description": "Now Playing album art layout (Full Screen|Letterbox|Standard|None)"
         },
         {
-          "index": 31,
+          "index": 30,
           "name": "music_overlay_style",
           "cpp_enum": "MUSIC_OVERLAY_STYLE",
           "type": "string",
           "description": "Now Playing controls overlay visibility (Art Only|Art + Metadata|Always Visible)"
         },
         {
-          "index": 32,
+          "index": 31,
           "name": "album_sort_order",
           "cpp_enum": "ALBUM_SORT_ORDER",
           "type": "string",
           "description": "Album browser sort order (Alphabetical|Newest on Top|Oldest on Top)"
         },
         {
-          "index": 33,
+          "index": 32,
           "name": "artist_album_sort_order",
           "cpp_enum": "ARTIST_ALBUM_SORT_ORDER",
           "type": "string",
           "description": "Artist discography sort order (Oldest on Top|Newest on Top|Alphabetical)"
         },
         {
-          "index": 34,
+          "index": 33,
           "name": "podcast_sort_order",
           "cpp_enum": "PODCAST_SORT_ORDER",
           "type": "string",
           "description": "Podcast episode sort order (Newest on Top|Oldest on Top)"
         },
         {
-          "index": 35,
+          "index": 34,
           "name": "ww_sens_okay_nabu",
           "cpp_enum": "WW_SENS_OKAY_NABU",
           "type": "string",
           "description": "Okay Nabu wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
         },
         {
-          "index": 36,
+          "index": 35,
           "name": "ww_sens_hey_luna",
           "cpp_enum": "WW_SENS_HEY_LUNA",
           "type": "string",
           "description": "Hey Luna wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
         },
         {
-          "index": 37,
+          "index": 36,
           "name": "ww_sens_hey_jarvis",
           "cpp_enum": "WW_SENS_HEY_JARVIS",
           "type": "string",
           "description": "Hey Jarvis wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
         },
         {
-          "index": 38,
+          "index": 37,
           "name": "ww_sens_hey_mycroft",
           "cpp_enum": "WW_SENS_HEY_MYCROFT",
           "type": "string",
           "description": "Hey Mycroft wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
         },
         {
-          "index": 39,
+          "index": 38,
           "name": "ww_sens_alexa",
           "cpp_enum": "WW_SENS_ALEXA",
           "type": "string",
           "description": "Alexa wake word sensitivity (Slightly sensitive|Moderately sensitive|Very sensitive)"
         },
         {
-          "index": 40,
+          "index": 39,
           "name": "wake_screen_on_assist",
           "cpp_enum": "WAKE_SCREEN_ON_ASSIST",
           "type": "bool",
           "description": "1 = wake display automatically when voice assistant triggers, else 0"
         },
         {
-          "index": 41,
+          "index": 40,
           "name": "alert_volume",
           "cpp_enum": "ALERT_VOLUME",
           "type": "u16",
           "description": "Timer, alarm, and notification chime volume percentage (20..100)"
         },
         {
-          "index": 42,
+          "index": 41,
           "name": "volume_step_size",
           "cpp_enum": "VOLUME_STEP_SIZE",
           "type": "u16",
           "description": "Rotary/button volume increment step percentage (1..10)"
         },
         {
-          "index": 43,
+          "index": 42,
           "name": "game_sound_effects",
           "cpp_enum": "GAME_SOUND_EFFECTS",
           "type": "bool",
           "description": "1 = play arcade game sound effects, else 0"
         },
         {
-          "index": 44,
+          "index": 43,
           "name": "ble_beacon_enabled",
           "cpp_enum": "BLE_BEACON_ENABLED",
           "type": "bool",
           "description": "1 = enable BLE iBeacon presence advertising (derived from native_ble_tracking), else 0"
         },
         {
-          "index": 45,
+          "index": 44,
           "name": "ble_beacon_mode",
           "cpp_enum": "BLE_BEACON_MODE",
           "type": "string",
           "description": "BLE beacon advertising duty policy (Handheld Only|Handheld + Screen Off|Always)"
         },
         {
-          "index": 46,
+          "index": 45,
           "name": "weather_sim_condition",
           "cpp_enum": "WEATHER_SIM_CONDITION",
           "type": "string",
           "description": "Developer weather animation override (Live (Home Assistant) or simulated condition label)"
         },
         {
-          "index": 47,
+          "index": 46,
           "name": "theme_color_hex",
           "cpp_enum": "THEME_COLOR_HEX",
           "type": "string",
           "description": "Custom theme accent color (#RRGGBB) synchronized with device_custom_color"
         },
         {
-          "index": 48,
+          "index": 47,
           "name": "home_clock_tap_action",
           "cpp_enum": "HOME_CLOCK_TAP_ACTION",
           "type": "string",
           "description": "Action when tapping the time readout on the Home Screen (Time App|Clock Face)"
         },
         {
-          "index": 49,
+          "index": 48,
           "name": "show_utc_clock",
           "cpp_enum": "SHOW_UTC_CLOCK",
           "type": "bool",
           "description": "1 = show a dedicated UTC World Clock card on the Time App Clock tab, else 0"
         },
         {
-          "index": 50,
+          "index": 49,
           "name": "world_clocks",
           "cpp_enum": "WORLD_CLOCKS",
           "type": "string",
           "description": "Semicolon-delimited custom-labeled World Clock entries (up to 4, '<label>|<iana>;...') shown on the Time App Clock tab"
         },
         {
-          "index": 51,
+          "index": 50,
           "name": "alarms_summary",
           "cpp_enum": "ALARMS_SUMMARY",
           "type": "string",
           "description": "Semicolon-delimited 3-slot device alarm schedule ('HH:MM|enabled|recurrence;...')"
         },
         {
-          "index": 52,
+          "index": 51,
           "name": "local_clock_label",
           "cpp_enum": "LOCAL_CLOCK_LABEL",
           "type": "string",
           "description": "Optional user-defined label shown above local time on the Time App Clock tab (up to 32 chars)"
         },
         {
-          "index": 53,
+          "index": 52,
           "name": "tools_items",
           "cpp_enum": "TOOLS_ITEMS",
           "type": "csv",
           "description": "Comma-separated enabled and ordered Tools launcher items (stopwatch,level,flashlight,calculator,dice,coin_flip)"
         },
         {
-          "index": 54,
+          "index": 53,
           "name": "games_items",
           "cpp_enum": "GAMES_ITEMS",
           "type": "csv",
           "description": "Comma-separated enabled and ordered Games launcher items (marbles,archery,bricks,chomp,2048,memory)"
         },
         {
-          "index": 55,
+          "index": 54,
           "name": "home_date_tap_action",
           "cpp_enum": "HOME_DATE_TAP_ACTION",
           "type": "string",
           "description": "Action when tapping the date readout on the Home Screen (Day View|Overview)"
         },
         {
-          "index": 56,
+          "index": 55,
           "name": "calendar_lookahead_days",
           "cpp_enum": "CALENDAR_LOOKAHEAD_DAYS",
           "type": "u16",
           "description": "Calendar Overview upcoming lookahead horizon in days (7|14|30|60)"
         },
         {
-          "index": 57,
+          "index": 56,
           "name": "calendar_week_start",
           "cpp_enum": "CALENDAR_WEEK_START",
           "type": "string",
           "description": "First day of week in Calendar Week and Month views (Sunday|Monday)"
         },
         {
-          "index": 58,
+          "index": 57,
           "name": "bedtime_active",
           "cpp_enum": "BEDTIME_ACTIVE",
           "type": "bool",
           "description": "1 = Bedtime Mode currently active (ultra-dim wake brightness, 15s idle -> bedtime_display, suppressed wake greeting, and silenced non-critical notification chimes/screen wakes), else 0"
         },
         {
-          "index": 59,
+          "index": 58,
           "name": "bedtime_display",
           "cpp_enum": "BEDTIME_DISPLAY",
           "type": "string",
           "description": "Idle display behavior while Bedtime Mode is active (Screen Off|Ambient Clock)"
         },
         {
-          "index": 60,
+          "index": 59,
           "name": "bedtime_schedule",
           "cpp_enum": "BEDTIME_SCHEDULE",
           "type": "bool",
           "description": "1 = automatically toggle Bedtime Mode on at bedtime_start_hour and off at bedtime_end_hour (manual/HA switch overrides hold until next boundary), else 0"
         },
         {
-          "index": 61,
+          "index": 60,
           "name": "bedtime_start_hour",
           "cpp_enum": "BEDTIME_START_HOUR",
           "type": "u16",
           "description": "Bedtime Mode schedule start hour in local 24h time (0..23)"
         },
         {
-          "index": 62,
+          "index": 61,
           "name": "bedtime_end_hour",
           "cpp_enum": "BEDTIME_END_HOUR",
           "type": "u16",
           "description": "Bedtime Mode schedule end hour in local 24h time (0..23)"
         },
         {
-          "index": 63,
+          "index": 62,
           "name": "bedtime_brightness",
           "cpp_enum": "BEDTIME_BRIGHTNESS",
           "type": "u16",
           "description": "Bedtime Mode active wake brightness percentage (1..100%)"
         },
         {
-          "index": 64,
+          "index": 63,
           "name": "camera_default_view",
           "cpp_enum": "CAMERA_DEFAULT_VIEW",
           "type": "string",
           "description": "Default view when opening the Cameras app (Grid|Single|Carousel)"
         },
         {
-          "index": 65,
+          "index": 64,
           "name": "camera_carousel_interval",
           "cpp_enum": "CAMERA_CAROUSEL_INTERVAL",
           "type": "string",
           "description": "Auto-cycle interval in Cameras Carousel view (10s|15s|30s|60s)"
         },
         {
-          "index": 66,
+          "index": 65,
           "name": "camera_framing",
           "cpp_enum": "CAMERA_FRAMING",
           "type": "string",
           "description": "Camera video framing mode (Uncropped|Fill)"
         },
         {
-          "index": 67,
+          "index": 66,
           "name": "camera_stream_mode",
           "cpp_enum": "CAMERA_STREAM_MODE",
           "type": "string",
           "description": "Camera live streaming quality and bandwidth mode (Auto|Low Bandwidth|Snapshots)"
         },
         {
-          "index": 68,
+          "index": 67,
           "name": "camera_doorbell_popup",
           "cpp_enum": "CAMERA_DOORBELL_POPUP",
           "type": "string",
           "description": "Doorbell ring popup media mode on hardware-JPEG devices (Snapshot|Live Video)"
         },
         {
-          "index": 69,
+          "index": 68,
           "name": "screensaver_photo_clock",
           "cpp_enum": "SCREENSAVER_PHOTO_CLOCK",
           "type": "bool",
           "description": "1 = show subtle clock overlay on Photo Frame screensaver, else 0"
         },
         {
-          "index": 70,
+          "index": 69,
           "name": "weather_app_background",
           "cpp_enum": "WEATHER_APP_BACKGROUND",
           "type": "bool",
@@ -2886,21 +2879,6 @@
       "capability": "display"
     },
     {
-      "key": "hold_crown_power_off",
-      "label": "Hold Crown to Power Off",
-      "domain": "switch",
-      "default": false,
-      "section": "power",
-      "esphome_section": "sleep",
-      "group_tier": "behavior",
-      "options": [],
-      "min": null,
-      "max": null,
-      "step": null,
-      "unit": "",
-      "capability": "display_battery"
-    },
-    {
       "key": "auto_brightness_mode",
       "label": "Auto Brightness Mode",
       "domain": "select",
@@ -3850,7 +3828,7 @@
     }
   ],
   "studio_contract": {
-    "studio_rev": 41,
+    "studio_rev": 42,
     "allowed_device_actions": [
       "restart",
       "find_my",

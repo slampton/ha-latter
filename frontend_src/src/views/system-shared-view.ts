@@ -1,14 +1,13 @@
 /**
- * System Shared Entities View (`shared_entities`, `D-022`, `D-059`, `D-064`, `D-065`):
+ * System Shared Entities View (`shared_entities`, `D-022`, `D-059`, `D-064`, `D-065`, `D-074`):
  * - Home hub & weather (singleton Weather/Alarm + multi-entity sortable domain boxes)
- * - Calendars & Cameras with pointer/keyboard reordering (`reorderStringListRows`) & combobox
+ * - Calendars & Cameras with pointer/keyboard reordering (`reorderStringListRows`) & native `<select>` pickers
  * - On-demand 600 s camera preview signing (`store.entity.previewCamera`, `Q4`)
- * - Custom colors (`isValidHexColor` swatch guard `A-07`) & shared System wallpapers
+ * - Custom colors (`isValidHexColor` swatch guard `A-07`)
  */
 
 import {
   renderCard,
-  renderEntityCombobox,
   renderEntitySlotList,
   renderSelectOptions,
   renderSelectRow,
@@ -225,30 +224,18 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
                       renderContent: (val, idx) => {
                         const meta = findCatalogChoice(g.choices, val);
                         return html`<div class="hub-slot-row">
-                          ${(g.choices?.length ?? 0) > 8
-                            ? renderEntityCombobox({
-                                id: `hub-combo-${g.key}-${idx}`,
-                                value: val,
-                                options: g.choices,
-                                ariaLabel: g.selectAriaLabel,
-                                emptyOptionLabel: g.emptyPlaceholder,
-                                host: store.host,
-                                overlay: store.localeOverlay,
-                                onChange: (nextVal) =>
-                                  store.entity.updateStringListRow(g.key, idx, nextVal),
-                              })
-                            : html`<select
-                                aria-label=${g.selectAriaLabel}
-                                .value=${val}
-                                @change=${(ev: Event) =>
-                                  store.entity.updateStringListRow(
-                                    g.key,
-                                    idx,
-                                    (ev.currentTarget as HTMLSelectElement).value,
-                                  )}
-                              >
-                                ${renderSelectOptions(g.choices, val, g.emptyPlaceholder)}
-                              </select>`}
+                          <select
+                            aria-label=${g.selectAriaLabel}
+                            .value=${val}
+                            @change=${(ev: Event) =>
+                              store.entity.updateStringListRow(
+                                g.key,
+                                idx,
+                                (ev.currentTarget as HTMLSelectElement).value,
+                              )}
+                          >
+                            ${renderSelectOptions(g.choices, val, g.emptyPlaceholder)}
+                          </select>
                           ${meta?.area_name
                             ? html`<span class="hub-slot-meta">
                                 <span class="chip">${meta.area_name}</span>
@@ -346,8 +333,6 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
             emptyStateText: store.t("shared.empty_calendars"),
             selectAriaLabel: store.t("shared.calendar_aria"),
             removeAriaLabel: store.t("shared.remove_calendar"),
-            useCombobox: (cat.calendars?.length ?? 0) > 8,
-            host: store.host,
             onReorder: (fromIdx, toIdx) =>
               store.entity.reorderStringListRows("calendar_entities", fromIdx, toIdx),
             onChange: (idx, val) =>
@@ -396,8 +381,6 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
               selectAriaLabel: store.t("shared.camera_aria"),
               removeAriaLabel: store.t("shared.remove_camera"),
               stacked: true,
-              useCombobox: (cat.cameras?.length ?? 0) > 8,
-              host: store.host,
               slotLabel: (idx) =>
                 idx === 0
                   ? store.t("shared.camera_slot_primary")

@@ -18,7 +18,7 @@ _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = _PROTOCOL_SCHEMA["defaults"]
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
 STUDIO_REV: Final[int] = int(_PROTOCOL_SCHEMA["studio_contract"]["studio_rev"])
-MIN_FIRMWARE_SDK_REV: Final = 2026112004
+MIN_FIRMWARE_SDK_REV: Final = 2026112005
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -124,7 +124,6 @@ CONF_BATTERY_HIBERNATE_TIMEOUT: Final = "battery_hibernate_timeout"
 CONF_SCREENSAVER_MODE: Final = "screensaver_mode"
 CONF_SCREENSAVER_STYLE: Final = "screensaver_style"
 CONF_SCREENSAVER_PHOTO_CLOCK: Final = "screensaver_photo_clock"
-CONF_HOLD_CROWN_POWER_OFF: Final = "hold_crown_power_off"
 CONF_BEDTIME_ACTIVE: Final = "bedtime_active"
 CONF_BEDTIME_DISPLAY: Final = "bedtime_display"
 CONF_BEDTIME_BRIGHTNESS: Final = "bedtime_brightness"

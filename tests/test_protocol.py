@@ -70,7 +70,7 @@ class TestProtocolV3Contract(unittest.TestCase):
             "remote_config": 3,
             "weather_forecast": 14,
             "calendar_agenda": 4,
-            "device_prefs": 68,
+            "device_prefs": 67,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})
@@ -1149,12 +1149,18 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         self.assertEqual(_PAYLOADS_MOD.parse_dirty_prefs_records(bad_raw), {})
 
     def test_power_profile_retired_and_activity_sources_in_scope(self) -> None:
-        for retired_key in ("power_profile", "show_speaker_shortcut", "show_library_shortcut", "docked_screensaver"):
+        for retired_key in (
+            "power_profile",
+            "show_speaker_shortcut",
+            "show_library_shortcut",
+            "docked_screensaver",
+            "hold_crown_power_off",
+        ):
             self.assertNotIn(retired_key, studio_scope.DEVICE_PREF_KEYS)
             self.assertNotIn(retired_key, studio_scope.DEVICE_SETTING_KEYS)
             with self.assertRaises(studio_scope.SettingsScopeError):
                 studio_scope.clean_device_settings({retired_key: "1"})
-        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 63)
+        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 62)
 
         for key, default_val in (
             ("manual_brightness", 80),

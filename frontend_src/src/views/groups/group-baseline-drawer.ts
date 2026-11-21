@@ -542,14 +542,6 @@ export function renderGroupBaselineDrawer(
           ${caps.has_battery !== false || groupSsMode !== "Never"
             ? renderSpecSelect(store, group, "docked_idle_timeout", cfg.docked_idle_timeout, caps)
             : nothing}
-          ${renderSpecSwitch(
-            store,
-            group,
-            "hold_crown_power_off",
-            cfg.hold_crown_power_off,
-            caps,
-            caps.has_battery !== false,
-          )}
           ${renderSpecSelect(
             store,
             group,

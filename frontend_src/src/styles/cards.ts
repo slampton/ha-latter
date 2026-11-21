@@ -158,10 +158,10 @@ export const CARD_STYLES = css`
     padding-block-start: var(--studio-space-2);
     border-block-start: 1px solid var(--studio-divider);
   }
-  .hub-slot-row > select,
-  .hub-slot-row > .combobox {
+  .hub-slot-row > select {
     flex: 1 1 200px;
     min-inline-size: 0;
+    max-inline-size: 100%;
   }
   .hub-slot-meta {
     display: inline-flex;

@@ -1540,8 +1540,6 @@ export interface EntitySlotListOptions {
   slotMeta?: (item: string, idx: number) => TemplateResult | typeof nothing;
   extraActions?: (item: string, idx: number) => TemplateResult | typeof nothing;
   stacked?: boolean;
-  useCombobox?: boolean;
-  host?: { requestUpdate(): void } | null;
   onReorder?: (fromIndex: number, toIndex: number) => void;
   onChange: (idx: number, value: string) => void;
   onRemove: (idx: number) => void;
@@ -1560,24 +1558,14 @@ export function renderEntitySlotList(opts: EntitySlotListOptions): TemplateResul
     ${includeLabel && opts.slotLabel
       ? html`<span class="field-label">${opts.slotLabel(idx)}</span>`
       : nothing}
-    ${opts.useCombobox
-      ? renderEntityCombobox({
-          id: `${opts.id}-combo-${idx}`,
-          value: val,
-          options: opts.choices,
-          ariaLabel: opts.selectAriaLabel,
-          emptyOptionLabel: opts.emptyOptionLabel,
-          host: opts.host,
-          onChange: (nextVal) => opts.onChange(idx, nextVal),
-        })
-      : html`<select
-          aria-label=${opts.selectAriaLabel}
-          .value=${val}
-          @change=${(ev: Event) =>
-            opts.onChange(idx, (ev.currentTarget as HTMLSelectElement).value)}
-        >
-          ${renderSelectOptions(opts.choices, val, opts.emptyOptionLabel)}
-        </select>`}
+    <select
+      aria-label=${opts.selectAriaLabel}
+      .value=${val}
+      @change=${(ev: Event) =>
+        opts.onChange(idx, (ev.currentTarget as HTMLSelectElement).value)}
+    >
+      ${renderSelectOptions(opts.choices, val, opts.emptyOptionLabel)}
+    </select>
     ${opts.slotMeta ? opts.slotMeta(val, idx) : nothing}
   </div>`;
 

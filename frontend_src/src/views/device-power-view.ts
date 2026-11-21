@@ -32,7 +32,6 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
       "pickup_to_wake",
       "battery_screen_timeout",
       "battery_hibernate_timeout",
-      "hold_crown_power_off",
     ])
     .filter((p) => !SCREENSAVER_KEYS.has(p.key));
 

@@ -52,8 +52,6 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
             emptyStateText: store.t("remotes.empty_remotes"),
             selectAriaLabel: store.t("remotes.remote_aria"),
             removeAriaLabel: store.t("remotes.remove_remote"),
-            useCombobox: (cat.remotes?.length ?? 0) > 8,
-            host: store.host,
             slotLabel: (idx) =>
               idx === 0
                 ? store.t("remotes.slot_primary")

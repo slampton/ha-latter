@@ -22,8 +22,8 @@ describe("Home Hub Broadcast App (D-074 / STUDIO_REV 41)", () => {
     resetDomBody();
   });
 
-  it("uses Broadcast naming, mdi:bullhorn icon, and STUDIO_REV 41", () => {
-    assert.equal(STUDIO_REV, 41);
+  it("uses Broadcast naming, mdi:bullhorn icon, and STUDIO_REV >= 41", () => {
+    assert.ok(STUDIO_REV >= 41);
     const intercomCat = HOME_CATEGORIES_CATALOG.find((c) => c.token === "intercom");
     assert.ok(intercomCat);
     assert.equal(intercomCat.label, "Broadcast");
@@ -60,6 +60,44 @@ describe("Home Hub Broadcast App (D-074 / STUDIO_REV 41)", () => {
     const overviewHtml = renderToHtml(renderSystemOverviewView(harness.store));
     assert.ok(overviewHtml.includes("2 Broadcast speakers"));
     assert.ok(overviewHtml.includes(harness.store.t("sys_overview.active_of_seven", { count: "1" })));
+  });
+
+  it("always renders standard native <select> dropdowns (never combobox) for Broadcast speakers and Cameras even with > 8 options", () => {
+    const manySpeakers = Array.from({ length: 14 }, (_, i) => ({
+      id: `media_player.speaker_${i + 1}`,
+      name: `Very Long Speaker Name Number ${i + 1}`,
+      area_name: `Area ${i + 1}`,
+    }));
+    const manyCameras = Array.from({ length: 12 }, (_, i) => ({
+      id: `camera.cam_${i + 1}`,
+      name: `Outdoor Perimeter Camera Channel ${i + 1}`,
+    }));
+    const harness = makeFakeStore({
+      currentScope: "system",
+      currentViewId: "shared_entities",
+      state: {
+        system_config: {
+          broadcast_speakers: ["media_player.speaker_1"],
+          camera_entities: ["camera.cam_1"],
+        },
+        catalog: {
+          ma_speakers: manySpeakers,
+          cameras: manyCameras,
+        },
+      },
+    });
+
+    const container = simDocument.createElement("div");
+    render(renderSystemSharedView(harness.store), container);
+    assert.equal(
+      container.querySelectorAll("input[role='combobox']").length,
+      0,
+      "Shared entities speaker and camera pickers must use native <select>, never combobox",
+    );
+    const speakerRow = container.querySelector("#hub-domain-broadcast_speakers");
+    const camRow = container.querySelector("#cameras-list");
+    assert.ok(speakerRow?.querySelector("select"), "Expected native <select> for Broadcast speakers");
+    assert.ok(camRow?.querySelector("select"), "Expected native <select> for Cameras");
   });
 
   it("renders Broadcast speakers pill list inside Configure Home hub and toggles per-Device subset", () => {

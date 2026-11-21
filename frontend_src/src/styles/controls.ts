@@ -534,8 +534,4 @@ export const CONTROL_STYLES = css`
   .sortable-row-stacked > .sortable-row-content {
     inline-size: 100%;
   }
-  .sortable-row-stacked .combobox-option-title {
-    white-space: normal;
-    line-height: 1.3;
-  }
 `;
