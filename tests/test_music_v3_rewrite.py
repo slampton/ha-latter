@@ -892,6 +892,37 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
             {"entity_id": "media_player.ma_pocket", "repeat": next_rep}
         ]
 
+    # 3b. Dynamic / radio mode queue locks shuffle & repeat: mask capability bits and ignore toggles
+    shuffle_calls.clear()
+    repeat_calls.clear()
+    mass.player_queues.queue_state_obj.is_dynamic = True
+    mass.player_queues.queue_state_obj.shuffle_enabled = True
+    mass.player_queues.queue_state_obj.repeat_mode = SimpleNamespace(value="off")
+    coord._cached_media_payload = None
+    _dyn_st, dyn_attrs = build_active_media_payload(coord)
+    assert dyn_attrs["media_caps"] == (
+        expected_caps & ~(MEDIA_CAP_SHUFFLE_SET | MEDIA_CAP_REPEAT_SET)
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_MEDIA_COMMAND,
+        {"target_device": coord.device_slug, "command": "shuffle_toggle"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_MEDIA_COMMAND,
+        {"target_device": coord.device_slug, "command": "repeat_cycle"},
+        blocking=True,
+    )
+    assert shuffle_calls == []
+    assert repeat_calls == []
+    mass.player_queues.queue_state_obj.is_dynamic = False
+    mass.player_queues.queue_state_obj.shuffle_enabled = False
+    coord._cached_media_payload = None
+    _restored_st, restored_attrs = build_active_media_payload(coord)
+    assert restored_attrs["media_caps"] == expected_caps
+
     # 4. favorite_toggle with media_id="" and plain non-URI media_id="Track Title" resolves real URI
     await hass.services.async_call(
         DOMAIN,

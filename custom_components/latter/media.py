@@ -2821,6 +2821,8 @@ def compute_media_caps(
     ma_st: State | None,
     ma_counterpart: str | None,
     vol_target: str,
+    *,
+    dynamic_queue: bool = False,
 ) -> int:
     """Compute the 11-bit `active_media.media_caps` capability bitmask for the active speaker."""
     has_ma = bool(ma_counterpart)
@@ -2870,12 +2872,11 @@ def compute_media_caps(
                     caps |= MEDIA_CAP_VOLUME_MUTE
 
     if has_ma:
-        caps |= (
-            MEDIA_CAP_MUSIC_ASSISTANT
-            | MEDIA_CAP_FAVORITE
-            | MEDIA_CAP_SHUFFLE_SET
-            | MEDIA_CAP_REPEAT_SET
-        )
+        caps |= MEDIA_CAP_MUSIC_ASSISTANT | MEDIA_CAP_FAVORITE
+        if not dynamic_queue:
+            caps |= MEDIA_CAP_SHUFFLE_SET | MEDIA_CAP_REPEAT_SET
+    if dynamic_queue:
+        caps &= ~(MEDIA_CAP_SHUFFLE_SET | MEDIA_CAP_REPEAT_SET)
     return caps & 0xFFFF
 
 
@@ -2904,13 +2905,13 @@ def _read_muted_from_targets(
 
 def _read_live_ma_queue_state(
     hass: HomeAssistant, ma_target: str | None
-) -> tuple[bool | None, str, bool | None, int | None, str]:
-    """Read `(shuffle, repeat, favorite, queue_count, current_uri)` from in-memory `mass.player_queues`."""
+) -> tuple[bool | None, str, bool | None, int | None, str, bool]:
+    """Read `(shuffle, repeat, favorite, queue_count, current_uri, is_dynamic)` from in-memory `mass.player_queues`."""
     if not ma_target:
-        return None, "", None, None, ""
+        return None, "", None, None, "", False
     mass = get_ma_mass_client(hass)
     if mass is None or not hasattr(mass, "player_queues"):
-        return None, "", None, None, ""
+        return None, "", None, None, "", False
     qid = resolve_ma_queue_id_sync(hass, ma_target, mass) or ma_target
     pqs = mass.player_queues
     q_obj: Any = None
@@ -2920,7 +2921,7 @@ def _read_live_ma_queue_state(
     except Exception:  # noqa: BLE001
         q_obj = None
     if q_obj is None:
-        return None, "", None, None, ""
+        return None, "", None, None, "", False
 
     q_dict = _extract_item_dict(q_obj) if isinstance(q_obj, dict) else None
     raw_shuf = (
@@ -2969,7 +2970,13 @@ def _read_live_ma_queue_state(
             or cur_d.get("media_content_id")
             or ""
         ).strip()
-    return shuf, rep, fav, q_cnt, cur_uri
+    raw_dyn = (
+        q_dict.get("is_dynamic")
+        if q_dict is not None
+        else getattr(q_obj, "is_dynamic", None)
+    )
+    is_dynamic = bool(raw_dyn) if raw_dyn is not None else False
+    return shuf, rep, fav, q_cnt, cur_uri, is_dynamic
 
 
 def _resolve_raw_source_favorite(
@@ -3076,7 +3083,7 @@ async def _async_execute_favorite_toggle(
         or ""
     ).strip()
 
-    _shuf, _rep, live_q_fav, _q_cnt, live_q_uri = _read_live_ma_queue_state(
+    _shuf, _rep, live_q_fav, _q_cnt, live_q_uri, _is_dyn = _read_live_ma_queue_state(
         hass, ma_target
     )
     raw_explicit = str(explicit_media_id or "").strip()
@@ -3352,7 +3359,15 @@ async def execute_coordinator_media_command(
     if cmd == "shuffle_toggle":
         m_attrs = dict(ma_state_obj.attributes) if ma_state_obj is not None else {}
         s_attrs = dict(state_obj.attributes) if state_obj is not None else {}
-        live_shuf, _, _, _, _ = _read_live_ma_queue_state(hass, ma_target)
+        live_shuf, _, _, _, _, live_is_dynamic = _read_live_ma_queue_state(
+            hass, ma_target
+        )
+        if live_is_dynamic:
+            _LOGGER.debug(
+                "Ignoring shuffle_toggle on %s: Music Assistant queue is in dynamic mode",
+                cmd_target,
+            )
+            return
         if "shuffle" in m_attrs and m_attrs.get("shuffle") is not None:
             cur_shuf = bool(m_attrs.get("shuffle"))
         elif "shuffle" in s_attrs and s_attrs.get("shuffle") is not None:
@@ -3372,7 +3387,15 @@ async def execute_coordinator_media_command(
     if cmd == "repeat_cycle":
         m_attrs = dict(ma_state_obj.attributes) if ma_state_obj is not None else {}
         s_attrs = dict(state_obj.attributes) if state_obj is not None else {}
-        _, live_rep, _, _, _ = _read_live_ma_queue_state(hass, ma_target)
+        _, live_rep, _, _, _, live_is_dynamic = _read_live_ma_queue_state(
+            hass, ma_target
+        )
+        if live_is_dynamic:
+            _LOGGER.debug(
+                "Ignoring repeat_cycle on %s: Music Assistant queue is in dynamic mode",
+                cmd_target,
+            )
+            return
         cur_rep = (
             _normalize_repeat_mode(m_attrs.get("repeat"))
             or _normalize_repeat_mode(s_attrs.get("repeat"))
@@ -3772,9 +3795,14 @@ def build_active_media_payload(
     else:
         pos_updated_at = 0
 
-    live_shuf, live_rep, live_fav, live_q_cnt, live_q_uri = _read_live_ma_queue_state(
-        coordinator.hass, ma_counterpart
-    )
+    (
+        live_shuf,
+        live_rep,
+        live_fav,
+        live_q_cnt,
+        live_q_uri,
+        live_is_dynamic,
+    ) = _read_live_ma_queue_state(coordinator.hass, ma_counterpart)
     if "shuffle" in m_attrs and m_attrs.get("shuffle") is not None:
         shuffle_flag = bool(m_attrs.get("shuffle"))
     elif "shuffle" in attrs and attrs.get("shuffle") is not None:
@@ -3838,7 +3866,12 @@ def build_active_media_payload(
     queue_count = max(0, min(65535, int(queue_count)))
 
     media_caps = compute_media_caps(
-        coordinator.hass, state_obj, ma_st, ma_counterpart, vol_target
+        coordinator.hass,
+        state_obj,
+        ma_st,
+        ma_counterpart,
+        vol_target,
+        dynamic_queue=live_is_dynamic,
     )
 
     dur_r = round(duration, 1) if duration > 0 else None
