@@ -153,8 +153,9 @@ def make_esphome_device() -> Callable[..., tuple[Any, str]]:
             "latter_set_beacon_uuid",
             "latter_device_command",
             "latter_set_slots",
+            "latter_set_music_lyrics",
+            "latter_set_calendar_view",
             "latter_show_notification",
-            "latter_ui_input",
             "latter_factory_reset",
         ):
             hass.services.async_register("esphome", f"{slug}_{svc_suffix}", lambda _call: None)
@@ -205,9 +206,9 @@ def setup_latter_hub(make_esphome_device: Callable[..., tuple[Any, str]]) -> Cal
             area_reg.async_create("Bedroom", area_id="bedroom", floor_id="floor_2")
 
         hass.states.async_set(
-            "person.sean",
+            "person.alex",
             "home",
-            {"friendly_name": "Sean", "latitude": 37.8045, "longitude": -122.2715},
+            {"friendly_name": "Alex", "latitude": 45.5152, "longitude": -122.6784},
         )
         hass.states.async_set(
             "weather.home",
@@ -233,7 +234,7 @@ def setup_latter_hub(make_esphome_device: Callable[..., tuple[Any, str]]) -> Cal
                 CONF_DEVICE_SLUG: "pocket_assistant",
                 CONF_DEFAULT_AREA: "living_room",
                 CONF_DEFAULT_SPEAKER: "media_player.pocket_assistant_music",
-                CONF_ASSIGNED_PERSON: "person.sean",
+                CONF_ASSIGNED_PERSON: "person.alex",
                 CONF_NATIVE_BLE_TRACKING: True,
                 CONF_BLE_AUTO_SWITCH: True,
                 CONF_SYNC_DEVICE_AREA: sync_device_area,
@@ -257,7 +258,7 @@ def setup_latter_hub(make_esphome_device: Callable[..., tuple[Any, str]]) -> Cal
                         CONF_DEVICE_SLUG: "keys_tag",
                         CONF_BLE_TARGET_ADDRESS: "11:22:33:44:55:66",
                         CONF_BLE_BEACON_UUID: "E2C56DB5-DFFB-48D2-B060-D0F5A71096E1",
-                        CONF_ASSIGNED_PERSON: "person.sean",
+                        CONF_ASSIGNED_PERSON: "person.alex",
                         CONF_NATIVE_BLE_TRACKING: True,
                     },
                     subentry_type=SUBENTRY_BLE_TAG,

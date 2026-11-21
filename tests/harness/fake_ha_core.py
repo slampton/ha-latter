@@ -51,10 +51,15 @@ def install_fake_ha_core() -> None:
         NUMBER = "number"
         BUTTON = "button"
         SWITCH = "switch"
+        LIGHT = "light"
 
     class EntityCategory(StrEnum):
         CONFIG = "config"
         DIAGNOSTIC = "diagnostic"
+
+    class UnitOfLength(StrEnum):
+        METERS = "m"
+        FEET = "ft"
 
     class UnitOfTime(StrEnum):
         SECONDS = "s"
@@ -63,6 +68,7 @@ def install_fake_ha_core() -> None:
 
     const_mod.Platform = Platform  # type: ignore[attr-defined]
     const_mod.EntityCategory = EntityCategory  # type: ignore[attr-defined]
+    const_mod.UnitOfLength = UnitOfLength  # type: ignore[attr-defined]
     const_mod.UnitOfTime = UnitOfTime  # type: ignore[attr-defined]
     const_mod.PERCENTAGE = "%"  # type: ignore[attr-defined]
     const_mod.ATTR_ENTITY_ID = "entity_id"  # type: ignore[attr-defined]
@@ -631,9 +637,9 @@ def install_fake_ha_core() -> None:
             }
             self.config = SimpleNamespace(
                 config_dir=str(root),
-                latitude=37.8044,
-                longitude=-122.2712,
-                location_name="Oakland Site",
+                latitude=45.5152,
+                longitude=-122.6784,
+                location_name="Main Site",
                 units=SimpleNamespace(temperature_unit="°F"),
                 path=lambda *parts: str(root.joinpath(*parts)),
                 components={"esphome", "bluetooth", "http", "frontend", "panel_custom"},

@@ -166,8 +166,8 @@ export const DIALOG_STYLES = css`
     position: absolute;
     inset-block-start: -6px;
     inset-inline-end: -6px;
-    inline-size: 22px;
-    block-size: 22px;
+    inline-size: 24px;
+    block-size: 24px;
     border-radius: var(--studio-radius-pill);
     border: 1px solid var(--studio-divider);
     background: var(--studio-surface);

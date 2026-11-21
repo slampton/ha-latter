@@ -42,10 +42,10 @@ async def _call_ws(
 async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify mandatory studio_rev=42 schema validation and studio_rev_mismatch on all 9 WS endpoints."""
+    """Verify mandatory studio_rev=44 schema validation and studio_rev_mismatch on all 9 WS endpoints."""
     import voluptuous as vol
 
-    assert STUDIO_REV == 43
+    assert STUDIO_REV == 44
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     from homeassistant.helpers import area_registry as ar
 
@@ -661,6 +661,7 @@ async def test_studio_commands_security_pin_secrecy_groups_and_backup_restore(
         "area_handoff",
         "tools_items",
         "games_items",
+        "do_not_disturb",
     ):
         assert op_key in sys_ctrl_by_pref
     assert sys_ctrl_by_pref["tools_items"]["section"] == "interface"
@@ -937,7 +938,7 @@ async def test_discovered_latter_devices_and_add_latter_device_command(
         payload={
             "esphome_device_id": unbound_dev.id,
             "device_group": "auto",
-            "assigned_person": "person.sean",
+            "assigned_person": "person.alex",
         },
         studio_rev=STUDIO_REV,
     )
@@ -947,7 +948,7 @@ async def test_discovered_latter_devices_and_add_latter_device_command(
     assert recorded_inits[0][2] == {
         "esphome_device_id": unbound_dev.id,
         "device_group": "auto",
-        "assigned_person": "person.sean",
+        "assigned_person": "person.alex",
     }
 
     assert await async_unload_entry(hass, entry) is True
@@ -1440,4 +1441,138 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     assert reloaded_coord.get_device_pref("night_brightness") == 35
     assert reloaded_coord.get_device_pref("bedtime_brightness") == 15
     assert reloaded_coord.device_group == "handhelds"
+    assert await async_unload_entry(hass, entry) is True
+
+
+@pytest.mark.asyncio
+async def test_phase4_device_actions_telemetry_and_dnd_entities(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify Phase 4 `device_action` verbs, `device_telemetry` -> Studio `live.telemetry`, and Screen/Screensaver/DND/Dismiss entities."""
+    from homeassistant.helpers import entity_registry as er
+
+    entry, sys_obj, coord = await setup_latter_hub(hass)
+    ent_reg = er.async_get(hass)
+    wifi_eid = f"sensor.{coord.device_slug}_system_wi_fi_signal"
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id=wifi_eid,
+            platform="esphome",
+            device_id=coord.esphome_device_id,
+        )
+    )
+    hass.states.async_set(wifi_eid, "-46")
+    assert coord.radio_connected is True
+
+    conn = websocket_api.ActiveConnection()
+    msg_id = 0
+
+    for verb in (
+        "deactivate_screensaver",
+        "wake_screen",
+        "screen_off",
+        "set_profiler_on",
+        "set_profiler_off",
+        "request_telemetry",
+    ):
+        msg_id += 1
+        await _call_ws(
+            hass,
+            conn,
+            msg_id,
+            "latter/device/command",
+            command="device_action",
+            subentry_id=coord.subentry_id,
+            payload={"action": verb},
+            studio_rev=STUDIO_REV,
+        )
+        assert not conn.errors, f"{verb} failed: {conn.errors}"
+
+    # Retired `log_memory_report` and `system_entity_action` must fail cleanly
+    msg_id += 1
+    await _call_ws(
+        hass,
+        conn,
+        msg_id,
+        "latter/device/command",
+        command="device_action",
+        subentry_id=coord.subentry_id,
+        payload={"action": "log_memory_report"},
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.errors[-1][1] == "invalid_format"
+    conn.errors.clear()
+
+    msg_id += 1
+    await _call_ws(
+        hass,
+        conn,
+        msg_id,
+        "latter/system/command",
+        command="system_entity_action",
+        payload={},
+        studio_rev=STUDIO_REV,
+    )
+    assert conn.errors[-1][1] == "unknown_command"
+    conn.errors.clear()
+
+    # Dispatch `device_telemetry` RPC and verify Studio `live.telemetry`
+    await sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        "device_telemetry",
+        {
+            "link_json": '{"state":"active","tx":12}',
+            "int_ram_free_kb": 184,
+            "int_ram_min_kb": 140,
+            "int_ram_largest_kb": 112,
+            "psram_min_kb": 6420,
+            "ble_active": True,
+            "profiler_on": True,
+        },
+    )
+    msg_id += 1
+    await _call_ws(
+        hass,
+        conn,
+        msg_id,
+        "latter/system/get_state",
+        subentry_id=coord.subentry_id,
+        studio_rev=STUDIO_REV,
+    )
+    st_telem = conn.results[-1][1]
+    assert st_telem["live"]["telemetry"]["int_ram_free_kb"] == 184
+    assert st_telem["live"]["telemetry"]["psram_min_kb"] == 6420
+    assert st_telem["live"]["telemetry"]["ble_active"] is True
+    assert st_telem["live"]["telemetry"]["profiler_on"] is True
+    assert st_telem["config"]["do_not_disturb"] is False
+
+    # Exercise `light.<slug>_screen`, `switch.<slug>_screensaver`, `switch.<slug>_do_not_disturb`, `button.<slug>_dismiss_alert`
+    screen_light = next(
+        e for e in hass.data["_test_entities"]["light"] if e.entity_id == f"light.{coord.device_slug}_screen"
+    )
+    ss_switch = next(
+        e for e in hass.data["_test_entities"]["switch"] if e.entity_id == f"switch.{coord.device_slug}_screensaver"
+    )
+    dnd_switch = next(
+        e for e in hass.data["_test_entities"]["switch"] if e.entity_id == f"switch.{coord.device_slug}_do_not_disturb"
+    )
+    dismiss_btn = next(
+        e for e in hass.data["_test_entities"]["button"] if e.entity_id == f"button.{coord.device_slug}_dismiss_alert"
+    )
+    assert not any(
+        e.entity_id.endswith("_activate_screensaver") for e in hass.data["_test_entities"]["button"]
+    )
+
+    await screen_light.async_turn_on(brightness=128)
+    assert coord.display_power_state == 0
+    await ss_switch.async_turn_on()
+    assert coord.screensaver_active is True
+    await screen_light.async_turn_off()
+    assert coord.display_power_state == 2
+    await dnd_switch.async_turn_on()
+    assert coord.do_not_disturb is True
+    coord.alarm_ringing = True
+    await dismiss_btn.async_press()
+    assert coord.alarm_ringing is False
+
     assert await async_unload_entry(hass, entry) is True

@@ -42,7 +42,17 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     assert len(hass._extra_js_urls) == 1
 
     # Verify all entity platforms populated states and enforce _attr_has_entity_name = True
-    for p_name in ("sensor", "binary_sensor", "device_tracker"):
+    assert coord.get_device_info()["manufacturer"] == "Latter"
+    for p_name in (
+        "sensor",
+        "binary_sensor",
+        "device_tracker",
+        "select",
+        "number",
+        "button",
+        "switch",
+        "light",
+    ):
         entities = hass.data["_test_entities"][p_name]
         assert entities, f"Expected entities for {p_name}"
         for ent in entities:
@@ -59,18 +69,22 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     assert hass.states.get("sensor.office_occupants") is not None or any(
         e.entity_id == "sensor.office_occupants" for e in hass.data["_test_entities"]["sensor"]
     )
+    assert hass.states.get("binary_sensor.office_occupancy") is not None or any(
+        e.entity_id == "binary_sensor.office_occupancy"
+        for e in hass.data["_test_entities"]["binary_sensor"]
+    )
     # Register in entity registry so remove exercises ent_reg.async_remove too
     ent_reg.async_register(
         er.RegistryEntry(entity_id="sensor.office_occupants", platform=DOMAIN)
     )
     ent_reg.async_register(
-        er.RegistryEntry(entity_id="binary_sensor.office_ble_occupancy", platform=DOMAIN)
+        er.RegistryEntry(entity_id="binary_sensor.office_occupancy", platform=DOMAIN)
     )
     area_reg.async_update("office", name="Home Office")
     area_reg.async_delete("office")
     await hass.async_block_till_done()
     assert ent_reg.async_get("sensor.office_occupants") is None
-    assert ent_reg.async_get("binary_sensor.office_ble_occupancy") is None
+    assert ent_reg.async_get("binary_sensor.office_occupancy") is None
 
     # Verify <255-char native_value cap on LatterAreaOccupantsSensor while full list stays in occupant_names
     long_names = [f"Occupant Person With Very Long Display Name {idx:02d}" for idx in range(30)]
@@ -84,12 +98,12 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     occ_sensor._cached_occ = {
         "is_occupied": True,
         "occupant_names": long_names,
-        "persons": ["person.sean"],
+        "persons": ["person.alex"],
         "occupied_by": ["pocket_assistant"],
     }
     assert len(occ_sensor.native_value) < 255
     assert occ_sensor.extra_state_attributes["occupant_names"] == long_names
-    assert occ_sensor.icon == "mdi:account-group"
+    assert occ_sensor.translation_key == "area_occupants"
 
     # Backup hooks flush cleanly
     await async_pre_backup(hass)

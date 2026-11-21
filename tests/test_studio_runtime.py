@@ -201,7 +201,8 @@ class TestEntitySections(unittest.TestCase):
         self.assertEqual(entity_sections.present_section_ids([{"id": "battery", "items": []}, "junk"]), set())
         payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
         self.assertIn('sec_ids = present_section_ids(esphome_inspector.get("sections"))', payload_src)
-        self.assertIn('"has_power": ("sleep" in sec_ids) or ("battery" in sec_ids),', payload_src)
+        self.assertIn('("sleep" in sec_ids)', payload_src)
+        self.assertIn('("battery" in sec_ids)', payload_src)
         self.assertNotIn('s.get("count"', payload_src)
 
     def test_ha_wake_word_is_the_one_wake_word_control(self) -> None:
@@ -1030,7 +1031,7 @@ class TestToolsDiagnosticsView(unittest.TestCase):
                     pinned_items: [
                       { kind: "entity", target: "script.baby_help", action: "turn_on", label: "Baby Help", icon: "mdi:baby-face-outline", confirm: false },
                     ],
-                    local_clock_label: "Oakland",
+                    local_clock_label: "Portland",
                     world_clocks: "Westminster|Europe/London;Kyoto|Asia/Tokyo",
                     home_categories: "alarm,thermostat,entry",
                     area_categories: "scene,light",
@@ -1152,6 +1153,9 @@ class TestToolsDiagnosticsView(unittest.TestCase):
             localInput.value = "Main ";
             localInput.dispatchEvent(new SimEvent("input", { bubbles: true }));
             const localDomDuringTyping = localInput.value;
+            const localInputStagedVal = stagedCalls[0]?.val;
+            localInput.dispatchEvent(new SimEvent("change", { bubbles: true }));
+            const localChangeStagedVal = stagedCalls[1]?.val;
 
             const zoneSelect = modalRoot.querySelector("#cfg-world_clocks_add");
             zoneSelect.value = "America/New_York";
@@ -1180,6 +1184,8 @@ class TestToolsDiagnosticsView(unittest.TestCase):
               lastCatalogZone: WORLD_CLOCK_ZONES_CATALOG[WORLD_CLOCK_ZONES_CATALOG.length - 1],
               localDomDuringTyping,
               localStagedCall: stagedCalls[0],
+              localInputStagedVal,
+              localChangeStagedVal,
               labelAfterZonePick,
               stagedWorldClocksAfterPick,
               toastOnMissingCity,
@@ -1201,7 +1207,8 @@ class TestToolsDiagnosticsView(unittest.TestCase):
         self.assertEqual(got["lastCatalogZone"]["iana"], "Pacific/Kiritimati")
         self.assertEqual(got["localDomDuringTyping"], "Main ")
         self.assertEqual(got["localStagedCall"]["key"], "local_clock_label")
-        self.assertEqual(got["localStagedCall"]["val"], "Main")
+        self.assertEqual(got["localInputStagedVal"], "Main ")
+        self.assertEqual(got["localChangeStagedVal"], "Main")
         self.assertEqual(got["labelAfterZonePick"], "")
         self.assertEqual(got["stagedWorldClocksAfterPick"], 0)
         self.assertTrue(got["toastOnMissingCity"])

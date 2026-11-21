@@ -163,9 +163,12 @@ def match_area_by_name_or_id(
 
 
 def latter_bound_esphome_device_ids(hass: HomeAssistant) -> set[str]:
-    """Return the ESPHome device IDs bound to Latter Devices (each Device subentry's stored device ID / MAC)."""
+    """Return all Device Registry IDs belonging to Latter or its bound ESPHome devices."""
     out: set[str] = set()
+    dev_reg = dr.async_get(hass)
     for entry in hass.config_entries.async_entries(DOMAIN):
+        for child_dev in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
+            out.add(child_dev.id)
         for sub in entry.subentries.values():
             if sub.subentry_type != SUBENTRY_DEVICE:
                 continue
@@ -266,6 +269,8 @@ def _is_curated_area_entity(
         ent_reg = er.async_get(hass)
     entry = ent_reg.async_get(state_obj.entity_id)
     if entry is not None:
+        if entry.platform == DOMAIN:
+            return False
         if entry.disabled_by or entry.hidden_by:
             return False
         if entry.entity_category is not None:
@@ -543,11 +548,14 @@ def area_illuminance_sensor_choices(
     ent_reg = er.async_get(hass)
     latter_dev_ids = latter_bound_esphome_device_ids(hass)
     choices: list[dict[str, Any]] = []
+    seen_eids: set[str] = set()
     for state_obj in sorted(
         idx.entities_in_area(area_id, ("sensor",)), key=lambda s: s.entity_id
     ):
         entry = ent_reg.async_get(state_obj.entity_id)
         if entry is not None:
+            if entry.platform == DOMAIN:
+                continue
             if entry.disabled_by or entry.hidden_by:
                 continue
             if entry.entity_category is not None:
@@ -560,6 +568,7 @@ def area_illuminance_sensor_choices(
         if dev_class != "illuminance" and unit not in ("lx", "lux"):
             continue
         lux_val = _parse_illuminance_state(state_obj)
+        seen_eids.add(state_obj.entity_id)
         choices.append(
             {
                 "entity_id": state_obj.entity_id,
@@ -569,6 +578,28 @@ def area_illuminance_sensor_choices(
                 "available": lux_val is not None,
             }
         )
+    cfg_ent = area_illuminance_settings(hass, area_id)["entity_id"]
+    if (
+        cfg_ent != "auto"
+        and cfg_ent.startswith("sensor.")
+        and cfg_ent not in seen_eids
+    ):
+        cfg_st = hass.states.get(cfg_ent)
+        if cfg_st is not None:
+            lux_val = _parse_illuminance_state(cfg_st)
+            choices.append(
+                {
+                    "entity_id": cfg_st.entity_id,
+                    "name": str(
+                        cfg_st.attributes.get("friendly_name") or cfg_st.entity_id
+                    ),
+                    "lux": lux_val,
+                    "lux_display": (
+                        format_ambient_lux(lux_val) if lux_val is not None else ""
+                    ),
+                    "available": lux_val is not None,
+                }
+            )
     return choices
 
 
@@ -962,7 +993,8 @@ def get_areas_summary(
             entry = ent_reg.async_get(state_obj.entity_id)
             if entry is not None:
                 if (
-                    entry.disabled_by
+                    entry.platform == DOMAIN
+                    or entry.disabled_by
                     or entry.hidden_by
                     or entry.entity_category is not None
                 ):
@@ -1402,8 +1434,16 @@ async def async_execute_area_action(
         raise HomeAssistantError(f"Entity '{entity_id}' is currently unavailable")
 
     domain = state_obj.domain
-    if not action and domain not in ("alarm_control_panel", "lock"):
-        action = "toggle"
+    raw_action = str(action or "").strip().lower()
+    if not raw_action:
+        if domain in ("alarm_control_panel", "lock"):
+            action = ""
+        elif level is not None:
+            action = "set_level"
+        else:
+            action = "toggle"
+    else:
+        action = raw_action
     cur_level = max(0, get_entity_level(state_obj))
 
     if domain in ("button", "input_button"):
@@ -1440,19 +1480,32 @@ async def async_execute_area_action(
                 domain, action, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
             )
             return
-
-    if domain in ("number", "input_number") and level is not None:
-        await hass.services.async_call(
-            domain,
-            "set_value",
-            {ATTR_ENTITY_ID: entity_id, "value": float(level)},
-            blocking=blocking,
-        )
+        if raise_on_missing:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="explicit_action_required",
+            )
         return
 
-    if domain == "media_player" and level is not None and not action:
+    if domain in ("number", "input_number"):
+        if level is not None:
+            await hass.services.async_call(
+                domain,
+                "set_value",
+                {ATTR_ENTITY_ID: entity_id, "value": float(level)},
+                blocking=blocking,
+            )
+            return
+        if raise_on_missing:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="explicit_action_required",
+            )
+        return
+
+    if domain == "media_player" and level is not None and action in ("set_level", "set_volume"):
         await async_execute_volume_action(
-            hass, entity_id, "set", volume_level=float(level)
+            hass, entity_id, "set", volume_pct=float(level)
         )
         return
 
@@ -1480,7 +1533,7 @@ async def async_execute_area_action(
                     translation_key="security_pin_required",
                 )
             if code_fmt == "number" and not (
-                4 <= len(clean_code) <= 8
+                4 <= len(clean_code) <= 12
                 and clean_code.isascii()
                 and clean_code.isdigit()
             ):
@@ -1537,7 +1590,7 @@ async def async_execute_area_action(
                 hass,
                 entity_id,
                 "up" if action == "step_up" else "down",
-                volume_level=step_lvl,
+                volume_pct=step_lvl,
             )
             return
         else:
@@ -1791,9 +1844,89 @@ async def async_execute_area_action(
             return
         if domain == "media_player":
             await async_execute_volume_action(
-                hass, entity_id, "set", volume_level=float(lvl)
+                hass, entity_id, "set", volume_pct=float(lvl)
             )
             return
+
+    if domain == "climate":
+        hvac_modes = [str(m).lower() for m in (state_obj.attributes.get("hvac_modes") or [])]
+        if action == "turn_off":
+            if "off" in hvac_modes:
+                await hass.services.async_call(
+                    "climate",
+                    "set_hvac_mode",
+                    {ATTR_ENTITY_ID: entity_id, "hvac_mode": "off"},
+                    blocking=blocking,
+                )
+            else:
+                await hass.services.async_call(
+                    "climate", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=blocking
+                )
+            return
+        if action == "turn_on":
+            active_modes = [m for m in hvac_modes if m != "off"]
+            if active_modes and not hass.services.has_service("climate", "turn_on"):
+                await hass.services.async_call(
+                    "climate",
+                    "set_hvac_mode",
+                    {ATTR_ENTITY_ID: entity_id, "hvac_mode": active_modes[0]},
+                    blocking=blocking,
+                )
+            else:
+                await hass.services.async_call(
+                    "climate", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=blocking
+                )
+            return
+        if action == "toggle":
+            if hass.services.has_service("climate", "toggle"):
+                await hass.services.async_call(
+                    "climate", "toggle", {ATTR_ENTITY_ID: entity_id}, blocking=blocking
+                )
+            elif state_obj.state == "off":
+                active_modes = [m for m in hvac_modes if m != "off"]
+                if active_modes:
+                    await hass.services.async_call(
+                        "climate",
+                        "set_hvac_mode",
+                        {ATTR_ENTITY_ID: entity_id, "hvac_mode": active_modes[0]},
+                        blocking=blocking,
+                    )
+                else:
+                    await hass.services.async_call(
+                        "climate", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=blocking
+                    )
+            elif "off" in hvac_modes:
+                await hass.services.async_call(
+                    "climate",
+                    "set_hvac_mode",
+                    {ATTR_ENTITY_ID: entity_id, "hvac_mode": "off"},
+                    blocking=blocking,
+                )
+            else:
+                await hass.services.async_call(
+                    "climate", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=blocking
+                )
+            return
+
+    if domain not in (
+        "light",
+        "switch",
+        "input_boolean",
+        "fan",
+        "cover",
+        "media_player",
+        "humidifier",
+        "water_heater",
+        "siren",
+        "remote",
+    ):
+        if raise_on_missing:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="not_supported",
+            )
+        _LOGGER.debug("Unsupported area action '%s' for entity '%s'", action, entity_id)
+        return
 
     if action == "turn_on":
         svc = "open_cover" if domain == "cover" else "turn_on"
@@ -1805,7 +1938,7 @@ async def async_execute_area_action(
         await hass.services.async_call(
             domain, svc, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
         )
-    else:
+    elif action == "toggle":
         svc = "media_play_pause" if domain == "media_player" else "toggle"
         if domain == "cover":
             svc = (
@@ -1815,6 +1948,11 @@ async def async_execute_area_action(
             )
         await hass.services.async_call(
             domain, svc, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
+        )
+    elif raise_on_missing:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="not_supported",
         )
 
 
@@ -1865,7 +2003,6 @@ def resolve_person_area_and_distance(
             "floor_id": "",
             "floor_name": "Unassigned",
             "is_home": False,
-            "distance_ft": None,
             "distance_m": None,
             "closest_proxy": "",
             "match_method": "",
@@ -1878,7 +2015,8 @@ def resolve_person_area_and_distance(
         key=lambda x: (
             x._ble_tracker.last_packet_monotonic
             if x._ble_tracker is not None
-            else 0.0
+            else 0.0,
+            bool(x.get_current_area_and_distance()[1]["area_id"]),
         ),
     )
     area_name, r_attrs = best_c.get_current_area_and_distance()
@@ -1889,7 +2027,6 @@ def resolve_person_area_and_distance(
         "floor_id": r_attrs["floor_id"],
         "floor_name": r_attrs["floor_name"],
         "is_home": r_attrs["is_home"],
-        "distance_ft": r_attrs["distance_ft"],
         "distance_m": r_attrs["distance_m"],
         "closest_proxy": r_attrs["closest_proxy"],
         "match_method": r_attrs["match_method"],
@@ -2236,9 +2373,16 @@ def bind_coordinator_area_listeners(coordinator: Any) -> None:
     )
     if listen_area_id:
         if idx.started:
+            @callback
+            def _on_indexed_area_change(changed_eid: str) -> None:
+                if changed_eid.startswith("sensor."):
+                    coordinator.async_notify_listeners()
+                    return
+                _schedule_area_push()
+
             unsubs_area.append(
                 idx.register_area_listener(
-                    listen_area_id, lambda _eid: _schedule_area_push()
+                    listen_area_id, _on_indexed_area_change
                 )
             )
         else:
@@ -2255,6 +2399,21 @@ def bind_coordinator_area_listeners(coordinator: Any) -> None:
                         coordinator.hass, tracked_ids, _on_area_entity_event
                     )
                 )
+        lux_ent = area_illuminance_settings(coordinator.hass, listen_area_id)["entity_id"]
+        if lux_ent != "auto" and lux_ent.startswith("sensor."):
+            @callback
+            def _on_explicit_lux_event(event: Event[EventStateChangedData]) -> None:
+                new_st = event.data.get("new_state")
+                old_st = event.data.get("old_state")
+                if new_st is None or (old_st is not None and new_st.state == old_st.state):
+                    return
+                coordinator.async_notify_listeners()
+
+            unsubs_area.append(
+                async_track_state_change_event(
+                    coordinator.hass, [lux_ent], _on_explicit_lux_event
+                )
+            )
     if unsubs_area:
 
         @callback

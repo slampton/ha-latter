@@ -183,9 +183,10 @@ function renderAspectSwitcher(
 
 export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
   const modal = store.photoUploadModal;
+  const uploadBusy = Boolean(modal.uploading || modal.creatingCollection);
   const close = (): void => store.entity.closePhotoUploadModal();
   const onBackdropClick = (ev: Event): void => {
-    if (ev.target === ev.currentTarget && !modal.uploading) {
+    if (ev.target === ev.currentTarget && !uploadBusy) {
       close();
     }
   };
@@ -195,7 +196,7 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
       id="latter-photo-upload-modal"
       aria-labelledby="latter-photo-upload-title"
       @cancel=${(ev: Event) => {
-        if (modal.uploading) ev.preventDefault();
+        if (uploadBusy) ev.preventDefault();
         else close();
       }}
       @click=${onBackdropClick}
@@ -283,7 +284,7 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
     id="latter-photo-upload-modal"
     aria-labelledby="latter-photo-upload-title"
     @cancel=${(ev: Event) => {
-      if (modal.uploading) ev.preventDefault();
+      if (uploadBusy) ev.preventDefault();
       else close();
     }}
     @click=${onBackdropClick}
@@ -614,11 +615,19 @@ export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
     }
   };
 
+  const onCancel = (ev: Event): void => {
+    if (modal.busy) {
+      ev.preventDefault();
+    } else {
+      close();
+    }
+  };
+
   if (!modal.open || !modal.photoId) {
     return html`<dialog
       id="latter-photo-edit-modal"
       aria-labelledby="latter-photo-edit-title"
-      @cancel=${close}
+      @cancel=${onCancel}
       @click=${onBackdropClick}
       class="studio-dialog photo-dialog"
     >
@@ -660,7 +669,7 @@ export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-photo-edit-modal"
     aria-labelledby="latter-photo-edit-title"
-    @cancel=${close}
+    @cancel=${onCancel}
     @click=${onBackdropClick}
     class="studio-dialog photo-dialog"
   >

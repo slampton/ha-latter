@@ -386,7 +386,10 @@ def build_quick_actions_payload(
     if coordinator.has_mic:
         action_specs.append(("trigger_va", "Trigger Voice Assistant", ""))
     if coordinator.has_display:
-        action_specs.append(("activate_screensaver", "Activate Screensaver", ""))
+        if bool(getattr(coordinator, "screensaver_active", False)):
+            action_specs.append(("deactivate_screensaver", "Exit Screensaver", ""))
+        else:
+            action_specs.append(("activate_screensaver", "Activate Screensaver", ""))
     action_specs.append(("restart", "Restart Device", "restart"))
 
     actions: list[dict[str, Any]] = []
@@ -488,7 +491,10 @@ def _build_system_shared_controls(
     controls: list[dict[str, Any]] = []
 
     for spec in DEVICE_PREF_SPECS:
-        if spec.group_tier is None or spec.domain not in STUDIO_BULK_CONTROL_DOMAINS:
+        if (
+            spec.group_tier is None
+            and spec.key not in ("bedtime_active", "do_not_disturb")
+        ) or spec.domain not in STUDIO_BULK_CONTROL_DOMAINS:
             continue
         targets: list[dict[str, Any]] = []
         for coord, is_online, is_roaming in coord_meta:
@@ -1660,7 +1666,6 @@ def _build_pref_specs_catalog() -> list[dict[str, Any]]:
             "domain": spec.domain,
             "default": spec.default,
             "section": spec.section,
-            "esphome_section": spec.esphome_section,
             "group_tier": spec.group_tier,
             "options": list(spec.options),
             "min": spec.min_val,
@@ -1764,7 +1769,13 @@ def build_studio_state_payload(
         "has_imu": coordinator.has_imu,
         "is_round": coordinator.is_round_display,
         "has_battery": coordinator.has_battery,
-        "has_power": ("sleep" in sec_ids) or ("battery" in sec_ids),
+        "has_power": not coordinator.is_ble_tag
+        and (
+            coordinator.has_display
+            or coordinator.has_battery
+            or ("sleep" in sec_ids)
+            or ("battery" in sec_ids)
+        ),
         "has_voice": not coordinator.is_ble_tag and (coordinator.has_mic or ("voice" in sec_ids)),
         "has_audio": (
             not coordinator.is_ble_tag
@@ -1971,6 +1982,23 @@ def build_studio_state_payload(
                 {}
                 if coordinator.is_ble_tag
                 else {
+                    "radio_connected": bool(
+                        getattr(
+                            coordinator,
+                            "radio_connected",
+                            is_coordinator_online_for_studio(hass, coordinator),
+                        )
+                    ),
+                    "display_power_state": int(
+                        getattr(coordinator, "display_power_state", 0)
+                    ),
+                    "display_brightness_pct": int(
+                        getattr(coordinator, "display_brightness_pct", 80)
+                    ),
+                    "screensaver_active": bool(
+                        getattr(coordinator, "screensaver_active", False)
+                    ),
+                    "telemetry": getattr(coordinator, "device_telemetry", None),
                     "timer_running": bool(coordinator.timer_running),
                     "timer_paused": bool(coordinator.timer_paused),
                     "timer_remaining_sec": int(

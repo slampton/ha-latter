@@ -7,6 +7,7 @@ node name of that device. Nothing is looked up by typed names or slugs.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from homeassistant.config_entries import (
@@ -64,7 +65,7 @@ from .const import (
     normalize_device_slug,
 )
 from .groups import active_group_keys, get_device_groups
-from .hub import get_area_state_index
+from .hub import get_area_state_index, get_system_config_lock
 from .identity import (
     esphome_node_name,
     esphome_service,
@@ -77,6 +78,7 @@ from .identity import (
 from .media import discover_ma_player_for_device
 from .presence import _iter_devices
 from .protocol import default_dock_items
+from .repairs import async_delete_device_issues
 from .studio.settings import humanize_device_model_label
 
 
@@ -385,9 +387,11 @@ def _apply_onboarding_profile_and_defaults(
         matched_grp = None
     else:
         matched_grp = next((g for g in groups if g.get("id") == grp_id), None)
+    prev_grp_id = str(existing.get(CONF_DEVICE_GROUP) or "").strip() if existing else ""
+    group_changed = (not existing) or (grp_id != prev_grp_id)
     if matched_grp:
         merged[CONF_DEVICE_GROUP] = str(matched_grp["id"])
-        if isinstance(matched_grp.get("device_config"), dict):
+        if isinstance(matched_grp.get("device_config"), dict) and group_changed:
             for k in active_group_keys(matched_grp):
                 if (
                     raw_grp_id == "auto"
@@ -454,10 +458,13 @@ def _seed_global_defaults(hass: HomeAssistant) -> None:
 
 
 def _build_ble_tag_data(user_input: dict[str, Any]) -> dict[str, Any] | None:
-    """Return subentry data for a BLE tag (phone, watch, tag), or None if the name or address is missing."""
-    slug = normalize_device_slug(str(user_input.get("name") or ""))
+    """Return subentry data for a BLE tag (phone, watch, tag), or None if the name or address is invalid."""
+    raw_name = str(user_input.get("name") or "").strip()
     target = str(user_input.get(CONF_BLE_TARGET_ADDRESS) or "").strip()
-    if slug == "esphome_device" or not target:
+    if not raw_name or not target or not re.search(r"[A-Za-z0-9]", raw_name):
+        return None
+    slug = normalize_device_slug(raw_name)
+    if slug == "esphome_device":
         return None
     raw_cat = str(user_input.get(CONF_BLE_CATEGORY) or DEFAULT_BLE_CATEGORY).strip().lower()
     if raw_cat not in ("auto", "phone", "ble_tag"):
@@ -646,12 +653,13 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
         if user_input is not None:
             raw_dev_id = str(user_input.get(CONF_ESPHOME_DEVICE_ID) or "").strip()
             if not raw_dev_id:
-                _seed_global_defaults(self.hass)
-                domain_data = self.hass.data.get(DOMAIN, {})
-                store = domain_data.get(DATA_GLOBAL_STORE)
-                global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
-                if store is not None and isinstance(global_cfg, dict):
-                    await store.async_save(global_cfg)
+                async with get_system_config_lock(self.hass):
+                    _seed_global_defaults(self.hass)
+                    domain_data = self.hass.data.get(DOMAIN, {})
+                    store = domain_data.get(DATA_GLOBAL_STORE)
+                    global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
+                    if store is not None and isinstance(global_cfg, dict):
+                        await store.async_save(global_cfg)
                 _abort_competing_flows(self.hass, "", keep_flow_id=self.flow_id)
                 await self.async_set_unique_id(DOMAIN)
                 self._abort_if_unique_id_configured()
@@ -786,8 +794,10 @@ class LatterDeviceSubentryFlow(ConfigSubentryFlow):
                         dev_reg.async_update_device(
                             latter_dev.id,
                             new_identifiers={(DOMAIN, new_ident_key)},
+                            via_device_id=dev.id,
                         )
                         break
+                async_delete_device_issues(self.hass, subentry.subentry_id)
 
             return self.async_update_and_abort(
                 entry,

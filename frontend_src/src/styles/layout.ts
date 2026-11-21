@@ -29,9 +29,9 @@ export const LAYOUT_STYLES = css`
     user-select: none;
   }
   .titlebar-brand .ha-menu-btn { color: var(--studio-header-icon); display: none; }
-  :host([narrow]) .titlebar-brand .ha-menu-btn { display: inline-flex; }
+  :host([show-menu]) .titlebar-brand .ha-menu-btn { display: inline-flex; }
   .titlebar-title { padding-inline-start: var(--studio-space-3); }
-  :host([narrow]) .titlebar-title { padding-inline-start: 0; }
+  :host([show-menu]) .titlebar-title { padding-inline-start: 0; }
   .titlebar-actions {
     display: flex;
     align-items: center;

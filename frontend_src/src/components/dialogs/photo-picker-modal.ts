@@ -31,11 +31,19 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
     }
   };
 
+  const onCancel = (ev: Event): void => {
+    if (modal.busy) {
+      ev.preventDefault();
+    } else {
+      close();
+    }
+  };
+
   if (!modal.open) {
     return html`<dialog
       id="latter-photo-picker-modal"
       aria-labelledby="latter-photo-picker-title"
-      @cancel=${close}
+      @cancel=${onCancel}
       @click=${onBackdropClick}
       class="studio-dialog photo-dialog"
     >
@@ -114,7 +122,7 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-photo-picker-modal"
     aria-labelledby="latter-photo-picker-title"
-    @cancel=${close}
+    @cancel=${onCancel}
     @click=${onBackdropClick}
     class="studio-dialog photo-dialog"
   >

@@ -150,9 +150,9 @@ LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
     "_latter_push_v3",
     "_latter_device_command",
     "_latter_set_slots",
+    "_latter_set_music_lyrics",
     "_latter_set_calendar_view",
     "_latter_show_notification",
-    "_latter_ui_input",
     "_latter_ping",
     "_latter_set_beacon_uuid",
     "_latter_factory_reset",
@@ -341,7 +341,10 @@ def read_device_hardware_manifest(
             except (ValueError, TypeError):
                 pass
 
-    if isinstance(cached_manifest, dict) and "w" in cached_manifest and "h" in cached_manifest:
+    if isinstance(cached_manifest, dict) and (
+        ("w" in cached_manifest and "h" in cached_manifest)
+        or "sdk" in cached_manifest
+    ):
         merged.update(cached_manifest)
 
     return merged
@@ -494,6 +497,18 @@ class RpcReassembler:
         self._record_completed(msg_key)
         return _decode_envelope(assembled)
 
+    def seed_silent(self, raw: str | None) -> None:
+        """Seed current `(boot_id, seq)` silently on `rebind()` without dispatching (`M-P0-02`)."""
+        frame = parse_rpc_frame(raw)
+        if frame is None:
+            return
+        if self._last_boot_id and frame.boot_id != self._last_boot_id:
+            self._inflight.clear()
+            self._completed.clear()
+        self._last_boot_id = frame.boot_id
+        if (frame.boot_id, frame.seq) not in self._completed:
+            self._record_completed((frame.boot_id, frame.seq))
+
     def _record_completed(self, key: tuple[str, int]) -> None:
         self._completed[key] = None
         while len(self._completed) > DEDUP_HISTORY_LIMIT:
@@ -517,6 +532,7 @@ class LatterRpcReceiver:
         self.coordinator = coordinator
         self._reassembler = RpcReassembler()
         self._tracked_entity_id: str | None = None
+        self._was_unavailable: bool = False
         self._unsub_state: Callable[[], None] | None = None
         self._unsub_ent_reg: Callable[[], None] | None = None
 
@@ -547,6 +563,7 @@ class LatterRpcReceiver:
             self._unsub_ent_reg()
             self._unsub_ent_reg = None
         self._tracked_entity_id = None
+        self._was_unavailable = False
 
     @callback
     def rebind(self) -> None:
@@ -567,6 +584,13 @@ class LatterRpcReceiver:
             if dev_id
             else None
         )
+        if ent_id:
+            ent_reg = er.async_get(self.hass)
+            reg_entry = ent_reg.async_get(ent_id)
+            if reg_entry is not None and reg_entry.hidden_by is None:
+                ent_reg.async_update_entity(
+                    ent_id, hidden_by=er.RegistryEntryHider.INTEGRATION
+                )
         if ent_id == self._tracked_entity_id:
             return
         if self._unsub_state is not None:
@@ -582,8 +606,10 @@ class LatterRpcReceiver:
             self._async_on_outbox_state_change,
         )
         st = self.hass.states.get(ent_id)
-        if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
-            self._ingest_raw_state(st.state)
+        if st is not None:
+            self._was_unavailable = st.state == STATE_UNAVAILABLE
+            if st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
+                self._reassembler.seed_silent(st.state)
 
     @callback
     def _async_on_entity_registry_updated(self, event: Event[Any]) -> None:
@@ -609,11 +635,28 @@ class LatterRpcReceiver:
         if new_state is None:
             return
         if new_state.state == STATE_UNAVAILABLE:
+            if not self._was_unavailable:
+                self._was_unavailable = True
+                _LOGGER.info(
+                    "Latter device '%s' is unavailable",
+                    self.coordinator.device_slug,
+                )
             self.coordinator._last_pushed_v3.clear()
             self.coordinator.async_update_listeners()
             return
-        if old_state is not None and old_state.state == STATE_UNAVAILABLE:
+        was_unavail = self._was_unavailable or (
+            old_state is not None and old_state.state == STATE_UNAVAILABLE
+        )
+        if was_unavail:
+            self._was_unavailable = False
+            _LOGGER.info(
+                "Latter device '%s' reconnected",
+                self.coordinator.device_slug,
+            )
             self.coordinator._last_pushed_v3.clear()
+            self.hass.async_create_task(
+                self.coordinator.async_provision_pin_session_key()
+            )
             self.coordinator.force_republish_all_domains()
             self.coordinator.async_update_listeners()
         if new_state.state in (STATE_UNKNOWN, ""):

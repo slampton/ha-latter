@@ -212,7 +212,7 @@ async def test_device_and_ble_tag_subentry_flows_and_hardware_replacement(
     assert inc["errors"]["base"] == "ble_tag_incomplete"
 
     tag_ok = await tag_flow.async_step_user(
-        {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: "AA:11:22:33:44:55", "assigned_person": "person.sean"}
+        {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: "AA:11:22:33:44:55", "assigned_person": "person.sam"}
     )
     assert tag_ok["type"] == "create_entry"
     hass.config_entries.async_add_subentry(

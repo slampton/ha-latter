@@ -28,7 +28,6 @@ from custom_components.latter.http import (
     LatterCameraGridView,
     LatterCameraSnapshotView,
     LatterCameraStreamView,
-    LatterMapSnapshotView,
     LatterWallpaperProxyView,
     LatterWallpaperUploadView,
     day_bucketed_expiry,
@@ -123,9 +122,10 @@ class _MultipartPart:
         if self._oversize_chunks > 0:
             self._oversize_chunks -= 1
             return b"\xFF" * size
-        if self._file_bytes is None or self._offset >= len(self._file_bytes):
+        buf = self._file_bytes if self._file_bytes is not None else self._text_val.encode("utf-8")
+        if self._offset >= len(buf):
             return b""
-        chunk = self._file_bytes[self._offset : self._offset + size]
+        chunk = buf[self._offset : self._offset + size]
         self._offset += size
         return chunk
 
@@ -445,11 +445,11 @@ async def test_artwork_camera_map_and_brand_icon_views(
     art_view = LatterArtworkTranscoderView(hass)
     art_sig = coord.sign_payload_resource("artwork|466|466|square")
 
-    # SSRF private/loopback external URL blocked (403)
+    # External HTTP/HTTPS artwork URL blocked (403 — Zero-WAN local-only artwork)
     hass.states.async_set(
         coord.active_speaker,
         "playing",
-        {"entity_picture": "http://169.254.169.254/latest/meta-data"},
+        {"entity_picture": "http://93.184.216.34/cover.jpg"},
     )
     r_ssrf = await art_view.get(
         _make_get_request(f"/api/latter/artwork/{coord.device_slug}?w=466&h=466&sig={art_sig}"),
@@ -457,11 +457,11 @@ async def test_artwork_camera_map_and_brand_icon_views(
     )
     assert r_ssrf.status == 403
 
-    # > 8 MB upstream image rejected (413)
+    # > 8 MB local HA proxy image rejected (413)
     hass.states.async_set(
         coord.active_speaker,
         "playing",
-        {"entity_picture": "http://93.184.216.34/huge.jpg"},
+        {"entity_picture": "/api/media_player_proxy/media_player.pocket_assistant_music?token=huge"},
     )
     hass.data["_mock_http_get"] = lambda _url, **_kw: _MockHttpResponse(
         status=200,
@@ -474,18 +474,24 @@ async def test_artwork_camera_map_and_brand_icon_views(
     )
     assert r_8mb.status == 413
 
-    # Valid public artwork transcoded & cached
+    # Valid local HA proxy artwork transcoded & cached (allow_redirects=False)
     valid_jpeg = _make_jpeg_bytes(100, 100)
+    seen_art_kwargs: list[dict[str, Any]] = []
     hass.states.async_set(
         coord.active_speaker,
         "playing",
-        {"entity_picture": "http://93.184.216.34/cover.jpg"},
+        {"entity_picture": "/api/media_player_proxy/media_player.pocket_assistant_music?token=ok1"},
     )
-    hass.data["_mock_http_get"] = lambda _url, **_kw: _MockHttpResponse(
-        status=200,
-        body=valid_jpeg,
-        content_length=len(valid_jpeg),
-    )
+
+    def _local_art_get(_url: str, **kw: Any) -> _MockHttpResponse:
+        seen_art_kwargs.append(dict(kw))
+        return _MockHttpResponse(
+            status=200,
+            body=valid_jpeg,
+            content_length=len(valid_jpeg),
+        )
+
+    hass.data["_mock_http_get"] = _local_art_get
     r_art_ok = await art_view.get(
         _make_get_request(f"/api/latter/artwork/{coord.device_slug}?w=466&h=466&sig={art_sig}"),
         coord.device_slug,
@@ -533,55 +539,18 @@ async def test_artwork_camera_map_and_brand_icon_views(
     assert r_cam_ok.content_type == "image/jpeg"
     assert r_cam_ok.body.startswith(b"\xff\xd8")
 
-    # 3) Map Snapshot View: zone.home ignored, non-home zone.office resolved, pan_x/pan_y clamped to ±4
-    map_view = LatterMapSnapshotView(hass)
+    # 3) Protocol-relative //evil.example.com artwork path is also blocked (403)
+    assert seen_art_kwargs and seen_art_kwargs[0].get("allow_redirects") is False
     hass.states.async_set(
-        "zone.home",
-        "0",
-        {"friendly_name": "Home", "latitude": 37.80, "longitude": -122.27},
+        coord.active_speaker,
+        "playing",
+        {"entity_picture": "//evil.example.com/cover.jpg"},
     )
-    hass.states.async_set(
-        "zone.office",
-        "0",
-        {"friendly_name": "Office", "latitude": 37.79, "longitude": -122.40},
-    )
-    tile_png = _make_png_bytes(256, 256)
-
-    def _map_http_mock(url: str, **_kw: Any) -> _MockHttpResponse:
-        if "nominatim" in url:
-            return _MockHttpResponse(status=200, json_data=[])
-        return _MockHttpResponse(status=200, body=tile_png)
-
-    hass.data["_mock_http_get"] = _map_http_mock
-
-    # Querying 'Home' must NOT resolve zone.home coordinates -> 404 when Nominatim returns empty
-    home_sig = coord.sign_payload_resource("map:Home|466|466|circle")
-    r_home_ignored = await map_view.get(
-        _make_get_request(f"/api/latter/map/{coord.device_slug}?q=Home&w=466&h=466&shape=circle&sig={home_sig}"),
+    r_proto_rel = await art_view.get(
+        _make_get_request(f"/api/latter/artwork/{coord.device_slug}?w=466&h=466&sig={art_sig}"),
         coord.device_slug,
     )
-    assert r_home_ignored.status == 404
-
-    # Non-home zone 'Office' resolves & extreme pan_x=99 clamps identically to pan_x=4!
-    off_sig = coord.sign_payload_resource("map:Office|466|466|circle")
-    r_pan_99 = await map_view.get(
-        _make_get_request(
-            f"/api/latter/map/{coord.device_slug}?q=Office&pan_x=99&pan_y=-99&w=466&h=466&shape=circle&sig={off_sig}"
-        ),
-        coord.device_slug,
-    )
-    assert r_pan_99.status == 200
-    assert r_pan_99.headers["X-Latter-Cache"] == "MISS"
-
-    # Requesting pan_x=4&pan_y=-4 MUST hit the exact same cache key as pan_x=99&pan_y=-99!
-    r_pan_4 = await map_view.get(
-        _make_get_request(
-            f"/api/latter/map/{coord.device_slug}?q=Office&pan_x=4&pan_y=-4&w=466&h=466&shape=circle&sig={off_sig}"
-        ),
-        coord.device_slug,
-    )
-    assert r_pan_4.status == 200
-    assert r_pan_4.headers["X-Latter-Cache"] == "HIT"
+    assert r_proto_rel.status == 403
 
     # 4) Brand Icon View
     brand_view = LatterBrandIconView(hass)

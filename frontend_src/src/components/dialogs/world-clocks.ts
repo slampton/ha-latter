@@ -37,10 +37,14 @@ function isImeSafeEnter(ev: KeyboardEvent): boolean {
   return ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229;
 }
 
-export function sanitizeClockLabel(raw: unknown, maxBytes = 32): string {
+export function sanitizeClockLabel(
+  raw: unknown,
+  maxBytes = 32,
+  trimEdges = true,
+): string {
   const str = String(raw ?? "");
   let collapsed = "";
-  let prevSpace = true;
+  let prevSpace = trimEdges;
   for (const ch of str) {
     const code = ch.charCodeAt(0);
     if (
@@ -64,20 +68,21 @@ export function sanitizeClockLabel(raw: unknown, maxBytes = 32): string {
     collapsed += ch;
     prevSpace = false;
   }
-  const trimmed = collapsed.trim();
+  const normalized = trimEdges ? collapsed.trim() : collapsed;
   if (typeof TextEncoder === "undefined") {
-    return trimmed.slice(0, maxBytes).trimEnd();
+    const sliced = normalized.slice(0, maxBytes);
+    return trimEdges ? sliced.trimEnd() : sliced;
   }
   const enc = new TextEncoder();
-  if (enc.encode(trimmed).length <= maxBytes) {
-    return trimmed;
+  if (enc.encode(normalized).length <= maxBytes) {
+    return normalized;
   }
   let out = "";
-  for (const cp of trimmed) {
+  for (const cp of normalized) {
     if (enc.encode(out + cp).length > maxBytes) break;
     out += cp;
   }
-  return out.trimEnd();
+  return trimEdges ? out.trimEnd() : out;
 }
 
 function fallbackLabelForIana(iana: string): string {
@@ -141,6 +146,14 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
   );
   const atWorldClockLimit = enabledWorldClocks.length >= MAX_WORLD_CLOCKS;
 
+  while (store.worldClockRowKeys.length < enabledWorldClocks.length) {
+    store.worldClockRowSeq += 1;
+    store.worldClockRowKeys.push(`wc-${store.worldClockRowSeq}`);
+  }
+  if (store.worldClockRowKeys.length > enabledWorldClocks.length) {
+    store.worldClockRowKeys.length = enabledWorldClocks.length;
+  }
+
   const renderWorldClockZoneOptions = (selectedIana: string): TemplateResult => {
     const missingSelected =
       selectedIana && !knownZoneSet.has(selectedIana)
@@ -170,6 +183,7 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
     patch: Partial<WorldClockItemView>,
     focusId?: string,
     debounceMs?: number,
+    trimLabel = true,
   ): void => {
     if (idx < 0 || idx >= enabledWorldClocks.length) return;
     const prev = enabledWorldClocks[idx];
@@ -178,17 +192,19 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
       return;
     }
     const nextLabel =
-      patch.label !== undefined ? sanitizeClockLabel(patch.label) : prev.label;
-    if (!nextLabel) return;
+      patch.label !== undefined
+        ? sanitizeClockLabel(patch.label, 32, trimLabel)
+        : prev.label;
+    if (!nextLabel.trim()) return;
     const dup = enabledWorldClocks.some(
       (item, i) =>
         i !== idx &&
         item.iana === nextIana &&
-        item.label.toLowerCase() === nextLabel.toLowerCase(),
+        item.label.toLowerCase() === nextLabel.trim().toLowerCase(),
     );
     if (dup) return;
     const next = enabledWorldClocks.map((item, i) =>
-      i === idx ? { label: nextLabel, iana: nextIana } : { ...item },
+      i === idx ? { label: nextLabel.trim(), iana: nextIana } : { ...item },
     );
     updateWorldClocks(next, focusId, debounceMs);
   };
@@ -206,10 +222,17 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
     const next = [...enabledWorldClocks];
     const [picked] = next.splice(fromIdx, 1);
     next.splice(toIdx, 0, picked);
+    if (store.worldClockRowKeys.length === enabledWorldClocks.length) {
+      const [pickedKey] = store.worldClockRowKeys.splice(fromIdx, 1);
+      store.worldClockRowKeys.splice(toIdx, 0, pickedKey);
+    }
     updateWorldClocks(next);
   };
 
   const removeWorldClock = (idx: number): void => {
+    if (idx >= 0 && idx < store.worldClockRowKeys.length) {
+      store.worldClockRowKeys.splice(idx, 1);
+    }
     updateWorldClocks(enabledWorldClocks.filter((_, i) => i !== idx));
   };
 
@@ -249,6 +272,8 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
     store.worldClockNewZone = "";
     if (newLabelEl) newLabelEl.value = "";
     if (zoneSelEl) zoneSelEl.value = "";
+    store.worldClockRowSeq += 1;
+    store.worldClockRowKeys.push(`wc-${store.worldClockRowSeq}`);
     updateWorldClocks(
       [...enabledWorldClocks, { label: typedLabel, iana: picked }],
       "btn-world_clock_add",
@@ -299,10 +324,14 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
         placeholder=${store.t("dialogs.optional_label_placeholder")}
         .value=${focusSafe(localClockLabelValue)}
         @input=${(ev: Event) => {
-          const cleaned = sanitizeClockLabel((ev.currentTarget as HTMLInputElement).value);
+          const liveVal = sanitizeClockLabel(
+            (ev.currentTarget as HTMLInputElement).value,
+            32,
+            false,
+          );
           store.entity.stageDeviceSetting(
             "local_clock_label",
-            cleaned,
+            liveVal,
             "cfg-local_clock_label",
             TEXT_INPUT_DEBOUNCE_MS,
           );
@@ -344,7 +373,7 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
               id: "world-clocks-list",
               ariaLabel: store.t("dialogs.world_clocks_aria"),
               items: enabledWorldClocks,
-              getKey: (entry) => `${entry.label.toLowerCase()}|${entry.iana}`,
+              getKey: (_entry, idx) => store.worldClockRowKeys[idx] || `wc-row-${idx}`,
               getLabel: (entry) => entry.label,
               onReorder: reorderWorldClocks,
               overlay: store.localeOverlay,
@@ -364,15 +393,18 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
                       placeholder=${store.t("dialogs.city_label_placeholder")}
                       .value=${focusSafe(entry.label)}
                       @input=${(ev: Event) => {
-                        const cleaned = sanitizeClockLabel(
+                        const liveVal = sanitizeClockLabel(
                           (ev.currentTarget as HTMLInputElement).value,
+                          32,
+                          false,
                         );
-                        if (cleaned) {
+                        if (liveVal.trim()) {
                           updateWorldClockItem(
                             idx,
-                            { label: cleaned },
+                            { label: liveVal },
                             lblId,
                             TEXT_INPUT_DEBOUNCE_MS,
+                            false,
                           );
                         }
                       }}

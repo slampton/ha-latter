@@ -327,6 +327,7 @@ const EN_DEVICES_STRINGS = {
   "dev_overview.qa_find_my": "Find my Device",
   "dev_overview.qa_trigger_va": "Trigger voice assistant",
   "dev_overview.qa_activate_screensaver": "Activate screensaver",
+  "dev_overview.qa_exit_screensaver": "Exit screensaver",
   "dev_overview.qa_restart": "Restart Device",
   "dev_overview.restart_device": "Restart Device",
   "dev_overview.restart_device_desc":
@@ -387,7 +388,10 @@ const EN_DEVICES_STRINGS = {
     "Locate or assign this Device to an Area to use ambient light.",
   "dev_display.screensaver_preview_desc":
     "Starts the screensaver on this Device immediately.",
+  "dev_display.screensaver_exit_desc":
+    "Wakes the display and exits the active screensaver immediately.",
   "dev_display.preview_btn": "Preview",
+  "dev_display.exit_screensaver_btn": "Exit screensaver",
   "dev_display.screensaver_photo_clock_desc":
     "Draws a compact subtle clock in the corner while displaying photos.",
   "dev_display.screensaver_pool_label": "Photo frame photos",
@@ -621,6 +625,16 @@ const EN_DEVICES_STRINGS = {
   "dev_tools.remove_device_desc":
     "Removes this Device from Latter. Your ESPHome device stays in Home Assistant.",
   "dev_tools.telem_uptime": "Session uptime",
+  "dev_tools.profiler_label": "Telemetry profiler",
+  "dev_tools.profiler_desc":
+    "Streams frame and subsystem timing logs over ESPHome logs for troubleshooting.",
+  "dev_tools.refresh_telemetry_label": "Runtime telemetry",
+  "dev_tools.refresh_telemetry_desc":
+    "Requests an immediate RAM, PSRAM, and Wi-Fi link snapshot from this Device.",
+  "dev_tools.refresh_telemetry_toast": "Requested telemetry snapshot",
+  "dev_tools.telem_int_ram": "Internal RAM (free / min / largest)",
+  "dev_tools.telem_psram_min": "PSRAM low-water mark",
+  "dev_tools.telem_ble_beacon": "BLE beacon radio",
   "dev_tools.telem_last_reset": "Last reset",
   "dev_tools.telem_wifi_disc": "Wi-Fi disconnects",
   "dev_tools.telem_beacon_timeouts": " ({count} beacon timeouts)",
@@ -1028,6 +1042,8 @@ const EN_SYSTEM_STRINGS = {
   "presence_sys.active_sensors_many": "{count} active sensors",
   "presence_sys.clear_sensors_one": "1 sensor clear",
   "presence_sys.clear_sensors_many": "{count} sensors clear",
+  "presence_sys.unavailable_sensors_one": "1 sensor unavailable",
+  "presence_sys.unavailable_sensors_many": "{count} sensors unavailable",
   "presence_sys.calibrated_meta": "calibrated {when} ({samples} samples)",
   "presence_sys.calibrate_hint":
     "calibrate with a carried Device to detect BLE presence here",
@@ -1060,6 +1076,8 @@ const EN_SYSTEM_STRINGS = {
   "presence_sys.ambient_calibration_desc":
     "Auto-calibrate from 7-day Home Assistant statistics or tune manually for this sensor.",
   "presence_sys.calibrate_lux_btn": "Auto-calibrate",
+  "presence_sys.calibrating_lux": "Calibrating…",
+  "presence_sys.lux_bounds_error": "Dark floor must be lower than bright ceiling.",
   "presence_sys.calibrate_lux_done": "Calibrated ambient light for {count} Areas.",
   "presence_sys.calibrate_lux_one_done": "Calibrated {area}: {dark}–{bright} lx.",
   "presence_sys.no_area_sensors":
@@ -1120,9 +1138,15 @@ const EN_SYSTEM_STRINGS = {
   "presence_sys.max_radius": "Maximum Area radius",
   "presence_sys.max_radius_desc":
     "Ignores Bluetooth proxies farther than this distance in meters so outdoor signals do not claim indoor Areas.",
+  "presence_sys.max_radius_ft": "Maximum Area radius (ft)",
+  "presence_sys.max_radius_ft_desc":
+    "Ignores Bluetooth proxies farther than this distance in feet so outdoor signals do not claim indoor Areas.",
   "presence_sys.max_speed": "Maximum movement speed",
   "presence_sys.max_speed_desc":
     "Smooths sudden signal drops that would imply movement faster than this speed in meters per second.",
+  "presence_sys.max_speed_fps": "Maximum movement speed (ft/s)",
+  "presence_sys.max_speed_fps_desc":
+    "Smooths sudden signal drops that would imply movement faster than this speed in feet per second.",
   "presence_sys.attenuation": "Wall signal drop-off",
   "presence_sys.attenuation_desc":
     "Controls how quickly Bluetooth signal strength fades with distance through walls (default 2.2).",
@@ -1549,6 +1573,7 @@ const PREF_LABELS = {
   screensaver_style: "Screensaver style",
   screensaver_photo_clock: "Show subtle clock",
   bedtime_active: "Bedtime mode",
+  do_not_disturb: "Do not disturb",
   bedtime_display: "Idle display in bedtime",
   bedtime_brightness: "Bedtime brightness",
   bedtime_schedule: "Bedtime schedule",
@@ -2156,13 +2181,18 @@ __latterExp(__exports, { Directive: () => Directive, directive: () => directive,
 __latterDef("src/protocol-schema.ts", (__exports, __req) => {
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 const PROTOCOL_CONTRACT_VERSION = 3;
-const STUDIO_REV = 43;
+const STUDIO_REV = 44;
 const ALLOWED_DEVICE_ACTIONS = [
   "restart",
   "find_my",
   "activate_screensaver",
+  "deactivate_screensaver",
+  "wake_screen",
+  "screen_off",
+  "set_profiler_on",
+  "set_profiler_off",
+  "request_telemetry",
   "trigger_va",
-  "log_memory_report",
   "dismiss_ringing",
   "cancel_timer",
   "reset_stopwatch",
@@ -2174,7 +2204,6 @@ const SYSTEM_WS_COMMANDS = new Set([
   "calibrate_area_illuminance",
   "capture_ble_area_signature",
   "clear_ble_area_signature",
-  "system_entity_action",
   "send_announcement",
   "check_system_updates",
   "clear_internal_logs",
@@ -2374,68 +2403,69 @@ const WORLD_CLOCK_ZONES_CATALOG = [
   {iana: "Pacific/Kiritimati", city: "Kiritimati", label: "UTC+14:00 — Line Islands Time (LINT)", std_off: 840, dst_off: 840, std_abbr: "LINT", dst_abbr: "LINT", rule: "none" },
 ];
 const DEVICE_PREF_SPECS_CATALOG = [
-  {key: "wake_word_mode", label: "Wake Word Mode", domain: "select", default: "Docked Only", section: "audio", esphome_section: "voice", group_tier: "behavior", options: ["Docked Only", "Always On", "Disabled"], min: null, max: null, step: null, unit: "", capability: "mic" },
-  {key: "tap_to_wake", label: "Tap to Wake", domain: "select", default: "Docked Only", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["Single Tap", "Double Tap", "Docked Only", "Disabled"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "pickup_to_wake", label: "Pickup to Wake", domain: "select", default: "Docked Only", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["Always On", "Docked Only", "Disabled"], min: null, max: null, step: null, unit: "", capability: "display_imu" },
-  {key: "battery_screen_timeout", label: "Battery Screen Timeout", domain: "select", default: "30s", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["10s", "15s", "30s", "1 min", "2 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display_battery" },
-  {key: "docked_idle_timeout", label: "Docked Idle Timeout", domain: "select", default: "1 min", section: "display", esphome_section: "display", group_tier: "behavior", options: ["10s", "15s", "30s", "1 min", "2 min", "5 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "battery_hibernate_timeout", label: "Battery Hibernate Timeout", domain: "select", default: "15 min", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["5 min", "10 min", "15 min", "30 min", "Disabled"], min: null, max: null, step: null, unit: "", capability: "display_battery" },
-  {key: "screensaver_mode", label: "Screensaver mode", domain: "select", default: "Docked Only", section: "display", esphome_section: "display", group_tier: "behavior", options: ["Docked Only", "Always", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "screensaver_style", label: "Screensaver Style", domain: "select", default: "Ambient Clock", section: "display", esphome_section: "display", group_tier: "display", options: ["Ambient Clock", "Photo Frame", "Aurora", "Starfield", "Digital Rain", "Fireworks"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "auto_brightness_mode", label: "Auto Brightness Mode", domain: "select", default: "Sun Synchronized", section: "display", esphome_section: "display", group_tier: "behavior", options: ["Disabled", "Sun Synchronized", "Time Schedule", "Ambient Light"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "manual_brightness", label: "Manual Brightness", domain: "number", default: 80, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
-  {key: "day_brightness", label: "Day Brightness", domain: "number", default: 90, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
-  {key: "night_brightness", label: "Night Brightness", domain: "number", default: 35, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
-  {key: "day_start_hour", label: "Day Start Hour", domain: "number", default: 7, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
-  {key: "night_start_hour", label: "Night Start Hour", domain: "number", default: 20, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
-  {key: "color_profile", label: "Color Profile", domain: "select", default: "Steel Blue", section: "display", esphome_section: "display", group_tier: "display", options: ["Steel Blue", "Pink", "Blue", "Green", "Custom"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "va_visual_profile", label: "Visual Profile", domain: "select", default: "Nebula", section: "display", esphome_section: "display", group_tier: "display", options: ["Nebula", "Solaris", "Rings", "Light Bar", "Dot Wave"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "home_screen_enabled", label: "Enable Home Screen", domain: "switch", default: true, section: "interface", esphome_section: "home", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "start_screen", label: "Start Screen", domain: "select", default: "Home", section: "interface", esphome_section: "home", group_tier: "interface", options: ["Home", "Pinned", "Time App", "Calendar", "Clock Face", "Media", "Home Hub", "Area Controls", "Remote", "Weather", "Cameras", "Games", "Tools"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "return_to_home_timeout", label: "Return to Home Timeout", domain: "select", default: "2 min", section: "interface", esphome_section: "home", group_tier: "interface", options: ["15s", "30s", "1 min", "2 min", "5 min", "10 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "clock_face", label: "Clock Face", domain: "select", default: "Minimal Digital", section: "interface", esphome_section: "display", group_tier: "interface", options: ["Minimal Digital", "Modern Analog", "Hybrid Digital"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "time_format", label: "Time Format", domain: "select", default: "12-Hour (AM/PM)", section: "interface", esphome_section: "display", group_tier: "interface", options: ["12-Hour (AM/PM)", "24-Hour"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "weather_background", label: "Weather Background", domain: "switch", default: true, section: "interface", esphome_section: "display", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "home_sun", label: "Sun", domain: "switch", default: true, section: "interface", esphome_section: "display", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "home_moon", label: "Moon", domain: "switch", default: true, section: "interface", esphome_section: "display", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "wake_greeting", label: "Wake Greeting", domain: "switch", default: true, section: "interface", esphome_section: "display", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "album_art_style", label: "Album Art Style", domain: "select", default: "Full Screen", section: "interface", esphome_section: "music", group_tier: "interface", options: ["Full Screen", "Letterbox", "Standard", "None"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "music_overlay_style", label: "Overlay Style", domain: "select", default: "Art + Metadata", section: "interface", esphome_section: "music", group_tier: "interface", options: ["Art Only", "Art + Metadata", "Always Visible"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "album_sort_order", label: "Album Sort Order", domain: "select", default: "Alphabetical", section: "interface", esphome_section: "music", group_tier: "interface", options: ["Alphabetical", "Newest on Top", "Oldest on Top"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "artist_album_sort_order", label: "Artist Album Sort Order", domain: "select", default: "Oldest on Top", section: "interface", esphome_section: "music", group_tier: "interface", options: ["Oldest on Top", "Newest on Top", "Alphabetical"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "podcast_sort_order", label: "Podcast Sort Order", domain: "select", default: "Newest on Top", section: "interface", esphome_section: "music", group_tier: "interface", options: ["Newest on Top", "Oldest on Top"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "ww_sens_okay_nabu", label: "Okay Nabu Sensitivity", domain: "select", default: "Moderately sensitive", section: "audio", esphome_section: "voice", group_tier: "behavior", options: ["Slightly sensitive", "Moderately sensitive", "Very sensitive"], min: null, max: null, step: null, unit: "", capability: "mic" },
-  {key: "ww_sens_hey_luna", label: "Hey Luna Sensitivity", domain: "select", default: "Moderately sensitive", section: "audio", esphome_section: "voice", group_tier: "behavior", options: ["Slightly sensitive", "Moderately sensitive", "Very sensitive"], min: null, max: null, step: null, unit: "", capability: "mic" },
-  {key: "ww_sens_hey_jarvis", label: "Hey Jarvis Sensitivity", domain: "select", default: "Moderately sensitive", section: "audio", esphome_section: "voice", group_tier: "behavior", options: ["Slightly sensitive", "Moderately sensitive", "Very sensitive"], min: null, max: null, step: null, unit: "", capability: "mic" },
-  {key: "ww_sens_hey_mycroft", label: "Hey Mycroft Sensitivity", domain: "select", default: "Moderately sensitive", section: "audio", esphome_section: "voice", group_tier: "behavior", options: ["Slightly sensitive", "Moderately sensitive", "Very sensitive"], min: null, max: null, step: null, unit: "", capability: "mic" },
-  {key: "ww_sens_alexa", label: "Alexa Sensitivity", domain: "select", default: "Moderately sensitive", section: "audio", esphome_section: "voice", group_tier: "behavior", options: ["Slightly sensitive", "Moderately sensitive", "Very sensitive"], min: null, max: null, step: null, unit: "", capability: "mic" },
-  {key: "wake_screen_on_assist", label: "Wake Screen on Assist", domain: "switch", default: true, section: "audio", esphome_section: "voice", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "alert_volume", label: "Alert Volume", domain: "number", default: 80, section: "audio", esphome_section: "sound", group_tier: "behavior", options: [], min: 20, max: 100, step: 5, unit: "%", capability: "speaker" },
-  {key: "volume_step_size", label: "Volume Step Size", domain: "number", default: 5, section: "audio", esphome_section: "sound", group_tier: "behavior", options: [], min: 1, max: 10, step: 1, unit: "%", capability: "speaker" },
-  {key: "game_sound_effects", label: "Game Sound Effects", domain: "switch", default: true, section: "audio", esphome_section: "sound", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "ble_beacon_mode", label: "BLE Beacon Mode", domain: "select", default: "Handheld Only", section: "presence", esphome_section: "presence", group_tier: "behavior", options: ["Handheld Only", "Handheld + Screen Off", "Always"], min: null, max: null, step: null, unit: "", capability: "beacon_battery" },
-  {key: "weather_sim_condition", label: "Weather Simulation", domain: "select", default: "Live (Home Assistant)", section: "developer", esphome_section: "developer", group_tier: null, options: ["Live (Home Assistant)", "Clear Night", "Sunny / Clear Day", "Partly Cloudy (Day)", "Partly Cloudy (Night)", "Cloudy / Overcast (Day)", "Cloudy / Overcast (Night)", "Fog / Mist (Day)", "Fog / Mist (Night)", "Rainy (Day)", "Rainy (Night)", "Pouring / Heavy Rain", "Snow (Day)", "Snow (Night)", "Thunderstorm (Day)", "Thunderstorm (Night)", "Windy"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "home_clock_tap_action", label: "Home Time Tap", domain: "select", default: "Time App", section: "interface", esphome_section: "home", group_tier: "interface", options: ["Time App", "Clock Face"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "home_date_tap_action", label: "Home Date Tap", domain: "select", default: "Overview", section: "interface", esphome_section: "home", group_tier: "interface", options: ["Day View", "Overview"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "local_clock_label", label: "Local Clock Label", domain: "text", default: "", section: "time", esphome_section: "time", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "show_utc_clock", label: "Show UTC Clock", domain: "switch", default: false, section: "interface", esphome_section: "home", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "world_clocks", label: "World Clocks", domain: "text", default: "", section: "interface", esphome_section: "home", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "alarms_summary", label: "Alarms", domain: "text", default: "07:00|0|1;08:30|0|2;09:00|0|2", section: "time", esphome_section: "time", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "calendar_lookahead_days", label: "Overview Lookahead", domain: "number", default: 30, section: "interface", esphome_section: "home", group_tier: "interface", options: [], min: 7, max: 60, step: 1, unit: "d", capability: "display" },
-  {key: "calendar_week_start", label: "Start Week On", domain: "select", default: "Sunday", section: "interface", esphome_section: "home", group_tier: "interface", options: ["Sunday", "Monday"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "bedtime_active", label: "Bedtime Mode", domain: "switch", default: false, section: "power", esphome_section: "sleep", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "bedtime_display", label: "Idle Display in Bedtime", domain: "select", default: "Screen Off", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["Screen Off", "Ambient Clock"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "bedtime_schedule", label: "Bedtime Schedule", domain: "switch", default: false, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "bedtime_start_hour", label: "Bedtime Starts", domain: "number", default: 22, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
-  {key: "bedtime_end_hour", label: "Bedtime Ends", domain: "number", default: 7, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
-  {key: "bedtime_brightness", label: "Bedtime Brightness", domain: "number", default: 15, section: "power", esphome_section: "sleep", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
-  {key: "camera_default_view", label: "Default camera view", domain: "select", default: "Grid", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Grid", "Single", "Carousel"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "camera_carousel_interval", label: "Carousel interval", domain: "select", default: "15s", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["10s", "15s", "30s", "60s"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "camera_framing", label: "Camera framing", domain: "select", default: "Uncropped", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Uncropped", "Fill"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "camera_stream_mode", label: "Camera stream mode", domain: "select", default: "Auto", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Auto", "Low Bandwidth", "Snapshots"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "camera_doorbell_popup", label: "Doorbell ring popup", domain: "select", default: "Snapshot", section: "interface", esphome_section: "cameras", group_tier: "interface", options: ["Snapshot", "Live Video"], min: null, max: null, step: null, unit: "", capability: "hw_jpeg" },
-  {key: "screensaver_photo_clock", label: "Show subtle clock", domain: "switch", default: false, section: "display", esphome_section: "display", group_tier: "display", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "weather_app_background", label: "Weather app background", domain: "switch", default: true, section: "interface", esphome_section: "display", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "wake_word_mode", label: "Wake Word Mode", domain: "select", default: "Docked Only", section: "audio", group_tier: "behavior", options: ["Docked Only", "Always On", "Disabled"], min: null, max: null, step: null, unit: "", capability: "mic" },
+  {key: "tap_to_wake", label: "Tap to Wake", domain: "select", default: "Docked Only", section: "power", group_tier: "behavior", options: ["Single Tap", "Double Tap", "Docked Only", "Disabled"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "pickup_to_wake", label: "Pickup to Wake", domain: "select", default: "Docked Only", section: "power", group_tier: "behavior", options: ["Always On", "Docked Only", "Disabled"], min: null, max: null, step: null, unit: "", capability: "display_imu" },
+  {key: "battery_screen_timeout", label: "Battery Screen Timeout", domain: "select", default: "30s", section: "power", group_tier: "behavior", options: ["10s", "15s", "30s", "1 min", "2 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display_battery" },
+  {key: "docked_idle_timeout", label: "Docked Idle Timeout", domain: "select", default: "1 min", section: "display", group_tier: "behavior", options: ["10s", "15s", "30s", "1 min", "2 min", "5 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "battery_hibernate_timeout", label: "Battery Hibernate Timeout", domain: "select", default: "15 min", section: "power", group_tier: "behavior", options: ["5 min", "10 min", "15 min", "30 min", "Disabled"], min: null, max: null, step: null, unit: "", capability: "display_battery" },
+  {key: "screensaver_mode", label: "Screensaver mode", domain: "select", default: "Docked Only", section: "display", group_tier: "behavior", options: ["Docked Only", "Always", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "screensaver_style", label: "Screensaver Style", domain: "select", default: "Ambient Clock", section: "display", group_tier: "display", options: ["Ambient Clock", "Photo Frame", "Aurora", "Starfield", "Digital Rain", "Fireworks"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "auto_brightness_mode", label: "Auto Brightness Mode", domain: "select", default: "Sun Synchronized", section: "display", group_tier: "behavior", options: ["Disabled", "Sun Synchronized", "Time Schedule", "Ambient Light"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "manual_brightness", label: "Manual Brightness", domain: "number", default: 80, section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
+  {key: "day_brightness", label: "Day Brightness", domain: "number", default: 90, section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
+  {key: "night_brightness", label: "Night Brightness", domain: "number", default: 35, section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
+  {key: "day_start_hour", label: "Day Start Hour", domain: "number", default: 7, section: "display", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
+  {key: "night_start_hour", label: "Night Start Hour", domain: "number", default: 20, section: "display", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
+  {key: "color_profile", label: "Color Profile", domain: "select", default: "Steel Blue", section: "display", group_tier: "display", options: ["Steel Blue", "Pink", "Blue", "Green", "Custom"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "va_visual_profile", label: "Visual Profile", domain: "select", default: "Nebula", section: "display", group_tier: "display", options: ["Nebula", "Solaris", "Rings", "Light Bar", "Dot Wave"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_screen_enabled", label: "Enable Home Screen", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "start_screen", label: "Start Screen", domain: "select", default: "Home", section: "interface", group_tier: "interface", options: ["Home", "Pinned", "Time App", "Calendar", "Clock Face", "Media", "Home Hub", "Area Controls", "Remote", "Weather", "Cameras", "Games", "Tools"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "return_to_home_timeout", label: "Return to Home Timeout", domain: "select", default: "2 min", section: "interface", group_tier: "interface", options: ["15s", "30s", "1 min", "2 min", "5 min", "10 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "clock_face", label: "Clock Face", domain: "select", default: "Minimal Digital", section: "interface", group_tier: "interface", options: ["Minimal Digital", "Modern Analog", "Hybrid Digital"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "time_format", label: "Time Format", domain: "select", default: "12-Hour (AM/PM)", section: "interface", group_tier: "interface", options: ["12-Hour (AM/PM)", "24-Hour"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "weather_background", label: "Weather Background", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_sun", label: "Sun", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_moon", label: "Moon", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "wake_greeting", label: "Wake Greeting", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "album_art_style", label: "Album Art Style", domain: "select", default: "Full Screen", section: "interface", group_tier: "interface", options: ["Full Screen", "Letterbox", "Standard", "None"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "music_overlay_style", label: "Overlay Style", domain: "select", default: "Art + Metadata", section: "interface", group_tier: "interface", options: ["Art Only", "Art + Metadata", "Always Visible"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "album_sort_order", label: "Album Sort Order", domain: "select", default: "Alphabetical", section: "interface", group_tier: "interface", options: ["Alphabetical", "Newest on Top", "Oldest on Top"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "artist_album_sort_order", label: "Artist Album Sort Order", domain: "select", default: "Oldest on Top", section: "interface", group_tier: "interface", options: ["Oldest on Top", "Newest on Top", "Alphabetical"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "podcast_sort_order", label: "Podcast Sort Order", domain: "select", default: "Newest on Top", section: "interface", group_tier: "interface", options: ["Newest on Top", "Oldest on Top"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "ww_sens_okay_nabu", label: "Okay Nabu Sensitivity", domain: "select", default: "Moderately sensitive", section: "audio", group_tier: "behavior", options: ["Slightly sensitive", "Moderately sensitive", "Very sensitive"], min: null, max: null, step: null, unit: "", capability: "mic" },
+  {key: "ww_sens_hey_luna", label: "Hey Luna Sensitivity", domain: "select", default: "Moderately sensitive", section: "audio", group_tier: "behavior", options: ["Slightly sensitive", "Moderately sensitive", "Very sensitive"], min: null, max: null, step: null, unit: "", capability: "mic" },
+  {key: "ww_sens_hey_jarvis", label: "Hey Jarvis Sensitivity", domain: "select", default: "Moderately sensitive", section: "audio", group_tier: "behavior", options: ["Slightly sensitive", "Moderately sensitive", "Very sensitive"], min: null, max: null, step: null, unit: "", capability: "mic" },
+  {key: "ww_sens_hey_mycroft", label: "Hey Mycroft Sensitivity", domain: "select", default: "Moderately sensitive", section: "audio", group_tier: "behavior", options: ["Slightly sensitive", "Moderately sensitive", "Very sensitive"], min: null, max: null, step: null, unit: "", capability: "mic" },
+  {key: "ww_sens_alexa", label: "Alexa Sensitivity", domain: "select", default: "Moderately sensitive", section: "audio", group_tier: "behavior", options: ["Slightly sensitive", "Moderately sensitive", "Very sensitive"], min: null, max: null, step: null, unit: "", capability: "mic" },
+  {key: "wake_screen_on_assist", label: "Wake Screen on Assist", domain: "switch", default: true, section: "audio", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "alert_volume", label: "Alert Volume", domain: "number", default: 80, section: "audio", group_tier: "behavior", options: [], min: 20, max: 100, step: 5, unit: "%", capability: "speaker" },
+  {key: "volume_step_size", label: "Volume Step Size", domain: "number", default: 5, section: "audio", group_tier: "behavior", options: [], min: 1, max: 10, step: 1, unit: "%", capability: "speaker" },
+  {key: "game_sound_effects", label: "Game Sound Effects", domain: "switch", default: true, section: "audio", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "ble_beacon_mode", label: "BLE Beacon Mode", domain: "select", default: "Handheld Only", section: "presence", group_tier: "behavior", options: ["Handheld Only", "Handheld + Screen Off", "Always"], min: null, max: null, step: null, unit: "", capability: "beacon_battery" },
+  {key: "weather_sim_condition", label: "Weather Simulation", domain: "select", default: "Live (Home Assistant)", section: "developer", group_tier: null, options: ["Live (Home Assistant)", "Clear Night", "Sunny / Clear Day", "Partly Cloudy (Day)", "Partly Cloudy (Night)", "Cloudy / Overcast (Day)", "Cloudy / Overcast (Night)", "Fog / Mist (Day)", "Fog / Mist (Night)", "Rainy (Day)", "Rainy (Night)", "Pouring / Heavy Rain", "Snow (Day)", "Snow (Night)", "Thunderstorm (Day)", "Thunderstorm (Night)", "Windy"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_clock_tap_action", label: "Home Time Tap", domain: "select", default: "Time App", section: "interface", group_tier: "interface", options: ["Time App", "Clock Face"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_date_tap_action", label: "Home Date Tap", domain: "select", default: "Overview", section: "interface", group_tier: "interface", options: ["Day View", "Overview"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "local_clock_label", label: "Local Clock Label", domain: "text", default: "", section: "time", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "show_utc_clock", label: "Show UTC Clock", domain: "switch", default: false, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "world_clocks", label: "World Clocks", domain: "text", default: "", section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "alarms_summary", label: "Alarms", domain: "text", default: "07:00|0|1;08:30|0|2;09:00|0|2", section: "time", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "calendar_lookahead_days", label: "Overview Lookahead", domain: "number", default: 30, section: "interface", group_tier: "interface", options: [], min: 7, max: 60, step: 1, unit: "d", capability: "display" },
+  {key: "calendar_week_start", label: "Start Week On", domain: "select", default: "Sunday", section: "interface", group_tier: "interface", options: ["Sunday", "Monday"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_active", label: "Bedtime Mode", domain: "switch", default: false, section: "power", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_display", label: "Idle Display in Bedtime", domain: "select", default: "Screen Off", section: "power", group_tier: "behavior", options: ["Screen Off", "Ambient Clock"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_schedule", label: "Bedtime Schedule", domain: "switch", default: false, section: "power", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "bedtime_start_hour", label: "Bedtime Starts", domain: "number", default: 22, section: "power", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
+  {key: "bedtime_end_hour", label: "Bedtime Ends", domain: "number", default: 7, section: "power", group_tier: "behavior", options: [], min: 0, max: 23, step: 1, unit: ":00", capability: "display" },
+  {key: "bedtime_brightness", label: "Bedtime Brightness", domain: "number", default: 15, section: "power", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
+  {key: "camera_default_view", label: "Default camera view", domain: "select", default: "Grid", section: "interface", group_tier: "interface", options: ["Grid", "Single", "Carousel"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_carousel_interval", label: "Carousel interval", domain: "select", default: "15s", section: "interface", group_tier: "interface", options: ["10s", "15s", "30s", "60s"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_framing", label: "Camera framing", domain: "select", default: "Uncropped", section: "interface", group_tier: "interface", options: ["Uncropped", "Fill"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_stream_mode", label: "Camera stream mode", domain: "select", default: "Auto", section: "interface", group_tier: "interface", options: ["Auto", "Low Bandwidth", "Snapshots"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "camera_doorbell_popup", label: "Doorbell ring popup", domain: "select", default: "Snapshot", section: "interface", group_tier: "interface", options: ["Snapshot", "Live Video"], min: null, max: null, step: null, unit: "", capability: "hw_jpeg" },
+  {key: "screensaver_photo_clock", label: "Show subtle clock", domain: "switch", default: false, section: "display", group_tier: "display", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "weather_app_background", label: "Weather app background", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "do_not_disturb", label: "Do not disturb", domain: "switch", default: false, section: "power", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
 ];
 const DEVICE_PREF_SPECS_MAP = Object.fromEntries(DEVICE_PREF_SPECS_CATALOG.map((s) => [s.key, s]));
 const DEFAULT_DOCK_ROUTES = "app:pinned,app:music,app:home_hub,app:cameras,app:area,app:remote,app:games,app:tools";
@@ -3506,8 +3536,9 @@ function renderConfirmDialog(opts) {
         ? t("confirm.blast_radius_one", undefined, opts.overlay)
         : t("confirm.blast_radius_many", { count }, opts.overlay)
       : "");
+  const isBusy = Boolean(opts.busy);
   const onBackdropClick = (ev) => {
-    if (ev.target === ev.currentTarget) {
+    if (ev.target === ev.currentTarget && !isBusy) {
       opts.onCancel();
     }
   };
@@ -3517,7 +3548,9 @@ function renderConfirmDialog(opts) {
     aria-describedby=${descId}
     @cancel=${(ev) => {
       ev.preventDefault();
-      opts.onCancel();
+      if (!isBusy) {
+        opts.onCancel();
+      }
     }}
     @click=${onBackdropClick}
     class="studio-dialog confirm-dialog"
@@ -3537,6 +3570,7 @@ function renderConfirmDialog(opts) {
         ${opts.onDownloadBackupFirst
           ? html`<button
               type="button"
+              ?disabled=${isBusy}
               @click=${opts.onDownloadBackupFirst}
               class="btn btn-text btn-compact"
             >
@@ -3547,6 +3581,7 @@ function renderConfirmDialog(opts) {
         <div class="dialog-actions-end">
           <button
             type="button"
+            ?disabled=${isBusy}
             @click=${opts.onCancel}
             class="btn btn-secondary"
           >
@@ -8087,7 +8122,7 @@ class EntityController {
       } catch (err) {
         clearOwnedInFlight();
         if (isConflictError(err)) {
-          void this.store.refreshState();
+          await this.store.refreshState();
           this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
           return;
         }
@@ -8126,8 +8161,10 @@ class EntityController {
             for (const [k, v] of Object.entries(previousValues)) {
               if (k.startsWith("__dom:")) continue;
               if (k in batchKeySeqs && seqMap.get(k) !== batchKeySeqs[k]) continue;
-              restoredConfig[k] = v;
-              if (v !== undefined) {
+              if (v === undefined) {
+                delete restoredConfig[k];
+              } else {
+                restoredConfig[k] = v;
                 restoredPrefs[k] = v;
               }
             }
@@ -8261,7 +8298,7 @@ class EntityController {
       } catch (err) {
         clearOwnedInFlight();
         if (isConflictError(err)) {
-          void this.store.refreshState();
+          await this.store.refreshState();
           this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
           return;
         }
@@ -8276,7 +8313,9 @@ class EntityController {
             if (k.startsWith("__dom:")) {
               const domId = k.slice(6);
               controlRevert[domId] = typeof v === "boolean" ? v : String(v ?? "");
-            } else if (v !== undefined) {
+            } else if (v === undefined) {
+              delete restored[k];
+            } else {
               restored[k] = v;
             }
           }
@@ -9068,7 +9107,7 @@ __latterExp(__exports, { isCatalogItemSupported: () => isCatalogItemSupported, i
 //# sourceURL=latter-studio/src/state/entity-controller.ts
 });
 __latterDef("src/state/groups-controller.ts", (__exports, __req) => {
-const { formatWsError } = __req("src/api/ws-client.ts");
+const { formatWsError, isConflictError } = __req("src/api/ws-client.ts");
 const { isValidHexColor } = __req("src/utils/format.ts");
 /**
  * `store.groups` Controller (`GroupsController`, `D-050`, `D-064` / `Q6`):
@@ -9094,10 +9133,15 @@ class GroupsController {
                    store;
   /** Per-`pref_key` token delta map (`{ [token]: true | false }`) preserving untouched per-Device tokens (`Q6`). */
            batchPillDrafts = new Map();
-                   batchEntityDrafts = new Map();
   batchBusy = false;
+  calibratingAllIlluminance = false;
+           calibratingIlluminanceAreas = new Set();
   constructor(store) {
     this.store = store;
+  }
+  isCalibratingIlluminance(areaId) {
+    if (this.calibratingAllIlluminance) return true;
+    return Boolean(areaId && this.calibratingIlluminanceAreas.has(String(areaId)));
   }
   get batchDraft() {
     return this.store.batchDraft;
@@ -9108,9 +9152,6 @@ class GroupsController {
       if (Object.keys(deltas).length > 0) {
         keys.add(pk);
       }
-    }
-    for (const ek of this.batchEntityDrafts.keys()) {
-      keys.add(`entity:${ek}`);
     }
     return keys.size;
   }
@@ -9434,11 +9475,6 @@ class GroupsController {
       return (t.device_group || "custom") === grpId;
     });
   }
-  filteredControlEntityIds(ctrl) {
-    return this.filteredControlTargets(ctrl)
-      .map((t) => t.entity_id || "")
-      .filter(Boolean);
-  }
   getEffectiveBatchValue(ctrl)
     {
     const prefKey = ctrl.pref_key || "";
@@ -9446,19 +9482,6 @@ class GroupsController {
       const raw = this.store.batchDraft.get(prefKey);
       const valStr =
         ctrl.domain === "switch" ? (raw ? "on" : "off") : String(raw ?? "");
-      return { value: valStr, mixed: false, staged: true };
-    }
-    const entKey = ctrl.key || ctrl.canonical_key || "";
-    if (!prefKey && entKey && this.batchEntityDrafts.has(entKey)) {
-      const entDraft = this.batchEntityDrafts.get(entKey);
-      const valStr =
-        entDraft.action === "turn_on"
-          ? "on"
-          : entDraft.action === "turn_off"
-            ? "off"
-            : entDraft.option !== undefined
-              ? entDraft.option
-              : String(entDraft.level ?? "");
       return { value: valStr, mixed: false, staged: true };
     }
     const targets = this.filteredControlTargets(ctrl);
@@ -9548,25 +9571,6 @@ class GroupsController {
     this.store.batchDraft.set("color_profile", "Custom");
     this.store.host.requestUpdate();
   }
-  stageBatchEntityControl(
-    ctrl,
-    mutation,
-  ) {
-    if (ctrl.pref_key) {
-      if (mutation.action !== undefined) {
-        this.stageBatchSetting(ctrl.pref_key, mutation.action === "turn_on");
-      } else if (mutation.option !== undefined) {
-        this.stageBatchSetting(ctrl.pref_key, mutation.option);
-      } else if (mutation.level !== undefined && Number.isFinite(mutation.level)) {
-        this.stageBatchSetting(ctrl.pref_key, mutation.level);
-      }
-      return;
-    }
-    const entKey = ctrl.key || ctrl.canonical_key || ctrl.name;
-    if (!entKey) return;
-    this.batchEntityDrafts.set(entKey, { ctrl, ...mutation });
-    this.store.host.requestUpdate();
-  }
   /**
    * Stages a per-token pill toggle across matching target Devices (`Q6`).
    * Never copies `states[0]` over `Mixed` target Devices: untouched tokens stay intact per Device.
@@ -9634,14 +9638,12 @@ class GroupsController {
   resetBatchDraft() {
     this.store.batchDraft.clear();
     this.batchPillDrafts.clear();
-    this.batchEntityDrafts.clear();
     this.store.host.requestUpdate();
   }
   previewBatchDetachmentCount() {
     if (!this.hasBatchDraft) return 0;
     const hasDetachingKey =
       this.batchPillDrafts.size > 0 ||
-      this.batchEntityDrafts.size > 0 ||
       Array.from(this.store.batchDraft.keys()).some((key) => {
         const spec = this.store.entity.getPrefSpec(key);
         return !spec || spec.group_tier !== null;
@@ -9697,6 +9699,7 @@ class GroupsController {
     const uniformPatch = Object.fromEntries(
       this.store.batchDraft.entries(),
     );
+    const foldedPillKeys = new Set();
     const perDevicePatches = new Map();
     const controls = this.store.state?.system_controls || [];
     for (const [prefKey, deltas] of this.batchPillDrafts.entries()) {
@@ -9717,6 +9720,7 @@ class GroupsController {
       const distinctCsvs = new Set(resolvedPerTarget.map((r) => r.csv));
       if (distinctCsvs.size === 1) {
         uniformPatch[prefKey] = resolvedPerTarget[0].csv;
+        foldedPillKeys.add(prefKey);
       } else {
         for (const item of resolvedPerTarget) {
           const cur = perDevicePatches.get(item.subentryId) || {};
@@ -9725,9 +9729,9 @@ class GroupsController {
         }
       }
     }
-    const entityActions = Array.from(this.batchEntityDrafts.values());
     this.batchBusy = true;
     this.store.host.requestUpdate();
+    let anyApplied = false;
     try {
       let lastRes = null;
       if (Object.keys(uniformPatch).length > 0) {
@@ -9739,34 +9743,39 @@ class GroupsController {
           },
           this.store.activeSubentryId || null,
         );
+        anyApplied = true;
+        for (const k of Object.keys(uniformPatch)) {
+          this.store.batchDraft.delete(k);
+        }
+        for (const pk of foldedPillKeys) {
+          this.batchPillDrafts.delete(pk);
+        }
       }
+      const remainingPerDevice = new Set (perDevicePatches.keys());
       for (const [subentryId, devPatch] of perDevicePatches.entries()) {
-        const devRes = await this.store.ws.runDeviceCommand(subentryId, "save_device_config", {
-          config: devPatch,
-        });
+        const expectedRev = this.store.getKnownDeviceConfigRev(subentryId);
+        const reqPayload = { config: devPatch };
+        if (expectedRev > 0) {
+          reqPayload.expected_config_rev = expectedRev;
+        }
+        const devRes = await this.store.ws.runDeviceCommand(
+          subentryId,
+          "save_device_config",
+          reqPayload,
+        );
+        anyApplied = true;
+        remainingPerDevice.delete(subentryId);
         if (devRes) {
+          if (devRes.subentry_id === subentryId && devRes.device_config_rev > 0) {
+            this.store.recordKnownDeviceConfigRev(subentryId, devRes.device_config_rev);
+          }
           lastRes = devRes;
         }
       }
-      for (const entAct of entityActions) {
-        const entityIds = this.filteredControlEntityIds(entAct.ctrl);
-        if (!entityIds.length) continue;
-        const body = { entity_ids: entityIds };
-        if (entAct.action !== undefined) body.action = entAct.action;
-        if (entAct.option !== undefined) body.option = entAct.option;
-        if (entAct.level !== undefined) body.level = entAct.level;
-        const entRes = await this.store.ws.runSystemCommand(
-          "system_entity_action",
-          body,
-          this.store.activeSubentryId || null,
-        );
-        if (entRes) {
-          lastRes = entRes;
-        }
-      }
       this.store.batchDraft.clear();
-      this.batchPillDrafts.clear();
-      this.batchEntityDrafts.clear();
+      if (remainingPerDevice.size === 0) {
+        this.batchPillDrafts.clear();
+      }
       if (lastRes) {
         this.store.ingestPayload(lastRes, false);
       }
@@ -9795,7 +9804,14 @@ class GroupsController {
         );
       }
     } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not apply staged batch settings"), true);
+      if (anyApplied || isConflictError(err)) {
+        await this.store.refreshState();
+      }
+      if (isConflictError(err)) {
+        this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
+      } else {
+        this.store.showToast(formatWsError(err, "Could not apply staged batch settings"), true);
+      }
     } finally {
       this.batchBusy = false;
       this.store.host.requestUpdate();
@@ -10016,6 +10032,13 @@ class GroupsController {
     }
   }
   async calibrateAreaIlluminance(areaId) {
+    if (this.isCalibratingIlluminance(areaId)) return;
+    if (areaId) {
+      this.calibratingIlluminanceAreas.add(areaId);
+    } else {
+      this.calibratingAllIlluminance = true;
+    }
+    this.store.host.requestUpdate();
     try {
       const payload = {};
       if (areaId) payload.area_id = areaId;
@@ -10049,6 +10072,13 @@ class GroupsController {
         formatWsError(err, "Could not calibrate Area ambient light"),
         true,
       );
+    } finally {
+      if (areaId) {
+        this.calibratingIlluminanceAreas.delete(areaId);
+      } else {
+        this.calibratingAllIlluminance = false;
+      }
+      this.store.host.requestUpdate();
     }
   }
 }
@@ -10973,6 +11003,8 @@ class StudioStore {
   pinBusy = false;
   worldClockNewLabel = "";
   worldClockNewZone = "";
+  worldClockRowKeys = [];
+  worldClockRowSeq = 0;
   overviewAlarmsOpen = false;
   // System Shared Entities & Photo Library UI state
   activeCameraPreviewEntity = "";
@@ -11546,6 +11578,7 @@ class StudioStore {
       this.devicePinDraft = "";
       this.worldClockNewLabel = "";
       this.worldClockNewZone = "";
+      this.worldClockRowKeys = [];
       this.overviewAlarmsOpen = false;
       this.appConfigModal = { open: false, app: null };
       this.cameraConfigModal = { ...this.cameraConfigModal, open: false };
@@ -11586,6 +11619,9 @@ class StudioStore {
     this.routeApplying = true;
     try {
       if (parts[0] === "devices" && parts[1]?.toLowerCase() === "discovered") {
+        if (prevScope === "system") {
+          void this.entity.flushSystemSettings();
+        }
         this.onActiveDeviceChanged(prevSubId, "");
         if (prevScope !== "device" || prevViewId !== "discovered_devices") {
           this.clearHandoffTargets();
@@ -11599,8 +11635,14 @@ class StudioStore {
           Array.isArray(this.state.system_devices) &&
           !this.state.system_devices.some((d) => d.subentry_id === nextSubId)
         ) {
+          if (prevScope === "system") {
+            void this.entity.flushSystemSettings();
+          }
           this.redirectInvalidDeviceRoute(nextSubId);
           return;
+        }
+        if (prevScope === "system") {
+          void this.entity.flushSystemSettings();
         }
         const requestedView = slugToView(DEVICE_VIEW_SLUGS, parts[2] || "overview") || "dashboard";
         this.onActiveDeviceChanged(prevSubId, nextSubId);
@@ -11630,6 +11672,9 @@ class StudioStore {
           this.ensureDefaultSurveyDevice();
         }
       } else {
+        if (prevScope === "system") {
+          void this.entity.flushSystemSettings();
+        }
         this.onActiveDeviceChanged(prevSubId, "");
         if (prevScope !== "device" || prevViewId !== "select_device_prompt") {
           this.clearHandoffTargets();
@@ -11684,6 +11729,9 @@ class StudioStore {
     }
   }
   openDevicesLanding() {
+    if (this.currentScope === "system") {
+      void this.entity.flushSystemSettings();
+    }
     this.onActiveDeviceChanged(this.activeSubentryId, "");
     this.clearHandoffTargets();
     this.currentScope = "device";
@@ -11694,6 +11742,9 @@ class StudioStore {
     void this.ensureSubscription(false);
   }
   openDiscoveredDevices(cardId = "") {
+    if (this.currentScope === "system") {
+      void this.entity.flushSystemSettings();
+    }
     this.onActiveDeviceChanged(this.activeSubentryId, "");
     this.clearHandoffTargets();
     this.currentScope = "device";
@@ -11745,6 +11796,8 @@ class StudioStore {
     const isSys = Object.prototype.hasOwnProperty.call(SYSTEM_VIEW_SLUGS, viewId);
     if (isSys) {
       this.onActiveDeviceChanged(this.activeSubentryId, "");
+    } else if (this.currentScope === "system") {
+      void this.entity.flushSystemSettings();
     }
     this.currentScope = isSys ? "system" : "device";
     this.currentViewId = viewId;
@@ -11787,6 +11840,9 @@ class StudioStore {
   ) {
     const cleanNext = String(nextSubentryId || "").trim();
     if (!cleanNext) return;
+    if (this.currentScope === "system") {
+      void this.entity.flushSystemSettings();
+    }
     this.onActiveDeviceChanged(this.activeSubentryId, cleanNext);
     this.currentScope = "device";
     const desired =
@@ -11892,6 +11948,11 @@ class StudioStore {
       }
       if (!this.state) {
         this.loading = false;
+        this.deviceLoading = false;
+        this.loadError = formatWsError(err, "Latter Studio could not connect.");
+        this.host.requestUpdate();
+      } else if (this.deviceLoading) {
+        this.deviceLoading = false;
         this.loadError = formatWsError(err, "Latter Studio could not connect.");
         this.host.requestUpdate();
       }
@@ -11934,6 +11995,7 @@ class StudioStore {
       }
       if (reqSeq < this.lastAppliedReqSeq) return;
       this.loading = false;
+      this.deviceLoading = false;
       this.loadError = formatWsError(err, "Latter Studio could not load.");
       this.host.requestUpdate();
     }
@@ -12351,10 +12413,14 @@ const TEXT_INPUT_DEBOUNCE_MS = 600;
 function isImeSafeEnter(ev) {
   return ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229;
 }
-function sanitizeClockLabel(raw, maxBytes = 32) {
+function sanitizeClockLabel(
+  raw,
+  maxBytes = 32,
+  trimEdges = true,
+) {
   const str = String(raw ?? "");
   let collapsed = "";
-  let prevSpace = true;
+  let prevSpace = trimEdges;
   for (const ch of str) {
     const code = ch.charCodeAt(0);
     if (
@@ -12378,20 +12444,21 @@ function sanitizeClockLabel(raw, maxBytes = 32) {
     collapsed += ch;
     prevSpace = false;
   }
-  const trimmed = collapsed.trim();
+  const normalized = trimEdges ? collapsed.trim() : collapsed;
   if (typeof TextEncoder === "undefined") {
-    return trimmed.slice(0, maxBytes).trimEnd();
+    const sliced = normalized.slice(0, maxBytes);
+    return trimEdges ? sliced.trimEnd() : sliced;
   }
   const enc = new TextEncoder();
-  if (enc.encode(trimmed).length <= maxBytes) {
-    return trimmed;
+  if (enc.encode(normalized).length <= maxBytes) {
+    return normalized;
   }
   let out = "";
-  for (const cp of trimmed) {
+  for (const cp of normalized) {
     if (enc.encode(out + cp).length > maxBytes) break;
     out += cp;
   }
-  return out.trimEnd();
+  return trimEdges ? out.trimEnd() : out;
 }
 function fallbackLabelForIana(iana) {
   const tail = iana.split("/").pop() || iana;
@@ -12449,6 +12516,13 @@ function renderTimeAppConfigBody(store) {
     worldClocksPref?.value ?? cfg.world_clocks ?? "",
   );
   const atWorldClockLimit = enabledWorldClocks.length >= MAX_WORLD_CLOCKS;
+  while (store.worldClockRowKeys.length < enabledWorldClocks.length) {
+    store.worldClockRowSeq += 1;
+    store.worldClockRowKeys.push(`wc-${store.worldClockRowSeq}`);
+  }
+  if (store.worldClockRowKeys.length > enabledWorldClocks.length) {
+    store.worldClockRowKeys.length = enabledWorldClocks.length;
+  }
   const renderWorldClockZoneOptions = (selectedIana) => {
     const missingSelected =
       selectedIana && !knownZoneSet.has(selectedIana)
@@ -12476,6 +12550,7 @@ function renderTimeAppConfigBody(store) {
     patch,
     focusId,
     debounceMs,
+    trimLabel = true,
   ) => {
     if (idx < 0 || idx >= enabledWorldClocks.length) return;
     const prev = enabledWorldClocks[idx];
@@ -12484,17 +12559,19 @@ function renderTimeAppConfigBody(store) {
       return;
     }
     const nextLabel =
-      patch.label !== undefined ? sanitizeClockLabel(patch.label) : prev.label;
-    if (!nextLabel) return;
+      patch.label !== undefined
+        ? sanitizeClockLabel(patch.label, 32, trimLabel)
+        : prev.label;
+    if (!nextLabel.trim()) return;
     const dup = enabledWorldClocks.some(
       (item, i) =>
         i !== idx &&
         item.iana === nextIana &&
-        item.label.toLowerCase() === nextLabel.toLowerCase(),
+        item.label.toLowerCase() === nextLabel.trim().toLowerCase(),
     );
     if (dup) return;
     const next = enabledWorldClocks.map((item, i) =>
-      i === idx ? { label: nextLabel, iana: nextIana } : { ...item },
+      i === idx ? { label: nextLabel.trim(), iana: nextIana } : { ...item },
     );
     updateWorldClocks(next, focusId, debounceMs);
   };
@@ -12511,9 +12588,16 @@ function renderTimeAppConfigBody(store) {
     const next = [...enabledWorldClocks];
     const [picked] = next.splice(fromIdx, 1);
     next.splice(toIdx, 0, picked);
+    if (store.worldClockRowKeys.length === enabledWorldClocks.length) {
+      const [pickedKey] = store.worldClockRowKeys.splice(fromIdx, 1);
+      store.worldClockRowKeys.splice(toIdx, 0, pickedKey);
+    }
     updateWorldClocks(next);
   };
   const removeWorldClock = (idx) => {
+    if (idx >= 0 && idx < store.worldClockRowKeys.length) {
+      store.worldClockRowKeys.splice(idx, 1);
+    }
     updateWorldClocks(enabledWorldClocks.filter((_, i) => i !== idx));
   };
   const getRenderRoot = () =>
@@ -12551,6 +12635,8 @@ function renderTimeAppConfigBody(store) {
     store.worldClockNewZone = "";
     if (newLabelEl) newLabelEl.value = "";
     if (zoneSelEl) zoneSelEl.value = "";
+    store.worldClockRowSeq += 1;
+    store.worldClockRowKeys.push(`wc-${store.worldClockRowSeq}`);
     updateWorldClocks(
       [...enabledWorldClocks, { label: typedLabel, iana: picked }],
       "btn-world_clock_add",
@@ -12599,10 +12685,14 @@ function renderTimeAppConfigBody(store) {
         placeholder=${store.t("dialogs.optional_label_placeholder")}
         .value=${focusSafe(localClockLabelValue)}
         @input=${(ev) => {
-          const cleaned = sanitizeClockLabel((ev.currentTarget).value);
+          const liveVal = sanitizeClockLabel(
+            (ev.currentTarget).value,
+            32,
+            false,
+          );
           store.entity.stageDeviceSetting(
             "local_clock_label",
-            cleaned,
+            liveVal,
             "cfg-local_clock_label",
             TEXT_INPUT_DEBOUNCE_MS,
           );
@@ -12644,7 +12734,7 @@ function renderTimeAppConfigBody(store) {
               id: "world-clocks-list",
               ariaLabel: store.t("dialogs.world_clocks_aria"),
               items: enabledWorldClocks,
-              getKey: (entry) => `${entry.label.toLowerCase()}|${entry.iana}`,
+              getKey: (_entry, idx) => store.worldClockRowKeys[idx] || `wc-row-${idx}`,
               getLabel: (entry) => entry.label,
               onReorder: reorderWorldClocks,
               overlay: store.localeOverlay,
@@ -12664,15 +12754,18 @@ function renderTimeAppConfigBody(store) {
                       placeholder=${store.t("dialogs.city_label_placeholder")}
                       .value=${focusSafe(entry.label)}
                       @input=${(ev) => {
-                        const cleaned = sanitizeClockLabel(
+                        const liveVal = sanitizeClockLabel(
                           (ev.currentTarget).value,
+                          32,
+                          false,
                         );
-                        if (cleaned) {
+                        if (liveVal.trim()) {
                           updateWorldClockItem(
                             idx,
-                            { label: cleaned },
+                            { label: liveVal },
                             lblId,
                             TEXT_INPUT_DEBOUNCE_MS,
+                            false,
                           );
                         }
                       }}
@@ -12801,7 +12894,7 @@ const { html, nothing } = __req("src/lib/lit.ts");
 const { ROUTE_PREVIEW_ICONS, shortcutActionLabel } = __req("src/mdi-catalog.ts");
 const { isCatalogItemSupported } = __req("src/state/store.ts");
 const { defaultLocaleTimeFormat, entityLabel } = __req("src/utils/format.ts");
-const { renderNativeControlRow, renderPillList, renderSelectRow, renderSettingsRow, renderSortableList, renderSwitchRow, renderTrashIconButton } = __req("src/components/controls.ts");
+const { renderPillList, renderSelectRow, renderSettingsRow, renderSortableList, renderSwitchRow, renderTrashIconButton } = __req("src/components/controls.ts");
 const { renderTimeAppConfigBody } = __req("src/components/dialogs/world-clocks.ts");
 /**
  * Native App Configuration Modal (`#latter-app-config-modal`, `D-053`, `D-054`, `D-064`, `Q7`).
@@ -13210,9 +13303,6 @@ function renderAppConfigModalBody(store) {
   } else if (app === "area") {
     const enabledAreaCats = store.entity.getEnabledAreaCategories();
     const pillItems = buildOrderedPillItems(AREA_CATEGORIES_CATALOG, enabledAreaCats, caps);
-    const areaExtraItems = store.entity
-      .getSectionItems("area")
-      .filter((it) => it.key !== "ble_beacon_mode");
     body = html`<div class="settings-list">
       ${renderSettingsRow({
         label: store.t("dialogs.area_cats_label"),
@@ -13227,7 +13317,6 @@ function renderAppConfigModalBody(store) {
           overlay: store.localeOverlay,
         }),
       })}
-      ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}
     </div>`;
   } else if (app === "music") {
     const musicKeys = [
@@ -13263,7 +13352,6 @@ function renderAppConfigModalBody(store) {
         label: store.t("dialogs.remote_missing_group", { id: rawId }),
       });
     }
-    const remoteEspItems = store.entity.getSectionItems("remote");
     body = html`<div class="settings-list">
       ${renderSelectRow({
         id: "cfg-device_remote_group",
@@ -13274,7 +13362,6 @@ function renderAppConfigModalBody(store) {
         onChange: (val) =>
           store.entity.stageDeviceSetting("device_remote_group", val, "cfg-device_remote_group"),
       })}
-      ${remoteEspItems.map((it) => renderNativeControlRow(store, it))}
     </div>`;
     extraAction = html`<button
       type="button"
@@ -13755,7 +13842,14 @@ function syncColorWheelCanvas(renderRoot, store) {
 function renderColorWheelDialog(store) {
   const modal = store.colorWheelModal;
   const onBackdropClick = (ev) => {
-    if (ev.target === ev.currentTarget) {
+    if (ev.target === ev.currentTarget && !modal.busy) {
+      store.tools.closeColorWheelModal();
+    }
+  };
+  const onCancel = (ev) => {
+    if (modal.busy) {
+      ev.preventDefault();
+    } else {
       store.tools.closeColorWheelModal();
     }
   };
@@ -13763,7 +13857,7 @@ function renderColorWheelDialog(store) {
     return html`<dialog
       id="latter-cw-modal"
       aria-labelledby="latter-cw-title"
-      @cancel=${() => store.tools.closeColorWheelModal()}
+      @cancel=${onCancel}
       @click=${onBackdropClick}
       class="studio-dialog"
     >
@@ -13812,7 +13906,7 @@ function renderColorWheelDialog(store) {
   return html`<dialog
     id="latter-cw-modal"
     aria-labelledby="latter-cw-title"
-    @cancel=${() => store.tools.closeColorWheelModal()}
+    @cancel=${onCancel}
     @click=${onBackdropClick}
     class="studio-dialog"
   >
@@ -13859,6 +13953,7 @@ function renderColorWheelDialog(store) {
       <div class="dialog-actions">
         <button
           type="button"
+          ?disabled=${modal.busy}
           @click=${() => store.tools.closeColorWheelModal()}
           class="btn btn-secondary"
         >
@@ -13889,8 +13984,15 @@ const { renderSelectOptions, renderSwitchRow } = __req("src/components/controls.
  * - Inline "Download backup first" + explicit consequence text on Remove & Reset
  * - `focusSafe` text inputs across BLE tag & Save custom group forms
  */
-function bindBackdropClose(ev, closeFn) {
-  if (ev.target === ev.currentTarget) {
+function bindBackdropClose(ev, closeFn, busy = false) {
+  if (!busy && ev.target === ev.currentTarget) {
+    closeFn();
+  }
+}
+function guardDialogCancel(ev, closeFn, busy = false) {
+  if (busy) {
+    ev.preventDefault();
+  } else {
     closeFn();
   }
 }
@@ -13901,8 +14003,8 @@ function renderRemoveDeviceDialog(store) {
     return html`<dialog
       id="latter-rm-modal"
       aria-labelledby="latter-rm-title"
-      @cancel=${close}
-      @click=${(ev) => bindBackdropClose(ev, close)}
+      @cancel=${(ev) => guardDialogCancel(ev, close, rm.busy)}
+      @click=${(ev) => bindBackdropClose(ev, close, rm.busy)}
       class="studio-dialog confirm-dialog"
     >
       ${nothing}
@@ -13913,8 +14015,8 @@ function renderRemoveDeviceDialog(store) {
     id="latter-rm-modal"
     aria-labelledby="latter-rm-title"
     aria-describedby="latter-rm-desc"
-    @cancel=${close}
-    @click=${(ev) => bindBackdropClose(ev, close)}
+    @cancel=${(ev) => guardDialogCancel(ev, close, rm.busy)}
+    @click=${(ev) => bindBackdropClose(ev, close, rm.busy)}
     class="studio-dialog confirm-dialog"
   >
     <div class="dialog-body">
@@ -13939,7 +14041,7 @@ function renderRemoveDeviceDialog(store) {
           ${store.t("action.download_backup_first")}
         </button>
         <div class="dialog-actions-end">
-          <button type="button" @click=${close} class="btn btn-secondary">
+          <button type="button" ?disabled=${rm.busy} @click=${close} class="btn btn-secondary">
             ${store.t("action.cancel")}
           </button>
           <button
@@ -13962,8 +14064,8 @@ function renderResetDeviceDialog(store) {
     return html`<dialog
       id="latter-reset-modal"
       aria-labelledby="latter-reset-title"
-      @cancel=${close}
-      @click=${(ev) => bindBackdropClose(ev, close)}
+      @cancel=${(ev) => guardDialogCancel(ev, close, rs.busy)}
+      @click=${(ev) => bindBackdropClose(ev, close, rs.busy)}
       class="studio-dialog confirm-dialog"
     >
       ${nothing}
@@ -13973,8 +14075,8 @@ function renderResetDeviceDialog(store) {
     id="latter-reset-modal"
     aria-labelledby="latter-reset-title"
     aria-describedby="latter-reset-desc"
-    @cancel=${close}
-    @click=${(ev) => bindBackdropClose(ev, close)}
+    @cancel=${(ev) => guardDialogCancel(ev, close, rs.busy)}
+    @click=${(ev) => bindBackdropClose(ev, close, rs.busy)}
     class="studio-dialog confirm-dialog"
   >
     <div class="dialog-body">
@@ -13991,6 +14093,7 @@ function renderResetDeviceDialog(store) {
           id: "latter-reset-device-settings",
           label: store.t("confirm.reset_device.device_settings"),
           description: store.t("confirm.reset_device.device_settings_desc"),
+          disabled: rs.busy,
           checked: rs.deviceSettings,
           onChange: (checked) => {
             store.resetModal = { ...store.resetModal, deviceSettings: checked };
@@ -14001,6 +14104,7 @@ function renderResetDeviceDialog(store) {
           id: "latter-reset-latter-options",
           label: store.t("confirm.reset_device.latter_options"),
           description: store.t("confirm.reset_device.latter_options_desc"),
+          disabled: rs.busy,
           checked: rs.latterOptions,
           onChange: (checked) => {
             store.resetModal = { ...store.resetModal, latterOptions: checked };
@@ -14021,7 +14125,7 @@ function renderResetDeviceDialog(store) {
           ${store.t("action.download_backup_first")}
         </button>
         <div class="dialog-actions-end">
-          <button type="button" @click=${close} class="btn btn-secondary">
+          <button type="button" ?disabled=${rs.busy} @click=${close} class="btn btn-secondary">
             ${store.t("action.cancel")}
           </button>
           <button
@@ -14045,8 +14149,8 @@ function renderAddBleDialog(store) {
     return html`<dialog
       id="latter-add-dev-modal"
       aria-labelledby="latter-add-dev-title"
-      @cancel=${close}
-      @click=${(ev) => bindBackdropClose(ev, close)}
+      @cancel=${(ev) => guardDialogCancel(ev, close, modal.busy)}
+      @click=${(ev) => bindBackdropClose(ev, close, modal.busy)}
       class="studio-dialog"
     >
       ${nothing}
@@ -14057,8 +14161,8 @@ function renderAddBleDialog(store) {
   return html`<dialog
     id="latter-add-dev-modal"
     aria-labelledby="latter-add-dev-title"
-    @cancel=${close}
-    @click=${(ev) => bindBackdropClose(ev, close)}
+    @cancel=${(ev) => guardDialogCancel(ev, close, modal.busy)}
+    @click=${(ev) => bindBackdropClose(ev, close, modal.busy)}
     class="studio-dialog"
   >
     <div class="dialog-body">
@@ -14132,7 +14236,7 @@ function renderAddBleDialog(store) {
         </select>
       </div>
       <div class="dialog-actions">
-        <button type="button" @click=${close} class="btn btn-secondary">
+        <button type="button" ?disabled=${modal.busy} @click=${close} class="btn btn-secondary">
           ${store.t("action.cancel")}
         </button>
         <button
@@ -14154,8 +14258,8 @@ function renderSaveGroupDialog(store) {
     return html`<dialog
       id="latter-save-group-modal"
       aria-labelledby="latter-save-group-title"
-      @cancel=${close}
-      @click=${(ev) => bindBackdropClose(ev, close)}
+      @cancel=${(ev) => guardDialogCancel(ev, close, Boolean(modal.busy))}
+      @click=${(ev) => bindBackdropClose(ev, close, Boolean(modal.busy))}
       class="studio-dialog"
     >
       ${nothing}
@@ -14164,8 +14268,8 @@ function renderSaveGroupDialog(store) {
   return html`<dialog
     id="latter-save-group-modal"
     aria-labelledby="latter-save-group-title"
-    @cancel=${close}
-    @click=${(ev) => bindBackdropClose(ev, close)}
+    @cancel=${(ev) => guardDialogCancel(ev, close, Boolean(modal.busy))}
+    @click=${(ev) => bindBackdropClose(ev, close, Boolean(modal.busy))}
     class="studio-dialog"
   >
     <div class="dialog-body">
@@ -14232,7 +14336,7 @@ function renderSaveGroupDialog(store) {
         })}
       </div>
       <div class="dialog-actions">
-        <button type="button" @click=${close} class="btn btn-secondary">
+        <button type="button" ?disabled=${Boolean(modal.busy)} @click=${close} class="btn btn-secondary">
           ${store.t("action.cancel")}
         </button>
         <button
@@ -14585,11 +14689,18 @@ function renderPhotoPickerDialog(store) {
       close();
     }
   };
+  const onCancel = (ev) => {
+    if (modal.busy) {
+      ev.preventDefault();
+    } else {
+      close();
+    }
+  };
   if (!modal.open) {
     return html`<dialog
       id="latter-photo-picker-modal"
       aria-labelledby="latter-photo-picker-title"
-      @cancel=${close}
+      @cancel=${onCancel}
       @click=${onBackdropClick}
       class="studio-dialog photo-dialog"
     >
@@ -14658,7 +14769,7 @@ function renderPhotoPickerDialog(store) {
   return html`<dialog
     id="latter-photo-picker-modal"
     aria-labelledby="latter-photo-picker-title"
-    @cancel=${close}
+    @cancel=${onCancel}
     @click=${onBackdropClick}
     class="studio-dialog photo-dialog"
   >
@@ -15055,9 +15166,10 @@ function renderAspectSwitcher(
 }
 function renderPhotoUploadDialog(store) {
   const modal = store.photoUploadModal;
+  const uploadBusy = Boolean(modal.uploading || modal.creatingCollection);
   const close = () => store.entity.closePhotoUploadModal();
   const onBackdropClick = (ev) => {
-    if (ev.target === ev.currentTarget && !modal.uploading) {
+    if (ev.target === ev.currentTarget && !uploadBusy) {
       close();
     }
   };
@@ -15066,7 +15178,7 @@ function renderPhotoUploadDialog(store) {
       id="latter-photo-upload-modal"
       aria-labelledby="latter-photo-upload-title"
       @cancel=${(ev) => {
-        if (modal.uploading) ev.preventDefault();
+        if (uploadBusy) ev.preventDefault();
         else close();
       }}
       @click=${onBackdropClick}
@@ -15144,7 +15256,7 @@ function renderPhotoUploadDialog(store) {
     id="latter-photo-upload-modal"
     aria-labelledby="latter-photo-upload-title"
     @cancel=${(ev) => {
-      if (modal.uploading) ev.preventDefault();
+      if (uploadBusy) ev.preventDefault();
       else close();
     }}
     @click=${onBackdropClick}
@@ -15473,11 +15585,18 @@ function renderPhotoEditDialog(store) {
       close();
     }
   };
+  const onCancel = (ev) => {
+    if (modal.busy) {
+      ev.preventDefault();
+    } else {
+      close();
+    }
+  };
   if (!modal.open || !modal.photoId) {
     return html`<dialog
       id="latter-photo-edit-modal"
       aria-labelledby="latter-photo-edit-title"
-      @cancel=${close}
+      @cancel=${onCancel}
       @click=${onBackdropClick}
       class="studio-dialog photo-dialog"
     >
@@ -15515,7 +15634,7 @@ function renderPhotoEditDialog(store) {
   return html`<dialog
     id="latter-photo-edit-modal"
     aria-labelledby="latter-photo-edit-title"
-    @cancel=${close}
+    @cancel=${onCancel}
     @click=${onBackdropClick}
     class="studio-dialog photo-dialog"
   >
@@ -16247,7 +16366,7 @@ const { css } = __req("src/lib/lit.ts");
  * (`docs/studio-design.md` §3, `D-061`, `D-066`).
  * Literal font sizes, pixel spacing, and colors appear ONLY inside `:host` / `:host([dark])`.
  */
-const BASE_STYLES = css`:host{--studio-font-family:var(--ha-font-family-body,inherit);--studio-font-code:var(--ha-font-family-code,monospace);--studio-font-title:var(--ha-font-size-xl,20px);--studio-font-section:var(--ha-font-size-l,16px);--studio-font-body:var(--ha-font-size-m,14px);--studio-font-secondary:var(--ha-font-size-s,12px);--studio-font-caption:var(--ha-font-size-s,12px);--studio-weight-regular:var(--ha-font-weight-normal,400);--studio-weight-medium:var(--ha-font-weight-medium,500);--studio-line-height:var(--ha-line-height-normal,1.6);--studio-line-height-condensed:var(--ha-line-height-condensed,1.2);--studio-font-card-title:var(--ha-card-header-font-size,var(--ha-font-size-2xl,24px));--studio-card-title-tracking:-0.012em;--studio-space-1:var(--ha-space-1,4px);--studio-space-2:var(--ha-space-2,8px);--studio-space-3:var(--ha-space-3,12px);--studio-space-4:var(--ha-space-4,16px);--studio-space-card-top:var(--ha-space-5,20px);--studio-space-5:var(--ha-space-6,24px);--studio-radius-card:var(--ha-card-border-radius,var(--ha-border-radius-lg,12px));--studio-radius-control:var(--ha-border-radius-md,8px);--studio-radius-field:var(--ha-border-radius-sm,4px);--studio-radius-button:var(--ha-button-border-radius,var(--ha-border-radius-pill,9999px));--studio-radius-dialog:var(--ha-dialog-border-radius,var(--ha-border-radius-3xl,24px));--studio-radius-pill:var(--ha-border-radius-pill,9999px);--studio-card-border-width:var(--ha-card-border-width,1px);--studio-control-height:var(--ha-button-height,40px);--studio-control-height-compact:32px;--studio-row-min-height:56px;--studio-header-height:var(--header-height,56px);--studio-sidebar-width:244px;--studio-bg:var(--primary-background-color,#fafafa);--studio-surface:var(--ha-card-background,var(--card-background-color,#ffffff));--studio-surface-alt:var(--secondary-background-color,#f0f0f0);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#ffffff));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#212121));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#616161));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(0,0,0,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#ffffff));--studio-input-bg:var(--input-fill-color,rgba(0,0,0,0.04));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#f5f5f5));--studio-field-bg-hover:var(--ha-color-form-background-hover,var(--studio-field-bg));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(0,0,0,0.42)));--studio-popup-bg:var(--card-background-color,#ffffff);--studio-divider:var(--divider-color,rgba(0,0,0,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(0,0,0,0.12)));--studio-text:var(--primary-text-color,#212121);--studio-text-secondary:var(--secondary-text-color,#5f6368);--studio-text-disabled:var(--disabled-text-color,#9e9e9e);--studio-primary:var(--primary-color,#009ac7);--studio-primary-tint:rgba(var(--rgb-primary-color,0,154,199),0.12);--studio-primary-tint-strong:rgba(var(--rgb-primary-color,0,154,199),0.24);--studio-hover:rgba(var(--rgb-primary-text-color,33,33,33),0.06);--studio-btn-accent-bg:var(--ha-color-fill-primary-loud-resting,var(--primary-color,#007da3));--studio-btn-accent-bg-hover:var(--ha-color-fill-primary-loud-hover,var(--studio-btn-accent-bg));--studio-btn-accent-text:var(--ha-color-on-primary-loud,var(--text-primary-color,#ffffff));--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#c2e6f2);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#005b78);--studio-btn-plain-hover:var(--ha-color-fill-primary-quiet-resting,var(--studio-primary-tint));--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-nav-active-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#dcf2df);--studio-chip-success-text:var(--ha-color-on-success-normal,#1b5e20);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#fff0d1);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#7a4900);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#c62828));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#e0e0e0));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#616161));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#d8eff7));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#005b78));--studio-switch-thumb-shadow:var(--ha-switch-thumb-box-shadow,var(--ha-box-shadow-s,0 1px 2px rgba(0,0,0,0.3)));--studio-toast-bg:var(--primary-text-color,#212121);--studio-toast-text:var(--card-background-color,#ffffff);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(140,140,140));--studio-success:var(--success-color,#2e7d32);--studio-warning:var(--warning-color,#ef6c00);--studio-error:var(--error-color,#c62828);--studio-info:var(--info-color,#0277bd);--studio-success-tint:color-mix(in srgb,var(--studio-success) 14%,transparent);--studio-warning-tint:color-mix(in srgb,var(--studio-warning) 14%,transparent);--studio-error-tint:color-mix(in srgb,var(--studio-error) 14%,transparent);--studio-info-tint:color-mix(in srgb,var(--studio-info) 14%,transparent);--studio-card-shadow:var(--ha-card-box-shadow,none);--studio-handoff-surface:color-mix(in srgb,var(--studio-primary) 8%,var(--studio-surface));--studio-handoff-ring:inset 0 0 0 1px var(--studio-primary);--studio-card-handoff-shadow:inset 0 0 0 1px var(--studio-primary),var(--studio-card-shadow);--studio-overlay-shadow:0 8px 24px rgba(0,0,0,0.35);--studio-scrim:rgba(0,0,0,0.5);--studio-media-bg:var(--secondary-background-color,#000000);--studio-photo-badge-bg:rgba(0,0,0,0.68);--studio-photo-badge-text:#ffffff;--studio-photo-ring-selected:0 0 0 2px var(--studio-primary);--studio-dropzone-bg:color-mix(in srgb,var(--studio-primary) 6%,var(--studio-input-bg));--studio-nav-scroll-mask:linear-gradient( to right,transparent 0,#000000 12px,#000000 calc(100% - 16px),transparent 100% );display:block;min-height:100vh;min-height:100dvh;background:var(--studio-bg);color:var(--studio-text);font-family:var(--studio-font-family);font-size:var(--studio-font-body);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height);-webkit-tap-highlight-color:transparent;color-scheme:light;scrollbar-color:var(--studio-scrollbar-thumb) transparent;scrollbar-width:thin;}:host([dark]){--studio-bg:var(--primary-background-color,#111111);--studio-surface:var(--ha-card-background,var(--card-background-color,#1c1c1c));--studio-surface-alt:var(--secondary-background-color,#282828);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#1c1c1c));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#e1e1e1));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#9b9b9b));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(225,225,225,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#1c1c1c));--studio-input-bg:var(--input-fill-color,rgba(255,255,255,0.05));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#363636));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(255,255,255,0.42)));--studio-popup-bg:var(--card-background-color,#1c1c1c);--studio-divider:var(--divider-color,rgba(225,225,225,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(225,225,225,0.12)));--studio-text:var(--primary-text-color,#e1e1e1);--studio-text-secondary:var(--secondary-text-color,#a8a8a8);--studio-text-disabled:var(--disabled-text-color,#6f6f6f);--studio-hover:rgba(var(--rgb-primary-text-color,225,225,225),0.06);--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#104559);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-nav-active-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#143619);--studio-chip-success-text:var(--ha-color-on-success-normal,#81e287);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#3b2a07);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#ffd166);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#db4437));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#202020));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#989898));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#0b3545));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#7bd6f5));--studio-toast-bg:var(--primary-text-color,#e1e1e1);--studio-toast-text:var(--card-background-color,#1c1c1c);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(110,110,110));--studio-success:var(--success-color,#43a047);--studio-warning:var(--warning-color,#ffa600);--studio-error:var(--error-color,#db4437);--studio-info:var(--info-color,#039be5);color-scheme:dark;}*{box-sizing:border-box;}.hidden{display:none !important;}.studio-root{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--studio-bg);}h2,h3,h4,p{margin:0;}code,.mono{font-family:var(--studio-font-code);font-size:var(--studio-font-secondary);}a{color:var(--studio-primary);}.studio-rev-banner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-2) var(--studio-space-4);background:var(--studio-chip-warning-bg);border-block-end:1px solid var(--studio-warning);color:var(--studio-chip-warning-text);z-index:40;}.offline-banner{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-3) var(--studio-space-4);border:1px solid var(--studio-divider);border-inline-start:4px solid var(--studio-warning);border-radius:var(--studio-radius-control);background:var(--studio-surface);color:var(--studio-text);}.offline-banner-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 260px;}.offline-banner-body>span{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;scroll-behavior:auto !important;}}`;
+const BASE_STYLES = css`:host{--studio-font-family:var(--ha-font-family-body,inherit);--studio-font-code:var(--ha-font-family-code,monospace);--studio-font-title:var(--ha-font-size-xl,20px);--studio-font-section:var(--ha-font-size-l,16px);--studio-font-body:var(--ha-font-size-m,14px);--studio-font-secondary:var(--ha-font-size-s,12px);--studio-font-caption:var(--ha-font-size-s,12px);--studio-weight-regular:var(--ha-font-weight-normal,400);--studio-weight-medium:var(--ha-font-weight-medium,500);--studio-line-height:var(--ha-line-height-normal,1.6);--studio-line-height-condensed:var(--ha-line-height-condensed,1.2);--studio-font-card-title:var(--ha-card-header-font-size,var(--ha-font-size-2xl,24px));--studio-card-title-tracking:-0.012em;--studio-space-1:var(--ha-space-1,4px);--studio-space-2:var(--ha-space-2,8px);--studio-space-3:var(--ha-space-3,12px);--studio-space-4:var(--ha-space-4,16px);--studio-space-card-top:var(--ha-space-5,20px);--studio-space-5:var(--ha-space-6,24px);--studio-radius-card:var(--ha-card-border-radius,var(--ha-border-radius-lg,12px));--studio-radius-control:var(--ha-border-radius-md,8px);--studio-radius-field:var(--ha-border-radius-sm,4px);--studio-radius-button:var(--ha-button-border-radius,var(--ha-border-radius-pill,9999px));--studio-radius-dialog:var(--ha-dialog-border-radius,var(--ha-border-radius-3xl,24px));--studio-radius-pill:var(--ha-border-radius-pill,9999px);--studio-card-border-width:var(--ha-card-border-width,1px);--studio-control-height:var(--ha-button-height,40px);--studio-control-height-compact:32px;--studio-row-min-height:56px;--studio-header-height:var(--header-height,56px);--studio-sidebar-width:244px;--studio-bg:var(--primary-background-color,#fafafa);--studio-surface:var(--ha-card-background,var(--card-background-color,#ffffff));--studio-surface-alt:var(--secondary-background-color,#f0f0f0);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#ffffff));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#212121));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#616161));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(0,0,0,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#ffffff));--studio-input-bg:var(--input-fill-color,rgba(0,0,0,0.04));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#f5f5f5));--studio-field-bg-hover:var(--ha-color-form-background-hover,var(--studio-field-bg));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(0,0,0,0.42)));--studio-popup-bg:var(--card-background-color,#ffffff);--studio-divider:var(--divider-color,rgba(0,0,0,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(0,0,0,0.12)));--studio-text:var(--primary-text-color,#212121);--studio-text-secondary:var(--secondary-text-color,#5f6368);--studio-text-disabled:var(--disabled-text-color,#9e9e9e);--studio-primary:var(--primary-color,#007299);--studio-primary-tint:rgba(var(--rgb-primary-color,0,154,199),0.12);--studio-primary-tint-strong:rgba(var(--rgb-primary-color,0,154,199),0.24);--studio-hover:rgba(var(--rgb-primary-text-color,33,33,33),0.06);--studio-btn-accent-bg:var(--ha-color-fill-primary-loud-resting,var(--primary-color,#007da3));--studio-btn-accent-bg-hover:var(--ha-color-fill-primary-loud-hover,var(--studio-btn-accent-bg));--studio-btn-accent-text:var(--ha-color-on-primary-loud,var(--text-primary-color,#ffffff));--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#c2e6f2);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#005b78);--studio-btn-plain-hover:var(--ha-color-fill-primary-quiet-resting,var(--studio-primary-tint));--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-nav-active-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#dcf2df);--studio-chip-success-text:var(--ha-color-on-success-normal,#1b5e20);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#fff0d1);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#7a4900);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#c62828));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#e0e0e0));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#616161));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#d8eff7));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#005b78));--studio-switch-thumb-shadow:var(--ha-switch-thumb-box-shadow,var(--ha-box-shadow-s,0 1px 2px rgba(0,0,0,0.3)));--studio-toast-bg:var(--primary-text-color,#212121);--studio-toast-text:var(--card-background-color,#ffffff);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(140,140,140));--studio-success:var(--success-color,#2e7d32);--studio-warning:var(--warning-color,#ef6c00);--studio-error:var(--error-color,#c62828);--studio-info:var(--info-color,#0277bd);--studio-success-tint:color-mix(in srgb,var(--studio-success) 14%,transparent);--studio-warning-tint:color-mix(in srgb,var(--studio-warning) 14%,transparent);--studio-error-tint:color-mix(in srgb,var(--studio-error) 14%,transparent);--studio-info-tint:color-mix(in srgb,var(--studio-info) 14%,transparent);--studio-card-shadow:var(--ha-card-box-shadow,none);--studio-handoff-surface:color-mix(in srgb,var(--studio-primary) 8%,var(--studio-surface));--studio-handoff-ring:inset 0 0 0 1px var(--studio-primary);--studio-card-handoff-shadow:inset 0 0 0 1px var(--studio-primary),var(--studio-card-shadow);--studio-overlay-shadow:0 8px 24px rgba(0,0,0,0.35);--studio-scrim:rgba(0,0,0,0.5);--studio-media-bg:var(--secondary-background-color,#000000);--studio-photo-badge-bg:rgba(0,0,0,0.68);--studio-photo-badge-text:#ffffff;--studio-photo-ring-selected:0 0 0 2px var(--studio-primary);--studio-dropzone-bg:color-mix(in srgb,var(--studio-primary) 6%,var(--studio-input-bg));--studio-nav-scroll-mask:linear-gradient( to right,transparent 0,#000000 12px,#000000 calc(100% - 16px),transparent 100% );display:block;min-height:100vh;min-height:100dvh;background:var(--studio-bg);color:var(--studio-text);font-family:var(--studio-font-family);font-size:var(--studio-font-body);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height);-webkit-tap-highlight-color:transparent;color-scheme:light;scrollbar-color:var(--studio-scrollbar-thumb) transparent;scrollbar-width:thin;}:host([dark]){--studio-bg:var(--primary-background-color,#111111);--studio-surface:var(--ha-card-background,var(--card-background-color,#1c1c1c));--studio-surface-alt:var(--secondary-background-color,#282828);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#1c1c1c));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#e1e1e1));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#9b9b9b));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(225,225,225,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#1c1c1c));--studio-input-bg:var(--input-fill-color,rgba(255,255,255,0.05));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#363636));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(255,255,255,0.42)));--studio-popup-bg:var(--card-background-color,#1c1c1c);--studio-divider:var(--divider-color,rgba(225,225,225,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(225,225,225,0.12)));--studio-text:var(--primary-text-color,#e1e1e1);--studio-text-secondary:var(--secondary-text-color,#a8a8a8);--studio-text-disabled:var(--disabled-text-color,#6f6f6f);--studio-primary:var(--primary-color,#38bdf8);--studio-hover:rgba(var(--rgb-primary-text-color,225,225,225),0.06);--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#104559);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-nav-active-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#143619);--studio-chip-success-text:var(--ha-color-on-success-normal,#81e287);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#3b2a07);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#ffd166);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#db4437));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#202020));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#989898));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#0b3545));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#7bd6f5));--studio-toast-bg:var(--primary-text-color,#e1e1e1);--studio-toast-text:var(--card-background-color,#1c1c1c);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(110,110,110));--studio-success:var(--success-color,#43a047);--studio-warning:var(--warning-color,#ffa600);--studio-error:var(--error-color,#db4437);--studio-info:var(--info-color,#039be5);color-scheme:dark;}*{box-sizing:border-box;}.hidden{display:none !important;}.studio-root{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--studio-bg);}h2,h3,h4,p{margin:0;}code,.mono{font-family:var(--studio-font-code);font-size:var(--studio-font-secondary);}a{color:var(--studio-primary);}.studio-rev-banner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-2) var(--studio-space-4);background:var(--studio-chip-warning-bg);border-block-end:1px solid var(--studio-warning);color:var(--studio-chip-warning-text);z-index:40;}.offline-banner{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-3) var(--studio-space-4);border:1px solid var(--studio-divider);border-inline-start:4px solid var(--studio-warning);border-radius:var(--studio-radius-control);background:var(--studio-surface);color:var(--studio-text);}.offline-banner-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 260px;}.offline-banner-body>span{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;scroll-behavior:auto !important;}}`;
 __latterExp(__exports, { BASE_STYLES: () => BASE_STYLES });
 //# sourceURL=latter-studio/src/styles/base.ts
 });
@@ -16266,7 +16385,7 @@ const { css } = __req("src/lib/lit.ts");
  * Settings rows, form controls, RTL switches, buttons, WAI-ARIA combobox (`Q11`),
  * and pointer/keyboard sortable drag-and-drop rows (`U4`).
  */
-const CONTROL_STYLES = css`.settings-list{display:flex;flex-direction:column;}.settings-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--studio-space-4);min-height:var(--studio-row-min-height);padding-block:var(--studio-space-2);padding-inline:0;}.settings-row-text{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.row-label{font-weight:var(--studio-weight-regular);}.row-description{line-height:normal;}.settings-row-control{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);}.settings-row-control select,.settings-row-control .combobox,.settings-row-control input[type="text"],.settings-row-control input[type="search"],.settings-row-control input[type="number"],.settings-row-control input[type="time"],.settings-row-control input[type="password"]{inline-size:260px;max-inline-size:100%;}.settings-row-control input[type="number"],.settings-row-control input[type="time"],.settings-row-control input[type="password"]{inline-size:140px;}.settings-row.stacked{grid-template-columns:minmax(0,1fr);}.settings-row.stacked .settings-row-control{justify-content:stretch;}.settings-row.stacked .settings-row-control>*{flex:1 1 200px;inline-size:auto;}select,input[type="text"],input[type="search"],input[type="number"],input[type="time"],input[type="password"],textarea{min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-block-end:1px solid var(--studio-field-line);border-radius:var(--studio-radius-field) var(--studio-radius-field) 0 0;background:var(--studio-field-bg);color:var(--studio-text);color-scheme:inherit;font:inherit;transition:background-color 0.15s ease-out;}textarea{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);resize:vertical;}select:hover,input[type="text"]:hover,input[type="search"]:hover,input[type="number"]:hover,input[type="time"]:hover,input[type="password"]:hover,textarea:hover{background:var(--studio-field-bg-hover);}select option,select optgroup{background-color:var(--studio-popup-bg);color:var(--studio-text);}input::placeholder,textarea::placeholder{color:var(--studio-text-secondary);opacity:1;}input[readonly]{color:var(--studio-text-secondary);}input[type="file"]{color:var(--studio-text-secondary);font:inherit;}input[type="range"]{inline-size:140px;accent-color:var(--studio-primary);}select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}select:focus-visible,input[type="text"]:focus-visible,input[type="search"]:focus-visible,input[type="number"]:focus-visible,input[type="time"]:focus-visible,input[type="password"]:focus-visible,textarea:focus-visible{outline:none;border-block-end-color:var(--studio-primary);box-shadow:inset 0 -1px 0 var(--studio-primary);}.switch{appearance:none;position:relative;inline-size:48px;block-size:24px;margin:0;border:1px solid var(--studio-switch-border);border-radius:var(--studio-radius-pill);background:var(--studio-switch-track);cursor:pointer;flex-shrink:0;transition:background-color 0.15s ease,border-color 0.15s ease;}.switch::after{content:"";position:absolute;inset-block-start:2px;inset-inline-start:2px;inline-size:18px;block-size:18px;border-radius:50%;background:var(--studio-switch-thumb);box-shadow:var(--studio-switch-thumb-shadow);transition:transform 0.15s ease,background-color 0.15s ease;}.switch:checked{background:var(--studio-switch-on-track);border-color:var(--studio-switch-on-border);}.switch:checked::after{transform:translateX(24px);background:var(--studio-switch-on-thumb);}:host(:dir(rtl)) .switch:checked::after{transform:translateX(-24px);}.switch:disabled{opacity:0.3;cursor:not-allowed;}.input-action-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.input-action-row>input:not([type="file"]),.input-action-row>select,.input-action-row>.combobox{flex:1 1 180px;min-inline-size:0;}.input-action-row>input[type="file"]{flex:0 1 auto;max-inline-size:100%;}.segmented{display:inline-flex;gap:var(--studio-space-1);padding:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);}.segmented button{min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:var(--studio-text-secondary);font:inherit;cursor:pointer;}.segmented button[aria-checked="true"]{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.inline-switch{display:inline-flex;align-items:center;gap:var(--studio-space-2);cursor:pointer;white-space:nowrap;}.list-row{display:flex;align-items:flex-end;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.list-row-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--studio-space-2);flex:1;min-inline-size:0;}.list-row-grow{flex:1;min-inline-size:0;}.list-block{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.list-row-head{display:flex;align-items:flex-end;gap:var(--studio-space-2);}.stacked-field{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.stacked-field>label,.stacked-field>.field-label{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.stacked-field>select,.stacked-field>input,.stacked-field>.combobox{inline-size:100%;}.stack{display:flex;flex-direction:column;gap:var(--studio-space-2);}.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--studio-space-1);min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-4);border:none;border-radius:var(--studio-radius-button);font:inherit;font-weight:var(--studio-weight-medium);line-height:1;text-decoration:none;white-space:nowrap;cursor:pointer;transition:background-color 0.15s ease-out;}.btn:disabled{opacity:0.5;cursor:not-allowed;}.btn-compact{min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-3);}.btn-primary{background:var(--studio-btn-accent-bg);color:var(--studio-btn-accent-text);}.btn-primary:hover:not(:disabled){background:var(--studio-btn-accent-bg-hover);}.btn-secondary{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.btn-secondary:hover:not(:disabled){background:var(--studio-btn-tonal-bg-hover);}.btn-text{background:transparent;color:var(--studio-btn-tonal-text);padding-block:0;padding-inline:var(--studio-space-3);}.btn-text:hover:not(:disabled){background:var(--studio-btn-plain-hover);}.btn-danger{background:var(--studio-danger-tonal-bg);color:var(--studio-danger-tonal-text);}.btn-danger:hover:not(:disabled){filter:brightness(0.95);}.btn-danger-filled{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.btn-icon{display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height);block-size:var(--studio-control-height);padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;}.btn-icon:disabled{opacity:0.4;cursor:not-allowed;}.btn-icon:hover:not(:disabled){background:var(--studio-hover);}.btn-icon.danger{color:var(--studio-error);}.btn-icon svg{inline-size:20px;block-size:20px;fill:currentColor;}.quick-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);padding-block-end:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);}.quick-action-grid:last-child{padding-block-end:0;border-block-end:none;}.quick-action-btn{justify-content:flex-start;gap:var(--studio-space-2);min-height:var(--studio-control-height);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border-radius:var(--studio-radius-control);white-space:normal;text-align:start;line-height:var(--studio-line-height-condensed);}.quick-action-btn svg{inline-size:18px;block-size:18px;fill:currentColor;flex-shrink:0;}.combobox{position:relative;display:flex;flex-direction:column;min-inline-size:0;}.combobox-input-wrap{position:relative;display:flex;align-items:center;inline-size:100%;}.combobox-input-wrap>input[role="combobox"]{inline-size:100%;padding-inline-end:calc(var(--studio-control-height-compact) + var(--studio-space-2));}.combobox-clear{position:absolute;inset-inline-end:var(--studio-space-1);display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:50%;background:transparent;color:var(--studio-text-secondary);font:inherit;cursor:pointer;}.combobox-clear:hover{background:var(--studio-hover);color:var(--studio-text);}.combobox-listbox{position:absolute;inset-block-start:calc(100% + var(--studio-space-1));inset-inline:0;z-index:45;max-height:280px;margin:0;padding:var(--studio-space-1);list-style:none;overflow-y:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-popup-bg);box-shadow:var(--studio-overlay-shadow);}.combobox-option{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-field);cursor:pointer;}.combobox-option:hover,.combobox-option.active{background:var(--studio-hover);}.combobox-option[aria-selected="true"]{background:var(--studio-nav-active-bg);color:var(--studio-nav-active-text);}.combobox-option-main{display:flex;flex-direction:column;min-inline-size:0;flex:1;}.combobox-option-title{font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.combobox-option-id{color:var(--studio-text-secondary);font-family:var(--studio-font-code);font-size:var(--studio-font-caption);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.combobox-option-chips{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);flex-shrink:0;}.combobox-empty,.combobox-footer{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);}.combobox-footer{border-block-start:1px solid var(--studio-divider);}.sortable-list{display:flex;flex-direction:column;gap:var(--studio-space-2);}.sortable-row{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.12s ease,opacity 0.12s ease,background-color 0.12s ease;}.sortable-row.dragging,.pill.dragging{opacity:0.65;border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);}.sortable-row.drag-over-before{border-block-start:2px solid var(--studio-primary);}.sortable-row.drag-over-after{border-block-end:2px solid var(--studio-primary);}.pill.drag-over-before{box-shadow:inset 2px 0 0 var(--studio-primary);}.pill.drag-over-after{box-shadow:inset -2px 0 0 var(--studio-primary);}.drag-handle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-field);background:transparent;color:var(--studio-text-secondary);font:inherit;line-height:1;cursor:grab;touch-action:none;user-select:none;flex-shrink:0;}.drag-handle:hover{background:var(--studio-hover);color:var(--studio-text);}.drag-handle:active{cursor:grabbing;}.sortable-row-content{flex:1;min-inline-size:0;}.sortable-row-actions{display:inline-flex;align-items:center;gap:var(--studio-space-1);flex-shrink:0;}.sortable-row-stacked{flex-direction:column;align-items:stretch;gap:var(--studio-space-2);padding-block:var(--studio-space-3);}.sortable-row-head{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);inline-size:100%;}.sortable-row-title{flex:1 1 auto;min-inline-size:0;}.sortable-row-stacked>.sortable-row-content{inline-size:100%;}`;
+const CONTROL_STYLES = css`.settings-list{display:flex;flex-direction:column;}.settings-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--studio-space-4);min-height:var(--studio-row-min-height);padding-block:var(--studio-space-2);padding-inline:0;}.settings-row-text{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.row-label{font-weight:var(--studio-weight-regular);}.row-description{line-height:normal;}.settings-row-control{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);}.settings-row-control select,.settings-row-control .combobox,.settings-row-control input[type="text"],.settings-row-control input[type="search"],.settings-row-control input[type="number"],.settings-row-control input[type="time"],.settings-row-control input[type="password"]{inline-size:260px;max-inline-size:100%;}.settings-row-control input[type="number"],.settings-row-control input[type="time"],.settings-row-control input[type="password"]{inline-size:140px;}.settings-row.stacked{grid-template-columns:minmax(0,1fr);}.settings-row.stacked .settings-row-control{justify-content:stretch;}.settings-row.stacked .settings-row-control>*{flex:1 1 200px;inline-size:auto;}select,input[type="text"],input[type="search"],input[type="number"],input[type="time"],input[type="password"],textarea{min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-block-end:1px solid var(--studio-field-line);border-radius:var(--studio-radius-field) var(--studio-radius-field) 0 0;background:var(--studio-field-bg);color:var(--studio-text);color-scheme:inherit;font:inherit;transition:background-color 0.15s ease-out;}textarea{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);resize:vertical;}select:hover,input[type="text"]:hover,input[type="search"]:hover,input[type="number"]:hover,input[type="time"]:hover,input[type="password"]:hover,textarea:hover{background:var(--studio-field-bg-hover);}select option,select optgroup{background-color:var(--studio-popup-bg);color:var(--studio-text);}input::placeholder,textarea::placeholder{color:var(--studio-text-secondary);opacity:1;}input[readonly]{color:var(--studio-text-secondary);}input[type="file"]{color:var(--studio-text-secondary);font:inherit;}input[type="range"]{inline-size:140px;accent-color:var(--studio-primary);}select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}select:focus-visible,input[type="text"]:focus-visible,input[type="search"]:focus-visible,input[type="number"]:focus-visible,input[type="time"]:focus-visible,input[type="password"]:focus-visible,textarea:focus-visible{outline:none;border-block-end-color:var(--studio-primary);box-shadow:inset 0 -1px 0 var(--studio-primary);}.switch{appearance:none;position:relative;inline-size:48px;block-size:24px;margin:0;border:1px solid var(--studio-switch-border);border-radius:var(--studio-radius-pill);background:var(--studio-switch-track);cursor:pointer;flex-shrink:0;transition:background-color 0.15s ease,border-color 0.15s ease;}.switch::after{content:"";position:absolute;inset-block-start:2px;inset-inline-start:2px;inline-size:18px;block-size:18px;border-radius:50%;background:var(--studio-switch-thumb);box-shadow:var(--studio-switch-thumb-shadow);transition:transform 0.15s ease,background-color 0.15s ease;}.switch:checked{background:var(--studio-switch-on-track);border-color:var(--studio-switch-on-border);}.switch:checked::after{transform:translateX(24px);background:var(--studio-switch-on-thumb);}:host(:dir(rtl)) .switch:checked::after{transform:translateX(-24px);}.switch:disabled{opacity:0.3;cursor:not-allowed;}.input-action-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.input-action-row>input:not([type="file"]),.input-action-row>select,.input-action-row>.combobox{flex:1 1 180px;min-inline-size:0;}.input-action-row>input[type="file"]{flex:0 1 auto;max-inline-size:100%;}.segmented{display:inline-flex;gap:var(--studio-space-1);padding:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);}.segmented button{min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:var(--studio-text-secondary);font:inherit;cursor:pointer;}.segmented button[aria-checked="true"]{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.inline-switch{display:inline-flex;align-items:center;gap:var(--studio-space-2);cursor:pointer;white-space:nowrap;}.list-row{display:flex;align-items:flex-end;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.list-row-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--studio-space-2);flex:1;min-inline-size:0;}.list-row-grow{flex:1;min-inline-size:0;}.list-block{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.list-row-head{display:flex;align-items:flex-end;gap:var(--studio-space-2);}.stacked-field{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.stacked-field>label,.stacked-field>.field-label{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.stacked-field>select,.stacked-field>input,.stacked-field>.combobox{inline-size:100%;}.stack{display:flex;flex-direction:column;gap:var(--studio-space-2);}.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--studio-space-1);min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-4);border:none;border-radius:var(--studio-radius-button);font:inherit;font-weight:var(--studio-weight-medium);line-height:1;text-decoration:none;white-space:nowrap;cursor:pointer;transition:background-color 0.15s ease-out;}.btn:disabled{opacity:0.5;cursor:not-allowed;}.btn-compact{min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-3);}.btn-primary{background:var(--studio-btn-accent-bg);color:var(--studio-btn-accent-text);}.btn-primary:hover:not(:disabled){background:var(--studio-btn-accent-bg-hover);}.btn-secondary{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.btn-secondary:hover:not(:disabled){background:var(--studio-btn-tonal-bg-hover);}.btn-text{background:transparent;color:var(--studio-btn-tonal-text);padding-block:0;padding-inline:var(--studio-space-3);}.btn-text:hover:not(:disabled){background:var(--studio-btn-plain-hover);}.btn-danger{background:var(--studio-danger-tonal-bg);color:var(--studio-danger-tonal-text);}.btn-danger:hover:not(:disabled){filter:brightness(0.95);}.btn-danger-filled{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.btn-icon{display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height);block-size:var(--studio-control-height);padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;}.btn-icon:disabled{opacity:0.4;cursor:not-allowed;}.btn-icon:hover:not(:disabled){background:var(--studio-hover);}.btn-icon.danger{color:var(--studio-error);}.btn-icon svg{inline-size:20px;block-size:20px;fill:currentColor;}.quick-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);padding-block-end:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);}.quick-action-grid:last-child{padding-block-end:0;border-block-end:none;}.quick-action-btn{justify-content:flex-start;gap:var(--studio-space-2);min-height:var(--studio-control-height);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border-radius:var(--studio-radius-control);white-space:normal;text-align:start;line-height:var(--studio-line-height-condensed);}.quick-action-btn svg{inline-size:18px;block-size:18px;fill:currentColor;flex-shrink:0;}.combobox{position:relative;display:flex;flex-direction:column;min-inline-size:0;}.combobox-input-wrap{position:relative;display:flex;align-items:center;inline-size:100%;}.combobox-input-wrap>input[role="combobox"]{inline-size:100%;padding-inline-end:calc(var(--studio-control-height-compact) + var(--studio-space-2));}.combobox-clear{position:absolute;inset-inline-end:var(--studio-space-1);display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:50%;background:transparent;color:var(--studio-text-secondary);font:inherit;cursor:pointer;}.combobox-clear:hover{background:var(--studio-hover);color:var(--studio-text);}.combobox-listbox{position:absolute;inset-block-start:calc(100% + var(--studio-space-1));inset-inline:0;z-index:45;max-height:280px;margin:0;padding:var(--studio-space-1);list-style:none;overflow-y:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-popup-bg);box-shadow:var(--studio-overlay-shadow);}.combobox-option{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-field);cursor:pointer;}.combobox-option:hover,.combobox-option.active{background:var(--studio-hover);}.combobox-option[aria-selected="true"]{background:var(--studio-nav-active-bg);color:var(--studio-nav-active-text);}.combobox-option-main{display:flex;flex-direction:column;min-inline-size:0;flex:1;}.combobox-option-title{font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.combobox-option-id{color:var(--studio-text-secondary);font-family:var(--studio-font-code);font-size:var(--studio-font-caption);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.combobox-option-chips{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);flex-shrink:0;}.combobox-empty,.combobox-footer{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);}.combobox-footer{border-block-start:1px solid var(--studio-divider);}.sortable-list{display:flex;flex-direction:column;gap:var(--studio-space-2);}.sortable-row{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.12s ease,opacity 0.12s ease,background-color 0.12s ease;}.sortable-row.dragging,.pill.dragging{opacity:0.65;border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);}.sortable-row.drag-over-before{border-block-start:2px solid var(--studio-primary);}.sortable-row.drag-over-after{border-block-end:2px solid var(--studio-primary);}.pill.drag-over-before{box-shadow:inset 2px 0 0 var(--studio-primary);}.pill.drag-over-after{box-shadow:inset -2px 0 0 var(--studio-primary);}:host(:dir(rtl)) .pill.drag-over-before{box-shadow:inset -2px 0 0 var(--studio-primary);}:host(:dir(rtl)) .pill.drag-over-after{box-shadow:inset 2px 0 0 var(--studio-primary);}.drag-handle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-field);background:transparent;color:var(--studio-text-secondary);font:inherit;line-height:1;cursor:grab;touch-action:none;user-select:none;flex-shrink:0;}.drag-handle:hover{background:var(--studio-hover);color:var(--studio-text);}.drag-handle:active{cursor:grabbing;}.sortable-row-content{flex:1;min-inline-size:0;}.sortable-row-actions{display:inline-flex;align-items:center;gap:var(--studio-space-1);flex-shrink:0;}.sortable-row-stacked{flex-direction:column;align-items:stretch;gap:var(--studio-space-2);padding-block:var(--studio-space-3);}.sortable-row-head{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);inline-size:100%;}.sortable-row-title{flex:1 1 auto;min-inline-size:0;}.sortable-row-stacked>.sortable-row-content{inline-size:100%;}`;
 __latterExp(__exports, { CONTROL_STYLES: () => CONTROL_STYLES });
 //# sourceURL=latter-studio/src/styles/controls.ts
 });
@@ -16276,7 +16395,7 @@ const { css } = __req("src/lib/lit.ts");
  * Key-value lists, data tables, WCAG 2.2 AA chips, >= 32px pills, BLE signal bars,
  * wallpaper gallery, camera previews, logs, & alerts (`D-061`, `D-064`).
  */
-const DATA_STYLES = css`.kv-list{display:flex;flex-direction:column;gap:0;}.kv-row{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:0;}.kv-row>span:first-child{color:var(--studio-text-secondary);}.kv-row>strong,.kv-value{font-weight:var(--studio-weight-medium);font-variant-numeric:tabular-nums;text-align:end;}button.kv-row{inline-size:100%;border:none;border-radius:var(--studio-radius-control);background:transparent;color:inherit;font:inherit;text-align:start;cursor:pointer;}button.kv-row:hover{background:var(--studio-hover);}button.kv-row>strong::after{content:" ›";color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}:host(:dir(rtl)) button.kv-row>strong::after{content:" ‹";}.table-wrap{inline-size:100%;overflow-x:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}table.data-table{inline-size:100%;border-collapse:collapse;text-align:start;}table.data-table th{padding:0;border-block-end:1px solid var(--studio-divider);white-space:nowrap;}.sort-btn{inline-size:100%;padding:var(--studio-space-3);border:none;background:transparent;color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:start;cursor:pointer;}.sort-btn:hover{color:var(--studio-text);}th[aria-sort="ascending"] .sort-btn,th[aria-sort="descending"] .sort-btn{color:var(--studio-primary);}table.data-table td{padding:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);white-space:nowrap;}table.data-table tbody tr:last-child td{border-block-end:none;}table.data-table tbody tr{cursor:pointer;}table.data-table tbody tr:hover,table.data-table tbody tr:focus-visible{background:var(--studio-hover);}td.col-name{font-weight:var(--studio-weight-medium);}table.data-table a{color:inherit;text-decoration:none;}table.data-table a:hover{text-decoration:underline;}td.col-open{color:var(--studio-text-secondary);text-align:end;}.chip{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:22px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);white-space:nowrap;font-variant-numeric:tabular-nums;}.chip-primary{background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.chip-success{background:var(--studio-chip-success-bg);color:var(--studio-chip-success-text);}.chip-warning{background:var(--studio-chip-warning-bg);color:var(--studio-chip-warning-text);}.chip-error{background:var(--studio-chip-danger-bg);color:var(--studio-chip-danger-text);}.status-dot{display:inline-block;inline-size:8px;block-size:8px;margin-inline-end:var(--studio-space-2);border-radius:50%;background:var(--studio-text-disabled);}.chip>.status-dot{margin-inline-end:var(--studio-space-1);}.status-dot.online{background:var(--studio-success);}.status-dot.update{background:var(--studio-warning);}.status-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);}@container (max-width:260px){.status-tiles{grid-template-columns:minmax(0,1fr);}}.status-tile{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-1);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.status-tile{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.status-tile:hover{background:var(--studio-hover);border-color:var(--studio-primary);}button.status-tile:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.status-tile-head{display:flex;align-items:center;gap:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.status-tile-head svg{inline-size:16px;block-size:16px;fill:currentColor;flex-shrink:0;}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}.status-tile-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.status-tile>.signal-track{margin-block-start:var(--studio-space-1);}@container (max-width:420px){.status-tile{gap:0;padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);}.status-tile-head{gap:var(--studio-space-1);}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-body);}.status-tile-meta{margin-block-start:var(--studio-space-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}.overview-box{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-2);inline-size:100%;padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.overview-box{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.overview-box:hover{background:var(--studio-hover);border-color:var(--studio-primary);}.overview-box-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-title{display:inline-flex;align-items:center;gap:var(--studio-space-2);font-size:var(--studio-font-body);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.overview-box-title svg{inline-size:18px;block-size:18px;fill:currentColor;color:var(--studio-text-secondary);flex-shrink:0;}.overview-box-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-chevron{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.overview-box-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.pill-list{display:flex;flex-wrap:wrap;gap:var(--studio-space-2);}.pill{display:inline-flex;align-items:center;gap:2px;min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);}.pill.enabled{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.pill-move{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-move:hover:not(:disabled){background:var(--studio-hover);color:var(--studio-primary);}.pill-move:disabled{opacity:0.4;cursor:not-allowed;}.pill-toggle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-toggle:disabled{opacity:0.5;cursor:not-allowed;}.pill .drag-handle{border-radius:var(--studio-radius-pill);color:inherit;}.swatch{display:inline-block;inline-size:20px;block-size:20px;border-radius:50%;border:1px solid var(--studio-divider);background:var(--swatch-color,var(--studio-primary));flex-shrink:0;}#card-ble-calibration{scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));}.calibrate-target-box{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.calibrate-target-box.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);background:var(--studio-primary-tint);}.calibrate-handoff-banner{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-weight:var(--studio-weight-medium);}.signal-row{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.signal-row.winner{border-color:var(--studio-primary);}.proxy-trim-details{padding-block-start:var(--studio-space-2);}.proxy-trim-details>summary{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.proxy-trim-details[open]>summary,.proxy-trim-details>summary:hover{color:var(--studio-text);}.proxy-trim-body{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);}.signal-row-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-row-title{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.signal-track,.upload-progress{block-size:6px;border-radius:var(--studio-radius-pill);background:var(--studio-surface-alt);overflow:hidden;}.signal-fill{inline-size:var(--signal-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.25s ease,width 0.25s ease;}.signal-fill.low{background:var(--studio-error);}.upload-progress-fill{inline-size:var(--upload-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.15s ease,width 0.15s ease;}.wp-upload-trigger{display:inline-flex;align-items:center;}.wp-upload-status{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);}.wp-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--studio-space-3);}.wp-card{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;}.wp-gallery>.empty-state{grid-column:1 / -1;}.wp-card.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.wp-thumb-btn{padding:0;border:none;background:transparent;border-radius:var(--studio-radius-control);cursor:pointer;line-height:0;}.wp-thumb-btn.circle{border-radius:50%;}.wp-thumb-btn:hover .wp-thumb{border-color:var(--studio-primary);}.wp-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.wp-thumb{inline-size:104px;block-size:104px;object-fit:cover;background:var(--studio-media-bg);border:1px solid var(--studio-divider);}.wp-thumb.circle{border-radius:50%;}.wp-thumb.square{border-radius:var(--studio-radius-control);}.wp-title{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow-wrap:anywhere;}.wp-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--studio-space-1);margin-block-start:auto;inline-size:100%;}.btn-icon.wp-star-btn{inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);}.btn-icon.wp-star-btn:hover{color:var(--studio-warning);background:var(--studio-warning-tint);}.btn-icon.wp-star-btn.starred{color:var(--studio-warning);}.photo-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-toolbar-start,.photo-toolbar-end{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-search-input{min-inline-size:200px;flex:1 1 220px;}.collection-strip{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.collection-chip-wrap{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);}.collection-chip-wrap.active{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.collection-chip-btn{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);cursor:pointer;}.collection-chip-action{display:inline-flex;align-items:center;justify-content:center;min-inline-size:28px;min-block-size:28px;padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;cursor:pointer;}.collection-chip-action:hover{background:var(--studio-hover);}.collection-chip-action svg{inline-size:14px;block-size:14px;fill:currentColor;}.photo-bulk-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-primary);border-radius:var(--studio-radius-control);background:var(--studio-primary-tint);}.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:var(--studio-space-3);}.photo-grid>.empty-state{grid-column:1 / -1;}.photo-tile{position:relative;display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);content-visibility:auto;contain-intrinsic-size:180px 220px;transition:border-color 0.15s ease,background-color 0.15s ease,box-shadow 0.15s ease;}.photo-tile:hover{border-color:var(--studio-primary);}.photo-tile.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-tile-thumb-btn{position:relative;display:block;inline-size:100%;padding:0;border:none;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);overflow:hidden;cursor:pointer;aspect-ratio:1 / 1;line-height:0;}.photo-tile-thumb-btn.circle{border-radius:50%;}.photo-tile-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.photo-tile-img{inline-size:100%;block-size:100%;object-fit:cover;display:block;}.photo-tile-check{position:absolute;inset-block-start:var(--studio-space-2);inset-inline-start:var(--studio-space-2);z-index:2;inline-size:20px;block-size:20px;accent-color:var(--studio-primary);cursor:pointer;}.photo-tile-badge{position:absolute;inset-block-end:var(--studio-space-1);inset-inline-end:var(--studio-space-1);padding-block:2px;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-photo-badge-bg);color:var(--studio-photo-badge-text);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.photo-tile-meta{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.photo-tile-name{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.photo-tile-sub{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);}.photo-pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);border-block-start:1px solid var(--studio-divider);}.photo-pool-preview{display:flex;flex-wrap:wrap;align-items:center;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.photo-pool-thumbs{display:flex;align-items:center;gap:var(--studio-space-1);flex-shrink:0;}.photo-pool-thumb{inline-size:48px;block-size:48px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-pool-thumb.circle{border-radius:50%;}.photo-pool-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 160px;}.photo-pool-title{font-weight:var(--studio-weight-medium);overflow-wrap:break-word;}.photo-pool-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);overflow-wrap:break-word;}.photo-pool-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);flex-shrink:0;}.cam-preview{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.cam-preview img{inline-size:100%;max-inline-size:360px;aspect-ratio:16 / 9;object-fit:cover;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);}.log-output{max-block-size:380px;margin:0;padding:var(--studio-space-3);overflow:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);white-space:pre-wrap;}.empty-state{padding-block:var(--studio-space-3);padding-inline:0;color:var(--studio-text-secondary);}.loading-state{display:flex;align-items:center;gap:var(--studio-space-3);padding-block:var(--studio-space-5);padding-inline:0;color:var(--studio-text-secondary);}.loading-state::before{content:"";inline-size:20px;block-size:20px;border:2px solid var(--studio-divider);border-block-start-color:var(--studio-primary);border-radius:50%;animation:studio-spin 0.8s linear infinite;}.studio-root:not(.is-loading) #studio-loading{display:none;}@keyframes studio-spin{to{transform:rotate(360deg);}}.alert{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-info-tint);}.alert-error{background:var(--studio-error-tint);}.alert-warning{background:var(--studio-warning-tint);}.alert-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.alert-list{margin:0;padding-inline-start:var(--studio-space-5);}.toast{position:fixed;inset-inline-start:50%;inset-block-end:var(--studio-space-5);transform:translateX(-50%);z-index:50;max-inline-size:min(560px,calc(100vw - 32px));padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-toast-bg);color:var(--studio-toast-text);box-shadow:var(--studio-overlay-shadow);}.toast.error{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.offscreen,.sr-only{position:fixed;inset-block-start:0;inset-inline-start:0;inline-size:1px;block-size:1px;padding:0;margin:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:none;opacity:0;pointer-events:none;}`;
+const DATA_STYLES = css`.kv-list{display:flex;flex-direction:column;gap:0;}.kv-row{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:0;}.kv-row>span:first-child{color:var(--studio-text-secondary);}.kv-row>strong,.kv-value{font-weight:var(--studio-weight-medium);font-variant-numeric:tabular-nums;text-align:end;}button.kv-row{inline-size:100%;border:none;border-radius:var(--studio-radius-control);background:transparent;color:inherit;font:inherit;text-align:start;cursor:pointer;}button.kv-row:hover{background:var(--studio-hover);}button.kv-row>strong::after{content:" ›";color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}:host(:dir(rtl)) button.kv-row>strong::after{content:" ‹";}.table-wrap{inline-size:100%;overflow-x:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}table.data-table{inline-size:100%;border-collapse:collapse;text-align:start;}table.data-table th{padding:0;border-block-end:1px solid var(--studio-divider);white-space:nowrap;}.sort-btn{inline-size:100%;padding:var(--studio-space-3);border:none;background:transparent;color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:start;cursor:pointer;}.sort-btn:hover{color:var(--studio-text);}th[aria-sort="ascending"] .sort-btn,th[aria-sort="descending"] .sort-btn{color:var(--studio-primary);}table.data-table td{padding:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);white-space:nowrap;}table.data-table tbody tr:last-child td{border-block-end:none;}table.data-table tbody tr{cursor:pointer;}table.data-table tbody tr:hover,table.data-table tbody tr:focus-visible{background:var(--studio-hover);}td.col-name{font-weight:var(--studio-weight-medium);}table.data-table a{color:inherit;text-decoration:none;}table.data-table a:hover{text-decoration:underline;}td.col-open{color:var(--studio-text-secondary);text-align:end;}.chip{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:22px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);white-space:nowrap;font-variant-numeric:tabular-nums;}.chip-primary{background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.chip-success{background:var(--studio-chip-success-bg);color:var(--studio-chip-success-text);}.chip-warning{background:var(--studio-chip-warning-bg);color:var(--studio-chip-warning-text);}.chip-error{background:var(--studio-chip-danger-bg);color:var(--studio-chip-danger-text);}.status-dot{display:inline-block;inline-size:8px;block-size:8px;margin-inline-end:var(--studio-space-2);border-radius:50%;background:var(--studio-text-disabled);}.chip>.status-dot{margin-inline-end:var(--studio-space-1);}.status-dot.online{background:var(--studio-success);}.status-dot.update{background:var(--studio-warning);}.status-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);}@container (max-width:260px){.status-tiles{grid-template-columns:minmax(0,1fr);}}.status-tile{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-1);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.status-tile{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.status-tile:hover{background:var(--studio-hover);border-color:var(--studio-primary);}button.status-tile:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.status-tile-head{display:flex;align-items:center;gap:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.status-tile-head svg{inline-size:16px;block-size:16px;fill:currentColor;flex-shrink:0;}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}.status-tile-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.status-tile>.signal-track{margin-block-start:var(--studio-space-1);}@container (max-width:420px){.status-tile{gap:0;padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);}.status-tile-head{gap:var(--studio-space-1);}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-body);}.status-tile-meta{margin-block-start:var(--studio-space-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}.overview-box{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-2);inline-size:100%;padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.overview-box{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.overview-box:hover{background:var(--studio-hover);border-color:var(--studio-primary);}.overview-box-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-title{display:inline-flex;align-items:center;gap:var(--studio-space-2);font-size:var(--studio-font-body);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.overview-box-title svg{inline-size:18px;block-size:18px;fill:currentColor;color:var(--studio-text-secondary);flex-shrink:0;}.overview-box-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-chevron{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.overview-box-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.pill-list{display:flex;flex-wrap:wrap;gap:var(--studio-space-2);}.pill{display:inline-flex;align-items:center;gap:2px;min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);}.pill.enabled{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.pill-move{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-move:hover:not(:disabled){background:var(--studio-hover);color:var(--studio-primary);}.pill-move:disabled{opacity:0.4;cursor:not-allowed;}.pill-toggle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-toggle:disabled{opacity:0.5;cursor:not-allowed;}.pill .drag-handle{border-radius:var(--studio-radius-pill);color:inherit;}.swatch{display:inline-block;inline-size:20px;block-size:20px;border-radius:50%;border:1px solid var(--studio-divider);background:var(--swatch-color,var(--studio-primary));flex-shrink:0;}#card-ble-calibration{scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));}.calibrate-target-box{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.calibrate-target-box.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);background:var(--studio-primary-tint);}.calibrate-handoff-banner{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-weight:var(--studio-weight-medium);}.signal-row{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.signal-row.winner{border-color:var(--studio-primary);}.proxy-trim-details{padding-block-start:var(--studio-space-2);}.proxy-trim-details>summary{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.proxy-trim-details[open]>summary,.proxy-trim-details>summary:hover{color:var(--studio-text);}.proxy-trim-body{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);}.signal-row-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-row-title{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.signal-track,.upload-progress{block-size:6px;border-radius:var(--studio-radius-pill);background:var(--studio-surface-alt);overflow:hidden;}.signal-fill{inline-size:var(--signal-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.25s ease,width 0.25s ease;}.signal-fill.low{background:var(--studio-error);}.upload-progress-fill{inline-size:var(--upload-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.15s ease,width 0.15s ease;}.wp-upload-trigger{display:inline-flex;align-items:center;}.wp-upload-status{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);}.wp-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--studio-space-3);}.wp-card{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;}.wp-gallery>.empty-state{grid-column:1 / -1;}.wp-card.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.wp-thumb-btn{padding:0;border:none;background:transparent;border-radius:var(--studio-radius-control);cursor:pointer;line-height:0;}.wp-thumb-btn.circle{border-radius:50%;}.wp-thumb-btn:hover .wp-thumb{border-color:var(--studio-primary);}.wp-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.wp-thumb{inline-size:104px;block-size:104px;object-fit:cover;background:var(--studio-media-bg);border:1px solid var(--studio-divider);}.wp-thumb.circle{border-radius:50%;}.wp-thumb.square{border-radius:var(--studio-radius-control);}.wp-title{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow-wrap:anywhere;}.wp-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--studio-space-1);margin-block-start:auto;inline-size:100%;}.btn-icon.wp-star-btn{inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);}.btn-icon.wp-star-btn:hover{color:var(--studio-warning);background:var(--studio-warning-tint);}.btn-icon.wp-star-btn.starred{color:var(--studio-warning);}.photo-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-toolbar-start,.photo-toolbar-end{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-search-input{min-inline-size:200px;flex:1 1 220px;}.collection-strip{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.collection-chip-wrap{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);}.collection-chip-wrap.active{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.collection-chip-btn{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);cursor:pointer;}.collection-chip-action{display:inline-flex;align-items:center;justify-content:center;min-inline-size:28px;min-block-size:28px;padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;cursor:pointer;}.collection-chip-action:hover{background:var(--studio-hover);}.collection-chip-action svg{inline-size:14px;block-size:14px;fill:currentColor;}.photo-bulk-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-primary);border-radius:var(--studio-radius-control);background:var(--studio-primary-tint);}.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:var(--studio-space-3);}.photo-grid>.empty-state{grid-column:1 / -1;}.photo-tile{position:relative;display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);content-visibility:auto;contain-intrinsic-size:180px 220px;transition:border-color 0.15s ease,background-color 0.15s ease,box-shadow 0.15s ease;}.photo-tile:hover{border-color:var(--studio-primary);}.photo-tile.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-tile-thumb-btn{position:relative;display:block;inline-size:100%;padding:0;border:none;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);overflow:hidden;cursor:pointer;aspect-ratio:1 / 1;line-height:0;}.photo-tile-thumb-btn.circle{border-radius:50%;}.photo-tile-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.photo-tile-img{inline-size:100%;block-size:100%;object-fit:cover;display:block;}.photo-tile-check{position:absolute;inset-block-start:var(--studio-space-2);inset-inline-start:var(--studio-space-2);z-index:2;inline-size:20px;block-size:20px;accent-color:var(--studio-primary);cursor:pointer;}.photo-tile-badge{position:absolute;inset-block-end:var(--studio-space-1);inset-inline-end:var(--studio-space-1);padding-block:2px;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-photo-badge-bg);color:var(--studio-photo-badge-text);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.photo-tile-meta{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.photo-tile-name{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.photo-tile-sub{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);}.photo-pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);border-block-start:1px solid var(--studio-divider);}.photo-pool-preview{display:flex;flex-wrap:wrap;align-items:center;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.photo-pool-thumbs{display:flex;align-items:center;gap:var(--studio-space-1);flex-shrink:0;}.photo-pool-thumb{inline-size:48px;block-size:48px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-pool-thumb.circle{border-radius:50%;}.photo-pool-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 160px;}.photo-pool-title{font-weight:var(--studio-weight-medium);overflow-wrap:break-word;}.photo-pool-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);overflow-wrap:break-word;}.photo-pool-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);flex-shrink:0;}.cam-preview{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.cam-preview img{inline-size:100%;max-inline-size:360px;aspect-ratio:16 / 9;object-fit:cover;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);}.log-output{max-block-size:380px;margin:0;padding:var(--studio-space-3);overflow:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);white-space:pre-wrap;}.empty-state{padding-block:var(--studio-space-3);padding-inline:0;color:var(--studio-text-secondary);}.loading-state{display:flex;align-items:center;gap:var(--studio-space-3);padding-block:var(--studio-space-5);padding-inline:0;color:var(--studio-text-secondary);}.loading-state::before{content:"";inline-size:20px;block-size:20px;border:2px solid var(--studio-divider);border-block-start-color:var(--studio-primary);border-radius:50%;animation:studio-spin 0.8s linear infinite;}.studio-root:not(.is-loading) #studio-loading{display:none;}@keyframes studio-spin{to{transform:rotate(360deg);}}.alert{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-info-tint);}.alert-error{background:var(--studio-error-tint);}.alert-warning{background:var(--studio-warning-tint);}.alert-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.alert-list{margin:0;padding-inline-start:var(--studio-space-5);}.toast{position:fixed;inset-inline:0;inset-block-end:var(--studio-space-5);margin-inline:auto;inline-size:fit-content;z-index:50;max-inline-size:min(560px,calc(100vw - 32px));padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-toast-bg);color:var(--studio-toast-text);box-shadow:var(--studio-overlay-shadow);}.toast.error{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.offscreen,.sr-only{position:fixed;inset-block-start:0;inset-inline-start:0;inline-size:1px;block-size:1px;padding:0;margin:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:none;opacity:0;pointer-events:none;}`;
 __latterExp(__exports, { DATA_STYLES: () => DATA_STYLES });
 //# sourceURL=latter-studio/src/styles/data.ts
 });
@@ -16286,7 +16405,7 @@ const { css } = __req("src/lib/lit.ts");
  * Native `<dialog>` modals, confirmation modal (`Q5`), non-truncating `.dock-row`,
  * shortcut/MDI picker grids, and HSV color wheel (`D-053`, `D-064`).
  */
-const DIALOG_STYLES = css`dialog.studio-dialog{inline-size:min(460px,calc(100vw - 32px));max-block-size:calc(100vh - 32px);max-block-size:calc(100dvh - 32px);padding:var(--studio-space-5);border:none;border-radius:var(--studio-radius-dialog);background:var(--studio-surface);color:var(--studio-text);box-shadow:var(--studio-overlay-shadow);overflow-y:auto;overscroll-behavior:contain;}dialog.studio-dialog::backdrop{background:var(--studio-scrim);}dialog.studio-dialog.confirm-dialog{inline-size:min(480px,calc(100vw - 32px));}.dialog-body{display:flex;flex-direction:column;gap:var(--studio-space-3);}.dialog-header-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.dialog-title{font-size:var(--studio-font-card-title);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height-condensed);}.dialog-text{color:var(--studio-text-secondary);}.dialog-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);margin-block-start:var(--studio-space-2);}.dialog-actions.with-secondary{justify-content:space-between;}.dialog-actions-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);margin-inline-start:auto;}dialog.studio-dialog.shortcut-dialog{inline-size:min(560px,calc(100vw - 32px));}dialog.studio-dialog.photo-dialog{inline-size:min(680px,calc(100vw - 32px));}.crop-dropzone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--studio-space-2);padding:var(--studio-space-5);border:2px dashed var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;cursor:pointer;transition:border-color 0.15s ease,background-color 0.15s ease;}.crop-dropzone.dragging,.crop-dropzone:hover{border-color:var(--studio-primary);background:var(--studio-dropzone-bg);}.crop-stage-wrap{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-surface-alt);}.crop-canvas{max-inline-size:100%;block-size:auto;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);cursor:grab;touch-action:none;display:block;}.crop-canvas.dragging{cursor:grabbing;}.crop-canvas.round{border-radius:50%;}.crop-controls-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-3);inline-size:100%;}.crop-zoom-control{display:flex;align-items:center;gap:var(--studio-space-2);flex:1 1 200px;}.crop-zoom-control input[type="range"]{flex:1;min-inline-size:120px;}.crop-filmstrip{display:flex;align-items:center;gap:var(--studio-space-2);overflow-x:auto;overscroll-behavior-inline:contain;padding-block:var(--studio-space-1);inline-size:100%;}.crop-filmstrip-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-1);padding:var(--studio-space-1);border:2px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);cursor:pointer;flex-shrink:0;}.crop-filmstrip-item.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.crop-filmstrip-thumb{inline-size:56px;block-size:56px;object-fit:cover;border-radius:var(--studio-radius-field);background:var(--studio-media-bg);display:block;}.crop-filmstrip-remove{position:absolute;inset-block-start:-6px;inset-inline-end:-6px;inline-size:22px;block-size:22px;border-radius:var(--studio-radius-pill);border:1px solid var(--studio-divider);background:var(--studio-surface);color:var(--studio-text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:var(--studio-font-caption);}.crop-filmstrip-remove:hover{background:var(--studio-danger-tonal-bg);color:var(--studio-danger-tonal-text);border-color:var(--studio-error);}.media-breadcrumbs{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);padding-block:var(--studio-space-1);}.media-folder-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--studio-space-2);}.media-folder-btn{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:var(--studio-text);font:inherit;text-align:start;cursor:pointer;min-inline-size:0;}.media-folder-btn:hover{border-color:var(--studio-primary);background:var(--studio-hover);}.media-folder-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.media-scroll-area{max-block-size:360px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-1);display:flex;flex-direction:column;gap:var(--studio-space-3);}.photo-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:var(--studio-space-2);max-block-size:320px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-1);}.photo-picker-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-1);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;cursor:pointer;text-align:center;}.photo-picker-item:hover{border-color:var(--studio-primary);}.photo-picker-item.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-picker-thumb{inline-size:88px;block-size:88px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-picker-thumb.circle{border-radius:50%;}.photo-picker-name{font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);inline-size:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-item-row,.dock-row{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.dock-row{flex-wrap:wrap;}.dock-row .shortcut-item-info{flex:1 1 180px;}.dock-row .shortcut-item-title,.dock-row .shortcut-item-meta{white-space:normal;overflow-wrap:anywhere;}.shortcut-item-row.shortcut-item-locked,.dock-row.shortcut-item-locked{border-style:dashed;background:transparent;}.shortcut-item-row.shortcut-item-locked .shortcut-icon-badge,.shortcut-item-row.shortcut-item-hidden .shortcut-icon-badge,.dock-row.shortcut-item-locked .shortcut-icon-badge,.dock-row.shortcut-item-hidden .shortcut-icon-badge{background:var(--studio-surface-alt);color:var(--studio-text-secondary);}.shortcut-icon-badge{display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);border-radius:var(--studio-radius-pill);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);flex-shrink:0;}.shortcut-item-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1;}.shortcut-item-title{font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-item-meta{font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-page-group{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-surface-alt);}.shortcut-page-header{display:flex;align-items:center;justify-content:space-between;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);color:var(--studio-text-secondary);}.shortcut-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.shortcut-icon-row{display:flex;align-items:center;gap:var(--studio-space-2);}.shortcut-icon-row input[type="text"]{flex:1;min-inline-size:0;}.mdi-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:var(--studio-space-1);max-block-size:168px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.mdi-picker-btn{display:inline-flex;align-items:center;justify-content:center;block-size:var(--studio-control-height);border:1px solid transparent;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text);cursor:pointer;}.mdi-picker-btn:hover{background:var(--studio-hover);}.mdi-picker-btn.selected{background:var(--studio-chip-primary-bg);border-color:var(--studio-primary);color:var(--studio-chip-primary-text);}.color-wheel{display:flex;justify-content:center;}.color-wheel canvas{border-radius:50%;cursor:crosshair;touch-action:none;}.color-hex-row{display:flex;align-items:center;justify-content:center;gap:var(--studio-space-2);}.color-hex-row input[type="text"]{inline-size:120px;font-family:var(--studio-font-code);text-align:center;}.color-hex-row input[type="color"]{inline-size:var(--studio-control-height);block-size:var(--studio-control-height);padding:0;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:none;cursor:pointer;}`;
+const DIALOG_STYLES = css`dialog.studio-dialog{inline-size:min(460px,calc(100vw - 32px));max-block-size:calc(100vh - 32px);max-block-size:calc(100dvh - 32px);padding:var(--studio-space-5);border:none;border-radius:var(--studio-radius-dialog);background:var(--studio-surface);color:var(--studio-text);box-shadow:var(--studio-overlay-shadow);overflow-y:auto;overscroll-behavior:contain;}dialog.studio-dialog::backdrop{background:var(--studio-scrim);}dialog.studio-dialog.confirm-dialog{inline-size:min(480px,calc(100vw - 32px));}.dialog-body{display:flex;flex-direction:column;gap:var(--studio-space-3);}.dialog-header-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.dialog-title{font-size:var(--studio-font-card-title);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height-condensed);}.dialog-text{color:var(--studio-text-secondary);}.dialog-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);margin-block-start:var(--studio-space-2);}.dialog-actions.with-secondary{justify-content:space-between;}.dialog-actions-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);margin-inline-start:auto;}dialog.studio-dialog.shortcut-dialog{inline-size:min(560px,calc(100vw - 32px));}dialog.studio-dialog.photo-dialog{inline-size:min(680px,calc(100vw - 32px));}.crop-dropzone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--studio-space-2);padding:var(--studio-space-5);border:2px dashed var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;cursor:pointer;transition:border-color 0.15s ease,background-color 0.15s ease;}.crop-dropzone.dragging,.crop-dropzone:hover{border-color:var(--studio-primary);background:var(--studio-dropzone-bg);}.crop-stage-wrap{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-surface-alt);}.crop-canvas{max-inline-size:100%;block-size:auto;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);cursor:grab;touch-action:none;display:block;}.crop-canvas.dragging{cursor:grabbing;}.crop-canvas.round{border-radius:50%;}.crop-controls-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-3);inline-size:100%;}.crop-zoom-control{display:flex;align-items:center;gap:var(--studio-space-2);flex:1 1 200px;}.crop-zoom-control input[type="range"]{flex:1;min-inline-size:120px;}.crop-filmstrip{display:flex;align-items:center;gap:var(--studio-space-2);overflow-x:auto;overscroll-behavior-inline:contain;padding-block:var(--studio-space-1);inline-size:100%;}.crop-filmstrip-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-1);padding:var(--studio-space-1);border:2px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);cursor:pointer;flex-shrink:0;}.crop-filmstrip-item.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.crop-filmstrip-thumb{inline-size:56px;block-size:56px;object-fit:cover;border-radius:var(--studio-radius-field);background:var(--studio-media-bg);display:block;}.crop-filmstrip-remove{position:absolute;inset-block-start:-6px;inset-inline-end:-6px;inline-size:24px;block-size:24px;border-radius:var(--studio-radius-pill);border:1px solid var(--studio-divider);background:var(--studio-surface);color:var(--studio-text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:var(--studio-font-caption);}.crop-filmstrip-remove:hover{background:var(--studio-danger-tonal-bg);color:var(--studio-danger-tonal-text);border-color:var(--studio-error);}.media-breadcrumbs{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);padding-block:var(--studio-space-1);}.media-folder-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--studio-space-2);}.media-folder-btn{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:var(--studio-text);font:inherit;text-align:start;cursor:pointer;min-inline-size:0;}.media-folder-btn:hover{border-color:var(--studio-primary);background:var(--studio-hover);}.media-folder-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.media-scroll-area{max-block-size:360px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-1);display:flex;flex-direction:column;gap:var(--studio-space-3);}.photo-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:var(--studio-space-2);max-block-size:320px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-1);}.photo-picker-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-1);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;cursor:pointer;text-align:center;}.photo-picker-item:hover{border-color:var(--studio-primary);}.photo-picker-item.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-picker-thumb{inline-size:88px;block-size:88px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-picker-thumb.circle{border-radius:50%;}.photo-picker-name{font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);inline-size:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-item-row,.dock-row{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.dock-row{flex-wrap:wrap;}.dock-row .shortcut-item-info{flex:1 1 180px;}.dock-row .shortcut-item-title,.dock-row .shortcut-item-meta{white-space:normal;overflow-wrap:anywhere;}.shortcut-item-row.shortcut-item-locked,.dock-row.shortcut-item-locked{border-style:dashed;background:transparent;}.shortcut-item-row.shortcut-item-locked .shortcut-icon-badge,.shortcut-item-row.shortcut-item-hidden .shortcut-icon-badge,.dock-row.shortcut-item-locked .shortcut-icon-badge,.dock-row.shortcut-item-hidden .shortcut-icon-badge{background:var(--studio-surface-alt);color:var(--studio-text-secondary);}.shortcut-icon-badge{display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);border-radius:var(--studio-radius-pill);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);flex-shrink:0;}.shortcut-item-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1;}.shortcut-item-title{font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-item-meta{font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-page-group{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-surface-alt);}.shortcut-page-header{display:flex;align-items:center;justify-content:space-between;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);color:var(--studio-text-secondary);}.shortcut-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.shortcut-icon-row{display:flex;align-items:center;gap:var(--studio-space-2);}.shortcut-icon-row input[type="text"]{flex:1;min-inline-size:0;}.mdi-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:var(--studio-space-1);max-block-size:168px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.mdi-picker-btn{display:inline-flex;align-items:center;justify-content:center;block-size:var(--studio-control-height);border:1px solid transparent;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text);cursor:pointer;}.mdi-picker-btn:hover{background:var(--studio-hover);}.mdi-picker-btn.selected{background:var(--studio-chip-primary-bg);border-color:var(--studio-primary);color:var(--studio-chip-primary-text);}.color-wheel{display:flex;justify-content:center;}.color-wheel canvas{border-radius:50%;cursor:crosshair;touch-action:none;}.color-hex-row{display:flex;align-items:center;justify-content:center;gap:var(--studio-space-2);}.color-hex-row input[type="text"]{inline-size:120px;font-family:var(--studio-font-code);text-align:center;}.color-hex-row input[type="color"]{inline-size:var(--studio-control-height);block-size:var(--studio-control-height);padding:0;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:none;cursor:pointer;}`;
 __latterExp(__exports, { DIALOG_STYLES: () => DIALOG_STYLES });
 //# sourceURL=latter-studio/src/styles/dialogs.ts
 });
@@ -16295,7 +16414,7 @@ const { css } = __req("src/lib/lit.ts");
 /**
  * Title bar, two-pane RTL-safe sidebar shell, navigation badges, & two-column layout (`D-014`).
  */
-const LAYOUT_STYLES = css`header.latter-top-titlebar{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);height:var(--studio-header-height);padding-block:0;padding-inline:var(--studio-space-3);background:var(--studio-header-bg);color:var(--studio-header-text);border-block-end:var(--studio-header-border);position:sticky;inset-block-start:0;z-index:30;}.titlebar-brand{display:flex;align-items:center;gap:var(--studio-space-3);font-size:var(--studio-font-title);font-weight:var(--studio-weight-regular);user-select:none;}.titlebar-brand .ha-menu-btn{color:var(--studio-header-icon);display:none;}:host([narrow]) .titlebar-brand .ha-menu-btn{display:inline-flex;}.titlebar-title{padding-inline-start:var(--studio-space-3);}:host([narrow]) .titlebar-title{padding-inline-start:0;}.titlebar-actions{display:flex;align-items:center;gap:var(--studio-space-2);}.app-shell{display:grid;grid-template-columns:var(--studio-sidebar-width) minmax(0,1fr);min-height:calc(100vh - var(--studio-header-height));min-height:calc(100dvh - var(--studio-header-height));}aside.sidebar{background:var(--studio-sidebar-bg);border-inline-end:1px solid var(--studio-divider);display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block:var(--studio-space-4);padding-inline:var(--studio-space-3);position:sticky;inset-block-start:var(--studio-header-height);height:calc(100vh - var(--studio-header-height));height:calc(100dvh - var(--studio-header-height));overflow-y:auto;}.scope-tabs{display:grid;grid-template-columns:1fr 1fr;gap:var(--studio-space-1);padding:var(--studio-space-1);background:var(--studio-input-bg);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.scope-tab{min-height:var(--studio-control-height-compact);border:none;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text-secondary);font:inherit;font-weight:var(--studio-weight-medium);cursor:pointer;}.scope-tab.active{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.nav-list{display:flex;flex-direction:column;gap:var(--studio-space-1);}.nav-btn{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);width:100%;min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text);font:inherit;font-weight:var(--studio-weight-medium);text-align:start;text-decoration:none;white-space:nowrap;cursor:pointer;}.nav-btn:hover{background:var(--studio-hover);}.nav-btn.active{background:var(--studio-nav-active-bg);color:var(--studio-nav-active-text);}.nav-btn.nav-back-btn{color:var(--studio-text-secondary);}.nav-device-title{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border-block-start:1px solid var(--studio-divider);border-block-end:1px solid var(--studio-divider);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}#nav-scope-device .nav-btn:not(.nav-back-btn){padding-inline-start:var(--studio-space-4);}.nav-badge{min-inline-size:20px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:center;font-variant-numeric:tabular-nums;}.main-area{min-inline-size:0;}.content-wrap{max-inline-size:1140px;margin-block:0;margin-inline:auto;padding:var(--studio-space-5);display:flex;flex-direction:column;gap:var(--studio-space-4);container-type:inline-size;container-name:studio-content;}.content-wrap>section{display:flex;flex-direction:column;gap:var(--studio-space-4);}.page-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--studio-space-2);font-size:var(--studio-font-title);font-weight:var(--studio-weight-regular);}.page-subtitle{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.is-loading .content-wrap>section{display:none !important;}.columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-4);align-items:start;}.column{display:flex;flex-direction:column;gap:var(--studio-space-4);min-inline-size:0;}@container studio-content (max-width:760px){.columns{grid-template-columns:minmax(0,1fr);}}`;
+const LAYOUT_STYLES = css`header.latter-top-titlebar{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);height:var(--studio-header-height);padding-block:0;padding-inline:var(--studio-space-3);background:var(--studio-header-bg);color:var(--studio-header-text);border-block-end:var(--studio-header-border);position:sticky;inset-block-start:0;z-index:30;}.titlebar-brand{display:flex;align-items:center;gap:var(--studio-space-3);font-size:var(--studio-font-title);font-weight:var(--studio-weight-regular);user-select:none;}.titlebar-brand .ha-menu-btn{color:var(--studio-header-icon);display:none;}:host([show-menu]) .titlebar-brand .ha-menu-btn{display:inline-flex;}.titlebar-title{padding-inline-start:var(--studio-space-3);}:host([show-menu]) .titlebar-title{padding-inline-start:0;}.titlebar-actions{display:flex;align-items:center;gap:var(--studio-space-2);}.app-shell{display:grid;grid-template-columns:var(--studio-sidebar-width) minmax(0,1fr);min-height:calc(100vh - var(--studio-header-height));min-height:calc(100dvh - var(--studio-header-height));}aside.sidebar{background:var(--studio-sidebar-bg);border-inline-end:1px solid var(--studio-divider);display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block:var(--studio-space-4);padding-inline:var(--studio-space-3);position:sticky;inset-block-start:var(--studio-header-height);height:calc(100vh - var(--studio-header-height));height:calc(100dvh - var(--studio-header-height));overflow-y:auto;}.scope-tabs{display:grid;grid-template-columns:1fr 1fr;gap:var(--studio-space-1);padding:var(--studio-space-1);background:var(--studio-input-bg);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.scope-tab{min-height:var(--studio-control-height-compact);border:none;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text-secondary);font:inherit;font-weight:var(--studio-weight-medium);cursor:pointer;}.scope-tab.active{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.nav-list{display:flex;flex-direction:column;gap:var(--studio-space-1);}.nav-btn{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);width:100%;min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text);font:inherit;font-weight:var(--studio-weight-medium);text-align:start;text-decoration:none;white-space:nowrap;cursor:pointer;}.nav-btn:hover{background:var(--studio-hover);}.nav-btn.active{background:var(--studio-nav-active-bg);color:var(--studio-nav-active-text);}.nav-btn.nav-back-btn{color:var(--studio-text-secondary);}.nav-device-title{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border-block-start:1px solid var(--studio-divider);border-block-end:1px solid var(--studio-divider);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}#nav-scope-device .nav-btn:not(.nav-back-btn){padding-inline-start:var(--studio-space-4);}.nav-badge{min-inline-size:20px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:center;font-variant-numeric:tabular-nums;}.main-area{min-inline-size:0;}.content-wrap{max-inline-size:1140px;margin-block:0;margin-inline:auto;padding:var(--studio-space-5);display:flex;flex-direction:column;gap:var(--studio-space-4);container-type:inline-size;container-name:studio-content;}.content-wrap>section{display:flex;flex-direction:column;gap:var(--studio-space-4);}.page-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--studio-space-2);font-size:var(--studio-font-title);font-weight:var(--studio-weight-regular);}.page-subtitle{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.is-loading .content-wrap>section{display:none !important;}.columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-4);align-items:start;}.column{display:flex;flex-direction:column;gap:var(--studio-space-4);min-inline-size:0;}@container studio-content (max-width:760px){.columns{grid-template-columns:minmax(0,1fr);}}`;
 __latterExp(__exports, { LAYOUT_STYLES: () => LAYOUT_STYLES });
 //# sourceURL=latter-studio/src/styles/layout.ts
 });
@@ -16326,7 +16445,7 @@ __latterExp(__exports, { BASE_STYLES: () => BASE_STYLES, CARD_STYLES: () => CARD
 //# sourceURL=latter-studio/src/styles/tokens.ts
 });
 __latterDef("src/views/device-overview-view.ts", (__exports, __req) => {
-const { isDeviceTime24h, renderCard, renderNativeControlRow, renderQuickActionGrid, renderSelectRow, renderSettingsRow, renderSvgIcon } = __req("src/components/controls.ts");
+const { isDeviceTime24h, renderCard, renderNativeControlRow, renderPrefControlRow, renderQuickActionGrid, renderSelectRow, renderSettingsRow, renderSvgIcon } = __req("src/components/controls.ts");
 const { DEFAULT_ALARMS_SUMMARY } = __req("src/constants.ts");
 const { formatHaEntityState } = __req("src/i18n/index.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
@@ -16354,7 +16473,7 @@ const DEV_ICON_BLUETOOTH =
 const DEV_ICON_CHIP =
   "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
 const DEV_ICON_TAG =
-  "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,14.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
+  "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
 /**
  * Shared calm offline / sleeping banner rendered at the top of Device views (`Q8` / `E-04`).
  */
@@ -16457,6 +16576,9 @@ function canonicalActionCommand(item) {
   if (tail === "activate_screensaver" || tail.endsWith("_activate_screensaver")) {
     return "activate_screensaver";
   }
+  if (tail === "deactivate_screensaver" || tail.endsWith("_deactivate_screensaver")) {
+    return "deactivate_screensaver";
+  }
   if (tail === "hibernate" || tail.endsWith("_hibernate_device") || tail.endsWith("_hibernate")) {
     return "hibernate";
   }
@@ -16477,6 +16599,8 @@ function localizedQuickActionLabel(
       return store.t("dev_overview.qa_trigger_va");
     case "activate_screensaver":
       return store.t("dev_overview.qa_activate_screensaver");
+    case "deactivate_screensaver":
+      return store.t("dev_overview.qa_exit_screensaver");
     case "restart":
       return store.t("dev_overview.qa_restart");
     default:
@@ -16708,11 +16832,15 @@ function renderDeviceOverviewView(store) {
   ) {
     otherQuickItemsRaw.push(data.speaker_volume);
   }
+  const dndPref = !isBleOnly ? store.entity.getPref("do_not_disturb") : undefined;
   const otherQuickItems = isOffline
     ? otherQuickItemsRaw.map((it) => ({ ...it, state: "unavailable" }))
     : otherQuickItemsRaw;
   const hasQuickControls =
-    harmlessQuickButtons.length > 0 || otherQuickItems.length > 0 || Boolean(restartButton);
+    harmlessQuickButtons.length > 0 ||
+    Boolean(dndPref) ||
+    otherQuickItems.length > 0 ||
+    Boolean(restartButton);
   const showQuickActionsCard = !isBleOnly;
   const otherSensorItems = store.entity.getSectionItems("other");
   const groups = data?.device_groups || [];
@@ -16998,6 +17126,7 @@ function renderDeviceOverviewView(store) {
               contentClass: "settings-list",
               body: hasQuickControls
                 ? html`${renderQuickActionGrid(store, harmlessQuickButtons, isOffline)}
+                    ${dndPref ? renderPrefControlRow(store, dndPref) : nothing}
                     ${otherQuickItems.map((it) => renderDeviceEntityRow(store, it))}
                     ${restartButton
                       ? renderSettingsRow({
@@ -17155,6 +17284,7 @@ function renderDeviceOverviewView(store) {
                       <button
                         type="button"
                         id="btn-dismiss-ringing"
+                        ?disabled=${isOffline}
                         @click=${() =>
                           void store.entity.runDeviceAction(
                             "dismiss_ringing",
@@ -17526,7 +17656,7 @@ const { renderCard, renderPrefControlRow, renderSettingsRow, renderSwitchRow } =
 const { WALLPAPER_ROTATION_OPTIONS } = __req("src/constants.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
 const { resolveCollectionDisplayName, resolvePoolPhotos } = __req("src/state/photo-ops.ts");
-const { defaultThemeHex, entityLabel, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
+const { defaultThemeHex, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
 const { renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
 /**
  * Device Display View (`display`, `D-027`, `D-029`, `D-034`, `D-036`, `D-069`, `D-072`):
@@ -17664,18 +17794,8 @@ function renderDeviceDisplayView(store) {
       ssPreviewThumbs.push(u);
     }
   }
-  const activateScreensaverBtn = store.entity
-    .getSectionItems("actions")
-    .find(
-      (it) =>
-        it.domain === "button" &&
-        (it.device_command === "activate_screensaver" ||
-          it.key === "activate_screensaver" ||
-          it.entity_id?.endsWith("_activate_screensaver")),
-    );
-  const hasScreensaverCard = Boolean(
-    ssModePref || ssStylePref || ssIdlePref || activateScreensaverBtn,
-  );
+  const ssActive = Boolean(live.screensaver_active);
+  const hasScreensaverCard = Boolean(ssModePref || ssStylePref || ssIdlePref);
   // Voice assistant card
   const voiceVisualPref = store.entity.getPref("va_visual_profile");
   const bedtimeActive = Boolean(
@@ -17905,41 +18025,37 @@ function renderDeviceDisplayView(store) {
                     </div>`
                   : nothing}
 
-                ${!ssNever && activateScreensaverBtn
+                ${!ssNever
                   ? html`<div class="settings-list">
                       ${renderSettingsRow({
-                        label: entityLabel(
-                          activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
-                        ),
-                        description: store.t("dev_display.screensaver_preview_desc"),
+                        id: "row-screensaver-preview",
+                        label: ssActive
+                          ? store.t("dev_overview.qa_exit_screensaver")
+                          : store.t("dev_overview.qa_activate_screensaver"),
+                        description: ssActive
+                          ? store.t("dev_display.screensaver_exit_desc")
+                          : store.t("dev_display.screensaver_preview_desc"),
                         control: html`<button
                           type="button"
-                          ?disabled=${isOffline ||
-                          String(activateScreensaverBtn.state ?? "") === "unavailable"}
+                          id="btn-screensaver-preview"
+                          ?disabled=${isOffline}
                           @click=${() => {
-                            const btnLabel = entityLabel(
-                              activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
+                            const actionCmd = ssActive
+                              ? "deactivate_screensaver"
+                              : "activate_screensaver";
+                            const actionLabel = ssActive
+                              ? store.t("dev_overview.qa_exit_screensaver")
+                              : store.t("dev_overview.qa_activate_screensaver");
+                            void store.entity.runDeviceAction(
+                              actionCmd,
+                              store.t("sync.triggered_action", { label: actionLabel }),
                             );
-                            const toastMsg = store.t("sync.triggered_action", {
-                              label: btnLabel,
-                            });
-                            if (activateScreensaverBtn.device_command) {
-                              void store.entity.runDeviceAction(
-                                activateScreensaverBtn.device_command,
-                                toastMsg,
-                              );
-                            } else {
-                              void store.entity.espAction(
-                                activateScreensaverBtn.entity_id,
-                                "press",
-                                undefined,
-                                toastMsg,
-                              );
-                            }
                           }}
                           class="btn btn-secondary btn-compact"
                         >
-                          ${store.t("dev_display.preview_btn")}
+                          ${ssActive
+                            ? store.t("dev_display.exit_screensaver_btn")
+                            : store.t("dev_display.preview_btn")}
                         </button>`,
                       })}
                     </div>`
@@ -18985,6 +19101,7 @@ const SCREENSAVER_KEYS = new Set([
   "screensaver_photo_clock",
 ]);
 const BEDTIME_KEYS = new Set([
+  "do_not_disturb",
   "bedtime_active",
   "bedtime_display",
   "bedtime_brightness",
@@ -19003,6 +19120,7 @@ function renderDevicePowerView(store) {
     ])
     .filter((p) => !SCREENSAVER_KEYS.has(p.key));
   const bedtimeAllPrefs = store.entity.getPrefs([
+    "do_not_disturb",
     "bedtime_active",
     "bedtime_display",
     "bedtime_brightness",
@@ -19303,7 +19421,7 @@ __latterExp(__exports, { renderDevicePresenceView: () => renderDevicePresenceVie
 //# sourceURL=latter-studio/src/views/device-presence-view.ts
 });
 __latterDef("src/views/device-tools-view.ts", (__exports, __req) => {
-const { renderCard, renderPrefControlRow, renderSelectRow, renderSettingsRow } = __req("src/components/controls.ts");
+const { renderCard, renderPrefControlRow, renderSelectRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
 const { SECURITY_PIN_POLICY_OPTIONS } = __req("src/constants.ts");
 const { t } = __req("src/i18n/index.ts");
 const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
@@ -19549,6 +19667,128 @@ function parseDeviceHardwareManifestRows(
   }
   return rows;
 }
+function parseDeviceRuntimeTelemetryRows(
+  telemetry,
+  includeLinkRows,
+  hass,
+  overlay,
+) {
+  if (!telemetry || typeof telemetry !== "object") return [];
+  const rows = [];
+  const ramFree = telemetry.int_ram_free_kb;
+  const ramMin = telemetry.int_ram_min_kb;
+  const ramLargest = telemetry.int_ram_largest_kb;
+  if (
+    (ramFree !== null && ramFree !== undefined && Number.isFinite(Number(ramFree))) ||
+    (ramMin !== null && ramMin !== undefined && Number.isFinite(Number(ramMin))) ||
+    (ramLargest !== null && ramLargest !== undefined && Number.isFinite(Number(ramLargest)))
+  ) {
+    const fmtKb = (v) =>
+      v !== null && v !== undefined && Number.isFinite(Number(v))
+        ? fmtNumber(Number(v), hass, 0)
+        : "—";
+    rows.push({
+      label: t("dev_tools.telem_int_ram", undefined, overlay),
+      value: `${fmtKb(ramFree)} / ${fmtKb(ramMin)} / ${fmtKb(ramLargest)} KB`,
+    });
+  }
+  const psramMin = telemetry.psram_min_kb;
+  if (psramMin !== null && psramMin !== undefined && Number.isFinite(Number(psramMin)) && Number(psramMin) > 0) {
+    rows.push({
+      label: t("dev_tools.telem_psram_min", undefined, overlay),
+      value: `${fmtNumber(Number(psramMin), hass, 0)} KB`,
+    });
+  }
+  if (typeof telemetry.ble_active === "boolean") {
+    rows.push({
+      label: t("dev_tools.telem_ble_beacon", undefined, overlay),
+      value: telemetry.ble_active
+        ? t("common.active", undefined, overlay)
+        : t("common.disabled", undefined, overlay),
+    });
+  }
+  const link = telemetry.link;
+  if (includeLinkRows && link && typeof link === "object" && !Array.isArray(link)) {
+    const upRaw = link.up_s ?? link.up;
+    if (upRaw !== undefined && upRaw !== null && Number.isFinite(Number(upRaw))) {
+      rows.push({
+        label: t("dev_tools.telem_uptime", undefined, overlay),
+        value: formatTelemetryDuration(Number(upRaw)),
+      });
+    }
+    const rstRaw = typeof link.rst === "string" ? link.rst.trim() : "";
+    if (rstRaw) {
+      rows.push({
+        label: t("dev_tools.telem_last_reset", undefined, overlay),
+        value: rstRaw,
+        code: true,
+      });
+    }
+    const discRaw = link.disc;
+    if (discRaw !== undefined && discRaw !== null && Number.isFinite(Number(discRaw))) {
+      const btoNum = Number(link.bto ?? 0);
+      const btoSuffix =
+        Number.isFinite(btoNum) && btoNum > 0
+          ? t("dev_tools.telem_beacon_timeouts", { count: fmtNumber(btoNum, hass, 0) }, overlay)
+          : "";
+      rows.push({
+        label: t("dev_tools.telem_wifi_disc", undefined, overlay),
+        value: `${fmtNumber(Number(discRaw), hass, 0)}${btoSuffix}`,
+      });
+    }
+    const rssiAvg = link.rssi_avg;
+    const rssiMin = link.rssi_min;
+    if (
+      rssiAvg !== undefined &&
+      rssiAvg !== null &&
+      rssiMin !== undefined &&
+      rssiMin !== null &&
+      Number.isFinite(Number(rssiAvg)) &&
+      Number.isFinite(Number(rssiMin))
+    ) {
+      rows.push({
+        label: t("dev_tools.telem_wifi_avg_min", undefined, overlay),
+        value: `${fmtNumber(Number(rssiAvg), hass, 0)} / ${fmtNumber(Number(rssiMin), hass, 0)} dBm`,
+      });
+    }
+    const haRaw = link.ha;
+    if (haRaw !== undefined && haRaw !== null && Number.isFinite(Number(haRaw))) {
+      const gapNum = Number(link.gap_s ?? link.gap ?? 0);
+      const gapSuffix =
+        Number.isFinite(gapNum) && gapNum > 0
+          ? t("dev_tools.telem_max_gap", { duration: formatTelemetryDuration(gapNum) }, overlay)
+          : "";
+      rows.push({
+        label: t("dev_tools.telem_ha_sessions", undefined, overlay),
+        value: `${fmtNumber(Number(haRaw), hass, 0)}${gapSuffix}`,
+      });
+    }
+    const nvsW = link.nvs_w;
+    const nvsE = link.nvs_e;
+    const nvsMax = link.nvs_max_ms;
+    if (
+      nvsW !== undefined &&
+      nvsW !== null &&
+      Number.isFinite(Number(nvsW)) &&
+      Number.isFinite(Number(nvsE ?? 0)) &&
+      Number.isFinite(Number(nvsMax ?? 0))
+    ) {
+      rows.push({
+        label: t("dev_tools.telem_nvs_writes", undefined, overlay),
+        value: t(
+          "dev_tools.telem_nvs_value",
+          {
+            writes: fmtNumber(Number(nvsW), hass, 0),
+            erases: fmtNumber(Number(nvsE ?? 0), hass, 0),
+            maxMs: fmtNumber(Number(nvsMax ?? 0), hass, 0),
+          },
+          overlay,
+        ),
+      });
+    }
+  }
+  return rows;
+}
 function renderDeviceToolsView(store) {
   const data = store.state;
   const cfg = data?.config || {};
@@ -19559,6 +19799,7 @@ function renderDeviceToolsView(store) {
   const curDevEntry =
     (data?.system_devices || []).find((d) => d.subentry_id === store.activeSubentryId) ||
     (data?.system_devices || []).find((d) => d.is_current);
+  const isOffline = !isBleOnly && curDevEntry?.is_online === false;
   const networkItems = store.entity.getSectionItems("network");
   const developerItems = store.entity.getSectionItems("developer");
   const networkControlItems = networkItems.filter((it) =>
@@ -19604,7 +19845,11 @@ function renderDeviceToolsView(store) {
     (it) =>
       INTERACTIVE_ENTITY_DOMAINS.has(it.domain) &&
       !it.pref_key &&
-      it.key !== "weather_sim_condition",
+      it.key !== "weather_sim_condition" &&
+      it.key !== "telemetry_profiler" &&
+      it.key !== "log_memory_report" &&
+      !it.entity_id.endsWith("_telemetry_profiler") &&
+      !it.entity_id.endsWith("_log_memory_report"),
   );
   const devSensorItems = developerItems.filter(
     (it) => !INTERACTIVE_ENTITY_DOMAINS.has(it.domain),
@@ -19620,20 +19865,19 @@ function renderDeviceToolsView(store) {
     store.hass,
     store.localeOverlay,
   );
+  const runtimeRows = parseDeviceRuntimeTelemetryRows(
+    live.telemetry,
+    linkRows.length === 0,
+    store.hass,
+    store.localeOverlay,
+  );
   const manifestRows = parseDeviceHardwareManifestRows(
     manifestEntity?.state,
     store.hass,
     store.localeOverlay,
   );
-  const hasDeveloperDrawer =
-    !isBleOnly &&
-    Boolean(
-      weatherSimPref ||
-        devControlItems.length ||
-        devSensorItems.length ||
-        linkRows.length ||
-        manifestRows.length,
-    );
+  const profilerOn = Boolean(live.telemetry?.profiler_on);
+  const hasDeveloperDrawer = !isBleOnly;
   const curPinPolicy = String(cfg.security_pin_policy || "auto");
   const effectivePinPolicyLabel = store.tPrefOption(
     "security_pin_policy",
@@ -19749,16 +19993,46 @@ function renderDeviceToolsView(store) {
               ? html`<details class="sub-collapsible">
                   <summary>${store.t("card.developer_telemetry")}</summary>
                   <div class="card-content">
-                    ${weatherSimPref || devControlItems.length
-                      ? html`<div class="settings-list">
-                          ${weatherSimPref ? renderPrefControlRow(store, weatherSimPref) : nothing}
-                          ${devControlItems.map((it) => renderDeviceEntityRow(store, it))}
-                        </div>`
-                      : nothing}
-                    ${devSensorItems.length || linkRows.length || manifestRows.length
+                    <div class="settings-list">
+                      ${weatherSimPref ? renderPrefControlRow(store, weatherSimPref) : nothing}
+                      ${renderSwitchRow({
+                        id: "dev-telemetry-profiler",
+                        label: store.t("dev_tools.profiler_label"),
+                        description: store.t("dev_tools.profiler_desc"),
+                        disabled: isOffline,
+                        checked: profilerOn,
+                        onChange: (checked) =>
+                          void store.entity.runDeviceAction(
+                            checked ? "set_profiler_on" : "set_profiler_off",
+                          ),
+                      })}
+                      ${renderSettingsRow({
+                        id: "row-refresh-telemetry",
+                        label: store.t("dev_tools.refresh_telemetry_label"),
+                        description: store.t("dev_tools.refresh_telemetry_desc"),
+                        control: html`<button
+                          type="button"
+                          id="btn-refresh-telemetry"
+                          ?disabled=${isOffline}
+                          @click=${() =>
+                            void store.entity.runDeviceAction(
+                              "request_telemetry",
+                              store.t("dev_tools.refresh_telemetry_toast"),
+                            )}
+                          class="btn btn-secondary btn-compact"
+                        >
+                          ${store.t("action.refresh")}
+                        </button>`,
+                      })}
+                      ${devControlItems.map((it) => renderDeviceEntityRow(store, it))}
+                    </div>
+                    ${devSensorItems.length ||
+                    runtimeRows.length ||
+                    linkRows.length ||
+                    manifestRows.length
                       ? html`<div class="kv-list">
                           ${devSensorItems.map((it) => renderDeviceEntityRow(store, it))}
-                          ${[...linkRows, ...manifestRows].map(
+                          ${[...runtimeRows, ...linkRows, ...manifestRows].map(
                             (row) => html`<div class="kv-row">
                               <span>${row.label}</span>
                               <strong>
@@ -19915,7 +20189,7 @@ function renderDeviceToolsView(store) {
     </div>
   </section>`;
 }
-__latterExp(__exports, { parseDeviceLinkReportRows: () => parseDeviceLinkReportRows, parseDeviceHardwareManifestRows: () => parseDeviceHardwareManifestRows, renderDeviceToolsView: () => renderDeviceToolsView });
+__latterExp(__exports, { parseDeviceLinkReportRows: () => parseDeviceLinkReportRows, parseDeviceHardwareManifestRows: () => parseDeviceHardwareManifestRows, parseDeviceRuntimeTelemetryRows: () => parseDeviceRuntimeTelemetryRows, renderDeviceToolsView: () => renderDeviceToolsView });
 //# sourceURL=latter-studio/src/views/device-tools-view.ts
 });
 __latterDef("src/views/devices-discovered-view.ts", (__exports, __req) => {
@@ -20644,8 +20918,8 @@ function renderBatchControlRow(
         .value=${selectValue}
         @change=${(ev) => {
           const val = (ev.currentTarget).value;
-          if (val !== "__mixed__") {
-            store.groups.stageBatchEntityControl(fc, { option: val });
+          if (val !== "__mixed__" && prefKey) {
+            store.groups.stageBatchSetting(prefKey, val);
           }
         }}
       >
@@ -20673,10 +20947,14 @@ function renderBatchControlRow(
         role="switch"
         aria-label=${label}
         .checked=${checked}
-        @change=${(ev) =>
-          store.groups.stageBatchEntityControl(fc, {
-            action: (ev.currentTarget).checked ? "turn_on" : "turn_off",
-          })}
+        @change=${(ev) => {
+          if (prefKey) {
+            store.groups.stageBatchSetting(
+              prefKey,
+              (ev.currentTarget).checked,
+            );
+          }
+        }}
         class="switch"
       />`;
   } else if (fc.domain === "number") {
@@ -20694,7 +20972,9 @@ function renderBatchControlRow(
               hass: store.hass,
               mixed: mixed && !staged,
               mixedLabel: store.t("batch.mixed_badge"),
-              onCommit: (raw) => store.groups.stageBatchEntityControl(fc, { level: raw }),
+              onCommit: (raw) => {
+                if (prefKey) store.groups.stageBatchSetting(prefKey, raw);
+              },
             })}`
         : html`${statusBadge}
             ${renderRangeControl({
@@ -20706,7 +20986,9 @@ function renderBatchControlRow(
               unit: fc.unit,
               is24h: defaultLocaleTimeFormat(store.hass).startsWith("24"),
               hass: store.hass,
-              onCommit: (raw) => store.groups.stageBatchEntityControl(fc, { level: raw }),
+              onCommit: (raw) => {
+                if (prefKey) store.groups.stageBatchSetting(prefKey, raw);
+              },
             })}`;
   } else if (fc.domain === "color") {
     const hexVal = isValidHexColor(curState) ? curState.toUpperCase() : "#3898FF";
@@ -23671,9 +23953,20 @@ const { fmtAgo, fmtDateTime, fmtDistance, fmtNumber, fmtPercent, rssiToPercent }
  * System BLE & Area presence view (`area_tracking`, `D-044` / `D-045` / `D-046` / `D-058` / `D-064`):
  * Area presence & sensors, walk-around BLE calibration, and advanced BLE settings.
  */
+const METERS_TO_FEET = 3.28084;
 function renderSystemPresenceView(store) {
   const data = store.state;
   const sysCfg = data?.system_config;
+  const unitLength = String(store.hass?.config?.unit_system?.length || "").toLowerCase();
+  const isImperial = unitLength === "mi" || unitLength === "ft";
+  const rawRadiusM = Number(sysCfg?.ble_max_radius_m ?? 12);
+  const displayRadius = isImperial
+    ? Math.round(rawRadiusM * METERS_TO_FEET * 10) / 10
+    : rawRadiusM;
+  const rawVelMps = Number(sysCfg?.ble_max_velocity_mps ?? 3.5);
+  const displayVel = isImperial
+    ? Math.round(rawVelMps * METERS_TO_FEET * 10) / 10
+    : rawVelMps;
   const presenceRows = data?.live?.area_presence_grid || [];
   const signatures = data?.ble_area_signatures || [];
   const allDevs = data?.system_devices || [];
@@ -23756,10 +24049,13 @@ function renderSystemPresenceView(store) {
           headerActions: hasAnyLuxSensor
             ? html`<button
                 type="button"
+                ?disabled=${store.groups.isCalibratingIlluminance()}
                 class="btn btn-secondary btn-compact"
                 @click=${() => void store.groups.calibrateAreaIlluminance()}
               >
-                ${store.t("presence_sys.calibrate_all_lux")}
+                ${store.groups.calibratingAllIlluminance
+                  ? store.t("presence_sys.calibrating_lux")
+                  : store.t("presence_sys.calibrate_all_lux")}
               </button>`
             : nothing,
           body: html`<div id="area-presence-grid-box" class="stack">
@@ -23821,6 +24117,15 @@ function renderSystemPresenceView(store) {
                           ? store.t("presence_sys.clear_sensors_one")
                           : store.t("presence_sys.clear_sensors_many", {
                               count: row.available_sensors.length,
+                            }),
+                      );
+                    }
+                    if (row?.unavailable_sensors && row.unavailable_sensors.length) {
+                      parts.push(
+                        row.unavailable_sensors.length === 1
+                          ? store.t("presence_sys.unavailable_sensors_one")
+                          : store.t("presence_sys.unavailable_sensors_many", {
+                              count: row.unavailable_sensors.length,
                             }),
                       );
                     }
@@ -24047,16 +24352,25 @@ function renderSystemPresenceView(store) {
                                             max="500"
                                             step="0.1"
                                             aria-label=${`${store.t("presence_sys.ambient_dark_lux")} (${areaName})`}
-                                            .value=${String(luxDark)}
+                                            .value=${focusSafe(String(luxDark))}
                                             @change=${(ev) => {
-                                              const v = Number(
-                                                (ev.currentTarget).value,
-                                              );
-                                              if (Number.isFinite(v)) {
-                                                void store.groups.setAreaIlluminance(areaId, {
-                                                  dark_lux: v,
-                                                });
+                                              const el = ev.currentTarget;
+                                              const v = Number(el.value);
+                                              if (!Number.isFinite(v) || v < 0) {
+                                                el.value = String(luxDark);
+                                                return;
                                               }
+                                              if (v >= luxBright) {
+                                                el.value = String(luxDark);
+                                                store.showToast(
+                                                  store.t("presence_sys.lux_bounds_error"),
+                                                  true,
+                                                );
+                                                return;
+                                              }
+                                              void store.groups.setAreaIlluminance(areaId, {
+                                                dark_lux: v,
+                                              });
                                             }}
                                           />
                                         </label>
@@ -24065,30 +24379,42 @@ function renderSystemPresenceView(store) {
                                           <input
                                             type="number"
                                             class="lux-number-input"
-                                            min="1"
+                                            min="0.5"
                                             max="100000"
-                                            step="1"
+                                            step="0.1"
                                             aria-label=${`${store.t("presence_sys.ambient_bright_lux")} (${areaName})`}
-                                            .value=${String(luxBright)}
+                                            .value=${focusSafe(String(luxBright))}
                                             @change=${(ev) => {
-                                              const v = Number(
-                                                (ev.currentTarget).value,
-                                              );
-                                              if (Number.isFinite(v)) {
-                                                void store.groups.setAreaIlluminance(areaId, {
-                                                  bright_lux: v,
-                                                });
+                                              const el = ev.currentTarget;
+                                              const v = Number(el.value);
+                                              if (!Number.isFinite(v) || v <= 0) {
+                                                el.value = String(luxBright);
+                                                return;
                                               }
+                                              if (v <= luxDark) {
+                                                el.value = String(luxBright);
+                                                store.showToast(
+                                                  store.t("presence_sys.lux_bounds_error"),
+                                                  true,
+                                                );
+                                                return;
+                                              }
+                                              void store.groups.setAreaIlluminance(areaId, {
+                                                bright_lux: v,
+                                              });
                                             }}
                                           />
                                         </label>
                                         <button
                                           type="button"
+                                          ?disabled=${store.groups.isCalibratingIlluminance(areaId)}
                                           class="btn btn-secondary btn-compact"
                                           @click=${() =>
                                             void store.groups.calibrateAreaIlluminance(areaId)}
                                         >
-                                          ${store.t("presence_sys.calibrate_lux_btn")}
+                                          ${store.groups.isCalibratingIlluminance(areaId)
+                                            ? store.t("presence_sys.calibrating_lux")
+                                            : store.t("presence_sys.calibrate_lux_btn")}
                                         </button>
                                       </div>`,
                                     })
@@ -24403,21 +24729,28 @@ function renderSystemPresenceView(store) {
             })}
             ${renderSettingsRow({
               forId: "sys-ble_max_radius_m",
-              label: store.t("presence_sys.max_radius"),
-              description: store.t("presence_sys.max_radius_desc"),
+              label: isImperial
+                ? store.t("presence_sys.max_radius_ft")
+                : store.t("presence_sys.max_radius"),
+              description: isImperial
+                ? store.t("presence_sys.max_radius_ft_desc")
+                : store.t("presence_sys.max_radius_desc"),
               control: html`<input
                 type="number"
                 id="sys-ble_max_radius_m"
-                min="2"
-                max="50"
-                step="0.5"
-                .value=${focusSafe(String(sysCfg?.ble_max_radius_m ?? 12))}
+                min=${isImperial ? "6.5" : "2"}
+                max=${isImperial ? "164" : "50"}
+                step=${isImperial ? "1" : "0.5"}
+                .value=${focusSafe(String(displayRadius))}
                 @change=${(ev) => {
                   const val = Number((ev.currentTarget).value);
                   if (Number.isFinite(val)) {
+                    const meters = isImperial
+                      ? Math.max(2, Math.min(50, Math.round((val / METERS_TO_FEET) * 100) / 100))
+                      : val;
                     store.entity.stageSystemSetting(
                       "ble_max_radius_m",
-                      val,
+                      meters,
                       "sys-ble_max_radius_m",
                     );
                   }
@@ -24426,21 +24759,28 @@ function renderSystemPresenceView(store) {
             })}
             ${renderSettingsRow({
               forId: "sys-ble_max_velocity_mps",
-              label: store.t("presence_sys.max_speed"),
-              description: store.t("presence_sys.max_speed_desc"),
+              label: isImperial
+                ? store.t("presence_sys.max_speed_fps")
+                : store.t("presence_sys.max_speed"),
+              description: isImperial
+                ? store.t("presence_sys.max_speed_fps_desc")
+                : store.t("presence_sys.max_speed_desc"),
               control: html`<input
                 type="number"
                 id="sys-ble_max_velocity_mps"
-                min="0.5"
-                max="15"
+                min=${isImperial ? "1.5" : "0.5"}
+                max=${isImperial ? "49" : "15"}
                 step="0.5"
-                .value=${focusSafe(String(sysCfg?.ble_max_velocity_mps ?? 3.5))}
+                .value=${focusSafe(String(displayVel))}
                 @change=${(ev) => {
                   const val = Number((ev.currentTarget).value);
                   if (Number.isFinite(val)) {
+                    const mps = isImperial
+                      ? Math.max(0.5, Math.min(15, Math.round((val / METERS_TO_FEET) * 100) / 100))
+                      : val;
                     store.entity.stageSystemSetting(
                       "ble_max_velocity_mps",
-                      val,
+                      mps,
                       "sys-ble_max_velocity_mps",
                     );
                   }

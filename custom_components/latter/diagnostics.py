@@ -25,9 +25,12 @@ REDACTED_FIELD_KEYS: frozenset[str] = frozenset(
         "art_url",
         "ble_beacon_uuid",
         "ble_target_address",
+        "camera_snapshot_url",
+        "camera_stream_url",
         "hmac_secret_hex",
         "mac",
         "payload",
+        "screensaver_photo_url",
         "security_pin",
         "security_pin_hash",
         "system_ble_uuid",
@@ -63,7 +66,7 @@ def _redact_mac_dict_key(key: str, *, parent_key: str = "") -> str:
     """Replace raw MAC address dictionary keys with a deterministic non-reversible short digest."""
     if _MAC_KEY_RE.match(key):
         return _mac_digest_token(key)
-    if parent_key in ("ble_scanner_offsets", "scanners") and _MAC_HEX12_RE.match(key):
+    if parent_key in ("ble_scanner_offsets", "scanners", "ble_scanners") and _MAC_HEX12_RE.match(key):
         return _mac_digest_token(key)
     if ":" in key or "-" in key:
         return _MAC_INLINE_RE.sub(lambda m: _mac_digest_token(m.group(0)), key)
@@ -154,6 +157,7 @@ def _build_coordinator_diagnostics(coordinator: LatterCoordinator) -> dict[str, 
             "has_security_pin": coordinator.has_security_pin,
         },
         "device_health": coordinator.last_device_health,
+        "device_telemetry": coordinator.device_telemetry,
         "sensors": sensors_diag,
     }
 

@@ -7,17 +7,16 @@ from collections import OrderedDict
 from collections.abc import Iterable, Mapping, Sequence
 import logging
 import re
+import time
 from typing import Any
-from urllib.parse import quote
 
-import aiohttp
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import device_registry as dr, entity_registry as er
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN, INTEGRATION_VERSION
+from .const import DOMAIN
+from .protocol import unescape_v3_subfield
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,6 +46,7 @@ _FAVORITE_MEDIA_TYPES: tuple[str, ...] = (
 
 # Bounded 64-entry LRU OrderedDict cache for lyrics & artist/album bio payloads
 MAX_LYRIC_LINES: int = 128
+NEGATIVE_CACHE_TTL_SECONDS: float = 300.0
 _BROWSE_LYRICS_BIO_CACHE: OrderedDict[str, dict[str, Any]] = OrderedDict()
 _LRC_TAG_RE = re.compile(r"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]")
 _LRC_WORD_TAG_RE = re.compile(r"<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>")
@@ -261,8 +261,8 @@ def resolve_ma_queue_id_sync(
                 pqs = getattr(mass, "player_queues", None)
                 if act_src and pqs is not None and hasattr(pqs, "get") and pqs.get(act_src) is not None:
                     return act_src
-            except Exception:  # noqa: BLE001
-                pass
+            except (AttributeError, KeyError, TypeError, ValueError, RuntimeError) as err:
+                _LOGGER.debug("resolve_ma_queue_id_sync(%s) skipped: %s", ma_target, err)
     return uid
 
 
@@ -279,8 +279,8 @@ def _extract_item_dict(raw: Any) -> dict[str, Any]:
             to_dict_res = raw.to_dict()
             if isinstance(to_dict_res, dict):
                 return to_dict_res
-        except Exception:  # noqa: BLE001
-            pass
+        except (AttributeError, TypeError, ValueError, RuntimeError) as err:
+            _LOGGER.debug("to_dict() conversion skipped: %s", err)
     result: dict[str, Any] = {}
     for attr in (
         "name",
@@ -579,9 +579,7 @@ async def _browse_favorites(
             for mtype in _FAVORITE_MEDIA_TYPES
         )
     )
-    results: list[str | dict[str, Any]] = []
     out: list[dict[str, Any]] = []
-    del results
     for mtype, raw_items in zip(_FAVORITE_MEDIA_TYPES, batches, strict=True):
         for item in raw_items:
             uri = str(item.get("uri") or item.get("media_content_id") or "")
@@ -820,8 +818,8 @@ async def _browse_active_queue(
                     current_queue_item_id = str(
                         _extract_item_dict(cur_obj).get("queue_item_id") or ""
                     ).strip()
-            except Exception:  # noqa: BLE001
-                pass
+            except (AttributeError, KeyError, TypeError, ValueError, RuntimeError) as err:
+                _LOGGER.debug("Reading current queue item for %s skipped: %s", eff_qid, err)
         if eff_qid and hasattr(pqs, "fetch_player_queue_items"):
             try:
                 fetched = await pqs.fetch_player_queue_items(
@@ -1130,7 +1128,7 @@ def _normalize_search_metadata(
     fallback_album: str = "",
 ) -> tuple[str, str, str, str, str, str]:
     """Resolve `(title, artist, album, clean_title, clean_album, cache_key)` for lyrics and info lookups."""
-    parts = [p.strip() for p in search.split("|")]
+    parts = [unescape_v3_subfield(p.strip()) for p in search.split("|")]
     title = parts[0] if len(parts) >= 1 and parts[0] else ""
     artist = parts[1] if len(parts) >= 2 and parts[1] else ""
     album = parts[2] if len(parts) >= 3 and parts[2] else ""
@@ -1216,9 +1214,34 @@ async def _read_current_queue_media_item(
                 m_obj = getattr(cur_obj, "media_item", None) if cur_obj is not None else None
                 if m_obj is not None:
                     return _extract_item_dict(m_obj)
-            except Exception:  # noqa: BLE001
-                pass
+            except (AttributeError, KeyError, TypeError, ValueError, RuntimeError) as err:
+                _LOGGER.debug("Reading in-memory queue media_item for %s skipped: %s", qid, err)
     return None
+
+
+async def _fetch_local_ma_controller_lyrics(
+    hass: HomeAssistant, media_item: dict[str, Any] | None
+) -> str:
+    """Query Music Assistant's local metadata controller (`mass.metadata.get_track_lyrics`) if available."""
+    if not media_item:
+        return ""
+    mass = get_ma_mass_client(hass)
+    meta_ctrl = getattr(mass, "metadata", None) if mass is not None else None
+    get_lyr = getattr(meta_ctrl, "get_track_lyrics", None)
+    if not callable(get_lyr):
+        return ""
+    try:
+        res = await get_lyr(media_item)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("mass.metadata.get_track_lyrics skipped: %s", err)
+        return ""
+    if isinstance(res, tuple):
+        plain_str = str(res[0] or "").strip() if len(res) >= 1 else ""
+        lrc_str = str(res[1] or "").strip() if len(res) >= 2 else ""
+        return lrc_str or plain_str
+    if isinstance(res, str):
+        return res.strip()
+    return ""
 
 
 async def async_fetch_track_lyrics(
@@ -1231,7 +1254,7 @@ async def async_fetch_track_lyrics(
     fallback_album: str = "",
     max_lines: int = MAX_LYRIC_LINES,
 ) -> tuple[str, bool, list[dict[str, Any]]]:
-    """Fetch full-track LRC or plain lyrics (`track_key`, `synced`, `lines`), cached in the 64-entry LRU cache."""
+    """Fetch full-track LRC or plain lyrics strictly from local Music Assistant (100% Zero-WAN, `M-P1-37`)."""
     title, artist, album, clean_title, _clean_album, cache_key = _normalize_search_metadata(
         hass,
         speaker,
@@ -1244,11 +1267,15 @@ async def async_fetch_track_lyrics(
     if not clean_title:
         return track_key, False, []
 
+    now_m = time.monotonic()
     cached = _cache_get(cache_key)
-    if cached is not None and isinstance(cached.get("lyrics_payload"), dict):
-        payload = cached["lyrics_payload"]
-        cached_lines = list(payload.get("lines") or [])[: max(1, int(max_lines))]
-        return track_key, bool(payload.get("synced")), cached_lines
+    if cached is not None:
+        if isinstance(cached.get("lyrics_payload"), dict):
+            payload = cached["lyrics_payload"]
+            cached_lines = list(payload.get("lines") or [])[: max(1, int(max_lines))]
+            return track_key, bool(payload.get("synced")), cached_lines
+        if now_m < float(cached.get("lyrics_miss_until") or 0.0):
+            return track_key, False, []
 
     raw_lyrics = ""
     raw_album_bio = ""
@@ -1264,6 +1291,7 @@ async def async_fetch_track_lyrics(
         release_year = _extract_release_year(m_item)
 
     config_entry_id = _get_ma_config_entry_id(hass)
+    matched_track: dict[str, Any] | None = None
     if config_entry_id and (not raw_lyrics or "[" not in raw_lyrics) and clean_title:
         tracks = await _call_ma_get_library(
             hass,
@@ -1274,6 +1302,8 @@ async def async_fetch_track_lyrics(
         )
         fallback_plain = raw_lyrics
         for trk in tracks:
+            if matched_track is None:
+                matched_track = trk
             lyr, _ = _extract_meta_strings(trk)
             if not lyr:
                 continue
@@ -1285,57 +1315,17 @@ async def async_fetch_track_lyrics(
         if not raw_lyrics and fallback_plain:
             raw_lyrics = fallback_plain
 
-    if (not raw_lyrics or not _LRC_TAG_RE.search(raw_lyrics)) and clean_title:
-        session = async_get_clientsession(hass)
-        timeout = aiohttp.ClientTimeout(total=5.0)
-        headers = {
-            "User-Agent": f"HomeAssistant-Latter/{INTEGRATION_VERSION} (https://github.com/slampton/ha-latter)"
-        }
-        plain_fallback = raw_lyrics
-        for s_title in (
-            [title, clean_title]
-            if clean_title.lower() != title.lower()
-            else [clean_title]
-        ):
-            if raw_lyrics and _LRC_TAG_RE.search(raw_lyrics):
-                break
-            try:
-                q_url = f"https://lrclib.net/api/search?track_name={quote(s_title)}"
-                if artist:
-                    q_url += f"&artist_name={quote(artist)}"
-                async with session.get(
-                    q_url, timeout=timeout, headers=headers
-                ) as resp:
-                    if resp.status == 200:
-                        items = await resp.json()
-                        if isinstance(items, list) and items:
-                            synced_hit = next(
-                                (
-                                    str(cand.get("syncedLyrics") or "").strip()
-                                    for cand in items[:5]
-                                    if isinstance(cand, dict)
-                                    and str(cand.get("syncedLyrics") or "").strip()
-                                ),
-                                "",
-                            )
-                            if synced_hit:
-                                raw_lyrics = synced_hit
-                                break
-                            first = items[0]
-                            if isinstance(first, dict) and not plain_fallback:
-                                plain_fallback = str(
-                                    first.get("syncedLyrics")
-                                    or first.get("plainLyrics")
-                                    or ""
-                                ).strip()
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.debug("LRCLIB fallback failed for '%s': %s", s_title, err)
-        if not raw_lyrics and plain_fallback:
-            raw_lyrics = plain_fallback
+    if not raw_lyrics or not _LRC_TAG_RE.search(raw_lyrics):
+        ctrl_lyr = await _fetch_local_ma_controller_lyrics(
+            hass, m_item or matched_track
+        )
+        if ctrl_lyr and (not raw_lyrics or _LRC_TAG_RE.search(ctrl_lyr)):
+            raw_lyrics = ctrl_lyr
 
     synced, parsed_lines = parse_lrc_lyrics(raw_lyrics, max_lines=MAX_LYRIC_LINES)
+    cache_entry = _cache_put(cache_key)
     if parsed_lines:
-        cache_entry = _cache_put(cache_key)
+        cache_entry.pop("lyrics_miss_until", None)
         cache_entry["lyrics_payload"] = {"synced": synced, "lines": parsed_lines}
         cache_entry["lyrics"] = [str(row["text"]) for row in parsed_lines]
         if raw_album_bio and "bio" not in cache_entry:
@@ -1348,6 +1338,8 @@ async def async_fetch_track_lyrics(
                 bio_seed.append(f"Release: {release_year}")
             bio_seed.extend(_unwrap_logical_lines(f"Album: {raw_album_bio}"))
             cache_entry["bio"] = bio_seed
+    else:
+        cache_entry["lyrics_miss_until"] = time.monotonic() + NEGATIVE_CACHE_TTL_SECONDS
 
     return track_key, synced, parsed_lines[: max(1, int(max_lines))]
 
@@ -1362,7 +1354,7 @@ async def _browse_track_lyrics_or_bio(
     fallback_artist: str = "",
     fallback_album: str = "",
 ) -> list[dict[str, Any]]:
-    """Fetch unwrapped lyrics or artist/album info from Music Assistant + LRCLIB/Wikipedia via 64-entry LRU cache."""
+    """Fetch unwrapped lyrics or artist/album metadata strictly from local Music Assistant (`M-P1-37`, Zero-WAN)."""
     if mode == "lyrics":
         _tkey, _synced, parsed_lines = await async_fetch_track_lyrics(
             hass,
@@ -1394,12 +1386,21 @@ async def _browse_track_lyrics_or_bio(
         fallback_artist=fallback_artist,
         fallback_album=fallback_album,
     )
+    now_m = time.monotonic()
     cached = _cache_get(cache_key)
-    if cached is not None and cached.get("bio"):
-        return [
-            {"name": ln, "id": "", "type": "text", "active": False}
-            for ln in cached["bio"]
-        ]
+    if cached is not None:
+        if cached.get("bio"):
+            return [
+                {"name": ln, "id": "", "type": "text", "active": False}
+                for ln in cached["bio"]
+            ]
+        if now_m < float(cached.get("bio_miss_until") or 0.0) and isinstance(
+            cached.get("bio_fallback"), list
+        ):
+            return [
+                {"name": ln, "id": "", "type": "text", "active": False}
+                for ln in cached["bio_fallback"]
+            ]
 
     raw_lyrics = ""
     raw_artist_bio = ""
@@ -1447,35 +1448,6 @@ async def _browse_track_lyrics_or_bio(
                 if raw_album_bio and release_year is not None:
                     break
 
-    if not raw_artist_bio and not raw_album_bio and artist:
-        session = async_get_clientsession(hass)
-        timeout = aiohttp.ClientTimeout(total=5.0)
-        headers = {
-            "User-Agent": f"HomeAssistant-Latter/{INTEGRATION_VERSION} (https://github.com/slampton/ha-latter)"
-        }
-        for query_term in (
-            f"{clean_album} ({artist} album)" if clean_album else "",
-            f"{artist} (band)",
-            f"{artist} (musician)",
-            artist,
-            clean_album,
-        ):
-            if not query_term:
-                continue
-            try:
-                wiki_title = quote(query_term.replace(" ", "_"))
-                w_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{wiki_title}"
-                async with session.get(w_url, timeout=timeout, headers=headers) as resp:
-                    if resp.status == 200:
-                        w_data = await resp.json()
-                        extract = str(w_data.get("extract") or "").strip()
-                        w_type = str(w_data.get("type") or "")
-                        if extract and w_type != "disambiguation" and len(extract) > 40:
-                            raw_artist_bio = extract
-                            break
-            except Exception:  # noqa: BLE001
-                pass
-
     bio_lines: list[str] = []
     if artist:
         bio_lines.append(f"Artist: {artist}")
@@ -1500,10 +1472,16 @@ async def _browse_track_lyrics_or_bio(
 
     cache_entry = _cache_put(cache_key)
     if has_rich_bio:
+        cache_entry.pop("bio_miss_until", None)
+        cache_entry.pop("bio_fallback", None)
         cache_entry["bio"] = bio_lines
+    else:
+        cache_entry["bio_fallback"] = bio_lines
+        cache_entry["bio_miss_until"] = time.monotonic() + NEGATIVE_CACHE_TTL_SECONDS
     if raw_lyrics and "lyrics_payload" not in cache_entry:
         synced, parsed_lines = parse_lrc_lyrics(raw_lyrics, max_lines=MAX_LYRIC_LINES)
         if parsed_lines:
+            cache_entry.pop("lyrics_miss_until", None)
             cache_entry["lyrics_payload"] = {"synced": synced, "lines": parsed_lines}
             cache_entry["lyrics"] = [str(row["text"]) for row in parsed_lines]
 

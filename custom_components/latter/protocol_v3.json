@@ -326,7 +326,7 @@
     "active_media": {
       "entity_suffix": "active_media",
       "cpp_enum_name": "MediaField",
-      "description": "Active media player state, metadata, timestamped playback progress, artwork URL, and speaker routing",
+      "description": "Active media player state, metadata, playback progress, artwork URL, and speaker routing",
       "fields": [
         {
           "index": 3,
@@ -368,108 +368,101 @@
           "name": "position",
           "cpp_enum": "POSITION",
           "type": "f32",
-          "description": "Track position in seconds at position_updated_at"
+          "description": "Track position in seconds"
         },
         {
           "index": 9,
-          "name": "position_updated_at",
-          "cpp_enum": "POSITION_UPDATED_AT",
-          "type": "u32",
-          "description": "Unix epoch seconds when position was sampled"
-        },
-        {
-          "index": 10,
           "name": "volume",
           "cpp_enum": "VOLUME",
           "type": "u16",
           "description": "Volume percentage (0..100)"
         },
         {
-          "index": 11,
+          "index": 10,
           "name": "media_type",
           "cpp_enum": "MEDIA_TYPE",
           "type": "string",
           "description": "Media content type"
         },
         {
-          "index": 12,
+          "index": 11,
           "name": "art_url",
           "cpp_enum": "ART_URL",
           "type": "url",
           "description": "Signed HTTP URL for album art proxy"
         },
         {
-          "index": 13,
+          "index": 12,
           "name": "active_speaker",
           "cpp_enum": "ACTIVE_SPEAKER",
           "type": "entity_id",
           "description": "Active media_player entity ID"
         },
         {
-          "index": 14,
+          "index": 13,
           "name": "speaker_name",
           "cpp_enum": "SPEAKER_NAME",
           "type": "string",
           "description": "Friendly name of active speaker"
         },
         {
-          "index": 15,
+          "index": 14,
           "name": "last_speaker",
           "cpp_enum": "LAST_SPEAKER",
           "type": "entity_id",
           "description": "Previously active media_player entity ID"
         },
         {
-          "index": 16,
+          "index": 15,
           "name": "local_speaker",
           "cpp_enum": "LOCAL_SPEAKER",
           "type": "entity_id",
           "description": "Device's own local media_player entity ID"
         },
         {
-          "index": 17,
+          "index": 16,
           "name": "is_local",
           "cpp_enum": "IS_LOCAL",
           "type": "bool",
           "description": "1 if active_speaker is this device's own speaker, else 0"
         },
         {
-          "index": 18,
+          "index": 17,
           "name": "shuffle",
           "cpp_enum": "SHUFFLE",
           "type": "bool",
           "description": "1 if shuffle is enabled on the active speaker/queue, else 0"
         },
         {
-          "index": 19,
+          "index": 18,
           "name": "repeat",
           "cpp_enum": "REPEAT",
           "type": "string",
           "description": "Active speaker/queue repeat mode (off|all|one); empty when unknown"
         },
         {
-          "index": 20,
+          "index": 19,
           "name": "muted",
           "cpp_enum": "MUTED",
           "type": "bool",
           "description": "1 if the active speaker or volume target is muted, else 0"
         },
         {
-          "index": 21,
+          "index": 20,
           "name": "favorite",
           "cpp_enum": "FAVORITE",
           "type": "bool",
           "description": "1 if the current track is marked favorite in Music Assistant, else 0"
         },
         {
-          "index": 22,
+          "index": 21,
           "name": "queue_count",
           "cpp_enum": "QUEUE_COUNT",
           "type": "u16",
           "description": "Total items in the active Music Assistant playback queue (0 when empty or non-MA)"
         },
         {
-          "index": 23,
+          "index": 22,
           "name": "media_caps",
           "cpp_enum": "MEDIA_CAPS",
           "type": "u16",
@@ -542,8 +535,8 @@
           "index": 7,
           "name": "wind_bearing",
           "cpp_enum": "WIND_BEARING",
-          "type": "string",
-          "description": "Wind cardinal direction or bearing"
+          "type": "f32",
+          "description": "Wind bearing in degrees (0..360)"
         },
         {
           "index": 8,
@@ -607,6 +600,13 @@
           "cpp_enum": "MOON_PHASE",
           "type": "string",
           "description": "Lunar phase slug (new_moon|waxing_crescent|first_quarter|waxing_gibbous|full_moon|waning_gibbous|last_quarter|waning_crescent)"
+        },
+        {
+          "index": 17,
+          "name": "temp_unit",
+          "cpp_enum": "TEMP_UNIT",
+          "type": "string",
+          "description": "Outdoor temperature unit ('C' or 'F')"
         }
       ]
     },
@@ -1118,6 +1118,13 @@
           "cpp_enum": "WEATHER_APP_BACKGROUND",
           "type": "bool",
           "description": "1 = show live animated weather sky background in the Sky & Weather app, else 0"
+        },
+        {
+          "index": 70,
+          "name": "do_not_disturb",
+          "cpp_enum": "DO_NOT_DISTURB",
+          "type": "bool",
+          "description": "1 = Do Not Disturb active, else 0"
         }
       ]
     },
@@ -1145,7 +1152,7 @@
           "name": "dock_items",
           "cpp_enum": "DOCK_ITEMS",
           "type": "records",
-          "description": "0x1E-joined kind|target|action|label|icon|confirm|state App Dock shortcut records (sent on chunk_index == 0, up to 16; empty until configured so device uses defaults.dock_routes; Settings is always appended last)"
+          "description": "0x1E-joined kind|target|action|label|icon|confirm|state App Dock shortcut records (sent on chunk_index == 0, up to 24; empty until configured so device uses defaults.dock_routes; Settings is always appended last)"
         },
         {
           "index": 6,
@@ -1187,7 +1194,7 @@
       "variables": {}
     },
     "latter_device_command": {
-      "description": "Execute a typed Device lifecycle, diagnostic, or UI command (restart|find_my|activate_screensaver|trigger_va|log_memory_report|dismiss_ringing|cancel_timer|reset_stopwatch)",
+      "description": "Execute a typed Device lifecycle, display, telemetry, security, or UI command (restart|find_my|activate_screensaver|deactivate_screensaver|wake_screen|screen_off|set_screen_bri:<1..100>|set_profiler_on|set_profiler_off|request_telemetry|set_pin_key:<key_id>:<hex_key>|trigger_va|dismiss_ringing|cancel_timer|reset_stopwatch)",
       "variables": {
         "command": "string"
       }
@@ -1215,14 +1222,13 @@
       }
     },
     "latter_set_calendar_view": {
-      "description": "Push chunked windowed calendar events (up to 64 events across multi-chunk frames) or a signed on-demand Event Details map URL to the device",
+      "description": "Push chunked windowed calendar events (up to 64 events across multi-chunk frames) to the device",
       "variables": {
         "req_id": "int",
         "chunk_index": "int",
         "chunk_count": "int",
         "window_start": "string",
         "window_end": "string",
-        "map_url": "string",
         "events": "string"
       }
     },
@@ -1237,13 +1243,6 @@
         "camera_url": "string",
         "camera_entity": "string",
         "alert_id": "int"
-      }
-    },
-    "latter_ui_input": {
-      "description": "Remote navigation input: action up|down|left|right|select|back|home (canonical navigation actions); delta overrides the step for directional actions (0 = derive from action)",
-      "variables": {
-        "action": "string",
-        "delta": "int"
       }
     }
   },
@@ -1757,6 +1756,26 @@
         "dirty_prefs"
       ]
     },
+    "device_telemetry": {
+      "description": "Periodic and on-demand device link, heap, PSRAM, BLE, and profiler telemetry reported to Home Assistant",
+      "fields": [
+        "link_json",
+        "int_ram_free_kb",
+        "int_ram_min_kb",
+        "int_ram_largest_kb",
+        "psram_min_kb",
+        "ble_active",
+        "profiler_on"
+      ]
+    },
+    "display_state": {
+      "description": "Report physical display power, perceptual brightness percentage, and screensaver transitions to Home Assistant",
+      "fields": [
+        "power_state",
+        "brightness_pct",
+        "screensaver_active"
+      ]
+    },
     "music_browse": {
       "description": "Browse speakers, library, favorites, playlists, artists, albums, tracks, podcasts, active queue, artist/album bios, or fetch full-track lyrics (lyrics_fetch)",
       "fields": [
@@ -1839,14 +1858,13 @@
       ]
     },
     "calendar_fetch": {
-      "description": "Fetch windowed calendar events for a date range or mint a signed Event Details map URL",
+      "description": "Fetch windowed calendar events for a date range",
       "fields": [
         "req_id",
         "mode",
         "start_date",
         "end_date",
-        "days",
-        "location"
+        "days"
       ]
     },
     "calendar_create_event": {
@@ -1884,8 +1902,7 @@
         "camera_entity",
         "camera_index",
         "message",
-        "noise_reduction",
-        "code"
+        "noise_reduction"
       ]
     },
     "save_custom_color": {
@@ -1923,154 +1940,6 @@
     }
   },
   "ha_services": {
-    "device_hello": {
-      "description": "Device-initiated handshake sent by an ESPHome Latter node on API connection to report its contract version, boot ID, and hardware manifest.",
-      "fields": [
-        "target_device",
-        "contract",
-        "boot_id",
-        "manifest",
-        "prefs_seq",
-        "dirty_prefs"
-      ]
-    },
-    "music_browse": {
-      "description": "Browse Music Assistant speakers, library, podcasts, queues, lyrics, and artist/album bios and push paginated slots to the ESPHome device.",
-      "fields": [
-        "target_device",
-        "req_id",
-        "mode",
-        "page",
-        "page_size",
-        "search",
-        "speaker",
-        "last_speaker",
-        "album_sort",
-        "artist_album_sort",
-        "podcast_sort"
-      ]
-    },
-    "set_active_speaker": {
-      "description": "Change the active target media_player for the ESPHome device and optionally transfer the active playback queue.",
-      "fields": [
-        "entity_id",
-        "transfer_queue",
-        "target_device"
-      ]
-    },
-    "media_volume": {
-      "description": "Set or step the volume, or toggle mute, on the active speaker. If a volume override is mapped for that speaker (for example an AV receiver), the change goes to the override entity.",
-      "fields": [
-        "target_device",
-        "entity_id",
-        "action",
-        "volume_level"
-      ]
-    },
-    "set_active_area": {
-      "description": "Switch the active area context by area_id or area name. The device's speaker follows to the new area when the device's \"Media follows this Device\" setting is on. On roaming devices with Voice Follows Me enabled, this also moves the device's Home Assistant Area so area-aware Assist commands target it.",
-      "fields": [
-        "area_id",
-        "target_device"
-      ]
-    },
-    "remote_action": {
-      "description": "Select one of the up to 10 configured TV remote slots or send a remote command.",
-      "fields": [
-        "slot",
-        "action",
-        "command",
-        "hold_secs",
-        "target_device"
-      ]
-    },
-    "area_browse": {
-      "description": "Browse Home Assistant areas, curated area entities, or home-wide alarm entities and push paginated slots to the ESPHome device.",
-      "fields": [
-        "target_device",
-        "req_id",
-        "mode",
-        "area_id",
-        "domain_filter",
-        "page",
-        "page_size"
-      ]
-    },
-    "area_action": {
-      "description": "Execute a normalized area control, light color/Kelvin, thermostat, lock, vacuum, or home security alarm action.",
-      "fields": [
-        "target_device",
-        "entity_id",
-        "area_id",
-        "action",
-        "level",
-        "code"
-      ]
-    },
-    "calendar_fetch": {
-      "description": "Fetch windowed system calendar events or mint a signed location map URL and push calendar view frames to the ESPHome device.",
-      "fields": [
-        "target_device",
-        "req_id",
-        "mode",
-        "start_date",
-        "end_date",
-        "days",
-        "location"
-      ]
-    },
-    "calendar_create_event": {
-      "description": "Create a timed, all-day, or recurring event on a writable system calendar and refresh the calendar store.",
-      "fields": [
-        "target_device",
-        "calendar_entity",
-        "summary",
-        "start_date_time",
-        "end_date_time",
-        "all_day",
-        "start_date",
-        "end_date",
-        "location",
-        "rrule",
-        "description"
-      ]
-    },
-    "calendar_delete_event": {
-      "description": "Delete an event or recurring instance from a writable system calendar and refresh the calendar store.",
-      "fields": [
-        "target_device",
-        "calendar_entity",
-        "uid",
-        "recurrence_id",
-        "recurrence_range"
-      ]
-    },
-    "intercom_broadcast": {
-      "description": "Broadcast a TTS announcement or recorded audio clip to configured broadcast speakers, explicitly chosen speakers, the speakers in occupied Areas ('occupied_areas'), or the speakers in a person's current Area ('person.<slug>'), automatically excluding the calling Device and Latter displays in Bedtime Mode.",
-      "fields": [
-        "target_device",
-        "message",
-        "media_url",
-        "target_speakers",
-        "tts_entity"
-      ]
-    },
-    "media_command": {
-      "description": "Run a playback, queue, or toggle command (play, pause, toggle, next, previous, stop, seek, play_media, clear_queue, queue_play, queue_move, queue_delete, mute_toggle, shuffle_toggle, repeat_cycle, favorite_toggle, lyrics_fetch, join, unjoin) on the active speaker. If the device restarted or slept and its Sendspin buffer is empty, play re-streams the Music Assistant queue.",
-      "fields": [
-        "target_device",
-        "command",
-        "entity_id",
-        "seek_position",
-        "media_id",
-        "media_type",
-        "enqueue",
-        "radio_mode",
-        "queue_item_id",
-        "pos_shift",
-        "group_members"
-      ]
-    },
     "notify": {
       "description": "Show an on-screen notification, with an optional chime and an optional camera snapshot, on a specific device, the devices in occupied Areas ('occupied_areas'), the devices assigned to a person ('person.<slug>'), or all displays ('all').",
       "fields": [
@@ -2084,33 +1953,29 @@
         "camera_entity"
       ]
     },
-    "save_custom_color": {
-      "description": "Save a custom hex color from the on-device or Studio Color Wheel into the System-Wide Color Library and apply it to the target device.",
+    "intercom_broadcast": {
+      "description": "Broadcast a TTS announcement or recorded audio clip to configured broadcast speakers, explicitly chosen speakers, the speakers in occupied Areas ('occupied_areas'), or the speakers in a person's current Area ('person.<slug>'), automatically excluding the calling Device and Latter displays in Bedtime Mode or Do Not Disturb.",
       "fields": [
         "target_device",
-        "hex_color",
-        "name"
-      ]
-    },
-    "shortcut_action": {
-      "description": "Execute a configured App Dock or Pinned Home Assistant entity action on behalf of a bound Latter Device, enforcing allowlist membership and Perimeter Security Policy.",
-      "fields": [
-        "target_device",
-        "entity_id",
-        "action",
-        "code"
-      ]
-    },
-    "doorbell_intercom": {
-      "description": "Listen to a doorbell camera's noise-reduced audio on a Latter device, reply by push-to-talk or quick reply (spoken with TTS on the camera's media_player), or select a carousel camera. There is no live device-to-door audio.",
-      "fields": [
-        "target_device",
-        "action",
-        "camera_entity",
-        "camera_index",
         "message",
-        "noise_reduction",
-        "code"
+        "media_url",
+        "target_speakers",
+        "tts_entity"
+      ]
+    },
+    "set_active_area": {
+      "description": "Switch the active area context by area_id or area name. The device's speaker follows to the new area when the device's \"Media follows this Device\" setting is on. On roaming devices with Voice Follows Me enabled, this also moves the device's Home Assistant Area so area-aware Assist commands target it.",
+      "fields": [
+        "area_id",
+        "target_device"
+      ]
+    },
+    "set_active_speaker": {
+      "description": "Change the active target media_player for the ESPHome device and optionally transfer the active playback queue.",
+      "fields": [
+        "entity_id",
+        "transfer_queue",
+        "target_device"
       ]
     },
     "reset_device": {
@@ -2119,27 +1984,6 @@
         "target_device",
         "device_settings",
         "latter_options"
-      ]
-    },
-    "set_device_prefs": {
-      "description": "Apply on-device preference updates from a bound Latter Device (or admin automation) into the Device's sleep-safe subentry configuration.",
-      "fields": [
-        "target_device",
-        "base_seq",
-        "changes"
-      ]
-    },
-    "timer_alarm_state": {
-      "description": "Event-driven timer, stopwatch, and alarm state update reported by a bound Latter Device.",
-      "fields": [
-        "target_device",
-        "timer_running",
-        "timer_paused",
-        "remaining_sec",
-        "ringing",
-        "stopwatch_running",
-        "stopwatch_paused",
-        "stopwatch_elapsed_sec"
       ]
     }
   },
@@ -2726,7 +2570,6 @@
       "domain": "select",
       "default": "Docked Only",
       "section": "audio",
-      "esphome_section": "voice",
       "group_tier": "behavior",
       "options": [
         "Docked Only",
@@ -2745,7 +2588,6 @@
       "domain": "select",
       "default": "Docked Only",
       "section": "power",
-      "esphome_section": "sleep",
       "group_tier": "behavior",
       "options": [
         "Single Tap",
@@ -2765,7 +2607,6 @@
       "domain": "select",
       "default": "Docked Only",
       "section": "power",
-      "esphome_section": "sleep",
       "group_tier": "behavior",
       "options": [
         "Always On",
@@ -2784,7 +2625,6 @@
       "domain": "select",
       "default": "30s",
       "section": "power",
-      "esphome_section": "sleep",
       "group_tier": "behavior",
       "options": [
         "10s",
@@ -2806,7 +2646,6 @@
       "domain": "select",
       "default": "1 min",
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "behavior",
       "options": [
         "10s",
@@ -2829,7 +2668,6 @@
       "domain": "select",
       "default": "15 min",
       "section": "power",
-      "esphome_section": "sleep",
       "group_tier": "behavior",
       "options": [
         "5 min",
@@ -2850,7 +2688,6 @@
       "domain": "select",
       "default": "Docked Only",
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "behavior",
       "options": [
         "Docked Only",
@@ -2869,7 +2706,6 @@
       "domain": "select",
       "default": "Ambient Clock",
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "display",
       "options": [
         "Ambient Clock",
@@ -2891,7 +2727,6 @@
       "domain": "select",
       "default": "Sun Synchronized",
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "behavior",
       "options": [
         "Disabled",
@@ -2911,7 +2746,6 @@
       "domain": "number",
       "default": 80,
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "behavior",
       "options": [],
       "min": 1,
@@ -2926,7 +2760,6 @@
       "domain": "number",
       "default": 90,
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "behavior",
       "options": [],
       "min": 1,
@@ -2941,7 +2774,6 @@
       "domain": "number",
       "default": 35,
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "behavior",
       "options": [],
       "min": 1,
@@ -2956,7 +2788,6 @@
       "domain": "number",
       "default": 7,
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "behavior",
       "options": [],
       "min": 0,
@@ -2971,7 +2802,6 @@
       "domain": "number",
       "default": 20,
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "behavior",
       "options": [],
       "min": 0,
@@ -2986,7 +2816,6 @@
       "domain": "select",
       "default": "Steel Blue",
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "display",
       "options": [
         "Steel Blue",
@@ -3007,7 +2836,6 @@
       "domain": "select",
       "default": "Nebula",
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "display",
       "options": [
         "Nebula",
@@ -3028,7 +2856,6 @@
       "domain": "switch",
       "default": true,
       "section": "interface",
-      "esphome_section": "home",
       "group_tier": "interface",
       "options": [],
       "min": null,
@@ -3043,7 +2870,6 @@
       "domain": "select",
       "default": "Home",
       "section": "interface",
-      "esphome_section": "home",
       "group_tier": "interface",
       "options": [
         "Home",
@@ -3072,7 +2898,6 @@
       "domain": "select",
       "default": "2 min",
       "section": "interface",
-      "esphome_section": "home",
       "group_tier": "interface",
       "options": [
         "15s",
@@ -3095,7 +2920,6 @@
       "domain": "select",
       "default": "Minimal Digital",
       "section": "interface",
-      "esphome_section": "display",
       "group_tier": "interface",
       "options": [
         "Minimal Digital",
@@ -3114,7 +2938,6 @@
       "domain": "select",
       "default": "12-Hour (AM/PM)",
       "section": "interface",
-      "esphome_section": "display",
       "group_tier": "interface",
       "options": [
         "12-Hour (AM/PM)",
@@ -3132,7 +2955,6 @@
       "domain": "switch",
       "default": true,
       "section": "interface",
-      "esphome_section": "display",
       "group_tier": "interface",
       "options": [],
       "min": null,
@@ -3147,7 +2969,6 @@
       "domain": "switch",
       "default": true,
       "section": "interface",
-      "esphome_section": "display",
       "group_tier": "interface",
       "options": [],
       "min": null,
@@ -3162,7 +2983,6 @@
       "domain": "switch",
       "default": true,
       "section": "interface",
-      "esphome_section": "display",
       "group_tier": "interface",
       "options": [],
       "min": null,
@@ -3177,7 +2997,6 @@
       "domain": "switch",
       "default": true,
       "section": "interface",
-      "esphome_section": "display",
       "group_tier": "interface",
       "options": [],
       "min": null,
@@ -3192,7 +3011,6 @@
       "domain": "select",
       "default": "Full Screen",
       "section": "interface",
-      "esphome_section": "music",
       "group_tier": "interface",
       "options": [
         "Full Screen",
@@ -3212,7 +3030,6 @@
       "domain": "select",
       "default": "Art + Metadata",
       "section": "interface",
-      "esphome_section": "music",
       "group_tier": "interface",
       "options": [
         "Art Only",
@@ -3231,7 +3048,6 @@
       "domain": "select",
       "default": "Alphabetical",
       "section": "interface",
-      "esphome_section": "music",
       "group_tier": "interface",
       "options": [
         "Alphabetical",
@@ -3250,7 +3066,6 @@
       "domain": "select",
       "default": "Oldest on Top",
       "section": "interface",
-      "esphome_section": "music",
       "group_tier": "interface",
       "options": [
         "Oldest on Top",
@@ -3269,7 +3084,6 @@
       "domain": "select",
       "default": "Newest on Top",
       "section": "interface",
-      "esphome_section": "music",
       "group_tier": "interface",
       "options": [
         "Newest on Top",
@@ -3287,7 +3101,6 @@
       "domain": "select",
       "default": "Moderately sensitive",
       "section": "audio",
-      "esphome_section": "voice",
       "group_tier": "behavior",
       "options": [
         "Slightly sensitive",
@@ -3306,7 +3119,6 @@
       "domain": "select",
       "default": "Moderately sensitive",
       "section": "audio",
-      "esphome_section": "voice",
       "group_tier": "behavior",
       "options": [
         "Slightly sensitive",
@@ -3325,7 +3137,6 @@
       "domain": "select",
       "default": "Moderately sensitive",
       "section": "audio",
-      "esphome_section": "voice",
       "group_tier": "behavior",
       "options": [
         "Slightly sensitive",
@@ -3344,7 +3155,6 @@
       "domain": "select",
       "default": "Moderately sensitive",
       "section": "audio",
-      "esphome_section": "voice",
       "group_tier": "behavior",
       "options": [
         "Slightly sensitive",
@@ -3363,7 +3173,6 @@
       "domain": "select",
       "default": "Moderately sensitive",
       "section": "audio",
-      "esphome_section": "voice",
       "group_tier": "behavior",
       "options": [
         "Slightly sensitive",
@@ -3382,7 +3191,6 @@
       "domain": "switch",
       "default": true,
       "section": "audio",
-      "esphome_section": "voice",
       "group_tier": "behavior",
       "options": [],
       "min": null,
@@ -3397,7 +3205,6 @@
       "domain": "number",
       "default": 80,
       "section": "audio",
-      "esphome_section": "sound",
       "group_tier": "behavior",
       "options": [],
       "min": 20,
@@ -3412,7 +3219,6 @@
       "domain": "number",
       "default": 5,
       "section": "audio",
-      "esphome_section": "sound",
       "group_tier": "behavior",
       "options": [],
       "min": 1,
@@ -3427,7 +3233,6 @@
       "domain": "switch",
       "default": true,
       "section": "audio",
-      "esphome_section": "sound",
       "group_tier": "behavior",
       "options": [],
       "min": null,
@@ -3442,7 +3247,6 @@
       "domain": "select",
       "default": "Handheld Only",
       "section": "presence",
-      "esphome_section": "presence",
       "group_tier": "behavior",
       "options": [
         "Handheld Only",
@@ -3461,7 +3265,6 @@
       "domain": "select",
       "default": "Live (Home Assistant)",
       "section": "developer",
-      "esphome_section": "developer",
       "group_tier": null,
       "options": [
         "Live (Home Assistant)",
@@ -3494,7 +3297,6 @@
       "domain": "select",
       "default": "Time App",
       "section": "interface",
-      "esphome_section": "home",
       "group_tier": "interface",
       "options": [
         "Time App",
@@ -3512,7 +3314,6 @@
       "domain": "select",
       "default": "Overview",
       "section": "interface",
-      "esphome_section": "home",
       "group_tier": "interface",
       "options": [
         "Day View",
@@ -3530,7 +3331,6 @@
       "domain": "text",
       "default": "",
       "section": "time",
-      "esphome_section": "time",
       "group_tier": null,
       "options": [],
       "min": null,
@@ -3545,7 +3345,6 @@
       "domain": "switch",
       "default": false,
       "section": "interface",
-      "esphome_section": "home",
       "group_tier": "interface",
       "options": [],
       "min": null,
@@ -3560,7 +3359,6 @@
       "domain": "text",
       "default": "",
       "section": "interface",
-      "esphome_section": "home",
       "group_tier": "interface",
       "options": [],
       "min": null,
@@ -3575,7 +3373,6 @@
       "domain": "text",
       "default": "07:00|0|1;08:30|0|2;09:00|0|2",
       "section": "time",
-      "esphome_section": "time",
       "group_tier": null,
       "options": [],
       "min": null,
@@ -3590,7 +3387,6 @@
       "domain": "number",
       "default": 30,
       "section": "interface",
-      "esphome_section": "home",
       "group_tier": "interface",
       "options": [],
       "min": 7,
@@ -3605,7 +3401,6 @@
       "domain": "select",
       "default": "Sunday",
       "section": "interface",
-      "esphome_section": "home",
       "group_tier": "interface",
       "options": [
         "Sunday",
@@ -3623,7 +3418,6 @@
       "domain": "switch",
       "default": false,
       "section": "power",
-      "esphome_section": "sleep",
       "group_tier": null,
       "options": [],
       "min": null,
@@ -3638,7 +3432,6 @@
       "domain": "select",
       "default": "Screen Off",
       "section": "power",
-      "esphome_section": "sleep",
       "group_tier": "behavior",
       "options": [
         "Screen Off",
@@ -3656,7 +3449,6 @@
       "domain": "switch",
       "default": false,
       "section": "power",
-      "esphome_section": "sleep",
       "group_tier": "behavior",
       "options": [],
       "min": null,
@@ -3671,7 +3463,6 @@
       "domain": "number",
       "default": 22,
       "section": "power",
-      "esphome_section": "sleep",
       "group_tier": "behavior",
       "options": [],
       "min": 0,
@@ -3686,7 +3477,6 @@
       "domain": "number",
       "default": 7,
       "section": "power",
-      "esphome_section": "sleep",
       "group_tier": "behavior",
       "options": [],
       "min": 0,
@@ -3701,7 +3491,6 @@
       "domain": "number",
       "default": 15,
       "section": "power",
-      "esphome_section": "sleep",
       "group_tier": "behavior",
       "options": [],
       "min": 1,
@@ -3716,7 +3505,6 @@
       "domain": "select",
       "default": "Grid",
       "section": "interface",
-      "esphome_section": "cameras",
       "group_tier": "interface",
       "options": [
         "Grid",
@@ -3735,7 +3523,6 @@
       "domain": "select",
       "default": "15s",
       "section": "interface",
-      "esphome_section": "cameras",
       "group_tier": "interface",
       "options": [
         "10s",
@@ -3755,7 +3542,6 @@
       "domain": "select",
       "default": "Uncropped",
       "section": "interface",
-      "esphome_section": "cameras",
       "group_tier": "interface",
       "options": [
         "Uncropped",
@@ -3773,7 +3559,6 @@
       "domain": "select",
       "default": "Auto",
       "section": "interface",
-      "esphome_section": "cameras",
       "group_tier": "interface",
       "options": [
         "Auto",
@@ -3792,7 +3577,6 @@
       "domain": "select",
       "default": "Snapshot",
       "section": "interface",
-      "esphome_section": "cameras",
       "group_tier": "interface",
       "options": [
         "Snapshot",
@@ -3810,7 +3594,6 @@
       "domain": "switch",
       "default": false,
       "section": "display",
-      "esphome_section": "display",
       "group_tier": "display",
       "options": [],
       "min": null,
@@ -3825,8 +3608,21 @@
       "domain": "switch",
       "default": true,
       "section": "interface",
-      "esphome_section": "display",
       "group_tier": "interface",
+      "options": [],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "display"
+    },
+    {
+      "key": "do_not_disturb",
+      "label": "Do not disturb",
+      "domain": "switch",
+      "default": false,
+      "section": "power",
+      "group_tier": null,
       "options": [],
       "min": null,
       "max": null,
@@ -3836,13 +3632,18 @@
     }
   ],
   "studio_contract": {
-    "studio_rev": 43,
+    "studio_rev": 44,
     "allowed_device_actions": [
       "restart",
       "find_my",
       "activate_screensaver",
+      "deactivate_screensaver",
+      "wake_screen",
+      "screen_off",
+      "set_profiler_on",
+      "set_profiler_off",
+      "request_telemetry",
       "trigger_va",
-      "log_memory_report",
       "dismiss_ringing",
       "cancel_timer",
       "reset_stopwatch"
@@ -3854,7 +3655,6 @@
       "calibrate_area_illuminance",
       "capture_ble_area_signature",
       "clear_ble_area_signature",
-      "system_entity_action",
       "send_announcement",
       "check_system_updates",
       "clear_internal_logs",

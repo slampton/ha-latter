@@ -26,7 +26,6 @@ import type { ConfigurableAppId, DeviceCapabilities, ShortcutItem } from "../../
 import { defaultLocaleTimeFormat, entityLabel } from "../../utils/format.js";
 import {
   type PillListItem,
-  renderNativeControlRow,
   renderPillList,
   renderSelectRow,
   renderSettingsRow,
@@ -450,9 +449,6 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
   } else if (app === "area") {
     const enabledAreaCats = store.entity.getEnabledAreaCategories();
     const pillItems = buildOrderedPillItems(AREA_CATEGORIES_CATALOG, enabledAreaCats, caps);
-    const areaExtraItems = store.entity
-      .getSectionItems("area")
-      .filter((it) => it.key !== "ble_beacon_mode");
     body = html`<div class="settings-list">
       ${renderSettingsRow({
         label: store.t("dialogs.area_cats_label"),
@@ -467,7 +463,6 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
           overlay: store.localeOverlay,
         }),
       })}
-      ${areaExtraItems.map((it) => renderNativeControlRow(store, it))}
     </div>`;
   } else if (app === "music") {
     const musicKeys = [
@@ -503,7 +498,6 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
         label: store.t("dialogs.remote_missing_group", { id: rawId }),
       });
     }
-    const remoteEspItems = store.entity.getSectionItems("remote");
     body = html`<div class="settings-list">
       ${renderSelectRow({
         id: "cfg-device_remote_group",
@@ -514,7 +508,6 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
         onChange: (val) =>
           store.entity.stageDeviceSetting("device_remote_group", val, "cfg-device_remote_group"),
       })}
-      ${remoteEspItems.map((it) => renderNativeControlRow(store, it))}
     </div>`;
     extraAction = html`<button
       type="button"

@@ -25,7 +25,6 @@ from custom_components.latter.cameras import (
     LatterCameraStreamHub,
     MjpegStreamParser,
     align16,
-    async_resolve_camera_capabilities,
     async_shutdown_camera_stream_hub,
     build_ffmpeg_video_cmd,
     compose_grid_frame,
@@ -172,13 +171,13 @@ def test_transcode_contain_vs_fill_and_circular_mask(monkeypatch: pytest.MonkeyP
 
     # Confirm circular_mask is ONLY invoked for fit="fill", never for fit="contain"
     mask_calls: list[tuple[int, int]] = []
-    orig_mask = cameras_mod._get_circular_mask_surfaces
+    orig_mask = cameras_mod.get_circular_mask_surfaces
 
     def _spy_mask(w: int, h: int) -> Any:
         mask_calls.append((w, h))
         return orig_mask(w, h)
 
-    monkeypatch.setattr(cameras_mod, "_get_circular_mask_surfaces", _spy_mask)
+    monkeypatch.setattr(cameras_mod, "get_circular_mask_surfaces", _spy_mask)
 
     transcode_camera_frame(raw_16x9, 466, 466, fit="contain", circular_mask=True)
     assert mask_calls == []
@@ -565,7 +564,7 @@ async def test_resolve_camera_capabilities_and_singleton_lifecycle(hass: Any) ->
     )
     hass.data.setdefault("_camera_streams", {})["camera.front_door"] = "rtsp://10.0.0.5/door"
 
-    caps_doorbell = await async_resolve_camera_capabilities(
+    caps_doorbell = resolve_camera_capabilities(
         hass,
         "camera.front_door",
         doorbell_ring_map={"binary_sensor.front_door_ring": "camera.front_door"},
@@ -831,7 +830,7 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
         assert payload["config"][CONF_CAMERA_CAROUSEL_ENTITIES] == ["camera.front_door"]
         cat_cams = {c["id"]: c for c in payload["catalog"]["cameras"]}
         assert cat_cams["camera.front_door"]["stream_kind"] == "rtsp"
-        assert cat_cams["camera.front_door"]["has_audio"] is True
+        assert cat_cams["camera.front_door"]["has_audio"] is False
         assert cat_cams["camera.backyard"]["stream_kind"] == "snapshot"
 
         # Dispatch doorbell alert and verify area_context wire indices 21, 39, 40

@@ -67,7 +67,15 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
   const modal = store.colorWheelModal;
 
   const onBackdropClick = (ev: Event): void => {
-    if (ev.target === ev.currentTarget) {
+    if (ev.target === ev.currentTarget && !modal.busy) {
+      store.tools.closeColorWheelModal();
+    }
+  };
+
+  const onCancel = (ev: Event): void => {
+    if (modal.busy) {
+      ev.preventDefault();
+    } else {
       store.tools.closeColorWheelModal();
     }
   };
@@ -76,7 +84,7 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
     return html`<dialog
       id="latter-cw-modal"
       aria-labelledby="latter-cw-title"
-      @cancel=${() => store.tools.closeColorWheelModal()}
+      @cancel=${onCancel}
       @click=${onBackdropClick}
       class="studio-dialog"
     >
@@ -132,7 +140,7 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-cw-modal"
     aria-labelledby="latter-cw-title"
-    @cancel=${() => store.tools.closeColorWheelModal()}
+    @cancel=${onCancel}
     @click=${onBackdropClick}
     class="studio-dialog"
   >
@@ -179,6 +187,7 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
       <div class="dialog-actions">
         <button
           type="button"
+          ?disabled=${modal.busy}
           @click=${() => store.tools.closeColorWheelModal()}
           class="btn btn-secondary"
         >

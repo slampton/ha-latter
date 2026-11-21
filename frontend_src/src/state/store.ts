@@ -211,6 +211,8 @@ export class StudioStore implements ReactiveController {
   pinBusy = false;
   worldClockNewLabel = "";
   worldClockNewZone = "";
+  worldClockRowKeys: string[] = [];
+  worldClockRowSeq = 0;
   overviewAlarmsOpen = false;
 
   // System Shared Entities & Photo Library UI state
@@ -842,6 +844,7 @@ export class StudioStore implements ReactiveController {
       this.devicePinDraft = "";
       this.worldClockNewLabel = "";
       this.worldClockNewZone = "";
+      this.worldClockRowKeys = [];
       this.overviewAlarmsOpen = false;
       this.appConfigModal = { open: false, app: null };
       this.cameraConfigModal = { ...this.cameraConfigModal, open: false };
@@ -885,6 +888,9 @@ export class StudioStore implements ReactiveController {
     this.routeApplying = true;
     try {
       if (parts[0] === "devices" && parts[1]?.toLowerCase() === "discovered") {
+        if (prevScope === "system") {
+          void this.entity.flushSystemSettings();
+        }
         this.onActiveDeviceChanged(prevSubId, "");
         if (prevScope !== "device" || prevViewId !== "discovered_devices") {
           this.clearHandoffTargets();
@@ -898,8 +904,14 @@ export class StudioStore implements ReactiveController {
           Array.isArray(this.state.system_devices) &&
           !this.state.system_devices.some((d) => d.subentry_id === nextSubId)
         ) {
+          if (prevScope === "system") {
+            void this.entity.flushSystemSettings();
+          }
           this.redirectInvalidDeviceRoute(nextSubId);
           return;
+        }
+        if (prevScope === "system") {
+          void this.entity.flushSystemSettings();
         }
         const requestedView = slugToView(DEVICE_VIEW_SLUGS, parts[2] || "overview") || "dashboard";
         this.onActiveDeviceChanged(prevSubId, nextSubId);
@@ -929,6 +941,9 @@ export class StudioStore implements ReactiveController {
           this.ensureDefaultSurveyDevice();
         }
       } else {
+        if (prevScope === "system") {
+          void this.entity.flushSystemSettings();
+        }
         this.onActiveDeviceChanged(prevSubId, "");
         if (prevScope !== "device" || prevViewId !== "select_device_prompt") {
           this.clearHandoffTargets();
@@ -990,6 +1005,9 @@ export class StudioStore implements ReactiveController {
   }
 
   openDevicesLanding(): void {
+    if (this.currentScope === "system") {
+      void this.entity.flushSystemSettings();
+    }
     this.onActiveDeviceChanged(this.activeSubentryId, "");
     this.clearHandoffTargets();
     this.currentScope = "device";
@@ -1001,6 +1019,9 @@ export class StudioStore implements ReactiveController {
   }
 
   openDiscoveredDevices(cardId = ""): void {
+    if (this.currentScope === "system") {
+      void this.entity.flushSystemSettings();
+    }
     this.onActiveDeviceChanged(this.activeSubentryId, "");
     this.clearHandoffTargets();
     this.currentScope = "device";
@@ -1055,6 +1076,8 @@ export class StudioStore implements ReactiveController {
     const isSys = Object.prototype.hasOwnProperty.call(SYSTEM_VIEW_SLUGS, viewId);
     if (isSys) {
       this.onActiveDeviceChanged(this.activeSubentryId, "");
+    } else if (this.currentScope === "system") {
+      void this.entity.flushSystemSettings();
     }
     this.currentScope = isSys ? "system" : "device";
     this.currentViewId = viewId;
@@ -1101,6 +1124,9 @@ export class StudioStore implements ReactiveController {
   ): Promise<void> {
     const cleanNext = String(nextSubentryId || "").trim();
     if (!cleanNext) return;
+    if (this.currentScope === "system") {
+      void this.entity.flushSystemSettings();
+    }
     this.onActiveDeviceChanged(this.activeSubentryId, cleanNext);
     this.currentScope = "device";
     const desired =
@@ -1214,6 +1240,11 @@ export class StudioStore implements ReactiveController {
       }
       if (!this.state) {
         this.loading = false;
+        this.deviceLoading = false;
+        this.loadError = formatWsError(err, "Latter Studio could not connect.");
+        this.host.requestUpdate();
+      } else if (this.deviceLoading) {
+        this.deviceLoading = false;
         this.loadError = formatWsError(err, "Latter Studio could not connect.");
         this.host.requestUpdate();
       }
@@ -1257,6 +1288,7 @@ export class StudioStore implements ReactiveController {
       }
       if (reqSeq < this.lastAppliedReqSeq) return;
       this.loading = false;
+      this.deviceLoading = false;
       this.loadError = formatWsError(err, "Latter Studio could not load.");
       this.host.requestUpdate();
     }

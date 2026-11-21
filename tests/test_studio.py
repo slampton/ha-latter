@@ -166,7 +166,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("TRACKER_KIND_TOKENS", js)
         self.assertIn("ignoreDiscoveredDevice", discovered_view)
         self.assertIn("unignoreDiscoveredDevice", discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 43)
+        self.assertEqual(latter_const.STUDIO_REV, 44)
         self.assertNotIn("hold_crown_power_off", js)
         self.assertIn(f"const STUDIO_REV = {latter_const.STUDIO_REV};", js)
         self.assertIn(".card.handoff-active", js)
@@ -643,9 +643,10 @@ class TestShortcutPolicy(unittest.TestCase):
         ):
             self.assertEqual(settings.SHORTCUT_ROUTE_MAP[music_tok]["label"], music_lbl)
             self.assertIn(f'token: "{music_tok}", label: "{music_lbl}"', js)
+        self.assertNotIn("shortcut_action", protocol_json["ha_services"])
         self.assertEqual(
-            protocol_json["ha_services"]["shortcut_action"]["fields"],
-            ["target_device", "entity_id", "action", "code"],
+            protocol_json["rpc_methods"]["shortcut_action"]["fields"],
+            ["entity_id", "action", "code"],
         )
         for key in ("dock_items", "pinned_items"):
             self.assertIn(key, settings.DEVICE_SETTING_KEYS)
@@ -656,8 +657,9 @@ class TestShortcutPolicy(unittest.TestCase):
 
     def test_media_handoff_is_one_latter_setting(self) -> None:
         protocol_json = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
-        for svc in ("set_active_area", "area_browse"):
-            self.assertNotIn("handoff_media", protocol_json["ha_services"][svc]["fields"])
+        self.assertNotIn("handoff_media", protocol_json["ha_services"]["set_active_area"]["fields"])
+        for rpc in ("set_active_area", "area_browse"):
+            self.assertNotIn("handoff_media", protocol_json["rpc_methods"][rpc]["fields"])
         services_src = (LATTER_DIR / "services.py").read_text(encoding="utf-8")
         self.assertNotIn('"handoff_media"', services_src)
         self.assertIn("area_handoff", settings.DEVICE_SETTING_KEYS)
@@ -943,10 +945,12 @@ class TestEntityActionRestrictions(unittest.TestCase):
         for bad in ({"action": "unlock"}, {"action": "disarm"}, {}, {"action": ""}):
             with self.assertRaises(scope.TargetNotAllowed):
                 scope.checked_entity_verb(bad, scope.DEVICE_ENTITY_VERBS)
+        self.assertFalse(hasattr(scope, "SYSTEM_ENTITY_VERBS"))
+        self.assertNotIn("system_entity_action", scope.SYSTEM_COMMANDS)
+        self.assertEqual(scope.checked_entity_verb({"option": "Analog"}, scope.DEVICE_ENTITY_VERBS), "")
+        self.assertEqual(scope.checked_entity_verb({"level": 40}, scope.DEVICE_ENTITY_VERBS), "")
         with self.assertRaises(scope.TargetNotAllowed):
-            scope.checked_entity_verb({"action": "toggle"}, scope.SYSTEM_ENTITY_VERBS)
-        self.assertEqual(scope.checked_entity_verb({"option": "Analog"}, scope.SYSTEM_ENTITY_VERBS), "")
-        self.assertEqual(scope.checked_entity_verb({"level": 40}, scope.SYSTEM_ENTITY_VERBS), "")
+            scope.checked_entity_verb({"option": "Analog", "action": "unlock"}, scope.DEVICE_ENTITY_VERBS)
 
 
 if __name__ == "__main__":

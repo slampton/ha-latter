@@ -1,4 +1,4 @@
-"""HMAC-SHA256 resource signing, LAN URL builders, and all 9 signed HTTP views for Latter."""
+"""HMAC-SHA256 resource signing, LAN URL builders, and all 8 local-only signed HTTP views for Latter."""
 
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ import logging
 import math
 from pathlib import Path
 import shutil
-import socket
+import threading
 import time
-from typing import TYPE_CHECKING
-from urllib.parse import quote, quote_plus, urlparse, urlsplit
+from typing import TYPE_CHECKING, Any
+from urllib.parse import quote, urlparse
 import wave
 
 from aiohttp import ClientTimeout, MultipartReader, web
@@ -35,14 +35,12 @@ from .const import (
     API_CAMERA_GRID_PATH,
     API_CAMERA_PROXY_PATH,
     API_CAMERA_STREAM_PATH,
-    API_MAP_PROXY_PATH,
     API_WALLPAPER_PROXY_PATH,
     API_WALLPAPER_UPLOAD_PATH,
     CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
     DEFAULT_ART_SIZE,
     DOMAIN,
-    INTEGRATION_VERSION,
     normalize_device_slug,
     normalize_noise_reduction,
 )
@@ -75,6 +73,7 @@ _LOGGER = logging.getLogger(__name__)
 SIG_BUCKET_SECONDS: int = 86400
 PAYLOAD_TTL_DAYS: int = 2
 ON_DEMAND_TTL_SECONDS: int = 600
+LAN_BASE_URL_TTL_SECONDS: float = 300.0
 _MAC_HEX_CHARS: int = 32
 _PROBED_LAN_IP_KEY = "_probed_lan_ip"
 
@@ -139,10 +138,12 @@ class UrlSigner:
         self.entry_id = entry_id
         self._hmac_secret = hmac_secret
         self._cached_lan_base_url: str | None = None
+        self._cached_lan_base_url_mono: float = 0.0
 
     def invalidate_lan_base_url(self) -> None:
         """Invalidate the cached numeric LAN base URL when HA network config changes."""
         self._cached_lan_base_url = None
+        self._cached_lan_base_url_mono = 0.0
         domain_data = self.hass.data.get(DOMAIN)
         if isinstance(domain_data, dict):
             domain_data.pop(_PROBED_LAN_IP_KEY, None)
@@ -158,6 +159,7 @@ class UrlSigner:
             if probed:
                 domain_data[_PROBED_LAN_IP_KEY] = str(probed)
         self._cached_lan_base_url = None
+        self._cached_lan_base_url_mono = 0.0
         return self.get_lan_base_url()
 
     def sign_payload_resource(
@@ -181,8 +183,12 @@ class UrlSigner:
         )
 
     def get_lan_base_url(self) -> str:
-        """Resolve the numeric-IP LAN HTTP base URL purely from memory / HA config (zero event-loop socket calls)."""
-        if self._cached_lan_base_url:
+        """Resolve the numeric-IP LAN HTTP base URL purely from memory / HA config with a 300 s TTL."""
+        now_m = time.monotonic()
+        if (
+            self._cached_lan_base_url
+            and (now_m - self._cached_lan_base_url_mono) < LAN_BASE_URL_TTL_SECONDS
+        ):
             return self._cached_lan_base_url
 
         active_port = getattr(getattr(self.hass, "http", None), "server_port", None)
@@ -216,6 +222,7 @@ class UrlSigner:
         else:
             resolved = f"{scheme}://{host}"
         self._cached_lan_base_url = resolved
+        self._cached_lan_base_url_mono = now_m
         return resolved
 
     def build_camera_snapshot_url(
@@ -307,25 +314,6 @@ class UrlSigner:
             f"&v={int(time.time())}&sig={sig}"
         )
 
-    def build_map_snapshot_url(
-        self,
-        device_slug: str,
-        location: str,
-        width: int,
-        height: int,
-        shape: str,
-    ) -> str:
-        """Build the local LAN HTTP Baseline-JPEG map snapshot URL for a calendar event location."""
-        clean_loc = (location or "").strip()
-        if not clean_loc:
-            return ""
-        base_url = self.get_lan_base_url()
-        sig = self.sign_payload_resource(f"map:{clean_loc}|{width}|{height}|{shape}")
-        return (
-            f"{base_url}/api/latter/map/{device_slug}"
-            f"?w={width}&h={height}&shape={shape}&q={quote_plus(clean_loc)}&sig={sig}"
-        )
-
     def build_wallpaper_url(
         self,
         device_slug: str,
@@ -356,7 +344,8 @@ class UrlSigner:
             get_photo_crop_hash(clean_src) if parse_photo_source(clean_src) else ""
         )
         digest = hashlib.md5(
-            f"{clean_src}|{shape}|{width}x{height}|{clean_mode}|{c_hash}".encode()
+            f"{clean_src}|{shape}|{width}x{height}|{clean_mode}|{c_hash}".encode(),
+            usedforsecurity=False,
         ).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/wallpaper/{device_slug}"
@@ -400,7 +389,9 @@ class UrlSigner:
         """Build the universal Baseline-JPEG artwork URL."""
         base_url = self.get_lan_base_url()
         sig = self.sign_payload_resource(f"artwork|{width}|{height}|{shape}")
-        digest = hashlib.md5(cache_bust.encode("utf-8")).hexdigest()[:10]
+        digest = hashlib.md5(
+            cache_bust.encode("utf-8"), usedforsecurity=False
+        ).hexdigest()[:10]
         return (
             f"{base_url}/api/latter/artwork/{device_slug}"
             f"?w={width}&h={height}&shape={shape}&sig={sig}&v={digest}"
@@ -408,41 +399,48 @@ class UrlSigner:
 
 
 # ---------------------------------------------------------------------------
-# Image Transcoding, LRU Caches, Live Camera Prefetch & Audio Stream Helpers
+# Thread-Safe Image Transcoding, LRU Caches & Audio Stream Helpers (`M-P0-03`, `M-P1-34`)
 # ---------------------------------------------------------------------------
-
-HTTP_USER_AGENT = (
-    f"HomeAssistant-Latter/{INTEGRATION_VERSION} (+https://github.com/slampton/ha-latter)"
-)
 
 MAX_ART_CACHE_ENTRIES = 24
 MAX_THUMB_CACHE_ENTRIES = 128
 THUMB_CACHE_MAX_DIM = 240
-MAX_UPSTREAM_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB hard stream cap on upstream artwork downloads
-_ARTWORK_LRU_CACHE: OrderedDict[tuple[str, int, int, bool, float], bytes] = OrderedDict()
+MAX_UPSTREAM_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_IMAGE_SIDE = 8192
+MAX_IMAGE_PIXELS = 25_000_000
+MAX_MULTIPART_PARTS = 16
+MAX_MULTIPART_TEXT_BYTES = 1024
+
+_IMAGE_CACHE_LOCK = threading.Lock()
+_TRANSCODE_SEMAPHORE = threading.BoundedSemaphore(4)
+_ARTWORK_LRU_CACHE: OrderedDict[tuple[str, int, int, bool, float], bytes] = (
+    OrderedDict()
+)
 _THUMB_LRU_CACHE: OrderedDict[tuple[str, int, int, bool, float], bytes] = OrderedDict()
-
 _CIRCULAR_MASK_CACHE: dict[tuple[int, int], tuple[Image.Image, Image.Image]] = {}
-
-_MAP_GEOCODE_CACHE: OrderedDict[str, tuple[float, float]] = OrderedDict()
-MAX_MAP_GEOCODE_CACHE = 64
-_MAP_JPEG_CACHE: OrderedDict[str, bytes] = OrderedDict()
-_OSM_TILE_CACHE: OrderedDict[tuple[int, int, int], bytes] = OrderedDict()
-MAX_OSM_TILE_CACHE = 128
 
 SILENCE_FALLBACK_MS: int = 250
 _FFMPEG_STREAM_SEMAPHORE = asyncio.Semaphore(2)
 _ACTIVE_DEVICE_STREAMS: dict[str, asyncio.subprocess.Process] = {}
+_FFMPEG_PROTOCOL_WHITELIST = "file,crypto,data,http,https,tcp,tls,rtp,rtsp,udp"
+_ALLOWED_STREAM_SCHEMES: tuple[str, ...] = ("rtsp://", "rtsps://", "http://", "https://")
+
+
+def validate_pil_image_dimensions(img: Image.Image) -> None:
+    """Reject oversize or decompression-bomb images (`> 8192 px` side or `> 25 MP`) before decode (`M-P1-34`)."""
+    w, h = img.size
+    if w <= 0 or h <= 0 or w > MAX_IMAGE_SIDE or h > MAX_IMAGE_SIDE or (w * h) > MAX_IMAGE_PIXELS:
+        raise ValueError(
+            f"Image dimensions {w}x{h} exceed safety ceiling ({MAX_IMAGE_SIDE}px / {MAX_IMAGE_PIXELS} pixels)"
+        )
 
 
 def clear_http_caches() -> None:
-    """Clear in-memory LRU caches for artwork, thumbnails, maps, and circular masks."""
-    _ARTWORK_LRU_CACHE.clear()
-    _THUMB_LRU_CACHE.clear()
-    _MAP_GEOCODE_CACHE.clear()
-    _MAP_JPEG_CACHE.clear()
-    _OSM_TILE_CACHE.clear()
-    _CIRCULAR_MASK_CACHE.clear()
+    """Clear in-memory LRU caches for artwork, thumbnails, and circular masks under `_IMAGE_CACHE_LOCK`."""
+    with _IMAGE_CACHE_LOCK:
+        _ARTWORK_LRU_CACHE.clear()
+        _THUMB_LRU_CACHE.clear()
+        _CIRCULAR_MASK_CACHE.clear()
 
 
 async def async_shutdown_camera_feeds(hass: HomeAssistant | None = None) -> None:
@@ -504,22 +502,27 @@ def build_noise_reduction_filter(level: str) -> str:
     )
 
 
-def _get_circular_mask_surfaces(
+def get_circular_mask_surfaces(
     width: int, height: int
 ) -> tuple[Image.Image, Image.Image]:
-    """Return cached (mask_L, black_bg_RGB) PIL surfaces for (width, height)."""
+    """Return thread-safe cached `(mask_L, black_bg_RGB)` PIL surfaces for `(width, height)` (`M-P0-03`, `M-P1-34`)."""
     key = (width, height)
-    cached = _CIRCULAR_MASK_CACHE.get(key)
-    if cached is not None:
-        return cached
+    with _IMAGE_CACHE_LOCK:
+        cached = _CIRCULAR_MASK_CACHE.get(key)
+        if cached is not None:
+            return cached
     mask = Image.new("L", (width, height), 0)
     draw = ImageDraw.Draw(mask)
     draw.ellipse((0, 0, width - 1, height - 1), fill=255)
     black_bg = Image.new("RGB", (width, height), (0, 0, 0))
-    if len(_CIRCULAR_MASK_CACHE) >= 16:
-        _CIRCULAR_MASK_CACHE.clear()
-    _CIRCULAR_MASK_CACHE[key] = (mask, black_bg)
+    with _IMAGE_CACHE_LOCK:
+        if len(_CIRCULAR_MASK_CACHE) >= 16:
+            _CIRCULAR_MASK_CACHE.clear()
+        _CIRCULAR_MASK_CACHE[key] = (mask, black_bg)
     return mask, black_bg
+
+
+_get_circular_mask_surfaces = get_circular_mask_surfaces
 
 
 def _transcode_to_baseline_jpeg(
@@ -532,7 +535,8 @@ def _transcode_to_baseline_jpeg(
     fast_live: bool = False,
 ) -> bytes:
     """Decode any image format, resize to (w, h), and encode non-progressive Baseline JPEG."""
-    with Image.open(io.BytesIO(raw_bytes)) as img:
+    with _TRANSCODE_SEMAPHORE, Image.open(io.BytesIO(raw_bytes)) as img:
+        validate_pil_image_dimensions(img)
         img_rgb = img.convert("RGB")
         if rotate_deg == 90:
             img_rgb = img_rgb.transpose(Image.Transpose.ROTATE_270)
@@ -543,14 +547,18 @@ def _transcode_to_baseline_jpeg(
         fitted = ImageOps.fit(
             img_rgb,
             (width, height),
-            method=Image.Resampling.BILINEAR if fast_live else Image.Resampling.LANCZOS,
+            method=(
+                Image.Resampling.BILINEAR
+                if fast_live
+                else Image.Resampling.LANCZOS
+            ),
             centering=(0.5, 0.5),
         )
         if darken < 1.0:
             fitted = ImageEnhance.Brightness(fitted).enhance(darken)
 
         if circular_mask:
-            mask, black_bg = _get_circular_mask_surfaces(width, height)
+            mask, black_bg = get_circular_mask_surfaces(width, height)
             fitted = Image.composite(fitted, black_bg, mask)
 
         out = io.BytesIO()
@@ -579,7 +587,8 @@ def _transcode_photo_to_baseline_jpeg(
     original_aspect: bool = False,
 ) -> bytes:
     """Decode a library photo, apply non-destructive crop (or preserve original aspect), and encode Baseline JPEG."""
-    with Image.open(io.BytesIO(raw_bytes)) as img:
+    with _TRANSCODE_SEMAPHORE, Image.open(io.BytesIO(raw_bytes)) as img:
+        validate_pil_image_dimensions(img)
         rgb = img.convert("RGB")
         if original_aspect:
             max_edge = max(64, min(1600, max(int(width), int(height))))
@@ -593,11 +602,13 @@ def _transcode_photo_to_baseline_jpeg(
             else:
                 fitted = rgb.copy()
         else:
-            fitted = crop_and_fit_image(rgb, width, height, crop_x, crop_y, crop_zoom)
+            fitted = crop_and_fit_image(
+                rgb, width, height, crop_x, crop_y, crop_zoom
+            )
             if darken < 1.0:
                 fitted = ImageEnhance.Brightness(fitted).enhance(darken)
             if circular_mask:
-                mask, black_bg = _get_circular_mask_surfaces(width, height)
+                mask, black_bg = get_circular_mask_surfaces(width, height)
                 fitted = Image.composite(fitted, black_bg, mask)
 
         out = io.BytesIO()
@@ -620,7 +631,8 @@ def _transcode_media_preview_jpeg(
     if size <= 0 or size > MAX_WALLPAPER_UPLOAD_BYTES:
         raise ValueError("Media file exceeds 15 MB preview cap")
     raw_bytes = file_path.read_bytes()
-    with Image.open(io.BytesIO(raw_bytes)) as img:
+    with _TRANSCODE_SEMAPHORE, Image.open(io.BytesIO(raw_bytes)) as img:
+        validate_pil_image_dimensions(img)
         rgb = ImageOps.exif_transpose(img).convert("RGB")
         fitted = ImageOps.fit(
             rgb,
@@ -651,29 +663,30 @@ def _render_preset_to_baseline_jpeg(
     is_night: bool = False,
 ) -> bytes:
     """Render a bundled default wallpaper or Day & Night Sky directly to Baseline JPEG."""
-    fitted = render_builtin_preset_image(
-        preset_id, width, height, mode=mode, is_night=is_night
-    )
-    eff_darken = (
-        1.0
-        if preset_id == DAY_NIGHT_SKY_PRESET_ID and mode != "screensaver"
-        else darken
-    )
-    if eff_darken < 1.0:
-        fitted = ImageEnhance.Brightness(fitted).enhance(eff_darken)
-    if circular_mask:
-        mask, black_bg = _get_circular_mask_surfaces(width, height)
-        fitted = Image.composite(fitted, black_bg, mask)
-    out = io.BytesIO()
-    fitted.save(
-        out,
-        format="JPEG",
-        quality=85,
-        optimize=True,
-        progressive=False,
-        subsampling=2,
-    )
-    return out.getvalue()
+    with _TRANSCODE_SEMAPHORE:
+        fitted = render_builtin_preset_image(
+            preset_id, width, height, mode=mode, is_night=is_night
+        )
+        eff_darken = (
+            1.0
+            if preset_id == DAY_NIGHT_SKY_PRESET_ID and mode != "screensaver"
+            else darken
+        )
+        if eff_darken < 1.0:
+            fitted = ImageEnhance.Brightness(fitted).enhance(eff_darken)
+        if circular_mask:
+            mask, black_bg = get_circular_mask_surfaces(width, height)
+            fitted = Image.composite(fitted, black_bg, mask)
+        out = io.BytesIO()
+        fitted.save(
+            out,
+            format="JPEG",
+            quality=85,
+            optimize=True,
+            progressive=False,
+            subsampling=2,
+        )
+        return out.getvalue()
 
 
 def _cache_for_dims(
@@ -685,15 +698,39 @@ def _cache_for_dims(
     return _ARTWORK_LRU_CACHE, MAX_ART_CACHE_ENTRIES
 
 
+def _cache_get(
+    bucket: OrderedDict[tuple[str, int, int, bool, float], bytes],
+    key: tuple[str, int, int, bool, float],
+) -> bytes | None:
+    with _IMAGE_CACHE_LOCK:
+        val = bucket.get(key)
+        if val is not None:
+            bucket.move_to_end(key)
+        return val
+
+
+def _cache_put(
+    bucket: OrderedDict[tuple[str, int, int, bool, float], bytes],
+    key: tuple[str, int, int, bool, float],
+    value: bytes,
+    limit: int,
+) -> None:
+    with _IMAGE_CACHE_LOCK:
+        bucket[key] = value
+        while len(bucket) > limit:
+            bucket.popitem(last=False)
+
+
 def evict_wallpaper_lru_cache(source_id: str) -> None:
-    """Evict all cached full-size and thumbnail entries for a deleted or recropped photo."""
+    """Thread-safely evict all cached full-size and thumbnail entries for a deleted or recropped photo (`M-P0-03`)."""
     prefix = f"wp:{source_id}"
-    for cache in (_ARTWORK_LRU_CACHE, _THUMB_LRU_CACHE):
-        stale_keys = [
-            k for k in cache if k[0] == prefix or k[0].startswith(f"{prefix}:")
-        ]
-        for k in stale_keys:
-            cache.pop(k, None)
+    with _IMAGE_CACHE_LOCK:
+        for cache in (_ARTWORK_LRU_CACHE, _THUMB_LRU_CACHE):
+            stale_keys = [
+                k for k in cache if k[0] == prefix or k[0].startswith(f"{prefix}:")
+            ]
+            for k in stale_keys:
+                cache.pop(k, None)
 
 
 def _parse_dimensions_and_shape(
@@ -744,48 +781,33 @@ def _parse_render_params(
     )
 
 
-def _is_public_global_ip(raw_ip: str) -> bool:
-    """Return True only if raw_ip parses as a globally routable unicast IP address."""
+def _is_private_or_loopback_client(request: web.Request) -> bool:
+    """Return True when `request.remote` is absent (in-process test) or a private/loopback/link-local LAN IP (`M-P1-33`)."""
+    remote_raw = getattr(request, "remote", None)
+    if not remote_raw:
+        return True
+    host_str = str(remote_raw).strip()
+    if not host_str:
+        return True
+    if "%" in host_str:
+        host_str = host_str.split("%", 1)[0]
     try:
-        ip = ipaddress.ip_address(raw_ip)
+        ip = ipaddress.ip_address(host_str)
     except ValueError:
         return False
-    return not (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_multicast
-        or ip.is_unspecified
-        or ip.is_reserved
-    )
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return bool(ip.is_private or ip.is_loopback or ip.is_link_local)
 
 
-def _resolve_and_check_public_host(hostname: str, port: int) -> bool:
-    """Resolve hostname via DNS in an executor thread and require every returned address to be globally routable."""
-    try:
-        ipaddress.ip_address(hostname)
-        return _is_public_global_ip(hostname)
-    except ValueError:
-        pass
-    try:
-        infos = socket.getaddrinfo(hostname, port, 0, socket.SOCK_STREAM)
-    except OSError:
+def _is_allowed_stream_url(stream_url: str | None) -> bool:
+    """Return True only when `stream_url` uses an explicit `rtsp(s)://` or `http(s)://` scheme (`M-P1-30`)."""
+    if not stream_url:
         return False
-    if not infos:
+    clean = stream_url.strip()
+    if not clean or clean.startswith("-"):
         return False
-    return all(_is_public_global_ip(str(info[4][0])) for info in infos if info[4])
-
-
-async def _async_is_safe_external_artwork_url(hass: HomeAssistant, url: str) -> bool:
-    """Block SSRF against loopback, private RFC1918, and cloud metadata IPs on external artwork URLs."""
-    parsed = urlsplit(url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        return False
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    is_safe: bool = await hass.async_add_executor_job(
-        _resolve_and_check_public_host, parsed.hostname, port
-    )
-    return is_safe
+    return clean.lower().startswith(_ALLOWED_STREAM_SCHEMES)
 
 
 async def _async_serve_speaker_artwork(
@@ -793,7 +815,7 @@ async def _async_serve_speaker_artwork(
     request: web.Request,
     coordinator: LatterCoordinator,
 ) -> web.Response:
-    """Fetch active speaker artwork, transcode to Baseline JPEG (8 MB cap + RAM LRU cache), and serve over HTTP."""
+    """Fetch active speaker artwork strictly via HA Core `media_player` entity or local `/` HA paths (`M-P1-31`, Zero-WAN)."""
     from .media import resolve_ma_counterpart_entity
 
     width, height, circular, shape_str = _parse_render_params(
@@ -806,87 +828,147 @@ async def _async_serve_speaker_artwork(
     ):
         return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
 
-    state_obj = hass.states.get(coordinator.active_speaker)
-    pic_path = None
-    if state_obj is not None:
-        attrs = state_obj.attributes
-        pic_path = (
+    ma_counterpart = resolve_ma_counterpart_entity(
+        hass, coordinator.active_speaker
+    )
+    candidate_speakers: list[str] = []
+    for spk in (coordinator.active_speaker, ma_counterpart):
+        if spk and spk not in candidate_speakers:
+            candidate_speakers.append(spk)
+
+    pic_path: str | None = None
+    for spk in candidate_speakers:
+        st_obj = hass.states.get(spk)
+        if st_obj is None:
+            continue
+        attrs = st_obj.attributes
+        cand_pic = (
             attrs.get("entity_picture_local")
             or attrs.get("entity_picture")
             or attrs.get("media_image_url")
         )
-    if not pic_path:
-        ma_counterpart = resolve_ma_counterpart_entity(
-            hass, coordinator.active_speaker
-        )
-        if ma_counterpart and ma_counterpart != coordinator.active_speaker:
-            ma_st = hass.states.get(ma_counterpart)
-            if ma_st is not None:
-                m_attrs = ma_st.attributes
-                pic_path = (
-                    m_attrs.get("entity_picture_local")
-                    or m_attrs.get("entity_picture")
-                    or m_attrs.get("media_image_url")
-                )
+        if cand_pic:
+            pic_path = str(cand_pic)
+            break
     if not pic_path and coordinator.last_valid_raw_pic:
-        pic_path = coordinator.last_valid_raw_pic
+        pic_path = str(coordinator.last_valid_raw_pic)
 
-    if not pic_path:
-        return web.Response(status=HTTPStatus.NOT_FOUND, text="No artwork")
+    raw_bytes: bytes | None = None
+    cache_key: tuple[str, int, int, bool, float] | None = None
 
-    raw_pic = str(pic_path)
-    is_local_ha_path = raw_pic.startswith("/")
-    pic_url = raw_pic
-    if is_local_ha_path:
-        try:
-            base_url = get_url(hass, allow_internal=True, prefer_external=False)
-        except Exception:  # noqa: BLE001
-            base_url = "http://127.0.0.1:8123"
-        pic_url = f"{base_url}{raw_pic}"
-    elif not await _async_is_safe_external_artwork_url(hass, pic_url):
-        return web.Response(
-            status=HTTPStatus.FORBIDDEN, text="Blocked upstream artwork host"
-        )
-
-    cache_key = (pic_url, width, height, circular, 1.0)
-    cached_bytes = _ARTWORK_LRU_CACHE.get(cache_key)
-    if cached_bytes is not None:
-        _ARTWORK_LRU_CACHE.move_to_end(cache_key)
-        return web.Response(
-            body=cached_bytes,
-            content_type="image/jpeg",
-            headers={"Cache-Control": "private, max-age=300", "X-Latter-Cache": "HIT"},
-        )
-
-    session = async_get_clientsession(hass)
-    try:
-        async with session.get(
-            pic_url,
-            timeout=ClientTimeout(total=8),
-            allow_redirects=is_local_ha_path,
-        ) as resp:
-            if resp.status != HTTPStatus.OK:
-                return web.Response(
-                    status=HTTPStatus.BAD_GATEWAY,
-                    text=f"Upstream returned {resp.status}",
+    comp = hass.data.get("media_player")
+    if comp is not None and hasattr(comp, "get_entity"):
+        for spk in candidate_speakers:
+            ent = comp.get_entity(spk)
+            if ent is None or not callable(
+                getattr(ent, "async_get_media_image", None)
+            ):
+                continue
+            st_spk = hass.states.get(spk)
+            tok = ""
+            if st_spk is not None:
+                tok = str(
+                    st_spk.attributes.get("entity_picture_local")
+                    or st_spk.attributes.get("entity_picture")
+                    or st_spk.attributes.get("media_image_url")
+                    or st_spk.attributes.get("media_title")
+                    or ""
                 )
-            if resp.content_length and resp.content_length > MAX_UPSTREAM_IMAGE_BYTES:
-                return web.Response(
-                    status=HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
-                    text="Upstream artwork exceeds 8 MB limit",
-                )
-            chunks = bytearray()
-            async for chunk in resp.content.iter_chunked(65536):
-                chunks.extend(chunk)
-                if len(chunks) > MAX_UPSTREAM_IMAGE_BYTES:
+            if tok:
+                ent_cache_key = (f"ent:{spk}:{tok}", width, height, circular, 1.0)
+                cached_ent = _cache_get(_ARTWORK_LRU_CACHE, ent_cache_key)
+                if cached_ent is not None:
+                    return web.Response(
+                        body=cached_ent,
+                        content_type="image/jpeg",
+                        headers={
+                            "Cache-Control": "private, max-age=300",
+                            "X-Latter-Cache": "HIT",
+                        },
+                    )
+            try:
+                img_data, _mime = await ent.async_get_media_image()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("async_get_media_image(%s) failed: %s", spk, err)
+                img_data = None
+            if img_data:
+                if len(img_data) > MAX_UPSTREAM_IMAGE_BYTES:
                     return web.Response(
                         status=HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
                         text="Upstream artwork exceeds 8 MB limit",
                     )
-            raw_bytes = bytes(chunks)
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.debug("Failed fetching artwork from %s: %s", pic_url, err)
-        return web.Response(status=HTTPStatus.BAD_GATEWAY, text="Upstream error")
+                raw_bytes = bytes(img_data)
+                digest_tok = (
+                    tok
+                    or hashlib.sha256(raw_bytes[:4096]).hexdigest()[:16]
+                )
+                cache_key = (
+                    f"ent:{spk}:{digest_tok}",
+                    width,
+                    height,
+                    circular,
+                    1.0,
+                )
+                break
+
+    if raw_bytes is None:
+        if not pic_path:
+            return web.Response(status=HTTPStatus.NOT_FOUND, text="No artwork")
+        raw_pic = str(pic_path).strip()
+        if not (raw_pic.startswith("/") and not raw_pic.startswith("//")):
+            return web.Response(
+                status=HTTPStatus.FORBIDDEN,
+                text="External artwork URLs are disabled",
+            )
+        try:
+            base_url = get_url(hass, allow_internal=True, prefer_external=False)
+        except Exception:  # noqa: BLE001
+            base_url = "http://127.0.0.1:8123"
+        pic_url = f"{base_url.rstrip('/')}{raw_pic}"
+        cache_key = (pic_url, width, height, circular, 1.0)
+        cached_bytes = _cache_get(_ARTWORK_LRU_CACHE, cache_key)
+        if cached_bytes is not None:
+            return web.Response(
+                body=cached_bytes,
+                content_type="image/jpeg",
+                headers={
+                    "Cache-Control": "private, max-age=300",
+                    "X-Latter-Cache": "HIT",
+                },
+            )
+
+        session = async_get_clientsession(hass)
+        try:
+            async with session.get(
+                pic_url,
+                timeout=ClientTimeout(total=8),
+                allow_redirects=False,
+            ) as resp:
+                if resp.status != HTTPStatus.OK:
+                    return web.Response(
+                        status=HTTPStatus.BAD_GATEWAY,
+                        text=f"Upstream returned {resp.status}",
+                    )
+                if (
+                    resp.content_length
+                    and resp.content_length > MAX_UPSTREAM_IMAGE_BYTES
+                ):
+                    return web.Response(
+                        status=HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        text="Upstream artwork exceeds 8 MB limit",
+                    )
+                chunks = bytearray()
+                async for chunk in resp.content.iter_chunked(65536):
+                    chunks.extend(chunk)
+                    if len(chunks) > MAX_UPSTREAM_IMAGE_BYTES:
+                        return web.Response(
+                            status=HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                            text="Upstream artwork exceeds 8 MB limit",
+                        )
+                raw_bytes = bytes(chunks)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Failed fetching local HA artwork from %s: %s", pic_url, err)
+            return web.Response(status=HTTPStatus.BAD_GATEWAY, text="Upstream error")
 
     try:
         jpeg_bytes = await hass.async_add_executor_job(
@@ -903,9 +985,8 @@ async def _async_serve_speaker_artwork(
             status=HTTPStatus.UNPROCESSABLE_ENTITY, text="Image processing error"
         )
 
-    _ARTWORK_LRU_CACHE[cache_key] = jpeg_bytes
-    if len(_ARTWORK_LRU_CACHE) > MAX_ART_CACHE_ENTRIES:
-        _ARTWORK_LRU_CACHE.popitem(last=False)
+    if cache_key is not None:
+        _cache_put(_ARTWORK_LRU_CACHE, cache_key, jpeg_bytes, MAX_ART_CACHE_ENTRIES)
 
     return web.Response(
         body=jpeg_bytes,
@@ -915,7 +996,7 @@ async def _async_serve_speaker_artwork(
 
 
 # ---------------------------------------------------------------------------
-# All 7 Signed / Admin HTTP Views
+# All 8 Signed / Admin HTTP Views (100% Local-Only, Zero Outbound WAN)
 # ---------------------------------------------------------------------------
 
 
@@ -958,7 +1039,6 @@ class LatterWallpaperProxyView(HomeAssistantView):
         from .coordinator import resolve_coordinator
         from .hub import get_latter_system
 
-        # On-demand signed `/media` preview thumbnail path (`system` scope only)
         media_root = str(request.query.get("media_root") or "").strip()
         media_path = str(request.query.get("media_path") or "").strip()
         if media_root or media_path:
@@ -996,9 +1076,8 @@ class LatterWallpaperProxyView(HomeAssistantView):
                     status=HTTPStatus.NOT_FOUND, text="Media file not found"
                 )
             m_key = (f"media:{media_root}/{media_path}", width, height, False, 1.0)
-            cached_m = _THUMB_LRU_CACHE.get(m_key)
+            cached_m = _cache_get(_THUMB_LRU_CACHE, m_key)
             if cached_m is not None:
-                _THUMB_LRU_CACHE.move_to_end(m_key)
                 return web.Response(
                     body=cached_m,
                     content_type="image/jpeg",
@@ -1017,9 +1096,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
                     status=HTTPStatus.UNPROCESSABLE_ENTITY,
                     text="Media preview error",
                 )
-            _THUMB_LRU_CACHE[m_key] = jpeg_bytes
-            if len(_THUMB_LRU_CACHE) > MAX_THUMB_CACHE_ENTRIES:
-                _THUMB_LRU_CACHE.popitem(last=False)
+            _cache_put(_THUMB_LRU_CACHE, m_key, jpeg_bytes, MAX_THUMB_CACHE_ENTRIES)
             return web.Response(
                 body=jpeg_bytes,
                 content_type="image/jpeg",
@@ -1098,9 +1175,8 @@ class LatterWallpaperProxyView(HomeAssistantView):
 
         cache_bucket, cache_limit = _cache_for_dims(width, height)
         cache_key = (cache_tag, width, height, is_circle, darken_factor)
-        cached_bytes = cache_bucket.get(cache_key)
+        cached_bytes = _cache_get(cache_bucket, cache_key)
         if cached_bytes is not None:
-            cache_bucket.move_to_end(cache_key)
             return web.Response(
                 body=cached_bytes,
                 content_type="image/jpeg",
@@ -1163,9 +1239,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
                 status=HTTPStatus.FORBIDDEN, text="Unsupported wallpaper source"
             )
 
-        cache_bucket[cache_key] = jpeg_bytes
-        if len(cache_bucket) > cache_limit:
-            cache_bucket.popitem(last=False)
+        _cache_put(cache_bucket, cache_key, jpeg_bytes, cache_limit)
 
         return web.Response(
             body=jpeg_bytes,
@@ -1180,6 +1254,21 @@ def _parse_multipart_float(raw: str, default: float) -> float:
         return val if math.isfinite(val) else default
     except (TypeError, ValueError):
         return default
+
+
+async def _async_read_bounded_part_text(
+    part: Any, max_bytes: int = MAX_MULTIPART_TEXT_BYTES
+) -> str:
+    """Read a multipart text field up to `max_bytes`, rejecting oversize metadata fields (`M-P1-34`)."""
+    buf = bytearray()
+    while True:
+        chunk = await part.read_chunk(min(1024, max_bytes + 1))
+        if not chunk:
+            break
+        buf.extend(chunk)
+        if len(buf) > max_bytes:
+            raise ValueError("Multipart text field exceeds size limit")
+    return buf.decode("utf-8", errors="replace").strip()
 
 
 class LatterWallpaperUploadView(HomeAssistantView):
@@ -1236,55 +1325,74 @@ class LatterWallpaperUploadView(HomeAssistantView):
                 status=HTTPStatus.BAD_REQUEST,
             )
 
+        parts_seen = 0
         while True:
             part = await reader.next()
             if part is None:
                 break
+            parts_seen += 1
+            if parts_seen > MAX_MULTIPART_PARTS:
+                return web.json_response(
+                    {"error": "Too many multipart form fields"},
+                    status=HTTPStatus.BAD_REQUEST,
+                )
             if isinstance(part, MultipartReader):
                 await part.release()
                 continue
             field_name = str(getattr(part, "name", "") or "")
-            if field_name == "scope":
-                upload_scope = (await part.text()).strip().lower()
-            elif field_name == "device_slug":
-                val = (await part.text()).strip()
-                if val:
-                    explicit_device_slug = val
-                    target_slug = normalize_device_slug(val)
-            elif field_name == "subentry_id":
-                val = (await part.text()).strip()
-                if val:
-                    subentry_id = val
-            elif field_name == "crop_x":
-                crop_x = _parse_multipart_float((await part.text()).strip(), 0.5)
-            elif field_name == "crop_y":
-                crop_y = _parse_multipart_float((await part.text()).strip(), 0.5)
-            elif field_name == "crop_zoom":
-                crop_zoom = _parse_multipart_float((await part.text()).strip(), 1.0)
-            elif field_name == "name":
-                val = (await part.text()).strip()
-                if val:
-                    photo_name = val
-            elif field_name == "collection_id":
-                val = (await part.text()).strip()
-                if val:
-                    collection_id = val
-            elif field_name == "file":
-                filename = str(getattr(part, "filename", None) or filename)
-                chunks = bytearray()
-                while True:
-                    chunk = await part.read_chunk(65536)
-                    if not chunk:
-                        break
-                    chunks.extend(chunk)
-                    if len(chunks) > MAX_WALLPAPER_UPLOAD_BYTES:
-                        return web.json_response(
-                            {"error": "Wallpaper upload exceeds 15 MB limit"},
-                            status=HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
-                        )
-                raw_bytes = bytes(chunks)
-            else:
-                await part.release()
+            try:
+                if field_name == "scope":
+                    upload_scope = (await _async_read_bounded_part_text(part)).lower()
+                elif field_name == "device_slug":
+                    val = await _async_read_bounded_part_text(part)
+                    if val:
+                        explicit_device_slug = val
+                        target_slug = normalize_device_slug(val)
+                elif field_name == "subentry_id":
+                    val = await _async_read_bounded_part_text(part)
+                    if val:
+                        subentry_id = val
+                elif field_name == "crop_x":
+                    crop_x = _parse_multipart_float(
+                        await _async_read_bounded_part_text(part, 64), 0.5
+                    )
+                elif field_name == "crop_y":
+                    crop_y = _parse_multipart_float(
+                        await _async_read_bounded_part_text(part, 64), 0.5
+                    )
+                elif field_name == "crop_zoom":
+                    crop_zoom = _parse_multipart_float(
+                        await _async_read_bounded_part_text(part, 64), 1.0
+                    )
+                elif field_name == "name":
+                    val = await _async_read_bounded_part_text(part, 256)
+                    if val:
+                        photo_name = val
+                elif field_name == "collection_id":
+                    val = await _async_read_bounded_part_text(part, 128)
+                    if val:
+                        collection_id = val
+                elif field_name == "file":
+                    filename = str(getattr(part, "filename", None) or filename)
+                    chunks = bytearray()
+                    while True:
+                        chunk = await part.read_chunk(65536)
+                        if not chunk:
+                            break
+                        chunks.extend(chunk)
+                        if len(chunks) > MAX_WALLPAPER_UPLOAD_BYTES:
+                            return web.json_response(
+                                {"error": "Wallpaper upload exceeds 15 MB limit"},
+                                status=HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                            )
+                    raw_bytes = bytes(chunks)
+                else:
+                    await part.release()
+            except ValueError as err:
+                return web.json_response(
+                    {"error": str(err)},
+                    status=HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                )
 
         if not raw_bytes:
             return web.json_response(
@@ -1339,15 +1447,19 @@ class LatterWallpaperUploadView(HomeAssistantView):
             if sys_obj is not None
             else None
         )
-        system_wallpapers = list_wallpaper_catalog(
-            self.hass,
-            "system",
-            "",
-            [],
-            sign_resource=sys_signer,
-            display_shape="square",
+        system_wallpapers = await self.hass.async_add_executor_job(
+            lambda: list_wallpaper_catalog(
+                self.hass,
+                "system",
+                "",
+                [],
+                sign_resource=sys_signer,
+                display_shape="square",
+            )
         )
-        photo_collections = list_photo_collections()
+        photo_collections = await self.hass.async_add_executor_job(
+            list_photo_collections
+        )
 
         if coord is not None:
             async with coord.config_lock:
@@ -1362,13 +1474,20 @@ class LatterWallpaperUploadView(HomeAssistantView):
                 coord.update_device_config(merged)
             coord._bind_wallpaper_cycle_timer()
             coord.async_notify_listeners()
-            wallpapers = list_wallpaper_catalog(
-                self.hass,
-                coord.device_slug,
-                coord.wallpaper_source,
-                coord.wallpaper_favorites,
-                sign_resource=coord.sign_payload_resource,
-                display_shape=coord.display_shape,
+            coord_slug = coord.device_slug
+            coord_wp_src = coord.wallpaper_source
+            coord_wp_favs = list(coord.wallpaper_favorites)
+            coord_signer = coord.sign_payload_resource
+            coord_shape = coord.display_shape
+            wallpapers = await self.hass.async_add_executor_job(
+                lambda: list_wallpaper_catalog(
+                    self.hass,
+                    coord_slug,
+                    coord_wp_src,
+                    coord_wp_favs,
+                    sign_resource=coord_signer,
+                    display_shape=coord_shape,
+                )
             )
         else:
             wallpapers = system_wallpapers
@@ -1572,6 +1691,12 @@ class LatterCameraStreamView(HomeAssistantView):
         )
         from .coordinator import resolve_coordinator
 
+        if not _is_private_or_loopback_client(request):
+            return web.Response(
+                status=HTTPStatus.FORBIDDEN,
+                text="Camera streams require local LAN client",
+            )
+
         coord = resolve_coordinator(self.hass, target_device)
         if coord is None:
             return web.Response(
@@ -1618,7 +1743,9 @@ class LatterCameraStreamView(HomeAssistantView):
 
         req_w = _clamp_video_query_dim(request.query.get("w"), max_w)
         req_h = _clamp_video_query_dim(request.query.get("h"), max_h)
-        req_fps = min(max_fps, normalize_fps(request.query.get("fps"), default=max_fps))
+        req_fps = min(
+            max_fps, normalize_fps(request.query.get("fps"), default=max_fps)
+        )
         fit_mode = normalize_fit_mode(request.query.get("fit"))
         is_circle = (request.query.get("shape") or "").strip().lower() == "circle"
 
@@ -1697,6 +1824,12 @@ class LatterCameraGridView(HomeAssistantView):
         )
         from .coordinator import resolve_coordinator
 
+        if not _is_private_or_loopback_client(request):
+            return web.Response(
+                status=HTTPStatus.FORBIDDEN,
+                text="Camera streams require local LAN client",
+            )
+
         coord = resolve_coordinator(self.hass, target_device)
         if coord is None:
             return web.Response(
@@ -1738,7 +1871,8 @@ class LatterCameraGridView(HomeAssistantView):
                 status=HTTPStatus.NOT_FOUND, text="No cameras configured for grid"
             )
         if any(
-            not cid.startswith("camera.") or cid not in allowed_set for cid in requested
+            not cid.startswith("camera.") or cid not in allowed_set
+            for cid in requested
         ):
             return web.Response(
                 status=HTTPStatus.FORBIDDEN,
@@ -1747,7 +1881,9 @@ class LatterCameraGridView(HomeAssistantView):
 
         req_w = _clamp_video_query_dim(request.query.get("w"), max_w)
         req_h = _clamp_video_query_dim(request.query.get("h"), max_h)
-        req_fps = min(grid_fps, normalize_fps(request.query.get("fps"), default=grid_fps))
+        req_fps = min(
+            grid_fps, normalize_fps(request.query.get("fps"), default=grid_fps)
+        )
         fit_mode = normalize_fit_mode(request.query.get("fit"))
 
         cam_configs = getattr(coord, "camera_configs", None) or {}
@@ -1771,7 +1907,8 @@ class LatterCameraGridView(HomeAssistantView):
                 first_chunk = await anext(stream_iter)
             except StopAsyncIteration:
                 return web.Response(
-                    status=HTTPStatus.BAD_GATEWAY, text="Camera grid stream unavailable"
+                    status=HTTPStatus.BAD_GATEWAY,
+                    text="Camera grid stream unavailable",
                 )
             except CameraIngestLimitError:
                 return web.Response(
@@ -1781,7 +1918,8 @@ class LatterCameraGridView(HomeAssistantView):
             except CameraFetchError as err:
                 _LOGGER.debug("Camera grid start failed: %s", err)
                 return web.Response(
-                    status=HTTPStatus.BAD_GATEWAY, text="Camera grid stream unavailable"
+                    status=HTTPStatus.BAD_GATEWAY,
+                    text="Camera grid stream unavailable",
                 )
 
             resp = web.StreamResponse(
@@ -1817,9 +1955,17 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         """Initialize the camera audio stream view."""
         self.hass = hass
 
-    async def get(self, request: web.Request, target_device: str) -> web.StreamResponse:
+    async def get(
+        self, request: web.Request, target_device: str
+    ) -> web.StreamResponse:
         """Stream live de-noised FLAC/WAV audio from a camera's RTSP source."""
         from .coordinator import resolve_coordinator
+
+        if not _is_private_or_loopback_client(request):
+            return web.Response(
+                status=HTTPStatus.FORBIDDEN,
+                text="Camera audio streams require local LAN client",
+            )
 
         coord = resolve_coordinator(self.hass, target_device)
         if coord is None:
@@ -1836,7 +1982,11 @@ class LatterCameraAudioStreamView(HomeAssistantView):
                 status=HTTPStatus.NOT_FOUND, text="No camera entity configured"
             )
 
-        raw_nr = (request.query.get("nr") or coord.doorbell_noise_reduction).strip().lower()
+        raw_nr = (
+            (request.query.get("nr") or coord.doorbell_noise_reduction)
+            .strip()
+            .lower()
+        )
         raw_fmt = (request.query.get("fmt") or "flac").strip().lower()
 
         if not coord.verify_resource(
@@ -1850,9 +2000,7 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         nr_level = normalize_noise_reduction(raw_nr)
         fmt = "wav" if raw_fmt == "wav" else "flac"
 
-        allowed_cams = set(coord.camera_entities)
-        if coord.active_carousel_camera:
-            allowed_cams.add(coord.active_carousel_camera)
+        allowed_cams = set(coord.visible_camera_entities)
         if cam_ent not in allowed_cams:
             return web.Response(
                 status=HTTPStatus.FORBIDDEN, text="Camera entity not authorized"
@@ -1870,7 +2018,9 @@ class LatterCameraAudioStreamView(HomeAssistantView):
             if isinstance(audio_info, dict)
             else 1
         )
-        out_rate = out_rate if out_rate in (16000, 22050, 24000, 44100, 48000) else 48000
+        out_rate = (
+            out_rate if out_rate in (16000, 22050, 24000, 44100, 48000) else 48000
+        )
         out_ch = 2 if out_ch == 2 else 1
 
         stream_url: str | None = None
@@ -1889,21 +2039,13 @@ class LatterCameraAudioStreamView(HomeAssistantView):
         except Exception:  # noqa: BLE001
             ffmpeg_bin = shutil.which("ffmpeg")
 
-        if not stream_url or not ffmpeg_bin:
+        if not _is_allowed_stream_url(stream_url) or not ffmpeg_bin:
             return web.Response(
                 body=_build_silence_wav(sample_rate=out_rate),
                 content_type="audio/wav",
             )
-
-        prev_proc = _ACTIVE_DEVICE_STREAMS.pop(coord.subentry_id, None)
-        if prev_proc is not None and prev_proc.returncode is None:
-            try:
-                prev_proc.terminate()
-                await asyncio.wait_for(prev_proc.wait(), timeout=1.5)
-            except TimeoutError:
-                prev_proc.kill()
-            except ProcessLookupError:
-                pass
+        assert stream_url is not None
+        clean_stream_url = stream_url.strip()
 
         try:
             await asyncio.wait_for(_FFMPEG_STREAM_SEMAPHORE.acquire(), timeout=0.25)
@@ -1913,39 +2055,57 @@ class LatterCameraAudioStreamView(HomeAssistantView):
                 text="Maximum concurrent camera audio streams reached",
             )
 
-        filtergraph = build_noise_reduction_filter(nr_level)
-        out_codec = "flac" if fmt == "flac" else "pcm_s16le"
-        out_fmt = "flac" if fmt == "flac" else "wav"
-        content_type = "audio/flac" if fmt == "flac" else "audio/wav"
-
-        cmd = [
-            ffmpeg_bin,
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-rtsp_transport",
-            "tcp",
-            "-rw_timeout",
-            "5000000",
-            "-i",
-            stream_url,
-            "-t",
-            "120",
-            "-vn",
-            "-af",
-            filtergraph,
-            "-ar",
-            str(out_rate),
-            "-ac",
-            str(out_ch),
-            "-c:a",
-            out_codec,
-            "-f",
-            out_fmt,
-            "pipe:1",
-        ]
-
         try:
+            prev_proc = _ACTIVE_DEVICE_STREAMS.pop(coord.subentry_id, None)
+            if prev_proc is not None and prev_proc.returncode is None:
+                try:
+                    prev_proc.terminate()
+                    await asyncio.wait_for(prev_proc.wait(), timeout=1.5)
+                except TimeoutError:
+                    prev_proc.kill()
+                except ProcessLookupError:
+                    pass
+
+            filtergraph = build_noise_reduction_filter(nr_level)
+            out_codec = "flac" if fmt == "flac" else "pcm_s16le"
+            out_fmt = "flac" if fmt == "flac" else "wav"
+            content_type = "audio/flac" if fmt == "flac" else "audio/wav"
+
+            cmd = [
+                ffmpeg_bin,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-protocol_whitelist",
+                _FFMPEG_PROTOCOL_WHITELIST,
+            ]
+            if clean_stream_url.lower().startswith(("rtsp://", "rtsps://")):
+                cmd.extend(["-rtsp_transport", "tcp"])
+            cmd.extend(
+                [
+                    "-rw_timeout",
+                    "5000000",
+                    "-i",
+                    clean_stream_url,
+                    "-t",
+                    "120",
+                    "-vn",
+                    "-sn",
+                    "-dn",
+                    "-af",
+                    filtergraph,
+                    "-ar",
+                    str(out_rate),
+                    "-ac",
+                    str(out_ch),
+                    "-c:a",
+                    out_codec,
+                    "-f",
+                    out_fmt,
+                    "pipe:1",
+                ]
+            )
+
             resp = web.StreamResponse(
                 status=HTTPStatus.OK,
                 headers={
@@ -1991,297 +2151,6 @@ class LatterCameraAudioStreamView(HomeAssistantView):
             _FFMPEG_STREAM_SEMAPHORE.release()
 
 
-def _latlon_to_tile_xy(lat: float, lon: float, zoom: int) -> tuple[float, float]:
-    """Convert (lat, lon) in degrees to fractional Web Mercator tile coordinates at zoom."""
-    lat_rad = math.radians(max(-85.0511, min(85.0511, lat)))
-    n = float(1 << zoom)
-    xtile = (lon + 180.0) / 360.0 * n
-    ytile = (1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n
-    return xtile, ytile
-
-
-def _compose_map_snapshot_jpeg(
-    tile_images: dict[tuple[int, int], bytes],
-    view_tx: float,
-    view_ty: float,
-    event_tx: float,
-    event_ty: float,
-    base_tx: int,
-    base_ty: int,
-    width: int,
-    height: int,
-    circular_mask: bool,
-) -> bytes:
-    """Stitch 3x3 256px OSM tiles centered on (view_tx, view_ty) and draw the Event vector pin (no Home Pin)."""
-    canvas = Image.new("RGB", (768, 768), (20, 26, 36))
-    tiles_loaded = 0
-    for dy in range(3):
-        for dx in range(3):
-            raw = tile_images.get((base_tx + dx, base_ty + dy))
-            if raw:
-                try:
-                    with Image.open(io.BytesIO(raw)) as t_img:
-                        canvas.paste(t_img.convert("RGB"), (dx * 256, dy * 256))
-                        tiles_loaded += 1
-                except Exception:  # noqa: BLE001
-                    pass
-
-    draw_c = ImageDraw.Draw(canvas)
-    if tiles_loaded == 0:
-        for g in range(0, 768, 48):
-            draw_c.line([(g, 0), (g, 768)], fill=(32, 42, 56), width=1)
-            draw_c.line([(0, g), (768, g)], fill=(32, 42, 56), width=1)
-
-    v_px = int((view_tx - base_tx) * 256.0)
-    v_py = int((view_ty - base_ty) * 256.0)
-
-    half_w = width // 2
-    half_h = height // 2
-    left = max(0, min(768 - width, v_px - half_w))
-    top = max(0, min(768 - height, v_py - half_h))
-    cropped = canvas.crop((left, top, left + width, top + height))
-
-    d = ImageDraw.Draw(cropped)
-    pin_x = int((event_tx - base_tx) * 256.0) - left
-    pin_y = int((event_ty - base_ty) * 256.0) - top
-
-    # Event Destination Vector Pin only — Home coordinates are never read or rendered on map snapshots
-    if -32 <= pin_x <= width + 32 and -32 <= pin_y <= height + 40:
-        d.ellipse(
-            (pin_x - 28, pin_y - 28, pin_x + 28, pin_y + 28),
-            outline=(56, 152, 255),
-            width=2,
-        )
-        d.ellipse(
-            (pin_x - 6, pin_y - 3, pin_x + 6, pin_y + 5),
-            fill=(10, 14, 20),
-        )
-        d.polygon(
-            [(pin_x, pin_y), (pin_x - 13, pin_y - 22), (pin_x + 13, pin_y - 22)],
-            fill=(235, 52, 62),
-        )
-        d.ellipse(
-            (pin_x - 14, pin_y - 36, pin_x + 14, pin_y - 8),
-            fill=(235, 52, 62),
-            outline=(255, 255, 255),
-            width=2,
-        )
-        d.ellipse(
-            (pin_x - 5, pin_y - 27, pin_x + 5, pin_y - 17),
-            fill=(255, 255, 255),
-        )
-
-    if circular_mask:
-        mask, black_bg = _get_circular_mask_surfaces(width, height)
-        cropped = Image.composite(cropped, black_bg, mask)
-
-    out = io.BytesIO()
-    cropped.save(out, format="JPEG", quality=86, optimize=True, progressive=False)
-    return out.getvalue()
-
-
-class LatterMapSnapshotView(HomeAssistantView):
-    """Geocodes an address or non-home HA zone and renders a Baseline-JPEG map snapshot (`±4` pan clamp, no Home Pin)."""
-
-    requires_auth = False
-    url = API_MAP_PROXY_PATH
-    name = "api:latter:map_proxy"
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the map snapshot view."""
-        self.hass = hass
-
-    async def _async_resolve_coordinates(
-        self, query: str
-    ) -> tuple[float, float] | None:
-        """Resolve an address string, 'lat,lon', or non-home HA zone name to (lat, lon)."""
-        from .hub import get_area_state_index
-
-        q_clean = query.strip()
-        if not q_clean:
-            return None
-
-        cache_key = q_clean.lower()
-        if cache_key in _MAP_GEOCODE_CACHE:
-            _MAP_GEOCODE_CACHE.move_to_end(cache_key)
-            return _MAP_GEOCODE_CACHE[cache_key]
-
-        def _store_geocode(coords: tuple[float, float]) -> tuple[float, float]:
-            _MAP_GEOCODE_CACHE[cache_key] = coords
-            while len(_MAP_GEOCODE_CACHE) > MAX_MAP_GEOCODE_CACHE:
-                _MAP_GEOCODE_CACHE.popitem(last=False)
-            return coords
-
-        if "," in q_clean:
-            parts = [p.strip() for p in q_clean.split(",", 1)]
-            try:
-                lat_v = float(parts[0])
-                lon_v = float(parts[1])
-                if -90.0 <= lat_v <= 90.0 and -180.0 <= lon_v <= 180.0:
-                    return _store_geocode((lat_v, lon_v))
-            except ValueError:
-                pass
-
-        for st in get_area_state_index(self.hass).states_for_domain("zone"):
-            if st.entity_id == "zone.home":
-                continue
-            z_name = str(
-                st.attributes.get("friendly_name") or st.name or ""
-            ).lower()
-            if z_name and z_name == cache_key:
-                lat_z = st.attributes.get("latitude")
-                lon_z = st.attributes.get("longitude")
-                if lat_z is not None and lon_z is not None:
-                    return _store_geocode((float(lat_z), float(lon_z)))
-
-        session = async_get_clientsession(self.hass)
-        try:
-            async with session.get(
-                "https://nominatim.openstreetmap.org/search",
-                params={"q": q_clean, "format": "json", "limit": "1"},
-                headers={"User-Agent": HTTP_USER_AGENT},
-                timeout=ClientTimeout(total=5),
-            ) as resp:
-                if resp.status == HTTPStatus.OK:
-                    data = await resp.json()
-                    if isinstance(data, list) and data:
-                        lat_n = float(data[0]["lat"])
-                        lon_n = float(data[0]["lon"])
-                        return _store_geocode((lat_n, lon_n))
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Nominatim geocode fallback for '%s': %s", q_clean, err)
-
-        return None
-
-    async def get(self, request: web.Request, target_device: str) -> web.Response:
-        """Handle GET /api/latter/map/{target_device}?q=...&z=15&pan_x=0&pan_y=0&w=466&h=466"""
-        from .coordinator import resolve_coordinator
-
-        coordinator = resolve_coordinator(self.hass, target_device)
-        if coordinator is None:
-            return web.Response(
-                status=HTTPStatus.NOT_FOUND, text="Unknown target device"
-            )
-
-        query = str(request.query.get("q") or "").strip()
-        width, height, is_circle, shape_str = _parse_render_params(
-            request,
-            coordinator,
-            min_dim=128,
-            max_dim=768,
-            default_circle=(coordinator.display_shape == "circle"),
-        )
-
-        if not coordinator.verify_resource(
-            f"map:{query}|{width}|{height}|{shape_str}",
-            sig=request.query.get("sig"),
-        ):
-            return web.Response(status=HTTPStatus.FORBIDDEN, text="Invalid signature")
-
-        zoom = 15
-        pan_x = 0
-        pan_y = 0
-        try:
-            if request.query.get("z"):
-                zoom = max(10, min(18, int(request.query.get("z", "15"))))
-            if request.query.get("pan_x"):
-                pan_x = max(-4, min(4, int(request.query.get("pan_x", "0"))))
-            if request.query.get("pan_y"):
-                pan_y = max(-4, min(4, int(request.query.get("pan_y", "0"))))
-        except ValueError:
-            pass
-
-        cache_id = f"{query.lower()}|{width}x{height}|{int(is_circle)}|z{zoom}|px{pan_x}|py{pan_y}"
-        if cache_id in _MAP_JPEG_CACHE:
-            _MAP_JPEG_CACHE.move_to_end(cache_id)
-            return web.Response(
-                body=_MAP_JPEG_CACHE[cache_id],
-                content_type="image/jpeg",
-                headers={
-                    "Cache-Control": "private, max-age=600",
-                    "X-Latter-Cache": "HIT",
-                },
-            )
-
-        coords = await self._async_resolve_coordinates(query)
-        if coords is None:
-            return web.Response(
-                status=HTTPStatus.NOT_FOUND,
-                text="Map location could not be geocoded",
-            )
-        lat, lon = coords
-        event_tx, event_ty = _latlon_to_tile_xy(lat, lon, zoom)
-
-        view_tx = event_tx + (pan_x * 0.62)
-        view_ty = event_ty + (pan_y * 0.62)
-        base_tx = int(view_tx) - 1
-        base_ty = int(view_ty) - 1
-
-        session = async_get_clientsession(self.hass)
-        tile_images: dict[tuple[int, int], bytes] = {}
-        n_tiles = 1 << zoom
-
-        async def _fetch_single_tile(gx: int, gy: int) -> None:
-            tx = gx % n_tiles
-            if gy < 0 or gy >= n_tiles:
-                return
-            t_key = (zoom, tx, gy)
-            if t_key in _OSM_TILE_CACHE:
-                _OSM_TILE_CACHE.move_to_end(t_key)
-                tile_images[(gx, gy)] = _OSM_TILE_CACHE[t_key]
-                return
-            tile_url = f"https://tile.openstreetmap.org/{zoom}/{tx}/{gy}.png"
-            try:
-                async with session.get(
-                    tile_url,
-                    headers={
-                        "User-Agent": HTTP_USER_AGENT,
-                        "Accept": "image/png,image/*;q=0.8",
-                    },
-                    timeout=ClientTimeout(total=4.0),
-                ) as t_resp:
-                    if t_resp.status == HTTPStatus.OK:
-                        raw_t = await t_resp.read()
-                        tile_images[(gx, gy)] = raw_t
-                        _OSM_TILE_CACHE[t_key] = raw_t
-                        while len(_OSM_TILE_CACHE) > MAX_OSM_TILE_CACHE:
-                            _OSM_TILE_CACHE.popitem(last=False)
-            except Exception:  # noqa: BLE001
-                pass
-
-        await asyncio.gather(
-            *[
-                _fetch_single_tile(base_tx + dx, base_ty + dy)
-                for dy in range(3)
-                for dx in range(3)
-            ]
-        )
-
-        jpeg_bytes = await self.hass.async_add_executor_job(
-            _compose_map_snapshot_jpeg,
-            tile_images,
-            view_tx,
-            view_ty,
-            event_tx,
-            event_ty,
-            base_tx,
-            base_ty,
-            width,
-            height,
-            is_circle,
-        )
-
-        _MAP_JPEG_CACHE[cache_id] = jpeg_bytes
-        while len(_MAP_JPEG_CACHE) > MAX_ART_CACHE_ENTRIES:
-            _MAP_JPEG_CACHE.popitem(last=False)
-
-        return web.Response(
-            body=jpeg_bytes,
-            content_type="image/jpeg",
-            headers={"Cache-Control": "private, max-age=600", "X-Latter-Cache": "MISS"},
-        )
-
-
 class LatterBrandIconView(HomeAssistantView):
     """Serve the Latter brand icon PNG for Studio and HACS."""
 
@@ -2299,7 +2168,9 @@ class LatterBrandIconView(HomeAssistantView):
         """Return the PNG icon bytes."""
         if self._cached_bytes is None:
             if not self._icon_path.is_file():
-                return web.Response(status=HTTPStatus.NOT_FOUND, text="Icon not found")
+                return web.Response(
+                    status=HTTPStatus.NOT_FOUND, text="Icon not found"
+                )
             self._cached_bytes = await self.hass.async_add_executor_job(
                 self._icon_path.read_bytes
             )

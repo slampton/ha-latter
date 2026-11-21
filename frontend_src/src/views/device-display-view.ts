@@ -23,7 +23,7 @@ import {
 } from "../state/photo-ops.js";
 import type { StudioStore } from "../state/store.js";
 import type { PhotoItem } from "../types.js";
-import { defaultThemeHex, entityLabel, fmtNumber, isValidHexColor } from "../utils/format.js";
+import { defaultThemeHex, fmtNumber, isValidHexColor } from "../utils/format.js";
 import { renderDeviceOfflineBanner } from "./device-overview-view.js";
 
 function rotationLabel(store: StudioStore, minutes: number, fallback: string): string {
@@ -162,19 +162,8 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     }
   }
 
-  const activateScreensaverBtn = store.entity
-    .getSectionItems("actions")
-    .find(
-      (it) =>
-        it.domain === "button" &&
-        (it.device_command === "activate_screensaver" ||
-          it.key === "activate_screensaver" ||
-          it.entity_id?.endsWith("_activate_screensaver")),
-    );
-
-  const hasScreensaverCard = Boolean(
-    ssModePref || ssStylePref || ssIdlePref || activateScreensaverBtn,
-  );
+  const ssActive = Boolean(live.screensaver_active);
+  const hasScreensaverCard = Boolean(ssModePref || ssStylePref || ssIdlePref);
 
   // Voice assistant card
   const voiceVisualPref = store.entity.getPref("va_visual_profile");
@@ -414,41 +403,37 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                     </div>`
                   : nothing}
 
-                ${!ssNever && activateScreensaverBtn
+                ${!ssNever
                   ? html`<div class="settings-list">
                       ${renderSettingsRow({
-                        label: entityLabel(
-                          activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
-                        ),
-                        description: store.t("dev_display.screensaver_preview_desc"),
+                        id: "row-screensaver-preview",
+                        label: ssActive
+                          ? store.t("dev_overview.qa_exit_screensaver")
+                          : store.t("dev_overview.qa_activate_screensaver"),
+                        description: ssActive
+                          ? store.t("dev_display.screensaver_exit_desc")
+                          : store.t("dev_display.screensaver_preview_desc"),
                         control: html`<button
                           type="button"
-                          ?disabled=${isOffline ||
-                          String(activateScreensaverBtn.state ?? "") === "unavailable"}
+                          id="btn-screensaver-preview"
+                          ?disabled=${isOffline}
                           @click=${() => {
-                            const btnLabel = entityLabel(
-                              activateScreensaverBtn.name || activateScreensaverBtn.entity_id,
+                            const actionCmd = ssActive
+                              ? "deactivate_screensaver"
+                              : "activate_screensaver";
+                            const actionLabel = ssActive
+                              ? store.t("dev_overview.qa_exit_screensaver")
+                              : store.t("dev_overview.qa_activate_screensaver");
+                            void store.entity.runDeviceAction(
+                              actionCmd,
+                              store.t("sync.triggered_action", { label: actionLabel }),
                             );
-                            const toastMsg = store.t("sync.triggered_action", {
-                              label: btnLabel,
-                            });
-                            if (activateScreensaverBtn.device_command) {
-                              void store.entity.runDeviceAction(
-                                activateScreensaverBtn.device_command,
-                                toastMsg,
-                              );
-                            } else {
-                              void store.entity.espAction(
-                                activateScreensaverBtn.entity_id,
-                                "press",
-                                undefined,
-                                toastMsg,
-                              );
-                            }
                           }}
                           class="btn btn-secondary btn-compact"
                         >
-                          ${store.t("dev_display.preview_btn")}
+                          ${ssActive
+                            ? store.t("dev_display.exit_screensaver_btn")
+                            : store.t("dev_display.preview_btn")}
                         </button>`,
                       })}
                     </div>`

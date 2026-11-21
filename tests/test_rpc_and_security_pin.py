@@ -41,6 +41,7 @@ from custom_components.latter.protocol import (
     hash_security_pin,
     is_sensitive_perimeter_action,
     verify_security_pin,
+    wrap_pin_code,
 )
 from custom_components.latter.services import async_dispatch_bound_rpc
 from custom_components.latter.studio.payload import build_studio_state_payload
@@ -203,46 +204,49 @@ async def test_three_tier_security_pin_policy_and_pbkdf2_verification(
         "require_pin", provided_code="2580", stored_pin_hash=pin_hash
     ) == (True, "")
 
+    nonce_seq = 0
+
+    def _wrap(ent: str, act: str, pin: str) -> str:
+        nonlocal nonce_seq
+        nonce_seq += 1
+        return wrap_pin_code(
+            coord._pin_key_id, coord._pin_key_bytes, nonce_seq, ent, act, pin
+        )
+
     # Unlock without PIN -> security_pin_required
     with pytest.raises(ServiceValidationError) as exc_req:
-        await hass.services.async_call(
-            DOMAIN,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
             "area_action",
             {
-                "target_device": "pocket_assistant",
                 "action": "unlock",
                 "entity_id": "lock.front_door",
             },
-            blocking=True,
         )
     assert exc_req.value.translation_key == "security_pin_required"
 
     # Unlock with wrong PIN -> security_pin_invalid
     with pytest.raises(ServiceValidationError) as exc_bad:
-        await hass.services.async_call(
-            DOMAIN,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
             "area_action",
             {
-                "target_device": "pocket_assistant",
                 "action": "unlock",
                 "entity_id": "lock.front_door",
-                "code": "0000",
+                "code": _wrap("lock.front_door", "unlock", "0000"),
             },
-            blocking=True,
         )
     assert exc_bad.value.translation_key == "security_pin_invalid"
 
     # Unlock with valid PIN -> succeeds!
-    await hass.services.async_call(
-        DOMAIN,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "area_action",
         {
-            "target_device": "pocket_assistant",
             "action": "unlock",
             "entity_id": "lock.front_door",
-            "code": "2580",
+            "code": _wrap("lock.front_door", "unlock", "2580"),
         },
-        blocking=True,
     )
     assert any(c.domain == "lock" and c.service == "unlock" for c in hass.services.calls)
 
@@ -254,16 +258,14 @@ async def test_three_tier_security_pin_policy_and_pbkdf2_verification(
     await coord.async_apply_options()
 
     with pytest.raises(ServiceValidationError) as exc_blk:
-        await hass.services.async_call(
-            DOMAIN,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
             "area_action",
             {
-                "target_device": "pocket_assistant",
                 "action": "open_cover",
                 "entity_id": "cover.garage_door",
-                "code": "2580",
+                "code": _wrap("cover.garage_door", "open_cover", "2580"),
             },
-            blocking=True,
         )
     assert exc_blk.value.translation_key == "security_action_blocked"
 
@@ -598,8 +600,6 @@ async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_an
     """Verify cold-boot Play preserves remaining album tracks, album track drilldown queues the album tail, and TTS never pollutes last_media_uri."""
     from homeassistant.config_entries import ConfigEntryState
 
-    import custom_components.latter.media as media_mod
-
     _entry, _sys_obj, coord = await setup_latter_hub(hass)
     ma_entry = hass.config_entries.add_entry(
         ConfigEntry(
@@ -709,20 +709,19 @@ async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_an
         lambda call: ma_play_calls.append(dict(call.data)),
     )
 
-    # 2. Cold-boot Play where Sendspin Noise handshake takes ~1.0s (4 * 0.25s) to flip to playing:
+    # 2. Cold-boot Play where Sendspin Noise handshake flips local speaker to playing on event bus:
     # must NOT invoke play_media or clobber the existing Music Assistant queue.
-    sleep_ticks = 0
+    import asyncio
 
-    async def _fast_sleep(_sec: float) -> None:
-        nonlocal sleep_ticks
-        sleep_ticks += 1
-        if sleep_ticks == 4:
-            hass.states.async_set(coord.local_speaker, "playing", {})
+    async def _flip_playing_shortly() -> None:
+        await asyncio.sleep(0)
+        hass.states.async_set(coord.local_speaker, "playing", {})
 
-    monkeypatch.setattr(media_mod.asyncio, "sleep", _fast_sleep)
     coord._local_needs_cold_resume = True
     coord._resuming_guard_until = 0.0
+    flip_task = asyncio.create_task(_flip_playing_shortly())
     await execute_coordinator_media_command(coord, "play")
+    await flip_task
     assert ma_play_calls == []
     assert coord._local_needs_cold_resume is False
 
@@ -757,11 +756,10 @@ async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_an
 
     # 4. Drilling into album_tracks via music_browse and tapping track 2 queues [42, 43, 44]
     ma_play_calls.clear()
-    await hass.services.async_call(
-        DOMAIN,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "music_browse",
         {
-            "target_device": coord.device_slug,
             "req_id": 1,
             "mode": "album_tracks",
             "page": 1,
@@ -769,7 +767,6 @@ async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_an
             "search": "library://album/4",
             "speaker": coord.local_speaker,
         },
-        blocking=True,
     )
     await execute_coordinator_media_command(
         coord,
@@ -974,33 +971,32 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
 
     # 2. Separate PINs on home_hub.alarm:
     # Arming requires ZERO PIN when code_arm_required=False and omits "code"
-    await hass.services.async_call(
-        DOMAIN,
+    hub_nonce = 0
+
+    def _wrap_hub(ent: str, act: str, pin: str) -> str:
+        nonlocal hub_nonce
+        hub_nonce += 1
+        return wrap_pin_code(
+            coord._pin_key_id, coord._pin_key_bytes, hub_nonce, ent, act, pin
+        )
+
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "area_action",
         {
-            "target_device": coord.device_slug,
             "entity_id": "home_hub.alarm",
             "action": "arm_home",
         },
-        blocking=True,
     )
-    await hass.services.async_call(
-        DOMAIN,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "area_action",
-        {
-            "target_device": coord.device_slug,
-            "action": "arm_away",
-        },
-        blocking=True,
+        {"action": "arm_away"},
     )
-    await hass.services.async_call(
-        DOMAIN,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "area_action",
-        {
-            "target_device": coord.device_slug,
-            "action": "arm_vacation",
-        },
-        blocking=True,
+        {"action": "arm_vacation"},
     )
     assert ("alarm_control_panel", "alarm_arm_home", {"entity_id": "alarm_control_panel.home_alarm"}) in svc_calls
     assert ("alarm_control_panel", "alarm_arm_away", {"entity_id": "alarm_control_panel.home_alarm"}) in svc_calls
@@ -1008,45 +1004,32 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
 
     # Disarm with empty PIN when code_format="number" -> security_pin_required
     with pytest.raises(ServiceValidationError) as exc_empty_pin:
-        await hass.services.async_call(
-            DOMAIN,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
             "area_action",
-            {
-                "target_device": coord.device_slug,
-                "entity_id": "home_hub.alarm",
-                "action": "disarm",
-            },
-            blocking=True,
+            {"entity_id": "home_hub.alarm", "action": "disarm"},
         )
     assert exc_empty_pin.value.translation_key == "security_pin_required"
 
-    # Disarm with non-4..8-digit PIN when code_format="number" -> security_pin_invalid
+    # Disarm with non-4..12-digit / unwrapped PIN when code_format="number" -> security_pin_invalid
     with pytest.raises(ServiceValidationError) as exc_bad_fmt:
-        await hass.services.async_call(
-            DOMAIN,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
             "area_action",
-            {
-                "target_device": coord.device_slug,
-                "entity_id": "home_hub.alarm",
-                "action": "disarm",
-                "code": "12",
-            },
-            blocking=True,
+            {"entity_id": "home_hub.alarm", "action": "disarm", "code": "12"},
         )
     assert exc_bad_fmt.value.translation_key == "security_pin_invalid"
 
     # Disarm with HA's SEPARATE alarm PIN ("9876", different from Latter's "2580"!) SUCCEEDS and forwards code!
     svc_calls.clear()
-    await hass.services.async_call(
-        DOMAIN,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "area_action",
         {
-            "target_device": coord.device_slug,
             "entity_id": "home_hub.alarm",
             "action": "disarm",
-            "code": "9876",
+            "code": _wrap_hub("home_hub.alarm", "disarm", "9876"),
         },
-        blocking=True,
     )
     assert svc_calls == [
         (
@@ -1063,29 +1046,25 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         {"friendly_name": "Home Security", "code_format": None, "code_arm_required": False},
     )
     with pytest.raises(ServiceValidationError) as exc_wrong_latter_pin:
-        await hass.services.async_call(
-            DOMAIN,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
             "area_action",
             {
-                "target_device": coord.device_slug,
                 "entity_id": "home_hub.alarm",
                 "action": "disarm",
-                "code": "9876",
+                "code": _wrap_hub("home_hub.alarm", "disarm", "9876"),
             },
-            blocking=True,
         )
     assert exc_wrong_latter_pin.value.translation_key == "security_pin_invalid"
 
-    await hass.services.async_call(
-        DOMAIN,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "area_action",
         {
-            "target_device": coord.device_slug,
             "entity_id": "home_hub.alarm",
             "action": "disarm",
-            "code": "2580",
+            "code": _wrap_hub("home_hub.alarm", "disarm", "2580"),
         },
-        blocking=True,
     )
 
     # Restore code_format="number" and verify security_pin_policy="block" rejects disarm
@@ -1102,16 +1081,14 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     await coord.async_apply_options()
 
     with pytest.raises(ServiceValidationError) as exc_blocked_disarm:
-        await hass.services.async_call(
-            DOMAIN,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
             "area_action",
             {
-                "target_device": coord.device_slug,
                 "entity_id": "home_hub.alarm",
                 "action": "disarm",
-                "code": "9876",
+                "code": _wrap_hub("home_hub.alarm", "disarm", "9876"),
             },
-            blocking=True,
         )
     assert exc_blocked_disarm.value.translation_key == "security_action_blocked"
 
@@ -1124,73 +1101,28 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
 
     # 3. Thermostat setpoint & HVAC mode adaptation
     svc_calls.clear()
-    await hass.services.async_call(
-        DOMAIN,
-        "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "climate.main_thermostat",
-            "action": "set_temperature",
-            "level": 72.5,
-        },
-        blocking=True,
-    )
-    await hass.services.async_call(
-        DOMAIN,
-        "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "climate.main_thermostat",
-            "action": "hvac_heat",
-        },
-        blocking=True,
-    )
-    await hass.services.async_call(
-        DOMAIN,
-        "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "climate.main_thermostat",
-            "action": "hvac_cool",
-        },
-        blocking=True,
-    )
-    # hvac_modes has "auto" (not "heat_cool") -> adapts "hvac_heat_cool" to "auto"
-    await hass.services.async_call(
-        DOMAIN,
-        "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "climate.main_thermostat",
-            "action": "hvac_heat_cool",
-        },
-        blocking=True,
-    )
-    await hass.services.async_call(
-        DOMAIN,
-        "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "climate.main_thermostat",
-            "action": "hvac_off",
-        },
-        blocking=True,
-    )
+    for clim_act, clim_extra in (
+        ("set_temperature", {"level": 72.5}),
+        ("hvac_heat", {}),
+        ("hvac_cool", {}),
+        ("hvac_heat_cool", {}),
+        ("hvac_off", {}),
+    ):
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            "area_action",
+            {"entity_id": "climate.main_thermostat", "action": clim_act, **clim_extra},
+        )
     # Reverse adaptation: hvac_modes has "heat_cool" (not "auto") -> adapts "hvac_auto" to "heat_cool"
     hass.states.async_set(
         "climate.main_thermostat",
         "heat_cool",
         {"hvac_modes": ["off", "heat", "cool", "heat_cool"]},
     )
-    await hass.services.async_call(
-        DOMAIN,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "climate.main_thermostat",
-            "action": "hvac_auto",
-        },
-        blocking=True,
+        {"entity_id": "climate.main_thermostat", "action": "hvac_auto"},
     )
     assert (
         "climate",
@@ -1225,103 +1157,58 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
 
     # 4. Lock, Garage (open_cover / close_cover / stop_cover idempotent), and Vacuum
     svc_calls.clear()
-    await hass.services.async_call(
-        DOMAIN,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "lock.front_door",
-            "action": "lock",
-        },
-        blocking=True,
+        {"entity_id": "lock.front_door", "action": "lock"},
     )
     with pytest.raises(ServiceValidationError) as exc_lock_pin:
-        await hass.services.async_call(
-            DOMAIN,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
             "area_action",
             {
-                "target_device": coord.device_slug,
                 "entity_id": "lock.front_door",
                 "action": "unlock",
-                "code": "9876",
+                "code": _wrap_hub("lock.front_door", "unlock", "9876"),
             },
-            blocking=True,
         )
     assert exc_lock_pin.value.translation_key == "security_pin_invalid"
-    await hass.services.async_call(
-        DOMAIN,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "area_action",
         {
-            "target_device": coord.device_slug,
             "entity_id": "lock.front_door",
             "action": "unlock",
-            "code": "2580",
+            "code": _wrap_hub("lock.front_door", "unlock", "2580"),
         },
-        blocking=True,
     )
 
     # Garage is currently "closed": close_cover MUST still call close_cover (never toggle open!)
-    await hass.services.async_call(
-        DOMAIN,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "cover.main_garage",
-            "action": "close_cover",
-        },
-        blocking=True,
+        {"entity_id": "cover.main_garage", "action": "close_cover"},
     )
-    await hass.services.async_call(
-        DOMAIN,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "area_action",
         {
-            "target_device": coord.device_slug,
             "entity_id": "cover.main_garage",
             "action": "open_cover",
-            "code": "2580",
+            "code": _wrap_hub("cover.main_garage", "open_cover", "2580"),
         },
-        blocking=True,
     )
-    await hass.services.async_call(
-        DOMAIN,
-        "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "cover.main_garage",
-            "action": "stop_cover",
-        },
-        blocking=True,
-    )
-    await hass.services.async_call(
-        DOMAIN,
-        "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "vacuum.robo_vac",
-            "action": "start",
-        },
-        blocking=True,
-    )
-    await hass.services.async_call(
-        DOMAIN,
-        "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "vacuum.robo_vac",
-            "action": "pause",
-        },
-        blocking=True,
-    )
-    await hass.services.async_call(
-        DOMAIN,
-        "area_action",
-        {
-            "target_device": coord.device_slug,
-            "entity_id": "vacuum.robo_vac",
-            "action": "return_to_base",
-        },
-        blocking=True,
-    )
+    for g_ent, g_act in (
+        ("cover.main_garage", "stop_cover"),
+        ("vacuum.robo_vac", "start"),
+        ("vacuum.robo_vac", "pause"),
+        ("vacuum.robo_vac", "return_to_base"),
+    ):
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            "area_action",
+            {"entity_id": g_ent, "action": g_act},
+        )
 
     assert ("lock", "lock", {"entity_id": "lock.front_door"}) in svc_calls
     assert ("lock", "unlock", {"entity_id": "lock.front_door"}) in svc_calls
@@ -1396,16 +1283,14 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         ("hvac_fan_only", {}),
         ("dry", {}),
     ):
-        await hass.services.async_call(
-            DOMAIN,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
             "area_action",
             {
-                "target_device": coord.device_slug,
                 "entity_id": "climate.main_thermostat",
                 "action": act_c,
                 **extra_c,
             },
-            blocking=True,
         )
     assert (
         "climate",
@@ -1439,15 +1324,13 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     assert compute_vacuum_caps(hass.states.get("vacuum.robo_vac")) == 0x3F
     svc_calls.clear()
     for vac_act in ("clean", "pause", "stop", "dock", "clean_spot", "spot", "locate"):
-        await hass.services.async_call(
-            DOMAIN,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
             "area_action",
             {
-                "target_device": coord.device_slug,
                 "entity_id": "vacuum.robo_vac",
                 "action": vac_act,
             },
-            blocking=True,
         )
     assert ("vacuum", "start", {"entity_id": "vacuum.robo_vac"}) in svc_calls
     assert ("vacuum", "pause", {"entity_id": "vacuum.robo_vac"}) in svc_calls
@@ -1465,15 +1348,13 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     assert compute_vacuum_caps(hass.states.get("vacuum.robo_vac")) == 0x05
     svc_calls.clear()
     for vac_act in ("start", "stop"):
-        await hass.services.async_call(
-            DOMAIN,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
             "area_action",
             {
-                "target_device": coord.device_slug,
                 "entity_id": "vacuum.robo_vac",
                 "action": vac_act,
             },
-            blocking=True,
         )
     assert ("vacuum", "turn_on", {"entity_id": "vacuum.robo_vac"}) in svc_calls
     assert ("vacuum", "turn_off", {"entity_id": "vacuum.robo_vac"}) in svc_calls

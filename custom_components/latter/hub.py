@@ -9,7 +9,7 @@ import secrets
 import time
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.const import EVENT_STATE_CHANGED
+from homeassistant.const import EVENT_CORE_CONFIG_UPDATE, EVENT_STATE_CHANGED
 from homeassistant.core import (
     Event,
     EventStateChangedData,
@@ -48,10 +48,11 @@ from .feeds import (
     read_sun_and_moon_fields,
 )
 from .http import UrlSigner
-from .protocol import V3Records
+from .protocol import PinLockoutTracker, V3Records
 
 if TYPE_CHECKING:
     from .coordinator import LatterCoordinator
+    from .services import LatterRpcDispatcher
 
 DATA_SYSTEM = "system"
 _SKY_TRACKED_ENTITIES: tuple[str, ...] = ("sun.sun", "sensor.moon_phase", "sensor.moon")
@@ -244,15 +245,44 @@ class AreaStateIndex:
             self.rebuild()
 
     @callback
-    def _on_registry_updated(self, _event: Event[Any] | Any = None) -> None:
-        """Rebuild registry maps and notify subscribed Areas whose membership may have changed."""
-        prev_areas = set(self._area_entities.keys())
+    def _on_registry_updated(self, event: Event[Any] | Any = None) -> None:
+        """Rebuild registry maps and notify subscribed Areas whose membership changed."""
+        data = getattr(event, "data", None)
+        event_type = getattr(event, "event_type", "")
+        if isinstance(data, dict) and data.get("action") == "update":
+            changes = data.get("changes")
+            if isinstance(changes, dict):
+                if event_type == er.EVENT_ENTITY_REGISTRY_UPDATED and not (
+                    changes.keys()
+                    & {"area_id", "device_id", "disabled_by", "entity_id"}
+                ):
+                    return
+                if event_type == dr.EVENT_DEVICE_REGISTRY_UPDATED and not (
+                    changes.keys() & {"area_id", "disabled_by"}
+                ):
+                    return
+        prev_area_entities = {
+            k: set(v) for k, v in self._area_entities.items()
+        }
         self.rebuild()
-        affected_areas = (
-            prev_areas
-            | set(self._area_entities.keys())
-            | set(self._area_listeners.keys())
-        )
+        if event_type == ar.EVENT_AREA_REGISTRY_UPDATED:
+            changed_area = str((data or {}).get("area_id") or "")
+            affected_areas = (
+                {changed_area}
+                if changed_area
+                else (
+                    set(prev_area_entities.keys())
+                    | set(self._area_entities.keys())
+                    | set(self._area_listeners.keys())
+                )
+            )
+        else:
+            all_areas = set(prev_area_entities.keys()) | set(self._area_entities.keys())
+            affected_areas = {
+                aid
+                for aid in all_areas
+                if prev_area_entities.get(aid) != self._area_entities.get(aid)
+            }
         for area_id in affected_areas:
             for cb in list(self._area_listeners.get(area_id, ())):
                 cb("")
@@ -397,6 +427,16 @@ def async_stop_area_state_index(hass: HomeAssistant) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _safe_hour(val: Any, default: int) -> int:
+    """Coerce a schedule hour preference into `0..23` without raising on corrupted input."""
+    if isinstance(val, bool) or val is None:
+        return default
+    try:
+        return int(val) % 24
+    except (TypeError, ValueError):
+        return default
+
+
 class LatterSystemHub:
     """Represents the shared Latter System state across all configured devices."""
 
@@ -408,11 +448,15 @@ class LatterSystemHub:
         hmac_secret: bytes,
     ) -> None:
         """Initialize the shared LatterSystemHub instance."""
+        from .services import LatterRpcDispatcher
+
         self.hass = hass
         self.store = store
         self.config = config
         self.hmac_secret = hmac_secret
         self.url_signer = UrlSigner(hass, "system", hmac_secret)
+        self.pin_lockout = PinLockoutTracker()
+        self.rpc_dispatcher: LatterRpcDispatcher = LatterRpcDispatcher(hass)
         self.coordinators: dict[str, LatterCoordinator] = {}
 
         self._unsub_weather_state: Callable[[], None] | None = None
@@ -420,6 +464,7 @@ class LatterSystemHub:
         self._unsub_forecast_timer: Callable[[], None] | None = None
         self._unsub_calendar_timer: Callable[[], None] | None = None
         self._unsub_bedtime_timer: Callable[[], None] | None = None
+        self._unsub_core_config: Callable[[], None] | None = None
         self._bedtime_sched_trackers: dict[str, tuple[bool, int, int, bool]] = {}
         self._tracked_weather_entity: str | None = None
 
@@ -460,21 +505,34 @@ class LatterSystemHub:
         """Mint a fresh 256-bit HMAC signing secret, persist it, and republish all signed URLs."""
         new_hex = secrets.token_hex(32)
         new_secret = bytes.fromhex(new_hex)
-        self.hmac_secret = new_secret
-        self.url_signer = UrlSigner(self.hass, "system", new_secret)
-        await self.url_signer.async_prime_lan_base_url()
-        domain_data = self.hass.data.setdefault(DOMAIN, {})
-        domain_data[DATA_HMAC_SECRET] = new_secret
-        global_cfg = self._live_global_config()
-        global_cfg["hmac_secret_hex"] = new_hex
-        await self.store.async_save(global_cfg)
+        async with get_system_config_lock(self.hass):
+            self.hmac_secret = new_secret
+            self.url_signer = UrlSigner(self.hass, "system", new_secret)
+            await self.url_signer.async_prime_lan_base_url()
+            domain_data = self.hass.data.setdefault(DOMAIN, {})
+            domain_data[DATA_HMAC_SECRET] = new_secret
+            global_cfg = self._live_global_config()
+            global_cfg["hmac_secret_hex"] = new_hex
+            await self.store.async_save(global_cfg)
         for coord in list(self.coordinators.values()):
             coord.update_hmac_secret(new_secret)
             coord.force_republish_all_domains()
 
     @callback
+    def _on_core_config_updated(self, _event: Event[Any]) -> None:
+        """Invalidate cached LAN base URLs when HA Core network/external URL config changes."""
+        self.url_signer.invalidate_lan_base_url()
+        for coord in list(self.coordinators.values()):
+            coord.url_signer.invalidate_lan_base_url()
+
+    @callback
     def bind_feed_listeners(self) -> None:
         """Bind or rebind the single System-level weather, sun/moon, and periodic feed listeners."""
+        if self._unsub_core_config is None:
+            self._unsub_core_config = self.hass.bus.async_listen(
+                EVENT_CORE_CONFIG_UPDATE,
+                self._on_core_config_updated,
+            )
         weather_ent = self.weather_entity
         if weather_ent != self._tracked_weather_entity or (
             weather_ent and self._unsub_weather_state is None
@@ -526,6 +584,7 @@ class LatterSystemHub:
             self._unsub_forecast_timer,
             self._unsub_calendar_timer,
             self._unsub_bedtime_timer,
+            self._unsub_core_config,
         ):
             if unsub is not None:
                 unsub()
@@ -534,6 +593,7 @@ class LatterSystemHub:
         self._unsub_forecast_timer = None
         self._unsub_calendar_timer = None
         self._unsub_bedtime_timer = None
+        self._unsub_core_config = None
         self._bedtime_sched_trackers.clear()
         self._tracked_weather_entity = None
         self.weather_loaded = False
@@ -596,8 +656,8 @@ class LatterSystemHub:
             if coord.subentry_id in self._bedtime_sched_trackers:
                 continue
             sched_on = bool(coord.get_device_pref("bedtime_schedule"))
-            start_h = int(coord.get_device_pref("bedtime_start_hour")) % 24
-            end_h = int(coord.get_device_pref("bedtime_end_hour")) % 24
+            start_h = _safe_hour(coord.get_device_pref("bedtime_start_hour"), 22)
+            end_h = _safe_hour(coord.get_device_pref("bedtime_end_hour"), 7)
             in_win = self._is_hour_in_bedtime_window(cur_hour, start_h, end_h)
             self._bedtime_sched_trackers[coord.subentry_id] = (
                 sched_on,
@@ -623,8 +683,8 @@ class LatterSystemHub:
             sub_id = coord.subentry_id
             live_ids.add(sub_id)
             sched_on = bool(coord.get_device_pref("bedtime_schedule"))
-            start_h = int(coord.get_device_pref("bedtime_start_hour")) % 24
-            end_h = int(coord.get_device_pref("bedtime_end_hour")) % 24
+            start_h = _safe_hour(coord.get_device_pref("bedtime_start_hour"), 22)
+            end_h = _safe_hour(coord.get_device_pref("bedtime_end_hour"), 7)
             in_win = self._is_hour_in_bedtime_window(cur_hour, start_h, end_h)
             prev = self._bedtime_sched_trackers.get(sub_id)
             self._bedtime_sched_trackers[sub_id] = (sched_on, start_h, end_h, in_win)
@@ -695,20 +755,26 @@ class LatterSystemHub:
         if (
             coalesce
             and days == 30
-            and self.calendar_loaded
             and (now_m - self._calendar_last_fetch_mono) < 0.5
         ):
             return self.calendar_records, self.calendar_raw_rows
-        records, raw_rows = await async_fetch_raw_calendar_events(
-            self.hass,
-            self.calendar_entities,
-            days=days,
-        )
+        prev_mono = self._calendar_last_fetch_mono
+        if days == 30:
+            self._calendar_last_fetch_mono = now_m
+        try:
+            records, raw_rows = await async_fetch_raw_calendar_events(
+                self.hass,
+                self.calendar_entities,
+                days=days,
+            )
+        except Exception:
+            if days == 30:
+                self._calendar_last_fetch_mono = prev_mono
+            raise
         if days == 30:
             self.calendar_records = records
             self.calendar_raw_rows = raw_rows
             self.calendar_loaded = True
-            self._calendar_last_fetch_mono = now_m
             for coord in list(self.coordinators.values()):
                 if not coord.is_ble_tag:
                     coord.apply_calendar_snapshot(records, raw_rows)
@@ -805,7 +871,7 @@ def get_system_device_info() -> DeviceInfo:
         identifiers={(DOMAIN, "system")},
         entry_type=dr.DeviceEntryType.SERVICE,
         name="Latter System",
-        manufacturer="Lampton Labs",
+        manufacturer="Latter",
         model="Latter Site & BLE Fabric Engine",
         sw_version=INTEGRATION_VERSION,
         configuration_url="homeassistant://latter",

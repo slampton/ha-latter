@@ -383,6 +383,8 @@ export const EN_SYSTEM_STRINGS = {
   "presence_sys.active_sensors_many": "{count} active sensors",
   "presence_sys.clear_sensors_one": "1 sensor clear",
   "presence_sys.clear_sensors_many": "{count} sensors clear",
+  "presence_sys.unavailable_sensors_one": "1 sensor unavailable",
+  "presence_sys.unavailable_sensors_many": "{count} sensors unavailable",
   "presence_sys.calibrated_meta": "calibrated {when} ({samples} samples)",
   "presence_sys.calibrate_hint":
     "calibrate with a carried Device to detect BLE presence here",
@@ -415,6 +417,8 @@ export const EN_SYSTEM_STRINGS = {
   "presence_sys.ambient_calibration_desc":
     "Auto-calibrate from 7-day Home Assistant statistics or tune manually for this sensor.",
   "presence_sys.calibrate_lux_btn": "Auto-calibrate",
+  "presence_sys.calibrating_lux": "Calibrating…",
+  "presence_sys.lux_bounds_error": "Dark floor must be lower than bright ceiling.",
   "presence_sys.calibrate_lux_done": "Calibrated ambient light for {count} Areas.",
   "presence_sys.calibrate_lux_one_done": "Calibrated {area}: {dark}–{bright} lx.",
   "presence_sys.no_area_sensors":
@@ -475,9 +479,15 @@ export const EN_SYSTEM_STRINGS = {
   "presence_sys.max_radius": "Maximum Area radius",
   "presence_sys.max_radius_desc":
     "Ignores Bluetooth proxies farther than this distance in meters so outdoor signals do not claim indoor Areas.",
+  "presence_sys.max_radius_ft": "Maximum Area radius (ft)",
+  "presence_sys.max_radius_ft_desc":
+    "Ignores Bluetooth proxies farther than this distance in feet so outdoor signals do not claim indoor Areas.",
   "presence_sys.max_speed": "Maximum movement speed",
   "presence_sys.max_speed_desc":
     "Smooths sudden signal drops that would imply movement faster than this speed in meters per second.",
+  "presence_sys.max_speed_fps": "Maximum movement speed (ft/s)",
+  "presence_sys.max_speed_fps_desc":
+    "Smooths sudden signal drops that would imply movement faster than this speed in feet per second.",
   "presence_sys.attenuation": "Wall signal drop-off",
   "presence_sys.attenuation_desc":
     "Controls how quickly Bluetooth signal strength fades with distance through walls (default 2.2).",

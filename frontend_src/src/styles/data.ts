@@ -846,9 +846,10 @@ export const DATA_STYLES = css`
   }
   .toast {
     position: fixed;
-    inset-inline-start: 50%;
+    inset-inline: 0;
     inset-block-end: var(--studio-space-5);
-    transform: translateX(-50%);
+    margin-inline: auto;
+    inline-size: fit-content;
     z-index: 50;
     max-inline-size: min(560px, calc(100vw - 32px));
     padding-block: var(--studio-space-3);

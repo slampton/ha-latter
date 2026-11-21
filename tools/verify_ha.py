@@ -2,7 +2,7 @@
 """Cross-platform static architecture, security, Studio, and HA compliance verifier for ha-latter.
 
 Runs in <1 second with Python 3.11+ standard library only (zero third-party dependencies),
-enforcing the 33-module topology, AST security/identity invariants, pyproject/manifest parity,
+enforcing the 34-module topology, AST security/identity invariants, pyproject/manifest parity,
 and Latter Studio guardrails identically in local development and GitHub Actions CI.
 """
 
@@ -45,6 +45,10 @@ TEXT_EXTS = {".py", ".json", ".yaml", ".yml", ".js", ".ts", ".md", ".toml"}
 BANNED_TERMS_RE = re.compile(r"\b(household|households)\b", re.IGNORECASE)
 SINGLE_QUOTED_PLACEHOLDER_RE = re.compile(r"'\{[a-zA-Z0-9_]+\}'")
 HASSFEST_TRANSLATION_KEY_RE = re.compile(r"^(?!-|_)[a-z0-9-_]+(?<!-|_)$")
+ZERO_WAN_RE = re.compile(
+    r"(?:lrclib\.net|wikipedia\.org|openstreetmap\.org|nominatim|https://[a-zA-Z0-9])",
+    re.IGNORECASE,
+)
 
 EXPECTED_ROOT_MODULES: frozenset[str] = frozenset(
     {
@@ -65,6 +69,7 @@ EXPECTED_ROOT_MODULES: frozenset[str] = frozenset(
         "http.py",
         "hub.py",
         "identity.py",
+        "light.py",
         "media.py",
         "media_browse.py",
         "number.py",
@@ -102,16 +107,19 @@ REQUIRED_REDACTED_KEYS: frozenset[str] = frozenset(
     {
         "ble_beacon_uuid",
         "ble_target_address",
+        "camera_snapshot_url",
+        "camera_stream_url",
         "hmac_secret_hex",
         "mac",
         "payload",
+        "screensaver_photo_url",
         "security_pin",
         "security_pin_hash",
         "system_ble_uuid",
     }
 )
 
-MIN_SDK_REV_FLOOR = 2026111039
+MIN_SDK_REV_FLOOR = 2026112007
 
 
 def iter_repo_files(base: Path) -> list[Path]:
@@ -197,6 +205,7 @@ def _check_hassfest_keys(
 
 def _check_ast_security_and_identity(
     parsed_trees: dict[str, ast.Module],
+    exception_keys: set[str],
     failures: list[str],
 ) -> None:
     """Enforce AST semantic guardrails across custom_components/latter."""
@@ -217,7 +226,7 @@ def _check_ast_security_and_identity(
                 exc_t = node.type
                 if isinstance(exc_t, ast.Name) and exc_t.id in {"ImportError", "ModuleNotFoundError"}:
                     failures.append(
-                        f"[32-MODULE TOPOLOGY] {rel}:{node.lineno} contains forbidden try/except {exc_t.id} shim"
+                        f"[34-MODULE TOPOLOGY] {rel}:{node.lineno} contains forbidden try/except {exc_t.id} shim"
                     )
 
             if not isinstance(node, ast.Call):
@@ -225,6 +234,21 @@ def _check_ast_security_and_identity(
 
             chain = _call_attr_chain(node.func)
             func_tail = chain.rsplit(".", 1)[-1]
+
+            # [EXCEPTION TRANSLATIONS]: verify ServiceValidationError / HomeAssistantError translation_key
+            if func_tail in {"ServiceValidationError", "HomeAssistantError"}:
+                for kw in node.keywords:
+                    if (
+                        kw.arg == "translation_key"
+                        and isinstance(kw.value, ast.Constant)
+                        and isinstance(kw.value.value, str)
+                    ):
+                        tkey = kw.value.value
+                        if tkey not in exception_keys:
+                            failures.append(
+                                f"[EXCEPTION TRANSLATIONS] {rel}:{node.lineno} passes unknown "
+                                f"translation_key={tkey!r} to {func_tail}() (missing from strings.json['exceptions'])"
+                            )
 
             # Check esphome service calls: never concatenate/f-string unbound slugs
             if func_tail in {"async_call", "has_service"} and len(node.args) >= 2:
@@ -255,11 +279,22 @@ def _check_ast_security_and_identity(
                         f"[SECURITY VERBS] {rel}:{node.lineno} dispatches forbidden 'toggle' on {dom_arg.value}"
                     )
 
-            # [VOICE FOLLOWS ME]: zero entity_registry mutations, and area_id device updates only in areas.py
+            # [VOICE FOLLOWS ME]: zero foreign entity_registry mutations (sole allowlist: identity.py
+            # auto-hiding bound latter_rpc_outbox via hidden_by=er.RegistryEntryHider.INTEGRATION; area_id forbidden)
             if func_tail == "async_update_entity":
-                failures.append(
-                    f"[VOICE FOLLOWS ME] {rel}:{node.lineno} calls async_update_entity() (foreign entity mutation forbidden)"
+                kw_map = {kw.arg: kw.value for kw in node.keywords if kw.arg}
+                has_unpacked_kw = any(kw.arg is None for kw in node.keywords)
+                is_outbox_autohide = (
+                    rel == "custom_components/latter/identity.py"
+                    and not has_unpacked_kw
+                    and set(kw_map.keys()) == {"hidden_by"}
+                    and _call_attr_chain(kw_map["hidden_by"]) == "er.RegistryEntryHider.INTEGRATION"
                 )
+                if not is_outbox_autohide:
+                    failures.append(
+                        f"[VOICE FOLLOWS ME] {rel}:{node.lineno} calls async_update_entity() "
+                        "(foreign entity mutation forbidden; area_id= strictly banned)"
+                    )
 
     # Track enclosing function for async_update_device(..., area_id=...)
     area_sync_sites: list[str] = []
@@ -376,7 +411,7 @@ def main() -> int:
             if m:
                 failures.append(f"[TERMINOLOGY] {rel} contains banned term {m.group(0)!r}")
 
-    # 2. [33-MODULE TOPOLOGY] & pure-stdlib leaf enforcement
+    # 2. [34-MODULE TOPOLOGY] & pure-stdlib leaf enforcement
     actual_root_py = {p.name for p in LATTER_DIR.glob("*.py")}
     actual_studio_py = {p.name for p in STUDIO_DIR.glob("*.py")} if STUDIO_DIR.is_dir() else set()
     all_latter_py = [p for p in iter_repo_files(LATTER_DIR) if p.suffix == ".py"]
@@ -387,13 +422,13 @@ def main() -> int:
     extra_studio = actual_studio_py - EXPECTED_STUDIO_MODULES
 
     if missing_root:
-        failures.append(f"[33-MODULE TOPOLOGY] Missing root module(s): {sorted(missing_root)}")
+        failures.append(f"[34-MODULE TOPOLOGY] Missing root module(s): {sorted(missing_root)}")
     if extra_root:
-        failures.append(f"[33-MODULE TOPOLOGY] Unexpected root module(s): {sorted(extra_root)}")
+        failures.append(f"[34-MODULE TOPOLOGY] Unexpected root module(s): {sorted(extra_root)}")
     if missing_studio:
-        failures.append(f"[33-MODULE TOPOLOGY] Missing studio/ module(s): {sorted(missing_studio)}")
+        failures.append(f"[34-MODULE TOPOLOGY] Missing studio/ module(s): {sorted(missing_studio)}")
     if extra_studio:
-        failures.append(f"[33-MODULE TOPOLOGY] Unexpected studio/ module(s): {sorted(extra_studio)}")
+        failures.append(f"[34-MODULE TOPOLOGY] Unexpected studio/ module(s): {sorted(extra_studio)}")
 
     unexpected_nested = [
         p.relative_to(LATTER_DIR).as_posix()
@@ -402,11 +437,11 @@ def main() -> int:
     ]
     if unexpected_nested:
         failures.append(
-            f"[33-MODULE TOPOLOGY] Legacy nested subpackage file(s) present: {sorted(unexpected_nested)}"
+            f"[34-MODULE TOPOLOGY] Legacy nested subpackage file(s) present: {sorted(unexpected_nested)}"
         )
-    if len(all_latter_py) != 33:
+    if len(all_latter_py) != 34:
         failures.append(
-            f"[33-MODULE TOPOLOGY] Expected exact 33 .py modules in custom_components/latter, found {len(all_latter_py)}"
+            f"[34-MODULE TOPOLOGY] Expected exact 34 .py modules in custom_components/latter, found {len(all_latter_py)}"
         )
 
     for std_rel in STDLIB_ONLY_MODULES:
@@ -420,16 +455,17 @@ def main() -> int:
                     root_pkg = alias.name.split(".", 1)[0]
                     if root_pkg in FORBIDDEN_NON_STDLIB_ROOTS:
                         failures.append(
-                            f"[31-MODULE TOPOLOGY] {full_rel}:{node.lineno} imports non-stdlib package {root_pkg!r}"
+                            f"[34-MODULE TOPOLOGY] {full_rel}:{node.lineno} imports non-stdlib package {root_pkg!r}"
                         )
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
                 root_pkg = node.module.split(".", 1)[0]
                 if root_pkg in FORBIDDEN_NON_STDLIB_ROOTS:
                     failures.append(
-                        f"[31-MODULE TOPOLOGY] {full_rel}:{node.lineno} imports non-stdlib package {root_pkg!r}"
+                        f"[34-MODULE TOPOLOGY] {full_rel}:{node.lineno} imports non-stdlib package {root_pkg!r}"
                     )
 
     # 3. Translations parity, [HA QUALITY], and services.yaml parity
+    strings_exception_keys: set[str] = set()
     strings_path = LATTER_DIR / "strings.json"
     en_path = LATTER_DIR / "translations" / "en.json"
     if not strings_path.is_file() or not en_path.is_file():
@@ -448,6 +484,8 @@ def main() -> int:
         except ValueError:
             pass
         else:
+            if isinstance(strings_data, dict) and isinstance(strings_data.get("exceptions"), dict):
+                strings_exception_keys = set(strings_data["exceptions"].keys())
             _check_hassfest_keys(strings_data, "custom_components/latter/strings.json", "", failures)
         try:
             en_data = json.loads(e_bytes.decode("utf-8", errors="replace"))
@@ -580,8 +618,8 @@ def main() -> int:
     if "\n  promote:" not in val_yml or "refs/heads/main" not in val_yml:
         failures.append("[DEV GATE] .github/workflows/validate.yml must fast-forward main from promote job")
 
-    # 6. AST & Python runtime invariants
-    _check_ast_security_and_identity(parsed_latter_trees, failures)
+    # 6. AST, Zero-WAN & Python runtime invariants
+    _check_ast_security_and_identity(parsed_latter_trees, strings_exception_keys, failures)
 
     http_path = LATTER_DIR / "http.py"
     if not http_path.is_file():
@@ -602,6 +640,11 @@ def main() -> int:
             failures.append(f"[AREA STATE INDEX] {rel} calls hass.states.async_all() (use AreaStateIndex)")
         if re.search(r"\bDataUpdateCoordinator\b", ptxt):
             failures.append(f"[PUSH COORDINATOR] {rel} references DataUpdateCoordinator (use pure push coordinator)")
+        m_wan = ZERO_WAN_RE.search(ptxt)
+        if m_wan:
+            failures.append(
+                f"[ZERO WAN] {rel} contains forbidden cloud/WAN endpoint reference {m_wan.group(0)!r}"
+            )
 
     # 7. [STUDIO NO REST], [STUDIO DESIGN DOC], and CSS token invariants
     if not STUDIO_DOC.is_file():

@@ -16,9 +16,21 @@ import {
   rssiToPercent,
 } from "../utils/format.js";
 
+const METERS_TO_FEET = 3.28084;
+
 export function renderSystemPresenceView(store: StudioStore): TemplateResult {
   const data = store.state;
   const sysCfg = data?.system_config;
+  const unitLength = String(store.hass?.config?.unit_system?.length || "").toLowerCase();
+  const isImperial = unitLength === "mi" || unitLength === "ft";
+  const rawRadiusM = Number(sysCfg?.ble_max_radius_m ?? 12);
+  const displayRadius = isImperial
+    ? Math.round(rawRadiusM * METERS_TO_FEET * 10) / 10
+    : rawRadiusM;
+  const rawVelMps = Number(sysCfg?.ble_max_velocity_mps ?? 3.5);
+  const displayVel = isImperial
+    ? Math.round(rawVelMps * METERS_TO_FEET * 10) / 10
+    : rawVelMps;
   const presenceRows = data?.live?.area_presence_grid || [];
   const signatures = data?.ble_area_signatures || [];
   const allDevs = data?.system_devices || [];
@@ -114,10 +126,13 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
           headerActions: hasAnyLuxSensor
             ? html`<button
                 type="button"
+                ?disabled=${store.groups.isCalibratingIlluminance()}
                 class="btn btn-secondary btn-compact"
                 @click=${() => void store.groups.calibrateAreaIlluminance()}
               >
-                ${store.t("presence_sys.calibrate_all_lux")}
+                ${store.groups.calibratingAllIlluminance
+                  ? store.t("presence_sys.calibrating_lux")
+                  : store.t("presence_sys.calibrate_all_lux")}
               </button>`
             : nothing,
           body: html`<div id="area-presence-grid-box" class="stack">
@@ -180,6 +195,15 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                           ? store.t("presence_sys.clear_sensors_one")
                           : store.t("presence_sys.clear_sensors_many", {
                               count: row.available_sensors.length,
+                            }),
+                      );
+                    }
+                    if (row?.unavailable_sensors && row.unavailable_sensors.length) {
+                      parts.push(
+                        row.unavailable_sensors.length === 1
+                          ? store.t("presence_sys.unavailable_sensors_one")
+                          : store.t("presence_sys.unavailable_sensors_many", {
+                              count: row.unavailable_sensors.length,
                             }),
                       );
                     }
@@ -408,16 +432,25 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                                             max="500"
                                             step="0.1"
                                             aria-label=${`${store.t("presence_sys.ambient_dark_lux")} (${areaName})`}
-                                            .value=${String(luxDark)}
+                                            .value=${focusSafe(String(luxDark))}
                                             @change=${(ev: Event) => {
-                                              const v = Number(
-                                                (ev.currentTarget as HTMLInputElement).value,
-                                              );
-                                              if (Number.isFinite(v)) {
-                                                void store.groups.setAreaIlluminance(areaId, {
-                                                  dark_lux: v,
-                                                });
+                                              const el = ev.currentTarget as HTMLInputElement;
+                                              const v = Number(el.value);
+                                              if (!Number.isFinite(v) || v < 0) {
+                                                el.value = String(luxDark);
+                                                return;
                                               }
+                                              if (v >= luxBright) {
+                                                el.value = String(luxDark);
+                                                store.showToast(
+                                                  store.t("presence_sys.lux_bounds_error"),
+                                                  true,
+                                                );
+                                                return;
+                                              }
+                                              void store.groups.setAreaIlluminance(areaId, {
+                                                dark_lux: v,
+                                              });
                                             }}
                                           />
                                         </label>
@@ -426,30 +459,42 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                                           <input
                                             type="number"
                                             class="lux-number-input"
-                                            min="1"
+                                            min="0.5"
                                             max="100000"
-                                            step="1"
+                                            step="0.1"
                                             aria-label=${`${store.t("presence_sys.ambient_bright_lux")} (${areaName})`}
-                                            .value=${String(luxBright)}
+                                            .value=${focusSafe(String(luxBright))}
                                             @change=${(ev: Event) => {
-                                              const v = Number(
-                                                (ev.currentTarget as HTMLInputElement).value,
-                                              );
-                                              if (Number.isFinite(v)) {
-                                                void store.groups.setAreaIlluminance(areaId, {
-                                                  bright_lux: v,
-                                                });
+                                              const el = ev.currentTarget as HTMLInputElement;
+                                              const v = Number(el.value);
+                                              if (!Number.isFinite(v) || v <= 0) {
+                                                el.value = String(luxBright);
+                                                return;
                                               }
+                                              if (v <= luxDark) {
+                                                el.value = String(luxBright);
+                                                store.showToast(
+                                                  store.t("presence_sys.lux_bounds_error"),
+                                                  true,
+                                                );
+                                                return;
+                                              }
+                                              void store.groups.setAreaIlluminance(areaId, {
+                                                bright_lux: v,
+                                              });
                                             }}
                                           />
                                         </label>
                                         <button
                                           type="button"
+                                          ?disabled=${store.groups.isCalibratingIlluminance(areaId)}
                                           class="btn btn-secondary btn-compact"
                                           @click=${() =>
                                             void store.groups.calibrateAreaIlluminance(areaId)}
                                         >
-                                          ${store.t("presence_sys.calibrate_lux_btn")}
+                                          ${store.groups.isCalibratingIlluminance(areaId)
+                                            ? store.t("presence_sys.calibrating_lux")
+                                            : store.t("presence_sys.calibrate_lux_btn")}
                                         </button>
                                       </div>`,
                                     })
@@ -765,21 +810,28 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
             })}
             ${renderSettingsRow({
               forId: "sys-ble_max_radius_m",
-              label: store.t("presence_sys.max_radius"),
-              description: store.t("presence_sys.max_radius_desc"),
+              label: isImperial
+                ? store.t("presence_sys.max_radius_ft")
+                : store.t("presence_sys.max_radius"),
+              description: isImperial
+                ? store.t("presence_sys.max_radius_ft_desc")
+                : store.t("presence_sys.max_radius_desc"),
               control: html`<input
                 type="number"
                 id="sys-ble_max_radius_m"
-                min="2"
-                max="50"
-                step="0.5"
-                .value=${focusSafe(String(sysCfg?.ble_max_radius_m ?? 12))}
+                min=${isImperial ? "6.5" : "2"}
+                max=${isImperial ? "164" : "50"}
+                step=${isImperial ? "1" : "0.5"}
+                .value=${focusSafe(String(displayRadius))}
                 @change=${(ev: Event) => {
                   const val = Number((ev.currentTarget as HTMLInputElement).value);
                   if (Number.isFinite(val)) {
+                    const meters = isImperial
+                      ? Math.max(2, Math.min(50, Math.round((val / METERS_TO_FEET) * 100) / 100))
+                      : val;
                     store.entity.stageSystemSetting(
                       "ble_max_radius_m",
-                      val,
+                      meters,
                       "sys-ble_max_radius_m",
                     );
                   }
@@ -788,21 +840,28 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
             })}
             ${renderSettingsRow({
               forId: "sys-ble_max_velocity_mps",
-              label: store.t("presence_sys.max_speed"),
-              description: store.t("presence_sys.max_speed_desc"),
+              label: isImperial
+                ? store.t("presence_sys.max_speed_fps")
+                : store.t("presence_sys.max_speed"),
+              description: isImperial
+                ? store.t("presence_sys.max_speed_fps_desc")
+                : store.t("presence_sys.max_speed_desc"),
               control: html`<input
                 type="number"
                 id="sys-ble_max_velocity_mps"
-                min="0.5"
-                max="15"
+                min=${isImperial ? "1.5" : "0.5"}
+                max=${isImperial ? "49" : "15"}
                 step="0.5"
-                .value=${focusSafe(String(sysCfg?.ble_max_velocity_mps ?? 3.5))}
+                .value=${focusSafe(String(displayVel))}
                 @change=${(ev: Event) => {
                   const val = Number((ev.currentTarget as HTMLInputElement).value);
                   if (Number.isFinite(val)) {
+                    const mps = isImperial
+                      ? Math.max(0.5, Math.min(15, Math.round((val / METERS_TO_FEET) * 100) / 100))
+                      : val;
                     store.entity.stageSystemSetting(
                       "ble_max_velocity_mps",
-                      val,
+                      mps,
                       "sys-ble_max_velocity_mps",
                     );
                   }

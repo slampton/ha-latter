@@ -62,7 +62,7 @@ export const BASE_STYLES = css`
     --studio-text: var(--primary-text-color, #212121);
     --studio-text-secondary: var(--secondary-text-color, #5f6368);
     --studio-text-disabled: var(--disabled-text-color, #9e9e9e);
-    --studio-primary: var(--primary-color, #009ac7);
+    --studio-primary: var(--primary-color, #007299);
     --studio-primary-tint: rgba(var(--rgb-primary-color, 0, 154, 199), 0.12);
     --studio-primary-tint-strong: rgba(var(--rgb-primary-color, 0, 154, 199), 0.24);
     --studio-hover: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.06);
@@ -163,6 +163,7 @@ export const BASE_STYLES = css`
     --studio-text: var(--primary-text-color, #e1e1e1);
     --studio-text-secondary: var(--secondary-text-color, #a8a8a8);
     --studio-text-disabled: var(--disabled-text-color, #6f6f6f);
+    --studio-primary: var(--primary-color, #38bdf8);
     --studio-hover: rgba(var(--rgb-primary-text-color, 225, 225, 225), 0.06);
 
     --studio-btn-tonal-bg: var(--ha-color-fill-primary-normal-resting, #0b3545);

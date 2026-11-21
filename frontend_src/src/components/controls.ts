@@ -514,8 +514,10 @@ export function renderConfirmDialog(opts: ConfirmDialogOptions): TemplateResult 
         : t("confirm.blast_radius_many", { count }, opts.overlay)
       : "");
 
+  const isBusy = Boolean(opts.busy);
+
   const onBackdropClick = (ev: Event): void => {
-    if (ev.target === ev.currentTarget) {
+    if (ev.target === ev.currentTarget && !isBusy) {
       opts.onCancel();
     }
   };
@@ -526,7 +528,9 @@ export function renderConfirmDialog(opts: ConfirmDialogOptions): TemplateResult 
     aria-describedby=${descId}
     @cancel=${(ev: Event) => {
       ev.preventDefault();
-      opts.onCancel();
+      if (!isBusy) {
+        opts.onCancel();
+      }
     }}
     @click=${onBackdropClick}
     class="studio-dialog confirm-dialog"
@@ -546,6 +550,7 @@ export function renderConfirmDialog(opts: ConfirmDialogOptions): TemplateResult 
         ${opts.onDownloadBackupFirst
           ? html`<button
               type="button"
+              ?disabled=${isBusy}
               @click=${opts.onDownloadBackupFirst}
               class="btn btn-text btn-compact"
             >
@@ -556,6 +561,7 @@ export function renderConfirmDialog(opts: ConfirmDialogOptions): TemplateResult 
         <div class="dialog-actions-end">
           <button
             type="button"
+            ?disabled=${isBusy}
             @click=${opts.onCancel}
             class="btn btn-secondary"
           >

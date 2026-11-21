@@ -58,7 +58,6 @@ from .http import (
     LatterCameraGridView,
     LatterCameraSnapshotView,
     LatterCameraStreamView,
-    LatterMapSnapshotView,
     LatterWallpaperProxyView,
     LatterWallpaperUploadView,
     async_shutdown_camera_feeds,
@@ -376,7 +375,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         hass.http.register_view(LatterCameraStreamView(hass))
         hass.http.register_view(LatterCameraGridView(hass))
         hass.http.register_view(LatterCameraAudioStreamView(hass))
-        hass.http.register_view(LatterMapSnapshotView(hass))
         hass.http.register_view(LatterBrandIconView(hass))
 
     await async_register_studio_panel(hass)
@@ -387,7 +385,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         identifiers={(DOMAIN, "system")},
         entry_type=dr.DeviceEntryType.SERVICE,
         name="Latter System",
-        manufacturer="Lampton Labs",
+        manufacturer="Latter",
         model="Latter Site & BLE Fabric Engine",
         sw_version=INTEGRATION_VERSION,
         configuration_url="homeassistant://latter",
@@ -401,31 +399,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
         for sub in entry.subentries.values()
         if sub.subentry_type in DEVICE_SUBENTRY_TYPES
     ]
-    for sub in device_subentries:
-        coordinator = LatterCoordinator(
-            hass=hass,
-            entry=entry,
-            hmac_secret=domain_data[DATA_HMAC_SECRET],
-            subentry=sub,
-        )
-        coordinator.on_area_changed_push_slots = (
-            lambda c: async_push_active_area_entities(hass, c)
-        )
-        domain_data[coordinator.subentry_id] = coordinator
-        sys_obj.coordinators[coordinator.subentry_id] = coordinator
-        try:
-            await coordinator.async_setup()
-        except Exception:
-            domain_data.pop(coordinator.subentry_id, None)
-            sys_obj.coordinators.pop(coordinator.subentry_id, None)
-            raise
-        _LOGGER.info(
-            "Latter v%s initialized device subentry '%s' (%s, active_speaker: %s)",
-            INTEGRATION_VERSION,
-            coordinator.device_slug,
-            coordinator.subentry_id,
-            coordinator.active_speaker,
-        )
+    initialized_coords: list[LatterCoordinator] = []
+    try:
+        for sub in device_subentries:
+            coordinator = LatterCoordinator(
+                hass=hass,
+                entry=entry,
+                hmac_secret=domain_data[DATA_HMAC_SECRET],
+                subentry=sub,
+            )
+            coordinator.on_area_changed_push_slots = (
+                lambda c: async_push_active_area_entities(hass, c)
+            )
+            domain_data[coordinator.subentry_id] = coordinator
+            sys_obj.coordinators[coordinator.subentry_id] = coordinator
+            try:
+                await coordinator.async_setup()
+            except Exception:
+                coordinator.async_cleanup()
+                domain_data.pop(coordinator.subentry_id, None)
+                sys_obj.coordinators.pop(coordinator.subentry_id, None)
+                raise
+            initialized_coords.append(coordinator)
+            _LOGGER.info(
+                "Latter v%s initialized device subentry '%s' (%s, active_speaker: %s)",
+                INTEGRATION_VERSION,
+                coordinator.device_slug,
+                coordinator.subentry_id,
+                coordinator.active_speaker,
+            )
+    except Exception:
+        for prev_coord in initialized_coords:
+            prev_coord.async_cleanup()
+            domain_data.pop(prev_coord.subentry_id, None)
+            sys_obj.coordinators.pop(prev_coord.subentry_id, None)
+        sys_obj.async_cleanup_feeds()
+        raise
 
     if domain_data.pop("_pending_builtin_group_preset_upgrade", False):
         await async_sync_coordinators_to_builtin_presets(
@@ -490,7 +499,8 @@ async def _async_update_listener(hass: HomeAssistant, entry: LatterConfigEntry) 
             return
 
     for coord in list(sys_obj.coordinators.values()):
-        await coord.async_apply_options()
+        if coord.has_option_changes():
+            await coord.async_apply_options()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:

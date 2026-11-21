@@ -66,11 +66,11 @@ class TestProtocolV3Contract(unittest.TestCase):
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
             "area_context": 40,
-            "active_media": 21,
+            "active_media": 20,
             "remote_config": 3,
-            "weather_forecast": 14,
+            "weather_forecast": 15,
             "calendar_agenda": 4,
-            "device_prefs": 67,
+            "device_prefs": 68,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})
@@ -435,14 +435,15 @@ class TestRecordsFields(unittest.TestCase):
         self.assertEqual(len(recs), self.p.FORECAST_MAX_RECORDS)
         packed = DomainPayloadPacker(epoch=9).pack(
             "weather_forecast", "sunny", 70, None, None, None, 72, 55, recs,
-            "above_horizon", 42.5, 180.0, "2026-11-09T06:45:00Z", "2026-11-08T17:02:00Z", "waxing_gibbous",
+            "above_horizon", 42.5, 180.0, "2026-11-09T06:45:00Z", "2026-11-08T17:02:00Z", "waxing_gibbous", "F",
         )[1]
         fields = packed.split("\x1f")
-        self.assertEqual(len(fields), 17)
+        self.assertEqual(len(fields), 18)
         self.assertEqual(fields[10].split("\x1e")[0], "SUN|partlycloudy|72|55")
         self.assertEqual(fields[4:6], ["70", ""])
         self.assertEqual(fields[11], "above_horizon")
         self.assertEqual(fields[16], "waxing_gibbous")
+        self.assertEqual(fields[17], "F")
 
     def test_records_revs_are_content_hashed(self) -> None:
         packer = DomainPayloadPacker(epoch=9)
@@ -752,10 +753,10 @@ class TestResourceSigning(unittest.TestCase):
             self.assertEqual(exp % 86400, 0)
             self.assertGreaterEqual(exp - now, 2 * 86400)
             self.assertLessEqual(exp - now, 3 * 86400)
-        sig = self._sign_bucketed("map:Home|480|480|circle", self.DAY_START)
+        sig = self._sign_bucketed("wallpaper:preset:aurora|480|480|circle", self.DAY_START)
         exp = int(sig.split(".", 1)[0])
-        self.assertTrue(resource_signing.verify(self.SECRET, "sub_abc", "map:Home|480|480|circle", sig, exp))
-        self.assertFalse(resource_signing.verify(self.SECRET, "sub_abc", "map:Home|480|480|circle", sig, exp + 1))
+        self.assertTrue(resource_signing.verify(self.SECRET, "sub_abc", "wallpaper:preset:aurora|480|480|circle", sig, exp))
+        self.assertFalse(resource_signing.verify(self.SECRET, "sub_abc", "wallpaper:preset:aurora|480|480|circle", sig, exp + 1))
 
     def test_exact_expiry_for_on_demand_urls(self) -> None:
         """An on-demand URL expires exactly ON_DEMAND_TTL_SECONDS (10 min) after signing."""
@@ -826,6 +827,7 @@ class TestStudioTargeting(unittest.TestCase):
             self.assertEqual(scope(cmd), "system", cmd)
         for retired in (
             "save_config",
+            "system_entity_action",
             "log_client_error",
             "export_backup_json",
             "restore_backup",
@@ -1029,10 +1031,10 @@ class TestResetPolicy(unittest.TestCase):
             self.assertNotIn(dropped, out)
 
     def test_ble_tag_reset_keeps_name_and_address(self) -> None:
-        current = {"device_slug": "seans_phone", "ble_target_address": "AA:BB:CC:DD:EE:FF", "assigned_person": "person.sean"}
+        current = {"device_slug": "alexs_phone", "ble_target_address": "AA:BB:CC:DD:EE:FF", "assigned_person": "person.alex"}
         defaults = {"device_slug": "x", "ble_target_address": "y", "assigned_person": "", "native_ble_tracking": True}
         out = reset_policy.reset_subentry_data(current, defaults, reset_policy.BLE_TAG_IDENTITY_KEYS)
-        self.assertEqual(out["device_slug"], "seans_phone")
+        self.assertEqual(out["device_slug"], "alexs_phone")
         self.assertEqual(out["ble_target_address"], "AA:BB:CC:DD:EE:FF")
         self.assertEqual(out["assigned_person"], "")
         self.assertTrue(out["native_ble_tracking"])
@@ -1117,8 +1119,9 @@ class TestDevicePrefsProtocol(unittest.TestCase):
                 "color_profile=NotARealProfile",
                 "clock_face=Hybrid Digital",
                 "home_clock_tap_action=Clock Face",
-                "local_clock_label=  Oakland Studio  ",
+                "local_clock_label=  Harbor Studio  ",
                 "show_utc_clock=1",
+                "do_not_disturb=1",
                 "world_clocks=London|Europe/London;Kyoto|Asia/Tokyo",
                 "alarms_summary=06:47|1|1;08:30|0|2;09:15|1|3",
                 "tools_items=dice,flashlight,dice",
@@ -1137,8 +1140,9 @@ class TestDevicePrefsProtocol(unittest.TestCase):
                 "weather_app_background": False,
                 "clock_face": "Hybrid Digital",
                 "home_clock_tap_action": "Clock Face",
-                "local_clock_label": "Oakland Studio",
+                "local_clock_label": "Harbor Studio",
                 "show_utc_clock": True,
+                "do_not_disturb": True,
                 "world_clocks": "London|Europe/London;Kyoto|Asia/Tokyo",
                 "alarms_summary": "06:47|1|1;08:30|0|2;09:15|1|3",
                 "tools_items": "dice,flashlight",
@@ -1160,7 +1164,12 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             self.assertNotIn(retired_key, studio_scope.DEVICE_SETTING_KEYS)
             with self.assertRaises(studio_scope.SettingsScopeError):
                 studio_scope.clean_device_settings({retired_key: "1"})
-        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 62)
+        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 63)
+        dnd_spec = studio_scope.DEVICE_PREF_SPEC_MAP["do_not_disturb"]
+        self.assertEqual((dnd_spec.domain, dnd_spec.section, dnd_spec.group_tier), ("switch", "power", None))
+        raw_schema = json.loads(HA_PROTO_JSON.read_text(encoding="utf-8"))
+        self.assertTrue(all("esphome_section" not in s for s in raw_schema["device_pref_specs"]))
+        self.assertEqual(studio_scope.MAX_DOCK_ITEMS, 24)
 
         for key, default_val in (
             ("manual_brightness", 80),
@@ -1221,8 +1230,8 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         self.assertEqual(srcs[0], ("calendar.family", "Family / Shared", "0", "1", "1"))
         self.assertEqual(srcs[1], ("calendar.holidays", "Holidays", "3", "0", "0"))
 
-        locs = _PAYLOADS_MOD.calendar_locations_records(["Home", "Oakland HQ", "home", "", "  Gym  "])
-        self.assertEqual(list(locs), [("Home",), ("Oakland HQ",), ("Gym",)])
+        locs = _PAYLOADS_MOD.calendar_locations_records(["Home", "Downtown HQ", "home", "", "  Gym  "])
+        self.assertEqual(list(locs), [("Home",), ("Downtown HQ",), ("Gym",)])
 
         win_events = [
             {
@@ -1246,6 +1255,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         self.assertEqual(len(chunks), 2)
         self.assertEqual(chunks[0]["chunk_index"], 0)
         self.assertEqual(chunks[0]["chunk_count"], 2)
+        self.assertNotIn("map_url", chunks[0])
         self.assertIn("Sync | #0", chunks[0]["events"])
         self.assertEqual(chunks[1]["chunk_index"], 1)
         self.assertEqual(len(chunks[1]["events"].split("\x1e")), 3)
@@ -1361,8 +1371,8 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             studio_scope.sanitize_clock_label("1234567890123456789012345678901é"),
             "1234567890123456789012345678901",
         )
-        cleaned_lbl = studio_scope.clean_device_settings({"local_clock_label": "  Oakland | Studio  "})
-        self.assertEqual(cleaned_lbl["local_clock_label"], "Oakland Studio")
+        cleaned_lbl = studio_scope.clean_device_settings({"local_clock_label": "  Harbor | Studio  "})
+        self.assertEqual(cleaned_lbl["local_clock_label"], "Harbor Studio")
 
         self.assertEqual(
             studio_scope.normalize_world_clocks_spec(

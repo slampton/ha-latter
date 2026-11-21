@@ -129,7 +129,7 @@ class PhotoCrop:
     def crop_hash(self) -> str:
         """Return a short deterministic cache-bust digest for this crop."""
         raw = f"{self.x:.4f}|{self.y:.4f}|{self.zoom:.4f}"
-        return hashlib.md5(raw.encode("utf-8")).hexdigest()[:8]
+        return hashlib.md5(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:8]
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +188,23 @@ class PhotoLibrarySnapshot:
 
 _LIBRARY_LOCK = threading.RLock()
 _PHOTO_LIBRARY_SNAPSHOT: PhotoLibrarySnapshot = PhotoLibrarySnapshot()
+_LOADED_WALLPAPER_ROOT: Path | None = None
+_MAX_IMAGE_SIDE = 8192
+_MAX_IMAGE_PIXELS = 25_000_000
+
+
+def _validate_pil_dimensions(img: Image.Image) -> None:
+    w, h = img.size
+    if (
+        w <= 0
+        or h <= 0
+        or w > _MAX_IMAGE_SIDE
+        or h > _MAX_IMAGE_SIDE
+        or (w * h) > _MAX_IMAGE_PIXELS
+    ):
+        raise ValueError(
+            f"Image dimensions {w}x{h} exceed safety ceiling ({_MAX_IMAGE_SIDE}px / {_MAX_IMAGE_PIXELS} pixels)"
+        )
 
 
 def is_dynamic_preset(source_id: str) -> bool:
@@ -461,6 +478,7 @@ def render_builtin_preset_image(
     fname = _PRESET_FILE_BY_ID.get(preset_id, "forest_mountains.jpg")
     img_path = BUILTIN_WALLPAPERS_DIR / fname
     with Image.open(img_path) as img:
+        _validate_pil_dimensions(img)
         rgb = img.convert("RGB")
         if rgb.size == (w, h):
             return rgb.copy()
@@ -657,8 +675,9 @@ def _build_snapshot_from_raw(
 
 def _load_photo_library_sync(root: Path) -> PhotoLibrarySnapshot:
     """Load `index.json` + `originals/` in a worker thread and swap `_PHOTO_LIBRARY_SNAPSHOT`."""
-    global _PHOTO_LIBRARY_SNAPSHOT
+    global _PHOTO_LIBRARY_SNAPSHOT, _LOADED_WALLPAPER_ROOT
     with _LIBRARY_LOCK:
+        resolved_root = root.resolve()
         idx_file = _index_path(root)
         raw_index: dict[str, Any] = {}
         if idx_file.is_file():
@@ -675,6 +694,7 @@ def _load_photo_library_sync(root: Path) -> PhotoLibrarySnapshot:
             except OSError as err:
                 _LOGGER.debug("Skipping index write during scan: %s", err)
         _PHOTO_LIBRARY_SNAPSHOT = snap
+        _LOADED_WALLPAPER_ROOT = resolved_root
         return snap
 
 
@@ -943,13 +963,25 @@ def resolve_photo_pool(
 
 
 def _ensure_loaded_locked(root: Path) -> PhotoLibrarySnapshot:
-    """Load index from disk when the in-memory snapshot doesn't match `root` yet."""
+    """Load index from disk when the in-memory snapshot doesn't match `root` yet (`M-P1-32`)."""
+    resolved_root = root.resolve()
+    if resolved_root != _LOADED_WALLPAPER_ROOT:
+        return _load_photo_library_sync(root)
     return _PHOTO_LIBRARY_SNAPSHOT
+
+
+def _commit_snapshot_locked(root: Path, new_snap: PhotoLibrarySnapshot) -> None:
+    """Atomically write `index.json` and update in-memory snapshot + loaded root under `_LIBRARY_LOCK`."""
+    global _PHOTO_LIBRARY_SNAPSHOT, _LOADED_WALLPAPER_ROOT
+    _write_index_atomic(root, new_snap)
+    _PHOTO_LIBRARY_SNAPSHOT = new_snap
+    _LOADED_WALLPAPER_ROOT = root.resolve()
 
 
 def _encode_original_jpeg(raw_bytes: bytes) -> tuple[bytes, int, int]:
     """Decode, EXIF-transpose, downscale to <= 1600 px long edge preserving aspect ratio, and encode Baseline JPEG."""
     with Image.open(io.BytesIO(raw_bytes)) as img:
+        _validate_pil_dimensions(img)
         transposed = ImageOps.exif_transpose(img)
         rgb = transposed.convert("RGB")
         w, h = rgb.size
@@ -969,13 +1001,12 @@ def _encode_original_jpeg(raw_bytes: bytes) -> tuple[bytes, int, int]:
 
 def create_collection(hass: HomeAssistant, name: str) -> dict[str, Any]:
     """Create a new photo collection and persist `index.json` atomically."""
-    global _PHOTO_LIBRARY_SNAPSHOT
     clean_name = _clean_display_name(name, "", MAX_COLLECTION_NAME_LEN)
     if not clean_name:
         raise ValueError("Collection name is required")
     root = get_wallpaper_root(hass)
     with _LIBRARY_LOCK:
-        snap = _PHOTO_LIBRARY_SNAPSHOT
+        snap = _ensure_loaded_locked(root)
         if len(snap.collections) >= MAX_COLLECTIONS:
             raise ValueError(f"At most {MAX_COLLECTIONS} collections are supported")
         low_name = clean_name.lower()
@@ -992,8 +1023,7 @@ def create_collection(hass: HomeAssistant, name: str) -> dict[str, Any]:
             photo_order=snap.photo_order,
             preset_collections=snap.preset_collections,
         )
-        _write_index_atomic(root, new_snap)
-        _PHOTO_LIBRARY_SNAPSHOT = new_snap
+        _commit_snapshot_locked(root, new_snap)
         return {"id": rec.id, "name": rec.name, "count": 0}
 
 
@@ -1001,14 +1031,13 @@ def rename_collection(
     hass: HomeAssistant, collection_id: str, name: str
 ) -> dict[str, Any]:
     """Rename an existing photo collection and persist `index.json` atomically."""
-    global _PHOTO_LIBRARY_SNAPSHOT
     cid = str(collection_id or "").strip()
     clean_name = _clean_display_name(name, "", MAX_COLLECTION_NAME_LEN)
     if not clean_name:
         raise ValueError("Collection name is required")
     root = get_wallpaper_root(hass)
     with _LIBRARY_LOCK:
-        snap = _PHOTO_LIBRARY_SNAPSHOT
+        snap = _ensure_loaded_locked(root)
         if not any(c.id == cid for c in snap.collections):
             raise ValueError(f"Unknown collection '{cid}'")
         low_name = clean_name.lower()
@@ -1024,19 +1053,17 @@ def rename_collection(
             photo_order=snap.photo_order,
             preset_collections=snap.preset_collections,
         )
-        _write_index_atomic(root, new_snap)
-        _PHOTO_LIBRARY_SNAPSHOT = new_snap
+        _commit_snapshot_locked(root, new_snap)
         counts = {c["id"]: c["count"] for c in list_photo_collections(new_snap)}
         return {"id": cid, "name": clean_name, "count": counts.get(cid, 0)}
 
 
 def delete_collection(hass: HomeAssistant, collection_id: str) -> bool:
     """Delete a collection and remove its tag from every photo and preset."""
-    global _PHOTO_LIBRARY_SNAPSHOT
     cid = str(collection_id or "").strip()
     root = get_wallpaper_root(hass)
     with _LIBRARY_LOCK:
-        snap = _PHOTO_LIBRARY_SNAPSHOT
+        snap = _ensure_loaded_locked(root)
         if not any(c.id == cid for c in snap.collections):
             return False
         new_cols = tuple(c for c in snap.collections if c.id != cid)
@@ -1069,8 +1096,7 @@ def delete_collection(hass: HomeAssistant, collection_id: str) -> bool:
             photo_order=snap.photo_order,
             preset_collections=MappingProxyType(new_pcols),
         )
-        _write_index_atomic(root, new_snap)
-        _PHOTO_LIBRARY_SNAPSHOT = new_snap
+        _commit_snapshot_locked(root, new_snap)
         return True
 
 
@@ -1083,12 +1109,11 @@ def update_photo_metadata(
     collections: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Update a photo's name, non-destructive crop, or collections (presets support collections only)."""
-    global _PHOTO_LIBRARY_SNAPSHOT
     pid = str(photo_id or "").strip()
     root = get_wallpaper_root(hass)
     crop_changed = False
     with _LIBRARY_LOCK:
-        snap = _PHOTO_LIBRARY_SNAPSHOT
+        snap = _ensure_loaded_locked(root)
         valid_col_ids = {c.id for c in snap.collections}
         cleaned_cols: tuple[str, ...] | None = None
         if collections is not None:
@@ -1118,8 +1143,7 @@ def update_photo_metadata(
                 photo_order=snap.photo_order,
                 preset_collections=MappingProxyType(new_pcols),
             )
-            _write_index_atomic(root, new_snap)
-            _PHOTO_LIBRARY_SNAPSHOT = new_snap
+            _commit_snapshot_locked(root, new_snap)
             preset = _PRESET_BY_ID[pid]
             return {
                 "id": pid,
@@ -1173,8 +1197,7 @@ def update_photo_metadata(
             photo_order=snap.photo_order,
             preset_collections=snap.preset_collections,
         )
-        _write_index_atomic(root, new_snap)
-        _PHOTO_LIBRARY_SNAPSHOT = new_snap
+        _commit_snapshot_locked(root, new_snap)
 
     if crop_changed:
         from .http import evict_wallpaper_lru_cache
@@ -1206,18 +1229,20 @@ def bulk_update_photos(
     delete: bool = False,
 ) -> dict[str, Any]:
     """Batch-assign/remove a collection or batch-delete custom photos in one atomic index write."""
-    global _PHOTO_LIBRARY_SNAPSHOT
     root = get_wallpaper_root(hass)
     target_ids = list(
-        dict.fromkeys(str(p or "").strip() for p in (photo_ids or ()) if str(p or "").strip())
+        dict.fromkeys(
+            str(p or "").strip() for p in (photo_ids or ()) if str(p or "").strip()
+        )
     )
     if not target_ids:
         return {"updated": 0, "deleted_ids": []}
 
     deleted_ids: list[str] = []
+    paths_to_unlink: list[Path] = []
     updated_count = 0
     with _LIBRARY_LOCK:
-        snap = _PHOTO_LIBRARY_SNAPSHOT
+        snap = _ensure_loaded_locked(root)
         valid_col_ids = {c.id for c in snap.collections}
         add_cid = str(add_collection or "").strip()
         rem_cid = str(remove_collection or "").strip()
@@ -1235,8 +1260,8 @@ def bulk_update_photos(
                 if pid not in new_photos:
                     continue
                 target_path = resolve_photo_path(root, pid)
-                if target_path is not None and target_path.is_file():
-                    target_path.unlink()
+                if target_path is not None:
+                    paths_to_unlink.append(target_path)
                 new_photos.pop(pid, None)
                 if pid in new_order:
                     new_order.remove(pid)
@@ -1292,8 +1317,12 @@ def bulk_update_photos(
                 photo_order=tuple(new_order),
                 preset_collections=MappingProxyType(new_pcols),
             )
-            _write_index_atomic(root, new_snap)
-            _PHOTO_LIBRARY_SNAPSHOT = new_snap
+            _commit_snapshot_locked(root, new_snap)
+            for p_unlink in paths_to_unlink:
+                try:
+                    p_unlink.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     if deleted_ids:
         from .http import evict_wallpaper_lru_cache
@@ -1345,7 +1374,7 @@ def save_uploaded_photo_bytes(
     orig_dir.mkdir(parents=True, exist_ok=True)
 
     with _LIBRARY_LOCK:
-        snap = _PHOTO_LIBRARY_SNAPSHOT
+        snap = _ensure_loaded_locked(root)
         valid_col_ids = {c.id for c in snap.collections}
         cid = str(collection_id or "").strip()
         if cid and cid not in valid_col_ids:
@@ -1386,8 +1415,7 @@ def save_uploaded_photo_bytes(
             photo_order=new_order,
             preset_collections=snap.preset_collections,
         )
-        _write_index_atomic(root, new_snap)
-        _PHOTO_LIBRARY_SNAPSHOT = new_snap
+        _commit_snapshot_locked(root, new_snap)
 
     from .http import evict_wallpaper_lru_cache
 
@@ -1568,8 +1596,7 @@ def import_media_photos_sync(
     collection_id: str | None = None,
     deduplicate: bool = True,
 ) -> dict[str, Any]:
-    """Batch-import images from HA `/media` into the Photo Library with SHA-256 deduplication."""
-    global _PHOTO_LIBRARY_SNAPSHOT
+    """Batch-import images from HA `/media` into the Photo Library with lock-free PIL decode (`M-P1-32`)."""
     root_key = str(root or "").strip()
     if not isinstance(media_dirs, Mapping) or root_key not in media_dirs:
         raise ValueError(f"Unknown media folder root '{root_key}'")
@@ -1584,16 +1611,88 @@ def import_media_photos_sync(
     wp_root = get_wallpaper_root(hass)
     orig_dir = _originals_dir(wp_root)
     orig_dir.mkdir(parents=True, exist_ok=True)
+    cid = str(collection_id or "").strip()
+
+    with _LIBRARY_LOCK:
+        initial_snap = _ensure_loaded_locked(wp_root)
+        valid_col_ids = {c.id for c in initial_snap.collections}
+        if cid and cid not in valid_col_ids:
+            raise ValueError(f"Unknown collection '{cid}'")
+        initial_sha_to_pid: dict[str, str] = {
+            rec.content_sha256: pid
+            for pid, rec in initial_snap.photos.items()
+            if rec.content_sha256
+        }
 
     imported = 0
     skipped = 0
     failed: list[dict[str, str]] = []
     created_photos: list[dict[str, Any]] = []
+    prepared_items: list[
+        tuple[str, str, Path, str, tuple[bytes, int, int] | None]
+    ] = []
+    batch_seen_sha: set[str] = set()
+
+    for relpath in path_list:
+        norm_rel = _normalize_media_relpath(relpath)
+        if not norm_rel:
+            failed.append({"path": relpath, "error": "Invalid media path"})
+            continue
+        resolved = resolve_media_path(media_dirs, root_key, norm_rel)
+        if resolved is None or not resolved.is_file():
+            failed.append(
+                {"path": relpath, "error": "File not found or outside media root"}
+            )
+            continue
+        if resolved.suffix.lower() not in IMAGE_SUFFIXES:
+            failed.append({"path": relpath, "error": "Unsupported image format"})
+            continue
+        try:
+            size_bytes = resolved.stat().st_size
+        except OSError as err:
+            failed.append({"path": relpath, "error": str(err)})
+            continue
+        if size_bytes <= 0:
+            failed.append({"path": relpath, "error": "Empty file"})
+            continue
+        if size_bytes > MAX_WALLPAPER_UPLOAD_BYTES:
+            failed.append({"path": relpath, "error": "File exceeds 15 MB limit"})
+            continue
+        try:
+            raw_bytes = resolved.read_bytes()
+        except OSError as err:
+            failed.append({"path": relpath, "error": str(err)})
+            continue
+
+        content_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+        if deduplicate and (
+            content_sha256 in initial_sha_to_pid or content_sha256 in batch_seen_sha
+        ):
+            prepared_items.append((relpath, norm_rel, resolved, content_sha256, None))
+            continue
+
+        try:
+            encoded_triplet = _encode_original_jpeg(raw_bytes)
+        except Exception as err:  # noqa: BLE001
+            failed.append({"path": relpath, "error": f"Invalid image: {err}"})
+            continue
+        if deduplicate:
+            batch_seen_sha.add(content_sha256)
+        prepared_items.append(
+            (relpath, norm_rel, resolved, content_sha256, encoded_triplet)
+        )
+
+    if not prepared_items:
+        return {
+            "imported": 0,
+            "skipped": 0,
+            "failed": failed,
+            "photos": [],
+        }
 
     with _LIBRARY_LOCK:
-        snap = _PHOTO_LIBRARY_SNAPSHOT
+        snap = _ensure_loaded_locked(wp_root)
         valid_col_ids = {c.id for c in snap.collections}
-        cid = str(collection_id or "").strip()
         if cid and cid not in valid_col_ids:
             raise ValueError(f"Unknown collection '{cid}'")
 
@@ -1606,36 +1705,7 @@ def import_media_photos_sync(
         }
         mutated = False
 
-        for relpath in path_list:
-            norm_rel = _normalize_media_relpath(relpath)
-            if not norm_rel:
-                failed.append({"path": relpath, "error": "Invalid media path"})
-                continue
-            resolved = resolve_media_path(media_dirs, root_key, norm_rel)
-            if resolved is None or not resolved.is_file():
-                failed.append({"path": relpath, "error": "File not found or outside media root"})
-                continue
-            if resolved.suffix.lower() not in IMAGE_SUFFIXES:
-                failed.append({"path": relpath, "error": "Unsupported image format"})
-                continue
-            try:
-                size_bytes = resolved.stat().st_size
-            except OSError as err:
-                failed.append({"path": relpath, "error": str(err)})
-                continue
-            if size_bytes <= 0:
-                failed.append({"path": relpath, "error": "Empty file"})
-                continue
-            if size_bytes > MAX_WALLPAPER_UPLOAD_BYTES:
-                failed.append({"path": relpath, "error": "File exceeds 15 MB limit"})
-                continue
-            try:
-                raw_bytes = resolved.read_bytes()
-            except OSError as err:
-                failed.append({"path": relpath, "error": str(err)})
-                continue
-
-            content_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+        for relpath, norm_rel, resolved, content_sha256, opt_triplet in prepared_items:
             existing_pid = sha_to_pid.get(content_sha256) if deduplicate else None
             if existing_pid is not None and existing_pid in new_photos:
                 skipped += 1
@@ -1658,16 +1728,25 @@ def import_media_photos_sync(
                         mutated = True
                 continue
 
-            try:
-                jpeg_bytes, width, height = _encode_original_jpeg(raw_bytes)
-            except Exception as err:  # noqa: BLE001
-                failed.append({"path": relpath, "error": f"Invalid image: {err}"})
-                continue
+            if opt_triplet is None:
+                try:
+                    raw_retry = resolved.read_bytes()
+                    triplet = _encode_original_jpeg(raw_retry)
+                except Exception as err:  # noqa: BLE001
+                    failed.append({"path": relpath, "error": f"Invalid image: {err}"})
+                    continue
+            else:
+                triplet = opt_triplet
 
+            jpeg_bytes, width, height = triplet
             stem = re.sub(
                 r"[^a-z0-9_]+", "_", resolved.stem.lower()
             ).strip("_")[:24]
-            key_base = f"{stem}_{secrets.token_hex(4)}" if stem else f"img_{secrets.token_hex(5)}"
+            key_base = (
+                f"{stem}_{secrets.token_hex(4)}"
+                if stem
+                else f"img_{secrets.token_hex(5)}"
+            )
             photo_id = make_photo_source(key_base)
             while photo_id in new_photos:
                 key_base = f"img_{secrets.token_hex(6)}"
@@ -1716,8 +1795,7 @@ def import_media_photos_sync(
                 photo_order=tuple(new_order),
                 preset_collections=snap.preset_collections,
             )
-            _write_index_atomic(wp_root, new_snap)
-            _PHOTO_LIBRARY_SNAPSHOT = new_snap
+            _commit_snapshot_locked(wp_root, new_snap)
 
     return {
         "imported": imported,
@@ -1768,7 +1846,7 @@ def restore_photo_library_metadata(
     evict_ids: list[str] = []
 
     with _LIBRARY_LOCK:
-        snap = _PHOTO_LIBRARY_SNAPSHOT
+        snap = _ensure_loaded_locked(root)
         new_cols_list: list[PhotoCollectionRecord] = []
         valid_col_ids: set[str] = set()
         if isinstance(collections_in, list):
@@ -1876,8 +1954,7 @@ def restore_photo_library_metadata(
             photo_order=snap.photo_order,
             preset_collections=MappingProxyType(new_pcols),
         )
-        _write_index_atomic(root, new_snap)
-        _PHOTO_LIBRARY_SNAPSHOT = new_snap
+        _commit_snapshot_locked(root, new_snap)
 
     if evict_ids:
         from .http import evict_wallpaper_lru_cache

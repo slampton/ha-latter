@@ -94,7 +94,6 @@ class LatterDeviceGroupSelect(SelectEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_translation_key = "device_group"
-    _attr_icon = "mdi:shape-outline"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize Device Group select."""
@@ -167,8 +166,6 @@ class LatterDeviceGroupSelect(SelectEntity):
 
 class LatterWakeWordModeSelect(_BaseLatterSelect):
     """Exposes select.<device_slug>_wake_word_mode."""
-
-    _attr_icon = "mdi:account-voice"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize Wake Word Mode select."""

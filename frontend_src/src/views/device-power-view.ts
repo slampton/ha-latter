@@ -16,6 +16,7 @@ const SCREENSAVER_KEYS = new Set([
 ]);
 
 const BEDTIME_KEYS = new Set([
+  "do_not_disturb",
   "bedtime_active",
   "bedtime_display",
   "bedtime_brightness",
@@ -36,6 +37,7 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
     .filter((p) => !SCREENSAVER_KEYS.has(p.key));
 
   const bedtimeAllPrefs = store.entity.getPrefs([
+    "do_not_disturb",
     "bedtime_active",
     "bedtime_display",
     "bedtime_brightness",

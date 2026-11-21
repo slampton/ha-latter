@@ -150,8 +150,15 @@ def evaluate_device_health(health: DeviceHealth) -> HealthActions:
     delete: set[str] = set()
     sdk = str(health.sdk) if health.sdk is not None else "unknown"
 
-    if health.reset in CRASH_RESETS:
-        raise_issues[ISSUE_CRASHED] = {"reason": health.reset, "sdk": sdk}
+    if health.reset in CRASH_RESETS or health.crash is True:
+        reason = (
+            health.reset
+            if health.reset in CRASH_RESETS
+            else (health.reset or "crash")
+        )
+        raise_issues[ISSUE_CRASHED] = {"reason": reason, "sdk": sdk}
+        if health.reset == BROWNOUT_RESET:
+            raise_issues[ISSUE_BROWNOUT] = {"sdk": sdk}
     elif health.reset == BROWNOUT_RESET:
         raise_issues[ISSUE_BROWNOUT] = {"sdk": sdk}
     elif health.reset in CLEAN_RESETS:
@@ -190,16 +197,24 @@ def async_audit_coordinator_health(
     slug = coordinator.device_slug
     warnings: list[dict[str, str]] = []
 
-    checked_keys: tuple[tuple[str, str], ...] = (
-        (CONF_WEATHER_ENTITY, "Weather Provider"),
-        (CONF_ALARM_ENTITY, "Home Security Alarm"),
-        (CONF_DEFAULT_SPEAKER, "Default Speaker"),
+    from .hub import iter_coordinators
+
+    all_coords = iter_coordinators(hass)
+    is_primary = not all_coords or all_coords[0].subentry_id == sub_id
+
+    checked_keys: tuple[tuple[str, str, bool], ...] = (
+        (CONF_WEATHER_ENTITY, "Weather Provider", True),
+        (CONF_ALARM_ENTITY, "Home Security Alarm", True),
+        (CONF_DEFAULT_SPEAKER, "Default Speaker", False),
     )
     missing_labels: list[str] = []
-    for conf_key, label in checked_keys:
+    repair_labels: list[str] = []
+    for conf_key, label, is_system_scope in checked_keys:
         ent_id = str(coordinator.get_opt(conf_key) or "").strip()
         if ent_id and not _entity_exists_in_ha(hass, ent_id):
             missing_labels.append(f"{label} ({ent_id})")
+            if not is_system_scope or is_primary:
+                repair_labels.append(f"{label} ({ent_id})")
             warnings.append(
                 {
                     "code": "missing_entity",
@@ -222,13 +237,13 @@ def async_audit_coordinator_health(
         )
 
     missing_issue_id = missing_mapped_entity_issue_id(sub_id)
-    if missing_labels:
+    if repair_labels:
         _create_scoped_issue(
             missing_issue_id,
             "missing_mapped_entity",
             {
                 "device_slug": slug,
-                "missing_list": ", ".join(missing_labels),
+                "missing_list": ", ".join(repair_labels),
             },
         )
     else:

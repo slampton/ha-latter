@@ -1,22 +1,73 @@
 {
   "entity": {
+    "binary_sensor": {
+      "alarm_ringing": {
+        "default": "mdi:alarm-bell",
+        "state": {
+          "off": "mdi:alarm-check",
+          "on": "mdi:alarm-bell"
+        }
+      },
+      "area_occupancy": {
+        "default": "mdi:home-account",
+        "state": {
+          "off": "mdi:home-outline",
+          "on": "mdi:home-account"
+        }
+      },
+      "timer_active": {
+        "default": "mdi:timer-outline",
+        "state": {
+          "off": "mdi:timer-off-outline",
+          "on": "mdi:timer-outline"
+        }
+      }
+    },
+    "button": {
+      "dismiss_alert": {
+        "default": "mdi:bell-cancel-outline"
+      },
+      "find_my_device": {
+        "default": "mdi:bell-alert-outline"
+      }
+    },
     "device_tracker": {
       "ble_tracker": {
-        "default": "mdi:bluetooth-connect"
+        "default": "mdi:bluetooth-connect",
+        "state": {
+          "home": "mdi:bluetooth-connect",
+          "not_home": "mdi:bluetooth-off"
+        }
+      }
+    },
+    "light": {
+      "screen": {
+        "default": "mdi:monitor-shimmer",
+        "state": {
+          "off": "mdi:monitor-off",
+          "on": "mdi:monitor-shimmer"
+        }
+      }
+    },
+    "number": {
+      "alert_volume": {
+        "default": "mdi:bell-ring-outline"
+      }
+    },
+    "select": {
+      "device_group": {
+        "default": "mdi:shape-outline"
+      },
+      "wake_word_mode": {
+        "default": "mdi:account-voice"
       }
     },
     "sensor": {
-      "active_media": {
-        "default": "mdi:music-circle"
-      },
-      "area_context": {
-        "default": "mdi:floor-plan"
+      "area_occupants": {
+        "default": "mdi:account-group"
       },
       "ble_distance": {
         "default": "mdi:map-marker-distance"
-      },
-      "calendar_agenda": {
-        "default": "mdi:calendar-clock"
       },
       "current_area": {
         "default": "mdi:map-marker-radius"
@@ -24,14 +75,40 @@
       "current_floor": {
         "default": "mdi:layers-outline"
       },
+      "person_ble_distance": {
+        "default": "mdi:map-marker-distance"
+      },
+      "person_current_area": {
+        "default": "mdi:account-location"
+      },
       "person_current_floor": {
         "default": "mdi:layers-outline"
       },
-      "remote_config": {
-        "default": "mdi:remote-tv"
+      "timer_remaining": {
+        "default": "mdi:timer-sand"
+      }
+    },
+    "switch": {
+      "bedtime_mode": {
+        "default": "mdi:weather-night",
+        "state": {
+          "off": "mdi:weather-sunny",
+          "on": "mdi:weather-night"
+        }
       },
-      "weather_forecast": {
-        "default": "mdi:weather-partly-cloudy"
+      "do_not_disturb": {
+        "default": "mdi:minus-circle-outline",
+        "state": {
+          "off": "mdi:bell-outline",
+          "on": "mdi:minus-circle"
+        }
+      },
+      "screensaver": {
+        "default": "mdi:image-frame",
+        "state": {
+          "off": "mdi:monitor",
+          "on": "mdi:image-frame"
+        }
       }
     }
   }

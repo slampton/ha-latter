@@ -88,7 +88,7 @@
             "assigned_person": "Person"
           },
           "data_description": {
-            "name": "Used for the entity IDs (for example `Sean's Phone` gives `sensor.sean_s_phone_current_area`).",
+            "name": "Used for the entity IDs (for example `Alex's Phone` gives `sensor.alex_s_phone_current_area`).",
             "ble_target_address": "A static MAC address, an iBeacon UUID, or a `private_ble_device` / iBeacon tracker entity ID.",
             "assigned_person": "Optional. Notifications sent to a person, and occupancy, use it."
           }
@@ -128,24 +128,6 @@
       "ble_distance": {
         "name": "BLE Distance"
       },
-      "active_media": {
-        "name": "Active Media"
-      },
-      "weather_forecast": {
-        "name": "Weather Forecast"
-      },
-      "area_context": {
-        "name": "Area Context"
-      },
-      "calendar_agenda": {
-        "name": "Calendar Agenda"
-      },
-      "remote_config": {
-        "name": "Remote Config"
-      },
-      "device_prefs": {
-        "name": "Device Preferences"
-      },
       "timer_remaining": {
         "name": "Timer Remaining"
       },
@@ -163,14 +145,19 @@
       }
     },
     "binary_sensor": {
-      "area_ble_occupancy": {
-        "name": "{area_name} BLE Occupancy"
+      "area_occupancy": {
+        "name": "{area_name} Occupancy"
       },
       "timer_active": {
         "name": "Timer Active"
       },
       "alarm_ringing": {
         "name": "Alarm Ringing"
+      }
+    },
+    "light": {
+      "screen": {
+        "name": "Screen"
       }
     },
     "select": {
@@ -190,13 +177,19 @@
       "find_my_device": {
         "name": "Find My Device"
       },
-      "activate_screensaver": {
-        "name": "Activate Screensaver"
+      "dismiss_alert": {
+        "name": "Dismiss Alert"
       }
     },
     "switch": {
       "bedtime_mode": {
         "name": "Bedtime Mode"
+      },
+      "do_not_disturb": {
+        "name": "Do Not Disturb"
+      },
+      "screensaver": {
+        "name": "Screensaver"
       }
     },
     "device_tracker": {
@@ -297,8 +290,14 @@
     "explicit_action_required": {
       "message": "Lock and alarm actions require an explicit command (lock, unlock, open, arm_home, arm_away, arm_night, or disarm); toggle is not permitted."
     },
+    "invalid_option": {
+      "message": "Invalid option {option}."
+    },
     "ma_counterpart_required": {
       "message": "Music Assistant counterpart player is required to play library media on {speaker}."
+    },
+    "no_broadcast_speakers": {
+      "message": "No broadcast speakers are configured in Latter Studio."
     },
     "not_supported": {
       "message": "The requested action is not supported by this entity."
@@ -327,6 +326,9 @@
     "security_pin_invalid": {
       "message": "The security PIN entered is invalid."
     },
+    "security_pin_locked_out": {
+      "message": "Too many failed security PIN attempts; temporarily locked out."
+    },
     "security_pin_not_configured": {
       "message": "This Device requires a security PIN, and no Latter Security PIN has been configured in Latter Studio yet."
     },
@@ -341,67 +343,117 @@
     }
   },
   "services": {
-    "timer_alarm_state": {
-      "name": "Timer, Stopwatch & Alarm State",
-      "description": "Event-driven timer, stopwatch, and alarm state update reported by a bound Latter Device.",
+    "notify": {
+      "name": "Send Notification",
+      "description": "Show an on-screen notification with an optional chime or camera snapshot on a Latter Device, occupied Areas, a person's Devices, or all displays.",
       "fields": {
         "target_device": {
-          "name": "Target Device",
-          "description": "Optional Latter device (auto-resolved when running a single Latter device)."
+          "name": "Target Device or Routing Mode",
+          "description": "ESPHome device slug, occupied_areas, all, or a person entity ID."
         },
-        "timer_running": {
-          "name": "Timer Running",
-          "description": "True while the device countdown timer is actively ticking."
+        "title": {
+          "name": "Alert Title",
+          "description": "Short heading for the notification banner."
         },
-        "timer_paused": {
-          "name": "Timer Paused",
-          "description": "True while the device countdown timer is paused."
+        "message": {
+          "name": "Alert Message",
+          "description": "Body text of the notification."
         },
-        "remaining_sec": {
-          "name": "Timer Remaining Seconds",
-          "description": "Remaining timer seconds at the moment of the state transition."
+        "priority": {
+          "name": "Priority Level",
+          "description": "Visual urgency of the alert (normal, warning, critical)."
         },
-        "ringing": {
-          "name": "Alarm or Timer Ringing",
-          "description": "True while an alarm or expired timer alert is actively ringing on the device."
+        "duration": {
+          "name": "Display Duration (Seconds)",
+          "description": "How many seconds to show the alert overlay on screen."
         },
-        "stopwatch_running": {
-          "name": "Stopwatch Running",
-          "description": "True while the device stopwatch is actively counting up."
+        "chime": {
+          "name": "Play Chime",
+          "description": "Play an alert chime on the device speaker when the notification arrives."
         },
-        "stopwatch_paused": {
-          "name": "Stopwatch Paused",
-          "description": "True while the device stopwatch is paused with elapsed time."
+        "announce": {
+          "name": "Speak Message",
+          "description": "Also speak the message with TTS on the device."
         },
-        "stopwatch_elapsed_sec": {
-          "name": "Stopwatch Elapsed Seconds",
-          "description": "Elapsed stopwatch seconds at the moment of the state transition."
+        "camera_entity": {
+          "name": "Camera Entity",
+          "description": "Optional camera entity whose snapshot is shown with the notification."
         }
       }
     },
-    "calendar_delete_event": {
-      "name": "Calendar Delete Event",
-      "description": "Delete an event or recurring instance by UID from a configured Site calendar that supports event deletion.",
+    "intercom_broadcast": {
+      "name": "Intercom Broadcast",
+      "description": "Broadcast a TTS announcement or local audio clip to explicit target speakers, occupied Areas, a person's Area, or configured broadcast speakers.",
+      "fields": {
+        "target_device": {
+          "name": "Calling Device or Routing Mode",
+          "description": "Optional calling Latter device slug, occupied_areas, all, or a person entity ID."
+        },
+        "message": {
+          "name": "Announcement Message (TTS)",
+          "description": "Text message to announce via Home Assistant TTS."
+        },
+        "media_url": {
+          "name": "Audio Clip URL",
+          "description": "Optional Home Assistant media-source:// URI or local /api/latter/ resource."
+        },
+        "target_speakers": {
+          "name": "Target Speakers",
+          "description": "Specific media_player entities to broadcast to."
+        },
+        "tts_entity": {
+          "name": "TTS Engine Entity",
+          "description": "Optional tts entity (auto-discovered if omitted)."
+        }
+      }
+    },
+    "set_active_area": {
+      "name": "Set Active Area",
+      "description": "Switch the active Area context by area_id or Area name.",
+      "fields": {
+        "area_id": {
+          "name": "Area ID or Area Name",
+          "description": "Target Home Assistant area_id or friendly Area name."
+        },
+        "target_device": {
+          "name": "Target Device",
+          "description": "Optional Latter device."
+        }
+      }
+    },
+    "set_active_speaker": {
+      "name": "Set Active Speaker",
+      "description": "Change the active target media_player for the Latter Device and optionally transfer the active playback queue.",
+      "fields": {
+        "entity_id": {
+          "name": "Speaker Entity",
+          "description": "Target media_player entity_id."
+        },
+        "transfer_queue": {
+          "name": "Transfer Active Queue",
+          "description": "Transfer the active Music Assistant queue to the new speaker."
+        },
+        "target_device": {
+          "name": "Target Device",
+          "description": "Optional Latter device when running multiple devices."
+        }
+      }
+    },
+    "reset_device": {
+      "name": "Reset Device to Defaults",
+      "description": "Reset saved settings on a Latter Device, its Latter Studio options, or both.",
       "fields": {
         "target_device": {
           "name": "Target Device",
-          "description": "Optional Latter device (auto-resolved when running a single Latter device)."
+          "description": "The Latter device to reset."
         },
-        "calendar_entity": {
-          "name": "Calendar Entity",
-          "description": "Target calendar.* entity owning the event."
+        "device_settings": {
+          "name": "Device Settings",
+          "description": "Erase settings saved on the device and restart it."
         },
-        "uid": {
-          "name": "Event UID",
-          "description": "Unique calendar event identifier (UID) to delete."
-        },
-        "recurrence_id": {
-          "name": "Recurrence Instance ID",
-          "description": "Optional recurrence instance identifier when deleting a recurring occurrence."
-        },
-        "recurrence_range": {
-          "name": "Recurrence Range",
-          "description": "Optional recurrence deletion scope (for example THISANDFUTURE)."
+        "latter_options": {
+          "name": "Latter Options",
+          "description": "Reset this device's Latter Studio options to their defaults."
         }
       }
     }

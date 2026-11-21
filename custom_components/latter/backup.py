@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import secrets
 from typing import Any
 
@@ -31,6 +32,7 @@ from .const import (
     CONF_DOCK_ITEMS,
     CONF_GAMES_ITEMS,
     CONF_HOME_CATEGORIES,
+    CONF_IGNORED_DISCOVERED_DEVICES,
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PINNED_ITEMS,
@@ -54,6 +56,7 @@ from .const import (
     DATA_GLOBAL_CONFIG,
     DATA_GLOBAL_STORE,
     DEFAULT_DEVICE_GROUP,
+    DEFAULT_SITE_ID,
     DOMAIN,
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
@@ -130,10 +133,11 @@ async def async_pre_backup(hass: HomeAssistant) -> None:
     if not isinstance(domain_data, dict):
         return
 
-    global_store = domain_data.get(DATA_GLOBAL_STORE)
-    global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
-    if global_store is not None and isinstance(global_cfg, dict):
-        await global_store.async_save(global_cfg)
+    async with get_system_config_lock(hass):
+        global_store = domain_data.get(DATA_GLOBAL_STORE)
+        global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
+        if global_store is not None and isinstance(global_cfg, dict):
+            await global_store.async_save(global_cfg)
 
     seen_ids: set[int] = set()
     for coord in iter_coordinators(hass):
@@ -286,7 +290,9 @@ async def _async_apply_device_snapshot_to_coordinator(
             if str(x or "").strip()
         ]
     if CONF_SITE_ID in incoming_cfg and incoming_cfg[CONF_SITE_ID] is not None:
-        merged[CONF_SITE_ID] = str(incoming_cfg[CONF_SITE_ID]).strip()[:64]
+        raw_site = str(incoming_cfg[CONF_SITE_ID]).strip().lower()
+        clean_site = re.sub(r"[^a-z0-9_-]+", "_", raw_site).strip("_-")[:64]
+        merged[CONF_SITE_ID] = clean_site or DEFAULT_SITE_ID
     if preserve_slug:
         merged[CONF_DEVICE_SLUG] = coord.device_slug
 
@@ -346,8 +352,14 @@ async def async_restore_backup_bundle(
                         continue
                     if k in sanitized_sys:
                         global_cfg[k] = sanitized_sys[k]
-                    elif k not in SYSTEM_SETTING_KEYS and k in global_cfg_in:
-                        global_cfg[k] = global_cfg_in[k]
+                raw_ignored = global_cfg_in.get(CONF_IGNORED_DISCOVERED_DEVICES)
+                if isinstance(raw_ignored, list):
+                    global_cfg[CONF_IGNORED_DISCOVERED_DEVICES] = [
+                        clean_id
+                        for item in raw_ignored[:100]
+                        if isinstance(item, str)
+                        and (clean_id := item.strip()[:64])
+                    ]
                 global_cfg[CONF_SYSTEM_CONFIG_REV] = get_system_config_rev(hass) + 1
                 sys_obj = get_latter_system(hass)
                 if sys_obj is not None:

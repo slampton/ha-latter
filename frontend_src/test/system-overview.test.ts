@@ -67,7 +67,7 @@ describe("System -> Overview streamlined 2-card layout & health semantics (D-076
           makeDevice({ subentry_id: "sub_desk", title: "Desk Assistant", area_id: "office" }),
           makeDevice({
             subentry_id: "sub_phone",
-            title: "Sean's Phone",
+            title: "Alex's Phone",
             kind: "ble_tag",
             ble_category: "phone",
             has_display: false,
@@ -76,7 +76,7 @@ describe("System -> Overview streamlined 2-card layout & health semantics (D-076
             ble_tracked: true,
             area_id: "kitchen",
             active_area_name: "Kitchen",
-            assigned_person: "person.sean",
+            assigned_person: "person.alex",
           }),
         ],
         live: {
@@ -133,7 +133,7 @@ describe("System -> Overview streamlined 2-card layout & health semantics (D-076
           }),
           makeDevice({
             subentry_id: "sub_phone",
-            title: "Thu's Phone",
+            title: "Sam's Phone",
             kind: "ble_tag",
             ble_category: "phone",
             has_display: false,
@@ -173,7 +173,7 @@ describe("System -> Overview streamlined 2-card layout & health semantics (D-076
     const roamingBox = container.querySelector("#sys-deploy-roaming")?.textContent || "";
     assert.ok(roamingBox.includes("1 / 2 active"));
     assert.ok(roamingBox.includes("Pocket Assistant (Kitchen)"));
-    assert.equal(roamingBox.includes("Thu's Phone (Away)"), false);
+    assert.equal(roamingBox.includes("Sam's Phone (Away)"), false);
 
     const deployHtml = container.querySelector("#card-area-deployment")?.innerHTML || "";
     assert.ok(deployHtml.includes("Here: Pocket Assistant"));

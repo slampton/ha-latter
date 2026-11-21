@@ -79,6 +79,7 @@ from .const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_REMOTE_GROUP,
     CONF_DEVICE_SLUG,
+    CONF_DO_NOT_DISTURB,
     CONF_DOCK_ITEMS,
     CONF_DOORBELL_NOISE_REDUCTION,
     CONF_ESPHOME_DEVICE_ID,
@@ -211,8 +212,10 @@ from .protocol import (
     MAX_DOCK_ITEMS,
     MAX_PINNED_ITEMS,
     DomainPayloadPacker,
+    PinLockoutTracker,
     V3Records,
     effective_security_pin_policy,
+    mint_pin_session_key,
     normalize_activity_sources,
     normalize_area_categories,
     normalize_dock_items,
@@ -222,6 +225,7 @@ from .protocol import (
     normalize_security_pin_policy,
     normalize_tools_items,
     pack_device_prefs_fields,
+    pack_weather_forecast_fields,
     parse_dirty_prefs_records,
     resolve_shortcut_entity_icon,
     resolve_shortcut_live_state,
@@ -304,7 +308,9 @@ class LatterDeviceRuntime:
         if manifest_raw and manifest_raw.strip().startswith("{"):
             try:
                 parsed = json.loads(manifest_raw)
-                if isinstance(parsed, dict) and "w" in parsed and "h" in parsed:
+                if isinstance(parsed, dict) and (
+                    ("w" in parsed and "h" in parsed) or "sdk" in parsed
+                ):
                     self.hello_manifest = parsed
                     parsed_manifest = parsed
             except (ValueError, TypeError):
@@ -515,7 +521,24 @@ class LatterCoordinator:
         self._unsub_doorbell_ring_state: Callable[[], None] | None = None
         self._unsub_link_report_state: Callable[[], None] | None = None
         self._unsub_ble_radio_state: Callable[[], None] | None = None
+        self._unsub_reconnect_post_delay: Callable[[], None] | None = None
         self._entered_hibernate: bool = False
+        self._pin_key_id: str = ""
+        self._pin_key_bytes: bytes = b""
+        self._pin_last_nonce: int = 0
+        self.pin_lockout = PinLockoutTracker()
+        self.display_power_state: int = 0
+        self.display_brightness_pct: int = self._initial_brightness_pct()
+        self.device_telemetry: dict[str, Any] = {
+            "link": {},
+            "int_ram_free_kb": None,
+            "int_ram_min_kb": None,
+            "int_ram_largest_kb": None,
+            "psram_min_kb": None,
+            "ble_active": None,
+            "profiler_on": False,
+            "updated_at": None,
+        }
         self._matched_ble_addresses: list[str] = []
         self._doorbell_ring_map: dict[str, str] = {}
         self._doorbell_ring_cooldown_until: dict[str, float] = {}
@@ -553,12 +576,14 @@ class LatterCoordinator:
         self._transfer_hold_artist: str = ""
         self._transfer_hold_album: str = ""
         self._transfer_hold_duration: float = 0.0
+        self._transfer_hold_track_key: str = ""
         self.forecast_records: V3Records = V3Records()
         self.weather_attributes: dict[str, Any] = init_weather_attributes(
             self._pack_domain_payload
         )
         self.calendar_records: V3Records = V3Records()
         self.calendar_events: list[dict[str, Any]] = []
+        self._last_cal_window: tuple[Any, Any] | None = None
         self.alert_id: int = 0
         self.alert_title: str = ""
         self.alert_message: str = ""
@@ -588,7 +613,18 @@ class LatterCoordinator:
         self._last_latter_area: str = ""
         self.current_wallpaper: str = ""
         self.current_screensaver_photo: str = ""
+        self._doorbell_talk_lock = asyncio.Lock()
         self._structural_snapshot: dict[str, Any] = self._capture_structural_snapshot()
+        self._applied_options_snapshot: dict[str, Any] = self._capture_options_snapshot()
+
+    def _initial_brightness_pct(self) -> int:
+        raw_bri = resolve_device_pref_value(
+            self._live_subentry().data, "manual_brightness"
+        )
+        try:
+            return max(1, min(100, round(float(raw_bri))))
+        except (TypeError, ValueError):
+            return 80
 
     # -----------------------------------------------------------------------
     # Listener & Subentry Configuration Accessors
@@ -645,6 +681,16 @@ class LatterCoordinator:
 
     def has_structural_changes(self) -> bool:
         return self._capture_structural_snapshot() != self._structural_snapshot
+
+    def _capture_options_snapshot(self) -> dict[str, Any]:
+        sub = self._live_subentry()
+        return {
+            "title": str(sub.title or ""),
+            "data": dict(sub.data),
+        }
+
+    def has_option_changes(self) -> bool:
+        return self._capture_options_snapshot() != self._applied_options_snapshot
 
     def _live_subentry(self) -> ConfigSubentry:
         live_sub = self.entry.subentries.get(self.subentry_id)
@@ -805,6 +851,10 @@ class LatterCoordinator:
         ent_id = self.device_entity(domain, *suffixes)
         return self.hass.states.get(ent_id) if ent_id else None
 
+    @property
+    def url_signer(self) -> UrlSigner:
+        return self._url_signer
+
     def get_device_info(self) -> DeviceInfo:
         esp_dev_id = self.esphome_device_id
         mac = self.device_mac
@@ -812,7 +862,7 @@ class LatterCoordinator:
         return DeviceInfo(
             identifiers={(DOMAIN, ident_key)},
             name=self.device_title,
-            manufacturer="Lampton Labs",
+            manufacturer="Latter",
             model="Latter ESPHome Companion Middleware",
             sw_version=INTEGRATION_VERSION,
             configuration_url=f"homeassistant://latter/devices/{self.subentry_id}",
@@ -881,8 +931,28 @@ class LatterCoordinator:
         return (
             isinstance(hw.get("beacon"), dict)
             or hw.get("minor") is not None
+            or self.device_telemetry.get("ble_active") is not None
             or bool(self.device_entity("binary_sensor", "_ble_radio_active"))
         )
+
+    @property
+    def radio_connected(self) -> bool:
+        """Return True when the bound ESPHome Device has an active online API connection and is not hibernating."""
+        return (
+            not self.is_ble_tag
+            and not self._entered_hibernate
+            and self.is_device_online()
+        )
+
+    @property
+    def screensaver_active(self) -> bool:
+        """Return True when the Device display is currently in screensaver power state (`1`)."""
+        return self.display_power_state == 1
+
+    @property
+    def do_not_disturb(self) -> bool:
+        """Return True when Do Not Disturb is active on this Device."""
+        return bool(self.get_device_pref(CONF_DO_NOT_DISTURB))
 
     @property
     def is_round_display(self) -> bool:
@@ -1683,12 +1753,6 @@ class LatterCoordinator:
             fmt,
         )
 
-    def build_map_snapshot_url(self, location: str) -> str:
-        w, h = self.art_dimensions
-        return self._url_signer.build_map_snapshot_url(
-            self.device_slug, location, w, h, self.display_shape
-        )
-
     def build_wallpaper_url(self) -> str:
         src = self.wallpaper_source
         if not src:
@@ -1921,6 +1985,7 @@ class LatterCoordinator:
         self._sync_ble_tracker()
         if not self.is_ble_tag:
             self._rpc_receiver.start()
+            await self.async_provision_pin_session_key()
             await self.async_push_beacon_uuid()
             if (sys_obj := get_latter_system(self.hass)) is not None:
                 sys_obj.bind_feed_listeners()
@@ -1940,6 +2005,7 @@ class LatterCoordinator:
                 await self.async_refresh_weather_forecast()
                 await self.async_refresh_calendar_agenda()
         await self.async_sync_presence_beacon("options")
+        self._applied_options_snapshot = self._capture_options_snapshot()
         try:
             async_audit_coordinator_health(self.hass, self)
         except Exception as err:  # noqa: BLE001
@@ -2031,6 +2097,7 @@ class LatterCoordinator:
         self._rpc_receiver.rebind()
         await self.async_push_beacon_uuid()
         await self.async_sync_presence_beacon("options")
+        self._applied_options_snapshot = self._capture_options_snapshot()
         get_ble_fabric(self.hass).notify_occupancy_listeners()
         self.async_notify_listeners()
 
@@ -2387,6 +2454,7 @@ class LatterCoordinator:
             "_unsub_doorbell_ring_state",
             "_unsub_link_report_state",
             "_unsub_ble_radio_state",
+            "_unsub_reconnect_post_delay",
             "_unsub_timer_tick",
         ):
             if (unsub := getattr(self, attr, None)) is not None:
@@ -2451,22 +2519,7 @@ class LatterCoordinator:
                 config_entry_id=self.entry.entry_id,
             )
 
-    async def _async_handle_reconnect(self) -> None:
-        enforce_local_speaker_if_remote_idle(self, "device_reconnect")
-        if self._ble_tracker is not None:
-            self._ble_tracker.reset_for_device_wake()
-            if (
-                self._ble_tracker.current_area_id
-                and self._ble_tracker.current_area_id != self.active_area_id
-            ):
-                self.async_set_active_area(
-                    self._ble_tracker.current_area_id,
-                    handoff_media=False,
-                    sync_device_registry=True,
-                    ble_driven=True,
-                )
-        self.async_notify_listeners()
-        await asyncio.sleep(1.5)
+    async def _async_finish_reconnect_post_delay(self) -> None:
         enforce_local_speaker_if_remote_idle(self, "device_reconnect_post_delay")
         if (
             self._ble_tracker is not None
@@ -2482,6 +2535,158 @@ class LatterCoordinator:
         self.async_notify_listeners()
         if self.on_area_changed_push_slots is not None:
             await self.on_area_changed_push_slots(self)
+
+    async def _async_handle_reconnect(self) -> None:
+        if self._unsub_reconnect_post_delay is not None:
+            self._unsub_reconnect_post_delay()
+            self._unsub_reconnect_post_delay = None
+        enforce_local_speaker_if_remote_idle(self, "device_reconnect")
+        if self._ble_tracker is not None:
+            self._ble_tracker.reset_for_device_wake()
+            if (
+                self._ble_tracker.current_area_id
+                and self._ble_tracker.current_area_id != self.active_area_id
+            ):
+                self.async_set_active_area(
+                    self._ble_tracker.current_area_id,
+                    handoff_media=False,
+                    sync_device_registry=True,
+                    ble_driven=True,
+                )
+        self.async_notify_listeners()
+
+        @callback
+        def _on_post_delay(_now: datetime) -> None:
+            self._unsub_reconnect_post_delay = None
+            self.entry.async_create_background_task(
+                self.hass,
+                self._async_finish_reconnect_post_delay(),
+                f"latter_reconnect_post_delay_{self.device_slug}",
+            )
+
+        self._unsub_reconnect_post_delay = async_call_later(
+            self.hass, 1.5, _on_post_delay
+        )
+
+    async def async_provision_pin_session_key(self) -> bool:
+        """Mint a fresh per-boot/reconnect HMAC PIN session key in RAM and push to firmware (`M-P0-01`)."""
+        if self.is_ble_tag:
+            return False
+        key_id, key_bytes = mint_pin_session_key()
+        self._pin_key_id = key_id
+        self._pin_key_bytes = key_bytes
+        self._pin_last_nonce = 0
+        return await self.async_send_device_command(
+            f"set_pin_key:{key_id}:{key_bytes.hex()}"
+        )
+
+    @callback
+    def apply_display_state(
+        self,
+        power_state: Any,
+        brightness_pct: Any,
+        screensaver_active: Any = None,
+    ) -> None:
+        """Apply live `display_state` RPC telemetry (`0`=awake, `1`=screensaver, `2`=off)."""
+        next_power = self.display_power_state
+        if power_state is not None and not isinstance(power_state, bool):
+            try:
+                parsed_p = int(float(power_state))
+                if parsed_p in (0, 1, 2):
+                    next_power = parsed_p
+            except (TypeError, ValueError):
+                pass
+        elif screensaver_active is not None:
+            ss_bool = (
+                screensaver_active
+                if isinstance(screensaver_active, bool)
+                else str(screensaver_active).strip().lower()
+                in ("1", "true", "yes", "on")
+            )
+            next_power = 1 if ss_bool else 0
+        if screensaver_active is not None and next_power == 0:
+            ss_bool = (
+                screensaver_active
+                if isinstance(screensaver_active, bool)
+                else str(screensaver_active).strip().lower()
+                in ("1", "true", "yes", "on")
+            )
+            if ss_bool:
+                next_power = 1
+
+        next_bri = self.display_brightness_pct
+        if brightness_pct is not None and not isinstance(brightness_pct, bool):
+            try:
+                parsed_b = round(float(brightness_pct))
+                if parsed_b > 0:
+                    next_bri = max(1, min(100, parsed_b))
+            except (TypeError, ValueError):
+                pass
+
+        self.display_power_state = next_power
+        self.display_brightness_pct = next_bri
+        self.async_update_listeners()
+
+    @callback
+    def apply_device_telemetry(self, payload: Mapping[str, Any]) -> None:
+        """Apply live `device_telemetry` RPC diagnostics and update hibernate/BLE state (`M-P1-20`)."""
+        raw_link = payload.get("link_json", payload.get("link"))
+        link_dict: dict[str, Any] = {}
+        if isinstance(raw_link, Mapping):
+            link_dict = dict(raw_link)
+        elif isinstance(raw_link, str) and raw_link.strip().startswith("{"):
+            try:
+                parsed_link = json.loads(raw_link)
+                if isinstance(parsed_link, dict):
+                    link_dict = parsed_link
+            except (TypeError, ValueError):
+                link_dict = {}
+
+        link_state = str(
+            link_dict.get("state")
+            or link_dict.get("status")
+            or payload.get("link_state")
+            or ""
+        ).strip().lower()
+        if link_state == "hibernating":
+            if not self._entered_hibernate:
+                self._entered_hibernate = True
+                self._schedule_persist_runtime_state()
+        elif link_dict and self._entered_hibernate:
+            self._entered_hibernate = False
+            self._schedule_persist_runtime_state()
+
+        def _parse_kb(val: Any) -> int | None:
+            if val is None or isinstance(val, bool) or str(val).strip() == "":
+                return None
+            try:
+                iv = round(float(val))
+                return iv if iv >= 0 else None
+            except (TypeError, ValueError):
+                return None
+
+        def _parse_opt_bool(val: Any) -> bool | None:
+            if val is None or str(val).strip() == "":
+                return None
+            if isinstance(val, bool):
+                return val
+            return str(val).strip().lower() in ("1", "true", "yes", "on")
+
+        ble_active = _parse_opt_bool(payload.get("ble_active"))
+        if ble_active is True and self._ble_tracker is not None:
+            self._ble_tracker.note_ble_radio_active(time.monotonic())
+
+        self.device_telemetry = {
+            "link": link_dict,
+            "int_ram_free_kb": _parse_kb(payload.get("int_ram_free_kb")),
+            "int_ram_min_kb": _parse_kb(payload.get("int_ram_min_kb")),
+            "int_ram_largest_kb": _parse_kb(payload.get("int_ram_largest_kb")),
+            "psram_min_kb": _parse_kb(payload.get("psram_min_kb")),
+            "ble_active": ble_active,
+            "profiler_on": bool(_parse_opt_bool(payload.get("profiler_on"))),
+            "updated_at": dt_util.now().isoformat(timespec="seconds"),
+        }
+        self.async_update_listeners()
 
     async def async_handle_device_hello(
         self,
@@ -2517,6 +2722,10 @@ class LatterCoordinator:
                     merged = {**self.device_data, **cleaned}
                     self.update_device_config(merged, bump_prefs_seq=False)
                     ble_tracking_changed = CONF_NATIVE_BLE_TRACKING in cleaned
+                    if not ble_tracking_changed:
+                        self._applied_options_snapshot = (
+                            self._capture_options_snapshot()
+                        )
             self.prefs_seq = max(
                 1, dev_seq + (1 if incoming_prefs and dev_seq > 0 else 0)
             )
@@ -2551,17 +2760,23 @@ class LatterCoordinator:
                         for k in cleaned:
                             self.prefs_key_seq[k] = new_seq
                         ble_tracking_changed = CONF_NATIVE_BLE_TRACKING in cleaned
+                        if not ble_tracking_changed:
+                            self._applied_options_snapshot = (
+                                self._capture_options_snapshot()
+                            )
                 self.prefs_seq = new_seq
             elif dev_seq > self.prefs_seq:
                 self.prefs_seq = dev_seq
 
         if ble_tracking_changed:
             self._sync_ble_tracker()
+            self._applied_options_snapshot = self._capture_options_snapshot()
             get_ble_fabric(self.hass).notify_occupancy_listeners()
 
         self._cached_prefs_payload = None
         self._schedule_persist_runtime_state()
         self._last_pushed_v3.clear()
+        await self.async_provision_pin_session_key()
         self.force_republish_all_domains()
         await self.async_push_beacon_uuid()
         await self._async_handle_reconnect()
@@ -2691,11 +2906,41 @@ class LatterCoordinator:
         self._notify_timer_tick_listeners()
         self.async_update_listeners()
 
+    async def async_set_screen_light(
+        self, *, turn_on: bool, brightness_pct: int | None = None
+    ) -> None:
+        """Control the Device's display power & brightness via `latter_device_command` (`M-P1-21`)."""
+        if turn_on:
+            if brightness_pct is not None and not isinstance(brightness_pct, bool):
+                pct = max(1, min(100, round(float(brightness_pct))))
+                await self.async_send_device_command(f"set_screen_bri:{pct}")
+                self.display_brightness_pct = pct
+            else:
+                await self.async_send_device_command("wake_screen")
+            self.display_power_state = 0
+        else:
+            await self.async_send_device_command("screen_off")
+            self.display_power_state = 2
+        self.async_update_listeners()
+
+    async def async_set_screensaver(self, active: bool) -> None:
+        """Activate or deactivate the Device screensaver via `latter_device_command` (`M-P1-21`)."""
+        await self.async_send_device_command(
+            "activate_screensaver" if active else "deactivate_screensaver"
+        )
+        self.display_power_state = 1 if active else 0
+        self.async_update_listeners()
+
+    async def async_dismiss_alert(self) -> None:
+        """Dismiss any active ringing alarm/timer/alert on the Device."""
+        await self.async_send_device_command("dismiss_ringing")
+
     async def async_send_device_command(
         self, command: str, *, raise_if_offline: bool = False
     ) -> bool:
         """Send an immediate action (`restart`, `find_my`, `activate_screensaver`, `trigger_va`, `log_memory_report`, `dismiss_ringing`, `cancel_timer`, `reset_stopwatch`) to the Device."""
         cmd = str(command or "").strip().lower()
+        safe_cmd_label = "set_pin_key" if cmd.startswith("set_pin_key:") else cmd
         if self.is_ble_tag:
             if raise_if_offline:
                 raise HomeAssistantError("BLE tags do not accept device commands")
@@ -2741,7 +2986,7 @@ class LatterCoordinator:
                 except Exception as err:
                     if raise_if_offline:
                         raise HomeAssistantError(
-                            f"Failed to send '{cmd}' to {self.device_title}: {err}"
+                            f"Failed to send '{safe_cmd_label}' to {self.device_title}: {err}"
                         ) from err
                     return False
             if cmd == "restart" and (
@@ -2807,6 +3052,7 @@ class LatterCoordinator:
             return False
         if self._rpc_receiver.is_device_unavailable():
             return False
+        saw_conn_sensor = False
         for sfx in ("_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"):
             ent_id = find_device_entity_by_suffix(
                 self.hass,
@@ -2816,9 +3062,23 @@ class LatterCoordinator:
             )
             if not ent_id:
                 continue
+            saw_conn_sensor = True
             st = self.hass.states.get(ent_id)
             if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
                 return True
+        if saw_conn_sensor:
+            return False
+        if self._entered_hibernate:
+            return False
+        if (
+            self.device_telemetry.get("updated_at") is not None
+            or bool(self._runtime.last_boot_id)
+        ):
+            outbox_id = self._rpc_receiver._tracked_entity_id
+            if outbox_id:
+                st = self.hass.states.get(outbox_id)
+                if st is not None and st.state != STATE_UNAVAILABLE:
+                    return True
         return False
 
     def is_ble_sleep_expected(self) -> bool:
@@ -2829,6 +3089,9 @@ class LatterCoordinator:
             if self._entered_hibernate:
                 self._entered_hibernate = False
                 self._schedule_persist_runtime_state()
+            telem_ble = self.device_telemetry.get("ble_active")
+            if isinstance(telem_ble, bool):
+                return not telem_ble
             ble_ent_id = find_device_entity_by_suffix(
                 self.hass,
                 self.esphome_device_id,
@@ -2851,6 +3114,9 @@ class LatterCoordinator:
             return True
         if not self.is_device_online():
             return not self.is_ble_sleep_expected()
+        telem_ble = self.device_telemetry.get("ble_active")
+        if isinstance(telem_ble, bool):
+            return telem_ble
         ble_ent_id = find_device_entity_by_suffix(
             self.hass,
             self.esphome_device_id,
@@ -3429,20 +3695,23 @@ class LatterCoordinator:
             wa = self.weather_attributes
             wa["rev"], wa["payload"] = self._pack_domain_payload(
                 "weather_forecast",
-                wa.get("condition"),
-                wa.get("temperature"),
-                wa.get("humidity"),
-                wa.get("wind_speed"),
-                wa.get("wind_bearing"),
-                wa.get("high"),
-                wa.get("low"),
-                self.forecast_records,
-                wa.get("sun_state"),
-                wa.get("sun_elevation"),
-                wa.get("sun_azimuth"),
-                wa.get("sun_next_rising"),
-                wa.get("sun_next_setting"),
-                wa.get("moon_phase"),
+                *pack_weather_forecast_fields(
+                    wa.get("condition"),
+                    wa.get("temperature"),
+                    wa.get("humidity"),
+                    wa.get("wind_speed"),
+                    wa.get("wind_bearing"),
+                    wa.get("high"),
+                    wa.get("low"),
+                    self.forecast_records,
+                    wa.get("sun_state"),
+                    wa.get("sun_elevation"),
+                    wa.get("sun_azimuth"),
+                    wa.get("sun_next_rising"),
+                    wa.get("sun_next_setting"),
+                    wa.get("moon_phase"),
+                    wa.get("temp_unit", ""),
+                ),
             )
         self.async_update_listeners()
         if not self.is_ble_tag:
@@ -3547,6 +3816,7 @@ class LatterCoordinator:
             custom_color_hex=self.device_custom_color,
             is_round_display=self.is_round_display,
             supports_hw_jpeg=self.supports_hw_jpeg,
+            do_not_disturb=self.do_not_disturb,
         )
         cur_rev, packed = self._pack_domain_payload("device_prefs", *fields)
         res = (

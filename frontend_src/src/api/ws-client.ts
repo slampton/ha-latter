@@ -34,7 +34,6 @@ export type SystemWsCommand =
   | "calibrate_area_illuminance"
   | "capture_ble_area_signature"
   | "clear_ble_area_signature"
-  | "system_entity_action"
   | "send_announcement"
   | "check_system_updates"
   | "clear_internal_logs"

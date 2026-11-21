@@ -77,8 +77,8 @@ function renderBatchControlRow(
         .value=${selectValue}
         @change=${(ev: Event) => {
           const val = (ev.currentTarget as HTMLSelectElement).value;
-          if (val !== "__mixed__") {
-            store.groups.stageBatchEntityControl(fc, { option: val });
+          if (val !== "__mixed__" && prefKey) {
+            store.groups.stageBatchSetting(prefKey, val);
           }
         }}
       >
@@ -106,10 +106,14 @@ function renderBatchControlRow(
         role="switch"
         aria-label=${label}
         .checked=${checked}
-        @change=${(ev: Event) =>
-          store.groups.stageBatchEntityControl(fc, {
-            action: (ev.currentTarget as HTMLInputElement).checked ? "turn_on" : "turn_off",
-          })}
+        @change=${(ev: Event) => {
+          if (prefKey) {
+            store.groups.stageBatchSetting(
+              prefKey,
+              (ev.currentTarget as HTMLInputElement).checked,
+            );
+          }
+        }}
         class="switch"
       />`;
   } else if (fc.domain === "number") {
@@ -127,7 +131,9 @@ function renderBatchControlRow(
               hass: store.hass,
               mixed: mixed && !staged,
               mixedLabel: store.t("batch.mixed_badge"),
-              onCommit: (raw) => store.groups.stageBatchEntityControl(fc, { level: raw }),
+              onCommit: (raw) => {
+                if (prefKey) store.groups.stageBatchSetting(prefKey, raw);
+              },
             })}`
         : html`${statusBadge}
             ${renderRangeControl({
@@ -139,7 +145,9 @@ function renderBatchControlRow(
               unit: fc.unit,
               is24h: defaultLocaleTimeFormat(store.hass).startsWith("24"),
               hass: store.hass,
-              onCommit: (raw) => store.groups.stageBatchEntityControl(fc, { level: raw }),
+              onCommit: (raw) => {
+                if (prefKey) store.groups.stageBatchSetting(prefKey, raw);
+              },
             })}`;
   } else if (fc.domain === "color") {
     const hexVal = isValidHexColor(curState) ? curState.toUpperCase() : "#3898FF";

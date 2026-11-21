@@ -27,7 +27,10 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
     diag_comp_mod = ensure_module("homeassistant.components.diagnostics")
     ffmpeg_mod = ensure_module("homeassistant.components.ffmpeg")
     http_comp_mod = ensure_module("homeassistant.components.http")
+    light_comp_mod = ensure_module("homeassistant.components.light")
     lock_mod = ensure_module("homeassistant.components.lock")
+    rec_mod = ensure_module("homeassistant.components.recorder")
+    rec_stats_mod = ensure_module("homeassistant.components.recorder.statistics")
     repairs_comp_mod = ensure_module("homeassistant.components.repairs")
     sensor_comp_mod = ensure_module("homeassistant.components.sensor")
     select_comp_mod = ensure_module("homeassistant.components.select")
@@ -109,10 +112,20 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
             else:
                 val = getattr(self, "native_value", None)
                 raw = "unknown" if val is None else str(val)
+            attrs = dict(self.extra_state_attributes or {})
+            if hasattr(self, "brightness") and hasattr(self, "supported_color_modes"):
+                attrs["supported_color_modes"] = [str(m) for m in (getattr(self, "supported_color_modes", None) or ())]
+                if getattr(self, "is_on", False):
+                    attrs["brightness"] = self.brightness
+                    if getattr(self, "_attr_color_mode", None) is not None:
+                        attrs["color_mode"] = str(self._attr_color_mode)
+                else:
+                    attrs["brightness"] = None
+                    attrs["color_mode"] = None
             self.hass.states.async_set(
                 self.entity_id,
                 raw,
-                attributes=dict(self.extra_state_attributes or {}),
+                attributes=attrs,
             )
 
     class SensorDeviceClass(StrEnum):
@@ -219,6 +232,65 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
             return None
 
     switch_comp_mod.SwitchEntity = SwitchEntity  # type: ignore[attr-defined]
+
+    class ColorMode(StrEnum):
+        UNKNOWN = "unknown"
+        ONOFF = "onoff"
+        BRIGHTNESS = "brightness"
+
+    class LightEntity(_BaseEntity):
+        _attr_is_on: bool | None = None
+        _attr_brightness: int | None = None
+        _attr_color_mode: ColorMode | None = None
+        _attr_supported_color_modes: set[ColorMode] | None = None
+
+        @property
+        def is_on(self) -> bool | None:
+            return self._attr_is_on
+
+        @property
+        def brightness(self) -> int | None:
+            return self._attr_brightness
+
+        @property
+        def supported_color_modes(self) -> set[ColorMode] | None:
+            return self._attr_supported_color_modes
+
+        async def async_turn_on(self, **kwargs: Any) -> None:
+            _ = kwargs
+            return None
+
+        async def async_turn_off(self, **kwargs: Any) -> None:
+            _ = kwargs
+            return None
+
+    light_comp_mod.ATTR_BRIGHTNESS = "brightness"  # type: ignore[attr-defined]
+    light_comp_mod.ColorMode = ColorMode  # type: ignore[attr-defined]
+    light_comp_mod.LightEntity = LightEntity  # type: ignore[attr-defined]
+
+    def _recorder_get_instance(hass: Any) -> Any:
+        inst = hass.data.get("_recorder_instance")
+        if inst is not None:
+            return inst
+        return SimpleNamespace(async_add_executor_job=hass.async_add_executor_job)
+
+    def _statistics_during_period(
+        hass: Any,
+        start_time: Any,
+        end_time: Any = None,
+        statistic_ids: Any = None,
+        period: str = "hour",
+        units: Any = None,
+        types: Any = None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        _ = (start_time, end_time, period, units, types)
+        mock_stats = hass.data.get("_recorder_statistics", {})
+        if statistic_ids is None:
+            return dict(mock_stats)
+        return {sid: list(mock_stats[sid]) for sid in statistic_ids if sid in mock_stats}
+
+    rec_mod.get_instance = _recorder_get_instance  # type: ignore[attr-defined]
+    rec_stats_mod.statistics_during_period = _statistics_during_period  # type: ignore[attr-defined]
 
     class SourceType(StrEnum):
         BLUETOOTH_LE = "bluetooth_le"
@@ -365,6 +437,11 @@ def install_fake_ha_components(callback_dec: Callable[..., Any]) -> None:
     async def _camera_get_stream_source(hass: Any, entity_id: str) -> str | None:
         return hass.data.get("_camera_streams", {}).get(entity_id)
 
+    class CameraEntityFeature:
+        ON_OFF = 1
+        STREAM = 2
+
+    cam_mod.CameraEntityFeature = CameraEntityFeature  # type: ignore[attr-defined]
     cam_mod.async_get_image = _camera_get_image  # type: ignore[attr-defined]
     cam_mod.async_get_stream_source = _camera_get_stream_source  # type: ignore[attr-defined]
 

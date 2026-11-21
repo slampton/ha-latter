@@ -13,12 +13,14 @@ import shutil
 import time
 from typing import Any
 
+from homeassistant.components.camera import CameraEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .const import DOMAIN
 from .doorbell import resolve_doorbell_targets
+from .http import get_circular_mask_surfaces, validate_pil_image_dimensions
 from .hub import get_area_state_index
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,8 +63,9 @@ CAMERA_CAP_IN_CAROUSEL: int = 8
 CAMERA_CAP_SHOW_REPLY: int = 16
 CAMERA_CAP_SHOW_UNLOCK: int = 32
 
-_CAMERA_FEATURE_STREAM: int = 2  # homeassistant.components.camera.CameraEntityFeature.STREAM
-_CIRCULAR_MASK_CACHE: dict[tuple[int, int], tuple[Image.Image, Image.Image]] = {}
+_CAMERA_FEATURE_STREAM: int = int(CameraEntityFeature.STREAM)
+_FFMPEG_PROTOCOL_WHITELIST: str = "file,crypto,data,http,https,tcp,tls,rtp,rtsp,udp"
+_ALLOWED_STREAM_SCHEMES: tuple[str, ...] = ("rtsp://", "rtsps://", "http://", "https://")
 
 
 class CameraFetchError(Exception):
@@ -190,22 +193,6 @@ def inspect_jpeg_header(raw: bytes) -> tuple[bool, int, int]:
     return False, 0, 0
 
 
-def _get_circular_mask_surfaces(width: int, height: int) -> tuple[Image.Image, Image.Image]:
-    """Return cached `(mask_L, black_bg_RGB)` PIL surfaces for circular fill masking."""
-    key = (width, height)
-    cached = _CIRCULAR_MASK_CACHE.get(key)
-    if cached is not None:
-        return cached
-    mask = Image.new("L", (width, height), 0)
-    draw = ImageDraw.Draw(mask)
-    draw.ellipse((0, 0, width - 1, height - 1), fill=255)
-    black_bg = Image.new("RGB", (width, height), (0, 0, 0))
-    if len(_CIRCULAR_MASK_CACHE) >= 16:
-        _CIRCULAR_MASK_CACHE.clear()
-    _CIRCULAR_MASK_CACHE[key] = (mask, black_bg)
-    return mask, black_bg
-
-
 def _apply_rotation(img: Image.Image, rot: int) -> Image.Image:
     """Apply clockwise rotation (`0 | 90 | 180 | 270`) to a PIL image."""
     if rot == 90:
@@ -235,6 +222,7 @@ def transcode_camera_frame(
     rot_deg = normalize_rotation(rot)
 
     with Image.open(io.BytesIO(raw_bytes)) as img:
+        validate_pil_image_dimensions(img)
         draft_fn = getattr(img, "draft", None)
         if callable(draft_fn):
             draft_fn("RGB", (target_w, target_h))
@@ -253,7 +241,7 @@ def transcode_camera_frame(
                 centering=(0.5, 0.5),
             )
             if circular_mask:
-                mask, black_bg = _get_circular_mask_surfaces(target_w, target_h)
+                mask, black_bg = get_circular_mask_surfaces(target_w, target_h)
                 framed = Image.composite(framed, black_bg, mask)
         else:
             out_w, out_h = compute_contain_size(
@@ -281,6 +269,34 @@ def transcode_camera_frame(
         return out.getvalue()
 
 
+def _load_tile_font(size_px: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
+    try:
+        return ImageFont.load_default(size=size_px)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def _draw_centered_line(
+    draw: ImageDraw.ImageDraw,
+    cx: int,
+    cy: int,
+    text: str,
+    font: ImageFont.ImageFont | ImageFont.FreeTypeFont,
+) -> None:
+    try:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw = max(1, int(bbox[2] - bbox[0]))
+        th = max(1, int(bbox[3] - bbox[1]))
+        draw.text(
+            (cx - tw // 2 - int(bbox[0]), cy - th // 2 - int(bbox[1])),
+            text,
+            fill=GRID_OFFLINE_TEXT_RGB,
+            font=font,
+        )
+    except Exception:  # noqa: BLE001
+        draw.text((max(0, cx - len(text) * 4), max(0, cy - 6)), text, fill=GRID_OFFLINE_TEXT_RGB)
+
+
 def _draw_offline_tile(
     draw: ImageDraw.ImageDraw,
     x0: int,
@@ -289,7 +305,7 @@ def _draw_offline_tile(
     cell_h: int,
     label: str,
 ) -> None:
-    """Draw a clean dark placeholder tile for an offline or stalled camera quadrant."""
+    """Draw a readable centered placeholder tile for an offline or stalled camera quadrant."""
     x1 = x0 + cell_w - 1
     y1 = y0 + cell_h - 1
     draw.rectangle(
@@ -300,12 +316,17 @@ def _draw_offline_tile(
     )
     cx = x0 + cell_w // 2
     cy = y0 + cell_h // 2
+    title_size = max(13, min(20, cell_h // 9))
+    sub_size = max(12, title_size - 2)
+    title_font = _load_tile_font(title_size)
+    sub_font = _load_tile_font(sub_size)
     clean_label = (label or "").strip()[:22]
+    gap = max(8, title_size // 2 + 4)
     if clean_label:
-        draw.text((max(x0 + 8, cx - 44), max(y0 + 8, cy - 14)), clean_label, fill=GRID_OFFLINE_TEXT_RGB)
-        draw.text((max(x0 + 8, cx - 22), min(y1 - 14, cy + 4)), "Offline", fill=GRID_OFFLINE_TEXT_RGB)
+        _draw_centered_line(draw, cx, cy - gap, clean_label, title_font)
+        _draw_centered_line(draw, cx, cy + gap, "Offline", sub_font)
     else:
-        draw.text((max(x0 + 8, cx - 22), max(y0 + 8, cy - 6)), "Offline", fill=GRID_OFFLINE_TEXT_RGB)
+        _draw_centered_line(draw, cx, cy, "Offline", title_font)
 
 
 def compose_grid_frame(
@@ -344,6 +365,7 @@ def compose_grid_frame(
             continue
         try:
             with Image.open(io.BytesIO(raw)) as img:
+                validate_pil_image_dimensions(img)
                 draft_fn = getattr(img, "draft", None)
                 if callable(draft_fn):
                     draft_fn("RGB", (cell_w, cell_h))
@@ -420,12 +442,29 @@ def build_ffmpeg_video_cmd(
             "force_divisible_by=16"
         )
 
+    clean_url = (stream_url or "").strip()
+    if (
+        not clean_url
+        or clean_url.startswith("-")
+        or not clean_url.lower().startswith(_ALLOWED_STREAM_SCHEMES)
+    ):
+        raise ValueError(f"Unsupported camera stream URL scheme: {clean_url[:16]!r}")
+
     q_val = 6 if (target_w * target_h > 300000) else 5
-    cmd = [ffmpeg_bin, "-hide_banner", "-loglevel", "error"]
-    if stream_url.lower().startswith(("rtsp://", "rtsps://")):
+    cmd = [
+        ffmpeg_bin,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-protocol_whitelist",
+        _FFMPEG_PROTOCOL_WHITELIST,
+    ]
+    if clean_url.lower().startswith(("rtsp://", "rtsps://")):
         cmd.extend(["-rtsp_transport", "tcp"])
     cmd.extend(
         [
+            "-rw_timeout",
+            "5000000",
             "-fflags",
             "+nobuffer+discardcorrupt",
             "-flags",
@@ -437,8 +476,10 @@ def build_ffmpeg_video_cmd(
             "-probesize",
             "200000",
             "-i",
-            stream_url,
+            clean_url,
             "-an",
+            "-sn",
+            "-dn",
             "-r",
             str(target_fps),
             "-vf",
@@ -684,6 +725,7 @@ class LatterCameraStreamHub:
         self._idle_timeout_s = max(0.05, float(idle_timeout_s))
         self._video_semaphore = asyncio.Semaphore(self._max_concurrent_ingests)
         self._ingests: dict[str, _CameraIngest] = {}
+        self._subscribe_locks: dict[str, asyncio.Lock] = {}
         self._stream_source_cache: dict[str, tuple[float, str | None]] = {}
         self._ffmpeg_bin_checked: bool = False
         self._cached_ffmpeg_bin: str | None = None
@@ -762,67 +804,76 @@ class LatterCameraStreamHub:
         rot: int = 0,
         circular_mask: bool = False,
     ) -> tuple[_CameraIngest, _CameraSubscriber]:
-        """Attach a subscriber to the shared `_CameraIngest` for `entity_id`, starting it if needed."""
-        sub = _CameraSubscriber(
-            width=align16(width),
-            height=align16(height),
-            fps=normalize_fps(fps),
-            fit=normalize_fit_mode(fit),
-            rot=normalize_rotation(rot),
-            circular_mask=bool(circular_mask and normalize_fit_mode(fit) == "fill"),
-        )
-        ingest = self._ingests.get(entity_id)
-        if ingest is None or ingest._closed:
-            if self._video_semaphore.locked():
-                idle_candidates = [
-                    ing
-                    for ing in self._ingests.values()
-                    if not ing._closed and not ing.subscribers
-                ]
-                if idle_candidates:
-                    victim = min(idle_candidates, key=lambda ing: ing._idle_since)
-                    await self._async_stop_ingest(victim)
-            try:
-                await asyncio.wait_for(self._video_semaphore.acquire(), timeout=0.25)
-            except TimeoutError as err:
-                raise CameraIngestLimitError(
-                    f"Maximum concurrent video ingests ({self._max_concurrent_ingests}) reached"
-                ) from err
-            ingest = _CameraIngest(
-                entity_id=entity_id,
-                stream_w=sub.width,
-                stream_h=sub.height,
-                stream_fps=sub.fps,
-                stream_fit=sub.fit,
-                stream_rot=sub.rot,
-                _sem_acquired=True,
+        """Attach a subscriber to the shared `_CameraIngest` for `entity_id`, serialized per camera (`M-P1-30`)."""
+        cam_lock = self._subscribe_locks.setdefault(entity_id, asyncio.Lock())
+        async with cam_lock:
+            sub = _CameraSubscriber(
+                width=align16(width),
+                height=align16(height),
+                fps=normalize_fps(fps),
+                fit=normalize_fit_mode(fit),
+                rot=normalize_rotation(rot),
+                circular_mask=bool(
+                    circular_mask and normalize_fit_mode(fit) == "fill"
+                ),
+            )
+            ingest = self._ingests.get(entity_id)
+            if ingest is None or ingest._closed:
+                if self._video_semaphore.locked():
+                    idle_candidates = [
+                        ing
+                        for ing in self._ingests.values()
+                        if not ing._closed and not ing.subscribers
+                    ]
+                    if idle_candidates:
+                        victim = min(
+                            idle_candidates, key=lambda ing: ing._idle_since
+                        )
+                        await self._async_stop_ingest(victim)
+                try:
+                    await asyncio.wait_for(
+                        self._video_semaphore.acquire(), timeout=0.25
+                    )
+                except TimeoutError as err:
+                    raise CameraIngestLimitError(
+                        f"Maximum concurrent video ingests ({self._max_concurrent_ingests}) reached"
+                    ) from err
+                ingest = _CameraIngest(
+                    entity_id=entity_id,
+                    stream_w=sub.width,
+                    stream_h=sub.height,
+                    stream_fps=sub.fps,
+                    stream_fit=sub.fit,
+                    stream_rot=sub.rot,
+                    _sem_acquired=True,
+                )
+                ingest.subscribers.add(sub)
+                self._ingests[entity_id] = ingest
+                ingest._task = self.hass.async_create_background_task(
+                    self._async_run_ingest(ingest),
+                    name=f"latter_camera_ingest_{entity_id}",
+                )
+                return ingest, sub
+
+            if ingest._idle_task is not None and not ingest._idle_task.done():
+                ingest._idle_task.cancel()
+                ingest._idle_task = None
+            ingest._idle_since = 0.0
+
+            prev_w, prev_h, prev_fps, prev_fit, prev_rot = (
+                ingest.desired_profile()
             )
             ingest.subscribers.add(sub)
-            self._ingests[entity_id] = ingest
-            ingest._task = self.hass.async_create_background_task(
-                self._async_run_ingest(ingest),
-                name=f"latter_camera_ingest_{entity_id}",
-            )
+            new_w, new_h, new_fps, new_fit, new_rot = ingest.desired_profile()
+            if (
+                new_w > prev_w
+                or new_h > prev_h
+                or new_fps > prev_fps
+                or (new_fit == "contain" and prev_fit == "fill")
+                or (new_rot != prev_rot and prev_rot != 0)
+            ):
+                ingest._restart_event.set()
             return ingest, sub
-
-        if ingest._idle_task is not None and not ingest._idle_task.done():
-            ingest._idle_task.cancel()
-            ingest._idle_task = None
-        ingest._idle_since = 0.0
-
-        prev_w, prev_h, prev_fps, prev_fit, prev_rot = ingest.desired_profile()
-        ingest.subscribers.add(sub)
-        new_w, new_h, new_fps, new_fit, new_rot = ingest.desired_profile()
-        if (
-            new_w > prev_w
-            or new_h > prev_h
-            or new_fps > prev_fps
-            or (new_fit == "contain" and prev_fit == "fill")
-            or (new_rot != prev_rot and prev_rot != 0)
-        ):
-            # Signal restart without mutating stream_* prematurely so warm frames keep accurate metadata
-            ingest._restart_event.set()
-        return ingest, sub
 
     def _unsubscribe(self, ingest: _CameraIngest, sub: _CameraSubscriber) -> None:
         """Detach `sub` and start the idle teardown timer if no subscribers remain."""
@@ -902,7 +953,7 @@ class LatterCameraStreamHub:
         for ingest in ingests:
             await self._async_stop_ingest(ingest)
         self._stream_source_cache.clear()
-        _CIRCULAR_MASK_CACHE.clear()
+        self._subscribe_locks.clear()
 
     async def _async_prime_snapshot(
         self,
@@ -1196,35 +1247,44 @@ class LatterCameraStreamHub:
         producer = asyncio.create_task(_invoke_mjpeg())
         try:
             while not ingest._closed and not ingest._restart_event.is_set():
-                get_task = asyncio.create_task(queue.get())
-                done, _pending = await asyncio.wait(
-                    {get_task, producer},
-                    timeout=FFMPEG_READ_TIMEOUT_SECONDS,
-                    return_when=asyncio.FIRST_COMPLETED,
+                get_task: asyncio.Task[bytes | None] = asyncio.create_task(
+                    queue.get()
                 )
-                if not done:
-                    get_task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await get_task
-                    break
+                try:
+                    done, _pending = await asyncio.wait(
+                        {get_task, producer},
+                        timeout=FFMPEG_READ_TIMEOUT_SECONDS,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    if not done:
+                        break
 
-                queue_eof = False
-                if get_task in done:
-                    chunk = get_task.result()
-                    if chunk is None:
-                        queue_eof = True
-                    else:
-                        for frame in parser.feed(chunk):
-                            if not got_any_frame:
-                                ingest.source_tier = "mjpeg"
-                                got_any_frame = True
-                            await self._async_publish_upstream_jpeg(ingest, frame)
-                else:
-                    get_task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await get_task
+                    queue_eof = False
+                    if get_task in done:
+                        chunk = (
+                            None
+                            if get_task.cancelled() or get_task.exception() is not None
+                            else get_task.result()
+                        )
+                        if chunk is None:
+                            queue_eof = True
+                        else:
+                            for frame in parser.feed(chunk):
+                                if not got_any_frame:
+                                    ingest.source_tier = "mjpeg"
+                                    got_any_frame = True
+                                await self._async_publish_upstream_jpeg(ingest, frame)
+                finally:
+                    if not get_task.done():
+                        get_task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await get_task
 
                 if producer in done or (queue_eof and producer.done()):
+                    if producer.cancelled():
+                        break
+                    if (prod_exc := producer.exception()) is not None:
+                        raise prod_exc
                     result = producer.result()
                     if result is None:
                         break
@@ -1694,7 +1754,6 @@ def resolve_camera_capabilities(
             platform = str(ent_entry.platform or "").lower()
 
     has_stream = bool(stream_source) or supports_stream
-    has_audio = bool(has_stream or attrs.get("has_audio") or attrs.get("audio"))
     has_talkback = bool(door_speaker)
 
     if isinstance(doorbell_ring_map, Mapping):
@@ -1719,10 +1778,25 @@ def resolve_camera_capabilities(
     custom_label = str(cfg.get("label") or "").strip()[:32]
     display_name = custom_label or friendly_name
 
-    # Smart defaults: Listen/Talk/Reply default ON only for detected doorbells (when hardware-capable),
-    # OFF for regular cameras; Unlock always defaults None until explicitly bound to a Lock/Garage entity.
     raw_listen = cfg.get("show_listen")
-    show_listen = bool(raw_listen) if isinstance(raw_listen, bool) else bool(is_doorbell and has_audio)
+    raw_has_audio = attrs.get("has_audio")
+    if raw_has_audio is None:
+        raw_has_audio = attrs.get("audio")
+    if isinstance(raw_has_audio, bool):
+        has_audio = raw_has_audio
+    elif raw_has_audio is not None:
+        has_audio = str(raw_has_audio).strip().lower() in ("1", "true", "yes", "on")
+    else:
+        has_audio = bool(
+            stream_kind == "rtsp"
+            and (is_doorbell or has_talkback or raw_listen is True)
+        )
+
+    show_listen = (
+        bool(raw_listen)
+        if isinstance(raw_listen, bool)
+        else bool(is_doorbell and has_audio)
+    )
     raw_talk = cfg.get("show_talk")
     show_talk = bool(raw_talk) if isinstance(raw_talk, bool) else bool(is_doorbell and has_talkback)
     raw_reply = cfg.get("show_reply")
@@ -1762,29 +1836,6 @@ def resolve_camera_capabilities(
         "stream_kind": stream_kind,
         "door_speaker": door_speaker,
     }
-
-
-async def async_resolve_camera_capabilities(
-    hass: HomeAssistant,
-    camera_entity_id: str,
-    *,
-    doorbell_ring_map: Mapping[str, str] | Collection[str] | None = None,
-    carousel_entities: Collection[str] | None = None,
-    volume_overrides: dict[str, str] | None = None,
-    camera_config: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Probe stream source asynchronously (cached) and return full camera capability metadata."""
-    hub = get_camera_stream_hub(hass)
-    stream_source = await hub.async_get_cached_stream_source(camera_entity_id)
-    return resolve_camera_capabilities(
-        hass,
-        camera_entity_id,
-        doorbell_ring_map=doorbell_ring_map,
-        carousel_entities=carousel_entities,
-        volume_overrides=volume_overrides,
-        camera_config=camera_config,
-        stream_source=stream_source,
-    )
 
 
 # ---------------------------------------------------------------------------

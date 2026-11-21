@@ -1,4 +1,4 @@
-"""Sleep-safe Tier 2 Switch entities (`switch.<device_slug>_*`) for Latter Devices."""
+"""Curated Switch entities (`switch.<device_slug>_*`) for Latter Devices."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up curated sleep-safe Latter switch controls for each display Device subentry."""
+    """Set up curated Latter switch controls for each Device subentry."""
     runtime = entry.runtime_data
     if isinstance(runtime, LatterSystemHub):
         coordinators = list(runtime.coordinators.values())
@@ -31,28 +31,38 @@ async def async_setup_entry(
         coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
 
     for coordinator in coordinators:
-        if coordinator.is_ble_tag or not coordinator.has_display:
+        if coordinator.is_ble_tag:
             continue
-        async_add_entities(
-            [LatterBedtimeModeSwitch(coordinator)],
-            config_subentry_id=coordinator.subentry_id,
-        )
+        dev_entities: list[SwitchEntity] = []
+        if coordinator.has_display:
+            dev_entities.extend(
+                [
+                    LatterBedtimeModeSwitch(coordinator),
+                    LatterScreensaverSwitch(coordinator),
+                ]
+            )
+        if coordinator.has_display or coordinator.has_speaker:
+            dev_entities.append(LatterDoNotDisturbSwitch(coordinator))
+        if dev_entities:
+            async_add_entities(
+                dev_entities,
+                config_subentry_id=coordinator.subentry_id,
+            )
 
 
-class LatterBedtimeModeSwitch(SwitchEntity):
-    """Exposes switch.<device_slug>_bedtime_mode backed by the Device subentry."""
+class _BaseLatterSwitch(SwitchEntity):
+    """Base switch subscribed to `LatterCoordinator` updates."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _attr_translation_key = "bedtime_mode"
-    _attr_icon = "mdi:weather-night"
 
-    def __init__(self, coordinator: LatterCoordinator) -> None:
-        """Initialize Bedtime Mode switch control."""
+    def __init__(self, coordinator: LatterCoordinator, suffix: str) -> None:
+        """Initialize the switch entity."""
         self.coordinator = coordinator
-        self._attr_unique_id = f"{coordinator.subentry_id}_bedtime_mode"
+        self._attr_translation_key = suffix
+        self._attr_unique_id = f"{coordinator.subentry_id}_{suffix}"
         self.entity_id = build_device_entity_id(
-            coordinator.device_slug, "bedtime_mode", "switch"
+            coordinator.device_slug, suffix, "switch"
         )
 
     @property
@@ -68,8 +78,21 @@ class LatterBedtimeModeSwitch(SwitchEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Write updated bedtime preference state to Home Assistant."""
+        """Write updated switch state to Home Assistant."""
         self.async_write_ha_state()
+
+
+class LatterBedtimeModeSwitch(_BaseLatterSwitch):
+    """Exposes sleep-safe `switch.<device_slug>_bedtime_mode` backed by the Device subentry."""
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize Bedtime Mode switch control."""
+        super().__init__(coordinator, "bedtime_mode")
+
+    @property
+    def available(self) -> bool:
+        """Remain available across deep sleep so preference changes queue cleanly."""
+        return True
 
     @property
     def is_on(self) -> bool:
@@ -85,3 +108,59 @@ class LatterBedtimeModeSwitch(SwitchEntity):
         """Disable Bedtime Mode on the Device subentry (pushes immediately when online)."""
         _ = kwargs
         await self.coordinator.async_update_device_prefs({"bedtime_active": False})
+
+
+class LatterDoNotDisturbSwitch(_BaseLatterSwitch):
+    """Exposes sleep-safe `switch.<device_slug>_do_not_disturb` backed by the Device subentry."""
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize Do Not Disturb switch control."""
+        super().__init__(coordinator, "do_not_disturb")
+
+    @property
+    def available(self) -> bool:
+        """Remain available across deep sleep so preference changes queue cleanly."""
+        return True
+
+    @property
+    def is_on(self) -> bool:
+        """Return True when Do Not Disturb is active for this Device."""
+        return self.coordinator.do_not_disturb
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable Do Not Disturb on the Device subentry."""
+        _ = kwargs
+        await self.coordinator.async_update_device_prefs({"do_not_disturb": True})
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable Do Not Disturb on the Device subentry."""
+        _ = kwargs
+        await self.coordinator.async_update_device_prefs({"do_not_disturb": False})
+
+
+class LatterScreensaverSwitch(_BaseLatterSwitch):
+    """Exposes live `switch.<device_slug>_screensaver` reflecting ambient screensaver state."""
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize Screensaver switch control."""
+        super().__init__(coordinator, "screensaver")
+
+    @property
+    def available(self) -> bool:
+        """Return True while the bound ESPHome device has a live radio connection."""
+        return self.coordinator.radio_connected
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while the ambient screensaver is actively displayed."""
+        return self.coordinator.screensaver_active
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Activate the ambient screensaver immediately."""
+        _ = kwargs
+        await self.coordinator.async_set_screensaver(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Exit the ambient screensaver and wake the screen."""
+        _ = kwargs
+        await self.coordinator.async_set_screensaver(False)

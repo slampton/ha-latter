@@ -6,7 +6,7 @@
  * - Walk-Around BLE calibration, scanner antenna trim, & Area sensor fusion
  */
 
-import { formatWsError } from "../api/ws-client.js";
+import { formatWsError, isConflictError } from "../api/ws-client.js";
 import type { SharedControlItem, SharedControlTarget, SystemDeviceEntry } from "../types.js";
 import { isValidHexColor } from "../utils/format.js";
 import type { StudioStore } from "./store.js";
@@ -33,23 +33,22 @@ export interface BatchPillState {
   staged: boolean;
 }
 
-interface StagedBatchEntityAction {
-  ctrl: SharedControlItem;
-  action?: string;
-  option?: string;
-  level?: number;
-}
-
 export class GroupsController {
   private readonly store: StudioStore;
 
   /** Per-`pref_key` token delta map (`{ [token]: true | false }`) preserving untouched per-Device tokens (`Q6`). */
   readonly batchPillDrafts = new Map<string, Record<string, boolean>>();
-  private readonly batchEntityDrafts = new Map<string, StagedBatchEntityAction>();
   batchBusy = false;
+  calibratingAllIlluminance = false;
+  readonly calibratingIlluminanceAreas = new Set<string>();
 
   constructor(store: StudioStore) {
     this.store = store;
+  }
+
+  isCalibratingIlluminance(areaId?: string): boolean {
+    if (this.calibratingAllIlluminance) return true;
+    return Boolean(areaId && this.calibratingIlluminanceAreas.has(String(areaId)));
   }
 
   get batchDraft(): Map<string, unknown> {
@@ -62,9 +61,6 @@ export class GroupsController {
       if (Object.keys(deltas).length > 0) {
         keys.add(pk);
       }
-    }
-    for (const ek of this.batchEntityDrafts.keys()) {
-      keys.add(`entity:${ek}`);
     }
     return keys.size;
   }
@@ -408,12 +404,6 @@ export class GroupsController {
     });
   }
 
-  filteredControlEntityIds(ctrl: SharedControlItem): string[] {
-    return this.filteredControlTargets(ctrl)
-      .map((t) => t.entity_id || "")
-      .filter(Boolean);
-  }
-
   getEffectiveBatchValue(ctrl: SharedControlItem): {
     value: string;
     mixed: boolean;
@@ -424,19 +414,6 @@ export class GroupsController {
       const raw = this.store.batchDraft.get(prefKey);
       const valStr =
         ctrl.domain === "switch" ? (raw ? "on" : "off") : String(raw ?? "");
-      return { value: valStr, mixed: false, staged: true };
-    }
-    const entKey = ctrl.key || ctrl.canonical_key || "";
-    if (!prefKey && entKey && this.batchEntityDrafts.has(entKey)) {
-      const entDraft = this.batchEntityDrafts.get(entKey)!;
-      const valStr =
-        entDraft.action === "turn_on"
-          ? "on"
-          : entDraft.action === "turn_off"
-            ? "off"
-            : entDraft.option !== undefined
-              ? entDraft.option
-              : String(entDraft.level ?? "");
       return { value: valStr, mixed: false, staged: true };
     }
     const targets = this.filteredControlTargets(ctrl);
@@ -532,26 +509,6 @@ export class GroupsController {
     this.store.host.requestUpdate();
   }
 
-  stageBatchEntityControl(
-    ctrl: SharedControlItem,
-    mutation: { action?: string; option?: string; level?: number },
-  ): void {
-    if (ctrl.pref_key) {
-      if (mutation.action !== undefined) {
-        this.stageBatchSetting(ctrl.pref_key, mutation.action === "turn_on");
-      } else if (mutation.option !== undefined) {
-        this.stageBatchSetting(ctrl.pref_key, mutation.option);
-      } else if (mutation.level !== undefined && Number.isFinite(mutation.level)) {
-        this.stageBatchSetting(ctrl.pref_key, mutation.level);
-      }
-      return;
-    }
-    const entKey = ctrl.key || ctrl.canonical_key || ctrl.name;
-    if (!entKey) return;
-    this.batchEntityDrafts.set(entKey, { ctrl, ...mutation });
-    this.store.host.requestUpdate();
-  }
-
   /**
    * Stages a per-token pill toggle across matching target Devices (`Q6`).
    * Never copies `states[0]` over `Mixed` target Devices: untouched tokens stay intact per Device.
@@ -627,7 +584,6 @@ export class GroupsController {
   resetBatchDraft(): void {
     this.store.batchDraft.clear();
     this.batchPillDrafts.clear();
-    this.batchEntityDrafts.clear();
     this.store.host.requestUpdate();
   }
 
@@ -635,7 +591,6 @@ export class GroupsController {
     if (!this.hasBatchDraft) return 0;
     const hasDetachingKey =
       this.batchPillDrafts.size > 0 ||
-      this.batchEntityDrafts.size > 0 ||
       Array.from(this.store.batchDraft.keys()).some((key) => {
         const spec = this.store.entity.getPrefSpec(key);
         return !spec || spec.group_tier !== null;
@@ -695,6 +650,7 @@ export class GroupsController {
     const uniformPatch: Record<string, unknown> = Object.fromEntries(
       this.store.batchDraft.entries(),
     );
+    const foldedPillKeys = new Set<string>();
     const perDevicePatches = new Map<string, Record<string, unknown>>();
 
     const controls = this.store.state?.system_controls || [];
@@ -718,6 +674,7 @@ export class GroupsController {
       const distinctCsvs = new Set(resolvedPerTarget.map((r) => r.csv));
       if (distinctCsvs.size === 1) {
         uniformPatch[prefKey] = resolvedPerTarget[0].csv;
+        foldedPillKeys.add(prefKey);
       } else {
         for (const item of resolvedPerTarget) {
           const cur = perDevicePatches.get(item.subentryId) || {};
@@ -727,11 +684,10 @@ export class GroupsController {
       }
     }
 
-    const entityActions = Array.from(this.batchEntityDrafts.values());
-
     this.batchBusy = true;
     this.store.host.requestUpdate();
 
+    let anyApplied = false;
     try {
       let lastRes = null;
       if (Object.keys(uniformPatch).length > 0) {
@@ -743,37 +699,41 @@ export class GroupsController {
           },
           this.store.activeSubentryId || null,
         );
+        anyApplied = true;
+        for (const k of Object.keys(uniformPatch)) {
+          this.store.batchDraft.delete(k);
+        }
+        for (const pk of foldedPillKeys) {
+          this.batchPillDrafts.delete(pk);
+        }
       }
 
+      const remainingPerDevice = new Set<string>(perDevicePatches.keys());
       for (const [subentryId, devPatch] of perDevicePatches.entries()) {
-        const devRes = await this.store.ws.runDeviceCommand(subentryId, "save_device_config", {
-          config: devPatch,
-        });
+        const expectedRev = this.store.getKnownDeviceConfigRev(subentryId);
+        const reqPayload: Record<string, unknown> = { config: devPatch };
+        if (expectedRev > 0) {
+          reqPayload.expected_config_rev = expectedRev;
+        }
+        const devRes = await this.store.ws.runDeviceCommand(
+          subentryId,
+          "save_device_config",
+          reqPayload,
+        );
+        anyApplied = true;
+        remainingPerDevice.delete(subentryId);
         if (devRes) {
+          if (devRes.subentry_id === subentryId && devRes.device_config_rev > 0) {
+            this.store.recordKnownDeviceConfigRev(subentryId, devRes.device_config_rev);
+          }
           lastRes = devRes;
         }
       }
 
-      for (const entAct of entityActions) {
-        const entityIds = this.filteredControlEntityIds(entAct.ctrl);
-        if (!entityIds.length) continue;
-        const body: Record<string, unknown> = { entity_ids: entityIds };
-        if (entAct.action !== undefined) body.action = entAct.action;
-        if (entAct.option !== undefined) body.option = entAct.option;
-        if (entAct.level !== undefined) body.level = entAct.level;
-        const entRes = await this.store.ws.runSystemCommand(
-          "system_entity_action",
-          body,
-          this.store.activeSubentryId || null,
-        );
-        if (entRes) {
-          lastRes = entRes;
-        }
-      }
-
       this.store.batchDraft.clear();
-      this.batchPillDrafts.clear();
-      this.batchEntityDrafts.clear();
+      if (remainingPerDevice.size === 0) {
+        this.batchPillDrafts.clear();
+      }
 
       if (lastRes) {
         this.store.ingestPayload(lastRes, false);
@@ -805,7 +765,14 @@ export class GroupsController {
         );
       }
     } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not apply staged batch settings"), true);
+      if (anyApplied || isConflictError(err)) {
+        await this.store.refreshState();
+      }
+      if (isConflictError(err)) {
+        this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
+      } else {
+        this.store.showToast(formatWsError(err, "Could not apply staged batch settings"), true);
+      }
     } finally {
       this.batchBusy = false;
       this.store.host.requestUpdate();
@@ -1039,6 +1006,13 @@ export class GroupsController {
   }
 
   async calibrateAreaIlluminance(areaId?: string): Promise<void> {
+    if (this.isCalibratingIlluminance(areaId)) return;
+    if (areaId) {
+      this.calibratingIlluminanceAreas.add(areaId);
+    } else {
+      this.calibratingAllIlluminance = true;
+    }
+    this.store.host.requestUpdate();
     try {
       const payload: Record<string, unknown> = {};
       if (areaId) payload.area_id = areaId;
@@ -1077,6 +1051,13 @@ export class GroupsController {
         formatWsError(err, "Could not calibrate Area ambient light"),
         true,
       );
+    } finally {
+      if (areaId) {
+        this.calibratingIlluminanceAreas.delete(areaId);
+      } else {
+        this.calibratingAllIlluminance = false;
+      }
+      this.store.host.requestUpdate();
     }
   }
 }

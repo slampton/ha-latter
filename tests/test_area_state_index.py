@@ -54,7 +54,6 @@ from custom_components.latter.doorbell import (
 )
 from custom_components.latter.feeds import (
     async_fetch_calendar_agenda,
-    async_fetch_calendar_snapshot,
     compute_moon_phase,
     read_sun_and_moon_fields,
 )
@@ -176,7 +175,7 @@ async def test_area_state_index_reactive_lookup_and_media_tick_filtering(
     # Dynamic new Area creation & deletion
     area_reg.async_create("Patio", area_id="patio")
     await hass.async_block_till_done()
-    assert hass.states.get("binary_sensor.patio_ble_occupancy") is not None
+    assert hass.states.get("binary_sensor.patio_occupancy") is not None
     area_reg.async_delete("patio")
     await hass.async_block_till_done()
 
@@ -276,6 +275,10 @@ async def test_context_builder_curated_entities_and_area_actions(
     assert "1 on" in areas_summary[0]["name"]
 
     all_lr = get_area_entities(hass, "living_room", "all", coord.local_speaker)
+    lr_ids = {item["id"] for item in all_lr}
+    assert f"light.{coord.device_slug}_screen" not in lr_ids
+    assert f"switch.{coord.device_slug}_screensaver" not in lr_ids
+    assert f"switch.{coord.device_slug}_do_not_disturb" not in lr_ids
     avail = get_area_available_domains(hass, "living_room", coord.local_speaker, all_lr)
     assert avail == "scene,light,cover,fan,switch,climate,media"
     assert (
@@ -493,13 +496,13 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
                         "summary": "Design Review",
                         "start": event_iso,
                         "end": (now_local + timedelta(hours=3)).isoformat(),
-                        "location": "37.8044,-122.2712",
+                        "location": "Downtown HQ",
                     },
                     {
                         "summary": "Design Review",
                         "start": event_iso,
                         "end": (now_local + timedelta(hours=3)).isoformat(),
-                        "location": "37.8044,-122.2712",
+                        "location": "Downtown HQ",
                     },
                     {
                         "summary": "Offsite Day",
@@ -529,16 +532,13 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
     )
 
     records, slots = await async_fetch_calendar_agenda(
-        hass, ["calendar.family"], days=14, map_url_builder=coord.build_map_snapshot_url
+        hass, ["calendar.family"], days=14
     )
     assert len(records) == 2  # Duplicate deduplicated!
     assert len(slots) == 2
-    assert "/api/latter/map/" in slots[0]["map_url"]
-
-    _, snap_slots = await async_fetch_calendar_snapshot(
-        hass, ["calendar.family"], days=7, map_url_builder=coord.build_map_snapshot_url
-    )
-    assert len(snap_slots) == 2
+    assert slots[0]["location"] == "Downtown HQ"
+    assert slots[0]["map_url"] == ""
+    assert not hasattr(coord, "build_map_snapshot_url")
 
     # Doorbell device with camera, speaker, lock, ring sensor, AND motion sensor
     door_dev = dev_reg.async_get_or_create(
@@ -575,7 +575,7 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
 
     targets = resolve_doorbell_targets(hass, "camera.front_door_high")
     assert targets["door_speaker"] == "media_player.front_door_speaker"
-    assert targets["lock_entity"] == "lock.front_door_deadbolt"
+    assert "lock_entity" not in targets
     assert targets["tts_lead_in"] is True
 
     # Exact device_id sibling matching: a standalone camera MUST NOT substring-match an unrelated speaker
@@ -956,5 +956,99 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
         coord.get_area_context_payload()[1]["home_categories"]
         == "alarm,thermostat,entry,vacuum"
     )
+
+    assert await async_unload_entry(hass, entry) is True
+
+
+async def test_wrapped_pin_enforced_on_area_and_shortcut_rpc(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify `area_action` and `shortcut_action` enforce `wrap_pin_code` envelopes and anti-replay nonces."""
+    from homeassistant.exceptions import ServiceValidationError
+
+    from custom_components.latter import async_unload_entry
+    from custom_components.latter.const import (
+        CONF_DOCK_ITEMS,
+        CONF_SECURITY_PIN_HASH,
+        CONF_SECURITY_PIN_POLICY,
+    )
+    from custom_components.latter.protocol import hash_security_pin, wrap_pin_code
+
+    entry, sys_obj, coord = await setup_latter_hub(hass)
+    ent_reg = er.async_get(hass)
+    ent_reg.async_register(
+        er.RegistryEntry(entity_id="lock.front_door", platform="zwave_js", area_id="living_room")
+    )
+    hass.states.async_set("lock.front_door", "locked", {"friendly_name": "Front Door"})
+
+    unlocked_calls: list[dict[str, Any]] = []
+    hass.services.async_register(
+        "lock", "unlock", lambda call: unlocked_calls.append(dict(call.data))
+    )
+
+    pin_hash = hash_security_pin("2468")
+    coord.update_device_config(
+        {
+            **coord.device_data,
+            CONF_SECURITY_PIN_POLICY: "require_pin",
+            CONF_SECURITY_PIN_HASH: pin_hash,
+            CONF_DOCK_ITEMS: [
+                {"kind": "entity", "target": "lock.front_door", "action": "unlock", "label": "Unlock"},
+            ],
+        }
+    )
+    assert coord._pin_key_id and coord._pin_key_bytes
+
+    # 1. Unwrapped plaintext PIN on `area_action` is rejected
+    with pytest.raises(ServiceValidationError) as exc_plain:
+        await sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            "area_action",
+            {"entity_id": "lock.front_door", "action": "unlock", "code": "2468"},
+        )
+    assert exc_plain.value.translation_key == "security_pin_invalid"
+    assert unlocked_calls == []
+
+    # 2. Valid wrapped PIN (`nonce=1`) on `area_action` succeeds
+    wrapped_area = wrap_pin_code(
+        coord._pin_key_id,
+        coord._pin_key_bytes,
+        1,
+        "lock.front_door",
+        "unlock",
+        "2468",
+    )
+    await sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        "area_action",
+        {"entity_id": "lock.front_door", "action": "unlock", "code": wrapped_area},
+    )
+    assert len(unlocked_calls) == 1
+
+    # 3. Replaying `nonce=1` is rejected
+    with pytest.raises(ServiceValidationError) as exc_replay:
+        await sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            "area_action",
+            {"entity_id": "lock.front_door", "action": "unlock", "code": wrapped_area},
+        )
+    assert exc_replay.value.translation_key == "security_pin_invalid"
+    assert len(unlocked_calls) == 1
+
+    # 4. Fresh `nonce=2` wrapped PIN on `shortcut_action` succeeds
+    wrapped_sc = wrap_pin_code(
+        coord._pin_key_id,
+        coord._pin_key_bytes,
+        2,
+        "lock.front_door",
+        "unlock",
+        "2468",
+    )
+    await sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        "shortcut_action",
+        {"entity_id": "lock.front_door", "action": "unlock", "code": wrapped_sc},
+    )
+    assert len(unlocked_calls) == 2
 
     assert await async_unload_entry(hass, entry) is True

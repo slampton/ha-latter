@@ -10,12 +10,17 @@ import {
   renderPrefControlRow,
   renderSelectRow,
   renderSettingsRow,
+  renderSwitchRow,
 } from "../components/controls.js";
 import { SECURITY_PIN_POLICY_OPTIONS } from "../constants.js";
 import { t } from "../i18n/index.js";
 import { focusSafe, html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import type { EspHomeEntityItem, HomeAssistant } from "../types.js";
+import type {
+  DeviceRuntimeTelemetry,
+  EspHomeEntityItem,
+  HomeAssistant,
+} from "../types.js";
 import { fmtNumber } from "../utils/format.js";
 import { renderDeviceEntityRow, renderDeviceOfflineBanner } from "./device-overview-view.js";
 
@@ -282,6 +287,134 @@ export function parseDeviceHardwareManifestRows(
   return rows;
 }
 
+export function parseDeviceRuntimeTelemetryRows(
+  telemetry: DeviceRuntimeTelemetry | null | undefined,
+  includeLinkRows: boolean,
+  hass?: HomeAssistant | null,
+  overlay?: Readonly<Record<string, string>> | null,
+): DiagnosticsTelemetryRow[] {
+  if (!telemetry || typeof telemetry !== "object") return [];
+  const rows: DiagnosticsTelemetryRow[] = [];
+
+  const ramFree = telemetry.int_ram_free_kb;
+  const ramMin = telemetry.int_ram_min_kb;
+  const ramLargest = telemetry.int_ram_largest_kb;
+  if (
+    (ramFree !== null && ramFree !== undefined && Number.isFinite(Number(ramFree))) ||
+    (ramMin !== null && ramMin !== undefined && Number.isFinite(Number(ramMin))) ||
+    (ramLargest !== null && ramLargest !== undefined && Number.isFinite(Number(ramLargest)))
+  ) {
+    const fmtKb = (v: number | null | undefined): string =>
+      v !== null && v !== undefined && Number.isFinite(Number(v))
+        ? fmtNumber(Number(v), hass, 0)
+        : "—";
+    rows.push({
+      label: t("dev_tools.telem_int_ram", undefined, overlay),
+      value: `${fmtKb(ramFree)} / ${fmtKb(ramMin)} / ${fmtKb(ramLargest)} KB`,
+    });
+  }
+
+  const psramMin = telemetry.psram_min_kb;
+  if (psramMin !== null && psramMin !== undefined && Number.isFinite(Number(psramMin)) && Number(psramMin) > 0) {
+    rows.push({
+      label: t("dev_tools.telem_psram_min", undefined, overlay),
+      value: `${fmtNumber(Number(psramMin), hass, 0)} KB`,
+    });
+  }
+
+  if (typeof telemetry.ble_active === "boolean") {
+    rows.push({
+      label: t("dev_tools.telem_ble_beacon", undefined, overlay),
+      value: telemetry.ble_active
+        ? t("common.active", undefined, overlay)
+        : t("common.disabled", undefined, overlay),
+    });
+  }
+
+  const link = telemetry.link;
+  if (includeLinkRows && link && typeof link === "object" && !Array.isArray(link)) {
+    const upRaw = link.up_s ?? link.up;
+    if (upRaw !== undefined && upRaw !== null && Number.isFinite(Number(upRaw))) {
+      rows.push({
+        label: t("dev_tools.telem_uptime", undefined, overlay),
+        value: formatTelemetryDuration(Number(upRaw)),
+      });
+    }
+    const rstRaw = typeof link.rst === "string" ? link.rst.trim() : "";
+    if (rstRaw) {
+      rows.push({
+        label: t("dev_tools.telem_last_reset", undefined, overlay),
+        value: rstRaw,
+        code: true,
+      });
+    }
+    const discRaw = link.disc;
+    if (discRaw !== undefined && discRaw !== null && Number.isFinite(Number(discRaw))) {
+      const btoNum = Number(link.bto ?? 0);
+      const btoSuffix =
+        Number.isFinite(btoNum) && btoNum > 0
+          ? t("dev_tools.telem_beacon_timeouts", { count: fmtNumber(btoNum, hass, 0) }, overlay)
+          : "";
+      rows.push({
+        label: t("dev_tools.telem_wifi_disc", undefined, overlay),
+        value: `${fmtNumber(Number(discRaw), hass, 0)}${btoSuffix}`,
+      });
+    }
+    const rssiAvg = link.rssi_avg;
+    const rssiMin = link.rssi_min;
+    if (
+      rssiAvg !== undefined &&
+      rssiAvg !== null &&
+      rssiMin !== undefined &&
+      rssiMin !== null &&
+      Number.isFinite(Number(rssiAvg)) &&
+      Number.isFinite(Number(rssiMin))
+    ) {
+      rows.push({
+        label: t("dev_tools.telem_wifi_avg_min", undefined, overlay),
+        value: `${fmtNumber(Number(rssiAvg), hass, 0)} / ${fmtNumber(Number(rssiMin), hass, 0)} dBm`,
+      });
+    }
+    const haRaw = link.ha;
+    if (haRaw !== undefined && haRaw !== null && Number.isFinite(Number(haRaw))) {
+      const gapNum = Number(link.gap_s ?? link.gap ?? 0);
+      const gapSuffix =
+        Number.isFinite(gapNum) && gapNum > 0
+          ? t("dev_tools.telem_max_gap", { duration: formatTelemetryDuration(gapNum) }, overlay)
+          : "";
+      rows.push({
+        label: t("dev_tools.telem_ha_sessions", undefined, overlay),
+        value: `${fmtNumber(Number(haRaw), hass, 0)}${gapSuffix}`,
+      });
+    }
+    const nvsW = link.nvs_w;
+    const nvsE = link.nvs_e;
+    const nvsMax = link.nvs_max_ms;
+    if (
+      nvsW !== undefined &&
+      nvsW !== null &&
+      Number.isFinite(Number(nvsW)) &&
+      Number.isFinite(Number(nvsE ?? 0)) &&
+      Number.isFinite(Number(nvsMax ?? 0))
+    ) {
+      rows.push({
+        label: t("dev_tools.telem_nvs_writes", undefined, overlay),
+        value: t(
+          "dev_tools.telem_nvs_value",
+          {
+            writes: fmtNumber(Number(nvsW), hass, 0),
+            erases: fmtNumber(Number(nvsE ?? 0), hass, 0),
+            maxMs: fmtNumber(Number(nvsMax ?? 0), hass, 0),
+          },
+          overlay,
+        ),
+      });
+    }
+  }
+
+  return rows;
+}
+
 export function renderDeviceToolsView(store: StudioStore): TemplateResult {
   const data = store.state;
   const cfg = data?.config || {};
@@ -293,6 +426,7 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
   const curDevEntry =
     (data?.system_devices || []).find((d) => d.subentry_id === store.activeSubentryId) ||
     (data?.system_devices || []).find((d) => d.is_current);
+  const isOffline = !isBleOnly && curDevEntry?.is_online === false;
 
   const networkItems = store.entity.getSectionItems("network");
   const developerItems = store.entity.getSectionItems("developer");
@@ -344,7 +478,11 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
     (it) =>
       INTERACTIVE_ENTITY_DOMAINS.has(it.domain) &&
       !it.pref_key &&
-      it.key !== "weather_sim_condition",
+      it.key !== "weather_sim_condition" &&
+      it.key !== "telemetry_profiler" &&
+      it.key !== "log_memory_report" &&
+      !it.entity_id.endsWith("_telemetry_profiler") &&
+      !it.entity_id.endsWith("_log_memory_report"),
   );
   const devSensorItems = developerItems.filter(
     (it) => !INTERACTIVE_ENTITY_DOMAINS.has(it.domain),
@@ -360,20 +498,19 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
     store.hass,
     store.localeOverlay,
   );
+  const runtimeRows = parseDeviceRuntimeTelemetryRows(
+    live.telemetry,
+    linkRows.length === 0,
+    store.hass,
+    store.localeOverlay,
+  );
   const manifestRows = parseDeviceHardwareManifestRows(
     manifestEntity?.state,
     store.hass,
     store.localeOverlay,
   );
-  const hasDeveloperDrawer =
-    !isBleOnly &&
-    Boolean(
-      weatherSimPref ||
-        devControlItems.length ||
-        devSensorItems.length ||
-        linkRows.length ||
-        manifestRows.length,
-    );
+  const profilerOn = Boolean(live.telemetry?.profiler_on);
+  const hasDeveloperDrawer = !isBleOnly;
 
   const curPinPolicy = String(cfg.security_pin_policy || "auto");
   const effectivePinPolicyLabel = store.tPrefOption(
@@ -491,16 +628,46 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
               ? html`<details class="sub-collapsible">
                   <summary>${store.t("card.developer_telemetry")}</summary>
                   <div class="card-content">
-                    ${weatherSimPref || devControlItems.length
-                      ? html`<div class="settings-list">
-                          ${weatherSimPref ? renderPrefControlRow(store, weatherSimPref) : nothing}
-                          ${devControlItems.map((it) => renderDeviceEntityRow(store, it))}
-                        </div>`
-                      : nothing}
-                    ${devSensorItems.length || linkRows.length || manifestRows.length
+                    <div class="settings-list">
+                      ${weatherSimPref ? renderPrefControlRow(store, weatherSimPref) : nothing}
+                      ${renderSwitchRow({
+                        id: "dev-telemetry-profiler",
+                        label: store.t("dev_tools.profiler_label"),
+                        description: store.t("dev_tools.profiler_desc"),
+                        disabled: isOffline,
+                        checked: profilerOn,
+                        onChange: (checked) =>
+                          void store.entity.runDeviceAction(
+                            checked ? "set_profiler_on" : "set_profiler_off",
+                          ),
+                      })}
+                      ${renderSettingsRow({
+                        id: "row-refresh-telemetry",
+                        label: store.t("dev_tools.refresh_telemetry_label"),
+                        description: store.t("dev_tools.refresh_telemetry_desc"),
+                        control: html`<button
+                          type="button"
+                          id="btn-refresh-telemetry"
+                          ?disabled=${isOffline}
+                          @click=${() =>
+                            void store.entity.runDeviceAction(
+                              "request_telemetry",
+                              store.t("dev_tools.refresh_telemetry_toast"),
+                            )}
+                          class="btn btn-secondary btn-compact"
+                        >
+                          ${store.t("action.refresh")}
+                        </button>`,
+                      })}
+                      ${devControlItems.map((it) => renderDeviceEntityRow(store, it))}
+                    </div>
+                    ${devSensorItems.length ||
+                    runtimeRows.length ||
+                    linkRows.length ||
+                    manifestRows.length
                       ? html`<div class="kv-list">
                           ${devSensorItems.map((it) => renderDeviceEntityRow(store, it))}
-                          ${[...linkRows, ...manifestRows].map(
+                          ${[...runtimeRows, ...linkRows, ...manifestRows].map(
                             (row) => html`<div class="kv-row">
                               <span>${row.label}</span>
                               <strong>

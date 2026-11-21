@@ -526,6 +526,7 @@ export interface AreaPresenceRow {
   closest_distance_ft?: number | null;
   active_sensors?: string[];
   available_sensors?: string[];
+  unavailable_sensors?: string[];
   floor_id?: string | null;
   floor_name?: string | null;
   match_method?: string | null;
@@ -612,6 +613,17 @@ interface BleTransmitterStatus {
   advertise_mode: string;
 }
 
+export interface DeviceRuntimeTelemetry {
+  link?: Record<string, unknown>;
+  int_ram_free_kb?: number | null;
+  int_ram_min_kb?: number | null;
+  int_ram_largest_kb?: number | null;
+  psram_min_kb?: number | null;
+  ble_active?: boolean | null;
+  profiler_on?: boolean;
+  updated_at?: string | null;
+}
+
 export interface LiveDeviceTelemetry {
   active_area_name?: string;
   active_area_lux_display?: string;
@@ -630,6 +642,11 @@ export interface LiveDeviceTelemetry {
   effective_security_pin_policy?: string;
   has_security_pin?: boolean;
   is_ble_sleep_expected?: boolean;
+  radio_connected?: boolean;
+  display_power_state?: number;
+  display_brightness_pct?: number;
+  screensaver_active?: boolean;
+  telemetry?: DeviceRuntimeTelemetry | null;
   timer_running?: boolean;
   timer_paused?: boolean;
   timer_remaining_sec?: number;

@@ -17,6 +17,7 @@ import pytest
 from custom_components.latter import async_unload_entry
 from custom_components.latter.areas import async_execute_area_action
 from custom_components.latter.const import (
+    CONF_BROADCAST_SPEAKERS,
     CONF_CAMERA_ENTITIES,
     CONF_PINNED_ITEMS,
     CONF_REMOTES_LIST,
@@ -26,23 +27,25 @@ from custom_components.latter.const import (
     DATA_GLOBAL_CONFIG,
     DOMAIN,
     MIN_FIRMWARE_SDK_REV,
-    SERVICE_AREA_ACTION,
-    SERVICE_AREA_BROWSE,
-    SERVICE_CALENDAR_CREATE_EVENT,
-    SERVICE_CALENDAR_FETCH,
-    SERVICE_DEVICE_HELLO,
-    SERVICE_DOORBELL_INTERCOM,
+    PUBLIC_SERVICES,
+    RPC_AREA_ACTION,
+    RPC_AREA_BROWSE,
+    RPC_CALENDAR_CREATE_EVENT,
+    RPC_CALENDAR_DELETE_EVENT,
+    RPC_CALENDAR_FETCH,
+    RPC_DEVICE_HELLO,
+    RPC_DOORBELL_INTERCOM,
+    RPC_MEDIA_COMMAND,
+    RPC_MEDIA_VOLUME,
+    RPC_MUSIC_BROWSE,
+    RPC_REMOTE_ACTION,
+    RPC_SAVE_CUSTOM_COLOR,
+    RPC_SHORTCUT_ACTION,
     SERVICE_INTERCOM_BROADCAST,
-    SERVICE_MEDIA_COMMAND,
-    SERVICE_MEDIA_VOLUME,
-    SERVICE_MUSIC_BROWSE,
     SERVICE_NOTIFY,
-    SERVICE_REMOTE_ACTION,
     SERVICE_RESET_DEVICE,
-    SERVICE_SAVE_CUSTOM_COLOR,
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
-    SERVICE_SHORTCUT_ACTION,
 )
 from custom_components.latter.media import (
     VOLUME_MUTE_FLAG,
@@ -58,7 +61,7 @@ from custom_components.latter.media_browse import (
     clear_browse_cache,
 )
 from custom_components.latter.presence import get_ble_fabric
-from custom_components.latter.protocol import hash_security_pin
+from custom_components.latter.protocol import hash_security_pin, wrap_pin_code
 
 
 @pytest.mark.asyncio
@@ -71,32 +74,31 @@ async def test_services_rbac_and_validation_errors(
     non_admin_ctx = Context(user_id="regular_user")
     admin_ctx = Context(user_id="admin_user")
 
-    for svc_name, payload in (
-        (SERVICE_SAVE_CUSTOM_COLOR, {"target_device": coord.device_slug, "hex_color": "#112233"}),
-        (SERVICE_RESET_DEVICE, {"target_device": coord.device_slug, "device_settings": False, "latter_options": True}),
-    ):
-        with pytest.raises(Unauthorized):
-            await hass.services.async_call(
-                DOMAIN, svc_name, payload, blocking=True, context=non_admin_ctx
-            )
+    # Only the 5 public actions are registered on hass.services
+    assert set(hass.services.async_services_for_domain(DOMAIN).keys()) == set(PUBLIC_SERVICES)
 
-    # Admin user succeeds & validation errors carry translation_domain + translation_key
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_SAVE_CUSTOM_COLOR,
-        {"target_device": coord.device_slug, "hex_color": "33AAFF", "name": "Ocean"},
-        blocking=True,
-        context=admin_ctx,
+    with pytest.raises(Unauthorized):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_RESET_DEVICE,
+            {"target_device": coord.device_slug, "device_settings": False, "latter_options": True},
+            blocking=True,
+            context=non_admin_ctx,
+        )
+
+    # Bound RPC save_custom_color succeeds & validation errors carry translation_domain + translation_key
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_SAVE_CUSTOM_COLOR,
+        {"hex_color": "33AAFF", "name": "Ocean"},
     )
     assert coord.device_data.get("device_custom_color") == "#33AAFF"
 
     with pytest.raises(ServiceValidationError) as exc_hex:
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_SAVE_CUSTOM_COLOR,
-            {"target_device": coord.device_slug, "hex_color": "#ZZZZZZ"},
-            blocking=True,
-            context=admin_ctx,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_SAVE_CUSTOM_COLOR,
+            {"hex_color": "#ZZZZZZ"},
         )
     assert exc_hex.value.translation_domain == DOMAIN
     assert exc_hex.value.translation_key == "invalid_hex_color"
@@ -113,11 +115,10 @@ async def test_services_rbac_and_validation_errors(
     hass.states.async_set("lock.front_door", "locked", {"friendly_name": "Front Door"})
 
     with pytest.raises(ServiceValidationError) as exc_unconf:
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_SHORTCUT_ACTION,
-            {"target_device": coord.device_slug, "entity_id": "script.baby_help", "action": "turn_on"},
-            blocking=True,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_SHORTCUT_ACTION,
+            {"entity_id": "script.baby_help", "action": "turn_on"},
         )
     assert exc_unconf.value.translation_key == "shortcut_not_configured"
 
@@ -148,39 +149,43 @@ async def test_services_rbac_and_validation_errors(
     )
 
     # Configured non-perimeter shortcut executes directly
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_SHORTCUT_ACTION,
-        {"target_device": coord.device_slug, "entity_id": "script.baby_help", "action": "turn_on"},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_SHORTCUT_ACTION,
+        {"entity_id": "script.baby_help", "action": "turn_on"},
     )
     assert ("script", "turn_on") in {(d, s) for d, s, _ in dispatched_shortcuts}
 
     # Wrong verb on configured entity is still rejected by allowlist
     with pytest.raises(ServiceValidationError) as exc_wrong_verb:
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_SHORTCUT_ACTION,
-            {"target_device": coord.device_slug, "entity_id": "script.baby_help", "action": "turn_off"},
-            blocking=True,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_SHORTCUT_ACTION,
+            {"entity_id": "script.baby_help", "action": "turn_off"},
         )
     assert exc_wrong_verb.value.translation_key == "shortcut_not_configured"
 
-    # Configured perimeter shortcut requires PIN when policy == require_pin
+    # Configured perimeter shortcut requires wrapped PIN when policy == require_pin
     with pytest.raises(ServiceValidationError) as exc_pin_req:
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_SHORTCUT_ACTION,
-            {"target_device": coord.device_slug, "entity_id": "lock.front_door", "action": "unlock"},
-            blocking=True,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_SHORTCUT_ACTION,
+            {"entity_id": "lock.front_door", "action": "unlock"},
         )
     assert exc_pin_req.value.translation_key == "security_pin_required"
 
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_SHORTCUT_ACTION,
-        {"target_device": coord.device_slug, "entity_id": "lock.front_door", "action": "unlock", "code": "4826"},
-        blocking=True,
+    wrapped_sc_pin = wrap_pin_code(
+        coord._pin_key_id,
+        coord._pin_key_bytes,
+        1,
+        "lock.front_door",
+        "unlock",
+        "4826",
+    )
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_SHORTCUT_ACTION,
+        {"entity_id": "lock.front_door", "action": "unlock", "code": wrapped_sc_pin},
     )
     assert ("lock", "unlock") in {(d, s) for d, s, _ in dispatched_shortcuts}
 
@@ -375,11 +380,10 @@ async def test_all_domain_services_ma_link_and_browse_lru(
             "beacon": {"uuid": "E2C56DB5-DFFB-48D2-B060-D0F5A71096E1", "major": 1, "minor": 2},
         }
     )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_DEVICE_HELLO,
-        {"target_device": coord.device_slug, "contract": 3, "boot_id": "boot_abc", "manifest": manifest},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_DEVICE_HELLO,
+        {"contract": 3, "boot_id": "boot_abc", "manifest": manifest},
     )
 
     # 3) set_active_speaker & media_command (including container fallback!) & media_volume with number override
@@ -399,11 +403,10 @@ async def test_all_domain_services_ma_link_and_browse_lru(
         {"command": "repeat", "enqueue": "all"},
         {"command": "play_media", "media_id": "library://album/42", "media_type": "album"},
     ):
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_MEDIA_COMMAND,
-            {"target_device": coord.device_slug, **cmd_extra},
-            blocking=True,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_MEDIA_COMMAND,
+            cmd_extra,
         )
 
     hass.states.async_set("number.avr_volume", "40", {"min": 0, "max": 100, "step": 5})
@@ -411,20 +414,18 @@ async def test_all_domain_services_ma_link_and_browse_lru(
         "media_player.pocket_sendspin": "number.avr_volume"
     }
     for vol_act in ("up", "down", "set", "mute"):
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_MEDIA_VOLUME,
-            {"target_device": coord.device_slug, "action": vol_act, "volume_level": 60},
-            blocking=True,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_MEDIA_VOLUME,
+            {"action": vol_act, "volume_level": 60},
         )
 
     # 4) music_browse & area_browse & area_action
     for browse_mode in ("speakers", "playlists", "albums", "artists", "tracks", "radio", "search"):
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_MUSIC_BROWSE,
-            {"target_device": coord.device_slug, "mode": browse_mode, "search": "Coltrane"},
-            blocking=True,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_MUSIC_BROWSE,
+            {"mode": browse_mode, "search": "Coltrane"},
         )
 
     hass.states.async_set("light.kitchen_island", "on", {"brightness": 200})
@@ -432,18 +433,16 @@ async def test_all_domain_services_ma_link_and_browse_lru(
         er.RegistryEntry(entity_id="light.kitchen_island", platform="hue", area_id="kitchen")
     )
     for area_mode in ("areas", "home", "entities"):
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_AREA_BROWSE,
-            {"target_device": coord.device_slug, "mode": area_mode, "area_id": "kitchen"},
-            blocking=True,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_AREA_BROWSE,
+            {"mode": area_mode, "area_id": "kitchen"},
         )
 
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_AREA_ACTION,
-        {"target_device": coord.device_slug, "entity_id": "light.kitchen_island", "action": "set_level", "level": 50},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_AREA_ACTION,
+        {"entity_id": "light.kitchen_island", "action": "set_level", "level": 50},
     )
 
     # 5) remote_action (Android TV short + long_press, Apple TV InputAction.Hold >= 1.0s, and ADB fallback)
@@ -475,29 +474,25 @@ async def test_all_domain_services_ma_link_and_browse_lru(
         ("long_press", "select"),
         ("toggle", "power"),
     ):
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_REMOTE_ACTION,
-            {"target_device": coord.device_slug, "slot": 1, "action": rem_act, "command": rem_cmd},
-            blocking=True,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_REMOTE_ACTION,
+            {"slot": 1, "action": rem_act, "command": rem_cmd},
         )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_REMOTE_ACTION,
-        {"target_device": coord.device_slug, "slot": 2, "action": "long_press", "command": "select"},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_REMOTE_ACTION,
+        {"slot": 2, "action": "long_press", "command": "select"},
     )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_REMOTE_ACTION,
-        {"target_device": coord.device_slug, "slot": 2, "action": "long_press", "command": "back"},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_REMOTE_ACTION,
+        {"slot": 2, "action": "long_press", "command": "back"},
     )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_REMOTE_ACTION,
-        {"target_device": coord.device_slug, "slot": 3, "action": "long_press", "command": "select"},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_REMOTE_ACTION,
+        {"slot": 3, "action": "long_press", "command": "select"},
     )
     await hass.async_block_till_done()
     remote_send_calls = [d for dom, svc, d in calls_log if (dom, svc) == ("remote", "send_command")]
@@ -547,48 +542,34 @@ async def test_all_domain_services_ma_link_and_browse_lru(
                         "summary": "Standup",
                         "start": "2026-11-18T09:00:00-08:00",
                         "end": "2026-11-18T09:30:00-08:00",
-                        "location": "Oakland HQ",
+                        "location": "Downtown HQ",
                         "uid": "evt-1",
                     }
                 ]
             }
         },
     )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_CALENDAR_FETCH,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_CALENDAR_FETCH,
         {
-            "target_device": coord.device_slug,
             "mode": "window",
             "start_date": "2026-11-01",
             "end_date": "2026-11-30",
             "days": 30,
         },
-        blocking=True,
     )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_CALENDAR_FETCH,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_CALENDAR_CREATE_EVENT,
         {
-            "target_device": coord.device_slug,
-            "mode": "map",
-            "location": "Oakland HQ",
-        },
-        blocking=True,
-    )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_CALENDAR_CREATE_EVENT,
-        {
-            "target_device": coord.device_slug,
             "calendar_entity": "calendar.work",
             "summary": "Standup",
-            "location": "Oakland HQ",
+            "location": "Downtown HQ",
             "start_date_time": "2026-11-18 09:00:00",
             "end_date_time": "2026-11-18 09:30:00",
             "rrule": "FREQ=WEEKLY",
         },
-        blocking=True,
     )
     assert len(created_rrule_events) == 1
     assert created_rrule_events[0]["rrule"] == "FREQ=WEEKLY"
@@ -598,42 +579,40 @@ async def test_all_domain_services_ma_link_and_browse_lru(
         "off",
         {"friendly_name": "Personal", "supported_features": 1},
     )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_CALENDAR_CREATE_EVENT,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_CALENDAR_CREATE_EVENT,
         {
-            "target_device": coord.device_slug,
             "calendar_entity": "calendar.personal",
             "summary": "Trip",
             "all_day": True,
             "start_date": "2026-11-20",
             "end_date": "2026-11-21",
         },
-        blocking=True,
     )
 
-    from custom_components.latter.const import SERVICE_CALENDAR_DELETE_EVENT
-
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_CALENDAR_DELETE_EVENT,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_CALENDAR_DELETE_EVENT,
         {
-            "target_device": coord.device_slug,
             "calendar_entity": "calendar.work",
             "uid": "evt-1",
             "recurrence_id": "20261118T170000Z",
         },
-        blocking=True,
     )
     assert deleted_events == [("evt-1", "20261118T170000Z", None)]
 
-    # 7) notify & intercom_broadcast ('all', 'occupied_areas', 'person.sean', invalid media_url check)
+    # 7) notify & intercom_broadcast ('all', 'occupied_areas', 'person.alex', invalid media_url check)
     fabric = get_ble_fabric(hass)
     assert coord._ble_tracker is not None
     coord._ble_tracker.current_area_id = "living_room"
     coord._ble_tracker.is_away = False
     coord.active_area_id = "living_room"
     fabric.notify_occupancy_listeners()
+    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_BROADCAST_SPEAKERS] = [
+        "media_player.pocket_sendspin"
+    ]
+    hass.states.async_set("tts.piper", "unknown", {})
 
     await hass.services.async_call(
         DOMAIN,
@@ -644,7 +623,7 @@ async def test_all_domain_services_ma_link_and_browse_lru(
     await hass.services.async_call(
         DOMAIN,
         SERVICE_NOTIFY,
-        {"target_device": "person.sean", "title": "Note", "message": "Package arrived"},
+        {"target_device": "person.alex", "title": "Note", "message": "Package arrived"},
         blocking=True,
     )
 
@@ -670,20 +649,16 @@ async def test_all_domain_services_ma_link_and_browse_lru(
     hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_CAMERA_ENTITIES] = ["camera.front"]
     hass.states.async_set("camera.front", "streaming", {"friendly_name": "Front"})
     hass.states.async_set("media_player.front_speaker", "idle", {"volume_level": 0.2})
-    hass.states.async_set("tts.piper", "unknown", {})
     for db_act in ("listen_start", "set_noise_reduction", "talk_message", "listen_stop"):
-        res_db = await hass.services.async_call(
-            DOMAIN,
-            SERVICE_DOORBELL_INTERCOM,
+        res_db = await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_DOORBELL_INTERCOM,
             {
-                "target_device": coord.device_slug,
                 "action": db_act,
                 "camera_entity": "camera.front",
                 "noise_reduction": "light",
                 "message": "Leave it on the mat",
             },
-            blocking=True,
-            return_response=True,
         )
         assert res_db["status"] == "ok"
 
@@ -808,11 +783,10 @@ async def test_volume_supported_features_and_remote_fallback(
         "media_player.shield_lineout"
     ]
 
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_REMOTE_ACTION,
-        {"target_device": coord.device_slug, "slot": 1, "action": "volume_up"},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_REMOTE_ACTION,
+        {"slot": 1, "action": "volume_up"},
     )
     await hass.async_block_till_done()
     assert calls_log == [

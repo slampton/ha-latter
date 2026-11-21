@@ -46,6 +46,8 @@ CANONICAL_NAV_INTENT: dict[str, str] = {
     "exit": "exit",
     "play": "play",
     "pause": "pause",
+    "play_pause": "play_pause",
+    "media_play_pause": "play_pause",
 }
 
 ANDROIDTV_COMMAND_MAP: dict[str, str] = {
@@ -60,6 +62,7 @@ ANDROIDTV_COMMAND_MAP: dict[str, str] = {
     "info": "INFO",
     "play": "MEDIA_PLAY",
     "pause": "MEDIA_PAUSE",
+    "play_pause": "MEDIA_PLAY_PAUSE",
 }
 
 STANDARD_REMOTE_COMMAND_MAP: dict[str, str] = {
@@ -72,6 +75,9 @@ STANDARD_REMOTE_COMMAND_MAP: dict[str, str] = {
     "home": "home",
     "menu": "menu",
     "info": "info",
+    "play": "play",
+    "pause": "pause",
+    "play_pause": "play_pause",
 }
 
 DENONAVR_COMMAND_MAP: dict[str, str] = {
@@ -100,6 +106,7 @@ WEBOSTV_BUTTON_MAP: dict[str, str] = {
     "exit": "EXIT",
     "play": "PLAY",
     "pause": "PAUSE",
+    "play_pause": "PLAY",
 }
 
 ADB_KEYCODE_MAP: dict[str, int] = {
@@ -114,6 +121,7 @@ ADB_KEYCODE_MAP: dict[str, int] = {
     "info": 165,
     "play": 126,
     "pause": 127,
+    "play_pause": 85,
 }
 
 # Android ViewConfiguration.getLongPressTimeout() is 500 ms (0.6 s gives reliable margin);
@@ -151,7 +159,10 @@ def resolve_remote_slot_pair(
     platform = str(entry.platform or "") if entry else ""
 
     if entry and entry.device_id:
-        for sib in er.async_entries_for_device(ent_reg, entry.device_id):
+        for sib in sorted(
+            er.async_entries_for_device(ent_reg, entry.device_id),
+            key=lambda s: s.entity_id,
+        ):
             if sib.disabled_by:
                 continue
             if sib.domain == "remote" and not remote_ent:
@@ -297,8 +308,10 @@ async def async_execute_remote_action(
 ) -> None:
     """Execute a unified TV/AV remote slot switch, power, volume, navigation, or long-press command."""
     slots = coord.get_remote_slots()
+    if not slots:
+        return
     slot_num = int(slot or coord.active_remote_slot or 1)
-    slot_num = max(1, min(max(1, len(slots)), slot_num))
+    slot_num = max(1, min(len(slots), slot_num))
     if slot_num != coord.active_remote_slot:
         coord.active_remote_slot = slot_num
         coord._schedule_persist_runtime_state()
@@ -307,7 +320,7 @@ async def async_execute_remote_action(
     norm_action = str(action or "").strip().lower()
     raw_cmd = str(command or ("" if norm_action == "long_press" else norm_action)).strip()
     cmd_low = raw_cmd.lower()
-    if norm_action in ("select_slot", "") or not slots:
+    if norm_action in ("select_slot", ""):
         return
 
     parsed_hold = float(hold_secs) if hold_secs is not None else 0.0
@@ -317,7 +330,24 @@ async def async_execute_remote_action(
     remote_ent = slot_info["remote_entity"]
     mp_ent = slot_info["media_player_entity"]
     platform = str(slot_info.get("platform") or "").lower()
-    combined_ident = f"{platform} {mp_ent} {remote_ent} {slot_info.get('name', '')}".lower()
+    if not platform:
+        ent_reg = er.async_get(hass)
+        for cand_ent in (remote_ent, mp_ent):
+            if cand_ent:
+                reg_entry = ent_reg.async_get(cand_ent)
+                if reg_entry and reg_entry.platform:
+                    platform = str(reg_entry.platform).lower()
+                    break
+
+    is_denon = platform == "denonavr"
+    is_webos = platform == "webostv"
+    is_apple_tv = platform == "apple_tv"
+    is_android_tv = platform in (
+        "androidtv_remote",
+        "androidtv",
+        "braviatv",
+        "firetv",
+    )
 
     if norm_action == "toggle" or cmd_low in ("toggle", "power"):
         target = mp_ent or remote_ent
@@ -337,13 +367,16 @@ async def async_execute_remote_action(
     ):
         if effective_media_cmd == "media_play_pause":
             if mp_ent and mp_ent.startswith("media_player."):
-                await hass.services.async_call(
-                    "media_player",
-                    "media_play_pause",
-                    {ATTR_ENTITY_ID: mp_ent},
-                    blocking=False,
-                )
-                return
+                mp_state = hass.states.get(mp_ent)
+                mp_sf = int((mp_state.attributes.get("supported_features") if mp_state else 0) or 0)
+                if mp_sf == 0 or bool(mp_sf & (1 | 16384 | 4096)):
+                    await hass.services.async_call(
+                        "media_player",
+                        "media_play_pause",
+                        {ATTR_ENTITY_ID: mp_ent},
+                        blocking=False,
+                    )
+                    return
         else:
             vol_override = coord.volume_overrides.get(
                 mp_ent
@@ -354,16 +387,20 @@ async def async_execute_remote_action(
             ):
                 return
         if remote_ent and remote_ent.startswith("remote."):
+            if effective_media_cmd == "media_play_pause":
+                rem_cmd = "MEDIA_PLAY_PAUSE" if is_android_tv else "play_pause"
+            else:
+                rem_cmd = (
+                    effective_media_cmd.upper()
+                    if is_android_tv
+                    else effective_media_cmd
+                )
             await hass.services.async_call(
                 "remote",
                 "send_command",
                 {
                     ATTR_ENTITY_ID: remote_ent,
-                    "command": (
-                        effective_media_cmd.upper()
-                        if "android" in combined_ident
-                        else effective_media_cmd
-                    ),
+                    "command": rem_cmd,
                 },
                 blocking=False,
             )
@@ -374,9 +411,6 @@ async def async_execute_remote_action(
 
     intent = CANONICAL_NAV_INTENT.get(cmd_low)
 
-    is_denon = platform == "denonavr" or any(
-        k in combined_ident for k in ("denon", "marantz")
-    )
     if is_denon and mp_ent and hass.services.has_service("denonavr", "get_command"):
         denon_path = DENONAVR_COMMAND_MAP.get(intent or cmd_low)
         if not denon_path and raw_cmd.startswith("/goform/"):
@@ -390,9 +424,6 @@ async def async_execute_remote_action(
             )
             return
 
-    is_webos = platform == "webostv" or any(
-        k in combined_ident for k in ("webos", "lg_tv", "lg_oled", "lg webos")
-    )
     if is_webos and mp_ent and hass.services.has_service("webostv", "button"):
         webos_btn = WEBOSTV_BUTTON_MAP.get(intent or cmd_low, raw_cmd.upper())
         await hass.services.async_call(
@@ -403,26 +434,6 @@ async def async_execute_remote_action(
         )
         return
 
-    is_apple_tv = platform == "apple_tv" or any(
-        k in combined_ident for k in ("apple_tv", "appletv", "apple tv")
-    )
-    is_android_tv = platform in (
-        "androidtv_remote",
-        "androidtv",
-        "braviatv",
-        "firetv",
-    ) or any(
-        k in combined_ident
-        for k in (
-            "shield",
-            "android",
-            "google_tv",
-            "chromecast",
-            "bravia",
-            "fire_tv",
-            "onn",
-        )
-    )
     if remote_ent and remote_ent.startswith("remote."):
         if is_android_tv:
             out_cmd = ANDROIDTV_COMMAND_MAP.get(intent or cmd_low, raw_cmd.upper())

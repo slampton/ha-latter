@@ -16,8 +16,8 @@ from custom_components.latter.const import (
     CONF_VOLUME_OVERRIDES,
     DATA_GLOBAL_CONFIG,
     DOMAIN,
-    SERVICE_MEDIA_COMMAND,
-    SERVICE_MUSIC_BROWSE,
+    RPC_MEDIA_COMMAND,
+    RPC_MUSIC_BROWSE,
 )
 from custom_components.latter.http import LatterArtworkTranscoderView
 from custom_components.latter.media import (
@@ -276,18 +276,16 @@ async def test_active_queue_fetches_player_queue_items_when_get_queue_items_is_i
     assert slots[2]["active"] is True
     assert sum(1 for s in slots if s["is_current"]) == 1
 
-    # Verify 7-column latter_set_slots wire encoding via music_browse service
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MUSIC_BROWSE,
+    # Verify 7-column latter_set_slots wire encoding via music_browse RPC
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MUSIC_BROWSE,
         {
-            "target_device": coord.device_slug,
             "req_id": 42,
             "mode": "active_queue",
             "page": 1,
             "page_size": 5,
         },
-        blocking=True,
     )
     assert len(pushed_slots) == 1
     assert pushed_slots[0]["req_id"] == 42
@@ -410,17 +408,15 @@ async def test_active_queue_graceful_fallback_and_offset_pagination(
         f"{coord.device_slug}_latter_set_slots",
         lambda call: pushed_p12.append(dict(call.data)),
     )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MUSIC_BROWSE,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MUSIC_BROWSE,
         {
-            "target_device": coord.device_slug,
             "req_id": 99,
             "mode": "active_queue",
             "page": 12,
             "page_size": 5,
         },
-        blocking=True,
     )
     assert fetch_log == [("ma_queue_pocket", 50, 50)]
     assert pushed_p12[0]["page"] == 12
@@ -482,10 +478,10 @@ def test_parse_lrc_lyrics_synced_multi_tag_and_plain_unwrapped() -> None:
 
 
 @pytest.mark.asyncio
-async def test_lyrics_fetch_lrclib_synced_preference_chunk_push_cache_and_unwrapped_bio(
-    hass: Any, setup_latter_hub: Any, monkeypatch: pytest.MonkeyPatch
+async def test_lyrics_fetch_local_ma_synced_preference_chunk_push_cache_and_unwrapped_bio(
+    hass: Any, setup_latter_hub: Any
 ) -> None:
-    """`lyrics_fetch` prefers synced LRCLIB lyrics, pushes `latter_set_music_lyrics`, caches in LRU, and auto-pushes on track change."""
+    """`lyrics_fetch` resolves local MA synced LRC over plain lyrics (Zero-WAN), caches in LRU, and auto-pushes on track change."""
     ma_browse.clear_browse_cache()
     _entry, _sys_obj, coord = await setup_latter_hub(hass)
     assert coord is not None
@@ -504,15 +500,15 @@ async def test_lyrics_fetch_lrclib_synced_preference_chunk_push_cache_and_unwrap
         lambda call: pushed_slots.append(dict(call.data)),
     )
 
-    # Mock MA get_library returning album metadata (year + long unwrapped bio) but no embedded lyrics,
-    # so lyrics_fetch falls through to LRCLIB and prefers syncedLyrics over plainLyrics.
     long_album_bio = (
         "Dirt is the second studio album by the American rock band Alice in Chains, "
         "released on September 29, 1992, through Columbia Records with acclaim."
     )
+    lib_track_calls: list[str] = []
 
     def _mock_get_library(call: Any) -> dict[str, Any]:
         mtype = call.data.get("media_type")
+        search_q = str(call.data.get("search") or "")
         if mtype == "album":
             return {
                 "items": [
@@ -524,40 +520,55 @@ async def test_lyrics_fetch_lrclib_synced_preference_chunk_push_cache_and_unwrap
                     }
                 ]
             }
+        if mtype == "track":
+            lib_track_calls.append(search_q)
+            if "Rooster" in search_q:
+                return {
+                    "items": [
+                        {
+                            "name": "Rooster",
+                            "uri": "library://track/68",
+                            "artists": [{"name": "Alice In Chains"}],
+                            "metadata": {
+                                "lyrics": "Long unsynced plain lyric line preserved without thirty-two char wrapping",
+                            },
+                        }
+                    ]
+                }
+            return {
+                "items": [
+                    {
+                        "name": "Would?",
+                        "uri": "library://track/67",
+                        "artists": [{"name": "Alice In Chains"}],
+                        "metadata": {
+                            "lyrics": "Plain fallback line that should NOT win when lrc_lyrics exists",
+                        },
+                    },
+                    {
+                        "name": "Would?",
+                        "uri": "library://track/67b",
+                        "artists": [{"name": "Alice In Chains"}],
+                        "metadata": {
+                            "lrc_lyrics": "[00:08.50]Know me broken by my master\n[00:15.20]Teach thee on child of love hereafter",
+                        },
+                    },
+                ]
+            }
         return {"items": []}
 
     hass.services.async_register("music_assistant", "get_library", _mock_get_library)
 
-    fake_http = _FakeHttpSession(
-        [
-            _FakeResponse(
-                200,
-                [
-                    {
-                        "plainLyrics": "Plain fallback line that should NOT win when syncedLyrics exists",
-                        "syncedLyrics": "[00:08.50]Know me broken by my master\n[00:15.20]Teach thee on child of love hereafter",
-                    }
-                ],
-            )
-        ]
-    )
-    monkeypatch.setattr(
-        "custom_components.latter.media_browse.async_get_clientsession",
-        lambda _hass: fake_http,
-    )
-
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MUSIC_BROWSE,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MUSIC_BROWSE,
         {
-            "target_device": coord.device_slug,
             "req_id": 7,
             "mode": "lyrics_fetch",
             "page": 1,
             "page_size": 128,
             "search": "Would?|Alice In Chains",
         },
-        blocking=True,
     )
     assert len(pushed_lyrics) == 1
     assert pushed_lyrics[0] == {
@@ -572,33 +583,25 @@ async def test_lyrics_fetch_lrclib_synced_preference_chunk_push_cache_and_unwrap
             f"15200{FIELD_SEP}Teach thee on child of love hereafter"
         ),
     }
-    assert len(fake_http.calls) == 1
+    assert len(lib_track_calls) == 1
 
-    # Second fetch hits the 64-entry LRU cache without calling LRCLIB again
+    # Second fetch hits the 64-entry LRU cache without calling get_library(track) again
     pushed_lyrics.clear()
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MUSIC_BROWSE,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MUSIC_BROWSE,
         {
-            "target_device": coord.device_slug,
             "req_id": 8,
             "mode": "lyrics_fetch",
             "search": "Would?|Alice In Chains",
         },
-        blocking=True,
     )
     assert len(pushed_lyrics) == 1
     assert pushed_lyrics[0]["req_id"] == 8
-    assert len(fake_http.calls) == 1  # Cached!
+    assert len(lib_track_calls) == 1  # Cached!
 
     # Track change while _lyrics_watch_active is True auto-pushes new lyrics (req_id=0)
     pushed_lyrics.clear()
-    fake_http._responses.append(
-        _FakeResponse(
-            200,
-            [{"plainLyrics": "Long unsynced plain lyric line preserved without thirty-two char wrapping", "syncedLyrics": None}],
-        )
-    )
     hass.states.async_set(
         "media_player.ma_pocket",
         "playing",
@@ -621,18 +624,16 @@ async def test_lyrics_fetch_lrclib_synced_preference_chunk_push_cache_and_unwrap
 
     # Bio / track_info emits unwrapped logical metadata + full unwrapped paragraphs (>64 chars preserved!)
     pushed_slots.clear()
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MUSIC_BROWSE,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MUSIC_BROWSE,
         {
-            "target_device": coord.device_slug,
             "req_id": 9,
             "mode": "bio",
             "page": 1,
             "page_size": 10,
             "search": "Would?|Alice In Chains|Dirt",
         },
-        blocking=True,
     )
     assert len(pushed_slots) == 1
     bio_rows = [r.split(FIELD_SEP)[0] for r in pushed_slots[0]["slots"].split(RECORD_SEP)]
@@ -682,70 +683,60 @@ async def test_enqueue_modes_radio_mode_and_queue_manipulation_commands(
     )
 
     for enq in ("play", "next", "add", "replace"):
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_MEDIA_COMMAND,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_MEDIA_COMMAND,
             {
-                "target_device": coord.device_slug,
                 "command": "play_media",
                 "media_id": "library://track/999",
                 "media_type": "track",
                 "enqueue": enq,
                 "radio_mode": enq == "replace",
             },
-            blocking=True,
         )
     assert [c["enqueue"] for c in ma_play_calls] == ["play", "next", "add", "replace"]
     assert "radio_mode" not in ma_play_calls[0]
     assert ma_play_calls[3]["radio_mode"] is True
 
     # queue_play jumps in-place via mass.player_queues.play_index
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
         {
-            "target_device": coord.device_slug,
             "command": "queue_play",
             "queue_item_id": "qi_4",
         },
-        blocking=True,
     )
     assert mass.player_queues.play_index_calls == [("ma_queue_pocket", "qi_4")]
 
     # queue_move supports Move Up (-1), Move Down (+1), and Play Next ("next" -> current_index + 1 - item_index)
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
         {
-            "target_device": coord.device_slug,
             "command": "queue_move",
             "queue_item_id": "qi_3",
             "pos_shift": -1,
         },
-        blocking=True,
     )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
         {
-            "target_device": coord.device_slug,
             "command": "queue_move",
             "queue_item_id": "qi_2",
             "pos_shift": "+1",
         },
-        blocking=True,
     )
     # Item qi_4 is at index 4; current_index is 1 -> Play Next target index is 2 -> shift = (1 + 1) - 4 = -2
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
         {
-            "target_device": coord.device_slug,
             "command": "queue_move",
             "queue_item_id": "qi_4",
             "pos_shift": "next",
         },
-        blocking=True,
     )
     assert mass.player_queues.move_item_calls == [
         ("ma_queue_pocket", "qi_3", -1),
@@ -754,15 +745,13 @@ async def test_enqueue_modes_radio_mode_and_queue_manipulation_commands(
     ]
 
     # queue_delete removes item via mass.player_queues.delete_item(queue_id, item_id_or_index=...)
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
         {
-            "target_device": coord.device_slug,
             "command": "queue_delete",
             "queue_item_id": "qi_3",
         },
-        blocking=True,
     )
     assert mass.player_queues.delete_item_calls == [("ma_queue_pocket", "qi_3")]
 
@@ -845,31 +834,29 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     assert attrs["media_caps"] == expected_caps
 
     wire_fields = attrs["payload"].split(FIELD_SEP)
-    assert len(wire_fields) == 3 + len(_PROTOCOL_V3_DATA["domains"]["active_media"]["fields"]) == 24
-    assert wire_fields[18] == "0"  # shuffle
-    assert wire_fields[19] == "off"  # repeat
-    assert wire_fields[20] == "1"  # muted (from volume_override AVR!)
-    assert wire_fields[21] == "0"  # favorite
-    assert wire_fields[22] == "15"  # queue_count
-    assert wire_fields[23] == str(expected_caps)  # media_caps
+    assert len(wire_fields) == 3 + len(_PROTOCOL_V3_DATA["domains"]["active_media"]["fields"]) == 23
+    assert wire_fields[17] == "0"  # shuffle
+    assert wire_fields[18] == "off"  # repeat
+    assert wire_fields[19] == "1"  # muted (from volume_override AVR!)
+    assert wire_fields[20] == "0"  # favorite
+    assert wire_fields[21] == "15"  # queue_count
+    assert wire_fields[22] == str(expected_caps)  # media_caps
 
     # 1. mute_toggle targets the configured volume_override entity (living_room_avr)
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
-        {"target_device": coord.device_slug, "command": "mute_toggle"},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
+        {"command": "mute_toggle"},
     )
     assert mute_calls == [
         {"entity_id": "media_player.living_room_avr", "is_volume_muted": False}
     ]
 
     # 2. shuffle_toggle toggles False -> True on MA player
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
-        {"target_device": coord.device_slug, "command": "shuffle_toggle"},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
+        {"command": "shuffle_toggle"},
     )
     assert shuffle_calls == [{"entity_id": "media_player.ma_pocket", "shuffle": True}]
 
@@ -882,11 +869,10 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
             "playing",
             {**dict(hass.states.get("media_player.ma_pocket").attributes), "repeat": cur_rep},
         )
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_MEDIA_COMMAND,
-            {"target_device": coord.device_slug, "command": "repeat_cycle"},
-            blocking=True,
+        await _sys_obj.rpc_dispatcher.async_dispatch(
+            coord,
+            RPC_MEDIA_COMMAND,
+            {"command": "repeat_cycle"},
         )
         assert repeat_calls == [
             {"entity_id": "media_player.ma_pocket", "repeat": next_rep}
@@ -903,17 +889,15 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     assert dyn_attrs["media_caps"] == (
         expected_caps & ~(MEDIA_CAP_SHUFFLE_SET | MEDIA_CAP_REPEAT_SET)
     )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
-        {"target_device": coord.device_slug, "command": "shuffle_toggle"},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
+        {"command": "shuffle_toggle"},
     )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
-        {"target_device": coord.device_slug, "command": "repeat_cycle"},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
+        {"command": "repeat_cycle"},
     )
     assert shuffle_calls == []
     assert repeat_calls == []
@@ -924,11 +908,10 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     assert restored_attrs["media_caps"] == expected_caps
 
     # 4. favorite_toggle with media_id="" and plain non-URI media_id="Track Title" resolves real URI
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
-        {"target_device": coord.device_slug, "command": "favorite_toggle", "media_id": ""},
-        blocking=True,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
+        {"command": "favorite_toggle", "media_id": ""},
     )
     assert mass.music.fav_add_calls == ["library://track/843"]
     coord._cached_media_payload = None
@@ -936,15 +919,13 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     assert attrs2["favorite"] is True
 
     # Passing a plain track title (non-URI without "://") must NOT pass raw title to add/remove_item_to_favorites
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
         {
-            "target_device": coord.device_slug,
             "command": "favorite_toggle",
             "media_id": "Would?",
         },
-        blocking=True,
     )
     assert mass.music.fav_remove_calls == [("track", "843")]
     coord._cached_media_payload = None
@@ -978,15 +959,13 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
             ]
         },
     )
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_MEDIA_COMMAND,
+    await _sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
+        RPC_MEDIA_COMMAND,
         {
-            "target_device": coord.device_slug,
             "command": "favorite_toggle",
             "media_id": "Track Title",
         },
-        blocking=True,
     )
     assert mass.music.fav_add_calls == ["library://track/901"]
 
@@ -1034,7 +1013,7 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
             "friendly_name": "Desk Speaker",
             "media_title": "Would?",
             "media_artist": "Alice In Chains",
-            "entity_picture": "http://93.184.216.34/cover_1000.png",
+            "entity_picture": "/api/media_player_proxy/media_player.pocket_assistant_music?token=desk_1000",
             "volume_level": 0.5,
         },
     )

@@ -129,6 +129,7 @@ export const EN_DEVICES_STRINGS = {
   "dev_overview.qa_find_my": "Find my Device",
   "dev_overview.qa_trigger_va": "Trigger voice assistant",
   "dev_overview.qa_activate_screensaver": "Activate screensaver",
+  "dev_overview.qa_exit_screensaver": "Exit screensaver",
   "dev_overview.qa_restart": "Restart Device",
   "dev_overview.restart_device": "Restart Device",
   "dev_overview.restart_device_desc":
@@ -190,7 +191,10 @@ export const EN_DEVICES_STRINGS = {
     "Locate or assign this Device to an Area to use ambient light.",
   "dev_display.screensaver_preview_desc":
     "Starts the screensaver on this Device immediately.",
+  "dev_display.screensaver_exit_desc":
+    "Wakes the display and exits the active screensaver immediately.",
   "dev_display.preview_btn": "Preview",
+  "dev_display.exit_screensaver_btn": "Exit screensaver",
   "dev_display.screensaver_photo_clock_desc":
     "Draws a compact subtle clock in the corner while displaying photos.",
   "dev_display.screensaver_pool_label": "Photo frame photos",
@@ -429,6 +433,16 @@ export const EN_DEVICES_STRINGS = {
   "dev_tools.remove_device_desc":
     "Removes this Device from Latter. Your ESPHome device stays in Home Assistant.",
   "dev_tools.telem_uptime": "Session uptime",
+  "dev_tools.profiler_label": "Telemetry profiler",
+  "dev_tools.profiler_desc":
+    "Streams frame and subsystem timing logs over ESPHome logs for troubleshooting.",
+  "dev_tools.refresh_telemetry_label": "Runtime telemetry",
+  "dev_tools.refresh_telemetry_desc":
+    "Requests an immediate RAM, PSRAM, and Wi-Fi link snapshot from this Device.",
+  "dev_tools.refresh_telemetry_toast": "Requested telemetry snapshot",
+  "dev_tools.telem_int_ram": "Internal RAM (free / min / largest)",
+  "dev_tools.telem_psram_min": "PSRAM low-water mark",
+  "dev_tools.telem_ble_beacon": "BLE beacon radio",
   "dev_tools.telem_last_reset": "Last reset",
   "dev_tools.telem_wifi_disc": "Wi-Fi disconnects",
   "dev_tools.telem_beacon_timeouts": " ({count} beacon timeouts)",

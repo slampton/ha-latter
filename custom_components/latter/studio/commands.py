@@ -131,7 +131,6 @@ from ..wallpapers import (
 )
 from .payload import (
     STUDIO_BULK_CONTROL_DOMAINS,
-    _build_system_shared_controls,
     build_studio_state_payload,
     is_coordinator_online_for_studio,
     log_studio_event,
@@ -141,7 +140,6 @@ from .settings import (
     ALLOWED_DEVICE_ACTIONS,
     DEVICE_ENTITY_VERBS,
     MAX_IGNORED_DISCOVERED,
-    SYSTEM_ENTITY_VERBS,
     CatalogGate,
     Scope,
     SectionHashGate,
@@ -237,15 +235,6 @@ _COMMAND_PAYLOAD_SCHEMAS: dict[str, vol.Schema] = {
     ),
     "clear_ble_area_signature": vol.Schema(
         {vol.Optional("area_id"): _str_cap(128)},
-        extra=vol.PREVENT_EXTRA,
-    ),
-    "system_entity_action": vol.Schema(
-        {
-            vol.Optional("entity_ids"): [vol.Any(_str_cap(128), None)],
-            vol.Optional("action"): _str_cap(64),
-            vol.Optional("level"): vol.Any(_non_bool_number, str, None),
-            vol.Optional("option"): vol.Any(_str_cap(128), None),
-        },
         extra=vol.PREVENT_EXTRA,
     ),
     "esphome_entity_action": vol.Schema(
@@ -623,8 +612,12 @@ def compute_illuminance_calibration_from_stats(
     dark_lux = round(dark_raw, 1) if dark_raw < 10.0 else float(round(dark_raw))
 
     pos_means = [v for v in means_sorted if v > dark_lux + 0.1]
-    bright_pool = pos_means if len(pos_means) >= 4 else means_sorted
-    bright_raw = _percentile(bright_pool, 0.90)
+    if len(pos_means) >= 4:
+        bright_raw = _percentile(pos_means, 0.90)
+    elif pos_means:
+        bright_raw = max(pos_means)
+    else:
+        bright_raw = _percentile(means_sorted, 0.90)
     bright_raw = max(dark_lux + 5.0, min(100000.0, bright_raw))
     bright_lux = round(bright_raw, 1) if bright_raw < 10.0 else float(round(bright_raw))
     return (dark_lux, bright_lux)
@@ -680,6 +673,11 @@ async def _cmd_calibrate_area_illuminance(
     _global_cfg: dict[str, Any],
     extra: dict[str, Any],
 ) -> None:
+    if "recorder" not in hass.config.components:
+        raise StudioCommandError(
+            "not_supported",
+            "Home Assistant recorder component is not enabled for ambient light calibration",
+        )
     area_reg = ar.async_get(hass)
     target_area_id = str(body.get("area_id") or "").strip()
     if target_area_id:
@@ -864,43 +862,6 @@ async def _cmd_clear_ble_area_signature(
         await async_save_and_broadcast_global_config(
             hass, {CONF_BLE_AREA_SIGNATURES: signatures}
         )
-
-
-async def _cmd_system_entity_action(
-    hass: HomeAssistant,
-    _coordinator: LatterCoordinator | None,
-    body: dict[str, Any],
-    _global_cfg: dict[str, Any],
-    _extra: dict[str, Any],
-) -> None:
-    shared_controls = _build_system_shared_controls(hass)
-    allowed = {
-        str(target["entity_id"])
-        for ctrl in shared_controls
-        for target in ctrl["targets"]
-        if target.get("entity_id")
-    }
-    entity_ids = allowed_entity_targets(
-        body.get("entity_ids") or [], allowed, "a shared control of a Latter Device"
-    )
-    action = checked_entity_verb(body, SYSTEM_ENTITY_VERBS)
-    level_val = _optional_level(body)
-    opt_val = _optional_option(body)
-    try:
-        for ent_id in entity_ids:
-            await async_execute_area_action(
-                hass,
-                entity_id=ent_id,
-                action=action or "toggle",
-                level=level_val,
-                option=opt_val,
-                blocking=True,
-                raise_on_missing=True,
-            )
-    except ServiceValidationError as err:
-        raise StudioCommandError("invalid_format", str(err)) from err
-    except HomeAssistantError as err:
-        raise StudioCommandError("command_failed", str(err)) from err
 
 
 async def _cmd_esphome_entity_action(
@@ -1750,15 +1711,28 @@ async def _cmd_save_device_config(
                     )
                 merged_device[CONF_DEVICE_GROUP] = new_grp_id
         group_changed = bool(group_in_updates and new_grp_id != old_grp_id)
-        if merged_device != current or group_changed:
-            coordinator.update_device_config(
-                merged_device, preserve_group=(target_grp is not None)
-            )
-            await coordinator.async_apply_options()
-        if target_grp is not None:
+        explicit_other_updates = {
+            k: v for k, v in updates.items() if k != CONF_DEVICE_GROUP
+        }
+        if group_changed and target_grp is not None:
             await async_apply_group_baseline_to_coordinators(
                 hass, target_grp, [coordinator]
             )
+            if explicit_other_updates:
+                post_baseline = {**coordinator.device_data, **explicit_other_updates}
+                post_baseline.pop(CONF_SECURITY_PIN, None)
+                for gk in set(GLOBAL_CONFIG_KEYS) - {CONF_SECURITY_PIN_HASH}:
+                    post_baseline.pop(gk, None)
+                coordinator.update_device_config(post_baseline, preserve_group=False)
+                await coordinator.async_apply_options()
+        elif merged_device != current or group_changed:
+            coordinator.update_device_config(
+                merged_device,
+                preserve_group=bool(
+                    group_in_updates and new_grp_id == DEFAULT_DEVICE_GROUP
+                ),
+            )
+            await coordinator.async_apply_options()
         if ma_link_changed:
             async_refresh_ma_link(hass, coordinator)
         coordinator._bind_wallpaper_cycle_timer()
@@ -1866,11 +1840,20 @@ async def _cmd_add_latter_device(
     }
     if assigned_person:
         init_data[CONF_ASSIGNED_PERSON] = assigned_person
-    await hass.config_entries.subentries.async_init(
+    flow_res = await hass.config_entries.subentries.async_init(
         (system_entries[0].entry_id, SUBENTRY_DEVICE),
         context={"source": "user"},
         data=init_data,
     )
+    if isinstance(flow_res, Mapping) and flow_res.get("type") != "create_entry":
+        reason = str(
+            flow_res.get("reason")
+            or next(iter((flow_res.get("errors") or {}).values()), "")
+            or "invalid_format"
+        )
+        raise StudioCommandError(
+            reason, f"Could not add '{_device_title(dev)}' ({reason})"
+        )
     async with get_system_config_lock(hass):
         live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
             DATA_GLOBAL_CONFIG, {}
@@ -1911,6 +1894,19 @@ async def _cmd_add_latter_device(
     )
 
 
+def _normalize_ble_target_key(raw: str) -> str:
+    """Return a canonical case-normalized key for deduplicating BLE MACs, iBeacon IDs, and tracker entities."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    if re.fullmatch(r"(?:[0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}|[0-9a-fA-F]{12}", s):
+        return str(dr.format_mac(s)).upper()
+    low = s.lower()
+    if low.startswith("ibeacon:"):
+        low = low[8:].strip()
+    return low
+
+
 async def _cmd_add_ble_device(
     hass: HomeAssistant,
     _coordinator: LatterCoordinator | None,
@@ -1932,11 +1928,26 @@ async def _cmd_add_ble_device(
         raise StudioCommandError(
             "invalid_format", "A BLE tag needs a name and a target address"
         )
-    if any(c.device_slug == target_slug for c in iter_coordinators(hass)):
-        raise StudioCommandError(
-            "already_configured", f"A Device named '{target_slug}' already exists"
-        )
-    await hass.config_entries.subentries.async_init(
+    norm_key = _normalize_ble_target_key(target_addr)
+    for existing in iter_coordinators(hass):
+        if existing.device_slug == target_slug:
+            raise StudioCommandError(
+                "already_configured", f"A Device named '{target_slug}' already exists"
+            )
+        existing_addr = str(getattr(existing, "ble_target_address", "") or "").strip()
+        if norm_key and existing_addr and _normalize_ble_target_key(existing_addr) == norm_key:
+            raise StudioCommandError(
+                "already_configured",
+                f"Target '{target_addr}' is already tracked by '{existing.device_slug}'",
+            )
+    for sub in system_entries[0].subentries.values():
+        sub_addr = str(sub.data.get(CONF_BLE_TARGET_ADDRESS) or "").strip()
+        if norm_key and sub_addr and _normalize_ble_target_key(sub_addr) == norm_key:
+            raise StudioCommandError(
+                "already_configured",
+                f"Target '{target_addr}' is already configured in Latter",
+            )
+    flow_res = await hass.config_entries.subentries.async_init(
         (system_entries[0].entry_id, SUBENTRY_BLE_TAG),
         context={"source": "user"},
         data={
@@ -1946,6 +1957,15 @@ async def _cmd_add_ble_device(
             CONF_ASSIGNED_PERSON: assigned_person,
         },
     )
+    if isinstance(flow_res, Mapping) and flow_res.get("type") != "create_entry":
+        reason = str(
+            flow_res.get("reason")
+            or next(iter((flow_res.get("errors") or {}).values()), "")
+            or "invalid_format"
+        )
+        raise StudioCommandError(
+            reason, f"Could not add BLE tag '{raw_name}' ({reason})"
+        )
     adopted_ble = next(
         (c for c in iter_coordinators(hass) if c.device_slug == target_slug),
         None,
@@ -2214,6 +2234,7 @@ async def _cmd_apply_batch_device_setting(
     raw_updates = dict(body.get("config") or {})
     source_sub_id = str(body.get("source_subentry_id") or "").strip()
     raw_copy_keys = body.get("copy_keys")
+    source_coord: LatterCoordinator | None = None
     if source_sub_id:
         source_coord = find_by_subentry_id(all_coords_full, source_sub_id)
         if source_coord is None or source_coord.is_ble_tag:
@@ -2236,7 +2257,14 @@ async def _cmd_apply_batch_device_setting(
                 else:
                     raw_updates[ck] = resolve_behavior_key_value(src_data, ck)
 
-    allowed_keys = set(GROUP_ALL_DEVICE_KEYS) | {"bedtime_active"}
+    allowed_keys = set(GROUP_ALL_DEVICE_KEYS) | {"bedtime_active", "do_not_disturb"}
+    if source_coord is not None and isinstance(raw_copy_keys, list):
+        for raw_k in raw_copy_keys:
+            ck = str(raw_k or "").strip()
+            if ck in ("bedtime_active", "do_not_disturb") and coordinator_supports_group_key(
+                source_coord, ck
+            ):
+                raw_updates[ck] = resolve_behavior_key_value(source_coord.device_data, ck)
     filtered = {k: v for k, v in raw_updates.items() if k in allowed_keys}
     if not filtered:
         raise StudioCommandError(
@@ -2329,8 +2357,7 @@ async def _cmd_rotate_signing_key(
     sys_obj = get_latter_system(hass)
     if sys_obj is None:
         raise StudioCommandError("not_ready", "Latter System is not initialized")
-    async with get_system_config_lock(hass):
-        await sys_obj.async_rotate_hmac_secret()
+    await sys_obj.async_rotate_hmac_secret()
     log_studio_event(hass, "INFO", "system", "Rotated HTTP resource signing key")
 
 
@@ -2403,7 +2430,6 @@ _STUDIO_COMMAND_HANDLERS: dict[str, _CommandHandler] = {
     "calibrate_area_illuminance": _cmd_calibrate_area_illuminance,
     "capture_ble_area_signature": _cmd_capture_ble_area_signature,
     "clear_ble_area_signature": _cmd_clear_ble_area_signature,
-    "system_entity_action": _cmd_system_entity_action,
     "esphome_entity_action": _cmd_esphome_entity_action,
     "test_doorbell_speaker": _cmd_test_doorbell_speaker,
     "send_announcement": _cmd_send_announcement,
@@ -2688,13 +2714,12 @@ async def ws_handle_subscribe(
             state_unsub[0]()
             state_unsub[0] = None
         target = resolve_target_coordinator(hass, sub_id) if sub_id else None
-        watched = [target] if target is not None else iter_coordinators(hass)
         entity_ids = sorted(
             {
                 e.entity_id
-                for c in watched
+                for c in iter_coordinators(hass)
                 for e in device_entities(hass, c.esphome_device_id)
-                if target is not None
+                if (target is not None and c is target)
                 or e.domain in STUDIO_BULK_CONTROL_DOMAINS
                 or e.domain == "update"
                 or e.entity_id.endswith(_STUDIO_STATUS_WATCH_SUFFIXES)

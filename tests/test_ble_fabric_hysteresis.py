@@ -280,6 +280,67 @@ async def test_sensor_fusion_modes_and_voice_follows_me_invariant(
         assert res["fusion_mode"] == mode
         assert res["is_occupied"] is expected_occ
 
+    # ble_and_sensor fails closed when physical sensor is unavailable or unknown, even with BLE present
+    assert coord._ble_tracker is not None
+    t_ble = time.monotonic()
+    for step in range(3):
+        coord._ble_tracker._ingest_proxy_observation(
+            "AA:BB:CC:00:00:22", -48, t_ble + step * 0.2, "Kitchen Proxy"
+        )
+    assert coord._ble_tracker.current_area_id == "kitchen"
+    assert fabric.get_area_occupancy("kitchen")["is_occupied"] is True
+    for bad_st in ("unavailable", "unknown"):
+        hass.states.async_set(
+            "binary_sensor.kitchen_pir",
+            bad_st,
+            {"device_class": "motion", "friendly_name": "Kitchen PIR"},
+        )
+        occ_closed = fabric.get_area_occupancy("kitchen")
+        assert occ_closed["is_occupied"] is False
+        assert occ_closed["confidence_pct"] == 0
+        assert "binary_sensor.kitchen_pir" in occ_closed["unavailable_sensors"]
+
+    # Area occupancy entity uses canonical `binary_sensor.<area>_occupancy` and never self-feeds back into fusion
+    assert hass.states.get("binary_sensor.kitchen_occupancy") is not None
+    assert hass.states.get("binary_sensor.kitchen_ble_occupancy") is None
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="binary_sensor.kitchen_occupancy",
+            platform=DOMAIN,
+            area_id="kitchen",
+            unique_id="latter_area_occupancy_kitchen",
+            original_device_class="occupancy",
+        )
+    )
+    hass.states.async_set(
+        "binary_sensor.kitchen_occupancy",
+        "on",
+        {"device_class": "occupancy"},
+    )
+    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_AREA_FUSION_CONFIG]["kitchen"] = {
+        "mode": "any_or",
+        "threshold_pct": 50,
+        "sensors": ["binary_sensor.kitchen_occupancy"],
+    }
+    fabric._invalidate_caches()
+    coord._ble_tracker._ingest_proxy_observation(
+        "AA:BB:CC:00:00:11", -35, t_ble + 20.0, "Living Room Proxy"
+    )
+    coord._ble_tracker._ingest_proxy_observation(
+        "AA:BB:CC:00:00:11", -35, t_ble + 20.3, "Living Room Proxy"
+    )
+    coord._ble_tracker._ingest_proxy_observation(
+        "AA:BB:CC:00:00:11", -35, t_ble + 20.6, "Living Room Proxy"
+    )
+    assert coord._ble_tracker.current_area_id == "living_room"
+    assert fabric.get_area_occupancy("kitchen")["sensor_occupied"] is False
+
+    # BLE distance sensor uses canonical meters (`m`, `distance_m`) with legacy `_ft` stripped
+    dist_st = hass.states.get("sensor.pocket_assistant_ble_distance")
+    assert dist_st is not None
+    assert "distance_m" in dist_st.attributes
+    assert "distance_ft" not in dist_st.attributes
+
     summary_rows = get_all_areas_presence_summary(hass)
     assert any(r["area_id"] == "kitchen" for r in summary_rows)
 
@@ -471,9 +532,10 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     assert tracker.is_away is False
     assert coord.get_current_area_and_distance()[0] == "Bedroom"
 
-    # Whereas actively advertising unseen (ble_radio_active == "on") marks Away cleanly
+    # Whereas actively advertising unseen (ble_active == True via device_telemetry or ble_radio_active == "on") marks Away cleanly
     hass.states.async_set("sensor.pocket_assistant_wi_fi_signal", "-60")
     hass.states.async_set("sensor.pocket_assistant_system_link_report", "ok")
+    coord.apply_device_telemetry({"ble_active": True, "int_ram_free_kb": 120})
     hass.states.async_set("binary_sensor.pocket_assistant_ble_radio_active", "on")
     await hass.async_block_till_done()
     tracker.check_away_timeout(t_hold + 120.0)
@@ -1201,7 +1263,7 @@ async def test_zero_ms_private_ble_rpa_rotation_connectable_and_eddystone_uid(
     area_reg.async_create("Living Room", area_id="living_room", floor_id="floor_1")
     area_reg.async_create("Kitchen", area_id="kitchen", floor_id="floor_1")
     _seed_ble_proxies(hass)
-    hass.states.async_set("person.sean", "home", {"friendly_name": "Sean"})
+    hass.states.async_set("person.alex", "home", {"friendly_name": "Alex"})
 
     # Seed `private_ble_device` entity with initial RPA
     rpa_1 = "54:AA:11:22:33:01"
@@ -1209,7 +1271,7 @@ async def test_zero_ms_private_ble_rpa_rotation_connectable_and_eddystone_uid(
     hass.states.async_set(
         "device_tracker.phone_ble",
         "home",
-        {"current_address": rpa_1, "friendly_name": "Sean iPhone BLE"},
+        {"current_address": rpa_1, "friendly_name": "Alex iPhone BLE"},
     )
     eddystone_uid_hex = "00112233445566778899aabbccddeeff"
 
@@ -1224,12 +1286,12 @@ async def test_zero_ms_private_ble_rpa_rotation_connectable_and_eddystone_uid(
                 ConfigSubentry(
                     subentry_id="sub_phone_ble",
                     subentry_type=SUBENTRY_BLE_TAG,
-                    title="Sean Phone",
+                    title="Alex Phone",
                     unique_id="tag_phone_ble",
                     data={
-                        CONF_DEVICE_SLUG: "sean_phone",
+                        CONF_DEVICE_SLUG: "alex_phone",
                         CONF_BLE_TARGET_ADDRESS: "device_tracker.phone_ble",
-                        CONF_ASSIGNED_PERSON: "person.sean",
+                        CONF_ASSIGNED_PERSON: "person.alex",
                         CONF_NATIVE_BLE_TRACKING: True,
                     },
                 ),
@@ -1264,7 +1326,7 @@ async def test_zero_ms_private_ble_rpa_rotation_connectable_and_eddystone_uid(
     hass.states.async_set(
         "device_tracker.phone_ble",
         "home",
-        {"current_address": rpa_2, "friendly_name": "Sean iPhone BLE"},
+        {"current_address": rpa_2, "friendly_name": "Alex iPhone BLE"},
     )
     assert rpa_2 in fabric._adv_unsubs
     assert rpa_1 not in fabric._adv_unsubs
@@ -1336,7 +1398,7 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
     area_reg.async_create("Living Room", area_id="living_room", floor_id=None)
     area_reg.async_create("Bedroom", area_id="bedroom", floor_id=None)
     _seed_ble_proxies(hass)
-    hass.states.async_set("person.sean", "home", {"friendly_name": "Sean"})
+    hass.states.async_set("person.alex", "home", {"friendly_name": "Alex"})
     assert has_configured_floors(hass) is False
 
     esp_dev, mac = make_esphome_device(
@@ -1365,7 +1427,7 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
                         "mac": mac,
                         CONF_DEVICE_SLUG: "pocket_assistant",
                         CONF_DEFAULT_AREA: "living_room",
-                        CONF_ASSIGNED_PERSON: "person.sean",
+                        CONF_ASSIGNED_PERSON: "person.alex",
                         CONF_NATIVE_BLE_TRACKING: True,
                         "ble_auto_switch": True,
                     },
@@ -1373,12 +1435,12 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
                 ConfigSubentry(
                     subentry_id="sub_watch",
                     subentry_type=SUBENTRY_BLE_TAG,
-                    title="Sean Watch",
+                    title="Alex Watch",
                     unique_id="tag_watch",
                     data={
-                        CONF_DEVICE_SLUG: "sean_watch",
+                        CONF_DEVICE_SLUG: "alex_watch",
                         CONF_BLE_TARGET_ADDRESS: "33:44:55:66:77:88",
-                        CONF_ASSIGNED_PERSON: "person.sean",
+                        CONF_ASSIGNED_PERSON: "person.alex",
                         CONF_NATIVE_BLE_TRACKING: True,
                     },
                 ),
@@ -1392,8 +1454,8 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
     # Zero Floors -> zero `current_floor` entity bloat!
     assert hass.states.get("sensor.pocket_assistant_current_area") is not None
     assert hass.states.get("sensor.pocket_assistant_current_floor") is None
-    assert hass.states.get("sensor.sean_watch_current_floor") is None
-    assert hass.states.get("sensor.sean_current_floor") is None
+    assert hass.states.get("sensor.alex_watch_current_floor") is None
+    assert hass.states.get("sensor.alex_current_floor") is None
 
     # 2) Dynamically create Floors in FloorRegistry & map Areas -> floor sensors auto-create live!
     floor_reg = fr.async_get(hass)
@@ -1405,8 +1467,8 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
 
     assert has_configured_floors(hass) is True
     pocket_floor = hass.states.get("sensor.pocket_assistant_current_floor")
-    watch_floor = hass.states.get("sensor.sean_watch_current_floor")
-    person_floor = hass.states.get("sensor.sean_current_floor")
+    watch_floor = hass.states.get("sensor.alex_watch_current_floor")
+    person_floor = hass.states.get("sensor.alex_current_floor")
     assert pocket_floor is not None and pocket_floor.state == "Ground Level"
     assert pocket_floor.attributes["floor_id"] == "floor_1"
     assert watch_floor is not None and watch_floor.state == "Unassigned"
@@ -1421,10 +1483,10 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
             "AA:BB:CC:00:00:33", -54, t0 + step * 0.2, "Bedroom Proxy"
         )
     await hass.async_block_till_done()
-    assert hass.states.get("sensor.sean_watch_current_floor").state == "Upper Level"
-    assert hass.states.get("sensor.sean_current_floor").state == "Upper Level"
-    watch_dt = hass.states.get("device_tracker.sean_watch_ble_tracker") or hass.states.get(
-        "device_tracker.sean_watch"
+    assert hass.states.get("sensor.alex_watch_current_floor").state == "Upper Level"
+    assert hass.states.get("sensor.alex_current_floor").state == "Upper Level"
+    watch_dt = hass.states.get("device_tracker.alex_watch_ble_tracker") or hass.states.get(
+        "device_tracker.alex_watch"
     )
     assert watch_dt is not None
     assert watch_dt.attributes["floor_id"] == "floor_2"
@@ -1439,8 +1501,8 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
     await hass.async_block_till_done()
 
     assert hass.states.get("sensor.pocket_assistant_current_floor").state == "Away"
-    assert hass.states.get("sensor.sean_watch_current_floor").state == "Away"
-    assert hass.states.get("sensor.sean_current_floor").state == "Away"
+    assert hass.states.get("sensor.alex_watch_current_floor").state == "Away"
+    assert hass.states.get("sensor.alex_current_floor").state == "Away"
 
     assert await async_unload_entry(hass, entry) is True
 
@@ -1522,21 +1584,21 @@ async def test_companion_app_ble_transmitter_discovery_dedupe_and_major_minor_is
         ),
     ]
 
-    # 1) Register Android HA Companion App device + `sensor.seans_pixel_9_ble_transmitter`
+    # 1) Register Android HA Companion App device + `sensor.alexs_pixel_9_ble_transmitter`
     phone_dev = dev_reg.async_get_or_create(
         config_entry_id="mobile_app_pixel9",
-        identifiers={("mobile_app", "pixel_9_pro_sean")},
-        name="Sean's Pixel 9",
+        identifiers={("mobile_app", "pixel_9_pro_alex")},
+        name="Alex's Pixel 9",
         manufacturer="Google",
         model="Pixel 9 Pro",
     )
-    emitter_eid = "sensor.seans_pixel_9_ble_transmitter"
+    emitter_eid = "sensor.alexs_pixel_9_ble_transmitter"
     ent_reg.async_register(
         er.RegistryEntry(
             entity_id=emitter_eid,
             platform="mobile_app",
             device_id=phone_dev.id,
-            unique_id="pixel_9_pro_sean_ble_emitter",
+            unique_id="pixel_9_pro_alex_ble_emitter",
             original_name="BLE Transmitter",
         )
     )
@@ -1544,7 +1606,7 @@ async def test_companion_app_ble_transmitter_discovery_dedupe_and_major_minor_is
         emitter_eid,
         "Transmitting",
         {
-            "friendly_name": "Sean's Pixel 9 BLE Transmitter",
+            "friendly_name": "Alex's Pixel 9 BLE Transmitter",
             "id": f"{phone_uuid}-100-1",
             "Measured power": -56,
         },
@@ -1604,7 +1666,7 @@ async def test_companion_app_ble_transmitter_discovery_dedupe_and_major_minor_is
     discovered = get_discovered_ble_candidates(hass, set(), set())
     assert len(discovered) == 1
     cand = discovered[0]
-    assert cand["title"] == "Sean's Pixel 9"
+    assert cand["title"] == "Alex's Pixel 9"
     assert cand["target_address"] == emitter_eid
     assert "HA Companion App" in cand["kind"]
     assert phone_uuid in cand["kind"]
@@ -1650,8 +1712,8 @@ async def test_companion_app_ble_transmitter_discovery_dedupe_and_major_minor_is
     assert disc_with_tag[0]["target_address"].startswith("device_tracker.")
     assert "iBeacon Tag" in disc_with_tag[0]["kind"]
 
-    # 2) Adopt `sensor.seans_pixel_9_ble_transmitter` as a BLE tag & verify model label, ref_power, and Major:Minor isolation
-    hass.states.async_set("person.sean", "home", {"friendly_name": "Sean"})
+    # 2) Adopt `sensor.alexs_pixel_9_ble_transmitter` as a BLE tag & verify model label, ref_power, and Major:Minor isolation
+    hass.states.async_set("person.alex", "home", {"friendly_name": "Alex"})
     await async_setup(hass, {})
     entry = hass.config_entries.add_entry(
         ConfigEntry(
@@ -1663,12 +1725,12 @@ async def test_companion_app_ble_transmitter_discovery_dedupe_and_major_minor_is
                 ConfigSubentry(
                     subentry_id="sub_pixel9",
                     subentry_type=SUBENTRY_BLE_TAG,
-                    title="Sean's Pixel 9",
+                    title="Alex's Pixel 9",
                     unique_id=f"tag_{emitter_eid}",
                     data={
-                        CONF_DEVICE_SLUG: "seans_pixel_9",
+                        CONF_DEVICE_SLUG: "alexs_pixel_9",
                         CONF_BLE_TARGET_ADDRESS: emitter_eid,
-                        CONF_ASSIGNED_PERSON: "person.sean",
+                        CONF_ASSIGNED_PERSON: "person.alex",
                         CONF_NATIVE_BLE_TRACKING: True,
                     },
                 )
@@ -1724,7 +1786,7 @@ async def test_companion_app_ble_transmitter_discovery_dedupe_and_major_minor_is
     await hass.async_block_till_done()
     assert tracker.current_area_id == "kitchen"
 
-    # Packet matching Sean's `UUID + major=100 + minor=1` in Living Room switches cleanly!
+    # Packet matching Alex's `UUID + major=100 + minor=1` in Living Room switches cleanly!
     for step in range(4):
         shared_cb(
             _make_ibeacon_adv(
@@ -1752,7 +1814,7 @@ async def test_companion_app_ble_transmitter_discovery_dedupe_and_major_minor_is
         emitter_eid,
         "Transmitting",
         {
-            "friendly_name": "Sean's Pixel 9 BLE Transmitter",
+            "friendly_name": "Alex's Pixel 9 BLE Transmitter",
             "id": f"{phone_uuid}-0-0",
             "Measured power": -54,
         },
@@ -1825,8 +1887,8 @@ async def test_private_ble_device_irk_vendor_and_device_type_fingerprinting(
 
     irk_cases = [
         (
-            "thu_iphone",
-            "Thu's iPhone",
+            "sam_iphone",
+            "Sam's iPhone",
             "51:AA:BB:CC:DD:01",
             {0x004C: bytes([0x10, 0x05, 0x0B, 0x1C, 0xAA])},
             {},
@@ -1835,8 +1897,8 @@ async def test_private_ble_device_irk_vendor_and_device_type_fingerprinting(
             "Apple iPhone, Watch, or iPad (Private BLE)",
         ),
         (
-            "sean_airpods",
-            "Sean AirPods Pro",
+            "alex_airpods",
+            "Alex AirPods Pro",
             "52:AA:BB:CC:DD:02",
             {0x004C: bytes([0x07, 0x19, 0x01, 0x0E, 0x20])},
             {},
@@ -2163,7 +2225,7 @@ async def test_companion_app_ultralow_phone_nonconnectable_matcher_and_phone_cat
             "Measured power": -59,
         },
     )
-    hass.states.async_set("person.sean", "home", {"friendly_name": "Sean"})
+    hass.states.async_set("person.alex", "home", {"friendly_name": "Alex"})
 
     # Private BLE classification checks (iPhone -> phone, AirPods -> ble_tag)
     ent_reg.async_register(
@@ -2171,7 +2233,7 @@ async def test_companion_app_ultralow_phone_nonconnectable_matcher_and_phone_cat
             entity_id="device_tracker.private_ble_iphone",
             platform="private_ble_device",
             unique_id="irk_iphone",
-            original_name="Sean iPhone",
+            original_name="Alex iPhone",
         )
     )
     hass.states.async_set(
@@ -2259,7 +2321,7 @@ async def test_companion_app_ultralow_phone_nonconnectable_matcher_and_phone_cat
                         CONF_DEVICE_SLUG: "pixel_10_pro_xl",
                         CONF_BLE_TARGET_ADDRESS: tx_entity,
                         CONF_BLE_CATEGORY: "auto",
-                        CONF_ASSIGNED_PERSON: "person.sean",
+                        CONF_ASSIGNED_PERSON: "person.alex",
                         CONF_NATIVE_BLE_TRACKING: True,
                     },
                 ),

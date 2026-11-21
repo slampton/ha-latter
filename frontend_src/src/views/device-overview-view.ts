@@ -11,6 +11,7 @@ import {
   isDeviceTime24h,
   renderCard,
   renderNativeControlRow,
+  renderPrefControlRow,
   renderQuickActionGrid,
   renderSelectRow,
   renderSettingsRow,
@@ -49,7 +50,7 @@ const DEV_ICON_BLUETOOTH =
 const DEV_ICON_CHIP =
   "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
 const DEV_ICON_TAG =
-  "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,14.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
+  "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
 
 /**
  * Shared calm offline / sleeping banner rendered at the top of Device views (`Q8` / `E-04`).
@@ -160,6 +161,9 @@ function canonicalActionCommand(item: EspHomeEntityItem): string {
   if (tail === "activate_screensaver" || tail.endsWith("_activate_screensaver")) {
     return "activate_screensaver";
   }
+  if (tail === "deactivate_screensaver" || tail.endsWith("_deactivate_screensaver")) {
+    return "deactivate_screensaver";
+  }
   if (tail === "hibernate" || tail.endsWith("_hibernate_device") || tail.endsWith("_hibernate")) {
     return "hibernate";
   }
@@ -181,6 +185,8 @@ function localizedQuickActionLabel(
       return store.t("dev_overview.qa_trigger_va");
     case "activate_screensaver":
       return store.t("dev_overview.qa_activate_screensaver");
+    case "deactivate_screensaver":
+      return store.t("dev_overview.qa_exit_screensaver");
     case "restart":
       return store.t("dev_overview.qa_restart");
     default:
@@ -434,11 +440,15 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
   ) {
     otherQuickItemsRaw.push(data.speaker_volume);
   }
+  const dndPref = !isBleOnly ? store.entity.getPref("do_not_disturb") : undefined;
   const otherQuickItems = isOffline
     ? otherQuickItemsRaw.map((it) => ({ ...it, state: "unavailable" }))
     : otherQuickItemsRaw;
   const hasQuickControls =
-    harmlessQuickButtons.length > 0 || otherQuickItems.length > 0 || Boolean(restartButton);
+    harmlessQuickButtons.length > 0 ||
+    Boolean(dndPref) ||
+    otherQuickItems.length > 0 ||
+    Boolean(restartButton);
   const showQuickActionsCard = !isBleOnly;
   const otherSensorItems = store.entity.getSectionItems("other");
 
@@ -735,6 +745,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
               contentClass: "settings-list",
               body: hasQuickControls
                 ? html`${renderQuickActionGrid(store, harmlessQuickButtons, isOffline)}
+                    ${dndPref ? renderPrefControlRow(store, dndPref) : nothing}
                     ${otherQuickItems.map((it) => renderDeviceEntityRow(store, it))}
                     ${restartButton
                       ? renderSettingsRow({
@@ -892,6 +903,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
                       <button
                         type="button"
                         id="btn-dismiss-ringing"
+                        ?disabled=${isOffline}
                         @click=${() =>
                           void store.entity.runDeviceAction(
                             "dismiss_ringing",

@@ -527,7 +527,7 @@ export class EntityController {
       } catch (err) {
         clearOwnedInFlight();
         if (isConflictError(err)) {
-          void this.store.refreshState();
+          await this.store.refreshState();
           this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
           return;
         }
@@ -569,8 +569,10 @@ export class EntityController {
             for (const [k, v] of Object.entries(previousValues)) {
               if (k.startsWith("__dom:")) continue;
               if (k in batchKeySeqs && seqMap.get(k) !== batchKeySeqs[k]) continue;
-              restoredConfig[k] = v;
-              if (v !== undefined) {
+              if (v === undefined) {
+                delete restoredConfig[k];
+              } else {
+                restoredConfig[k] = v;
                 restoredPrefs[k] = v;
               }
             }
@@ -715,7 +717,7 @@ export class EntityController {
       } catch (err) {
         clearOwnedInFlight();
         if (isConflictError(err)) {
-          void this.store.refreshState();
+          await this.store.refreshState();
           this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
           return;
         }
@@ -731,7 +733,9 @@ export class EntityController {
             if (k.startsWith("__dom:")) {
               const domId = k.slice(6);
               controlRevert[domId] = typeof v === "boolean" ? v : String(v ?? "");
-            } else if (v !== undefined) {
+            } else if (v === undefined) {
+              delete restored[k];
+            } else {
               restored[k] = v;
             }
           }

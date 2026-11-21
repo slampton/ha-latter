@@ -102,7 +102,6 @@ class LatterBleDeviceTracker(TrackerEntity):
             "floor_id": attrs["floor_id"],
             "floor_name": attrs["floor_name"],
             "closest_proxy": attrs["closest_proxy"],
-            "distance_ft": attrs["distance_ft"],
             "distance_m": attrs["distance_m"],
             "rssi": attrs["rssi"],
             "match_method": attrs["match_method"],

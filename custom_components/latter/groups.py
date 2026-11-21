@@ -59,6 +59,7 @@ from .const import (
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DEFAULT_WALLPAPER_MODE,
     DOMAIN,
+    MIN_FIRMWARE_SDK_REV,
 )
 from .identity import (
     device_entities,
@@ -305,7 +306,6 @@ def get_esphome_device_entities(
     sections_map: dict[str, list[dict[str, Any]]] = {
         sec_id: [] for sec_id, _title, _desc in UNIVERSAL_SECTION_META
     }
-    custom_sec_titles: dict[str, str] = {}
 
     entries: list[er.RegistryEntry] = device_entities(
         hass,
@@ -366,7 +366,7 @@ def get_esphome_device_entities(
         )
         cat = entry.entity_category
 
-        sec_id, custom_title = classify_esphome_entity_section(
+        sec_id, _custom_title = classify_esphome_entity_section(
             entry.entity_id,
             clean_name,
             entry.domain,
@@ -375,9 +375,7 @@ def get_esphome_device_entities(
             translation_key=entry.translation_key,
             device_object_prefixes=object_prefixes,
         )
-        if custom_title and sec_id not in sections_map:
-            sections_map[sec_id] = []
-            custom_sec_titles[sec_id] = custom_title
+        sections_map.setdefault(sec_id, [])
 
         display_label = (
             clean_name.split(":", 1)[1].strip()
@@ -420,22 +418,6 @@ def get_esphome_device_entities(
                 "id": sec_id,
                 "title": sec_title,
                 "description": sec_desc,
-                "items": sec_items,
-            }
-        )
-
-    for sec_id, sec_title in sorted(custom_sec_titles.items(), key=lambda x: x[1].lower()):
-        sec_items = sections_map.get(sec_id, [])
-        if not sec_items:
-            continue
-        sec_items.sort(key=lambda x: x["_sort"])
-        for it in sec_items:
-            it.pop("_sort", None)
-        sections_list.append(
-            {
-                "id": sec_id,
-                "title": sec_title,
-                "description": f"Entities grouped under the '{sec_title}:' prefix.",
                 "items": sec_items,
             }
         )
@@ -1221,6 +1203,7 @@ async def async_apply_group_baseline_to_coordinators(
     grp_id = str(group.get("id") or "").strip()
     enforced_keys = active_group_keys(group)
     updated_devices = 0
+    updated_controls = 0
 
     for coord in targets:
         if getattr(coord, "is_ble_tag", False):
@@ -1243,17 +1226,18 @@ async def async_apply_group_baseline_to_coordinators(
                 ).strip()
             if not _same_control_val(cur_v, want_v) or k not in cur_data:
                 updates[k] = want_v
-        cleaned = (
-            clean_device_settings(
+        if updates:
+            cleaned = clean_device_settings(
                 updates,
                 current=cur_data,
                 is_round_display=is_round,
                 supports_hw_jpeg=bool(getattr(coord, "supports_hw_jpeg", False)),
             )
-            if updates
-            else {}
-        )
-        merged = {**cur_data, **(cleaned or updates)}
+            if not cleaned:
+                raise ValueError("Group baseline contained no valid device settings")
+        else:
+            cleaned = {}
+        merged = {**cur_data, **cleaned}
         if grp_id and grp_id != DEFAULT_DEVICE_GROUP:
             merged["device_group"] = grp_id
         wp_override = CONF_WALLPAPER_SOURCE in cleaned
@@ -1268,6 +1252,7 @@ async def async_apply_group_baseline_to_coordinators(
                 coord._bind_wallpaper_cycle_timer()
             if hasattr(coord, "_bind_screensaver_cycle_timer"):
                 coord._bind_screensaver_cycle_timer()
+            updated_controls += len(cleaned)
         if hasattr(coord, "async_update_listeners"):
             coord.async_update_listeners()
         coord.async_notify_listeners()
@@ -1275,7 +1260,7 @@ async def async_apply_group_baseline_to_coordinators(
 
     return {
         "updated_devices": updated_devices,
-        "updated_controls": 0,
+        "updated_controls": updated_controls,
     }
 
 
@@ -1295,7 +1280,7 @@ BLE_TAG_IDENTITY_KEYS: tuple[str, ...] = (
     "ble_target_address",
 )
 
-FACTORY_RESET_MIN_SDK_REV = 2026110261
+FACTORY_RESET_MIN_SDK_REV = MIN_FIRMWARE_SDK_REV
 
 _FLAG_ERRORS: dict[str, str] = {
     "reset_nothing_selected": "Select what to reset: the device settings, the Latter options, or both.",

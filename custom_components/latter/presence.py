@@ -157,7 +157,10 @@ def decide_area(
     """Pick the best-scoring Area and decide whether the Device moves there."""
     if not scores:
         return None
-    best_area_id, best_score = max(scores.items(), key=lambda item: item[1])
+    best_area_id, best_score = min(
+        scores.items(),
+        key=lambda item: (-round(item[1], 6), item[0] != current_area_id, item[0]),
+    )
     if best_score < MIN_WINNING_RSSI_DBM:
         return None
     if current_area_id is None:
@@ -353,6 +356,21 @@ def invalidate_area_fusion_index(hass: HomeAssistant) -> None:
         domain_data.pop("_area_fusion_index", None)
 
 
+def _is_latter_own_area_sensor(
+    entry: er.RegistryEntry | None,
+    entity_id: str = "",
+    state_obj: Any = None,
+) -> bool:
+    """Return True when `entry`/`entity_id` belongs to Latter itself (never feed back into Area sensor fusion)."""
+    if entry is not None:
+        return entry.platform == DOMAIN or bool(
+            (entry.unique_id or "").startswith("latter_area_")
+        )
+    if state_obj is not None and "fusion_mode" in getattr(state_obj, "attributes", {}):
+        return True
+    return entity_id.endswith("_ble_occupancy")
+
+
 def _area_candidate_binary_sensors(hass: HomeAssistant, area_id: str) -> list[str]:
     """Return cached physical binary_sensor entity_ids assigned to `area_id`."""
     ent_reg = er.async_get(hass)
@@ -367,11 +385,8 @@ def _area_candidate_binary_sensors(hass: HomeAssistant, area_id: str) -> list[st
             if (
                 not entry.disabled_by
                 and entry.domain == "binary_sensor"
-                and "ble_occupancy" not in entry.entity_id
-                and not (
-                    entry.unique_id
-                    and str(entry.unique_id).startswith("latter_area_ble_occupancy_")
-                )
+                and entry.platform != DOMAIN
+                and not (entry.unique_id or "").startswith("latter_area_")
                 and entry.entity_id not in seen_set
             ):
                 seen_set.add(entry.entity_id)
@@ -383,13 +398,8 @@ def _area_candidate_binary_sensors(hass: HomeAssistant, area_id: str) -> list[st
                     not entry.area_id
                     and not entry.disabled_by
                     and entry.domain == "binary_sensor"
-                    and "ble_occupancy" not in entry.entity_id
-                    and not (
-                        entry.unique_id
-                        and str(entry.unique_id).startswith(
-                            "latter_area_ble_occupancy_"
-                        )
-                    )
+                    and entry.platform != DOMAIN
+                    and not (entry.unique_id or "").startswith("latter_area_")
                     and entry.entity_id not in seen_set
                 ):
                     seen_set.add(entry.entity_id)
@@ -414,13 +424,19 @@ def get_tracked_fusion_entity_ids(hass: HomeAssistant) -> set[str]:
             if isinstance(cfg, dict) and isinstance(cfg.get("sensors"), list):
                 for s in cfg["sensors"]:
                     eid = str(s or "").strip()
-                    if eid.startswith("binary_sensor.") and "ble_occupancy" not in eid:
+                    if not eid.startswith("binary_sensor."):
+                        continue
+                    entry = ent_reg.async_get(eid)
+                    st = hass.states.get(eid)
+                    if not _is_latter_own_area_sensor(entry, eid, st):
                         tracked.add(eid)
 
     for area in area_reg.async_list_areas():
         for eid in _area_candidate_binary_sensors(hass, area.id):
             entry = ent_reg.async_get(eid)
             st = hass.states.get(eid)
+            if _is_latter_own_area_sensor(entry, eid, st):
+                continue
             dclass = str(
                 (st.attributes.get("device_class") if st else "")
                 or (entry.device_class if entry else "")
@@ -440,14 +456,15 @@ def discover_area_fusion_sensors(
 ) -> tuple[list[str], list[str], list[str], list[str], list[dict[str, str]]]:
     """Return (occ_on, occ_off, motion_on, door_closed, available_sensors) for a Home Assistant Area."""
     ent_reg = er.async_get(hass)
-    explicit_set = {
+    explicit_list = [
         str(s).strip()
         for s in (configured_sensors or [])
         if str(s or "").strip().startswith("binary_sensor.")
-    }
+    ]
+    explicit_set = set(explicit_list)
 
     candidate_eids = list(_area_candidate_binary_sensors(hass, area_id))
-    for eid in explicit_set:
+    for eid in explicit_list:
         if eid not in candidate_eids:
             candidate_eids.append(eid)
 
@@ -458,12 +475,12 @@ def discover_area_fusion_sensors(
     available: list[dict[str, str]] = []
 
     for eid in candidate_eids:
-        if "ble_occupancy" in eid:
-            continue
         entry = ent_reg.async_get(eid)
+        st = hass.states.get(eid)
+        if _is_latter_own_area_sensor(entry, eid, st):
+            continue
         if entry is not None and (entry.disabled_by or entry.domain != "binary_sensor"):
             continue
-        st = hass.states.get(eid)
         dclass = str(
             (st.attributes.get("device_class") if st else "")
             or (entry.device_class if entry else "")
@@ -549,6 +566,35 @@ def evaluate_area_sensor_fusion(
     active_sensors = occ_on + motion_on
     sensor_present = len(active_sensors) > 0
 
+    ent_reg = er.async_get(hass)
+    explicit_eids = [
+        str(s).strip()
+        for s in (configured_sensors or [])
+        if str(s or "").strip().startswith("binary_sensor.")
+    ]
+    unavailable_sensors: list[str] = []
+    if explicit_eids:
+        for eid in explicit_eids:
+            entry = ent_reg.async_get(eid)
+            st = hass.states.get(eid)
+            if _is_latter_own_area_sensor(entry, eid, st):
+                continue
+            if (
+                st is None
+                or (entry is not None and bool(entry.disabled_by))
+                or str(st.state).lower() in ("unavailable", "unknown")
+            ) and eid not in unavailable_sensors:
+                unavailable_sensors.append(eid)
+    else:
+        for item in available_sensors:
+            eid = str(item.get("entity_id") or "")
+            if (
+                eid
+                and str(item.get("state") or "").lower() in ("unavailable", "unknown")
+                and eid not in unavailable_sensors
+            ):
+                unavailable_sensors.append(eid)
+
     score = 0.0
     if ble_present:
         if best_rssi is not None and best_rssi >= -68:
@@ -584,8 +630,14 @@ def evaluate_area_sensor_fusion(
         if is_occupied and confidence_pct < 60:
             confidence_pct = 75
     elif fusion_mode == "ble_and_sensor":
-        has_local_sensors = bool(occ_on or occ_off or motion_on)
-        is_occupied = ble_present and (sensor_present if has_local_sensors else True)
+        if explicit_eids and unavailable_sensors:
+            is_occupied = False
+            confidence_pct = 0
+        elif ble_present and sensor_present:
+            is_occupied = True
+        else:
+            is_occupied = False
+            confidence_pct = 0
     else:
         is_occupied = confidence_pct >= threshold_pct
 
@@ -597,6 +649,7 @@ def evaluate_area_sensor_fusion(
         "confidence_pct": confidence_pct,
         "active_sensors": active_sensors,
         "available_sensors": available_sensors,
+        "unavailable_sensors": unavailable_sensors,
     }
 
 
@@ -616,6 +669,19 @@ SURVEY_RETENTION_SECONDS = 180.0
 WAKE_GAP_SECONDS = 8.0
 AWAY_CHECK_INTERVAL_SECONDS = 15.0
 AWAY_TIMEOUT_SECONDS = 180.0
+MATCHED_BLE_ADDRESS_TTL_SECONDS = 900.0
+
+
+def _safe_rssi_int(val: Any) -> int | None:
+    """Coerce raw RSSI to int, rejecting booleans, NaN/Inf, and non-numeric values."""
+    if val is None or isinstance(val, bool):
+        return None
+    if isinstance(val, float) and not math.isfinite(val):
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 _IBEACON_IDENTITY_RE = re.compile(
     r"^(?P<uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})"
@@ -1453,8 +1519,9 @@ class LatterNativeBleTracker:
         ):
             return
         is_new = norm not in self._matched_ble_addresses
-        self._matched_ble_addresses[norm] = time.monotonic()
-        evicted = False
+        now_mono = time.monotonic()
+        self._matched_ble_addresses[norm] = now_mono
+        evicted = self._prune_expired_matched_ble_addresses(now_mono)
         if len(self._matched_ble_addresses) > 64:
             oldest = min(
                 self._matched_ble_addresses,
@@ -1471,6 +1538,24 @@ class LatterNativeBleTracker:
                 fabric._async_seed_tracker_from_scanners_once(
                     self, only_address=norm
                 )
+
+    @callback
+    def _prune_expired_matched_ble_addresses(self, now_mono: float) -> bool:
+        """Evict expired rotating BLE addresses (RPAs) after TTL while retaining bound ESPHome / static MACs."""
+        if self._esphome_device_id or not self._matched_ble_addresses:
+            return False
+        evicted = False
+        for addr, ts in list(self._matched_ble_addresses.items()):
+            if (now_mono - ts) <= MATCHED_BLE_ADDRESS_TTL_SECONDS:
+                continue
+            if self._dynamic_target_mac_str and addr == self._dynamic_target_mac_str:
+                continue
+            addr_int = _mac_to_int(addr)
+            if addr_int is not None and addr_int in self._target_mac_ints:
+                continue
+            self._matched_ble_addresses.pop(addr, None)
+            evicted = True
+        return evicted
 
     @property
     def matched_ble_addresses(self) -> list[str]:
@@ -1663,6 +1748,8 @@ class LatterNativeBleTracker:
     def check_away_timeout(self, now_mono: float) -> None:
         """Transition tracker to Away if no BLE packet has been received within the configured away timeout."""
         self._seed_explicit_target_address()
+        if self._prune_expired_matched_ble_addresses(now_mono):
+            get_ble_fabric(self.hass).sync_tracker_addresses()
         ref_mono = max(
             self.last_packet_monotonic
             if self.last_packet_monotonic > 0.0
@@ -1753,15 +1840,9 @@ class LatterNativeBleTracker:
         minor_val: int | None = None
         if isinstance(beacon_cfg, dict):
             if beacon_cfg.get("major") is not None:
-                try:
-                    major_val = int(beacon_cfg["major"])
-                except (ValueError, TypeError):
-                    major_val = None
+                major_val = _coerce_uint16(beacon_cfg["major"])
             if beacon_cfg.get("minor") is not None:
-                try:
-                    minor_val = int(beacon_cfg["minor"])
-                except (ValueError, TypeError):
-                    minor_val = None
+                minor_val = _coerce_uint16(beacon_cfg["minor"])
         return major_val, minor_val
 
     @property
@@ -2040,31 +2121,31 @@ class LatterNativeBleTracker:
         if (
             norm_addr
             and norm_addr in self._matched_ble_addresses
-            and not (has_ibeacon_frame and self._target_uuid_hex)
+            and not self._target_uuid_hex
+            and not self._target_eddystone_namespace_hex
         ):
             return True
 
-        if apple_bytes and len(apple_bytes) >= 18 and self._target_uuid_hex:
-            uuid_matched = False
-            major_val: int | None = None
-            minor_val: int | None = None
-            if has_ibeacon_frame:
-                uuid_hex = apple_bytes[2:18].hex().lower()
-                uuid_matched = uuid_hex == self._target_uuid_hex
-                if len(apple_bytes) >= 20:
-                    major_val = (apple_bytes[18] << 8) | apple_bytes[19]
-                if len(apple_bytes) >= 22:
-                    minor_val = (apple_bytes[20] << 8) | apple_bytes[21]
-            elif self._target_uuid_hex in apple_bytes.hex().lower():
-                uuid_matched = True
-            if uuid_matched:
+        if has_ibeacon_frame and apple_bytes and self._target_uuid_hex:
+            uuid_hex = apple_bytes[2:18].hex().lower()
+            if uuid_hex == self._target_uuid_hex:
+                major_val: int | None = (
+                    (apple_bytes[18] << 8) | apple_bytes[19]
+                    if len(apple_bytes) >= 20
+                    else None
+                )
+                minor_val: int | None = (
+                    (apple_bytes[20] << 8) | apple_bytes[21]
+                    if len(apple_bytes) >= 22
+                    else None
+                )
                 expected_major, expected_minor = self._resolve_beacon_major_minor()
                 if self._explicit_major is not None:
                     if major_val != expected_major:
                         return False
                 elif (
                     expected_major is not None
-                    and expected_major >= 1
+                    and expected_major >= 0
                     and major_val != expected_major
                 ):
                     return False
@@ -2073,7 +2154,7 @@ class LatterNativeBleTracker:
                     return minor_val == expected_minor
                 if self._explicit_major is not None:
                     return True
-                if expected_minor is not None and expected_minor >= 1:
+                if expected_minor is not None and expected_minor >= 0:
                     return minor_val == expected_minor
                 return not bool(self._esphome_device_id)
 
@@ -2096,8 +2177,6 @@ class LatterNativeBleTracker:
                             and ns_20 == self._target_eddystone_namespace_hex
                         ):
                             return True
-                    elif self._target_uuid_hex and self._target_uuid_hex in raw_b.hex().lower():
-                        return True
 
         return False
 
@@ -2127,14 +2206,14 @@ class LatterNativeBleTracker:
         if not self._matches_target_device(service_info):
             return
 
-        rssi = getattr(service_info, "rssi", None)
+        rssi_int = _safe_rssi_int(getattr(service_info, "rssi", None))
         source = str(getattr(service_info, "source", "") or "")
-        if rssi is None or not source or int(rssi) <= -100:
+        if rssi_int is None or not source or rssi_int <= -100:
             return
 
         adv_ts = getattr(service_info, "time", None)
         obs_mono = float(adv_ts) if adv_ts is not None else time.monotonic()
-        self._ingest_proxy_observation(source, int(rssi), obs_mono, source)
+        self._ingest_proxy_observation(source, rssi_int, obs_mono, source)
 
     def _resolve_cached_scanner_area(self, norm_source: str) -> str | None:
         """Resolve `norm_source` to a Home Assistant `area_id` using per-tracker cache."""
@@ -2200,15 +2279,16 @@ class LatterNativeBleTracker:
             else:
                 pre_dbm = sorted(vals)[1]
 
-            # Bermuda-style physical velocity gate: damp impossible recession spikes while keeping approaches crisp
+            # Symmetric physical velocity gate: damp impossible recession/approach multipath jumps
+            ref_shift = self.effective_ref_power_dbm - TX_POWER_1M_DBM
+            offset_db = self._get_scanner_offset(norm_source)
+            prev_norm = st.x_dbm + offset_db - ref_shift
+            cand_norm = pre_dbm + offset_db - ref_shift
+            prev_dist = _continuous_distance_m(prev_norm, self._attenuation)
+            cand_dist = _continuous_distance_m(cand_norm, self._attenuation)
+            max_step_m = self._max_velocity_mps * dt
             if pre_dbm < st.x_dbm:
-                ref_shift = self.effective_ref_power_dbm - TX_POWER_1M_DBM
-                offset_db = self._get_scanner_offset(norm_source)
-                prev_norm = st.x_dbm + offset_db - ref_shift
-                cand_norm = pre_dbm + offset_db - ref_shift
-                prev_dist = _continuous_distance_m(prev_norm, self._attenuation)
-                cand_dist = _continuous_distance_m(cand_norm, self._attenuation)
-                max_allowed_dist = prev_dist + (self._max_velocity_mps * dt)
+                max_allowed_dist = prev_dist + max_step_m
                 if cand_dist > max_allowed_dist:
                     clamped_norm = _distance_m_to_norm_dbm(
                         max_allowed_dist, self._attenuation
@@ -2216,13 +2296,23 @@ class LatterNativeBleTracker:
                     gated_dbm = clamped_norm - offset_db + ref_shift
                 else:
                     gated_dbm = pre_dbm
+            elif pre_dbm > st.x_dbm:
+                min_allowed_dist = max(0.05, prev_dist - max_step_m)
+                if cand_dist < min_allowed_dist:
+                    clamped_norm = _distance_m_to_norm_dbm(
+                        min_allowed_dist, self._attenuation
+                    )
+                    gated_dbm = clamped_norm - offset_db + ref_shift
+                else:
+                    gated_dbm = pre_dbm
             else:
                 gated_dbm = pre_dbm
 
-            # Adaptive 1D Kalman filter
+            # Symmetric bounded adaptive 1D Kalman filter
             q_var = 2.5 * dt
-            if gated_dbm > st.x_dbm + 6.0:
-                q_var += 0.25 * ((gated_dbm - st.x_dbm) ** 2)
+            delta_gated = abs(gated_dbm - st.x_dbm)
+            if delta_gated > 6.0:
+                q_var += min(36.0, 0.25 * (delta_gated ** 2))
             p_pred = st.p_var + q_var
             kalman_gain = p_pred / (p_pred + KALMAN_MEASUREMENT_VAR)
             st.x_dbm = st.x_dbm + kalman_gain * (gated_dbm - st.x_dbm)
@@ -2325,7 +2415,7 @@ class LatterNativeBleTracker:
         if is_cross_floor(area_id):
             score -= CROSS_FLOOR_ATTENUATION_DB
 
-        best_src = max(matched_srcs, key=lambda s: fresh_norm[s])
+        best_src = min(matched_srcs, key=lambda s: (-round(fresh_norm[s], 6), s))
         return score, best_src
 
     @callback
@@ -2355,7 +2445,8 @@ class LatterNativeBleTracker:
 
         self._last_adv_ts_by_scanner[norm_source] = obs_time
         just_woke_from_standby = (
-            not self._awaiting_fresh_wake_lock
+            not from_poll
+            and not self._awaiting_fresh_wake_lock
             and self.last_packet_monotonic > 0.0
             and (obs_time - self.last_packet_monotonic) >= WAKE_GAP_SECONDS
         )
@@ -2407,7 +2498,7 @@ class LatterNativeBleTracker:
         """Evaluate multi-scanner path-loss + vector signature scores with wake coalescing and 3.0 dBm deadband."""
         area_reg = ar.async_get(self.hass)
         prior_area_id = None if self._awaiting_fresh_wake_lock else self.current_area_id
-        anchor_floor_area_id = prior_area_id
+        anchor_floor_area_id = self.current_area_id
         cur_floor_id: str | None = None
         if anchor_floor_area_id:
             cur_area_entry = area_reg.async_get_area(anchor_floor_area_id)
@@ -2452,8 +2543,9 @@ class LatterNativeBleTracker:
         area_packet_counts: dict[str, int] = {}
 
         for a_id, cand_list in area_candidates.items():
-            best_decayed, best_norm, best_st, best_src = max(
-                cand_list, key=lambda item: item[0]
+            best_decayed, best_norm, best_st, best_src = min(
+                cand_list,
+                key=lambda item: (-round(item[0], 6), -round(item[1], 6), item[3]),
             )
             corroborating = sum(
                 1 for _dec, n_dbm, _s, _src in cand_list if n_dbm >= CORROBORATION_MIN_DBM
@@ -2516,7 +2608,10 @@ class LatterNativeBleTracker:
             fabric.emit_survey_delta(self)
             return
 
-        top_area_id = max(scores.items(), key=lambda item: item[1])[0]
+        top_area_id = min(
+            scores.items(),
+            key=lambda item: (-round(item[1], 6), item[0] != prior_area_id, item[0]),
+        )[0]
         challenger_pkts = area_packet_counts.get(top_area_id, 1)
         decision = decide_area(
             scores,
@@ -2620,9 +2715,48 @@ class LatterBleFabric:
         self._survey_listeners: list[Callable[[dict[str, Any]], None]] = []
         self._scanner_area_cache: dict[str, str | None] = {}
         self._unsub_ble: Callable[[], None] | None = None
+        self._unsub_registry_events: Callable[[], None] | None = None
         self._adv_unsubs: dict[str, Callable[[], None]] = {}
         self._unsub_away_timer: Callable[[], None] | None = None
         self._unsub_sensor_events: Callable[[], None] | None = None
+
+    @callback
+    def _ensure_registry_listeners(self) -> None:
+        """Keep Area/Device/Entity/Floor registry cache invalidation active whenever trackers or occupancy listeners exist."""
+        if self._unsub_registry_events is not None:
+            return
+        reg_unsubs = [
+            self.hass.bus.async_listen(
+                dr.EVENT_DEVICE_REGISTRY_UPDATED, self._invalidate_caches
+            ),
+            self.hass.bus.async_listen(
+                er.EVENT_ENTITY_REGISTRY_UPDATED, self._invalidate_caches
+            ),
+            self.hass.bus.async_listen(
+                ar.EVENT_AREA_REGISTRY_UPDATED, self._invalidate_caches
+            ),
+            self.hass.bus.async_listen(
+                "floor_registry_updated", self._invalidate_caches
+            ),
+        ]
+
+        @callback
+        def _unsub_regs() -> None:
+            for u in reg_unsubs:
+                u()
+
+        self._unsub_registry_events = _unsub_regs
+
+    @callback
+    def _maybe_stop_registry_listeners(self) -> None:
+        """Stop registry invalidation listeners when neither trackers nor occupancy listeners remain."""
+        if (
+            not self._trackers
+            and not self._occupancy_listeners
+            and self._unsub_registry_events is not None
+        ):
+            self._unsub_registry_events()
+            self._unsub_registry_events = None
 
     @callback
     def _invalidate_caches(self, _event: Any = None) -> None:
@@ -2638,6 +2772,7 @@ class LatterBleFabric:
         invalidate_area_fusion_index(self.hass)
         if self._occupancy_listeners:
             self.rebind_fusion_sensor_listener()
+            self.notify_occupancy_listeners()
 
     @callback
     def rebind_fusion_sensor_listener(self) -> None:
@@ -2663,6 +2798,7 @@ class LatterBleFabric:
         """Register a listener for real-time per-area BLE & sensor-fused occupancy changes."""
         if listener not in self._occupancy_listeners:
             self._occupancy_listeners.append(listener)
+        self._ensure_registry_listeners()
         if self._unsub_sensor_events is None:
             self.rebind_fusion_sensor_listener()
 
@@ -2673,6 +2809,7 @@ class LatterBleFabric:
             if not self._occupancy_listeners and self._unsub_sensor_events is not None:
                 self._unsub_sensor_events()
                 self._unsub_sensor_events = None
+            self._maybe_stop_registry_listeners()
 
         unsub: Callable[[], None] = _unsub
         return unsub
@@ -2810,6 +2947,7 @@ class LatterBleFabric:
             "persons": persons,
             "active_sensors": fused["active_sensors"],
             "available_sensors": fused["available_sensors"],
+            "unavailable_sensors": fused["unavailable_sensors"],
             "closest_device": closest_dev,
             "winning_rssi": best_rssi,
             "closest_distance_m": closest_dist_m,
@@ -2881,6 +3019,7 @@ class LatterBleFabric:
     @callback
     def _async_start_fabric(self) -> None:
         """Start the shared passive Bluetooth callback (both connectable & non-connectable) and away timer."""
+        self._ensure_registry_listeners()
         unsubs: list[Callable[[], None]] = []
         try:
             from homeassistant.components import bluetooth
@@ -2906,24 +3045,10 @@ class LatterBleFabric:
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Passive Bluetooth callback registration skipped: %s", err)
 
-        unsubs.extend(
-            [
-                self.hass.bus.async_listen(
-                    "esphome.ibeacon_seen", self._async_on_esphome_ibeacon_event
-                ),
-                self.hass.bus.async_listen(
-                    dr.EVENT_DEVICE_REGISTRY_UPDATED, self._invalidate_caches
-                ),
-                self.hass.bus.async_listen(
-                    er.EVENT_ENTITY_REGISTRY_UPDATED, self._invalidate_caches
-                ),
-                self.hass.bus.async_listen(
-                    ar.EVENT_AREA_REGISTRY_UPDATED, self._invalidate_caches
-                ),
-                self.hass.bus.async_listen(
-                    "floor_registry_updated", self._invalidate_caches
-                ),
-            ]
+        unsubs.append(
+            self.hass.bus.async_listen(
+                "esphome.ibeacon_seen", self._async_on_esphome_ibeacon_event
+            )
         )
 
         @callback
@@ -2951,9 +3076,10 @@ class LatterBleFabric:
         if self._unsub_away_timer is not None:
             self._unsub_away_timer()
             self._unsub_away_timer = None
-        if self._unsub_sensor_events is not None:
+        if not self._occupancy_listeners and self._unsub_sensor_events is not None:
             self._unsub_sensor_events()
             self._unsub_sensor_events = None
+        self._maybe_stop_registry_listeners()
 
     @callback
     def _async_on_esphome_ibeacon_event(self, event: Any) -> None:
@@ -2961,8 +3087,8 @@ class LatterBleFabric:
         data = getattr(event, "data", {}) or {}
         source = str(data.get("source") or data.get("scanner") or "").strip()
         uuid_raw = _normalize_uuid_hex(str(data.get("uuid") or ""))
-        rssi = data.get("rssi")
-        if not source or rssi is None or int(rssi) <= -100:
+        rssi_int = _safe_rssi_int(data.get("rssi"))
+        if not source or rssi_int is None or rssi_int <= -100:
             return
         adv_addr = str(data.get("address") or data.get("mac") or "").strip().upper()
         adv_int = _mac_to_int(adv_addr) if adv_addr else None
@@ -2990,27 +3116,24 @@ class LatterBleFabric:
                 ):
                     continue
             else:
-                mac_ok = bool(
-                    (adv_addr and adv_addr in tracker._matched_ble_addresses)
-                    or (
-                        tracker._target_mac_ints
-                        and adv_int is not None
-                        and adv_int in tracker._target_mac_ints
-                    )
+                static_mac_ok = bool(
+                    tracker._target_mac_ints
+                    and adv_int is not None
+                    and adv_int in tracker._target_mac_ints
                 )
-                if not mac_ok:
+                if not static_mac_ok:
                     if (
                         expected_major is not None
-                        and expected_major >= 1
+                        and expected_major >= 0
                         and ev_major != expected_major
                     ):
                         continue
-                    if expected_minor is not None and expected_minor >= 1:
+                    if expected_minor is not None and expected_minor >= 0:
                         if ev_minor != expected_minor:
                             continue
                     elif tracker._esphome_device_id:
                         continue
-            tracker._ingest_proxy_observation(source, int(rssi), now_mono, source)
+            tracker._ingest_proxy_observation(source, rssi_int, now_mono, source)
 
     @callback
     def _async_on_raw_ble_advertisement(self, service_info: object) -> None:
@@ -3095,14 +3218,15 @@ class LatterBleFabric:
                     obs_mono = float(last_ts) if last_ts is not None else now_mono
                     if last_ts is not None and (now_mono - obs_mono) > SURVEY_RETENTION_SECONDS:
                         continue
-                    rssi = getattr(adv_data, "rssi", None)
-                    if rssi is None:
-                        rssi = getattr(ble_dev, "rssi", None)
-                    if rssi is None or int(rssi) <= -100:
+                    raw_rssi = getattr(adv_data, "rssi", None)
+                    if raw_rssi is None:
+                        raw_rssi = getattr(ble_dev, "rssi", None)
+                    rssi_int = _safe_rssi_int(raw_rssi)
+                    if rssi_int is None or rssi_int <= -100:
                         continue
                     tracker._ingest_proxy_observation(
                         source,
-                        int(rssi),
+                        rssi_int,
                         obs_mono,
                         scanner_name,
                         from_poll=last_ts is not None,
@@ -3168,6 +3292,7 @@ def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
                 "persons": occ["persons"],
                 "active_sensors": occ["active_sensors"],
                 "available_sensors": occ["available_sensors"],
+                "unavailable_sensors": occ["unavailable_sensors"],
                 "closest_device": occ["closest_device"] or "",
                 "winning_rssi": occ["winning_rssi"],
                 "closest_distance_m": occ["closest_distance_m"],

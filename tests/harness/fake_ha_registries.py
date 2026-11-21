@@ -335,6 +335,12 @@ def install_fake_ha_registries(slugify_fn: Callable[..., str], entity_category_c
         def async_get(self, entity_id: str) -> RegistryEntry | None:
             return self.entities.get(entity_id)
 
+        def async_get_entity_id(self, domain: str, platform: str, unique_id: str) -> str | None:
+            for ent in self.entities.values():
+                if ent.domain == domain and ent.platform == platform and ent.unique_id == unique_id:
+                    return ent.entity_id
+            return None
+
         def async_register(self, entry: RegistryEntry) -> RegistryEntry:
             if not entry.unique_id:
                 entry.unique_id = f"uid_{entry.entity_id}"
@@ -370,9 +376,14 @@ def install_fake_ha_registries(slugify_fn: Callable[..., str], entity_category_c
                     EVENT_ENTITY_REGISTRY_UPDATED, {"action": "remove", "entity_id": entity_id}
                 )
 
+    class RegistryEntryHider(StrEnum):
+        INTEGRATION = "integration"
+        USER = "user"
+
     er_mod.EVENT_ENTITY_REGISTRY_UPDATED = EVENT_ENTITY_REGISTRY_UPDATED  # type: ignore[attr-defined]
     er_mod.EntityRegistry = EntityRegistry  # type: ignore[attr-defined]
     er_mod.RegistryEntry = RegistryEntry  # type: ignore[attr-defined]
+    er_mod.RegistryEntryHider = RegistryEntryHider  # type: ignore[attr-defined]
     er_mod.async_get = lambda hass: hass._entity_registry  # type: ignore[attr-defined]
     er_mod.async_entries_for_area = lambda reg, area_id: [
         e for e in reg.entities.values() if e.area_id == area_id

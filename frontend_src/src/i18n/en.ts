@@ -32,6 +32,7 @@ export const PREF_LABELS: Readonly<Record<string, string>> = {
   screensaver_style: "Screensaver style",
   screensaver_photo_clock: "Show subtle clock",
   bedtime_active: "Bedtime mode",
+  do_not_disturb: "Do not disturb",
   bedtime_display: "Idle display in bedtime",
   bedtime_brightness: "Bedtime brightness",
   bedtime_schedule: "Bedtime schedule",

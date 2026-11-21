@@ -17,8 +17,11 @@ _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = _PROTOCOL_SCHEMA["defaults"]
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final[int] = int(_PROTOCOL_SCHEMA["studio_contract"]["studio_rev"])
-MIN_FIRMWARE_SDK_REV: Final = 2026112006
+STUDIO_REV: Final[int] = 44
+if int(_PROTOCOL_SCHEMA["studio_contract"]["studio_rev"]) != STUDIO_REV:
+    raise RuntimeError("const.py STUDIO_REV is out of sync with protocol_v3.json")
+
+MIN_FIRMWARE_SDK_REV: Final = 2026112007
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -27,6 +30,7 @@ PLATFORMS: Final[list[Platform]] = [
     Platform.NUMBER,
     Platform.BUTTON,
     Platform.SWITCH,
+    Platform.LIGHT,
 ]
 
 STORAGE_VERSION: Final = 1
@@ -130,6 +134,7 @@ CONF_BEDTIME_BRIGHTNESS: Final = "bedtime_brightness"
 CONF_BEDTIME_SCHEDULE: Final = "bedtime_schedule"
 CONF_BEDTIME_START_HOUR: Final = "bedtime_start_hour"
 CONF_BEDTIME_END_HOUR: Final = "bedtime_end_hour"
+CONF_DO_NOT_DISTURB: Final = "do_not_disturb"
 CONF_AUTO_BRIGHTNESS_MODE: Final = "auto_brightness_mode"
 CONF_MANUAL_BRIGHTNESS: Final = "manual_brightness"
 CONF_DAY_BRIGHTNESS: Final = "day_brightness"
@@ -214,29 +219,68 @@ DEFAULT_SCREENSAVER_SHUFFLE: Final = False
 DEFAULT_ART_SIZE: Final = 466  # artwork edge until the Device reports its hardware manifest
 WALLPAPER_MAX_DIM: Final = 720  # native wallpaper ceiling for 720x720 high-resolution displays
 
-# Native Latter Services
-SERVICE_DEVICE_HELLO: Final = "device_hello"
-SERVICE_SET_DEVICE_PREFS: Final = "set_device_prefs"
-SERVICE_TIMER_ALARM_STATE: Final = "timer_alarm_state"
-SERVICE_MUSIC_BROWSE: Final = "music_browse"
-SERVICE_SET_ACTIVE_SPEAKER: Final = "set_active_speaker"
-SERVICE_MEDIA_COMMAND: Final = "media_command"
-SERVICE_MEDIA_VOLUME: Final = "media_volume"
-SERVICE_AREA_BROWSE: Final = "area_browse"
-SERVICE_AREA_ACTION: Final = "area_action"
-SERVICE_SET_ACTIVE_AREA: Final = "set_active_area"
-SERVICE_REMOTE_ACTION: Final = "remote_action"
-SERVICE_CALENDAR_FETCH: Final = "calendar_fetch"
-SERVICE_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
-SERVICE_CALENDAR_DELETE_EVENT: Final = "calendar_delete_event"
-SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
+# Public Home Assistant Services (`latter.<service>` — strictly matches services.yaml)
 SERVICE_NOTIFY: Final = "notify"
-SERVICE_SAVE_CUSTOM_COLOR: Final = "save_custom_color"
-SERVICE_SHORTCUT_ACTION: Final = "shortcut_action"
-SERVICE_DOORBELL_INTERCOM: Final = "doorbell_intercom"
+SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
+SERVICE_SET_ACTIVE_AREA: Final = "set_active_area"
+SERVICE_SET_ACTIVE_SPEAKER: Final = "set_active_speaker"
 SERVICE_RESET_DEVICE: Final = "reset_device"
+PUBLIC_SERVICES: Final[tuple[str, ...]] = (
+    SERVICE_NOTIFY,
+    SERVICE_INTERCOM_BROADCAST,
+    SERVICE_SET_ACTIVE_AREA,
+    SERVICE_SET_ACTIVE_SPEAKER,
+    SERVICE_RESET_DEVICE,
+)
 
-# HTTP Endpoints (Artwork, Wallpaper, Wallpaper Upload, Camera Snapshot, Camera Audio, Map & Brand)
+# Private Bound Firmware Outbox RPC Methods (`latter_rpc_outbox` -> LatterRpcDispatcher)
+RPC_DEVICE_HELLO: Final = "device_hello"
+RPC_DEVICE_TELEMETRY: Final = "device_telemetry"
+RPC_DISPLAY_STATE: Final = "display_state"
+RPC_MUSIC_BROWSE: Final = "music_browse"
+RPC_SET_ACTIVE_SPEAKER: Final = "set_active_speaker"
+RPC_MEDIA_COMMAND: Final = "media_command"
+RPC_MEDIA_VOLUME: Final = "media_volume"
+RPC_AREA_BROWSE: Final = "area_browse"
+RPC_AREA_ACTION: Final = "area_action"
+RPC_SET_ACTIVE_AREA: Final = "set_active_area"
+RPC_REMOTE_ACTION: Final = "remote_action"
+RPC_CALENDAR_FETCH: Final = "calendar_fetch"
+RPC_CALENDAR_CREATE_EVENT: Final = "calendar_create_event"
+RPC_CALENDAR_DELETE_EVENT: Final = "calendar_delete_event"
+RPC_INTERCOM_BROADCAST: Final = "intercom_broadcast"
+RPC_DOORBELL_INTERCOM: Final = "doorbell_intercom"
+RPC_SAVE_CUSTOM_COLOR: Final = "save_custom_color"
+RPC_SHORTCUT_ACTION: Final = "shortcut_action"
+RPC_SET_DEVICE_PREFS: Final = "set_device_prefs"
+RPC_TIMER_ALARM_STATE: Final = "timer_alarm_state"
+
+ALL_RPC_METHODS: Final[tuple[str, ...]] = (
+    RPC_DEVICE_HELLO,
+    RPC_DEVICE_TELEMETRY,
+    RPC_DISPLAY_STATE,
+    RPC_MUSIC_BROWSE,
+    RPC_SET_ACTIVE_SPEAKER,
+    RPC_MEDIA_COMMAND,
+    RPC_MEDIA_VOLUME,
+    RPC_AREA_BROWSE,
+    RPC_AREA_ACTION,
+    RPC_SET_ACTIVE_AREA,
+    RPC_REMOTE_ACTION,
+    RPC_CALENDAR_FETCH,
+    RPC_CALENDAR_CREATE_EVENT,
+    RPC_CALENDAR_DELETE_EVENT,
+    RPC_INTERCOM_BROADCAST,
+    RPC_DOORBELL_INTERCOM,
+    RPC_SAVE_CUSTOM_COLOR,
+    RPC_SHORTCUT_ACTION,
+    RPC_SET_DEVICE_PREFS,
+    RPC_TIMER_ALARM_STATE,
+)
+if set(ALL_RPC_METHODS) != set(_PROTOCOL_SCHEMA["rpc_methods"].keys()):
+    raise RuntimeError("const.py ALL_RPC_METHODS is out of sync with protocol_v3.json rpc_methods")
+
+# HTTP Endpoints (Artwork, Wallpaper, Wallpaper Upload, Camera Snapshot, Camera Stream/Grid/Audio & Brand)
 API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"
 API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{target_device}"
 API_WALLPAPER_UPLOAD_PATH: Final = "/api/latter/wallpaper/upload"

@@ -1,4 +1,4 @@
-"""Special service targets (`occupied_areas`), sensor unrecorded attributes, and 28-module invariants."""
+"""Special service targets (`occupied_areas`), curated sensor surface, and 34-module invariants."""
 
 from __future__ import annotations
 
@@ -10,14 +10,18 @@ import unittest
 from custom_components.latter import (
     areas,
     backup,
+    binary_sensor,
+    button,
     const as targets,
     coordinator,
     doorbell,
     http,
     hub,
+    light,
     media,
     media_browse,
     presence,
+    switch,
 )
 from custom_components.latter.studio import settings
 
@@ -56,17 +60,47 @@ class OtherLatterDevicesTests(unittest.TestCase):
         self.assertIn("broadcast_phrase_records(", inspect.getsource(areas))
 
 
-class UnrecordedAttributesTests(unittest.TestCase):
-    def test_only_attributes_the_sensors_expose(self) -> None:
+class CuratedSensorAndPlatformTests(unittest.TestCase):
+    """Verify the 6 dead diagnostic sensors are deleted, BLE distance uses meters, and 8 platforms exist."""
+
+    def test_removed_diagnostic_sensors_and_metric_distance(self) -> None:
         src = (LATTER_DIR / "sensor.py").read_text(encoding="utf-8")
-        m = re.search(r"_unrecorded_attributes = frozenset\((\{[^}]*\})\)", src)
-        self.assertIsNotNone(m)
-        assert m is not None
-        names = set(re.findall(r'"([a-z_]+)"', m.group(1)))
-        self.assertEqual(names, {"rev"})
+        for removed_cls in (
+            "LatterActiveMediaSensor",
+            "LatterWeatherForecastSensor",
+            "LatterAreaContextSensor",
+            "LatterCalendarAgendaSensor",
+            "LatterRemoteConfigSensor",
+            "LatterDevicePrefsSensor",
+        ):
+            self.assertNotIn(removed_cls, src)
         self.assertNotIn('"payload":', src)
-        for name in names:
-            self.assertIn(f'"{name}": attrs.get("{name}"', src)
+        self.assertIn("UnitOfLength.METERS", src)
+        self.assertIn("SensorDeviceClass.DISTANCE", src)
+        self.assertIn("_strip_legacy_ft", src)
+
+    def test_eight_platforms_and_curated_entities(self) -> None:
+        platform_names = [str(p) for p in targets.PLATFORMS]
+        self.assertEqual(
+            platform_names,
+            [
+                "sensor",
+                "binary_sensor",
+                "device_tracker",
+                "select",
+                "number",
+                "button",
+                "switch",
+                "light",
+            ],
+        )
+        self.assertTrue(hasattr(light, "LatterScreenLight"))
+        self.assertTrue(hasattr(switch, "LatterScreensaverSwitch"))
+        self.assertTrue(hasattr(switch, "LatterDoNotDisturbSwitch"))
+        self.assertTrue(hasattr(button, "LatterDismissAlertButton"))
+        self.assertFalse(hasattr(button, "LatterActivateScreensaverButton"))
+        bs_src = inspect.getsource(binary_sensor)
+        self.assertIn("f\"binary_sensor.{a_slug}_occupancy\"", bs_src)
 
 
 class TargetKindTests(unittest.TestCase):
@@ -101,8 +135,8 @@ class ServiceSourceTests(unittest.TestCase):
     def test_intercom_device_target_must_resolve(self) -> None:
         helper_body = self.SRC.split("def _resolve_occupied_area_ids(", 1)[1].split("\nasync def ", 1)[0]
         self.assertIn("resolve_person_area_and_distance(hass, target_low)", helper_body)
-        body = self.SRC.split("async def _handle_intercom_broadcast", 1)[1].split("\n    async def ", 1)[0]
-        self.assertIn("_resolve_coordinator_from_call(hass, call)", body)
+        body = self.SRC.split("async def _async_execute_intercom_broadcast", 1)[1].split("\ndef ", 1)[0]
+        self.assertIn("_resolve_coordinator_by_target(hass, raw_target)", body)
         self.assertIn('scoped_mode = kind in ("occupied_areas", "person")', body)
         self.assertIn("_resolve_occupied_area_ids(", body)
 
@@ -162,14 +196,20 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         sensor_src = (LATTER_DIR / "sensor.py").read_text(encoding="utf-8")
         self.assertIn("class _BaseLatterPersonSensor(SensorEntity):", sensor_src)
         self.assertIn("fabric.register_occupancy_listener(self._handle_person_update)", sensor_src)
-        self.assertIn("resolve_person_area_and_distance(self.hass, self._person_entity)", sensor_src)
+        self.assertRegex(
+            sensor_src,
+            r"resolve_person_area_and_distance\(\s*self\.hass,\s*self\._person_entity\s*\)",
+        )
 
     def test_ble_tag_skips_display_sensors_and_listeners(self) -> None:
         sensor_src = (LATTER_DIR / "sensor.py").read_text(encoding="utf-8")
-        ble_branch = sensor_src.split("if coordinator.is_ble_tag:", 1)[1].split("else:", 1)[0]
-        self.assertIn("LatterCurrentAreaSensor(coordinator)", ble_branch)
-        self.assertIn("LatterBleDistanceSensor(coordinator)", ble_branch)
-        self.assertNotIn("LatterAreaContextSensor", ble_branch)
+        self.assertIn("LatterCurrentAreaSensor(coordinator)", sensor_src)
+        self.assertIn("LatterBleDistanceSensor(coordinator)", sensor_src)
+        self.assertIn(
+            "if not coordinator.is_ble_tag and coordinator.has_display:\n"
+            "            dev_entities.append(LatterTimerRemainingSensor(coordinator))",
+            sensor_src,
+        )
 
         coord_src = inspect.getsource(coordinator)
         self.assertNotIn("DataUpdateCoordinator", coord_src)

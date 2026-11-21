@@ -479,6 +479,12 @@ export const CONTROL_STYLES = css`
   .pill.drag-over-after {
     box-shadow: inset -2px 0 0 var(--studio-primary);
   }
+  :host(:dir(rtl)) .pill.drag-over-before {
+    box-shadow: inset -2px 0 0 var(--studio-primary);
+  }
+  :host(:dir(rtl)) .pill.drag-over-after {
+    box-shadow: inset 2px 0 0 var(--studio-primary);
+  }
   .drag-handle {
     display: inline-flex;
     align-items: center;

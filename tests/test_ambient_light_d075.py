@@ -147,12 +147,18 @@ def test_clean_area_illuminance_validation() -> None:
     assert clean_area_illuminance(cleaned, {"entity_id": "disabled"}, allowed)["entity_id"] == "disabled"
     assert clean_area_illuminance(cleaned, {"entity_id": "auto"}, allowed)["entity_id"] == "auto"
 
-    # Enforces bright_lux >= dark_lux + 1.0
-    clamped = clean_area_illuminance({}, {"dark_lux": 20.0, "bright_lux": 10.0}, allowed)
-    assert clamped["bright_lux"] >= 21.0
-
-    with pytest.raises(SettingsScopeError):
-        clean_area_illuminance({}, {"entity_id": "sensor.other_room_lux"}, allowed)
+    # Rejects dark_lux >= bright_lux, bool, NaN, Inf, and out-of-Area entities
+    for bad_update in (
+        {"dark_lux": 20.0, "bright_lux": 10.0},
+        {"dark_lux": 20.0, "bright_lux": 20.0},
+        {"dark_lux": True, "bright_lux": 35.0},
+        {"dark_lux": 1.0, "bright_lux": False},
+        {"dark_lux": float("nan"), "bright_lux": 35.0},
+        {"dark_lux": 1.0, "bright_lux": float("inf")},
+        {"entity_id": "sensor.other_room_lux"},
+    ):
+        with pytest.raises(SettingsScopeError):
+            clean_area_illuminance({}, bad_update, allowed)
 
 
 @pytest.mark.asyncio
@@ -201,9 +207,24 @@ async def test_area_ambient_light_wire_packing_and_studio_command(
         },
     )
 
-    # Auto-discovery skips unavailable sensors and picks the live EP1 sensor
+    # Latter's own platform entities never leak into Area illuminance choices
+    ent_reg.async_register(
+        er.RegistryEntry(
+            entity_id="sensor.living_room_latter_own_lux",
+            platform=DOMAIN,
+            area_id="living_room",
+        )
+    )
+    hass.states.async_set(
+        "sensor.living_room_latter_own_lux",
+        "12.0",
+        {"device_class": "illuminance", "unit_of_measurement": "lx"},
+    )
+
+    # Auto-discovery skips unavailable & own-platform sensors and picks the live EP1 sensor
     choices = area_illuminance_sensor_choices(hass, "living_room")
     assert len(choices) == 2
+    assert all(c["entity_id"] != "sensor.living_room_latter_own_lux" for c in choices)
     amb = resolve_area_ambient_light(hass, "living_room")
     assert amb["resolved_entity"] == e1_id
     assert amb["lux_display"] == "5.6"

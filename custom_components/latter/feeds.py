@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
 import logging
@@ -17,8 +18,11 @@ from .protocol import (
     calendar_agenda_records,
     calendar_locations_records,
     calendar_sources_records,
+    escape_v3_subfield,
     forecast_records,
     ha_value,
+    normalize_temp_unit,
+    pack_weather_forecast_fields,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -202,7 +206,7 @@ def _parse_event_dict(
                 and local_end.date() > start_date
             ):
                 inclusive_end = local_end.date() - timedelta(days=1)
-                end_min = 1440 if inclusive_end == start_date else 0
+                end_min = 1440
             else:
                 inclusive_end = local_end.date()
                 end_min = local_end.hour * 60 + local_end.minute
@@ -245,10 +249,10 @@ async def async_fetch_raw_calendar_events(
     lookahead_days = max(1, min(int(days or 30), 60))
     end_utc = now_utc + timedelta(days=lookahead_days)
 
-    raw_events: list[dict[str, Any]] = []
-    for cal_idx, cal_id in enumerate(targets[:CALENDAR_SOURCES_MAX]):
-        try:
-            resp = await hass.services.async_call(
+    bounded_targets = targets[:CALENDAR_SOURCES_MAX]
+    responses = await asyncio.gather(
+        *(
+            hass.services.async_call(
                 "calendar",
                 "get_events",
                 {
@@ -259,8 +263,17 @@ async def async_fetch_raw_calendar_events(
                 blocking=True,
                 return_response=True,
             )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("calendar.get_events failed for %s: %s", cal_id, err)
+            for cal_id in bounded_targets
+        ),
+        return_exceptions=True,
+    )
+
+    raw_events: list[dict[str, Any]] = []
+    for cal_idx, (cal_id, resp) in enumerate(
+        zip(bounded_targets, responses, strict=False)
+    ):
+        if isinstance(resp, BaseException):
+            _LOGGER.debug("calendar.get_events failed for %s: %s", cal_id, resp)
             continue
         cal_data = resp.get(cal_id) if isinstance(resp, dict) else None
         events_list = cal_data.get("events", []) if isinstance(cal_data, dict) else []
@@ -305,21 +318,25 @@ def build_calendar_browse_items(
     raw_rows: list[dict[str, Any]],
     map_url_builder: Callable[[str], str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build device-scoped calendar browse slots (with signed map snapshot URLs) from fetched event rows."""
+    """Build device-scoped calendar browse slots from fetched event rows."""
     slot_items: list[dict[str, Any]] = []
     for idx, row in enumerate(raw_rows):
-        time_label = row["time_label"]
-        title = row["title"]
-        location = row["location"]
+        time_label = str(row["time_label"] or "")
+        title = str(row["title"] or "")
+        location = str(row["location"] or "")
         map_url = (
             map_url_builder(location)
             if (location and callable(map_url_builder))
             else ""
         )
+        encoded_id = "|".join(
+            escape_v3_subfield(part)
+            for part in (time_label, title, location, map_url)
+        )
         slot_items.append(
             {
                 "name": f"{time_label}: {title}",
-                "id": f"{time_label}|{title}|{location}|{map_url}",
+                "id": encoded_id,
                 "type": "calendar_event",
                 "active": idx == 0,
                 "summary": title,
@@ -349,19 +366,19 @@ async def async_fetch_calendar_agenda(
     return records, build_calendar_browse_items(raw_rows, map_url_builder=map_url_builder)
 
 
-async def async_fetch_calendar_snapshot(
-    hass: HomeAssistant,
-    calendar_entities: list[str],
-    days: int = 30,
-    map_url_builder: Callable[[str], str] | None = None,
-) -> tuple[V3Records, list[dict[str, Any]]]:
-    """Fetch the calendar agenda records (Protocol v3) and the structured event list."""
-    return await async_fetch_calendar_agenda(
-        hass,
-        calendar_entities,
-        days=days,
-        map_url_builder=map_url_builder,
-    )
+def _resolve_hass_temp_unit(hass: HomeAssistant | None, raw_attr: Any = None) -> str:
+    """Resolve `'C'` or `'F'` from a weather entity attribute or Home Assistant unit system."""
+    unit = normalize_temp_unit(raw_attr)
+    if unit:
+        return unit
+    if hass is not None:
+        cfg = getattr(hass, "config", None)
+        units = getattr(cfg, "units", None) if cfg is not None else None
+        if units is not None:
+            unit = normalize_temp_unit(getattr(units, "temperature_unit", None))
+            if unit:
+                return unit
+    return ""
 
 
 async def async_fetch_weather_snapshot(
@@ -379,6 +396,7 @@ async def async_fetch_weather_snapshot(
             "wind_bearing": None,
             "high": None,
             "low": None,
+            "temp_unit": _resolve_hass_temp_unit(hass),
             **sky,
         }
 
@@ -387,6 +405,7 @@ async def async_fetch_weather_snapshot(
         return None
 
     attrs = state_obj.attributes
+    temp_unit = _resolve_hass_temp_unit(hass, attrs.get("temperature_unit"))
     forecasts: list[dict[str, Any]] = []
     try:
         resp = await hass.services.async_call(
@@ -408,12 +427,18 @@ async def async_fetch_weather_snapshot(
 
     days: list[dict[str, Any]] = []
     for item in forecasts:
-        parsed = dt_util.parse_datetime(str(item.get("datetime") or ""))
-        if parsed is None:
-            continue
+        raw_dt = str(item.get("datetime") or "").strip()
+        parsed = dt_util.parse_datetime(raw_dt)
+        if parsed is not None:
+            weekday_idx = dt_util.as_local(parsed).weekday()
+        else:
+            parsed_d = dt_util.parse_date(raw_dt)
+            if parsed_d is None:
+                continue
+            weekday_idx = parsed_d.weekday()
         days.append(
             {
-                "day": DAY_ABBR[dt_util.as_local(parsed).weekday()],
+                "day": DAY_ABBR[weekday_idx],
                 "condition": str(item.get("condition") or ""),
                 "high": _opt_float(item.get("temperature")),
                 "low": _opt_float(item.get("templow")),
@@ -429,6 +454,7 @@ async def async_fetch_weather_snapshot(
         "wind_bearing": _opt_float(attrs.get("wind_bearing")),
         "high": today.get("high"),
         "low": today.get("low"),
+        "temp_unit": temp_unit,
         **sky,
     }
 
@@ -439,20 +465,7 @@ def init_weather_attributes(
     """Build initial unknown weather_attributes dictionary for a fresh coordinator."""
     w_rev, w_payload = pack_fn(
         "weather_forecast",
-        "",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        V3Records(),
-        "",
-        None,
-        None,
-        "",
-        "",
-        "",
+        *pack_weather_forecast_fields(),
     )
     return {
         "condition": "",
@@ -468,6 +481,7 @@ def init_weather_attributes(
         "sun_next_rising": "",
         "sun_next_setting": "",
         "moon_phase": "",
+        "temp_unit": "",
         "rev": w_rev,
         "payload": w_payload,
     }
@@ -477,11 +491,9 @@ def init_weather_attributes(
 def apply_coordinator_calendar_snapshot(
     coordinator: Any, records: V3Records, raw_rows: list[dict[str, Any]]
 ) -> None:
-    """Apply a Site-level calendar agenda snapshot and build device-scoped map snapshot URLs."""
+    """Apply a Site-level calendar agenda snapshot."""
     coordinator.calendar_records = records
-    coordinator.calendar_events = build_calendar_browse_items(
-        raw_rows, map_url_builder=coordinator.build_map_snapshot_url
-    )
+    coordinator.calendar_events = build_calendar_browse_items(raw_rows)
     coordinator.async_notify_listeners()
 
 
@@ -497,11 +509,10 @@ async def async_refresh_coordinator_calendar(
         if coordinator.subentry_id not in sys_obj.coordinators:
             apply_coordinator_calendar_snapshot(coordinator, records, raw_rows)
         return
-    records, events = await async_fetch_calendar_snapshot(
+    records, events = await async_fetch_calendar_agenda(
         coordinator.hass,
         coordinator.calendar_entities,
         days=days,
-        map_url_builder=coordinator.build_map_snapshot_url,
     )
     coordinator.calendar_records = records
     coordinator.calendar_events = events
@@ -531,10 +542,9 @@ async def async_fetch_calendar_window(
     start_utc = start_local.astimezone(UTC)
     end_utc = end_local.astimezone(UTC)
 
-    raw_events: list[dict[str, Any]] = []
-    for cal_idx, cal_id in enumerate(targets):
-        try:
-            resp = await hass.services.async_call(
+    responses = await asyncio.gather(
+        *(
+            hass.services.async_call(
                 "calendar",
                 "get_events",
                 {
@@ -545,8 +555,15 @@ async def async_fetch_calendar_window(
                 blocking=True,
                 return_response=True,
             )
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("calendar.get_events window failed for %s: %s", cal_id, err)
+            for cal_id in targets
+        ),
+        return_exceptions=True,
+    )
+
+    raw_events: list[dict[str, Any]] = []
+    for cal_idx, (cal_id, resp) in enumerate(zip(targets, responses, strict=False)):
+        if isinstance(resp, BaseException):
+            _LOGGER.debug("calendar.get_events window failed for %s: %s", cal_id, resp)
             continue
         cal_data = resp.get(cal_id) if isinstance(resp, dict) else None
         events_list = cal_data.get("events", []) if isinstance(cal_data, dict) else []
@@ -631,23 +648,29 @@ def apply_coordinator_weather_snapshot(
         sun_rise = str(sky.get("sun_next_rising") or "")
         sun_set = str(sky.get("sun_next_setting") or "")
         moon_ph = str(sky.get("moon_phase") or "")
+        temp_unit = _resolve_hass_temp_unit(
+            getattr(coordinator, "hass", None), sky.get("temp_unit")
+        )
         coordinator.forecast_records = V3Records()
         w_rev, w_payload = coordinator._pack_domain_payload(
             "weather_forecast",
-            "",
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            coordinator.forecast_records,
-            sun_state,
-            sun_elev,
-            sun_azim,
-            sun_rise,
-            sun_set,
-            moon_ph,
+            *pack_weather_forecast_fields(
+                "",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                coordinator.forecast_records,
+                sun_state,
+                sun_elev,
+                sun_azim,
+                sun_rise,
+                sun_set,
+                moon_ph,
+                temp_unit,
+            ),
         )
         coordinator.weather_attributes = {
             "condition": "",
@@ -663,6 +686,7 @@ def apply_coordinator_weather_snapshot(
             "sun_next_rising": sun_rise,
             "sun_next_setting": sun_set,
             "moon_phase": moon_ph,
+            "temp_unit": temp_unit,
             "weather_entity": "",
             "rev": w_rev,
             "payload": w_payload,
@@ -672,26 +696,33 @@ def apply_coordinator_weather_snapshot(
     if snap is None:
         return
     records, w_fields = snap
+    temp_unit = _resolve_hass_temp_unit(
+        getattr(coordinator, "hass", None), w_fields.get("temp_unit")
+    )
     coordinator.forecast_records = records
     w_rev, w_payload = coordinator._pack_domain_payload(
         "weather_forecast",
-        w_fields["condition"],
-        w_fields["temperature"],
-        w_fields["humidity"],
-        w_fields["wind_speed"],
-        w_fields["wind_bearing"],
-        w_fields["high"],
-        w_fields["low"],
-        coordinator.forecast_records,
-        w_fields.get("sun_state", ""),
-        w_fields.get("sun_elevation"),
-        w_fields.get("sun_azimuth"),
-        w_fields.get("sun_next_rising", ""),
-        w_fields.get("sun_next_setting", ""),
-        w_fields.get("moon_phase", ""),
+        *pack_weather_forecast_fields(
+            w_fields["condition"],
+            w_fields["temperature"],
+            w_fields["humidity"],
+            w_fields["wind_speed"],
+            w_fields["wind_bearing"],
+            w_fields["high"],
+            w_fields["low"],
+            coordinator.forecast_records,
+            w_fields.get("sun_state", ""),
+            w_fields.get("sun_elevation"),
+            w_fields.get("sun_azimuth"),
+            w_fields.get("sun_next_rising", ""),
+            w_fields.get("sun_next_setting", ""),
+            w_fields.get("moon_phase", ""),
+            temp_unit,
+        ),
     )
     coordinator.weather_attributes = {
         **w_fields,
+        "temp_unit": temp_unit,
         "weather_entity": weather_ent,
         "rev": w_rev,
         "payload": w_payload,

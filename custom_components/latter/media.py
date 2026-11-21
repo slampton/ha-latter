@@ -57,7 +57,7 @@ from .media_browse import (
     is_music_assistant_player,
     resolve_ma_queue_id_sync,
 )
-from .protocol import ha_value
+from .protocol import pack_active_media_fields, utf8_safe_truncate
 from .repairs import link_ma_player_issue_id
 
 if TYPE_CHECKING:
@@ -249,6 +249,38 @@ def _extract_macs_from_device_or_entry(
     return macs
 
 
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    """Safely parse a finite float without raising on `'unavailable'`/`'unknown'`/boolean values (`M-P1-38`)."""
+    if val is None or isinstance(val, bool):
+        return default
+    try:
+        parsed = float(val)
+    except (TypeError, ValueError):
+        return default
+    return parsed if math.isfinite(parsed) else default
+
+
+def _safe_opt_float(val: Any) -> float | None:
+    """Safely parse an optional finite float, returning `None` when absent or non-numeric."""
+    if val is None or isinstance(val, bool):
+        return None
+    try:
+        parsed = float(val)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) else None
+
+
+def _safe_int(val: Any, default: int = 0) -> int:
+    """Safely parse an integer without raising on non-numeric strings or booleans (`M-P2-22`)."""
+    if val is None or isinstance(val, bool):
+        return default
+    try:
+        return round(float(val))
+    except (TypeError, ValueError):
+        return default
+
+
 def _lookup_mass_player(mass: Any, player_id: str) -> Any | None:
     """Look up a Music Assistant Player model by `player_id` from `mass.players`."""
     if mass is None or not player_id:
@@ -261,8 +293,8 @@ def _lookup_mass_player(mass: Any, player_id: str) -> Any | None:
             found = players.get(player_id)
             if found is not None:
                 return found
-        except Exception:  # noqa: BLE001
-            pass
+        except (AttributeError, KeyError, TypeError, ValueError, RuntimeError) as err:
+            _LOGGER.debug("mass.players.get(%s) skipped: %s", player_id, err)
     if isinstance(players, Iterable) and not isinstance(players, (str, bytes, Mapping)):
         for item in players:
             if str(_attr_or_key(item, "player_id") or "").strip() == player_id:
@@ -976,7 +1008,10 @@ def suggest_ma_player_for(hass: HomeAssistant, coordinator: Any) -> str | None:
     unclaimed_live = [
         row for row in live_candidates if row[0].entity_id not in claimed_by_others
     ]
-    pool = unclaimed_live if unclaimed_live else [*live_candidates, *offline_candidates]
+    unclaimed_offline = [
+        row for row in offline_candidates if row[0].entity_id not in claimed_by_others
+    ]
+    pool = unclaimed_live if unclaimed_live else unclaimed_offline
     candidates: list[tuple[str, str | None, str | None]] = [
         (
             c_entry.entity_id,
@@ -1364,8 +1399,8 @@ def interpolate_speaker_position(state_obj: Any) -> float:
     if state_obj is None:
         return 0.0
     attrs = state_obj.attributes
-    duration = float(attrs.get("media_duration") or 0.0)
-    base_pos = float(attrs.get("media_position") or 0.0)
+    duration = _safe_float(attrs.get("media_duration"), 0.0)
+    base_pos = _safe_float(attrs.get("media_position"), 0.0)
     updated_at = attrs.get("media_position_updated_at")
     pos = base_pos
     if state_obj.state == STATE_PLAYING and isinstance(updated_at, datetime):
@@ -1387,21 +1422,36 @@ def read_volume_from_target(
         STATE_UNKNOWN,
     ):
         if vol_state.domain in ("number", "input_number"):
-            try:
-                val = float(vol_state.state)
-                min_v = float(vol_state.attributes.get("min", 0.0))
-                max_v = float(vol_state.attributes.get("max", 100.0))
-                if max_v > min_v:
-                    return max(0.0, min(1.0, (val - min_v) / (max_v - min_v)))
-            except ValueError:
-                pass
+            val = _safe_opt_float(vol_state.state)
+            min_v = _safe_float(vol_state.attributes.get("min"), 0.0)
+            max_v = _safe_float(vol_state.attributes.get("max"), 100.0)
+            if val is not None and max_v > min_v:
+                return max(0.0, min(1.0, (val - min_v) / (max_v - min_v)))
         else:
-            v_lvl = vol_state.attributes.get("volume_level")
-            if v_lvl is not None:
-                return float(v_lvl)
+            parsed_lvl = _safe_opt_float(vol_state.attributes.get("volume_level"))
+            if parsed_lvl is not None:
+                return max(0.0, min(1.0, parsed_lvl))
 
-    if fallback_attrs.get("volume_level") is not None:
-        return float(fallback_attrs["volume_level"])
+    fb_lvl = _safe_opt_float(fallback_attrs.get("volume_level"))
+    if fb_lvl is not None:
+        return max(0.0, min(1.0, fb_lvl))
+    return None
+
+
+def _resolve_canonical_volume(
+    volume_level: float | None, volume_pct: float | int | None
+) -> float | None:
+    """Resolve explicit `volume_pct` (`0..100`) or canonical `volume_level` (`0.0..1.0`) without scale discontinuity."""
+    if volume_pct is not None:
+        pct = _safe_opt_float(volume_pct)
+        if pct is None:
+            return None
+        return max(0.0, min(1.0, pct / 100.0))
+    if volume_level is not None:
+        lvl = _safe_opt_float(volume_level)
+        if lvl is None:
+            return None
+        return max(0.0, min(1.0, lvl))
     return None
 
 
@@ -1410,8 +1460,10 @@ async def async_execute_volume_action(
     vol_target: str,
     action: str,
     volume_level: float | None = None,
+    *,
+    volume_pct: float | int | None = None,
 ) -> bool:
-    """Execute a volume action ('set', 'up', 'down', 'mute') on a media_player, number, or input_number."""
+    """Execute a volume action ('set', 'up', 'down', 'mute') on a media_player, number, or input_number (`M-P1-38`)."""
     if not vol_target:
         return False
     state_obj = hass.states.get(vol_target)
@@ -1424,24 +1476,35 @@ async def async_execute_volume_action(
     elif norm_action == "volume_mute":
         norm_action = "mute"
 
+    resolved_lvl = _resolve_canonical_volume(volume_level, volume_pct)
+
     if target_domain in ("number", "input_number"):
         cur_val = (
-            float(state_obj.state)
+            _safe_float(state_obj.state, 50.0)
             if (state_obj and state_obj.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN))
             else 50.0
         )
-        min_v = float(state_obj.attributes.get("min", 0.0)) if state_obj else 0.0
-        max_v = float(state_obj.attributes.get("max", 100.0)) if state_obj else 100.0
-        native_step = state_obj.attributes.get("step") if state_obj else None
-        step = float(native_step) if native_step else max(1.0, (max_v - min_v) * 0.05)
+        min_v = _safe_float(state_obj.attributes.get("min"), 0.0) if state_obj else 0.0
+        max_v = (
+            _safe_float(state_obj.attributes.get("max"), 100.0)
+            if state_obj
+            else 100.0
+        )
+        native_step = (
+            _safe_opt_float(state_obj.attributes.get("step")) if state_obj else None
+        )
+        step = (
+            native_step
+            if (native_step is not None and native_step > 0)
+            else max(1.0, (max_v - min_v) * 0.05)
+        )
 
         if norm_action == "up":
             new_val = min(max_v, cur_val + step)
         elif norm_action == "down":
             new_val = max(min_v, cur_val - step)
-        elif volume_level is not None:
-            lvl = volume_level / 100.0 if volume_level > 1.0 else volume_level
-            new_val = min_v + max(0.0, min(1.0, lvl)) * (max_v - min_v)
+        elif resolved_lvl is not None:
+            new_val = min_v + resolved_lvl * (max_v - min_v)
         else:
             return False
 
@@ -1462,7 +1525,7 @@ async def async_execute_volume_action(
         else None
     )
     sf: int | None = None
-    if raw_sf is not None:
+    if raw_sf is not None and not isinstance(raw_sf, bool):
         try:
             sf = int(raw_sf)
         except (ValueError, TypeError):
@@ -1474,15 +1537,13 @@ async def async_execute_volume_action(
     supports_vol_set = bool(
         can_set
         and state_obj is not None
-        and state_obj.attributes.get("volume_level") is not None
+        and _safe_opt_float(state_obj.attributes.get("volume_level")) is not None
     )
-    if norm_action in ("up", "down") and volume_level is not None and supports_vol_set:
-        lvl = volume_level / 100.0 if volume_level > 1.0 else volume_level
-        lvl = max(0.0, min(1.0, lvl))
+    if norm_action in ("up", "down") and resolved_lvl is not None and supports_vol_set:
         await hass.services.async_call(
             "media_player",
             "volume_set",
-            {ATTR_ENTITY_ID: vol_target, "volume_level": round(lvl, 2)},
+            {ATTR_ENTITY_ID: vol_target, "volume_level": round(resolved_lvl, 2)},
             blocking=False,
         )
         return True
@@ -1515,15 +1576,13 @@ async def async_execute_volume_action(
             blocking=False,
         )
         return True
-    if volume_level is not None:
+    if resolved_lvl is not None:
         if not can_set:
             return False
-        lvl = volume_level / 100.0 if volume_level > 1.0 else volume_level
-        lvl = max(0.0, min(1.0, lvl))
         await hass.services.async_call(
             "media_player",
             "volume_set",
-            {ATTR_ENTITY_ID: vol_target, "volume_level": round(lvl, 2)},
+            {ATTR_ENTITY_ID: vol_target, "volume_level": round(resolved_lvl, 2)},
             blocking=False,
         )
         return True
@@ -1613,8 +1672,8 @@ async def async_find_queue_resume_items(
                     ):
                         next_uri = _extract_queue_entry_uri(q_data.get("next_item"))
                     album_ref = _extract_queue_entry_album_ref(cur_item)
-                    pos = float(
-                        q_data.get("elapsed_time") or last_media_position or 0.0
+                    pos = _safe_float(
+                        q_data.get("elapsed_time"), _safe_float(last_media_position, 0.0)
                     )
                     items_cand = q_data.get("items") or q_data.get("queue_items")
                     if isinstance(items_cand, list):
@@ -1808,7 +1867,7 @@ async def async_play_media_with_ma_fallback(
                             search=alb_uri,
                         )
                         track_slots = [
-                            s for s in (raw_tracks or [])[:25] if s.get("id")
+                            s for s in (raw_tracks or []) if s.get("id")
                         ]
                         if track_slots:
                             track_uris = [str(s["id"]) for s in track_slots]
@@ -1873,32 +1932,26 @@ async def async_push_music_lyrics(
     if esphome_action is None:
         return False
 
-    clean_key = (
-        str(track_key or "")[:160]
-        .replace("\x1f", " ")
-        .replace("\x1e", " ")
-        .replace("\r", " ")
-        .replace("\n", " ")
-        .strip()
+    clean_key = utf8_safe_truncate(
+        re.sub(r"[\x00-\x1f\x7f\u2028\u2029]+", " ", str(track_key or "")).strip(),
+        160,
     )
     capped = list(lines)[:MAX_LYRIC_LINES]
     encoded_rows: list[str] = []
     for row in capped:
-        t_ms = int(row.get("t_ms", -1))
-        txt = (
-            str(row.get("text") or "")[:200]
-            .replace("\x1f", " ")
-            .replace("\x1e", " ")
-            .replace("\r", " ")
-            .replace("\n", " ")
-            .strip()
+        t_ms = _safe_int(row.get("t_ms", -1), -1)
+        txt = utf8_safe_truncate(
+            re.sub(
+                r"[\x00-\x1f\x7f\u2028\u2029]+", " ", str(row.get("text") or "")
+            ).strip(),
+            200,
         )
         if not txt:
             continue
         encoded_rows.append(f"{t_ms}\x1f{txt}")
 
     chunk_count = max(1, math.ceil(len(encoded_rows) / LYRICS_CHUNK_SIZE))
-    safe_req_id = max(0, int(req_id))
+    safe_req_id = max(0, _safe_int(req_id, 0))
     try:
         for chunk_idx in range(chunk_count):
             chunk_slice = encoded_rows[
@@ -2237,10 +2290,10 @@ async def async_execute_ma_queue_transfer(
                         {ATTR_ENTITY_ID: cmd_target},
                         blocking=False,
                     )
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug("Queue transfer media_play on %s skipped: %s", cmd_target, err)
 
-            tgt_pos = float(updated_tgt.attributes.get("media_position") or 0.0)
+            tgt_pos = _safe_float(updated_tgt.attributes.get("media_position"), 0.0)
             if handoff_position > 5.0 and abs(tgt_pos - handoff_position) > 4.0:
                 try:
                     await hass.services.async_call(
@@ -2273,20 +2326,46 @@ async def async_resume_idle_speaker_queue(
 ) -> bool:
     """Resume playback on an idle speaker when native media_play has no active queue stream."""
     ma_entity = resolve_ma_counterpart_entity(hass, speaker_entity_id)
+    watched_entities = [
+        ent_id for ent_id in dict.fromkeys((speaker_entity_id, ma_entity)) if ent_id
+    ]
 
     def _is_playing_or_buffering() -> bool:
         return any(
-            ent_id
-            and (st := hass.states.get(ent_id)) is not None
+            (st := hass.states.get(ent_id)) is not None
             and st.state in (STATE_PLAYING, STATE_BUFFERING)
-            for ent_id in (speaker_entity_id, ma_entity)
+            for ent_id in watched_entities
         )
 
-    if not immediate:
-        for _ in range(10):
-            await asyncio.sleep(0.25)
+    async def _async_wait_playing(timeout_s: float) -> bool:
+        if _is_playing_or_buffering():
+            return True
+        if not watched_entities:
+            return False
+        woke = asyncio.Event()
+
+        @callback
+        def _on_watched_change(_event: Event[EventStateChangedData]) -> None:
+            if _is_playing_or_buffering():
+                woke.set()
+
+        unsub = async_track_state_change_event(
+            hass, watched_entities, _on_watched_change
+        )
+        try:
             if _is_playing_or_buffering():
                 return True
+            try:
+                await asyncio.wait_for(woke.wait(), timeout=timeout_s)
+                return True
+            except TimeoutError:
+                return _is_playing_or_buffering()
+        finally:
+            unsub()
+
+    if not immediate:
+        if await _async_wait_playing(2.5):
+            return True
         if ma_entity and ma_entity != speaker_entity_id and not already_tried_ma:
             try:
                 await hass.services.async_call(
@@ -2295,12 +2374,14 @@ async def async_resume_idle_speaker_queue(
                     {ATTR_ENTITY_ID: ma_entity},
                     blocking=True,
                 )
-                for _ in range(6):
-                    await asyncio.sleep(0.25)
-                    if _is_playing_or_buffering():
-                        return True
-            except Exception:  # noqa: BLE001
-                pass
+                if await _async_wait_playing(1.5):
+                    return True
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug(
+                    "Idle speaker MA counterpart media_play on %s failed: %s",
+                    ma_entity,
+                    err,
+                )
 
     cur_state = hass.states.get(speaker_entity_id)
     resume_uris, resume_pos = await async_find_queue_resume_items(
@@ -2362,8 +2443,10 @@ async def async_resume_idle_speaker_queue(
                 },
                 blocking=False,
             )
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug(
+                "Post-resume media_seek on %s skipped: %s", play_target, err
+            )
     return True
 
 
@@ -2445,7 +2528,7 @@ def _resolve_speaker_media_snapshot(
         or ""
     )
     album = str(attrs.get("media_album_name") or "")
-    duration = float(attrs.get("media_duration") or 0.0)
+    duration = _safe_float(attrs.get("media_duration"), 0.0)
     position = interpolate_speaker_position(state_obj)
 
     if not title and m_attrs.get("media_title"):
@@ -2458,20 +2541,9 @@ def _resolve_speaker_media_snapshot(
         )
         album = str(m_attrs.get("media_album_name") or album)
     if duration <= 0 and m_attrs.get("media_duration"):
-        duration = float(m_attrs.get("media_duration") or duration)
+        duration = _safe_float(m_attrs.get("media_duration"), duration)
     if position <= 0 and ma_st is not None:
         position = interpolate_speaker_position(ma_st) or position
-
-    if not title and bool(is_local_flag):
-        t_st = coordinator.device_state("sensor", "_now_playing_title")
-        a_st = coordinator.device_state("sensor", "_now_playing_artist")
-        al_st = coordinator.device_state("sensor", "_now_playing_album")
-        if t_st is not None and ha_value(t_st.state):
-            title = str(t_st.state)
-            if a_st is not None and ha_value(a_st.state):
-                artist = str(a_st.state)
-            if al_st is not None and ha_value(al_st.state):
-                album = str(al_st.state)
 
     raw_type = str(
         attrs.get("media_content_type") or m_attrs.get("media_content_type") or ""
@@ -2568,10 +2640,6 @@ def bind_coordinator_speaker_listener(coordinator: LatterCoordinator) -> None:
     coordinator._tracked_ma_counterpart = ma_counterpart
     if ma_counterpart and ma_counterpart not in tracked:
         tracked.append(ma_counterpart)
-    if coordinator.is_local_speaker_entity(coordinator.active_speaker):
-        np_title = coordinator.device_entity("sensor", "_now_playing_title")
-        if np_title and np_title not in tracked:
-            tracked.append(np_title)
 
     _sync_active_speaker_media_snapshot(coordinator)
 
@@ -2734,10 +2802,14 @@ def set_coordinator_active_speaker(
                 or (coordinator.last_media_album if prev_is_local else "")
                 or ""
             )
-            coordinator._transfer_hold_duration = float(
-                p_attrs.get("media_duration")
-                or (coordinator.last_media_duration if prev_is_local else 0.0)
-                or 0.0
+            coordinator._transfer_hold_duration = _safe_float(
+                p_attrs.get("media_duration"),
+                coordinator.last_media_duration if prev_is_local else 0.0,
+            )
+            coordinator._transfer_hold_track_key = (
+                f"{coordinator._transfer_hold_title}|{coordinator._transfer_hold_artist}|{coordinator._transfer_hold_album}"
+                if coordinator._transfer_hold_title
+                else ""
             )
 
             if transfer_queue:
@@ -2918,7 +2990,8 @@ def _read_live_ma_queue_state(
     try:
         if hasattr(pqs, "get") or isinstance(pqs, dict):
             q_obj = pqs.get(qid)
-    except Exception:  # noqa: BLE001
+    except (AttributeError, KeyError, TypeError, ValueError, RuntimeError) as err:
+        _LOGGER.debug("mass.player_queues.get(%s) skipped: %s", qid, err)
         q_obj = None
     if q_obj is None:
         return None, "", None, None, "", False
@@ -3269,15 +3342,40 @@ async def execute_coordinator_media_command(
         raw_shift_str = str(pos_shift).strip().lower()
         shift_int = 0
         if raw_shift_str == "next":
+            cur_item_raw = q_data.get("current_item")
+            cur_qid = (
+                str(_extract_item_dict(cur_item_raw).get("queue_item_id") or "").strip()
+                if cur_item_raw is not None
+                else ""
+            )
             items_list: list[dict[str, Any]] = []
             if hasattr(pqs, "fetch_player_queue_items"):
-                fetched = await pqs.fetch_player_queue_items(
-                    queue_id, limit=50, offset=0
-                )
-                if isinstance(fetched, Sequence) and not isinstance(
-                    fetched, (str, bytes)
-                ):
-                    items_list = [_extract_item_dict(x) for x in fetched]
+                page_limit = 100
+                for page_offset in range(0, 500, page_limit):
+                    fetched = await pqs.fetch_player_queue_items(
+                        queue_id, limit=page_limit, offset=page_offset
+                    )
+                    if not (
+                        isinstance(fetched, Sequence)
+                        and not isinstance(fetched, (str, bytes))
+                    ):
+                        break
+                    batch = [_extract_item_dict(x) for x in fetched]
+                    items_list.extend(batch)
+                    found_target = any(
+                        str(it.get("queue_item_id") or "").strip() == clean_qid
+                        for it in items_list
+                    )
+                    found_cur = (
+                        not cur_qid
+                        or isinstance(q_data.get("current_index"), int)
+                        or any(
+                            str(it.get("queue_item_id") or "").strip() == cur_qid
+                            for it in items_list
+                        )
+                    )
+                    if (found_target and found_cur) or len(batch) < page_limit:
+                        break
             if not items_list:
                 for list_key in ("queue_items", "items"):
                     cand_l = q_data.get(list_key)
@@ -3300,25 +3398,27 @@ async def execute_coordinator_media_command(
                 current_index = raw_cur_idx
             elif hasattr(pqs, "get"):
                 q_obj = pqs.get(queue_id)
-                cand_idx = getattr(q_obj, "current_index", None) if q_obj is not None else None
+                cand_idx = (
+                    getattr(q_obj, "current_index", None)
+                    if q_obj is not None
+                    else None
+                )
                 if isinstance(cand_idx, int) and not isinstance(cand_idx, bool):
                     current_index = cand_idx
             if current_index is None:
-                cur_item_raw = q_data.get("current_item")
-                cur_qid = (
-                    str(_extract_item_dict(cur_item_raw).get("queue_item_id") or "").strip()
-                    if cur_item_raw is not None
-                    else ""
-                )
                 current_index = next(
                     (
                         idx
                         for idx, it in enumerate(items_list)
-                        if cur_qid and str(it.get("queue_item_id") or "").strip() == cur_qid
+                        if cur_qid
+                        and str(it.get("queue_item_id") or "").strip() == cur_qid
                     ),
                     0,
                 )
-            shift_int = (current_index + 1) - item_index
+            if item_index < current_index:
+                shift_int = current_index - item_index
+            else:
+                shift_int = (current_index + 1) - item_index
         else:
             try:
                 shift_int = int(raw_shift_str)
@@ -3560,15 +3660,17 @@ async def execute_coordinator_media_command(
         return
 
     if cmd == "seek" and seek_position is not None:
-        await hass.services.async_call(
-            "media_player",
-            "media_seek",
-            {
-                ATTR_ENTITY_ID: cmd_target,
-                "seek_position": round(float(seek_position), 1),
-            },
-            blocking=False,
-        )
+        safe_seek = _safe_opt_float(seek_position)
+        if safe_seek is not None and safe_seek >= 0.0:
+            await hass.services.async_call(
+                "media_player",
+                "media_seek",
+                {
+                    ATTR_ENTITY_ID: cmd_target,
+                    "seek_position": round(safe_seek, 1),
+                },
+                blocking=False,
+            )
         return
 
     if cmd == "join":
@@ -3665,27 +3767,28 @@ def build_active_media_payload(
         )
         med_rev, med_payload = coordinator._pack_domain_payload(
             "active_media",
-            "",
-            idle_title,
-            idle_artist,
-            idle_album,
-            idle_dur,
-            idle_pos,
-            None,
-            idle_vol_pct,
-            idle_type,
-            "",
-            coordinator.active_speaker,
-            fallback_spk_name,
-            coordinator.last_speaker,
-            coordinator.local_speaker,
-            is_local_flag,
-            False,
-            "",
-            idle_muted,
-            False,
-            0,
-            idle_caps,
+            *pack_active_media_fields(
+                "",
+                idle_title,
+                idle_artist,
+                idle_album,
+                idle_dur,
+                idle_pos,
+                idle_vol_pct,
+                idle_type,
+                "",
+                coordinator.active_speaker,
+                fallback_spk_name,
+                coordinator.last_speaker,
+                coordinator.local_speaker,
+                bool(is_local_flag),
+                False,
+                "",
+                idle_muted,
+                False,
+                0,
+                idle_caps,
+            ),
         )
         res: tuple[str | None, dict[str, Any]] = (
             None,
@@ -3728,12 +3831,19 @@ def build_active_media_payload(
 
     in_transfer_window = now_m < coordinator._transfer_hold_until
     if in_transfer_window:
+        cur_track_key = f"{title}|{artist}|{album}" if title else ""
+        hold_key = getattr(coordinator, "_transfer_hold_track_key", "")
         if not title and coordinator._transfer_hold_title:
             title = coordinator._transfer_hold_title
             artist = coordinator._transfer_hold_artist or artist
             album = coordinator._transfer_hold_album or album
             duration = coordinator._transfer_hold_duration or duration
-        if position < 1.0 and coordinator._transfer_hold_position > 1.0:
+            cur_track_key = f"{title}|{artist}|{album}"
+        if (
+            (not hold_key or cur_track_key == hold_key)
+            and position < 1.0
+            and coordinator._transfer_hold_position > 1.0
+        ):
             position = coordinator._transfer_hold_position
     elif (
         not title
@@ -3762,6 +3872,7 @@ def build_active_media_payload(
         or ""
     )
     track_key = f"{title}|{artist}|{album}"
+    hold_track_key = getattr(coordinator, "_transfer_hold_track_key", "")
 
     if state == STATE_OFF or not title:
         art_url = ""
@@ -3773,10 +3884,15 @@ def build_active_media_payload(
         )
         art_url = coordinator._last_art_proxy_url
     elif (
-        track_key == coordinator._last_art_track_key or in_transfer_window
-    ) and coordinator._last_art_proxy_url:
+        (
+            track_key == coordinator._last_art_track_key
+            or (in_transfer_window and bool(hold_track_key) and track_key == hold_track_key)
+        )
+        and coordinator._last_art_proxy_url
+    ):
         art_url = coordinator._last_art_proxy_url
     else:
+        coordinator.last_valid_raw_pic = ""
         art_url = ""
 
     speaker_name = (
@@ -3882,7 +3998,9 @@ def build_active_media_payload(
         if volume is not None
         else None
     )
-    raw_pos = float(attrs.get("media_position") or m_attrs.get("media_position") or 0.0)
+    raw_pos = _safe_float(
+        attrs.get("media_position") or m_attrs.get("media_position"), 0.0
+    )
     media_anchor = (
         state,
         title,
@@ -3917,27 +4035,28 @@ def build_active_media_payload(
 
     med_rev, med_payload = coordinator._pack_domain_payload(
         "active_media",
-        state,
-        title,
-        artist,
-        album,
-        dur_r,
-        pos_r,
-        pos_updated_at or None,
-        vol_pct,
-        media_type,
-        art_url,
-        coordinator.active_speaker,
-        speaker_name,
-        coordinator.last_speaker,
-        coordinator.local_speaker,
-        is_local_flag,
-        shuffle_flag,
-        repeat_str,
-        muted_flag,
-        favorite_flag,
-        queue_count,
-        media_caps,
+        *pack_active_media_fields(
+            state,
+            title,
+            artist,
+            album,
+            dur_r,
+            pos_r,
+            vol_pct,
+            media_type,
+            art_url,
+            coordinator.active_speaker,
+            speaker_name,
+            coordinator.last_speaker,
+            coordinator.local_speaker,
+            bool(is_local_flag),
+            shuffle_flag,
+            repeat_str,
+            muted_flag,
+            favorite_flag,
+            queue_count,
+            media_caps,
+        ),
     )
     res = (
         state,

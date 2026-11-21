@@ -110,6 +110,7 @@ async def test_device_hello_cases_a_b_and_c(
         prefs_seq=0,
         dirty_prefs="color_profile=Green",
     )
+    await hass.async_block_till_done()
     assert coord.prefs_seq == seq_before_replace
     assert coord.get_device_pref("color_profile") == "Pink"
     assert coord.get_device_pref("alert_volume") == 65
@@ -165,10 +166,9 @@ async def test_online_set_device_prefs_rpc_and_diagnostic_sensor(
     assert coord.get_device_pref("alert_volume") == 70
     assert coord.device_group == "custom"
 
-    prefs_st = hass.states.get(f"sensor.{coord.device_slug}_device_prefs")
-    assert prefs_st is not None
-    assert int(prefs_st.state) == coord.prefs_seq
-    assert prefs_st.attributes["rev"] >= 1
+    # Removed diagnostic `sensor.<slug>_device_prefs` stays absent (replaced by Studio `live`)
+    assert hass.states.get(f"sensor.{coord.device_slug}_device_prefs") is None
+    assert coord.prefs_seq >= 2
 
     _seq, payload_attrs = coord.get_device_prefs_payload()
     assert payload_attrs["device_group"] == "custom"
@@ -248,14 +248,21 @@ async def test_tier2_select_number_sleep_safe_and_buttons_online_vs_offline(
     assert hass.states.get("select.keys_tag_wake_word_mode") is None
     assert hass.states.get("number.keys_tag_alert_volume") is None
     assert hass.states.get("button.keys_tag_find_my_device") is None
+    assert hass.states.get("light.keys_tag_screen") is None
+    assert hass.states.get("switch.keys_tag_screensaver") is None
+    assert hass.states.get("switch.keys_tag_do_not_disturb") is None
 
-    # Sleep-safe select & number succeed while ESPHome Wi-Fi is `unavailable`
+    # Sleep-safe select, number & DND switch succeed while ESPHome Wi-Fi is `unavailable`
     assert hass.states.get(f"select.{slug}_power_profile") is None
+    assert hass.states.get(f"button.{slug}_activate_screensaver") is None
     group_sel = _find_entity(hass, "select", f"select.{slug}_device_group")
     ww_sel = _find_entity(hass, "select", f"select.{slug}_wake_word_mode")
     vol_num = _find_entity(hass, "number", f"number.{slug}_alert_volume")
     find_btn = _find_entity(hass, "button", f"button.{slug}_find_my_device")
-    ss_btn = _find_entity(hass, "button", f"button.{slug}_activate_screensaver")
+    dismiss_btn = _find_entity(hass, "button", f"button.{slug}_dismiss_alert")
+    screen_light = _find_entity(hass, "light", f"light.{slug}_screen")
+    ss_sw = _find_entity(hass, "switch", f"switch.{slug}_screensaver")
+    dnd_sw = _find_entity(hass, "switch", f"switch.{slug}_do_not_disturb")
 
     assert group_sel.options == [
         "Pocket Carry",
@@ -277,25 +284,54 @@ async def test_tier2_select_number_sleep_safe_and_buttons_online_vs_offline(
     assert float(hass.states.get(f"number.{slug}_alert_volume").state) == 55.0
     assert coord.get_device_pref("alert_volume") == 55
 
-    # Action buttons raise HomeAssistantError while sleeping
+    assert dnd_sw.available is True
+    await dnd_sw.async_turn_on()
+    assert coord.do_not_disturb is True
+    assert hass.states.get(f"switch.{slug}_do_not_disturb").state == "on"
+    await dnd_sw.async_turn_off()
+    assert coord.do_not_disturb is False
+
+    # Radio-dependent controls report unavailable while sleeping; Find My raises HomeAssistantError
+    assert find_btn.available is False
+    assert dismiss_btn.available is False
+    assert screen_light.available is False
+    assert ss_sw.available is False
     with pytest.raises(HomeAssistantError):
         await find_btn.async_press()
-    with pytest.raises(HomeAssistantError):
-        await ss_btn.async_press()
 
-    # Bring Device online -> action buttons dispatch `esphome.<slug>_latter_device_command`
+    # Bring Device online -> buttons, screen light, and screensaver switch dispatch `esphome.<slug>_latter_device_command`
     hass.states.async_set(wifi_eid, "-49")
     hass.states.async_set(f"sensor.{slug}_system_rpc_outbox", "")
+    coord.async_update_listeners()
+    assert find_btn.available is True
+    assert dismiss_btn.available is True
+    assert screen_light.available is True
+    assert ss_sw.available is True
     hass.services.calls.clear()
 
     await find_btn.async_press()
-    await ss_btn.async_press()
+    await dismiss_btn.async_press()
+    await ss_sw.async_turn_on()
+    assert ss_sw.is_on is True
+    await ss_sw.async_turn_off()
+    assert ss_sw.is_on is False
+    await screen_light.async_turn_on(brightness=128)
+    assert screen_light.is_on is True
+    await screen_light.async_turn_off()
+    assert screen_light.is_on is False
     cmds = [
         c.data.get("command")
         for c in hass.services.calls
         if c.domain == "esphome" and c.service == f"{slug}_latter_device_command"
     ]
-    assert cmds == ["find_my", "activate_screensaver"]
+    assert cmds == [
+        "find_my",
+        "dismiss_ringing",
+        "activate_screensaver",
+        "deactivate_screensaver",
+        "set_screen_bri:50",
+        "screen_off",
+    ]
 
     assert await async_unload_entry(hass, entry) is True
 
@@ -576,11 +612,10 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     anchor = 5000.0
     monkeypatch.setattr(time, "monotonic", lambda: anchor)
 
-    await hass.services.async_call(
-        "latter",
+    await sys_obj.rpc_dispatcher.async_dispatch(
+        coord,
         "timer_alarm_state",
         {
-            "target_device": coord.subentry_id,
             "timer_running": True,
             "timer_paused": False,
             "remaining_sec": 90,
@@ -589,7 +624,6 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
             "stopwatch_paused": False,
             "stopwatch_elapsed_sec": 15,
         },
-        blocking=True,
     )
     assert coord._unsub_timer_tick is not None
 

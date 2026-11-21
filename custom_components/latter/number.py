@@ -44,7 +44,6 @@ class LatterAlertVolumeNumber(NumberEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_translation_key = "alert_volume"
-    _attr_icon = "mdi:bell-ring-outline"
     _attr_native_min_value = 20.0
     _attr_native_max_value = 100.0
     _attr_native_step = 5.0

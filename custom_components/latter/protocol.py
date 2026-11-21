@@ -1,18 +1,20 @@
-"""Pure Protocol v3 payload packer, dock/activity policies, and PBKDF2 security policy for Latter.
+"""Pure Protocol v3 payload packer, dock/activity policies, and PBKDF2 / PIN session-key security for Latter.
 
 Standard library only (no Home Assistant imports), so standalone unit tests exercise this exact code.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 import hashlib
 import hmac
 import json
 import math
 from pathlib import Path
+import re
 import secrets
+import time
 from typing import Any
 import unicodedata
 
@@ -65,7 +67,7 @@ from .studio.settings import (
 )
 
 # ---------------------------------------------------------------------------
-# Protocol v3 Payload Packer & Record Formatters
+# Protocol v3 Payload Packer, Multi-Tier Delimiter Escaping & Record Formatters
 # ---------------------------------------------------------------------------
 
 _PROTOCOL_V3_DATA: dict[str, Any] = json.loads(
@@ -77,6 +79,12 @@ PROTOCOL_V3_DOMAINS: tuple[str, ...] = tuple(_PROTOCOL_V3_DATA["domains"].keys()
 FIELD_SEP = "\x1f"
 RECORD_SEP = "\x1e"
 SUBFIELD_SEP = "|"
+
+_V3_FIELD_UNSAFE_RE = re.compile(r"[\x00-\x1f\x7f\u2028\u2029]")
+_SWITCH_TRUE_TOKENS: frozenset[str] = frozenset({"1", "true", "on", "yes"})
+_SWITCH_FALSE_TOKENS: frozenset[str] = frozenset({"0", "false", "off", "no"})
+_HEX_RGB_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+_LOWER_HEX_RE = re.compile(r"^[0-9a-f]+$")
 
 # calendar_agenda.summary (protocol type "records"): up to CALENDAR_MAX_RECORDS records of
 # time|title|location|all_day, each text subfield capped at the length below (characters, after sanitizing).
@@ -114,6 +122,58 @@ def ha_value(val: Any) -> Any:
     return val
 
 
+def utf8_safe_truncate(s: str | None, max_bytes: int) -> str:
+    """Truncate `s` to at most `max_bytes` UTF-8 bytes without splitting any multi-byte codepoint."""
+    if not s or max_bytes <= 0:
+        return ""
+    text = str(s)
+    raw = text.encode("utf-8", errors="replace")
+    if len(raw) <= max_bytes:
+        return raw.decode("utf-8", errors="ignore")
+    return raw[:max_bytes].decode("utf-8", errors="ignore")
+
+
+def escape_v3_subfield(val: Any) -> str:
+    """Escape `\\` -> `\\\\`, `|` -> `\\p`, `;` -> `\\s` after stripping control characters."""
+    if val is None:
+        return ""
+    if isinstance(val, bool):
+        return "1" if val else "0"
+    clean = _V3_FIELD_UNSAFE_RE.sub(" ", str(val))
+    return clean.replace("\\", "\\\\").replace("|", "\\p").replace(";", "\\s")
+
+
+def unescape_v3_subfield(val: str | None) -> str:
+    """Decode a subfield encoded with `escape_v3_subfield` (`\\\\` -> `\\`, `\\p` -> `|`, `\\s` -> `;`)."""
+    if not val:
+        return ""
+    s = str(val)
+    if "\\" not in s:
+        return s
+    out: list[str] = []
+    i = 0
+    n = len(s)
+    while i < n:
+        ch = s[i]
+        if ch == "\\" and i + 1 < n:
+            nxt = s[i + 1]
+            if nxt == "\\":
+                out.append("\\")
+                i += 2
+                continue
+            if nxt == "p":
+                out.append("|")
+                i += 2
+                continue
+            if nxt == "s":
+                out.append(";")
+                i += 2
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 class V3Records(tuple[Sequence[Any], ...]):
     """A Protocol v3 "records" field: a tuple of records, each a sequence of subfields.
 
@@ -125,7 +185,7 @@ class V3Records(tuple[Sequence[Any], ...]):
 def sanitize_v3_subfield(val: Any, max_len: int | None = None) -> str:
     """Return one subfield of a records field: no separators, no control characters, capped.
 
-    '|' becomes '/', every control character (0x1F, 0x1E, 0x1D, newlines, tabs, ...) becomes a space,
+    '|' becomes '/', every control character (0x00..0x1F, 0x7F, U+2028, U+2029, ...) becomes a space,
     whitespace runs collapse to one space, and the result is trimmed and cut to `max_len` characters.
     """
     if val is None:
@@ -133,7 +193,12 @@ def sanitize_v3_subfield(val: Any, max_len: int | None = None) -> str:
     if isinstance(val, bool):
         return "1" if val else "0"
     s = str(val).replace(SUBFIELD_SEP, "/")
-    s = "".join(" " if unicodedata.category(ch) in ("Cc", "Zl", "Zp") else ch for ch in s)
+    s = "".join(
+        " "
+        if (ord(ch) <= 0x1F or ord(ch) == 0x7F or unicodedata.category(ch) in ("Cc", "Zl", "Zp"))
+        else ch
+        for ch in s
+    )
     s = " ".join(s.split())
     if max_len is not None and len(s) > max_len:
         s = s[:max_len].rstrip()
@@ -164,9 +229,23 @@ def _whole_number(val: Any) -> str:
     if val is None or isinstance(val, bool):
         return ""
     try:
-        return str(round(float(val)))
+        fval = float(val)
+        if not math.isfinite(fval):
+            return ""
+        return str(round(fval))
     except (TypeError, ValueError, OverflowError):
         return ""
+
+
+def _finite_float_field(val: Any) -> float | str:
+    """Return a finite float for Protocol v3 `f32` fields, or "" when absent/non-finite."""
+    if val is None or isinstance(val, bool) or val == "":
+        return ""
+    try:
+        fval = float(val)
+    except (TypeError, ValueError, OverflowError):
+        return ""
+    return fval if math.isfinite(fval) else ""
 
 
 # area_context.cameras_summary: entity_id|name|area_id|caps|unlock_entity
@@ -185,7 +264,10 @@ def _temp_tenths(val: Any) -> str:
     if val is None or isinstance(val, bool):
         return ""
     try:
-        val_f = round(float(val), 1)
+        fval = float(val)
+        if not math.isfinite(fval):
+            return ""
+        val_f = round(fval, 1)
         return str(int(val_f)) if val_f.is_integer() else f"{val_f:.1f}"
     except (TypeError, ValueError, OverflowError):
         return ""
@@ -335,6 +417,108 @@ def forecast_records(days: Iterable[Mapping[str, Any]]) -> V3Records:
     )
 
 
+def normalize_temp_unit(unit: Any) -> str:
+    """Normalize a temperature unit token to `'C'`, `'F'`, or `''`."""
+    raw = str(unit or "").strip().lstrip("°").strip().upper()
+    if raw in ("C", "CELSIUS"):
+        return "C"
+    if raw in ("F", "FAHRENHEIT"):
+        return "F"
+    return ""
+
+
+def pack_weather_forecast_fields(
+    condition: Any = "",
+    temperature: Any = None,
+    humidity: Any = None,
+    wind_speed: Any = None,
+    wind_bearing: Any = None,
+    high: Any = None,
+    low: Any = None,
+    forecast_5d: V3Records | None = None,
+    sun_state: Any = "",
+    sun_elevation: Any = None,
+    sun_azimuth: Any = None,
+    sun_next_rising: Any = "",
+    sun_next_setting: Any = "",
+    moon_phase: Any = "",
+    temp_unit: Any = "",
+) -> tuple[Any, ...]:
+    """Return the 15 ordered body fields (`indices 3..17`) for Protocol v3 `weather_forecast`."""
+    return (
+        ha_value(condition),
+        _finite_float_field(temperature),
+        _finite_float_field(humidity),
+        _finite_float_field(wind_speed),
+        _finite_float_field(wind_bearing),
+        _finite_float_field(high),
+        _finite_float_field(low),
+        forecast_5d if isinstance(forecast_5d, V3Records) else V3Records(),
+        ha_value(sun_state),
+        _finite_float_field(sun_elevation),
+        _finite_float_field(sun_azimuth),
+        ha_value(sun_next_rising),
+        ha_value(sun_next_setting),
+        ha_value(moon_phase),
+        normalize_temp_unit(temp_unit),
+    )
+
+
+def pack_active_media_fields(
+    state: Any = "",
+    title: Any = "",
+    artist: Any = "",
+    album: Any = "",
+    duration: Any = None,
+    position: Any = None,
+    volume: int | None = None,
+    media_type: Any = "",
+    art_url: Any = "",
+    active_speaker: Any = "",
+    speaker_name: Any = "",
+    last_speaker: Any = "",
+    local_speaker: Any = "",
+    is_local: bool = False,
+    shuffle: bool = False,
+    repeat: Any = "",
+    muted: bool = False,
+    favorite: bool = False,
+    queue_count: int = 0,
+    media_caps: int = 0,
+) -> tuple[Any, ...]:
+    """Return the 20 ordered body fields (`indices 3..22`) for Protocol v3 `active_media`."""
+    vol_field: int | str = ""
+    if volume is not None and not isinstance(volume, bool):
+        try:
+            fvol = float(volume)
+            if math.isfinite(fvol):
+                vol_field = max(0, min(100, round(fvol)))
+        except (TypeError, ValueError, OverflowError):
+            vol_field = ""
+    return (
+        ha_value(state),
+        ha_value(title),
+        ha_value(artist),
+        ha_value(album),
+        _finite_float_field(duration),
+        _finite_float_field(position),
+        vol_field,
+        ha_value(media_type),
+        ha_value(art_url),
+        ha_value(active_speaker),
+        ha_value(speaker_name),
+        ha_value(last_speaker),
+        ha_value(local_speaker),
+        bool(is_local),
+        bool(shuffle),
+        ha_value(repeat),
+        bool(muted),
+        bool(favorite),
+        max(0, int(queue_count or 0)),
+        max(0, int(media_caps or 0)),
+    )
+
+
 def calendar_time_label(local_start: datetime, today: date, all_day: bool) -> str:
     """Return the agenda record's time: 'TODAY 14:30', 'TOM 09:00', 'FRI 18:00', 'NOV 08 14:30'."""
     days_ahead = (local_start.date() - today).days
@@ -428,7 +612,9 @@ def _sanitize_window_field(val: Any, max_len: int | None = None) -> str:
     if isinstance(val, bool):
         return "1" if val else "0"
     s = "".join(
-        " " if unicodedata.category(ch) in ("Cc", "Zl", "Zp") else ch
+        " "
+        if (ord(ch) <= 0x1F or ord(ch) == 0x7F or unicodedata.category(ch) in ("Cc", "Zl", "Zp"))
+        else ch
         for ch in str(val)
     )
     s = " ".join(s.split())
@@ -494,7 +680,6 @@ def pack_calendar_window_chunks(
                 "chunk_count": chunk_count,
                 "window_start": clean_ws,
                 "window_end": clean_we,
-                "map_url": "",
                 "events": RECORD_SEP.join(slice_recs),
             }
         )
@@ -509,11 +694,9 @@ def sanitize_v3_field(val: Any) -> str:
         return encode_v3_records(val)
     if isinstance(val, bool):
         return "1" if val else "0"
-    s = str(val)
-    for ch in ("\x1f", "\x1e", "\x1d", "\n", "\r"):
-        if ch in s:
-            s = s.replace(ch, " ")
-    return s
+    if isinstance(val, float) and not math.isfinite(val):
+        return ""
+    return _V3_FIELD_UNSAFE_RE.sub(" ", str(val))
 
 
 class DomainPayloadPacker:
@@ -524,7 +707,7 @@ class DomainPayloadPacker:
         self.epoch: int = int(epoch) if epoch else (secrets.randbits(31) or 1)
         self.rev: int = 1
         self._domain_hashes: dict[str, str] = {}
-        self._domain_revs: dict[str, int] = {dom: 1 for dom in PROTOCOL_V3_DOMAINS}
+        self._domain_revs: dict[str, int] = dict.fromkeys(PROTOCOL_V3_DOMAINS, 1)
 
     def pack(self, domain: str, *fields: Any) -> tuple[int, str]:
         """Pack domain fields with content-hashed per-domain revision."""
@@ -612,10 +795,13 @@ def pack_device_prefs_fields(
     custom_color_hex: str,
     is_round_display: bool = True,
     supports_hw_jpeg: bool = True,
+    do_not_disturb: bool | None = None,
 ) -> tuple[Any, ...]:
-    """Return the ordered body fields for Protocol v3 `device_prefs`."""
+    """Return the ordered body fields (`indices 3..70`) for Protocol v3 `device_prefs`."""
     home_enabled = bool(resolve_device_pref_value(cfg, "home_screen_enabled"))
     clean_hex = str(custom_color_hex or "").strip().upper()
+    if clean_hex and not _HEX_RGB_RE.fullmatch(clean_hex):
+        clean_hex = ""
     out: list[Any] = []
     for name in _DEVICE_PREFS_BODY_NAMES:
         if name == "prefs_seq":
@@ -624,6 +810,8 @@ def pack_device_prefs_fields(
             out.append(bool(native_ble_tracking))
         elif name == "theme_color_hex":
             out.append(clean_hex)
+        elif name == "do_not_disturb" and do_not_disturb is not None:
+            out.append(bool(do_not_disturb))
         elif name == "tools_items":
             try:
                 out.append(
@@ -650,6 +838,15 @@ def pack_device_prefs_fields(
     return tuple(out)
 
 
+def _parse_strict_switch_token(val: str) -> bool | None:
+    low = val.lower()
+    if low in _SWITCH_TRUE_TOKENS:
+        return True
+    if low in _SWITCH_FALSE_TOKENS:
+        return False
+    return None
+
+
 def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
     """Parse 0x1E-delimited `key=val` preference records from `device_hello` or `set_device_prefs`."""
     out: dict[str, Any] = {}
@@ -663,7 +860,13 @@ def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
         key = raw_key.strip()
         val = raw_val.strip()
         if key == "ble_beacon_enabled":
-            out["native_ble_tracking"] = val.lower() in ("1", "true", "on", "yes")
+            sw_val = _parse_strict_switch_token(val)
+            if sw_val is not None:
+                out["native_ble_tracking"] = sw_val
+            continue
+        if key == "theme_color_hex":
+            if _HEX_RGB_RE.fullmatch(val):
+                out["device_custom_color"] = val.upper()
             continue
         if key == "tools_items":
             try:
@@ -681,7 +884,9 @@ def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
         if spec is None:
             continue
         if spec.domain == "switch":
-            out[key] = val.lower() in ("1", "true", "on", "yes")
+            sw_val = _parse_strict_switch_token(val)
+            if sw_val is not None:
+                out[key] = sw_val
         elif spec.domain == "select":
             if val in spec.options:
                 out[key] = val
@@ -696,11 +901,12 @@ def parse_dirty_prefs_records(raw: str | None) -> dict[str, Any]:
                 except ValueError:
                     continue
         elif spec.domain == "number":
-            if isinstance(val, bool):
-                continue
             try:
-                ival = int(float(val))
-            except (TypeError, ValueError):
+                fval = float(val)
+                if not math.isfinite(fval):
+                    continue
+                ival = int(fval)
+            except (TypeError, ValueError, OverflowError):
                 continue
             if key == "calendar_lookahead_days":
                 ival = snap_calendar_lookahead_days(ival)
@@ -778,11 +984,12 @@ def format_tz_record(
     custom_label: str | None = None,
 ) -> str:
     """Format `<iana>|<label>|<abbr>|<utc_offset_min>|<is_dst>` for `area_context`."""
-    clean_iana = str(iana or "").strip()
+    clean_iana = sanitize_v3_field(iana).strip()
     if not clean_iana:
         return ""
+    safe_iana = escape_v3_subfield(clean_iana)
     if clean_iana in ("UTC", "Etc/UTC", "GMT", "Etc/GMT", "Etc/GMT+0", "Etc/GMT-0", "Etc/GMT0"):
-        return f"{clean_iana}|UTC|UTC|0|0"
+        return f"{safe_iana}|UTC|UTC|0|0"
 
     now = (now_utc or datetime.now(UTC)).astimezone(UTC)
     cat_entry = WORLD_CLOCK_CATALOG_MAP.get(clean_iana)
@@ -795,7 +1002,8 @@ def format_tz_record(
             if cat_entry is not None
             else clean_iana.rsplit("/", 1)[-1].replace("_", " ")
         )
-        city = sanitize_clock_label(city) or clean_iana
+        city = sanitize_clock_label(city) or safe_iana
+    safe_city = escape_v3_subfield(city)
 
     tz = get_cached_zoneinfo(clean_iana)
     if tz is not None:
@@ -804,17 +1012,17 @@ def format_tz_record(
         dst_td = local_dt.dst() or timedelta(0)
         off_min = round(off_td.total_seconds() / 60)
         is_dst = dst_td.total_seconds() != 0
-        raw_abbr = (local_dt.tzname() or "").replace("|", "").replace(";", "").strip()
+        raw_abbr = _V3_FIELD_UNSAFE_RE.sub("", local_dt.tzname() or "").replace("|", "").replace(";", "").strip()
         if (not raw_abbr or raw_abbr[0] in "+-") and cat_entry is not None:
             raw_abbr = str(cat_entry["dst_abbr" if is_dst else "std_abbr"])
-        abbr = raw_abbr or _format_utc_offset_abbr(off_min)
-        return f"{clean_iana}|{city}|{abbr}|{off_min}|{'1' if is_dst else '0'}"
+        abbr = escape_v3_subfield(raw_abbr or _format_utc_offset_abbr(off_min))
+        return f"{safe_iana}|{safe_city}|{abbr}|{off_min}|{'1' if is_dst else '0'}"
     if cat_entry is None:
         return ""
     is_dst = _catalog_dst_active(str(cat_entry["rule"]), int(cat_entry["std_off"]), now)
     off_min = int(cat_entry["dst_off" if is_dst else "std_off"])
-    abbr = str(cat_entry["dst_abbr" if is_dst else "std_abbr"])
-    return f"{clean_iana}|{city}|{abbr}|{off_min}|{'1' if is_dst else '0'}"
+    abbr = escape_v3_subfield(str(cat_entry["dst_abbr" if is_dst else "std_abbr"]))
+    return f"{safe_iana}|{safe_city}|{abbr}|{off_min}|{'1' if is_dst else '0'}"
 
 
 def build_time_zone_payloads(
@@ -981,7 +1189,17 @@ def shortcut_records(
         label = str(it.get("label") or "")
         icon = str(it.get("icon") or "")
         confirm = "1" if (kind == "entity" and bool(it.get("confirm"))) else "0"
-        state_val = int(it.get("state", -1)) if kind == "entity" else -1
+        raw_state = it.get("state")
+        if kind != "entity" or raw_state is None or isinstance(raw_state, bool):
+            state_val = -1
+        else:
+            try:
+                f_state = float(raw_state)
+                state_val = int(f_state) if math.isfinite(f_state) else -1
+            except (TypeError, ValueError, OverflowError):
+                state_val = -1
+            if state_val not in (-1, 0, 1, 2):
+                state_val = -1
         rows.append((kind, target, action, label, icon, confirm, str(state_val)))
     return build_v3_records(
         rows,
@@ -997,10 +1215,14 @@ def activity_payload(card_on: bool, sources: str) -> tuple[int, str]:
 
 
 # ---------------------------------------------------------------------------
-# 3-Tier Perimeter Security Policy & PBKDF2-HMAC-SHA256 PIN Verification
+# 3-Tier Perimeter Security Policy, PIN Session-Key Wrap & Brute-Force Lockout
 # ---------------------------------------------------------------------------
 
 SECURITY_PIN_POLICIES: tuple[str, ...] = ("auto", "allow", "require_pin", "block")
+MIN_PIN_LEN: int = 4
+MAX_PIN_LEN: int = 12
+PIN_SESSION_KEY_BYTES: int = 32
+PIN_WRAP_PREFIX: str = "v1:"
 PBKDF2_ITERATIONS: int = 200_000
 _HASH_SCHEME: str = "pbkdf2_sha256"
 _SALT_BYTES: int = 16
@@ -1009,6 +1231,14 @@ _GARAGE_COVER_CLASSES: frozenset[str] = frozenset({"garage", "gate", "door"})
 _OPENING_COVER_ACTIONS: frozenset[str] = frozenset(
     {"turn_on", "open", "open_cover", "toggle", "set_level"}
 )
+
+
+class PinWrapError(ValueError):
+    """Raised when a `v1:` session-key wrapped PIN fails format, key, replay, MAC, or digit validation."""
+
+    def __init__(self, reason: str, message: str = "") -> None:
+        super().__init__(message or reason)
+        self.reason = reason
 
 
 def normalize_security_pin_policy(value: str | None) -> str:
@@ -1033,18 +1263,205 @@ def effective_security_pin_policy(
 
 
 def is_valid_pin_digits(pin: str | None) -> bool:
-    """Return True if `pin` is 4 to 12 ASCII digits."""
+    """Return True if `pin` is `MIN_PIN_LEN..MAX_PIN_LEN` (`4..12`) ASCII digits."""
     if not isinstance(pin, str):
         return False
     stripped = pin.strip()
-    return 4 <= len(stripped) <= 12 and stripped.isascii() and stripped.isdigit()
+    return MIN_PIN_LEN <= len(stripped) <= MAX_PIN_LEN and stripped.isascii() and stripped.isdigit()
+
+
+def is_wrapped_pin_code(code: str | None) -> bool:
+    """Return True if `code` carries the `v1:` PIN session-key envelope prefix."""
+    return isinstance(code, str) and code.strip().startswith(PIN_WRAP_PREFIX)
+
+
+def mint_pin_session_key() -> tuple[str, bytes]:
+    """Mint a random 8-hex `key_id` and 32-byte HMAC-SHA256 session key for bound PIN transport."""
+    return secrets.token_hex(4), secrets.token_bytes(PIN_SESSION_KEY_BYTES)
+
+
+def _validate_pin_key_material(key_id: str, key_bytes: bytes) -> tuple[str, bytes]:
+    kid = str(key_id or "").strip().lower()
+    if len(kid) != 8 or not _LOWER_HEX_RE.fullmatch(kid):
+        raise ValueError("PIN session key_id must be 8 lowercase hex characters")
+    raw_key = bytes(key_bytes)
+    if len(raw_key) != PIN_SESSION_KEY_BYTES:
+        raise ValueError(f"PIN session key_bytes must be {PIN_SESSION_KEY_BYTES} bytes")
+    return kid, raw_key
+
+
+def wrap_pin_code(
+    key_id: str,
+    key_bytes: bytes,
+    nonce: int,
+    entity_id: str,
+    action: str,
+    code: str,
+) -> str:
+    """Encrypt-then-MAC wrap a `4..12` digit PIN as `v1:<key_id>:<nonce_hex8>:<ct_hex>:<mac_hex32>`."""
+    kid, raw_key = _validate_pin_key_material(key_id, key_bytes)
+    nonce_int = int(nonce)
+    if nonce_int < 1 or nonce_int > 0xFFFFFFFF:
+        raise ValueError("PIN session nonce must be in 1..0xFFFFFFFF")
+    clean_code = str(code or "").strip()
+    if not is_valid_pin_digits(clean_code):
+        raise ValueError(f"PIN code must be {MIN_PIN_LEN} to {MAX_PIN_LEN} ASCII digits")
+
+    nonce_hex8 = f"{nonce_int:08x}"
+    ent = str(entity_id or "").strip()
+    act = str(action or "").strip()
+    pt_bytes = clean_code.encode("ascii")
+    keystream = hmac.new(
+        raw_key,
+        f"stream|{kid}|{nonce_hex8}".encode(),
+        hashlib.sha256,
+    ).digest()[: len(pt_bytes)]
+    ct_hex = bytes(b ^ k for b, k in zip(pt_bytes, keystream, strict=True)).hex()
+    mac_hex32 = hmac.new(
+        raw_key,
+        f"latter-pin-v1|{kid}|{nonce_hex8}|{ent}|{act}|{ct_hex}".encode(),
+        hashlib.sha256,
+    ).hexdigest()[:32]
+    return f"v1:{kid}:{nonce_hex8}:{ct_hex}:{mac_hex32}"
+
+
+def unwrap_pin_code(
+    key_id: str,
+    key_bytes: bytes,
+    last_nonce: int,
+    entity_id: str,
+    action: str,
+    wrapped: str,
+) -> tuple[str, int]:
+    """Verify and decrypt a `v1:` wrapped PIN, returning `(plaintext_pin, nonce)`."""
+    expected_kid, raw_key = _validate_pin_key_material(key_id, key_bytes)
+    if int(last_nonce) < 0:
+        raise ValueError("last_nonce must be >= 0")
+
+    parts = str(wrapped or "").strip().split(":")
+    if len(parts) != 5 or parts[0] != "v1":
+        raise PinWrapError("malformed", "Invalid v1 PIN envelope format")
+    wire_kid, nonce_hex8, ct_hex, wire_mac = parts[1], parts[2], parts[3], parts[4]
+    if (
+        len(wire_kid) != 8
+        or len(nonce_hex8) != 8
+        or len(wire_mac) != 32
+        or len(ct_hex) % 2 != 0
+        or not (2 * MIN_PIN_LEN <= len(ct_hex) <= 2 * MAX_PIN_LEN)
+        or not _LOWER_HEX_RE.fullmatch(wire_kid)
+        or not _LOWER_HEX_RE.fullmatch(nonce_hex8)
+        or not _LOWER_HEX_RE.fullmatch(ct_hex)
+        or not _LOWER_HEX_RE.fullmatch(wire_mac)
+    ):
+        raise PinWrapError("malformed", "Invalid hex field in v1 PIN envelope")
+
+    if not hmac.compare_digest(wire_kid, expected_kid):
+        raise PinWrapError("key_mismatch", "PIN session key_id mismatch")
+
+    nonce_int = int(nonce_hex8, 16)
+    if nonce_int < 1 or nonce_int <= int(last_nonce):
+        raise PinWrapError("replay", "PIN session nonce replay or out-of-order")
+
+    ent = str(entity_id or "").strip()
+    act = str(action or "").strip()
+    expected_mac = hmac.new(
+        raw_key,
+        f"latter-pin-v1|{expected_kid}|{nonce_hex8}|{ent}|{act}|{ct_hex}".encode(),
+        hashlib.sha256,
+    ).hexdigest()[:32]
+    if not hmac.compare_digest(wire_mac, expected_mac):
+        raise PinWrapError("bad_mac", "PIN session MAC verification failed")
+
+    ct_bytes = bytes.fromhex(ct_hex)
+    keystream = hmac.new(
+        raw_key,
+        f"stream|{expected_kid}|{nonce_hex8}".encode(),
+        hashlib.sha256,
+    ).digest()[: len(ct_bytes)]
+    pt_bytes = bytes(c ^ k for c, k in zip(ct_bytes, keystream, strict=True))
+    try:
+        pin = pt_bytes.decode("ascii")
+    except UnicodeDecodeError as err:
+        raise PinWrapError("invalid_digits", "Decrypted PIN is non-ASCII") from err
+    if not is_valid_pin_digits(pin):
+        raise PinWrapError("invalid_digits", "Decrypted PIN is not 4 to 12 ASCII digits")
+    return pin, nonce_int
+
+
+class PinLockoutTracker:
+    """Pure-stdlib exponential-backoff brute-force lockout tracker for PIN verification."""
+
+    def __init__(
+        self,
+        *,
+        max_failures: int = 5,
+        base_cooldown_s: float = 60.0,
+        max_cooldown_s: float = 900.0,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.max_failures: int = max(1, int(max_failures))
+        self.base_cooldown_s: float = max(1.0, float(base_cooldown_s))
+        self.max_cooldown_s: float = max(self.base_cooldown_s, float(max_cooldown_s))
+        self._clock: Callable[[], float] = clock
+        self._failures: dict[str, int] = {}
+        self._locked_until: dict[str, float] = {}
+
+    def _now(self, now: float | None) -> float:
+        return float(now) if now is not None else float(self._clock())
+
+    def remaining_cooldown(self, scope: str = "global", *, now: float | None = None) -> float:
+        """Return seconds remaining in active lockout for `scope`, or `0.0` when unlocked."""
+        key = str(scope or "global")
+        until = self._locked_until.get(key, 0.0)
+        if until <= 0.0:
+            return 0.0
+        rem = until - self._now(now)
+        if rem <= 0.0:
+            self._locked_until.pop(key, None)
+            return 0.0
+        return rem
+
+    def is_locked_out(self, scope: str = "global", *, now: float | None = None) -> bool:
+        """Return True if `scope` is currently under an active brute-force cooldown."""
+        return self.remaining_cooldown(scope, now=now) > 0.0
+
+    def failure_count(self, scope: str = "global") -> int:
+        """Return the consecutive failure count recorded for `scope`."""
+        return self._failures.get(str(scope or "global"), 0)
+
+    def record_failure(self, scope: str = "global", *, now: float | None = None) -> float:
+        """Record a failed PIN attempt for `scope` and return any newly applied cooldown in seconds."""
+        key = str(scope or "global")
+        t = self._now(now)
+        count = self._failures.get(key, 0) + 1
+        self._failures[key] = count
+        if count < self.max_failures:
+            return 0.0
+        exponent = min(count - self.max_failures, 20)
+        cooldown = min(self.max_cooldown_s, self.base_cooldown_s * (2**exponent))
+        self._locked_until[key] = max(self._locked_until.get(key, 0.0), t + cooldown)
+        return self._locked_until[key] - t
+
+    def record_success(self, scope: str = "global") -> None:
+        """Clear consecutive failures and cooldown for `scope` after a valid PIN."""
+        key = str(scope or "global")
+        self._failures.pop(key, None)
+        self._locked_until.pop(key, None)
+
+    def reset(self, scope: str | None = None) -> None:
+        """Clear lockout state for `scope`, or all scopes when `scope` is None."""
+        if scope is None:
+            self._failures.clear()
+            self._locked_until.clear()
+            return
+        self.record_success(scope)
 
 
 def hash_security_pin(pin: str) -> str:
     """Hash a 4-12 digit PIN with PBKDF2-HMAC-SHA256 and a random 128-bit salt."""
     cleaned = str(pin or "").strip()
     if not is_valid_pin_digits(cleaned):
-        raise ValueError("Security PIN must be 4 to 12 digits")
+        raise ValueError(f"Security PIN must be {MIN_PIN_LEN} to {MAX_PIN_LEN} digits")
     salt = secrets.token_bytes(_SALT_BYTES)
     dk = hashlib.pbkdf2_hmac(
         "sha256",
