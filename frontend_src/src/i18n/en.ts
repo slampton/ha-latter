@@ -109,6 +109,7 @@ export const PREF_LABELS: Readonly<Record<string, string>> = {
   home_categories: "Home categories",
   tools_items: "Enabled tools",
   games_items: "Enabled games",
+  broadcast_speaker_entities: "Broadcast speakers",
   camera_visible_entities: "Visible cameras",
   camera_carousel_entities: "Carousel cameras",
 };

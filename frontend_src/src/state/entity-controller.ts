@@ -993,6 +993,77 @@ export class EntityController {
 
   // ---------- Per-Device Cameras Visibility & Carousel Lists ----------
 
+  getSystemBroadcastSpeakers(): string[] {
+    const out: string[] = [];
+    for (const raw of this.store.state?.system_config?.broadcast_speakers || []) {
+      const id = String(raw || "").trim();
+      if (id && !out.includes(id)) {
+        out.push(id);
+      }
+    }
+    return out;
+  }
+
+  getBroadcastSpeakers(): string[] {
+    const sys = this.getSystemBroadcastSpeakers();
+    if (sys.length === 0) return [];
+    const raw = this.store.state?.config?.broadcast_speaker_entities;
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return [...sys];
+    }
+    const filtered: string[] = [];
+    for (const item of raw) {
+      const id = String(item || "").trim();
+      if (id && sys.includes(id) && !filtered.includes(id)) {
+        filtered.push(id);
+      }
+    }
+    return filtered.length > 0 ? filtered : [...sys];
+  }
+
+  toggleBroadcastSpeaker(entityId: string, forceEnabled?: boolean): void {
+    const cleanId = String(entityId || "").trim();
+    const sys = this.getSystemBroadcastSpeakers();
+    if (!cleanId || !sys.includes(cleanId)) return;
+    const current = this.getBroadcastSpeakers();
+    const idx = current.indexOf(cleanId);
+    const currentlyOn = idx >= 0;
+    const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
+    if (wantOn === currentlyOn) return;
+
+    let next: string[];
+    if (!wantOn) {
+      if (current.length <= 1) {
+        this.store.showToast(this.store.t("common.keep_one_enabled", { noun: "speaker" }), true);
+        return;
+      }
+      next = current.filter((id) => id !== cleanId);
+    } else {
+      next = [...current, cleanId];
+    }
+    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+    this.stageDeviceSetting("broadcast_speaker_entities", sameAsSys ? [] : next);
+  }
+
+  reorderBroadcastSpeakers(fromIndex: number, toIndex: number): void {
+    const sys = this.getSystemBroadcastSpeakers();
+    const current = this.getBroadcastSpeakers();
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= current.length ||
+      toIndex >= current.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+    const next = [...current];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+    this.stageDeviceSetting("broadcast_speaker_entities", sameAsSys ? [] : next);
+  }
+
   getSystemCameraEntities(): string[] {
     const out: string[] = [];
     for (const raw of this.store.state?.system_config?.camera_entities || []) {

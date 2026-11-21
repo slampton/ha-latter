@@ -278,21 +278,26 @@ def camera_records(cameras: Iterable[Mapping[str, Any]]) -> V3Records:
     )
 
 
-# area_context.intercom_targets_summary: target_id|label|kind
-INTERCOM_MAX_RECORDS = 64
-INTERCOM_LABEL_MAX = 32
-INTERCOM_KINDS: tuple[str, ...] = ("all", "device")
+# area_context.broadcast_phrases: phrase (up to 12 phrases, max 64 chars each)
+BROADCAST_PHRASES_MAX_RECORDS = 12
+BROADCAST_PHRASE_MAX_LEN = 64
 
 
-def intercom_target_records(targets: Iterable[Mapping[str, Any]]) -> V3Records:
-    """Records for call_target: `kind` all (every other Latter Device) or device (one Latter Device)."""
-    rows = []
-    for t in targets:
-        kind = str(t.get("kind") or "")
-        if kind not in INTERCOM_KINDS:
-            raise ValueError(f"Unknown intercom target kind: {kind!r}")
-        rows.append((t.get("target_id"), t.get("label"), kind))
-    return build_v3_records(rows, (None, INTERCOM_LABEL_MAX, None), INTERCOM_MAX_RECORDS)
+def broadcast_phrase_records(phrases: Iterable[Any]) -> V3Records:
+    """Pack ordered Quick Broadcast phrases for `area_context.broadcast_phrases`."""
+    rows: list[tuple[str]] = []
+    seen: set[str] = set()
+    for item in phrases:
+        clean = str(item or "").strip()
+        if not clean or clean in seen:
+            continue
+        seen.add(clean)
+        rows.append((clean,))
+        if len(rows) >= BROADCAST_PHRASES_MAX_RECORDS:
+            break
+    return build_v3_records(
+        rows, (BROADCAST_PHRASE_MAX_LEN,), BROADCAST_PHRASES_MAX_RECORDS
+    )
 
 
 # remote_config.slots_summary: index|label|entity_id|kind|area_id|state
@@ -1089,8 +1094,6 @@ def is_sensitive_perimeter_action(
     act = str(action or "").strip().lower()
     if dom == "lock":
         return act in ("unlock", "open")
-    if dom == "doorbell":
-        return act == "unlock_door"
     if dom == "alarm_control_panel":
         return act == "disarm"
     if dom == "cover":

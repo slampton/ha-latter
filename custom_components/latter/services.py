@@ -39,6 +39,7 @@ from .areas import (
 )
 from .const import (
     CONF_ALARM_ENTITY,
+    CONF_BROADCAST_SPEAKERS,
     CONF_CUSTOM_PALETTES,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_CUSTOM_COLOR,
@@ -1161,53 +1162,86 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         target_speakers = data.get("target_speakers") or []
         tts_entity = str(data.get("tts_entity") or "").strip()
 
-        speakers = [str(s) for s in target_speakers]
+        explicit_speakers = [str(s) for s in target_speakers]
+        speakers = list(explicit_speakers)
         raw_target = str(data.get("target_device") or "").strip()
         target_low = raw_target.lower()
         kind = target_kind(raw_target)
+        caller_coord: LatterCoordinator | None = None
         if kind == "device":
-            _resolve_coordinator_from_call(hass, call)
+            caller_coord = _resolve_coordinator_from_call(hass, call)
+
+        global_cfg = (hass.data.get(DOMAIN, {}) or {}).get(DATA_GLOBAL_CONFIG) or {}
+        system_broadcast_speakers = [
+            str(s).strip()
+            for s in (global_cfg.get(CONF_BROADCAST_SPEAKERS) or [])
+            if str(s or "").strip().startswith("media_player.")
+        ]
+
+        ent_reg = er.async_get(hass)
+        dev_reg = dr.async_get(hass)
+
+        def _is_speaker_online(entity_id: str) -> bool:
+            st_obj = hass.states.get(entity_id)
+            return st_obj is not None and st_obj.state not in ("unavailable", "unknown")
+
+        def _speaker_matches_coord(entity_id: str, coord: LatterCoordinator) -> bool:
+            if not entity_id:
+                return False
+            if entity_id in (coord.local_speaker, coord.local_ma_speaker):
+                return True
+            if coord.local_ma_speaker:
+                ma_match = resolve_ma_counterpart_entity(hass, entity_id)
+                if ma_match and ma_match == coord.local_ma_speaker:
+                    return True
+            if coord.esphome_device_id:
+                e_entry = ent_reg.async_get(entity_id)
+                if e_entry and e_entry.device_id == coord.esphome_device_id:
+                    return True
+            return False
 
         scoped_mode = kind in ("occupied_areas", "person")
         if scoped_mode or not speakers:
-            all_online_speakers = [
-                s.entity_id
-                for s in sorted(
-                    get_area_state_index(hass).states_for_domain("media_player"),
-                    key=lambda st: st.entity_id,
-                )
-                if s.state not in ("unavailable", "unknown")
-                and is_music_assistant_player(hass, s)
-            ]
             if scoped_mode:
-                ent_reg = er.async_get(hass)
-                dev_reg = dr.async_get(hass)
                 occupied_areas = _resolve_occupied_area_ids(
                     hass, kind, target_low
+                )
+                base_pool = (
+                    [s for s in system_broadcast_speakers if _is_speaker_online(s)]
+                    if system_broadcast_speakers
+                    else [
+                        s.entity_id
+                        for s in sorted(
+                            get_area_state_index(hass).states_for_domain("media_player"),
+                            key=lambda st: st.entity_id,
+                        )
+                        if s.state not in ("unavailable", "unknown")
+                        and is_music_assistant_player(hass, s)
+                    ]
                 )
 
                 matched_speakers: list[str] = []
                 seen_dev_ids: set[str] = set()
                 if occupied_areas:
-                    for c in iter_coordinators(hass):
-                        if c.active_area_id in occupied_areas:
-                            for cand_spk in (c.active_speaker, c.local_speaker):
-                                if not cand_spk or cand_spk in matched_speakers:
-                                    continue
-                                st_s = hass.states.get(cand_spk)
-                                if not st_s or st_s.state in ("unavailable", "unknown"):
-                                    continue
-                                e_entry = ent_reg.async_get(cand_spk)
-                                dev_key = (
-                                    e_entry.device_id
-                                    if e_entry and e_entry.device_id
-                                    else (c.esphome_device_id or cand_spk)
-                                )
-                                if dev_key in seen_dev_ids:
-                                    continue
-                                seen_dev_ids.add(dev_key)
-                                matched_speakers.append(cand_spk)
-                    for spk_id in all_online_speakers:
+                    if not system_broadcast_speakers:
+                        for c in iter_coordinators(hass):
+                            if c.active_area_id in occupied_areas:
+                                for cand_spk in (c.active_speaker, c.local_speaker):
+                                    if not cand_spk or cand_spk in matched_speakers:
+                                        continue
+                                    if not _is_speaker_online(cand_spk):
+                                        continue
+                                    e_entry = ent_reg.async_get(cand_spk)
+                                    dev_key = (
+                                        e_entry.device_id
+                                        if e_entry and e_entry.device_id
+                                        else (c.esphome_device_id or cand_spk)
+                                    )
+                                    if dev_key in seen_dev_ids:
+                                        continue
+                                    seen_dev_ids.add(dev_key)
+                                    matched_speakers.append(cand_spk)
+                    for spk_id in base_pool:
                         e_entry = ent_reg.async_get(spk_id)
                         spk_area = e_entry.area_id if e_entry else None
                         if not spk_area and e_entry and e_entry.device_id:
@@ -1231,8 +1265,34 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                         "targets": [],
                     }
                 speakers = matched_speakers
+            elif caller_coord is not None:
+                speakers = [
+                    s for s in caller_coord.effective_broadcast_speakers if _is_speaker_online(s)
+                ]
             else:
-                speakers = all_online_speakers
+                speakers = [
+                    s for s in system_broadcast_speakers if _is_speaker_online(s)
+                ]
+
+        # Auto-exclude the calling Device's own speaker and skip Latter displays in Bedtime Mode
+        bedtime_coords = [
+            c
+            for c in iter_coordinators(hass)
+            if not c.is_ble_tag
+            and c.has_display
+            and bool(c.get_device_pref("bedtime_active"))
+        ]
+        if caller_coord is not None or (bedtime_coords and not explicit_speakers):
+            filtered_speakers: list[str] = []
+            for spk_id in speakers:
+                if caller_coord is not None and _speaker_matches_coord(spk_id, caller_coord):
+                    continue
+                if not explicit_speakers and any(
+                    _speaker_matches_coord(spk_id, bc) for bc in bedtime_coords
+                ):
+                    continue
+                filtered_speakers.append(spk_id)
+            speakers = filtered_speakers
 
         if not speakers:
             return {

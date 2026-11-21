@@ -10,14 +10,15 @@ from typing import Any, Final, Literal
 
 from homeassistant.const import Platform
 
-_PROTOCOL_DEFAULTS: Final[dict[str, Any]] = json.loads(
+_PROTOCOL_SCHEMA: Final[dict[str, Any]] = json.loads(
     (Path(__file__).resolve().parent / "protocol_v3.json").read_text(encoding="utf-8")
-)["defaults"]
+)
+_PROTOCOL_DEFAULTS: Final[dict[str, Any]] = _PROTOCOL_SCHEMA["defaults"]
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final = 40
-MIN_FIRMWARE_SDK_REV: Final = 2026112003
+STUDIO_REV: Final[int] = int(_PROTOCOL_SCHEMA["studio_contract"]["studio_rev"])
+MIN_FIRMWARE_SDK_REV: Final = 2026112004
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -80,6 +81,14 @@ CONF_AREA_CATEGORIES: Final = "area_categories"
 CONF_HOME_CATEGORIES: Final = "home_categories"
 CONF_CAMERA_VISIBLE_ENTITIES: Final = "camera_visible_entities"
 CONF_CAMERA_CAROUSEL_ENTITIES: Final = "camera_carousel_entities"
+CONF_BROADCAST_SPEAKERS: Final = "broadcast_speakers"
+CONF_BROADCAST_PHRASES: Final = "broadcast_phrases"
+CONF_BROADCAST_SPEAKER_ENTITIES: Final = "broadcast_speaker_entities"
+DEFAULT_BROADCAST_PHRASES: Final[tuple[str, ...]] = (
+    "Dinner is ready",
+    "Come upstairs",
+    "Leaving soon",
+)
 CONF_TOOLS_ITEMS: Final = "tools_items"
 CONF_GAMES_ITEMS: Final = "games_items"
 CONF_ACTIVITY_CARD: Final = "activity_card"
@@ -270,6 +279,8 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_LOCK_ENTITIES,
     CONF_GARAGE_ENTITIES,
     CONF_VACUUM_ENTITIES,
+    CONF_BROADCAST_SPEAKERS,
+    CONF_BROADCAST_PHRASES,
     CONF_VOLUME_OVERRIDES,
     CONF_BLE_SCANNER_OFFSETS,
     CONF_BLE_AREA_SIGNATURES,
@@ -339,12 +350,3 @@ def other_latter_devices(candidates: Iterable[Any], caller_slug: str) -> list[An
         and not getattr(c, "is_ble_tag", False)
         and c.device_slug != caller_slug
     ]
-
-
-def call_target_slugs(candidates: Iterable[Any], caller_slug: str, target: Any) -> list[str]:
-    """Return the slugs `call_target` rings: every other Latter Device for `all` (or empty), else the named one."""
-    others = other_latter_devices(candidates, caller_slug)
-    text = str(target or "").strip()
-    if text.lower() in ("", TARGET_ALL):
-        return [c.device_slug for c in others]
-    return [c.device_slug for c in others if c.device_slug == text]

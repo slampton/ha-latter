@@ -801,6 +801,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     )
     from custom_components.latter.const import (
         CONF_ALARM_ENTITY,
+        CONF_BROADCAST_SPEAKERS,
         CONF_CAMERA_ENTITIES,
         CONF_GARAGE_ENTITIES,
         CONF_HOME_CATEGORIES,
@@ -865,6 +866,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     global_cfg[CONF_LOCK_ENTITIES] = ["lock.front_door"]
     global_cfg[CONF_GARAGE_ENTITIES] = ["cover.main_garage"]
     global_cfg[CONF_VACUUM_ENTITIES] = ["vacuum.robo_vac"]
+    global_cfg[CONF_BROADCAST_SPEAKERS] = ["media_player.kitchen_speaker"]
     global_cfg[CONF_CAMERA_ENTITIES] = ["camera.front_porch"]
 
     # Set Latter System Security PIN to "2580" and stationary require_pin policy

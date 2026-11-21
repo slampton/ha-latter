@@ -250,6 +250,31 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
   } else if (app === "home_hub") {
     const enabledHomeCats = store.entity.getEnabledHomeCategories();
     const pillItems = buildOrderedPillItems(HOME_CATEGORIES_CATALOG, enabledHomeCats, caps);
+    const sysSpeakers = store.entity.getSystemBroadcastSpeakers();
+    const activeSpeakers = store.entity.getBroadcastSpeakers();
+    const spkCatalogMap = new Map((data?.catalog?.ma_speakers || []).map((s) => [s.id, s]));
+    const speakerPillLabel = (entityId: string): string => {
+      const meta = spkCatalogMap.get(entityId);
+      if (!meta?.name) return entityId;
+      const stripped = meta.name.replace(/\s*\([^)]*\)\s*(?:\(unavailable\))?$/, "").trim();
+      return stripped ? entityLabel(stripped) : entityId;
+    };
+    const activeSpkSet = new Set(activeSpeakers);
+    const speakerPillItems: PillListItem[] = [
+      ...activeSpeakers.map((id) => ({
+        token: id,
+        label: speakerPillLabel(id),
+        enabled: true,
+      })),
+      ...sysSpeakers
+        .filter((id) => !activeSpkSet.has(id))
+        .map((id) => ({
+          token: id,
+          label: speakerPillLabel(id),
+          enabled: false,
+        })),
+    ];
+
     body = html`<div class="settings-list">
       ${renderSettingsRow({
         label: store.t("dialogs.home_cats_label"),
@@ -263,6 +288,25 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
           onReorder: (fromIdx, toIdx) => store.entity.reorderHomeCategories(fromIdx, toIdx),
           overlay: store.localeOverlay,
         }),
+      })}
+      ${renderSettingsRow({
+        id: "home-broadcast-speakers-row",
+        label: store.t("dialogs.broadcast_speakers_label"),
+        description: store.t("dialogs.broadcast_speakers_desc"),
+        stacked: true,
+        control:
+          sysSpeakers.length > 0
+            ? renderPillList({
+                id: "broadcast-speakers-pills",
+                ariaLabel: store.t("dialogs.broadcast_speakers_label"),
+                items: speakerPillItems,
+                onToggle: (tok, next) => store.entity.toggleBroadcastSpeaker(tok, next),
+                onReorder: (fromIdx, toIdx) => store.entity.reorderBroadcastSpeakers(fromIdx, toIdx),
+                overlay: store.localeOverlay,
+              })
+            : html`<p class="empty-state">
+                ${store.t("dialogs.broadcast_speakers_empty_system")}
+              </p>`,
       })}
     </div>`;
     extraAction = html`<button

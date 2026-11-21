@@ -584,7 +584,9 @@ export type StringListKey =
   | "thermostat_entities"
   | "lock_entities"
   | "garage_entities"
-  | "vacuum_entities";
+  | "vacuum_entities"
+  | "broadcast_speakers"
+  | "broadcast_phrases";
 
 export const STRING_LIST_KEYS: readonly StringListKey[] = [
   "calendar_entities",
@@ -594,6 +596,8 @@ export const STRING_LIST_KEYS: readonly StringListKey[] = [
   "lock_entities",
   "garage_entities",
   "vacuum_entities",
+  "broadcast_speakers",
+  "broadcast_phrases",
 ];
 
 export const STRING_LIST_MAX_ITEMS: Readonly<Record<StringListKey, number>> = {
@@ -604,6 +608,8 @@ export const STRING_LIST_MAX_ITEMS: Readonly<Record<StringListKey, number>> = {
   lock_entities: 8,
   garage_entities: 6,
   vacuum_entities: 6,
+  broadcast_speakers: 32,
+  broadcast_phrases: 12,
 };
 
 export function isStringListKey(key: string): key is StringListKey {
@@ -614,7 +620,9 @@ export function isStringListKey(key: string): key is StringListKey {
     key === "thermostat_entities" ||
     key === "lock_entities" ||
     key === "garage_entities" ||
-    key === "vacuum_entities"
+    key === "vacuum_entities" ||
+    key === "broadcast_speakers" ||
+    key === "broadcast_phrases"
   );
 }
 

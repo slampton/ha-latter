@@ -15,23 +15,17 @@ from typing import Any
 
 from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_SECURITY_PIN_HASH,
-    DATA_GLOBAL_CONFIG,
-    DOMAIN,
     DOORBELL_NOISE_REDUCTION_LEVELS,
-    call_target_slugs,
     normalize_noise_reduction,
 )
-from .hub import _iter_registry_entities, get_area_state_index, iter_coordinators
+from .hub import _iter_registry_entities, get_area_state_index
 from .identity import esphome_service
 from .media import async_announce_on_targets
-from .protocol import check_perimeter_action_allowed
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -133,98 +127,6 @@ async def async_execute_doorbell_intercom(
         hass, cam_ent, coordinator.volume_overrides
     )
     local_spk = coordinator.local_speaker
-
-    if act == "unlock_door":
-        stored_hash = getattr(coordinator, "security_pin_hash", None)
-        if not stored_hash:
-            global_cfg = (hass.data.get(DOMAIN, {}) or {}).get(DATA_GLOBAL_CONFIG) or {}
-            stored_hash = (
-                str(global_cfg.get(CONF_SECURITY_PIN_HASH) or "").strip() or None
-            )
-        eff_pol = getattr(coordinator, "security_pin_policy", "require_pin")
-        allowed, err_key = await hass.async_add_executor_job(
-            lambda: check_perimeter_action_allowed(
-                eff_pol,
-                provided_code=code,
-                stored_pin_hash=stored_hash,
-            )
-        )
-        if not allowed:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key=err_key,
-            )
-        cam_configs = getattr(coordinator, "camera_configs", None) or {}
-        explicit_unlock = (
-            str((cam_configs.get(cam_ent) or {}).get("unlock_entity") or "").strip()
-            if cam_ent
-            else ""
-        )
-        if explicit_unlock and hass.states.get(explicit_unlock) is not None:
-            if explicit_unlock.startswith("lock."):
-                await hass.services.async_call(
-                    "lock", "unlock", {ATTR_ENTITY_ID: explicit_unlock}, blocking=True
-                )
-                return target_info
-            if explicit_unlock.startswith("cover."):
-                await hass.services.async_call(
-                    "cover", "open_cover", {ATTR_ENTITY_ID: explicit_unlock}, blocking=True
-                )
-                return target_info
-
-        idx_areas = get_area_state_index(hass)
-        cam_area = str(target_info.get("area_id") or "")
-        lock_ent = str(target_info.get("lock_entity") or "").strip()
-        if not lock_ent:
-            lock_cands = list(getattr(coordinator, "lock_entities", ()) or ())
-            if cam_area:
-                for cand in lock_cands:
-                    if idx_areas.resolve_entity_area_id(cand) == cam_area:
-                        lock_ent = cand
-                        break
-            if not lock_ent and lock_cands:
-                lock_ent = lock_cands[0]
-
-        if lock_ent and hass.states.get(lock_ent) is not None:
-            await hass.services.async_call(
-                "lock", "unlock", {ATTR_ENTITY_ID: lock_ent}, blocking=True
-            )
-            return target_info
-
-        garage_cands = list(getattr(coordinator, "garage_entities", ()) or ())
-        garage_ent = ""
-        if cam_area:
-            for cand in garage_cands:
-                if idx_areas.resolve_entity_area_id(cand) == cam_area:
-                    garage_ent = cand
-                    break
-        if not garage_ent and garage_cands:
-            garage_ent = garage_cands[0]
-        if garage_ent and hass.states.get(garage_ent) is not None:
-            await hass.services.async_call(
-                "cover", "open_cover", {ATTR_ENTITY_ID: garage_ent}, blocking=True
-            )
-        return target_info
-
-    if act == "call_target":
-        slugs = call_target_slugs(
-            iter_coordinators(hass), coordinator.device_slug, message
-        )
-        for slug in slugs:
-            await hass.services.async_call(
-                DOMAIN,
-                "notify",
-                {
-                    "target_device": slug,
-                    "title": f"Intercom: {coordinator.device_title}",
-                    "message": "Tap to answer",
-                    "priority": "critical",
-                    "duration": 20,
-                    "chime": True,
-                },
-                blocking=False,
-            )
-        return target_info
 
     if act == "select_camera":
         coordinator.async_notify_listeners()

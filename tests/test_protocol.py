@@ -285,7 +285,7 @@ class TestRecordsFields(unittest.TestCase):
             records_fields,
             {
                 ("area_context", "cameras_summary"),
-                ("area_context", "intercom_targets_summary"),
+                ("area_context", "broadcast_phrases"),
                 ("area_context", "thermostats_summary"),
                 ("area_context", "locks_summary"),
                 ("area_context", "garages_summary"),
@@ -306,7 +306,7 @@ class TestRecordsFields(unittest.TestCase):
         coord_src = (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8")
         for builder in (
             "camera_records(",
-            "intercom_target_records(",
+            "broadcast_phrase_records(",
             "thermostat_records(",
             "entry_records(",
             "vacuum_records(",
@@ -349,19 +349,25 @@ class TestRecordsFields(unittest.TestCase):
         self.assertEqual(len(self.p.camera_records(many)), self.p.CAMERAS_MAX_RECORDS)
         self.assertEqual(self.p.encode_v3_records(self.p.camera_records([])), "")
 
-    def test_intercom_targets(self) -> None:
-        self.assertEqual(self.layout("area_context", "intercom_targets_summary"), ["target_id", "label", "kind"])
-        recs = self.p.intercom_target_records(
+    def test_broadcast_phrases(self) -> None:
+        recs = self.p.broadcast_phrase_records(
             [
-                {"target_id": "all", "label": "All Devices", "kind": "all"},
-                {"target_id": "kitchen", "label": "Kitchen|Display", "kind": "device"},
+                "Dinner is ready",
+                "  Come upstairs  ",
+                "Dinner is ready",
+                "",
+                "A" * 80,
             ]
         )
-        self.assertEqual(list(recs), [("all", "All Devices", "all"), ("kitchen", "Kitchen/Display", "device")])
-        with self.assertRaises(ValueError):
-            self.p.intercom_target_records([{"target_id": "x", "label": "x", "kind": "speaker"}])
-        for kind in self.p.INTERCOM_KINDS:
-            self.assertIn(kind, next(f for f in self.spec["domains"]["area_context"]["fields"] if f["name"] == "intercom_targets_summary")["description"])
+        self.assertEqual(
+            list(recs),
+            [("Dinner is ready",), ("Come upstairs",), ("A" * self.p.BROADCAST_PHRASE_MAX_LEN,)],
+        )
+        self.assertEqual(
+            len(self.p.broadcast_phrase_records([f"Phrase {i}" for i in range(20)])),
+            self.p.BROADCAST_PHRASES_MAX_RECORDS,
+        )
+        self.assertEqual(self.p.encode_v3_records(self.p.broadcast_phrase_records([])), "")
 
     def test_home_hub_and_area_climate_records(self) -> None:
         self.assertEqual(
@@ -1496,7 +1502,6 @@ class TestPerimeterSecurityPolicy(unittest.TestCase):
             ("lock", "unlock", "lock.front_door"),
             ("alarm_control_panel", "disarm", "alarm_control_panel.home"),
             ("cover", "open_cover", "cover.garage_door"),
-            ("doorbell", "unlock_door", "camera.front_door"),
         ):
             self.assertTrue(
                 security_policy.is_sensitive_perimeter_action(domain, verb, entity_id=ent),

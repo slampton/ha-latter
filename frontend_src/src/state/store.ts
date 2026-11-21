@@ -351,6 +351,8 @@ export class StudioStore implements ReactiveController {
     lock_entities: 0,
     garage_entities: 0,
     vacuum_entities: 0,
+    broadcast_speakers: 0,
+    broadcast_phrases: 0,
   };
   readonly pendingDeviceBuckets = new Map<string, DevicePendingBucket>();
   readonly pendingEntityStates = new Map<string, PendingEntityEntry>();

@@ -33,6 +33,7 @@ from ..const import (
     CONF_BLE_CATEGORY,
     CONF_BLE_REF_POWER,
     CONF_BLE_TARGET_ADDRESS,
+    CONF_BROADCAST_SPEAKER_ENTITIES,
     CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_CAMERA_VISIBLE_ENTITIES,
     CONF_DEFAULT_AREA,
@@ -1201,13 +1202,20 @@ def _build_entity_catalog(
                         else friendly
                     )
                     ma_speakers.append(
-                        {
-                            "id": ent_id,
-                            "name": f"{clean_lbl} — built-in speaker ({ent_id}){suffix_state}",
-                        }
+                        _enrich_hub_catalog_item(
+                            {
+                                "id": ent_id,
+                                "name": f"{clean_lbl} — built-in speaker ({ent_id}){suffix_state}",
+                            },
+                            state_obj,
+                            idx,
+                            area_reg,
+                        )
                     )
                 else:
-                    ma_speakers.append(item)
+                    ma_speakers.append(
+                        _enrich_hub_catalog_item(item, state_obj, idx, area_reg)
+                    )
         elif domain == "remote":
             remotes_list.append(item)
         elif domain in ("number", "input_number"):
@@ -1874,6 +1882,7 @@ def build_studio_state_payload(
         CONF_PINNED_ITEMS: coordinator.pinned_items,
         CONF_AREA_CATEGORIES: coordinator.area_categories_csv,
         CONF_HOME_CATEGORIES: coordinator.home_categories_csv,
+        CONF_BROADCAST_SPEAKER_ENTITIES: coordinator.configured_broadcast_speaker_entities,
         CONF_CAMERA_VISIBLE_ENTITIES: coordinator.configured_camera_visible_entities,
         CONF_CAMERA_CAROUSEL_ENTITIES: coordinator.configured_camera_carousel_entities,
         CONF_TOOLS_ITEMS: coordinator.tools_items_csv,

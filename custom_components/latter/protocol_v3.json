@@ -183,10 +183,10 @@
         },
         {
           "index": 23,
-          "name": "intercom_targets_summary",
-          "cpp_enum": "INTERCOM_TARGETS_SUMMARY",
+          "name": "broadcast_phrases",
+          "cpp_enum": "BROADCAST_PHRASES",
           "type": "records",
-          "description": "0x1E-joined target_id|label|kind call_target records (up to 10; kind all = every other Latter Device, listed first; kind device = one Latter Device, labelled by its title); empty when there is no other Device"
+          "description": "0x1E-joined ordered quick broadcast phrases (up to 12 phrases, max 64 chars each) configured in Latter Studio; empty when no quick phrases are configured"
         },
         {
           "index": 24,
@@ -1317,7 +1317,7 @@
       },
       {
         "token": "home_hub:intercom",
-        "label": "Intercom",
+        "label": "Broadcast",
         "group": "Home Hub"
       },
       {
@@ -1676,7 +1676,7 @@
       },
       {
         "token": "intercom",
-        "label": "Intercom"
+        "label": "Broadcast"
       },
       {
         "token": "thermostat",
@@ -1872,13 +1872,13 @@
       ]
     },
     "intercom_broadcast": {
-      "description": "Broadcast a voice announcement to chosen speakers, the speakers in occupied Areas, or every speaker",
+      "description": "Broadcast a voice announcement to configured broadcast speakers, chosen speakers, or occupied Areas",
       "fields": [
         "message"
       ]
     },
     "doorbell_intercom": {
-      "description": "Doorbell talkback and requests (talk_message, quick_reply, listen_start, listen_stop, call_target, unlock_door, set_noise_reduction)",
+      "description": "Doorbell talkback and requests (talk_message, quick_reply, listen_start, listen_stop, set_noise_reduction)",
       "fields": [
         "action",
         "camera_entity",
@@ -2046,7 +2046,7 @@
       ]
     },
     "intercom_broadcast": {
-      "description": "Broadcast a TTS announcement or recorded audio clip to chosen speakers, the speakers in occupied Areas ('occupied_areas'), the speakers in a person's current Area ('person.<slug>'), or all online Music Assistant speakers.",
+      "description": "Broadcast a TTS announcement or recorded audio clip to configured broadcast speakers, explicitly chosen speakers, the speakers in occupied Areas ('occupied_areas'), or the speakers in a person's current Area ('person.<slug>'), automatically excluding the calling Device and Latter displays in Bedtime Mode.",
       "fields": [
         "target_device",
         "message",
@@ -2102,7 +2102,7 @@
       ]
     },
     "doorbell_intercom": {
-      "description": "Listen to a doorbell camera's noise-reduced audio on a Latter device, reply by push-to-talk or quick reply (spoken with TTS on the camera's media_player), select a carousel camera, unlock the door's lock, or ring other Latter displays with a notification (call_target). There is no live device-to-door audio.",
+      "description": "Listen to a doorbell camera's noise-reduced audio on a Latter device, reply by push-to-talk or quick reply (spoken with TTS on the camera's media_player), or select a carousel camera. There is no live device-to-door audio.",
       "fields": [
         "target_device",
         "action",
@@ -3850,7 +3850,7 @@
     }
   ],
   "studio_contract": {
-    "studio_rev": 40,
+    "studio_rev": 41,
     "allowed_device_actions": [
       "restart",
       "find_my",

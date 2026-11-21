@@ -108,9 +108,11 @@ export const EN_SYSTEM_STRINGS = {
     "+{count} additional Home Assistant Areas without Latter Devices or BLE coverage.",
   "sys_overview.capabilities_subtitle":
     "Shared entities, photo library, media routing, Device groups, custom colors, and security policies.",
-  "sys_overview.active_of_six": "{count} / 6 active",
+  "sys_overview.active_of_seven": "{count} / 7 active",
   "sys_overview.hub_weather": "Weather",
   "sys_overview.hub_alarm": "Alarm",
+  "sys_overview.hub_broadcast": "Broadcast",
+  "sys_overview.hub_broadcast_speakers": "{count} Broadcast speakers",
   "sys_overview.hub_thermostat": "Thermostat",
   "sys_overview.hub_zones": "{count} zones",
   "sys_overview.hub_lock": "Door lock",
@@ -195,6 +197,16 @@ export const EN_SYSTEM_STRINGS = {
   "shared.choose_vacuum": "— Choose a robot vacuum —",
   "shared.vacuum_aria": "Robot vacuum",
   "shared.remove_vacuum": "Remove robot vacuum",
+  "shared.broadcast_speakers": "Broadcast speakers",
+  "shared.add_speaker": "Add speaker",
+  "shared.choose_speaker": "— Choose a speaker —",
+  "shared.speaker_aria": "Broadcast speaker",
+  "shared.remove_speaker": "Remove broadcast speaker",
+  "shared.broadcast_phrases": "Quick broadcast phrases",
+  "shared.add_phrase": "Add phrase",
+  "shared.phrase_placeholder": "Enter a quick broadcast phrase…",
+  "shared.phrase_aria": "Quick broadcast phrase",
+  "shared.remove_phrase": "Remove quick broadcast phrase",
   "shared.calendars_subtitle":
     "Upcoming events merged into the Activity card and agenda feed.",
   "shared.add_calendar": "Add calendar",
@@ -605,6 +617,11 @@ export const EN_SYSTEM_STRINGS = {
   "dialogs.home_cats_label": "Home categories",
   "dialogs.home_cats_desc":
     "Toggle and reorder categories shown in the Home hub. The first available category opens by default; categories with no configured entity are not displayed.",
+  "dialogs.broadcast_speakers_label": "Broadcast speakers",
+  "dialogs.broadcast_speakers_desc":
+    "Choose which System broadcast speakers this Device announces to. The calling Device's own speaker and displays in Bedtime mode are skipped automatically.",
+  "dialogs.broadcast_speakers_empty_system":
+    "No broadcast speakers configured in System shared entities yet.",
   "dialogs.camera_default_view_desc": "Layout shown when opening the Cameras app.",
   "dialogs.camera_framing_desc": "Show the full frame uncropped or fill the display.",
   "dialogs.camera_carousel_interval_desc": "How often Carousel advances to the next camera.",

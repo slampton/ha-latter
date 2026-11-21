@@ -19,6 +19,7 @@ from .const import (
     CONF_AREA_HANDOFF,
     CONF_BLE_AUTO_SWITCH,
     CONF_BLE_TARGET_ADDRESS,
+    CONF_BROADCAST_SPEAKER_ENTITIES,
     CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_CAMERA_VISIBLE_ENTITIES,
     CONF_DEVICE_CUSTOM_COLOR,
@@ -526,6 +527,7 @@ GROUP_INTERFACE_NON_PREF_KEYS: tuple[str, ...] = (
     CONF_PINNED_ITEMS,
     CONF_AREA_CATEGORIES,
     CONF_HOME_CATEGORIES,
+    CONF_BROADCAST_SPEAKER_ENTITIES,
     CONF_CAMERA_VISIBLE_ENTITIES,
     CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_TOOLS_ITEMS,
@@ -631,6 +633,7 @@ def default_group_baseline_config(
         base[CONF_PINNED_ITEMS] = []
         base[CONF_AREA_CATEGORIES] = DEFAULT_AREA_CATEGORIES
         base[CONF_HOME_CATEGORIES] = DEFAULT_HOME_CATEGORIES
+        base[CONF_BROADCAST_SPEAKER_ENTITIES] = []
         base[CONF_CAMERA_VISIBLE_ENTITIES] = []
         base[CONF_CAMERA_CAROUSEL_ENTITIES] = []
         base[CONF_TOOLS_ITEMS] = DEFAULT_TOOLS_ITEMS
@@ -741,6 +744,16 @@ def resolve_behavior_key_value(data: Mapping[str, Any], key: str) -> Any:
             )
         except ValueError:
             return DEFAULT_HOME_CATEGORIES
+    if key == CONF_BROADCAST_SPEAKER_ENTITIES:
+        raw_spks = data.get(key)
+        if not isinstance(raw_spks, (list, tuple)):
+            return []
+        cleaned_spks: list[str] = []
+        for item in raw_spks:
+            sid = str(item or "").strip()
+            if sid.startswith("media_player.") and sid not in cleaned_spks:
+                cleaned_spks.append(sid)
+        return cleaned_spks[:32]
     if key in (CONF_CAMERA_VISIBLE_ENTITIES, CONF_CAMERA_CAROUSEL_ENTITIES):
         raw_cams = data.get(key)
         if not isinstance(raw_cams, (list, tuple)):

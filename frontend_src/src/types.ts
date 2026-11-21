@@ -308,6 +308,8 @@ export interface SystemConfig {
   lock_entities: string[];
   garage_entities: string[];
   vacuum_entities: string[];
+  broadcast_speakers: string[];
+  broadcast_phrases: string[];
   camera_entities: string[];
   camera_configs?: Record<string, CameraConfig>;
   remotes_list: string[];
@@ -353,6 +355,7 @@ export interface DeviceConfig {
   games_items?: string;
   activity_card?: boolean;
   activity_sources?: string;
+  broadcast_speaker_entities?: string[];
   camera_visible_entities?: string[];
   camera_carousel_entities?: string[];
   camera_default_view?: string;

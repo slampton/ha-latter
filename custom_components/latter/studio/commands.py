@@ -40,6 +40,7 @@ from ..const import (
     CONF_BLE_CATEGORY,
     CONF_BLE_SCANNER_OFFSETS,
     CONF_BLE_TARGET_ADDRESS,
+    CONF_BROADCAST_SPEAKER_ENTITIES,
     CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_CAMERA_VISIBLE_ENTITIES,
     CONF_DEVICE_GROUP,
@@ -1414,21 +1415,29 @@ async def _cmd_save_system_config(
 def _validate_device_camera_lists(
     updates: dict[str, Any], global_cfg: dict[str, Any]
 ) -> None:
-    """Ensure per-Device visible/carousel camera selections reference configured System cameras."""
+    """Ensure per-Device camera and broadcast speaker selections reference configured System entities."""
+    sys_view = system_settings_view(global_cfg)
     if (
-        CONF_CAMERA_VISIBLE_ENTITIES not in updates
-        and CONF_CAMERA_CAROUSEL_ENTITIES not in updates
+        CONF_CAMERA_VISIBLE_ENTITIES in updates
+        or CONF_CAMERA_CAROUSEL_ENTITIES in updates
     ):
-        return
-    system_cameras = set(system_settings_view(global_cfg)["camera_entities"])
-    for key in (CONF_CAMERA_VISIBLE_ENTITIES, CONF_CAMERA_CAROUSEL_ENTITIES):
-        if key not in updates:
-            continue
-        for cam_id in updates[key]:
-            if cam_id not in system_cameras:
+        system_cameras = set(sys_view["camera_entities"])
+        for key in (CONF_CAMERA_VISIBLE_ENTITIES, CONF_CAMERA_CAROUSEL_ENTITIES):
+            if key not in updates:
+                continue
+            for cam_id in updates[key]:
+                if cam_id not in system_cameras:
+                    raise StudioCommandError(
+                        "not_found",
+                        f"Camera '{cam_id}' is not configured in System shared entities",
+                    )
+    if CONF_BROADCAST_SPEAKER_ENTITIES in updates:
+        system_speakers = set(sys_view["broadcast_speakers"])
+        for spk_id in updates[CONF_BROADCAST_SPEAKER_ENTITIES]:
+            if spk_id not in system_speakers:
                 raise StudioCommandError(
                     "not_found",
-                    f"Camera '{cam_id}' is not configured in System shared entities",
+                    f"Broadcast speaker '{spk_id}' is not configured in System shared entities",
                 )
 
 

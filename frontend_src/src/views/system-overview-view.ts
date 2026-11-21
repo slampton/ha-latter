@@ -267,6 +267,9 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
   const roamingOnlineCount = roamingDevices.filter((d) => d.is_online).length;
 
   // System Capabilities metrics
+  const broadcastCount = (sysCfg?.broadcast_speakers || []).filter((s) =>
+    Boolean(String(s || "").trim()),
+  ).length;
   const thermCount = (sysCfg?.thermostat_entities || []).filter((s) =>
     Boolean(String(s || "").trim()),
   ).length;
@@ -288,6 +291,15 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
     {
       label: store.t("sys_overview.hub_alarm"),
       configured: Boolean(String(sysCfg?.alarm_entity || "").trim()),
+    },
+    {
+      label:
+        broadcastCount > 1
+          ? store.t("sys_overview.hub_broadcast_speakers", {
+              count: fmtNumber(broadcastCount, store.hass, 0),
+            })
+          : store.t("sys_overview.hub_broadcast"),
+      configured: broadcastCount > 0,
     },
     {
       label:
@@ -758,7 +770,7 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
                 </span>
                 <span class="overview-box-end">
                   <span class="chip ${wholeHomeActiveCount > 0 ? "chip-primary" : ""}">
-                    ${store.t("sys_overview.active_of_six", {
+                    ${store.t("sys_overview.active_of_seven", {
                       count: fmtNumber(wholeHomeActiveCount, store.hass, 0),
                     })}
                   </span>

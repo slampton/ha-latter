@@ -915,20 +915,8 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
         ("vacuum", "return_to_base", {"entity_id": "vacuum.unassigned_vac"})
     ]
 
-    # Assigning doorbell_media_player (or default_speaker / a 2nd Latter display) enables 'intercom'
-    global_cfg["doorbell_media_player"] = "media_player.living_room_tv"
-    coord._cached_area_payload = None
-    assert (
-        coord.get_area_context_payload()[1]["home_categories"]
-        == "alarm,intercom,thermostat,entry,vacuum"
-    )
-
-    global_cfg.pop("doorbell_media_player")
-    coord._cached_area_payload = None
-    assert (
-        coord.get_area_context_payload()[1]["home_categories"]
-        == "alarm,thermostat,entry,vacuum"
-    )
+    # Assigning Broadcast speakers enables 'intercom' (Broadcast); unconfigured speakers keep it hidden even with 2 displays
+    from custom_components.latter.const import CONF_BROADCAST_SPEAKERS
 
     esp_dev_2, mac_2 = make_esphome_device(
         hass,
@@ -952,7 +940,21 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
     coord._cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
+        == "alarm,thermostat,entry,vacuum"
+    )
+
+    global_cfg[CONF_BROADCAST_SPEAKERS] = ["media_player.living_room_tv"]
+    coord._cached_area_payload = None
+    assert (
+        coord.get_area_context_payload()[1]["home_categories"]
         == "alarm,intercom,thermostat,entry,vacuum"
+    )
+
+    global_cfg.pop(CONF_BROADCAST_SPEAKERS)
+    coord._cached_area_payload = None
+    assert (
+        coord.get_area_context_payload()[1]["home_categories"]
+        == "alarm,thermostat,entry,vacuum"
     )
 
     assert await async_unload_entry(hass, entry) is True

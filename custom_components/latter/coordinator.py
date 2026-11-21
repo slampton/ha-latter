@@ -64,6 +64,9 @@ from .const import (
     CONF_BLE_REF_POWER,
     CONF_BLE_SCANNER_OFFSETS,
     CONF_BLE_TARGET_ADDRESS,
+    CONF_BROADCAST_PHRASES,
+    CONF_BROADCAST_SPEAKER_ENTITIES,
+    CONF_BROADCAST_SPEAKERS,
     CONF_CALENDAR_ENTITIES,
     CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_CAMERA_CONFIGS,
@@ -1229,6 +1232,50 @@ class LatterCoordinator:
     def carousel_camera_entities(self) -> list[str]:
         configured = self.configured_camera_carousel_entities
         return configured if configured else self.visible_camera_entities
+
+    @property
+    def system_broadcast_speakers(self) -> list[str]:
+        return self._clean_entity_list_opt(CONF_BROADCAST_SPEAKERS, "media_player.", 32)
+
+    @property
+    def configured_broadcast_speaker_entities(self) -> list[str]:
+        raw = self._live_subentry().data.get(CONF_BROADCAST_SPEAKER_ENTITIES)
+        if not isinstance(raw, (list, tuple)):
+            return []
+        system_set = set(self.system_broadcast_speakers)
+        out: list[str] = []
+        for item in raw:
+            sid = str(item or "").strip()
+            if sid and sid in system_set and sid not in out:
+                out.append(sid)
+        return out[:32]
+
+    @property
+    def effective_broadcast_speakers(self) -> list[str]:
+        configured = self.configured_broadcast_speaker_entities
+        return configured if configured else self.system_broadcast_speakers
+
+    @property
+    def broadcast_phrases(self) -> list[str]:
+        domain_data = self.hass.data.get(DOMAIN) if self.hass is not None else None
+        global_cfg = (
+            domain_data.get(DATA_GLOBAL_CONFIG)
+            if isinstance(domain_data, dict)
+            else None
+        )
+        if not isinstance(global_cfg, dict) or CONF_BROADCAST_PHRASES not in global_cfg:
+            from .const import DEFAULT_BROADCAST_PHRASES
+
+            return list(DEFAULT_BROADCAST_PHRASES)
+        raw = global_cfg.get(CONF_BROADCAST_PHRASES)
+        if not isinstance(raw, (list, tuple)):
+            return []
+        out: list[str] = []
+        for item in raw:
+            clean = str(item or "").strip()[:64]
+            if clean and clean not in out:
+                out.append(clean)
+        return out[:12]
 
     @property
     def camera_entity(self) -> str | None:

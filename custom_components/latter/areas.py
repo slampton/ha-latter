@@ -31,12 +31,12 @@ from homeassistant.util import dt as dt_util
 from .cameras import resolve_camera_capabilities
 from .const import (
     CONF_ALARM_ENTITY,
+    CONF_BROADCAST_SPEAKERS,
     CONF_DEFAULT_AREA,
-    CONF_DEFAULT_SPEAKER,
     CONF_ESPHOME_DEVICE_ID,
+    DEFAULT_BROADCAST_PHRASES,
     DOMAIN,
     SUBENTRY_DEVICE,
-    other_latter_devices,
 )
 from .groups import _apply_ha_display_precision
 from .hub import get_area_state_index, is_media_position_only_tick, iter_coordinators
@@ -56,11 +56,11 @@ from .protocol import (
     V3Records,
     activity_payload,
     area_climate_records,
+    broadcast_phrase_records,
     build_time_zone_payloads,
     camera_records,
     entry_records,
     ha_value,
-    intercom_target_records,
     parse_area_categories,
     parse_home_categories,
     thermostat_records,
@@ -905,50 +905,26 @@ def _is_intercom_available(
     coordinator: Any,
     hub_info: Mapping[str, Any],
 ) -> bool:
-    """Return True when Intercom has peer Latter displays or an explicitly configured speaker."""
+    """Return True when Broadcast has at least one configured speaker for this Device."""
     if hub_info.get("intercom_available"):
         return True
+    if coordinator is not None:
+        eff_speakers = getattr(coordinator, "effective_broadcast_speakers", None)
+        if isinstance(eff_speakers, (list, tuple)):
+            return bool(eff_speakers)
     hass_obj = hass or (
         getattr(coordinator, "hass", None) if coordinator is not None else None
     )
-    if coordinator is not None:
-        dev_subs = getattr(coordinator, "device_subentries", None)
-        if dev_subs is not None and len(dev_subs) > 1:
-            return True
-        entry = getattr(coordinator, "entry", None)
-        if (
-            entry is not None
-            and hasattr(entry, "subentries")
-            and sum(
-                1
-                for sub in entry.subentries.values()
-                if getattr(sub, "subentry_type", None) == SUBENTRY_DEVICE
-            )
-            > 1
-        ):
-            return True
-        if hass_obj is not None and other_latter_devices(
-            iter_coordinators(hass_obj),
-            str(getattr(coordinator, "device_slug", "") or ""),
-        ):
-            return True
-        get_opt = getattr(coordinator, "get_opt", None)
-        if (
-            bool(getattr(coordinator, "default_speaker", None))
-            or bool(callable(get_opt) and get_opt(CONF_DEFAULT_SPEAKER))
-            or bool(getattr(coordinator, "doorbell_media_player", None))
-            or bool(callable(get_opt) and get_opt("doorbell_media_player"))
-        ):
-            return True
     if hass_obj is not None:
         domain_data = getattr(hass_obj, "data", {}).get(DOMAIN)
         if isinstance(domain_data, Mapping):
             global_cfg = domain_data.get("global_config")
-            if isinstance(global_cfg, Mapping) and (
-                bool(global_cfg.get(CONF_DEFAULT_SPEAKER))
-                or bool(global_cfg.get("doorbell_media_player"))
-            ):
-                return True
+            if isinstance(global_cfg, Mapping):
+                raw_spks = global_cfg.get(CONF_BROADCAST_SPEAKERS)
+                if isinstance(raw_spks, (list, tuple)) and any(
+                    str(s or "").strip().startswith("media_player.") for s in raw_spks
+                ):
+                    return True
     return False
 
 
@@ -1718,20 +1694,12 @@ def resolve_person_area_and_distance(
     }
 
 
-def _build_intercom_targets_summary(coordinator: Any) -> V3Records:
-    """Build call_target records for all other Latter Devices."""
-    others = other_latter_devices(
-        iter_coordinators(coordinator.hass), coordinator.device_slug
-    )
-    others.sort(key=lambda c: (c.device_title.lower(), c.device_slug))
-    targets: list[dict[str, str]] = (
-        [{"target_id": "all", "label": "All Devices", "kind": "all"}] if others else []
-    )
-    targets += [
-        {"target_id": c.device_slug, "label": c.device_title, "kind": "device"}
-        for c in others
-    ]
-    return intercom_target_records(targets)
+def _build_broadcast_phrases_summary(coordinator: Any) -> V3Records:
+    """Build ordered Quick Broadcast phrases for `area_context.broadcast_phrases`."""
+    phrases = getattr(coordinator, "broadcast_phrases", None)
+    if not isinstance(phrases, (list, tuple)):
+        phrases = DEFAULT_BROADCAST_PHRASES
+    return broadcast_phrase_records(phrases)
 
 
 def _build_cameras_summary(coordinator: Any) -> V3Records:
@@ -1923,7 +1891,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "camera_stream_url": camera_stream_url,
         "cameras_summary": _build_cameras_summary(coordinator),
         "doorbell_talk_state": coordinator.doorbell_talk_state,
-        "intercom_targets_summary": _build_intercom_targets_summary(coordinator),
+        "broadcast_phrases": _build_broadcast_phrases_summary(coordinator),
         "alert_id": coordinator.alert_id,
         "alert_title": coordinator.alert_title,
         "alert_message": coordinator.alert_message,
@@ -1958,7 +1926,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         area_attrs["camera_snapshot_url"],
         area_attrs["cameras_summary"],
         area_attrs["doorbell_talk_state"],
-        area_attrs["intercom_targets_summary"],
+        area_attrs["broadcast_phrases"],
         *(
             (
                 coordinator.alert_id,

@@ -153,7 +153,7 @@ export const ROUTE_PREVIEW_ICONS: Readonly<Record<string, string>> = {
   "music:info": "mdi:information-outline",
   "app:home_hub": "mdi:home",
   "home_hub:alarm": "mdi:shield-home",
-  "home_hub:intercom": "mdi:phone-in-talk",
+  "home_hub:intercom": "mdi:bullhorn",
   "home_hub:thermostat": "mdi:thermostat",
   "home_hub:entry": "mdi:lock",
   "home_hub:vacuum": "mdi:robot-vacuum",

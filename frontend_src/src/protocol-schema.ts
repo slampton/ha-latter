@@ -1,7 +1,7 @@
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 
 export const PROTOCOL_CONTRACT_VERSION = 3;
-export const STUDIO_REV = 40;
+export const STUDIO_REV = 41;
 
 export const ALLOWED_DEVICE_ACTIONS: ReadonlyArray<string> = [
   "restart",
@@ -76,7 +76,7 @@ export const SHORTCUT_ROUTES_CATALOG: ReadonlyArray<CatalogItem> = [
   {token: "app:games", label: "Games", group: "Apps"},
   {token: "app:clock", label: "Clock Face", group: "Apps"},
   {token: "home_hub:alarm", label: "Security Alarm", group: "Home Hub"},
-  {token: "home_hub:intercom", label: "Intercom", group: "Home Hub"},
+  {token: "home_hub:intercom", label: "Broadcast", group: "Home Hub"},
   {token: "home_hub:thermostat", label: "Thermostat", group: "Home Hub"},
   {token: "home_hub:entry", label: "Entry & Garage", group: "Home Hub"},
   {token: "home_hub:vacuum", label: "Robot Vacuum", group: "Home Hub"},
@@ -158,7 +158,7 @@ export const AREA_CATEGORIES_CATALOG: ReadonlyArray<CatalogItem> = [
 
 export const HOME_CATEGORIES_CATALOG: ReadonlyArray<CatalogItem> = [
   {token: "alarm", label: "Security Alarm"},
-  {token: "intercom", label: "Intercom"},
+  {token: "intercom", label: "Broadcast"},
   {token: "thermostat", label: "Thermostat"},
   {token: "entry", label: "Entry & Garage"},
   {token: "vacuum", label: "Robot Vacuum"},

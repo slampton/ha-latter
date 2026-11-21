@@ -34,8 +34,8 @@ class _Dev:
         self.is_ble_tag = ble_tag
 
 
-class CallTargetTests(unittest.TestCase):
-    """Doorbell call_target rings Latter Devices only: never the caller, never a BLE tag."""
+class OtherLatterDevicesTests(unittest.TestCase):
+    """other_latter_devices lists peer Latter Devices only: never the caller, never a BLE tag."""
 
     def setUp(self) -> None:
         self.pool = [
@@ -46,22 +46,14 @@ class CallTargetTests(unittest.TestCase):
             object(),
         ]
 
-    def test_all_rings_every_other_latter_device(self) -> None:
-        for target in ("all", "ALL", "", None):
-            self.assertEqual(targets.call_target_slugs(self.pool, "desk", target), ["kitchen", "office"], target)
-
-    def test_named_target(self) -> None:
-        self.assertEqual(targets.call_target_slugs(self.pool, "desk", "office"), ["office"])
-        self.assertEqual(targets.call_target_slugs(self.pool, "desk", "phone"), [])
-        self.assertEqual(targets.call_target_slugs(self.pool, "desk", "desk"), [])
-        self.assertEqual(targets.call_target_slugs(self.pool, "desk", "nowhere"), [])
-
-    def test_intercom_list_uses_the_same_rule(self) -> None:
+    def test_excludes_caller_and_ble_tags(self) -> None:
         self.assertEqual(
-            [d.device_slug for d in targets.other_latter_devices(self.pool, "kitchen")], ["desk", "office"]
+            [d.device_slug for d in targets.other_latter_devices(self.pool, "kitchen")],
+            ["desk", "office"],
         )
-        self.assertIn("call_target_slugs(", inspect.getsource(doorbell))
-        self.assertIn("other_latter_devices(", inspect.getsource(areas))
+        self.assertNotIn("call_target_slugs", inspect.getsource(doorbell))
+        self.assertNotIn("unlock_door", inspect.getsource(doorbell))
+        self.assertIn("broadcast_phrase_records(", inspect.getsource(areas))
 
 
 class UnrecordedAttributesTests(unittest.TestCase):

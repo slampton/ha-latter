@@ -751,9 +751,11 @@ const EN_SYSTEM_STRINGS = {
     "+{count} additional Home Assistant Areas without Latter Devices or BLE coverage.",
   "sys_overview.capabilities_subtitle":
     "Shared entities, photo library, media routing, Device groups, custom colors, and security policies.",
-  "sys_overview.active_of_six": "{count} / 6 active",
+  "sys_overview.active_of_seven": "{count} / 7 active",
   "sys_overview.hub_weather": "Weather",
   "sys_overview.hub_alarm": "Alarm",
+  "sys_overview.hub_broadcast": "Broadcast",
+  "sys_overview.hub_broadcast_speakers": "{count} Broadcast speakers",
   "sys_overview.hub_thermostat": "Thermostat",
   "sys_overview.hub_zones": "{count} zones",
   "sys_overview.hub_lock": "Door lock",
@@ -837,6 +839,16 @@ const EN_SYSTEM_STRINGS = {
   "shared.choose_vacuum": "— Choose a robot vacuum —",
   "shared.vacuum_aria": "Robot vacuum",
   "shared.remove_vacuum": "Remove robot vacuum",
+  "shared.broadcast_speakers": "Broadcast speakers",
+  "shared.add_speaker": "Add speaker",
+  "shared.choose_speaker": "— Choose a speaker —",
+  "shared.speaker_aria": "Broadcast speaker",
+  "shared.remove_speaker": "Remove broadcast speaker",
+  "shared.broadcast_phrases": "Quick broadcast phrases",
+  "shared.add_phrase": "Add phrase",
+  "shared.phrase_placeholder": "Enter a quick broadcast phrase…",
+  "shared.phrase_aria": "Quick broadcast phrase",
+  "shared.remove_phrase": "Remove quick broadcast phrase",
   "shared.calendars_subtitle":
     "Upcoming events merged into the Activity card and agenda feed.",
   "shared.add_calendar": "Add calendar",
@@ -1241,6 +1253,11 @@ const EN_SYSTEM_STRINGS = {
   "dialogs.home_cats_label": "Home categories",
   "dialogs.home_cats_desc":
     "Toggle and reorder categories shown in the Home hub. The first available category opens by default; categories with no configured entity are not displayed.",
+  "dialogs.broadcast_speakers_label": "Broadcast speakers",
+  "dialogs.broadcast_speakers_desc":
+    "Choose which System broadcast speakers this Device announces to. The calling Device's own speaker and displays in Bedtime mode are skipped automatically.",
+  "dialogs.broadcast_speakers_empty_system":
+    "No broadcast speakers configured in System shared entities yet.",
   "dialogs.camera_default_view_desc": "Layout shown when opening the Cameras app.",
   "dialogs.camera_framing_desc": "Show the full frame uncropped or fill the display.",
   "dialogs.camera_carousel_interval_desc": "How often Carousel advances to the next camera.",
@@ -1646,6 +1663,7 @@ const PREF_LABELS = {
   home_categories: "Home categories",
   tools_items: "Enabled tools",
   games_items: "Enabled games",
+  broadcast_speaker_entities: "Broadcast speakers",
   camera_visible_entities: "Visible cameras",
   camera_carousel_entities: "Carousel cameras",
 };
@@ -2175,7 +2193,7 @@ __latterExp(__exports, { Directive: () => Directive, directive: () => directive,
 __latterDef("src/protocol-schema.ts", (__exports, __req) => {
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 const PROTOCOL_CONTRACT_VERSION = 3;
-const STUDIO_REV = 40;
+const STUDIO_REV = 41;
 const ALLOWED_DEVICE_ACTIONS = [
   "restart",
   "find_my",
@@ -2238,7 +2256,7 @@ const SHORTCUT_ROUTES_CATALOG = [
   {token: "app:games", label: "Games", group: "Apps"},
   {token: "app:clock", label: "Clock Face", group: "Apps"},
   {token: "home_hub:alarm", label: "Security Alarm", group: "Home Hub"},
-  {token: "home_hub:intercom", label: "Intercom", group: "Home Hub"},
+  {token: "home_hub:intercom", label: "Broadcast", group: "Home Hub"},
   {token: "home_hub:thermostat", label: "Thermostat", group: "Home Hub"},
   {token: "home_hub:entry", label: "Entry & Garage", group: "Home Hub"},
   {token: "home_hub:vacuum", label: "Robot Vacuum", group: "Home Hub"},
@@ -2317,7 +2335,7 @@ const AREA_CATEGORIES_CATALOG = [
 ];
 const HOME_CATEGORIES_CATALOG = [
   {token: "alarm", label: "Security Alarm"},
-  {token: "intercom", label: "Intercom"},
+  {token: "intercom", label: "Broadcast"},
   {token: "thermostat", label: "Thermostat"},
   {token: "entry", label: "Entry & Garage"},
   {token: "vacuum", label: "Robot Vacuum"},
@@ -5063,7 +5081,7 @@ const ROUTE_PREVIEW_ICONS = {
   "music:info": "mdi:information-outline",
   "app:home_hub": "mdi:home",
   "home_hub:alarm": "mdi:shield-home",
-  "home_hub:intercom": "mdi:phone-in-talk",
+  "home_hub:intercom": "mdi:bullhorn",
   "home_hub:thermostat": "mdi:thermostat",
   "home_hub:entry": "mdi:lock",
   "home_hub:vacuum": "mdi:robot-vacuum",
@@ -7349,6 +7367,8 @@ const STRING_LIST_KEYS = [
   "lock_entities",
   "garage_entities",
   "vacuum_entities",
+  "broadcast_speakers",
+  "broadcast_phrases",
 ];
 const STRING_LIST_MAX_ITEMS = {
   camera_entities: 10,
@@ -7358,6 +7378,8 @@ const STRING_LIST_MAX_ITEMS = {
   lock_entities: 8,
   garage_entities: 6,
   vacuum_entities: 6,
+  broadcast_speakers: 32,
+  broadcast_phrases: 12,
 };
 function isStringListKey(key) {
   return (
@@ -7367,7 +7389,9 @@ function isStringListKey(key) {
     key === "thermostat_entities" ||
     key === "lock_entities" ||
     key === "garage_entities" ||
-    key === "vacuum_entities"
+    key === "vacuum_entities" ||
+    key === "broadcast_speakers" ||
+    key === "broadcast_phrases"
   );
 }
 function cleanPersistedStringList(items, maxItems) {
@@ -8536,6 +8560,72 @@ class EntityController {
     this.tokenLists.activity_sources.reorder(fromIndex, toIndex);
   }
   // ---------- Per-Device Cameras Visibility & Carousel Lists ----------
+  getSystemBroadcastSpeakers() {
+    const out = [];
+    for (const raw of this.store.state?.system_config?.broadcast_speakers || []) {
+      const id = String(raw || "").trim();
+      if (id && !out.includes(id)) {
+        out.push(id);
+      }
+    }
+    return out;
+  }
+  getBroadcastSpeakers() {
+    const sys = this.getSystemBroadcastSpeakers();
+    if (sys.length === 0) return [];
+    const raw = this.store.state?.config?.broadcast_speaker_entities;
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return [...sys];
+    }
+    const filtered = [];
+    for (const item of raw) {
+      const id = String(item || "").trim();
+      if (id && sys.includes(id) && !filtered.includes(id)) {
+        filtered.push(id);
+      }
+    }
+    return filtered.length > 0 ? filtered : [...sys];
+  }
+  toggleBroadcastSpeaker(entityId, forceEnabled) {
+    const cleanId = String(entityId || "").trim();
+    const sys = this.getSystemBroadcastSpeakers();
+    if (!cleanId || !sys.includes(cleanId)) return;
+    const current = this.getBroadcastSpeakers();
+    const idx = current.indexOf(cleanId);
+    const currentlyOn = idx >= 0;
+    const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
+    if (wantOn === currentlyOn) return;
+    let next;
+    if (!wantOn) {
+      if (current.length <= 1) {
+        this.store.showToast(this.store.t("common.keep_one_enabled", { noun: "speaker" }), true);
+        return;
+      }
+      next = current.filter((id) => id !== cleanId);
+    } else {
+      next = [...current, cleanId];
+    }
+    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+    this.stageDeviceSetting("broadcast_speaker_entities", sameAsSys ? [] : next);
+  }
+  reorderBroadcastSpeakers(fromIndex, toIndex) {
+    const sys = this.getSystemBroadcastSpeakers();
+    const current = this.getBroadcastSpeakers();
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= current.length ||
+      toIndex >= current.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+    const next = [...current];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+    this.stageDeviceSetting("broadcast_speaker_entities", sameAsSys ? [] : next);
+  }
   getSystemCameraEntities() {
     const out = [];
     for (const raw of this.store.state?.system_config?.camera_entities || []) {
@@ -11008,6 +11098,8 @@ class StudioStore {
     lock_entities: 0,
     garage_entities: 0,
     vacuum_entities: 0,
+    broadcast_speakers: 0,
+    broadcast_phrases: 0,
   };
            pendingDeviceBuckets = new Map();
            pendingEntityStates = new Map();
@@ -12917,6 +13009,30 @@ function renderAppConfigModalBody(store) {
   } else if (app === "home_hub") {
     const enabledHomeCats = store.entity.getEnabledHomeCategories();
     const pillItems = buildOrderedPillItems(HOME_CATEGORIES_CATALOG, enabledHomeCats, caps);
+    const sysSpeakers = store.entity.getSystemBroadcastSpeakers();
+    const activeSpeakers = store.entity.getBroadcastSpeakers();
+    const spkCatalogMap = new Map((data?.catalog?.ma_speakers || []).map((s) => [s.id, s]));
+    const speakerPillLabel = (entityId) => {
+      const meta = spkCatalogMap.get(entityId);
+      if (!meta?.name) return entityId;
+      const stripped = meta.name.replace(/\s*\([^)]*\)\s*(?:\(unavailable\))?$/, "").trim();
+      return stripped ? entityLabel(stripped) : entityId;
+    };
+    const activeSpkSet = new Set(activeSpeakers);
+    const speakerPillItems = [
+      ...activeSpeakers.map((id) => ({
+        token: id,
+        label: speakerPillLabel(id),
+        enabled: true,
+      })),
+      ...sysSpeakers
+        .filter((id) => !activeSpkSet.has(id))
+        .map((id) => ({
+          token: id,
+          label: speakerPillLabel(id),
+          enabled: false,
+        })),
+    ];
     body = html`<div class="settings-list">
       ${renderSettingsRow({
         label: store.t("dialogs.home_cats_label"),
@@ -12930,6 +13046,25 @@ function renderAppConfigModalBody(store) {
           onReorder: (fromIdx, toIdx) => store.entity.reorderHomeCategories(fromIdx, toIdx),
           overlay: store.localeOverlay,
         }),
+      })}
+      ${renderSettingsRow({
+        id: "home-broadcast-speakers-row",
+        label: store.t("dialogs.broadcast_speakers_label"),
+        description: store.t("dialogs.broadcast_speakers_desc"),
+        stacked: true,
+        control:
+          sysSpeakers.length > 0
+            ? renderPillList({
+                id: "broadcast-speakers-pills",
+                ariaLabel: store.t("dialogs.broadcast_speakers_label"),
+                items: speakerPillItems,
+                onToggle: (tok, next) => store.entity.toggleBroadcastSpeaker(tok, next),
+                onReorder: (fromIdx, toIdx) => store.entity.reorderBroadcastSpeakers(fromIdx, toIdx),
+                overlay: store.localeOverlay,
+              })
+            : html`<p class="empty-state">
+                ${store.t("dialogs.broadcast_speakers_empty_system")}
+              </p>`,
       })}
     </div>`;
     extraAction = html`<button
@@ -22534,6 +22669,9 @@ function renderSystemOverviewView(store) {
   );
   const roamingOnlineCount = roamingDevices.filter((d) => d.is_online).length;
   // System Capabilities metrics
+  const broadcastCount = (sysCfg?.broadcast_speakers || []).filter((s) =>
+    Boolean(String(s || "").trim()),
+  ).length;
   const thermCount = (sysCfg?.thermostat_entities || []).filter((s) =>
     Boolean(String(s || "").trim()),
   ).length;
@@ -22554,6 +22692,15 @@ function renderSystemOverviewView(store) {
     {
       label: store.t("sys_overview.hub_alarm"),
       configured: Boolean(String(sysCfg?.alarm_entity || "").trim()),
+    },
+    {
+      label:
+        broadcastCount > 1
+          ? store.t("sys_overview.hub_broadcast_speakers", {
+              count: fmtNumber(broadcastCount, store.hass, 0),
+            })
+          : store.t("sys_overview.hub_broadcast"),
+      configured: broadcastCount > 0,
     },
     {
       label:
@@ -23015,7 +23162,7 @@ function renderSystemOverviewView(store) {
                 </span>
                 <span class="overview-box-end">
                   <span class="chip ${wholeHomeActiveCount > 0 ? "chip-primary" : ""}">
-                    ${store.t("sys_overview.active_of_six", {
+                    ${store.t("sys_overview.active_of_seven", {
                       count: fmtNumber(wholeHomeActiveCount, store.hass, 0),
                     })}
                   </span>
@@ -24741,7 +24888,7 @@ __latterExp(__exports, { renderSystemRemotesView: () => renderSystemRemotesView 
 __latterDef("src/views/system-shared-view.ts", (__exports, __req) => {
 const { renderCard, renderEntityCombobox, renderEntitySlotList, renderSelectOptions, renderSelectRow, renderSettingsRow, renderSortableList, renderSvgIcon, renderTrashIconButton } = __req("src/components/controls.ts");
 const { openCameraConfigModal, resolveEffectiveCameraConfig } = __req("src/components/dialogs/camera-config-modal.ts");
-const { html, nothing } = __req("src/lib/lit.ts");
+const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
 const { entityLabel, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
 /**
  * System Shared Entities View (`shared_entities`, `D-022`, `D-059`, `D-064`, `D-065`):
@@ -24758,6 +24905,10 @@ const ICON_GARAGE =
   "M19,20H17V11H7V20H5V9L12,5L19,9V20M8,12H16V14H8V12M8,15H16V17H8V15M16,18V20H8V18H16Z";
 const ICON_VACUUM =
   "M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12C4,13.38 4.35,14.68 4.97,15.81L18.81,7.82C17.34,5.53 14.84,4 12,4M19.56,9.5L5.72,17.5C7.19,19.62 9.45,21 12,21A8,8 0 0,0 20,13C20,11.75 19.84,10.58 19.56,9.5M12,11A2,2 0 0,1 14,13A2,2 0 0,1 12,15A2,2 0 0,1 10,13A2,2 0 0,1 12,11Z";
+const ICON_BULLHORN =
+  "M12,8H4A2,2 0 0,0 2,10V14A2,2 0 0,0 4,16H5V20A1,1 0 0,0 6,21H8A1,1 0 0,0 9,20V16H12L17,20V4L12,8M21.5,12C21.5,13.71 20.54,15.26 19,16V8C20.53,8.75 21.5,10.3 21.5,12Z";
+const ICON_PHRASE =
+  "M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M6,9H18V11H6M14,14H6V12H14M18,8H6V6H18";
 function findCatalogChoice(
   choices,
   id,
@@ -24786,6 +24937,18 @@ function renderSystemSharedView(store) {
   ];
   const multiDomainGroups
      = [
+    {
+      key: "broadcast_speakers",
+      title: store.t("shared.broadcast_speakers"),
+      addLabel: store.t("shared.add_speaker"),
+      emptyPlaceholder: store.t("shared.choose_speaker"),
+      selectAriaLabel: store.t("shared.speaker_aria"),
+      removeAriaLabel: store.t("shared.remove_speaker"),
+      icon: ICON_BULLHORN,
+      maxItems: 32,
+      items: sc?.broadcast_speakers || [],
+      choices: cat.ma_speakers,
+    },
     {
       key: "thermostat_entities",
       title: store.t("shared.thermostat_zones"),
@@ -24945,7 +25108,67 @@ function renderSystemSharedView(store) {
                     })
                   : nothing}
               </div>`;
-            })}`,
+            })}
+
+            ${(() => {
+              const phrases = sc?.broadcast_phrases || [];
+              const phraseCount = phrases.filter((s) => Boolean(String(s || "").trim())).length;
+              return html`<div id="hub-domain-broadcast_phrases" class="hub-domain-box">
+                <div class="hub-domain-head">
+                  <span class="hub-domain-title">
+                    ${renderSvgIcon(ICON_PHRASE)}
+                    <span>${store.t("shared.broadcast_phrases")}</span>
+                    ${phraseCount > 0
+                      ? html`<span class="chip chip-primary">
+                          ${fmtNumber(phraseCount, store.hass, 0)}
+                        </span>`
+                      : html`<span class="hub-domain-empty">
+                          ${store.t("common.none_configured")}
+                        </span>`}
+                  </span>
+                  <button
+                    type="button"
+                    ?disabled=${phrases.length >= 12}
+                    @click=${() => store.entity.addStringListRow("broadcast_phrases", "", 12)}
+                    class="btn btn-secondary btn-compact"
+                  >
+                    ${store.t("shared.add_phrase")}
+                  </button>
+                </div>
+                ${phrases.length
+                  ? renderSortableList({
+                      id: "hub-list-broadcast_phrases",
+                      ariaLabel: store.t("shared.broadcast_phrases"),
+                      items: phrases,
+                      overlay: store.localeOverlay,
+                      getKey: (val, idx) => (val ? `phrase:${val}` : `empty:${idx}`),
+                      getLabel: (val, idx) =>
+                        val || `${store.t("shared.phrase_aria")} ${idx + 1}`,
+                      onReorder: (fromIdx, toIdx) =>
+                        store.entity.reorderStringListRows("broadcast_phrases", fromIdx, toIdx),
+                      renderContent: (val, idx) => html`<div class="hub-slot-row">
+                        <input
+                          type="text"
+                          maxlength="64"
+                          aria-label=${`${store.t("shared.phrase_aria")} ${idx + 1}`}
+                          placeholder=${store.t("shared.phrase_placeholder")}
+                          .value=${focusSafe(val)}
+                          @change=${(ev) =>
+                            store.entity.updateStringListRow(
+                              "broadcast_phrases",
+                              idx,
+                              (ev.currentTarget).value,
+                            )}
+                        />
+                      </div>`,
+                      renderActions: (_val, idx) =>
+                        renderTrashIconButton(store.t("shared.remove_phrase"), () =>
+                          store.entity.removeStringListRow("broadcast_phrases", idx),
+                        ),
+                    })
+                  : nothing}
+              </div>`;
+            })()}`,
         })}
 
         ${renderCard({

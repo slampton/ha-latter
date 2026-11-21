@@ -21,7 +21,7 @@ import {
   openCameraConfigModal,
   resolveEffectiveCameraConfig,
 } from "../components/dialogs/camera-config-modal.js";
-import { html, nothing, type TemplateResult } from "../lib/lit.js";
+import { focusSafe, html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StringListKey, StudioStore } from "../state/store.js";
 import type { CatalogChoice, SystemConfig } from "../types.js";
 import { entityLabel, fmtNumber, isValidHexColor } from "../utils/format.js";
@@ -34,6 +34,10 @@ const ICON_GARAGE =
   "M19,20H17V11H7V20H5V9L12,5L19,9V20M8,12H16V14H8V12M8,15H16V17H8V15M16,18V20H8V18H16Z";
 const ICON_VACUUM =
   "M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12C4,13.38 4.35,14.68 4.97,15.81L18.81,7.82C17.34,5.53 14.84,4 12,4M19.56,9.5L5.72,17.5C7.19,19.62 9.45,21 12,21A8,8 0 0,0 20,13C20,11.75 19.84,10.58 19.56,9.5M12,11A2,2 0 0,1 14,13A2,2 0 0,1 12,15A2,2 0 0,1 10,13A2,2 0 0,1 12,11Z";
+const ICON_BULLHORN =
+  "M12,8H4A2,2 0 0,0 2,10V14A2,2 0 0,0 4,16H5V20A1,1 0 0,0 6,21H8A1,1 0 0,0 9,20V16H12L17,20V4L12,8M21.5,12C21.5,13.71 20.54,15.26 19,16V8C20.53,8.75 21.5,10.3 21.5,12Z";
+const ICON_PHRASE =
+  "M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M6,9H18V11H6M14,14H6V12H14M18,8H6V6H18";
 
 function findCatalogChoice(
   choices: readonly CatalogChoice[] | undefined,
@@ -71,7 +75,11 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
   const multiDomainGroups: ReadonlyArray<{
     key: Extract<
       StringListKey,
-      "thermostat_entities" | "lock_entities" | "garage_entities" | "vacuum_entities"
+      | "thermostat_entities"
+      | "lock_entities"
+      | "garage_entities"
+      | "vacuum_entities"
+      | "broadcast_speakers"
     >;
     title: string;
     addLabel: string;
@@ -83,6 +91,18 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
     items: readonly string[];
     choices: readonly CatalogChoice[] | undefined;
   }> = [
+    {
+      key: "broadcast_speakers",
+      title: store.t("shared.broadcast_speakers"),
+      addLabel: store.t("shared.add_speaker"),
+      emptyPlaceholder: store.t("shared.choose_speaker"),
+      selectAriaLabel: store.t("shared.speaker_aria"),
+      removeAriaLabel: store.t("shared.remove_speaker"),
+      icon: ICON_BULLHORN,
+      maxItems: 32,
+      items: sc?.broadcast_speakers || [],
+      choices: cat.ma_speakers,
+    },
     {
       key: "thermostat_entities",
       title: store.t("shared.thermostat_zones"),
@@ -243,7 +263,67 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
                     })
                   : nothing}
               </div>`;
-            })}`,
+            })}
+
+            ${(() => {
+              const phrases = sc?.broadcast_phrases || [];
+              const phraseCount = phrases.filter((s) => Boolean(String(s || "").trim())).length;
+              return html`<div id="hub-domain-broadcast_phrases" class="hub-domain-box">
+                <div class="hub-domain-head">
+                  <span class="hub-domain-title">
+                    ${renderSvgIcon(ICON_PHRASE)}
+                    <span>${store.t("shared.broadcast_phrases")}</span>
+                    ${phraseCount > 0
+                      ? html`<span class="chip chip-primary">
+                          ${fmtNumber(phraseCount, store.hass, 0)}
+                        </span>`
+                      : html`<span class="hub-domain-empty">
+                          ${store.t("common.none_configured")}
+                        </span>`}
+                  </span>
+                  <button
+                    type="button"
+                    ?disabled=${phrases.length >= 12}
+                    @click=${() => store.entity.addStringListRow("broadcast_phrases", "", 12)}
+                    class="btn btn-secondary btn-compact"
+                  >
+                    ${store.t("shared.add_phrase")}
+                  </button>
+                </div>
+                ${phrases.length
+                  ? renderSortableList({
+                      id: "hub-list-broadcast_phrases",
+                      ariaLabel: store.t("shared.broadcast_phrases"),
+                      items: phrases,
+                      overlay: store.localeOverlay,
+                      getKey: (val, idx) => (val ? `phrase:${val}` : `empty:${idx}`),
+                      getLabel: (val, idx) =>
+                        val || `${store.t("shared.phrase_aria")} ${idx + 1}`,
+                      onReorder: (fromIdx, toIdx) =>
+                        store.entity.reorderStringListRows("broadcast_phrases", fromIdx, toIdx),
+                      renderContent: (val, idx) => html`<div class="hub-slot-row">
+                        <input
+                          type="text"
+                          maxlength="64"
+                          aria-label=${`${store.t("shared.phrase_aria")} ${idx + 1}`}
+                          placeholder=${store.t("shared.phrase_placeholder")}
+                          .value=${focusSafe(val)}
+                          @change=${(ev: Event) =>
+                            store.entity.updateStringListRow(
+                              "broadcast_phrases",
+                              idx,
+                              (ev.currentTarget as HTMLInputElement).value,
+                            )}
+                        />
+                      </div>`,
+                      renderActions: (_val, idx) =>
+                        renderTrashIconButton(store.t("shared.remove_phrase"), () =>
+                          store.entity.removeStringListRow("broadcast_phrases", idx),
+                        ),
+                    })
+                  : nothing}
+              </div>`;
+            })()}`,
         })}
 
         ${renderCard({

@@ -204,6 +204,8 @@ SYSTEM_SETTING_KEYS: tuple[str, ...] = (
     "lock_entities",
     "garage_entities",
     "vacuum_entities",
+    "broadcast_speakers",
+    "broadcast_phrases",
     "camera_entities",
     "camera_configs",
     "remotes_list",
@@ -1075,6 +1077,7 @@ DEVICE_SETTING_KEYS: tuple[str, ...] = (
     *DEVICE_BOOL_KEYS,
     "dock_items",
     "pinned_items",
+    "broadcast_speaker_entities",
     "camera_visible_entities",
     "camera_carousel_entities",
     "wallpaper_favorites",
@@ -1095,6 +1098,14 @@ MAX_THERMOSTATS = 8
 MAX_LOCKS = 8
 MAX_GARAGES = 6
 MAX_VACUUMS = 6
+MAX_BROADCAST_SPEAKERS = 32
+MAX_BROADCAST_PHRASES = 12
+MAX_BROADCAST_PHRASE_LEN = 64
+DEFAULT_STUDIO_BROADCAST_PHRASES: tuple[str, ...] = (
+    "Dinner is ready",
+    "Come upstairs",
+    "Leaving soon",
+)
 MAX_CALENDARS = 50
 MAX_CUSTOM_PALETTES = 24
 MAX_REMOTE_GROUPS = 20
@@ -1155,6 +1166,21 @@ def _entity_list(val: Any, limit: int = MAX_LIST_ITEMS) -> list[str]:
         if ent and ent not in out:
             out.append(ent)
     return out[:limit]
+
+
+def _broadcast_phrases(val: Any, *, strict: bool = False) -> list[str]:
+    if val is None:
+        return []
+    if not isinstance(val, (list, tuple)):
+        if strict:
+            raise SettingsScopeError("broadcast_phrases must be a list of strings")
+        return []
+    out: list[str] = []
+    for item in val:
+        phrase = _text(item)[:MAX_BROADCAST_PHRASE_LEN]
+        if phrase and phrase not in out:
+            out.append(phrase)
+    return out[:MAX_BROADCAST_PHRASES]
 
 
 def _camera_configs(val: Any, *, strict: bool = False) -> dict[str, dict[str, Any]]:
@@ -1459,6 +1485,17 @@ def clean_system_settings(incoming: Mapping[str, Any]) -> dict[str, Any]:
             MAX_VACUUMS,
             "vacuum_entities",
         )
+    if "broadcast_speakers" in incoming:
+        out["broadcast_speakers"] = _domain_entity_list(
+            incoming["broadcast_speakers"],
+            "media_player.",
+            MAX_BROADCAST_SPEAKERS,
+            "broadcast_speakers",
+        )
+    if "broadcast_phrases" in incoming:
+        out["broadcast_phrases"] = _broadcast_phrases(
+            incoming["broadcast_phrases"], strict=True
+        )
     if "camera_entities" in incoming:
         out["camera_entities"] = _domain_entity_list(
             incoming["camera_entities"],
@@ -1659,6 +1696,14 @@ def clean_device_settings(
         except ValueError as err:
             raise SettingsScopeError(str(err)) from None
 
+    if "broadcast_speaker_entities" in incoming:
+        out["broadcast_speaker_entities"] = _domain_entity_list(
+            incoming["broadcast_speaker_entities"],
+            "media_player.",
+            MAX_BROADCAST_SPEAKERS,
+            "broadcast_speaker_entities",
+        )
+
     if "camera_visible_entities" in incoming:
         out["camera_visible_entities"] = _domain_entity_list(
             incoming["camera_visible_entities"],
@@ -1804,6 +1849,16 @@ def system_settings_view(global_cfg: Mapping[str, Any]) -> dict[str, Any]:
             ),
             "vacuum_entities": _safe_domain_entity_list(
                 global_cfg.get("vacuum_entities"), "vacuum.", MAX_VACUUMS
+            ),
+            "broadcast_speakers": _safe_domain_entity_list(
+                global_cfg.get("broadcast_speakers"),
+                "media_player.",
+                MAX_BROADCAST_SPEAKERS,
+            ),
+            "broadcast_phrases": (
+                _broadcast_phrases(global_cfg.get("broadcast_phrases"))
+                if "broadcast_phrases" in global_cfg
+                else list(DEFAULT_STUDIO_BROADCAST_PHRASES)
             ),
             "camera_entities": cams,
             "camera_configs": _camera_configs(global_cfg.get("camera_configs")),
