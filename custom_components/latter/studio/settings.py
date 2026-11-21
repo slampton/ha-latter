@@ -1415,6 +1415,72 @@ def clean_area_fusion(
     return out
 
 
+ILLUMINANCE_DARK_LUX_MIN = 0.0
+ILLUMINANCE_DARK_LUX_MAX = 500.0
+ILLUMINANCE_BRIGHT_LUX_MIN = 1.0
+ILLUMINANCE_BRIGHT_LUX_MAX = 100000.0
+
+
+def clean_area_illuminance(
+    current: Mapping[str, Any], update: Mapping[str, Any], allowed_sensors: set[str]
+) -> dict[str, Any]:
+    """Return one Area's ambient light calibration after a Studio change (`area_illuminance_config[<area_id>]`)."""
+    out: dict[str, Any] = {}
+    if "entity_id" in current and isinstance(current["entity_id"], str):
+        out["entity_id"] = current["entity_id"]
+    if "dark_lux" in current:
+        try:
+            out["dark_lux"] = max(
+                ILLUMINANCE_DARK_LUX_MIN,
+                min(ILLUMINANCE_DARK_LUX_MAX, float(current["dark_lux"])),
+            )
+        except (TypeError, ValueError):
+            pass
+    if "bright_lux" in current:
+        try:
+            out["bright_lux"] = max(
+                ILLUMINANCE_BRIGHT_LUX_MIN,
+                min(ILLUMINANCE_BRIGHT_LUX_MAX, float(current["bright_lux"])),
+            )
+        except (TypeError, ValueError):
+            pass
+
+    if "entity_id" in update:
+        ent = _text(update["entity_id"])
+        if ent in ("", "auto"):
+            out["entity_id"] = "auto"
+        elif ent == "disabled":
+            out["entity_id"] = "disabled"
+        else:
+            if ent not in allowed_sensors:
+                raise SettingsScopeError(f"Not an illuminance sensor of this Area: {ent}")
+            out["entity_id"] = ent
+
+    if "dark_lux" in update:
+        try:
+            dark_val = float(update["dark_lux"])
+        except (TypeError, ValueError):
+            raise SettingsScopeError("Dark lux must be a number") from None
+        if dark_val < ILLUMINANCE_DARK_LUX_MIN or dark_val > ILLUMINANCE_DARK_LUX_MAX:
+            raise SettingsScopeError("Dark lux must be between 0 and 500 lx")
+        out["dark_lux"] = round(dark_val, 2)
+
+    if "bright_lux" in update:
+        try:
+            bright_val = float(update["bright_lux"])
+        except (TypeError, ValueError):
+            raise SettingsScopeError("Bright lux must be a number") from None
+        if bright_val < ILLUMINANCE_BRIGHT_LUX_MIN or bright_val > ILLUMINANCE_BRIGHT_LUX_MAX:
+            raise SettingsScopeError("Bright lux must be between 1 and 100000 lx")
+        out["bright_lux"] = round(bright_val, 1)
+
+    dark_eff = float(out.get("dark_lux", 0.5))
+    bright_eff = float(out.get("bright_lux", 40.0))
+    if bright_eff < dark_eff + 1.0:
+        out["bright_lux"] = round(min(ILLUMINANCE_BRIGHT_LUX_MAX, dark_eff + 1.0), 1)
+    return out
+
+
 def _domain_entity_list(val: Any, prefix: str, limit: int, label: str) -> list[str]:
     if not isinstance(val, (list, tuple)):
         raise SettingsScopeError(f"{label} must be a list of entity IDs")

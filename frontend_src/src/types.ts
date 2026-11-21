@@ -522,6 +522,14 @@ interface AreaFusionSensorChoice {
   device_class?: string;
 }
 
+export interface AreaIlluminanceSensorChoice {
+  entity_id: string;
+  name: string;
+  lux?: number | null;
+  lux_display?: string;
+  available?: boolean;
+}
+
 export interface AreaPresenceRow {
   area_id: string;
   area_name: string;
@@ -540,6 +548,15 @@ export interface AreaPresenceRow {
   fusion_threshold_pct?: number;
   fusion_sensors?: string[];
   fusion_sensor_choices?: AreaFusionSensorChoice[];
+  illuminance_entity?: string;
+  illuminance_resolved_entity?: string;
+  illuminance_resolved_name?: string;
+  illuminance_lux?: number | null;
+  illuminance_lux_display?: string;
+  illuminance_ambient_pct?: number | null;
+  illuminance_dark_lux?: number;
+  illuminance_bright_lux?: number;
+  illuminance_sensor_choices?: AreaIlluminanceSensorChoice[];
 }
 
 export interface SharedControlTarget {
@@ -612,6 +629,10 @@ interface BleTransmitterStatus {
 
 export interface LiveDeviceTelemetry {
   active_area_name?: string;
+  active_area_lux_display?: string;
+  active_area_ambient_pct?: number | null;
+  active_area_illuminance_entity?: string;
+  active_area_illuminance_name?: string;
   ma_link_matched?: boolean;
   ble_closest_proxy?: string;
   ble_detected_ref_power?: number | null;

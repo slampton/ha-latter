@@ -18,7 +18,7 @@ _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = _PROTOCOL_SCHEMA["defaults"]
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
 STUDIO_REV: Final[int] = int(_PROTOCOL_SCHEMA["studio_contract"]["studio_rev"])
-MIN_FIRMWARE_SDK_REV: Final = 2026112005
+MIN_FIRMWARE_SDK_REV: Final = 2026112006
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
@@ -264,8 +264,12 @@ CONF_DEVICE_GROUP: Final = "device_group"
 DEFAULT_DEVICE_GROUP: Final = "custom"
 CONF_DEVICE_GROUPS: Final = "device_groups"
 
-# Area Sensor Fusion & Event Bus
+# Area Sensor Fusion, Ambient Light & Event Bus
 CONF_AREA_FUSION_CONFIG: Final = "area_fusion_config"
+CONF_AREA_ILLUMINANCE_CONFIG: Final = "area_illuminance_config"
+DEFAULT_AREA_DARK_LUX: Final = 0.5
+DEFAULT_AREA_BRIGHT_LUX: Final = 40.0
+AMBIENT_LIGHT_DEADBAND_PCT: Final = 4
 EVENT_LATTER: Final = "latter_event"
 TRANSFER_HOLD_WINDOW_SECONDS: Final = 6.0
 
@@ -294,6 +298,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_DOORBELL_NOISE_REDUCTION,
     CONF_DEVICE_GROUPS,
     CONF_AREA_FUSION_CONFIG,
+    CONF_AREA_ILLUMINANCE_CONFIG,
     CONF_SYSTEM_BLE_UUID,
     CONF_IGNORED_DISCOVERED_DEVICES,
 )

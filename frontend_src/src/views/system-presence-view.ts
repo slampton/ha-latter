@@ -100,6 +100,10 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
     (r) => Boolean(r.is_fresh) && r.effective_rssi !== null && r.effective_rssi !== undefined,
   );
 
+  const hasAnyLuxSensor = unifiedAreas.some(
+    ({ row }) => (row?.illuminance_sensor_choices?.length || 0) > 0,
+  );
+
   return html`<section id="view-area_tracking">
     <div class="columns">
       <div class="column">
@@ -107,6 +111,15 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
           id: "card-area-presence",
           title: store.t("card.area_presence_sensors"),
           subtitle: store.t("presence_sys.area_card_subtitle"),
+          headerActions: hasAnyLuxSensor
+            ? html`<button
+                type="button"
+                class="btn btn-secondary btn-compact"
+                @click=${() => void store.groups.calibrateAreaIlluminance()}
+              >
+                ${store.t("presence_sys.calibrate_all_lux")}
+              </button>`
+            : nothing,
           body: html`<div id="area-presence-grid-box" class="stack">
             ${unifiedAreas.length
               ? repeat(
@@ -185,6 +198,19 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                     const threshold = Number(row?.fusion_threshold_pct ?? 50);
                     const chosen = row?.fusion_sensors || [];
                     const choices = row?.fusion_sensor_choices || [];
+                    const luxChoices = row?.illuminance_sensor_choices || [];
+                    const luxEntity = String(row?.illuminance_entity || "auto");
+                    const luxResolvedName = String(
+                      row?.illuminance_resolved_name || row?.illuminance_resolved_entity || "",
+                    );
+                    const luxDisplay = String(row?.illuminance_lux_display || "");
+                    const luxAmbPct =
+                      row?.illuminance_ambient_pct !== null &&
+                      row?.illuminance_ambient_pct !== undefined
+                        ? Number(row.illuminance_ambient_pct)
+                        : null;
+                    const luxDark = Number(row?.illuminance_dark_lux ?? 0.5);
+                    const luxBright = Number(row?.illuminance_bright_lux ?? 40);
                     const thresholdId = `fusion-threshold-${areaId}`;
                     const areaBoxId = `area-box-${areaId}`;
                     const isAreaHandoff = store.isHandoffTarget(areaBoxId);
@@ -229,6 +255,14 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                           : hasBleProxy
                             ? html`<span class="chip">${store.t("sys_overview.ble_proxy")}</span>`
                             : html`<span class="chip chip-warning">${store.t("sys_overview.no_ble_proxy")}</span>`}
+                        ${luxDisplay && luxAmbPct !== null && Number.isFinite(luxAmbPct)
+                          ? html`<span class="chip"
+                              >${store.t("presence_sys.lux_chip", {
+                                lux: luxDisplay,
+                                level: fmtNumber(luxAmbPct, store.hass, 0),
+                              })}</span
+                            >`
+                          : nothing}
                       </div>
 
                       <div class="area-box-meta">${parts.join(" • ")}</div>
@@ -325,6 +359,102 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                                   ${store.t("presence_sys.no_area_sensors")}
                                 </p>`,
                           })}
+                          ${luxChoices.length > 0 || luxEntity !== "auto"
+                            ? html`${renderSettingsRow({
+                                  label: store.t("presence_sys.ambient_sensor"),
+                                  control: html`<select
+                                    aria-label=${store.t("presence_sys.ambient_sensor_aria", {
+                                      area: areaName,
+                                    })}
+                                    .value=${luxEntity}
+                                    @change=${(ev: Event) =>
+                                      void store.groups.setAreaIlluminance(areaId, {
+                                        entity_id: (ev.currentTarget as HTMLSelectElement).value,
+                                      })}
+                                  >
+                                    <option value="auto" ?selected=${luxEntity === "auto"}>
+                                      ${luxResolvedName && luxEntity === "auto"
+                                        ? store.t("presence_sys.ambient_sensor_auto", {
+                                            sensor: luxResolvedName,
+                                          })
+                                        : store.t("presence_sys.ambient_sensor_auto_none")}
+                                    </option>
+                                    ${luxChoices.map(
+                                      (s) =>
+                                        html`<option
+                                          value=${s.entity_id}
+                                          ?selected=${luxEntity === s.entity_id}
+                                        >
+                                          ${s.name}${s.lux_display ? ` (${s.lux_display} lx)` : ""}
+                                        </option>`,
+                                    )}
+                                    <option value="disabled" ?selected=${luxEntity === "disabled"}>
+                                      ${store.t("presence_sys.ambient_sensor_disabled")}
+                                    </option>
+                                  </select>`,
+                                })}
+                                ${luxEntity !== "disabled"
+                                  ? renderSettingsRow({
+                                      label: store.t("presence_sys.calibrate_lux_btn"),
+                                      description: store.t("presence_sys.ambient_calibration_desc"),
+                                      stacked: true,
+                                      control: html`<div class="lux-bounds-row">
+                                        <label class="lux-bound-field">
+                                          <span>${store.t("presence_sys.ambient_dark_lux")}</span>
+                                          <input
+                                            type="number"
+                                            class="lux-number-input"
+                                            min="0"
+                                            max="500"
+                                            step="0.1"
+                                            aria-label=${`${store.t("presence_sys.ambient_dark_lux")} (${areaName})`}
+                                            .value=${String(luxDark)}
+                                            @change=${(ev: Event) => {
+                                              const v = Number(
+                                                (ev.currentTarget as HTMLInputElement).value,
+                                              );
+                                              if (Number.isFinite(v)) {
+                                                void store.groups.setAreaIlluminance(areaId, {
+                                                  dark_lux: v,
+                                                });
+                                              }
+                                            }}
+                                          />
+                                        </label>
+                                        <label class="lux-bound-field">
+                                          <span>${store.t("presence_sys.ambient_bright_lux")}</span>
+                                          <input
+                                            type="number"
+                                            class="lux-number-input"
+                                            min="1"
+                                            max="100000"
+                                            step="1"
+                                            aria-label=${`${store.t("presence_sys.ambient_bright_lux")} (${areaName})`}
+                                            .value=${String(luxBright)}
+                                            @change=${(ev: Event) => {
+                                              const v = Number(
+                                                (ev.currentTarget as HTMLInputElement).value,
+                                              );
+                                              if (Number.isFinite(v)) {
+                                                void store.groups.setAreaIlluminance(areaId, {
+                                                  bright_lux: v,
+                                                });
+                                              }
+                                            }}
+                                          />
+                                        </label>
+                                        <button
+                                          type="button"
+                                          class="btn btn-secondary btn-compact"
+                                          @click=${() =>
+                                            void store.groups.calibrateAreaIlluminance(areaId)}
+                                        >
+                                          ${store.t("presence_sys.calibrate_lux_btn")}
+                                        </button>
+                                      </div>`,
+                                    })
+                                  : nothing}`
+                            : nothing}
                         </div>
                       </details>
                     </div>`;

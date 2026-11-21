@@ -247,4 +247,23 @@ export const CARD_STYLES = css`
     font-weight: var(--studio-weight-medium);
   }
   .card-content > .subsection-title:first-child { padding-block-start: 0; border-block-start: none; }
+  .lux-bounds-row {
+    display: flex;
+    align-items: safe center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+  }
+  .lux-bound-field {
+    display: inline-flex;
+    align-items: safe center;
+    gap: var(--studio-space-1);
+    color: var(--studio-text-secondary);
+    font-size:var(--studio-font-secondary);
+  }
+  .lux-number-input {
+    inline-size: 76px;
+    min-block-size: var(--studio-control-height-compact);
+    padding-block: var(--studio-space-1);
+    padding-inline: var(--studio-space-2);
+  }
 `;

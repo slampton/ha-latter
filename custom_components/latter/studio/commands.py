@@ -8,8 +8,9 @@ Studio's selected Device (a System command that acts on one Device names it in i
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 import copy
+from datetime import timedelta
 import logging
 import math
 import re
@@ -29,12 +30,17 @@ from homeassistant.helpers.event import async_call_later, async_track_state_chan
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
-from ..areas import async_execute_area_action
+from ..areas import (
+    area_illuminance_sensor_choices,
+    async_execute_area_action,
+    resolve_area_ambient_light,
+)
 from ..backup import async_restore_backup_bundle, build_backup_bundle
 from ..config_flow import _bound_elsewhere, _device_title, _device_unique_id
 from ..const import (
     CONF_ACTIVITY_SOURCES,
     CONF_AREA_FUSION_CONFIG,
+    CONF_AREA_ILLUMINANCE_CONFIG,
     CONF_ASSIGNED_PERSON,
     CONF_BLE_AREA_SIGNATURES,
     CONF_BLE_CATEGORY,
@@ -146,6 +152,7 @@ from .settings import (
     checked_entity_verb,
     clean_announcement,
     clean_area_fusion,
+    clean_area_illuminance,
     clean_device_settings,
     clean_system_settings,
     command_scope,
@@ -203,6 +210,21 @@ _COMMAND_PAYLOAD_SCHEMAS: dict[str, vol.Schema] = {
             vol.Optional("mode"): _str_cap(32),
             vol.Optional("threshold_pct"): vol.Any(_non_bool_number, str),
             vol.Optional("sensors"): [_str_cap(128)],
+        },
+        extra=vol.PREVENT_EXTRA,
+    ),
+    "set_area_illuminance": vol.Schema(
+        {
+            vol.Optional("area_id"): _str_cap(128),
+            vol.Optional("entity_id"): _str_cap(128),
+            vol.Optional("dark_lux"): vol.Any(_non_bool_number, str),
+            vol.Optional("bright_lux"): vol.Any(_non_bool_number, str),
+        },
+        extra=vol.PREVENT_EXTRA,
+    ),
+    "calibrate_area_illuminance": vol.Schema(
+        {
+            vol.Optional("area_id"): _str_cap(128),
         },
         extra=vol.PREVENT_EXTRA,
     ),
@@ -557,6 +579,214 @@ async def _cmd_set_area_fusion(
     fabric = get_ble_fabric(hass)
     fabric.rebind_fusion_sensor_listener()
     fabric.notify_occupancy_listeners()
+
+
+def _percentile(sorted_vals: list[float], q: float) -> float:
+    """Linearly interpolated percentile (`q` in `0..1`) over a non-empty sorted list."""
+    if len(sorted_vals) == 1:
+        return sorted_vals[0]
+    pos = max(0.0, min(1.0, q)) * (len(sorted_vals) - 1)
+    lo = math.floor(pos)
+    hi = min(len(sorted_vals) - 1, lo + 1)
+    frac = pos - lo
+    return sorted_vals[lo] + frac * (sorted_vals[hi] - sorted_vals[lo])
+
+
+def compute_illuminance_calibration_from_stats(
+    rows: list[Mapping[str, Any]],
+) -> tuple[float, float] | None:
+    """Derive `(dark_lux, bright_lux)` from hourly HA recorder statistics rows."""
+    mins: list[float] = []
+    means: list[float] = []
+    for row in rows:
+        raw_min = row.get("min")
+        raw_mean = row.get("mean")
+        if raw_min is not None:
+            try:
+                v_min = float(raw_min)
+                if math.isfinite(v_min) and v_min >= 0.0:
+                    mins.append(v_min)
+            except (TypeError, ValueError):
+                pass
+        if raw_mean is not None:
+            try:
+                v_mean = float(raw_mean)
+                if math.isfinite(v_mean) and v_mean >= 0.0:
+                    means.append(v_mean)
+            except (TypeError, ValueError):
+                pass
+    if not means:
+        return None
+    mins_sorted = sorted(mins or means)
+    means_sorted = sorted(means)
+    dark_raw = max(0.0, min(500.0, _percentile(mins_sorted, 0.10)))
+    dark_lux = round(dark_raw, 1) if dark_raw < 10.0 else float(round(dark_raw))
+
+    pos_means = [v for v in means_sorted if v > dark_lux + 0.1]
+    bright_pool = pos_means if len(pos_means) >= 4 else means_sorted
+    bright_raw = _percentile(bright_pool, 0.90)
+    bright_raw = max(dark_lux + 5.0, min(100000.0, bright_raw))
+    bright_lux = round(bright_raw, 1) if bright_raw < 10.0 else float(round(bright_raw))
+    return (dark_lux, bright_lux)
+
+
+def _refresh_coordinators_ambient_light(hass: HomeAssistant) -> None:
+    """Clear ambient-light deadband caches and notify all Device coordinators immediately."""
+    for coord in iter_coordinators(hass):
+        coord._last_ambient_light = ("", None, "")
+        coord._cached_area_payload = None
+        coord.async_notify_listeners()
+
+
+async def _cmd_set_area_illuminance(
+    hass: HomeAssistant,
+    _coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
+    _extra: dict[str, Any],
+) -> None:
+    area_id = str(body.get("area_id") or "").strip()
+    if not area_id or ar.async_get(hass).async_get_area(area_id) is None:
+        raise StudioCommandError("not_found", f"Unknown Area '{area_id}'")
+    allowed_sensors = {
+        str(s["entity_id"]) for s in area_illuminance_sensor_choices(hass, area_id)
+    }
+    async with get_system_config_lock(hass):
+        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
+            DATA_GLOBAL_CONFIG, {}
+        )
+        raw_lux = live_cfg.get(CONF_AREA_ILLUMINANCE_CONFIG) or {}
+        lux_cfg = dict(raw_lux) if isinstance(raw_lux, dict) else {}
+        current_area = lux_cfg.get(area_id)
+        lux_cfg[area_id] = clean_area_illuminance(
+            current_area if isinstance(current_area, dict) else {},
+            {
+                k: body[k]
+                for k in ("entity_id", "dark_lux", "bright_lux")
+                if k in body
+            },
+            allowed_sensors,
+        )
+        await async_save_and_broadcast_global_config(
+            hass, {CONF_AREA_ILLUMINANCE_CONFIG: lux_cfg}
+        )
+    _refresh_coordinators_ambient_light(hass)
+
+
+async def _cmd_calibrate_area_illuminance(
+    hass: HomeAssistant,
+    _coordinator: LatterCoordinator | None,
+    body: dict[str, Any],
+    _global_cfg: dict[str, Any],
+    extra: dict[str, Any],
+) -> None:
+    area_reg = ar.async_get(hass)
+    target_area_id = str(body.get("area_id") or "").strip()
+    if target_area_id:
+        area_entry = area_reg.async_get_area(target_area_id)
+        if area_entry is None:
+            raise StudioCommandError("not_found", f"Unknown Area '{target_area_id}'")
+        target_areas = [area_entry]
+    else:
+        target_areas = list(area_reg.async_list_areas())
+
+    area_targets: list[tuple[str, str, str]] = []
+    skipped: list[str] = []
+    for area_entry in target_areas:
+        ambient = resolve_area_ambient_light(hass, area_entry.id)
+        if ambient["configured_entity"] == "disabled":
+            skipped.append(area_entry.name)
+            continue
+        eid = str(ambient["resolved_entity"] or "")
+        if not eid:
+            if target_area_id:
+                raise StudioCommandError(
+                    "invalid_format",
+                    f"No illuminance sensor found in {area_entry.name}",
+                )
+            continue
+        area_targets.append((area_entry.id, area_entry.name, eid))
+
+    if not area_targets:
+        raise StudioCommandError(
+            "invalid_format",
+            "No illuminance sensors found to calibrate",
+        )
+
+    statistic_ids = sorted({eid for _, _, eid in area_targets})
+    stats_by_eid: dict[str, list[Mapping[str, Any]]] = {}
+    try:
+        from homeassistant.components.recorder import get_instance
+        from homeassistant.components.recorder.statistics import (
+            statistics_during_period,
+        )
+
+        end_dt = dt_util.utcnow()
+        start_dt = end_dt - timedelta(days=7)
+        rec = get_instance(hass)
+        stats_by_eid = await rec.async_add_executor_job(
+            statistics_during_period,
+            hass,
+            start_dt,
+            end_dt,
+            set(statistic_ids),
+            "hour",
+            None,
+            {"min", "mean"},
+        )
+    except Exception as err:
+        _LOGGER.debug("Recorder statistics unavailable for illuminance calibration: %s", err)
+        raise StudioCommandError(
+            "failed",
+            "Recorder hourly statistics are unavailable for ambient light calibration",
+        ) from err
+
+    calibrated: list[dict[str, Any]] = []
+    async with get_system_config_lock(hass):
+        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
+            DATA_GLOBAL_CONFIG, {}
+        )
+        raw_lux = live_cfg.get(CONF_AREA_ILLUMINANCE_CONFIG) or {}
+        lux_cfg = dict(raw_lux) if isinstance(raw_lux, dict) else {}
+        for aid, aname, eid in area_targets:
+            rows = list(stats_by_eid.get(eid) or [])
+            cal = compute_illuminance_calibration_from_stats(rows)
+            if cal is None:
+                skipped.append(aname)
+                continue
+            dark_lux, bright_lux = cal
+            cur = dict(lux_cfg.get(aid) or {}) if isinstance(lux_cfg.get(aid), dict) else {}
+            cur["dark_lux"] = dark_lux
+            cur["bright_lux"] = bright_lux
+            lux_cfg[aid] = cur
+            calibrated.append(
+                {
+                    "area_id": aid,
+                    "area_name": aname,
+                    "entity_id": eid,
+                    "dark_lux": dark_lux,
+                    "bright_lux": bright_lux,
+                    "samples": len(rows),
+                }
+            )
+        if not calibrated:
+            raise StudioCommandError(
+                "invalid_format",
+                "Not enough recorded illuminance history yet (wait for hourly statistics)",
+            )
+        await async_save_and_broadcast_global_config(
+            hass, {CONF_AREA_ILLUMINANCE_CONFIG: lux_cfg}
+        )
+
+    _refresh_coordinators_ambient_light(hass)
+    extra["calibrated"] = calibrated
+    extra["skipped"] = skipped
+    log_studio_event(
+        hass,
+        "INFO",
+        "system",
+        f"Auto-calibrated ambient light for {len(calibrated)} Area(s)",
+    )
 
 
 async def _cmd_capture_ble_area_signature(
@@ -2169,6 +2399,8 @@ _CommandHandler = Callable[
 _STUDIO_COMMAND_HANDLERS: dict[str, _CommandHandler] = {
     "set_ble_scanner_offset": _cmd_set_ble_scanner_offset,
     "set_area_fusion": _cmd_set_area_fusion,
+    "set_area_illuminance": _cmd_set_area_illuminance,
+    "calibrate_area_illuminance": _cmd_calibrate_area_illuminance,
     "capture_ble_area_signature": _cmd_capture_ble_area_signature,
     "clear_ble_area_signature": _cmd_clear_ble_area_signature,
     "system_entity_action": _cmd_system_entity_action,

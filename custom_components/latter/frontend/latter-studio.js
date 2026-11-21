@@ -378,6 +378,13 @@ const EN_DEVICES_STRINGS = {
   "dev_display.card_voice_assistant": "Voice assistant",
   "dev_display.bedtime_brightness_override_note":
     "Bedtime mode is currently active and overriding screen brightness.",
+  "dev_display.bright_brightness_label": "Bright brightness",
+  "dev_display.dark_brightness_label": "Dark brightness",
+  "dev_display.ambient_live_status": "{area} · {lux} lx ({level}% ambient)",
+  "dev_display.ambient_fallback_status":
+    "No ambient light sensor in {area} — using Sun synchronized fallback.",
+  "dev_display.ambient_unassigned_status":
+    "Locate or assign this Device to an Area to use ambient light.",
   "dev_display.screensaver_preview_desc":
     "Starts the screensaver on this Device immediately.",
   "dev_display.preview_btn": "Preview",
@@ -1099,6 +1106,20 @@ const EN_SYSTEM_STRINGS = {
   "presence_sys.sensors_selected_desc": "{selected} of {total} selected.",
   "presence_sys.sensors_all_desc": "None selected: every sensor in this Area counts.",
   "presence_sys.sensors_group_aria": "Sensors that count in {area}",
+  "presence_sys.calibrate_all_lux": "Auto-calibrate lux",
+  "presence_sys.lux_chip": "{lux} lx ({level}%)",
+  "presence_sys.ambient_sensor": "Ambient light sensor",
+  "presence_sys.ambient_sensor_aria": "Ambient light sensor for {area}",
+  "presence_sys.ambient_sensor_auto": "Auto ({sensor})",
+  "presence_sys.ambient_sensor_auto_none": "Auto (none detected)",
+  "presence_sys.ambient_sensor_disabled": "None (use schedule fallback)",
+  "presence_sys.ambient_dark_lux": "Dark floor (lx)",
+  "presence_sys.ambient_bright_lux": "Bright ceiling (lx)",
+  "presence_sys.ambient_calibration_desc":
+    "Auto-calibrate from 7-day Home Assistant statistics or tune manually for this sensor.",
+  "presence_sys.calibrate_lux_btn": "Auto-calibrate",
+  "presence_sys.calibrate_lux_done": "Calibrated ambient light for {count} Areas.",
+  "presence_sys.calibrate_lux_one_done": "Calibrated {area}: {dark}–{bright} lx.",
   "presence_sys.no_area_sensors":
     "This Area has no occupancy, motion, or door sensors.",
   "presence_sys.empty_areas":
@@ -1698,6 +1719,7 @@ const PREF_OPTION_LABELS = {
   Fireworks: "Fireworks",
   "Sun Synchronized": "Sun synchronized",
   "Time Schedule": "Time schedule",
+  "Ambient Light": "Ambient light",
   "Steel Blue": "Steel blue",
   Pink: "Pink",
   Blue: "Blue",
@@ -2192,7 +2214,7 @@ __latterExp(__exports, { Directive: () => Directive, directive: () => directive,
 __latterDef("src/protocol-schema.ts", (__exports, __req) => {
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 const PROTOCOL_CONTRACT_VERSION = 3;
-const STUDIO_REV = 42;
+const STUDIO_REV = 43;
 const ALLOWED_DEVICE_ACTIONS = [
   "restart",
   "find_my",
@@ -2206,6 +2228,8 @@ const ALLOWED_DEVICE_ACTIONS = [
 const SYSTEM_WS_COMMANDS = new Set([
   "set_ble_scanner_offset",
   "set_area_fusion",
+  "set_area_illuminance",
+  "calibrate_area_illuminance",
   "capture_ble_area_signature",
   "clear_ble_area_signature",
   "system_entity_action",
@@ -2416,7 +2440,7 @@ const DEVICE_PREF_SPECS_CATALOG = [
   {key: "battery_hibernate_timeout", label: "Battery Hibernate Timeout", domain: "select", default: "15 min", section: "power", esphome_section: "sleep", group_tier: "behavior", options: ["5 min", "10 min", "15 min", "30 min", "Disabled"], min: null, max: null, step: null, unit: "", capability: "display_battery" },
   {key: "screensaver_mode", label: "Screensaver mode", domain: "select", default: "Docked Only", section: "display", esphome_section: "display", group_tier: "behavior", options: ["Docked Only", "Always", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "screensaver_style", label: "Screensaver Style", domain: "select", default: "Ambient Clock", section: "display", esphome_section: "display", group_tier: "display", options: ["Ambient Clock", "Photo Frame", "Aurora", "Starfield", "Digital Rain", "Fireworks"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "auto_brightness_mode", label: "Auto Brightness Mode", domain: "select", default: "Sun Synchronized", section: "display", esphome_section: "display", group_tier: "behavior", options: ["Disabled", "Sun Synchronized", "Time Schedule"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "auto_brightness_mode", label: "Auto Brightness Mode", domain: "select", default: "Sun Synchronized", section: "display", esphome_section: "display", group_tier: "behavior", options: ["Disabled", "Sun Synchronized", "Time Schedule", "Ambient Light"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "manual_brightness", label: "Manual Brightness", domain: "number", default: 80, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
   {key: "day_brightness", label: "Day Brightness", domain: "number", default: 90, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
   {key: "night_brightness", label: "Night Brightness", domain: "number", default: 35, section: "display", esphome_section: "display", group_tier: "behavior", options: [], min: 1, max: 100, step: 1, unit: "%", capability: "display" },
@@ -10033,6 +10057,58 @@ class GroupsController {
       this.store.showToast(formatWsError(err, "Could not update Area fusion"), true);
     }
   }
+  async setAreaIlluminance(
+    areaId,
+    update,
+  ) {
+    try {
+      const res = await this.store.ws.runSystemCommand(
+        "set_area_illuminance",
+        { area_id: areaId, ...update },
+        this.store.activeSubentryId || null,
+      );
+      if (res) this.store.ingestPayload(res, false);
+      this.store.announcePolite(this.store.t("shell.saved_status"));
+    } catch (err) {
+      this.store.showToast(formatWsError(err, "Could not update Area ambient light"), true);
+    }
+  }
+  async calibrateAreaIlluminance(areaId) {
+    try {
+      const payload = {};
+      if (areaId) payload.area_id = areaId;
+      const res = await this.store.ws.runSystemCommand(
+        "calibrate_area_illuminance",
+        payload,
+        this.store.activeSubentryId || null,
+      );
+      if (res) this.store.ingestPayload(res, false);
+      const rawCal = (res
+              )?.calibrated;
+      const list = Array.isArray(rawCal) ? rawCal : [];
+      if (list.length === 1) {
+        const item = list[0];
+        this.store.showToast(
+          this.store.t("presence_sys.calibrate_lux_one_done", {
+            area: String(item.area_name || ""),
+            dark: String(item.dark_lux ?? 0),
+            bright: String(item.bright_lux ?? 40),
+          }),
+          false,
+        );
+      } else if (list.length > 1) {
+        this.store.showToast(
+          this.store.t("presence_sys.calibrate_lux_done", { count: list.length }),
+          false,
+        );
+      }
+    } catch (err) {
+      this.store.showToast(
+        formatWsError(err, "Could not calibrate Area ambient light"),
+        true,
+      );
+    }
+  }
 }
 __latterExp(__exports, { GroupsController: () => GroupsController });
 //# sourceURL=latter-studio/src/state/groups-controller.ts
@@ -16239,7 +16315,7 @@ const { css } = __req("src/lib/lit.ts");
 /**
  * Card surfaces, collapsible drawers, Home Hub domain boxes, & Area presence containers.
  */
-const CARD_STYLES = css`.card{min-inline-size:0;container-type:inline-size;background:var(--studio-surface);border:var(--studio-card-border-width) solid var(--studio-card-border);border-radius:var(--studio-radius-card);box-shadow:var(--studio-card-shadow);color:var(--studio-text);scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.card.danger{border-color:var(--studio-error);}.card.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-card-handoff-shadow);background:var(--studio-handoff-surface);}.handoff-active[tabindex="-1"]:focus-visible{outline:none;}.card-header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding-block:var(--studio-space-card-top) 0;padding-inline:var(--studio-space-4);}.card-heading{display:flex;flex-direction:column;gap:var(--studio-space-2);min-inline-size:0;flex:1 1 240px;}.card-title{font-size:var(--studio-font-card-title);font-weight:var(--studio-weight-regular);letter-spacing:var(--studio-card-title-tracking);line-height:var(--studio-line-height-condensed);}.card-subtitle,.row-description,.help-text{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.card-header-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.card-content{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-4);}.card-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);padding:var(--studio-space-2);border-block-start:1px solid var(--studio-divider);}details.card>summary{list-style:none;cursor:pointer;padding-block-end:var(--studio-space-card-top);}details.card>summary::-webkit-details-marker{display:none;}details.card>summary::after{content:"▾";color:var(--studio-text-secondary);transition:transform 0.15s ease;}details.card[open]>summary::after{transform:rotate(180deg);}details.card[open]>summary{border-block-end:1px solid var(--studio-divider);}details.sub-collapsible{border-block-start:1px solid var(--studio-divider);padding-block-start:var(--studio-space-3);}details.sub-collapsible>summary{cursor:pointer;font-weight:var(--studio-weight-medium);}details.sub-collapsible>.card-content{padding-block:var(--studio-space-3) 0;padding-inline:0;}details.sub-collapsible.summary-row>summary{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);list-style:none;}details.sub-collapsible.summary-row>summary::-webkit-details-marker{display:none;}.summary-row-end{display:inline-flex;align-items:center;gap:var(--studio-space-2);}.summary-chevron{color:var(--studio-text-secondary);transition:transform 0.15s ease;}details.sub-collapsible.summary-row[open]>summary .summary-chevron{transform:rotate(180deg);}.hub-domain-box{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.hub-domain-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);min-height:var(--studio-control-height-compact);}.hub-domain-title{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);font-weight:var(--studio-weight-medium);}.hub-domain-title svg{width:18px;height:18px;fill:var(--studio-primary);flex-shrink:0;}.hub-domain-empty{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-regular);}.hub-slot-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);border-block-start:1px solid var(--studio-divider);}.hub-slot-row>select{flex:1 1 200px;min-inline-size:0;max-inline-size:100%;}.hub-slot-meta{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);}.area-presence-box{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.area-presence-box.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);background:var(--studio-primary-tint);}.area-box-head{display:flex;align-items:safe center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.area-box-heading{display:flex;align-items:safe center;flex-wrap:wrap;gap:var(--studio-space-2);}.area-box-title{flex:1 1 140px;min-inline-size:0;font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.area-box-actions{display:flex;align-items:safe center;flex-wrap:wrap;gap:var(--studio-space-2);margin-inline-start:auto;}.area-box-badges{display:flex;align-items:safe center;flex-wrap:wrap;gap:var(--studio-space-2);}.area-box-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.area-presence-box>.settings-row{min-height:var(--studio-control-height);padding-block:var(--studio-space-2) 0;padding-inline:0;border-block-start:1px solid var(--studio-divider);}.area-presence-box>details.sub-collapsible{padding-block-start:var(--studio-space-2);}.area-presence-box>details.sub-collapsible>summary{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.area-presence-box>details.sub-collapsible[open]>summary,.area-presence-box>details.sub-collapsible>summary:hover{color:var(--studio-text);}.subsection-title{padding-block-start:var(--studio-space-3);border-block-start:1px solid var(--studio-divider);font-size:var(--studio-font-body);font-weight:var(--studio-weight-medium);}.card-content>.subsection-title:first-child{padding-block-start:0;border-block-start:none;}`;
+const CARD_STYLES = css`.card{min-inline-size:0;container-type:inline-size;background:var(--studio-surface);border:var(--studio-card-border-width) solid var(--studio-card-border);border-radius:var(--studio-radius-card);box-shadow:var(--studio-card-shadow);color:var(--studio-text);scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.card.danger{border-color:var(--studio-error);}.card.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-card-handoff-shadow);background:var(--studio-handoff-surface);}.handoff-active[tabindex="-1"]:focus-visible{outline:none;}.card-header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding-block:var(--studio-space-card-top) 0;padding-inline:var(--studio-space-4);}.card-heading{display:flex;flex-direction:column;gap:var(--studio-space-2);min-inline-size:0;flex:1 1 240px;}.card-title{font-size:var(--studio-font-card-title);font-weight:var(--studio-weight-regular);letter-spacing:var(--studio-card-title-tracking);line-height:var(--studio-line-height-condensed);}.card-subtitle,.row-description,.help-text{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.card-header-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.card-content{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-4);}.card-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);padding:var(--studio-space-2);border-block-start:1px solid var(--studio-divider);}details.card>summary{list-style:none;cursor:pointer;padding-block-end:var(--studio-space-card-top);}details.card>summary::-webkit-details-marker{display:none;}details.card>summary::after{content:"▾";color:var(--studio-text-secondary);transition:transform 0.15s ease;}details.card[open]>summary::after{transform:rotate(180deg);}details.card[open]>summary{border-block-end:1px solid var(--studio-divider);}details.sub-collapsible{border-block-start:1px solid var(--studio-divider);padding-block-start:var(--studio-space-3);}details.sub-collapsible>summary{cursor:pointer;font-weight:var(--studio-weight-medium);}details.sub-collapsible>.card-content{padding-block:var(--studio-space-3) 0;padding-inline:0;}details.sub-collapsible.summary-row>summary{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);list-style:none;}details.sub-collapsible.summary-row>summary::-webkit-details-marker{display:none;}.summary-row-end{display:inline-flex;align-items:center;gap:var(--studio-space-2);}.summary-chevron{color:var(--studio-text-secondary);transition:transform 0.15s ease;}details.sub-collapsible.summary-row[open]>summary .summary-chevron{transform:rotate(180deg);}.hub-domain-box{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.hub-domain-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);min-height:var(--studio-control-height-compact);}.hub-domain-title{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);font-weight:var(--studio-weight-medium);}.hub-domain-title svg{width:18px;height:18px;fill:var(--studio-primary);flex-shrink:0;}.hub-domain-empty{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-regular);}.hub-slot-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);border-block-start:1px solid var(--studio-divider);}.hub-slot-row>select{flex:1 1 200px;min-inline-size:0;max-inline-size:100%;}.hub-slot-meta{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);}.area-presence-box{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.area-presence-box.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);background:var(--studio-primary-tint);}.area-box-head{display:flex;align-items:safe center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.area-box-heading{display:flex;align-items:safe center;flex-wrap:wrap;gap:var(--studio-space-2);}.area-box-title{flex:1 1 140px;min-inline-size:0;font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.area-box-actions{display:flex;align-items:safe center;flex-wrap:wrap;gap:var(--studio-space-2);margin-inline-start:auto;}.area-box-badges{display:flex;align-items:safe center;flex-wrap:wrap;gap:var(--studio-space-2);}.area-box-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.area-presence-box>.settings-row{min-height:var(--studio-control-height);padding-block:var(--studio-space-2) 0;padding-inline:0;border-block-start:1px solid var(--studio-divider);}.area-presence-box>details.sub-collapsible{padding-block-start:var(--studio-space-2);}.area-presence-box>details.sub-collapsible>summary{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.area-presence-box>details.sub-collapsible[open]>summary,.area-presence-box>details.sub-collapsible>summary:hover{color:var(--studio-text);}.subsection-title{padding-block-start:var(--studio-space-3);border-block-start:1px solid var(--studio-divider);font-size:var(--studio-font-body);font-weight:var(--studio-weight-medium);}.card-content>.subsection-title:first-child{padding-block-start:0;border-block-start:none;}.lux-bounds-row{display:flex;align-items:safe center;flex-wrap:wrap;gap:var(--studio-space-2);}.lux-bound-field{display:inline-flex;align-items:safe center;gap:var(--studio-space-1);color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.lux-number-input{inline-size:76px;min-block-size:var(--studio-control-height-compact);padding-block:var(--studio-space-1);padding-inline:var(--studio-space-2);}`;
 __latterExp(__exports, { CARD_STYLES: () => CARD_STYLES });
 //# sourceURL=latter-studio/src/styles/cards.ts
 });
@@ -17669,6 +17745,29 @@ function renderDeviceDisplayView(store) {
   const autoBrtState = String(autoBrtPref?.value ?? "").trim();
   const autoBrtOff = autoBrtState === "Disabled" || autoBrtState === "off";
   const autoBrtTimeSchedule = autoBrtState === "Time Schedule";
+  const autoBrtAmbient = autoBrtState === "Ambient Light";
+  const activeAreaName = String(live.active_area_name || "").trim();
+  const activeAreaLux = String(live.active_area_lux_display || "").trim();
+  const activeAreaAmbPct =
+    live.active_area_ambient_pct !== null && live.active_area_ambient_pct !== undefined
+      ? Number(live.active_area_ambient_pct)
+      : null;
+  let ambientBrightnessSubtitle;
+  if (autoBrtAmbient) {
+    if (activeAreaLux && activeAreaAmbPct !== null && Number.isFinite(activeAreaAmbPct)) {
+      ambientBrightnessSubtitle = store.t("dev_display.ambient_live_status", {
+        area: activeAreaName || store.t("common.unknown"),
+        lux: activeAreaLux,
+        level: fmtNumber(activeAreaAmbPct, store.hass, 0),
+      });
+    } else if (activeAreaName && activeAreaName !== "Unassigned") {
+      ambientBrightnessSubtitle = store.t("dev_display.ambient_fallback_status", {
+        area: activeAreaName,
+      });
+    } else {
+      ambientBrightnessSubtitle = store.t("dev_display.ambient_unassigned_status");
+    }
+  }
   const brightnessPrefs = store.entity.getPrefs([
     "auto_brightness_mode",
     "manual_brightness",
@@ -17923,9 +18022,17 @@ function renderDeviceDisplayView(store) {
               heading: html`<h3 class="card-title">${store.t("card.brightness")}</h3>`,
               subtitle: bedtimeActive
                 ? store.t("dev_display.bedtime_brightness_override_note")
-                : undefined,
+                : ambientBrightnessSubtitle,
               contentClass: "settings-list",
-              body: visibleBrightnessPrefs.map((p) => renderPrefControlRow(store, p)),
+              body: visibleBrightnessPrefs.map((p) => {
+                const labelOverride =
+                  autoBrtAmbient && p.key === "day_brightness"
+                    ? store.t("dev_display.bright_brightness_label")
+                    : autoBrtAmbient && p.key === "night_brightness"
+                      ? store.t("dev_display.dark_brightness_label")
+                      : undefined;
+                return renderPrefControlRow(store, p, labelOverride);
+              }),
             })
           : nothing}
       </div>
@@ -24021,6 +24128,9 @@ function renderSystemPresenceView(store) {
   const hasFreshSignal = surveyRows.some(
     (r) => Boolean(r.is_fresh) && r.effective_rssi !== null && r.effective_rssi !== undefined,
   );
+  const hasAnyLuxSensor = unifiedAreas.some(
+    ({ row }) => (row?.illuminance_sensor_choices?.length || 0) > 0,
+  );
   return html`<section id="view-area_tracking">
     <div class="columns">
       <div class="column">
@@ -24028,6 +24138,15 @@ function renderSystemPresenceView(store) {
           id: "card-area-presence",
           title: store.t("card.area_presence_sensors"),
           subtitle: store.t("presence_sys.area_card_subtitle"),
+          headerActions: hasAnyLuxSensor
+            ? html`<button
+                type="button"
+                class="btn btn-secondary btn-compact"
+                @click=${() => void store.groups.calibrateAreaIlluminance()}
+              >
+                ${store.t("presence_sys.calibrate_all_lux")}
+              </button>`
+            : nothing,
           body: html`<div id="area-presence-grid-box" class="stack">
             ${unifiedAreas.length
               ? repeat(
@@ -24104,6 +24223,19 @@ function renderSystemPresenceView(store) {
                     const threshold = Number(row?.fusion_threshold_pct ?? 50);
                     const chosen = row?.fusion_sensors || [];
                     const choices = row?.fusion_sensor_choices || [];
+                    const luxChoices = row?.illuminance_sensor_choices || [];
+                    const luxEntity = String(row?.illuminance_entity || "auto");
+                    const luxResolvedName = String(
+                      row?.illuminance_resolved_name || row?.illuminance_resolved_entity || "",
+                    );
+                    const luxDisplay = String(row?.illuminance_lux_display || "");
+                    const luxAmbPct =
+                      row?.illuminance_ambient_pct !== null &&
+                      row?.illuminance_ambient_pct !== undefined
+                        ? Number(row.illuminance_ambient_pct)
+                        : null;
+                    const luxDark = Number(row?.illuminance_dark_lux ?? 0.5);
+                    const luxBright = Number(row?.illuminance_bright_lux ?? 40);
                     const thresholdId = `fusion-threshold-${areaId}`;
                     const areaBoxId = `area-box-${areaId}`;
                     const isAreaHandoff = store.isHandoffTarget(areaBoxId);
@@ -24147,6 +24279,14 @@ function renderSystemPresenceView(store) {
                           : hasBleProxy
                             ? html`<span class="chip">${store.t("sys_overview.ble_proxy")}</span>`
                             : html`<span class="chip chip-warning">${store.t("sys_overview.no_ble_proxy")}</span>`}
+                        ${luxDisplay && luxAmbPct !== null && Number.isFinite(luxAmbPct)
+                          ? html`<span class="chip"
+                              >${store.t("presence_sys.lux_chip", {
+                                lux: luxDisplay,
+                                level: fmtNumber(luxAmbPct, store.hass, 0),
+                              })}</span
+                            >`
+                          : nothing}
                       </div>
 
                       <div class="area-box-meta">${parts.join(" • ")}</div>
@@ -24243,6 +24383,102 @@ function renderSystemPresenceView(store) {
                                   ${store.t("presence_sys.no_area_sensors")}
                                 </p>`,
                           })}
+                          ${luxChoices.length > 0 || luxEntity !== "auto"
+                            ? html`${renderSettingsRow({
+                                  label: store.t("presence_sys.ambient_sensor"),
+                                  control: html`<select
+                                    aria-label=${store.t("presence_sys.ambient_sensor_aria", {
+                                      area: areaName,
+                                    })}
+                                    .value=${luxEntity}
+                                    @change=${(ev) =>
+                                      void store.groups.setAreaIlluminance(areaId, {
+                                        entity_id: (ev.currentTarget).value,
+                                      })}
+                                  >
+                                    <option value="auto" ?selected=${luxEntity === "auto"}>
+                                      ${luxResolvedName && luxEntity === "auto"
+                                        ? store.t("presence_sys.ambient_sensor_auto", {
+                                            sensor: luxResolvedName,
+                                          })
+                                        : store.t("presence_sys.ambient_sensor_auto_none")}
+                                    </option>
+                                    ${luxChoices.map(
+                                      (s) =>
+                                        html`<option
+                                          value=${s.entity_id}
+                                          ?selected=${luxEntity === s.entity_id}
+                                        >
+                                          ${s.name}${s.lux_display ? ` (${s.lux_display} lx)` : ""}
+                                        </option>`,
+                                    )}
+                                    <option value="disabled" ?selected=${luxEntity === "disabled"}>
+                                      ${store.t("presence_sys.ambient_sensor_disabled")}
+                                    </option>
+                                  </select>`,
+                                })}
+                                ${luxEntity !== "disabled"
+                                  ? renderSettingsRow({
+                                      label: store.t("presence_sys.calibrate_lux_btn"),
+                                      description: store.t("presence_sys.ambient_calibration_desc"),
+                                      stacked: true,
+                                      control: html`<div class="lux-bounds-row">
+                                        <label class="lux-bound-field">
+                                          <span>${store.t("presence_sys.ambient_dark_lux")}</span>
+                                          <input
+                                            type="number"
+                                            class="lux-number-input"
+                                            min="0"
+                                            max="500"
+                                            step="0.1"
+                                            aria-label=${`${store.t("presence_sys.ambient_dark_lux")} (${areaName})`}
+                                            .value=${String(luxDark)}
+                                            @change=${(ev) => {
+                                              const v = Number(
+                                                (ev.currentTarget).value,
+                                              );
+                                              if (Number.isFinite(v)) {
+                                                void store.groups.setAreaIlluminance(areaId, {
+                                                  dark_lux: v,
+                                                });
+                                              }
+                                            }}
+                                          />
+                                        </label>
+                                        <label class="lux-bound-field">
+                                          <span>${store.t("presence_sys.ambient_bright_lux")}</span>
+                                          <input
+                                            type="number"
+                                            class="lux-number-input"
+                                            min="1"
+                                            max="100000"
+                                            step="1"
+                                            aria-label=${`${store.t("presence_sys.ambient_bright_lux")} (${areaName})`}
+                                            .value=${String(luxBright)}
+                                            @change=${(ev) => {
+                                              const v = Number(
+                                                (ev.currentTarget).value,
+                                              );
+                                              if (Number.isFinite(v)) {
+                                                void store.groups.setAreaIlluminance(areaId, {
+                                                  bright_lux: v,
+                                                });
+                                              }
+                                            }}
+                                          />
+                                        </label>
+                                        <button
+                                          type="button"
+                                          class="btn btn-secondary btn-compact"
+                                          @click=${() =>
+                                            void store.groups.calibrateAreaIlluminance(areaId)}
+                                        >
+                                          ${store.t("presence_sys.calibrate_lux_btn")}
+                                        </button>
+                                      </div>`,
+                                    })
+                                  : nothing}`
+                            : nothing}
                         </div>
                       </details>
                     </div>`;

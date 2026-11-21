@@ -187,6 +187,29 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
   const autoBrtState = String(autoBrtPref?.value ?? "").trim();
   const autoBrtOff = autoBrtState === "Disabled" || autoBrtState === "off";
   const autoBrtTimeSchedule = autoBrtState === "Time Schedule";
+  const autoBrtAmbient = autoBrtState === "Ambient Light";
+  const activeAreaName = String(live.active_area_name || "").trim();
+  const activeAreaLux = String(live.active_area_lux_display || "").trim();
+  const activeAreaAmbPct =
+    live.active_area_ambient_pct !== null && live.active_area_ambient_pct !== undefined
+      ? Number(live.active_area_ambient_pct)
+      : null;
+  let ambientBrightnessSubtitle: string | undefined;
+  if (autoBrtAmbient) {
+    if (activeAreaLux && activeAreaAmbPct !== null && Number.isFinite(activeAreaAmbPct)) {
+      ambientBrightnessSubtitle = store.t("dev_display.ambient_live_status", {
+        area: activeAreaName || store.t("common.unknown"),
+        lux: activeAreaLux,
+        level: fmtNumber(activeAreaAmbPct, store.hass, 0),
+      });
+    } else if (activeAreaName && activeAreaName !== "Unassigned") {
+      ambientBrightnessSubtitle = store.t("dev_display.ambient_fallback_status", {
+        area: activeAreaName,
+      });
+    } else {
+      ambientBrightnessSubtitle = store.t("dev_display.ambient_unassigned_status");
+    }
+  }
 
   const brightnessPrefs = store.entity.getPrefs([
     "auto_brightness_mode",
@@ -449,9 +472,17 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
               heading: html`<h3 class="card-title">${store.t("card.brightness")}</h3>`,
               subtitle: bedtimeActive
                 ? store.t("dev_display.bedtime_brightness_override_note")
-                : undefined,
+                : ambientBrightnessSubtitle,
               contentClass: "settings-list",
-              body: visibleBrightnessPrefs.map((p) => renderPrefControlRow(store, p)),
+              body: visibleBrightnessPrefs.map((p) => {
+                const labelOverride =
+                  autoBrtAmbient && p.key === "day_brightness"
+                    ? store.t("dev_display.bright_brightness_label")
+                    : autoBrtAmbient && p.key === "night_brightness"
+                      ? store.t("dev_display.dark_brightness_label")
+                      : undefined;
+                return renderPrefControlRow(store, p, labelOverride);
+              }),
             })
           : nothing}
       </div>

@@ -461,6 +461,20 @@ export const EN_SYSTEM_STRINGS = {
   "presence_sys.sensors_selected_desc": "{selected} of {total} selected.",
   "presence_sys.sensors_all_desc": "None selected: every sensor in this Area counts.",
   "presence_sys.sensors_group_aria": "Sensors that count in {area}",
+  "presence_sys.calibrate_all_lux": "Auto-calibrate lux",
+  "presence_sys.lux_chip": "{lux} lx ({level}%)",
+  "presence_sys.ambient_sensor": "Ambient light sensor",
+  "presence_sys.ambient_sensor_aria": "Ambient light sensor for {area}",
+  "presence_sys.ambient_sensor_auto": "Auto ({sensor})",
+  "presence_sys.ambient_sensor_auto_none": "Auto (none detected)",
+  "presence_sys.ambient_sensor_disabled": "None (use schedule fallback)",
+  "presence_sys.ambient_dark_lux": "Dark floor (lx)",
+  "presence_sys.ambient_bright_lux": "Bright ceiling (lx)",
+  "presence_sys.ambient_calibration_desc":
+    "Auto-calibrate from 7-day Home Assistant statistics or tune manually for this sensor.",
+  "presence_sys.calibrate_lux_btn": "Auto-calibrate",
+  "presence_sys.calibrate_lux_done": "Calibrated ambient light for {count} Areas.",
+  "presence_sys.calibrate_lux_one_done": "Calibrated {area}: {dark}–{bright} lx.",
   "presence_sys.no_area_sensors":
     "This Area has no occupancy, motion, or door sensors.",
   "presence_sys.empty_areas":

@@ -313,6 +313,13 @@
           "cpp_enum": "SCREENSAVER_PHOTO_URL",
           "type": "url",
           "description": "Signed HTTP URL for the active Photo Frame screensaver image (un-dimmed, darken=1.0); empty when screensaver_style is not Photo Frame or the photo pool is empty"
+        },
+        {
+          "index": 42,
+          "name": "area_ambient_light",
+          "cpp_enum": "AREA_AMBIENT_LIGHT",
+          "type": "string",
+          "description": "Calibrated active Area ambient light level ('<norm_pct_0_100>|<formatted_lux>', e.g. '57|5.6'); empty when no illuminance sensor is available for the active Area"
         }
       ]
     },
@@ -711,7 +718,7 @@
           "name": "auto_brightness_mode",
           "cpp_enum": "AUTO_BRIGHTNESS_MODE",
           "type": "string",
-          "description": "Automatic brightness mode (Disabled|Sun Synchronized|Time Schedule)"
+          "description": "Automatic brightness mode (Disabled|Sun Synchronized|Time Schedule|Ambient Light)"
         },
         {
           "index": 13,
@@ -2889,7 +2896,8 @@
       "options": [
         "Disabled",
         "Sun Synchronized",
-        "Time Schedule"
+        "Time Schedule",
+        "Ambient Light"
       ],
       "min": null,
       "max": null,
@@ -3828,7 +3836,7 @@
     }
   ],
   "studio_contract": {
-    "studio_rev": 42,
+    "studio_rev": 43,
     "allowed_device_actions": [
       "restart",
       "find_my",
@@ -3842,6 +3850,8 @@
     "system_commands": [
       "set_ble_scanner_offset",
       "set_area_fusion",
+      "set_area_illuminance",
+      "calibrate_area_illuminance",
       "capture_ble_area_signature",
       "clear_ble_area_signature",
       "system_entity_action",

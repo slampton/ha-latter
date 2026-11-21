@@ -168,7 +168,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("TRACKER_KIND_TOKENS", js)
         self.assertIn("ignoreDiscoveredDevice", discovered_view)
         self.assertIn("unignoreDiscoveredDevice", discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 42)
+        self.assertEqual(latter_const.STUDIO_REV, 43)
         self.assertNotIn("hold_crown_power_off", js)
         self.assertIn(f"const STUDIO_REV = {latter_const.STUDIO_REV};", js)
         self.assertIn(".card.handoff-active", js)

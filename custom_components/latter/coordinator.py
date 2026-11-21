@@ -484,6 +484,7 @@ class LatterCoordinator:
         self._cached_media_payload: tuple[float, tuple[str | None, dict[str, Any]]] | None = None
         self._cached_media_anchor: tuple[tuple[Any, ...], float] | None = None
         self._cached_area_payload: tuple[float, tuple[str, dict[str, Any]]] | None = None
+        self._last_ambient_light: tuple[str, int | None, str] = ("", None, "")
         self._cached_remote_payload: tuple[float, tuple[str | None, dict[str, Any]]] | None = None
         self._cached_prefs_payload: tuple[int, dict[str, Any]] | None = None
         self._cached_shortcuts_payload: tuple[int, tuple[str, ...]] | None = None

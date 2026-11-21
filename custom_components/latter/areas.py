@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 import logging
+import math
 import re
 import time
 from typing import Any
@@ -30,10 +31,15 @@ from homeassistant.util import dt as dt_util
 
 from .cameras import resolve_camera_capabilities
 from .const import (
+    AMBIENT_LIGHT_DEADBAND_PCT,
     CONF_ALARM_ENTITY,
+    CONF_AREA_ILLUMINANCE_CONFIG,
     CONF_BROADCAST_SPEAKERS,
     CONF_DEFAULT_AREA,
     CONF_ESPHOME_DEVICE_ID,
+    DATA_GLOBAL_CONFIG,
+    DEFAULT_AREA_BRIGHT_LUX,
+    DEFAULT_AREA_DARK_LUX,
     DEFAULT_BROADCAST_PHRASES,
     DOMAIN,
     SUBENTRY_DEVICE,
@@ -450,6 +456,203 @@ def get_area_climate_telemetry(
                 break
 
     return result
+
+
+def normalize_ambient_lux(
+    lux: float,
+    dark_lux: float = DEFAULT_AREA_DARK_LUX,
+    bright_lux: float = DEFAULT_AREA_BRIGHT_LUX,
+) -> int:
+    """Map an illuminance reading (`lx`) onto a perceptual `0..100` level between `dark_lux` and `bright_lux`."""
+    if not math.isfinite(lux):
+        return 0
+    lo = max(0.0, float(dark_lux)) if math.isfinite(dark_lux) else DEFAULT_AREA_DARK_LUX
+    hi = max(lo + 1.0, float(bright_lux)) if math.isfinite(bright_lux) else max(lo + 1.0, DEFAULT_AREA_BRIGHT_LUX)
+    above = max(0.0, float(lux) - lo)
+    span = max(1.0, hi - lo)
+    norm = math.log1p(above) / math.log1p(span)
+    return max(0, min(100, round(norm * 100.0)))
+
+
+def format_ambient_lux(lux: float) -> str:
+    """Format a lux reading compactly for Protocol v3 and Studio (`0`, `5.6`, `42`)."""
+    if not math.isfinite(lux) or lux < 0.05:
+        return "0"
+    clamped = min(100000.0, float(lux))
+    if clamped < 10.0:
+        formatted = f"{clamped:.1f}".rstrip("0").rstrip(".")
+        return formatted or "0"
+    return str(round(clamped))
+
+
+def area_illuminance_settings(
+    hass: HomeAssistant, area_id: str | None
+) -> dict[str, Any]:
+    """Return effective ambient light calibration settings for one Area."""
+    entity_id = "auto"
+    dark_lux = float(DEFAULT_AREA_DARK_LUX)
+    bright_lux = float(DEFAULT_AREA_BRIGHT_LUX)
+    if area_id:
+        global_cfg = (hass.data.get(DOMAIN) or {}).get(DATA_GLOBAL_CONFIG) or {}
+        raw_map = global_cfg.get(CONF_AREA_ILLUMINANCE_CONFIG)
+        if isinstance(raw_map, Mapping):
+            entry = raw_map.get(area_id)
+            if isinstance(entry, Mapping):
+                raw_ent = str(entry.get("entity_id") or "").strip()
+                if raw_ent:
+                    entity_id = raw_ent
+                try:
+                    if entry.get("dark_lux") is not None:
+                        dark_lux = max(0.0, min(500.0, float(entry["dark_lux"])))
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    if entry.get("bright_lux") is not None:
+                        bright_lux = max(dark_lux + 1.0, min(100000.0, float(entry["bright_lux"])))
+                except (TypeError, ValueError):
+                    pass
+    if bright_lux < dark_lux + 1.0:
+        bright_lux = dark_lux + 1.0
+    return {
+        "entity_id": entity_id,
+        "dark_lux": round(dark_lux, 2),
+        "bright_lux": round(bright_lux, 1),
+    }
+
+
+def _parse_illuminance_state(state_obj: State | None) -> float | None:
+    """Parse a finite non-negative numeric illuminance value from `state_obj`, or None."""
+    if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
+        return None
+    try:
+        val = float(state_obj.state)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(val) or val < 0.0:
+        return None
+    return val
+
+
+def area_illuminance_sensor_choices(
+    hass: HomeAssistant, area_id: str | None
+) -> list[dict[str, Any]]:
+    """Return illuminance (`lx`) sensor choices assigned to `area_id`."""
+    if not area_id:
+        return []
+    idx = get_area_state_index(hass)
+    ent_reg = er.async_get(hass)
+    latter_dev_ids = latter_bound_esphome_device_ids(hass)
+    choices: list[dict[str, Any]] = []
+    for state_obj in sorted(
+        idx.entities_in_area(area_id, ("sensor",)), key=lambda s: s.entity_id
+    ):
+        entry = ent_reg.async_get(state_obj.entity_id)
+        if entry is not None:
+            if entry.disabled_by or entry.hidden_by:
+                continue
+            if entry.entity_category is not None:
+                continue
+            if entry.device_id and entry.device_id in latter_dev_ids:
+                continue
+        attrs = state_obj.attributes
+        dev_class = str(attrs.get("device_class") or "").lower()
+        unit = str(attrs.get("unit_of_measurement") or "").strip().lower()
+        if dev_class != "illuminance" and unit not in ("lx", "lux"):
+            continue
+        lux_val = _parse_illuminance_state(state_obj)
+        choices.append(
+            {
+                "entity_id": state_obj.entity_id,
+                "name": str(attrs.get("friendly_name") or state_obj.entity_id),
+                "lux": lux_val,
+                "lux_display": format_ambient_lux(lux_val) if lux_val is not None else "",
+                "available": lux_val is not None,
+            }
+        )
+    return choices
+
+
+def resolve_area_ambient_light(
+    hass: HomeAssistant, area_id: str | None
+) -> dict[str, Any]:
+    """Resolve active Area illuminance reading and calibrated Protocol v3 `area_ambient_light` payload."""
+    cfg = area_illuminance_settings(hass, area_id)
+    dark_lux = float(cfg["dark_lux"])
+    bright_lux = float(cfg["bright_lux"])
+    configured_ent = str(cfg["entity_id"] or "auto")
+    out: dict[str, Any] = {
+        "configured_entity": configured_ent,
+        "resolved_entity": "",
+        "resolved_name": "",
+        "lux": None,
+        "lux_display": "",
+        "ambient_pct": None,
+        "dark_lux": dark_lux,
+        "bright_lux": bright_lux,
+        "wire": "",
+    }
+    if not area_id or configured_ent == "disabled":
+        return out
+
+    chosen_state: State | None = None
+    chosen_eid = ""
+    if configured_ent != "auto":
+        st = hass.states.get(configured_ent)
+        lux_val = _parse_illuminance_state(st)
+        if st is not None:
+            chosen_eid = configured_ent
+            out["resolved_entity"] = configured_ent
+            out["resolved_name"] = str(st.attributes.get("friendly_name") or configured_ent)
+            if lux_val is not None:
+                chosen_state = st
+    else:
+        choices = area_illuminance_sensor_choices(hass, area_id)
+        for item in choices:
+            if item["available"]:
+                chosen_eid = str(item["entity_id"])
+                chosen_state = hass.states.get(chosen_eid)
+                out["resolved_entity"] = chosen_eid
+                out["resolved_name"] = str(item["name"])
+                break
+        if not chosen_eid and choices:
+            out["resolved_entity"] = str(choices[0]["entity_id"])
+            out["resolved_name"] = str(choices[0]["name"])
+
+    lux_val = _parse_illuminance_state(chosen_state)
+    if lux_val is None:
+        return out
+
+    ambient_pct = normalize_ambient_lux(lux_val, dark_lux, bright_lux)
+    lux_disp = format_ambient_lux(lux_val)
+    out["lux"] = lux_val
+    out["lux_display"] = lux_disp
+    out["ambient_pct"] = ambient_pct
+    out["wire"] = f"{ambient_pct}|{lux_disp}"
+    return out
+
+
+def apply_ambient_light_deadband(
+    prev: tuple[str, int | None, str],
+    area_id: str,
+    ambient_pct: int | None,
+    wire: str,
+    *,
+    deadband_pct: int = AMBIENT_LIGHT_DEADBAND_PCT,
+) -> tuple[str, int | None, str]:
+    """Suppress minor ambient-lux jitter within the same Area to keep Protocol v3 quiet."""
+    prev_area, prev_pct, _prev_wire = prev
+    if (
+        area_id != prev_area
+        or (prev_pct is None) != (ambient_pct is None)
+        or ambient_pct is None
+        or prev_pct is None
+    ):
+        return (area_id, ambient_pct, wire)
+    if ambient_pct in (0, 100) and ambient_pct != prev_pct:
+        return (area_id, ambient_pct, wire)
+    if abs(ambient_pct - prev_pct) >= max(1, int(deadband_pct)):
+        return (area_id, ambient_pct, wire)
+    return prev
 
 
 def compute_alarm_caps(state_obj: State | None) -> int:
@@ -1820,6 +2023,18 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
     climate_telemetry = get_area_climate_telemetry(
         coordinator.hass, eff_area_id or None
     )
+    ambient_info = resolve_area_ambient_light(
+        coordinator.hass, eff_area_id or None
+    )
+    prev_ambient = getattr(coordinator, "_last_ambient_light", ("", None, ""))
+    eff_ambient = apply_ambient_light_deadband(
+        prev_ambient,
+        eff_area_id,
+        ambient_info["ambient_pct"],
+        ambient_info["wire"],
+    )
+    coordinator._last_ambient_light = eff_ambient
+    area_ambient_wire = eff_ambient[2]
     alarm_info = get_home_alarm_summary(
         coordinator.hass, coordinator.get_opt(CONF_ALARM_ENTITY)
     )
@@ -1903,6 +2118,12 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         "local_tz_info": local_tz_info,
         "world_clocks_summary": world_clocks_summary,
         "screensaver_photo_url": coordinator.build_screensaver_photo_url(),
+        "area_ambient_light": area_ambient_wire,
+        "area_lux": ambient_info["lux"],
+        "area_lux_display": ambient_info["lux_display"],
+        "area_ambient_pct": ambient_info["ambient_pct"],
+        "area_illuminance_entity": ambient_info["resolved_entity"],
+        "area_illuminance_name": ambient_info["resolved_name"],
     }
     area_rev, area_payload = coordinator._pack_domain_payload(
         "area_context",
@@ -1952,6 +2173,7 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         camera_stream_url,
         alert_camera_entity,
         area_attrs["screensaver_photo_url"],
+        area_ambient_wire,
     )
     area_attrs["rev"] = area_rev
     area_attrs["payload"] = area_payload

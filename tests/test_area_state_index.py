@@ -732,7 +732,7 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     assert area_state == "Living Area"
     assert area_attrs["area_icon"] == "mdi:sofa"
     wire_tokens = area_attrs["payload"].split("\x1f")
-    assert len(wire_tokens) == 42
+    assert len(wire_tokens) == 43
     assert wire_tokens[35] == "mdi:sofa"
     assert wire_tokens[36].startswith("America/Los_Angeles|Los Angeles|")
     assert wire_tokens[37] == ""

@@ -19,6 +19,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.util import dt as dt_util
 
+from ..areas import resolve_area_ambient_light
 from ..cameras import resolve_camera_capabilities
 from ..config_flow import get_discovered_latter_devices
 from ..const import (
@@ -1949,6 +1950,21 @@ def build_studio_state_payload(
     ss_pool = coordinator.resolve_screensaver_photo_pool()
     active_wp_id = coordinator.wallpaper_source
     active_ss_id = coordinator.screensaver_photo_source
+    active_ambient = (
+        resolve_area_ambient_light(hass, coordinator.active_area_id or None)
+        if not coordinator.is_ble_tag
+        else {
+            "resolved_entity": "",
+            "resolved_name": "",
+            "lux_display": "",
+            "ambient_pct": None,
+        }
+    )
+    active_area_name = (
+        coordinator.get_current_area_and_distance()[0]
+        if coordinator.is_ble_tag
+        else coordinator.active_area_name
+    )
 
     return {
         **base,
@@ -1971,11 +1987,11 @@ def build_studio_state_payload(
             "active_screensaver_photo_id": active_ss_id,
             "active_screensaver_photo_thumb_url": wp_thumb_by_id.get(active_ss_id, ""),
             "screensaver_pool_count": len(ss_pool),
-            "active_area_name": (
-                coordinator.get_current_area_and_distance()[0]
-                if coordinator.is_ble_tag
-                else coordinator.active_area_name
-            ),
+            "active_area_name": active_area_name,
+            "active_area_lux_display": active_ambient["lux_display"],
+            "active_area_ambient_pct": active_ambient["ambient_pct"],
+            "active_area_illuminance_entity": active_ambient["resolved_entity"],
+            "active_area_illuminance_name": active_ambient["resolved_name"],
             "ma_link_matched": bool(
                 local_ma_id
                 or not local_spk_id

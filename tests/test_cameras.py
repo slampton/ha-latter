@@ -846,7 +846,7 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
         coord._cached_area_payload = None
         _st, area_attrs = coord.get_area_context_payload()
         wire = area_attrs["payload"].split("\x1f")
-        assert len(wire) == 42
+        assert len(wire) == 43
         # Non-doorbell cameras default Listen/Talk/Reply/Unlock OFF -> front_door has only in_carousel (8)
         assert "camera.front_door|Front Door||8|" in wire[21]
         assert "camera.backyard|Backyard||0|" in wire[21]

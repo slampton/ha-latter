@@ -146,6 +146,7 @@ export const PREF_OPTION_LABELS: Readonly<Record<string, string>> = {
   Fireworks: "Fireworks",
   "Sun Synchronized": "Sun synchronized",
   "Time Schedule": "Time schedule",
+  "Ambient Light": "Ambient light",
   "Steel Blue": "Steel blue",
   Pink: "Pink",
   Blue: "Blue",

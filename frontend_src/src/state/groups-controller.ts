@@ -1020,4 +1020,63 @@ export class GroupsController {
       this.store.showToast(formatWsError(err, "Could not update Area fusion"), true);
     }
   }
+
+  async setAreaIlluminance(
+    areaId: string,
+    update: { entity_id?: string; dark_lux?: number; bright_lux?: number },
+  ): Promise<void> {
+    try {
+      const res = await this.store.ws.runSystemCommand(
+        "set_area_illuminance",
+        { area_id: areaId, ...update },
+        this.store.activeSubentryId || null,
+      );
+      if (res) this.store.ingestPayload(res, false);
+      this.store.announcePolite(this.store.t("shell.saved_status"));
+    } catch (err) {
+      this.store.showToast(formatWsError(err, "Could not update Area ambient light"), true);
+    }
+  }
+
+  async calibrateAreaIlluminance(areaId?: string): Promise<void> {
+    try {
+      const payload: Record<string, unknown> = {};
+      if (areaId) payload.area_id = areaId;
+      const res = await this.store.ws.runSystemCommand(
+        "calibrate_area_illuminance",
+        payload,
+        this.store.activeSubentryId || null,
+      );
+      if (res) this.store.ingestPayload(res, false);
+      const rawCal = (res as unknown as {
+        calibrated?: Array<{
+          area_name?: string;
+          dark_lux?: number;
+          bright_lux?: number;
+        }>;
+      } | null)?.calibrated;
+      const list = Array.isArray(rawCal) ? rawCal : [];
+      if (list.length === 1) {
+        const item = list[0];
+        this.store.showToast(
+          this.store.t("presence_sys.calibrate_lux_one_done", {
+            area: String(item.area_name || ""),
+            dark: String(item.dark_lux ?? 0),
+            bright: String(item.bright_lux ?? 40),
+          }),
+          false,
+        );
+      } else if (list.length > 1) {
+        this.store.showToast(
+          this.store.t("presence_sys.calibrate_lux_done", { count: list.length }),
+          false,
+        );
+      }
+    } catch (err) {
+      this.store.showToast(
+        formatWsError(err, "Could not calibrate Area ambient light"),
+        true,
+      );
+    }
+  }
 }

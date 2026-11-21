@@ -3127,13 +3127,26 @@ def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
 
     rows: list[dict[str, Any]] = []
     for area_entry in sorted(area_reg.async_list_areas(), key=lambda a: a.name.lower()):
+        from .areas import (
+            area_illuminance_sensor_choices,
+            resolve_area_ambient_light,
+        )
+
         occ = fabric.get_area_occupancy(area_entry.id)
         has_proxy = area_entry.id in proxy_areas
         has_sig = area_entry.id in sig_areas
         has_sensors = len(occ["available_sensors"]) > 0
-        if not has_proxy and not has_sig and not has_sensors and not occ["is_occupied"]:
+        lux_choices = area_illuminance_sensor_choices(hass, area_entry.id)
+        if (
+            not has_proxy
+            and not has_sig
+            and not has_sensors
+            and not lux_choices
+            and not occ["is_occupied"]
+        ):
             continue
         fusion_cfg = area_fusion_settings(hass, area_entry.id)
+        ambient = resolve_area_ambient_light(hass, area_entry.id)
         rows.append(
             {
                 "area_id": area_entry.id,
@@ -3162,6 +3175,15 @@ def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
                     str(s) for s in (fusion_cfg.get("sensors") or []) if isinstance(s, str)
                 ],
                 "fusion_sensor_choices": area_fusion_sensor_choices(hass, area_entry.id),
+                "illuminance_entity": ambient["configured_entity"],
+                "illuminance_resolved_entity": ambient["resolved_entity"],
+                "illuminance_resolved_name": ambient["resolved_name"],
+                "illuminance_lux": ambient["lux"],
+                "illuminance_lux_display": ambient["lux_display"],
+                "illuminance_ambient_pct": ambient["ambient_pct"],
+                "illuminance_dark_lux": ambient["dark_lux"],
+                "illuminance_bright_lux": ambient["bright_lux"],
+                "illuminance_sensor_choices": lux_choices,
             }
         )
     return rows

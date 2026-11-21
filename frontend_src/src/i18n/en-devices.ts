@@ -181,6 +181,13 @@ export const EN_DEVICES_STRINGS = {
   "dev_display.card_voice_assistant": "Voice assistant",
   "dev_display.bedtime_brightness_override_note":
     "Bedtime mode is currently active and overriding screen brightness.",
+  "dev_display.bright_brightness_label": "Bright brightness",
+  "dev_display.dark_brightness_label": "Dark brightness",
+  "dev_display.ambient_live_status": "{area} · {lux} lx ({level}% ambient)",
+  "dev_display.ambient_fallback_status":
+    "No ambient light sensor in {area} — using Sun synchronized fallback.",
+  "dev_display.ambient_unassigned_status":
+    "Locate or assign this Device to an Area to use ambient light.",
   "dev_display.screensaver_preview_desc":
     "Starts the screensaver on this Device immediately.",
   "dev_display.preview_btn": "Preview",

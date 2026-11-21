@@ -30,6 +30,8 @@ export const WS_LONG_TIMEOUT_MS = 60_000;
 export type SystemWsCommand =
   | "set_ble_scanner_offset"
   | "set_area_fusion"
+  | "set_area_illuminance"
+  | "calibrate_area_illuminance"
   | "capture_ble_area_signature"
   | "clear_ble_area_signature"
   | "system_entity_action"
