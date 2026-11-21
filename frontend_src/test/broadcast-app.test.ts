@@ -12,7 +12,6 @@ import { renderAppConfigModalBody } from "../src/components/dialogs/app-config.j
 import { HOME_CATEGORIES_CATALOG, STUDIO_REV } from "../src/constants.js";
 import { render } from "../src/lib/lit.js";
 import { ROUTE_PREVIEW_ICONS } from "../src/mdi-catalog.js";
-import { renderSystemOverviewView } from "../src/views/system-overview-view.js";
 import { renderSystemSharedView } from "../src/views/system-shared-view.js";
 import { resetDomBody, simDocument } from "./dom-shim.js";
 import { makeFakeStore, renderToHtml } from "./fake-store.js";
@@ -30,7 +29,7 @@ describe("Home Hub Broadcast App (D-074 / STUDIO_REV 41)", () => {
     assert.equal(ROUTE_PREVIEW_ICONS["home_hub:intercom"], "mdi:bullhorn");
   });
 
-  it("renders Broadcast speakers with Area chips and Quick broadcast phrases in System -> Shared entities and counts them in System Overview", () => {
+  it("renders Broadcast speakers with Area chips and Quick broadcast phrases in System -> Shared entities", () => {
     const harness = makeFakeStore({
       currentScope: "system",
       currentViewId: "shared_entities",
@@ -56,10 +55,6 @@ describe("Home Hub Broadcast App (D-074 / STUDIO_REV 41)", () => {
     assert.ok(sharedHtml.includes("Kitchen"));
     assert.ok(sharedHtml.includes("Dinner is ready"));
     assert.ok(sharedHtml.includes("Time to leave"));
-
-    const overviewHtml = renderToHtml(renderSystemOverviewView(harness.store));
-    assert.ok(overviewHtml.includes("2 Broadcast speakers"));
-    assert.ok(overviewHtml.includes(harness.store.t("sys_overview.active_of_seven", { count: "1" })));
   });
 
   it("always renders standard native <select> dropdowns (never combobox) for Broadcast speakers and Cameras even with > 8 options", () => {

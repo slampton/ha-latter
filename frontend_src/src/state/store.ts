@@ -1472,7 +1472,6 @@ export class StudioStore implements ReactiveController {
         has_security_pin: incoming.has_security_pin,
         photo_collections: mergedPhotoCollections,
         system_wallpapers: mergedSystemWallpapers,
-        doorbells: incoming.doorbells,
         catalog: mergedCatalog,
         pref_specs: mergedPrefSpecs,
         world_clock_zones: mergedWorldClockZones,

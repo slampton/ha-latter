@@ -1789,7 +1789,6 @@ class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
                     custom_palettes: [{ name: "Ocean", hex: "#009ac7" }],
                     doorbell_noise_reduction: "strong",
                   },
-                  doorbells: [{ camera_entity: "camera.front_door", ring_entity: "binary_sensor.front_doorbell" }],
                   system_wallpapers: [
                     { id: "preset:forest_mountains", name: "Forest Mountains", kind: "preset" },
                     { id: "upload:1", name: "Custom Photo", kind: "upload", deletable: true },
@@ -1808,6 +1807,8 @@ class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
         alerts = re.sub(r"\s+", " ", got["alertsHtml"])
 
         self.assertNotIn("sys-issues-banner", healthy)
+        self.assertNotIn("card-system-capabilities", healthy)
+        self.assertNotIn("System capabilities", healthy)
         for expected in (
             "All online",
             "2 / 2 online",
@@ -1815,11 +1816,8 @@ class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
             "2 Areas • 5 BLE proxies",
             "1 person assigned",
             "Area deployment",
-            "System capabilities",
-            "Photo library",
-            "Custom colors",
-            "--swatch-color:#009AC7",
-            "System PIN set",
+            "Living Area",
+            "Living Panel",
         ):
             self.assertIn(expected, healthy)
 
@@ -1830,7 +1828,6 @@ class TestDeviceGroupsAndCustomFlow(unittest.TestCase):
             "sys-discovered-banner",
             "Hardware ready to adopt",
             "Office Dock",
-            "No System PIN",
         ):
             self.assertIn(expected_alert, alerts)
 

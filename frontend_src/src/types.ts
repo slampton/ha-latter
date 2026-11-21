@@ -500,21 +500,6 @@ export interface BulkPhotoUpdateResult {
   deleted_ids: string[];
 }
 
-interface DoorbellTalkEntry {
-  device_title: string;
-  state: string;
-}
-
-interface DoorbellStatusItem {
-  camera_entity: string;
-  camera_name?: string;
-  ring_entity?: string;
-  ring_name?: string;
-  ring_state?: string;
-  ring_at?: string;
-  talk?: DoorbellTalkEntry[];
-}
-
 interface AreaFusionSensorChoice {
   entity_id: string;
   name: string;
@@ -708,7 +693,6 @@ export interface StudioStatePayload {
   has_security_pin?: boolean;
   photo_collections?: PhotoCollection[];
   system_wallpapers: PhotoItem[];
-  doorbells: DoorbellStatusItem[];
   catalog?: EntityCatalog;
   pref_specs?: DevicePrefSpecItem[];
   world_clock_zones?: WorldClockZoneItem[];

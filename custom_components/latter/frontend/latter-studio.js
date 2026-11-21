@@ -666,7 +666,6 @@ const EN_SYSTEM_STRINGS = {
   "card.support_subtitle":
     "Version lockstep, redacted System diagnostics bundle, and issue reporting.",
   "card.area_deployment": "Area deployment",
-  "card.system_capabilities": "System capabilities",
   "card.home_hub_weather": "Home hub & weather",
   "card.calendars": "Calendars",
   "card.cameras_doorbell": "Cameras & doorbell audio",
@@ -691,13 +690,19 @@ const EN_SYSTEM_STRINGS = {
   "support.download_system_diagnostics": "Download System diagnostics",
   "support.documentation": "Documentation",
   "support.report_issue": "Report an issue",
-  // System -> Overview (D-051 / D-003 / D-004 / D-061)
+  // System -> Overview (D-051 / D-003 / D-004 / D-061 / D-076)
   "sys_overview.no_devices": "No Devices",
   "sys_overview.issues_one": "1 issue",
   "sys_overview.issues_many": "{count} issues",
   "sys_overview.updates_one": "1 update",
   "sys_overview.updates_many": "{count} updates",
   "sys_overview.all_online": "All online",
+  "sys_overview.healthy": "Healthy",
+  "sys_overview.sleeping_count": "{count} sleeping",
+  "sys_overview.away_count": "{count} away",
+  "sys_overview.scanning_count": "{count} scanning",
+  "sys_overview.offline_count": "{count} offline",
+  "sys_overview.low_battery_count": "{count} low battery",
   "sys_overview.online_ratio": "{online} / {total} online",
   "sys_overview.zero_devices": "0 Devices",
   "sys_overview.ready_to_onboard": "Ready to onboard",
@@ -756,71 +761,8 @@ const EN_SYSTEM_STRINGS = {
     "+1 additional Home Assistant Area without Latter Devices or BLE coverage.",
   "sys_overview.unconfigured_areas_many":
     "+{count} additional Home Assistant Areas without Latter Devices or BLE coverage.",
-  "sys_overview.capabilities_subtitle":
-    "Shared entities, photo library, media routing, Device groups, custom colors, and security policies.",
-  "sys_overview.active_of_seven": "{count} / 7 active",
-  "sys_overview.hub_weather": "Weather",
-  "sys_overview.hub_alarm": "Alarm",
-  "sys_overview.hub_broadcast": "Broadcast",
-  "sys_overview.hub_broadcast_speakers": "{count} Broadcast speakers",
-  "sys_overview.hub_thermostat": "Thermostat",
-  "sys_overview.hub_zones": "{count} zones",
-  "sys_overview.hub_lock": "Door lock",
-  "sys_overview.hub_locks": "{count} locks",
-  "sys_overview.hub_garage": "Garage door",
-  "sys_overview.hub_garages": "{count} garage doors",
-  "sys_overview.hub_vacuum": "Vacuum",
-  "sys_overview.hub_vacuums": "{count} vacuums",
-  "sys_overview.cap_cameras_calendars": "Cameras, doorbells & calendars",
-  "sys_overview.not_set": "Not set",
-  "sys_overview.cameras_one": "1 camera",
-  "sys_overview.cameras_many": "{count} cameras",
-  "sys_overview.doorbells_one": "1 doorbell",
-  "sys_overview.doorbells_many": "{count} doorbells",
-  "sys_overview.calendars_one": "1 calendar",
-  "sys_overview.calendars_many": "{count} calendars",
-  "sys_overview.cameras_calendars_empty":
-    "Connect cameras for doorbell popups and calendars for the Home agenda.",
-  "sys_overview.cap_media_remotes": "Media & remotes",
-  "sys_overview.remotes_meta": "{groups} • {overrides}",
-  "sys_overview.area_groups_one": "1 Area group",
-  "sys_overview.area_groups_many": "{count} Area groups",
-  "sys_overview.vol_overrides_one": "1 volume override",
-  "sys_overview.vol_overrides_many": "{count} volume overrides",
-  "sys_overview.remotes_empty":
-    "Add TV, streaming, or AV receiver remotes and volume overrides.",
-  "sys_overview.cap_device_groups": "Device groups",
-  "sys_overview.groups_one": "1 group",
-  "sys_overview.groups_many": "{count} groups",
-  "sys_overview.groups_meta_dynamic": "Shared baselines across {names}.",
-  "sys_overview.groups_meta_empty":
-    "Shared baselines that keep assigned Devices aligned.",
-  "sys_overview.custom_group_chip": "Custom: {count}",
-  "sys_overview.cap_photo_library": "Photo library",
   "sys_overview.photos_count_one": "1 photo",
   "sys_overview.photos_count_many": "{count} photos",
-  "sys_overview.defaults_one": "1 default",
-  "sys_overview.defaults_many": "{count} defaults",
-  "sys_overview.collections_one": "1 collection",
-  "sys_overview.collections_many": "{count} collections",
-  "sys_overview.photo_library_meta": "{defaults} • {photos} • {collections}",
-  "sys_overview.cap_custom_colors": "Custom colors",
-  "sys_overview.custom_colors_empty": "Add shared accent swatches for Custom color profiles.",
-  "sys_overview.cap_colors_wallpapers": "Colors & wallpapers",
-  "sys_overview.wallpapers_one": "1 wallpaper",
-  "sys_overview.wallpapers_many": "{count} wallpapers",
-  "sys_overview.colors_wallpapers_meta": "{colors} • {presets}{uploaded}",
-  "sys_overview.custom_colors_one": "1 custom color",
-  "sys_overview.custom_colors_many": "{count} custom colors",
-  "sys_overview.presets_one": "1 preset",
-  "sys_overview.presets_many": "{count} presets",
-  "sys_overview.uploaded_suffix": ", {count} uploaded",
-  "sys_overview.system_pin_set": "System PIN set",
-  "sys_overview.no_system_pin": "No System PIN",
-  "sys_overview.pin_active_meta":
-    "Default PIN active for opening locks, garage covers, and code-less alarms.",
-  "sys_overview.pin_unset_meta":
-    "Set a fallback System security PIN for perimeter locks, covers, and alarms.",
   // System -> Shared entities (D-022 / D-059 / D-065)
   "shared.home_hub_subtitle":
     "Shared climate zones, entry controls, vacuums, security, and weather across every Device.",
@@ -12197,7 +12139,6 @@ class StudioStore {
         has_security_pin: incoming.has_security_pin,
         photo_collections: mergedPhotoCollections,
         system_wallpapers: mergedSystemWallpapers,
-        doorbells: incoming.doorbells,
         catalog: mergedCatalog,
         pref_specs: mergedPrefSpecs,
         world_clock_zones: mergedWorldClockZones,
@@ -16335,7 +16276,7 @@ const { css } = __req("src/lib/lit.ts");
  * Key-value lists, data tables, WCAG 2.2 AA chips, >= 32px pills, BLE signal bars,
  * wallpaper gallery, camera previews, logs, & alerts (`D-061`, `D-064`).
  */
-const DATA_STYLES = css`.kv-list{display:flex;flex-direction:column;gap:0;}.kv-row{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:0;}.kv-row>span:first-child{color:var(--studio-text-secondary);}.kv-row>strong,.kv-value{font-weight:var(--studio-weight-medium);font-variant-numeric:tabular-nums;text-align:end;}button.kv-row{inline-size:100%;border:none;border-radius:var(--studio-radius-control);background:transparent;color:inherit;font:inherit;text-align:start;cursor:pointer;}button.kv-row:hover{background:var(--studio-hover);}button.kv-row>strong::after{content:" ›";color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}:host(:dir(rtl)) button.kv-row>strong::after{content:" ‹";}.table-wrap{inline-size:100%;overflow-x:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}table.data-table{inline-size:100%;border-collapse:collapse;text-align:start;}table.data-table th{padding:0;border-block-end:1px solid var(--studio-divider);white-space:nowrap;}.sort-btn{inline-size:100%;padding:var(--studio-space-3);border:none;background:transparent;color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:start;cursor:pointer;}.sort-btn:hover{color:var(--studio-text);}th[aria-sort="ascending"] .sort-btn,th[aria-sort="descending"] .sort-btn{color:var(--studio-primary);}table.data-table td{padding:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);white-space:nowrap;}table.data-table tbody tr:last-child td{border-block-end:none;}table.data-table tbody tr{cursor:pointer;}table.data-table tbody tr:hover,table.data-table tbody tr:focus-visible{background:var(--studio-hover);}td.col-name{font-weight:var(--studio-weight-medium);}table.data-table a{color:inherit;text-decoration:none;}table.data-table a:hover{text-decoration:underline;}td.col-open{color:var(--studio-text-secondary);text-align:end;}.chip{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:22px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);white-space:nowrap;font-variant-numeric:tabular-nums;}.chip-primary{background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.chip-success{background:var(--studio-chip-success-bg);color:var(--studio-chip-success-text);}.chip-warning{background:var(--studio-chip-warning-bg);color:var(--studio-chip-warning-text);}.chip-error{background:var(--studio-chip-danger-bg);color:var(--studio-chip-danger-text);}.status-dot{display:inline-block;inline-size:8px;block-size:8px;margin-inline-end:var(--studio-space-2);border-radius:50%;background:var(--studio-text-disabled);}.chip>.status-dot{margin-inline-end:var(--studio-space-1);}.status-dot.online{background:var(--studio-success);}.status-dot.update{background:var(--studio-warning);}.status-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);}@container (max-width:260px){.status-tiles{grid-template-columns:minmax(0,1fr);}}.status-tile{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-1);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.status-tile{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.status-tile:hover{background:var(--studio-hover);border-color:var(--studio-primary);}button.status-tile:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.status-tile-head{display:flex;align-items:center;gap:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.status-tile-head svg{inline-size:16px;block-size:16px;fill:currentColor;flex-shrink:0;}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}.status-tile-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.status-tile>.signal-track{margin-block-start:var(--studio-space-1);}@container (max-width:420px){.status-tile{gap:0;padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);}.status-tile-head{gap:var(--studio-space-1);}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-body);}.status-tile-meta{margin-block-start:var(--studio-space-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}.overview-box{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-2);inline-size:100%;padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.overview-box{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.overview-box:hover{background:var(--studio-hover);border-color:var(--studio-primary);}.overview-box-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-title{display:inline-flex;align-items:center;gap:var(--studio-space-2);font-size:var(--studio-font-body);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.overview-box-title svg{inline-size:18px;block-size:18px;fill:currentColor;color:var(--studio-text-secondary);flex-shrink:0;}.overview-box-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-chevron{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.overview-box-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.overview-chips{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);}.swatch-strip{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);}.swatch.swatch-sm{inline-size:14px;block-size:14px;}.pill-list{display:flex;flex-wrap:wrap;gap:var(--studio-space-2);}.pill{display:inline-flex;align-items:center;gap:2px;min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);}.pill.enabled{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.pill-move{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-move:hover:not(:disabled){background:var(--studio-hover);color:var(--studio-primary);}.pill-move:disabled{opacity:0.4;cursor:not-allowed;}.pill-toggle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-toggle:disabled{opacity:0.5;cursor:not-allowed;}.pill .drag-handle{border-radius:var(--studio-radius-pill);color:inherit;}.swatch{display:inline-block;inline-size:20px;block-size:20px;border-radius:50%;border:1px solid var(--studio-divider);background:var(--swatch-color,var(--studio-primary));flex-shrink:0;}#card-ble-calibration{scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));}.calibrate-target-box{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.calibrate-target-box.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);background:var(--studio-primary-tint);}.calibrate-handoff-banner{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-weight:var(--studio-weight-medium);}.signal-row{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.signal-row.winner{border-color:var(--studio-primary);}.proxy-trim-details{padding-block-start:var(--studio-space-2);}.proxy-trim-details>summary{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.proxy-trim-details[open]>summary,.proxy-trim-details>summary:hover{color:var(--studio-text);}.proxy-trim-body{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);}.signal-row-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-row-title{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.signal-track,.upload-progress{block-size:6px;border-radius:var(--studio-radius-pill);background:var(--studio-surface-alt);overflow:hidden;}.signal-fill{inline-size:var(--signal-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.25s ease,width 0.25s ease;}.signal-fill.low{background:var(--studio-error);}.upload-progress-fill{inline-size:var(--upload-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.15s ease,width 0.15s ease;}.wp-upload-trigger{display:inline-flex;align-items:center;}.wp-upload-status{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);}.wp-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--studio-space-3);}.wp-card{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;}.wp-gallery>.empty-state{grid-column:1 / -1;}.wp-card.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.wp-thumb-btn{padding:0;border:none;background:transparent;border-radius:var(--studio-radius-control);cursor:pointer;line-height:0;}.wp-thumb-btn.circle{border-radius:50%;}.wp-thumb-btn:hover .wp-thumb{border-color:var(--studio-primary);}.wp-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.wp-thumb{inline-size:104px;block-size:104px;object-fit:cover;background:var(--studio-media-bg);border:1px solid var(--studio-divider);}.wp-thumb.circle{border-radius:50%;}.wp-thumb.square{border-radius:var(--studio-radius-control);}.wp-title{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow-wrap:anywhere;}.wp-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--studio-space-1);margin-block-start:auto;inline-size:100%;}.btn-icon.wp-star-btn{inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);}.btn-icon.wp-star-btn:hover{color:var(--studio-warning);background:var(--studio-warning-tint);}.btn-icon.wp-star-btn.starred{color:var(--studio-warning);}.photo-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-toolbar-start,.photo-toolbar-end{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-search-input{min-inline-size:200px;flex:1 1 220px;}.collection-strip{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.collection-chip-wrap{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);}.collection-chip-wrap.active{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.collection-chip-btn{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);cursor:pointer;}.collection-chip-action{display:inline-flex;align-items:center;justify-content:center;min-inline-size:28px;min-block-size:28px;padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;cursor:pointer;}.collection-chip-action:hover{background:var(--studio-hover);}.collection-chip-action svg{inline-size:14px;block-size:14px;fill:currentColor;}.photo-bulk-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-primary);border-radius:var(--studio-radius-control);background:var(--studio-primary-tint);}.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:var(--studio-space-3);}.photo-grid>.empty-state{grid-column:1 / -1;}.photo-tile{position:relative;display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);content-visibility:auto;contain-intrinsic-size:180px 220px;transition:border-color 0.15s ease,background-color 0.15s ease,box-shadow 0.15s ease;}.photo-tile:hover{border-color:var(--studio-primary);}.photo-tile.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-tile-thumb-btn{position:relative;display:block;inline-size:100%;padding:0;border:none;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);overflow:hidden;cursor:pointer;aspect-ratio:1 / 1;line-height:0;}.photo-tile-thumb-btn.circle{border-radius:50%;}.photo-tile-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.photo-tile-img{inline-size:100%;block-size:100%;object-fit:cover;display:block;}.photo-tile-check{position:absolute;inset-block-start:var(--studio-space-2);inset-inline-start:var(--studio-space-2);z-index:2;inline-size:20px;block-size:20px;accent-color:var(--studio-primary);cursor:pointer;}.photo-tile-badge{position:absolute;inset-block-end:var(--studio-space-1);inset-inline-end:var(--studio-space-1);padding-block:2px;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-photo-badge-bg);color:var(--studio-photo-badge-text);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.photo-tile-meta{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.photo-tile-name{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.photo-tile-sub{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);}.photo-pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);border-block-start:1px solid var(--studio-divider);}.photo-pool-preview{display:flex;flex-wrap:wrap;align-items:center;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.photo-pool-thumbs{display:flex;align-items:center;gap:var(--studio-space-1);flex-shrink:0;}.photo-pool-thumb{inline-size:48px;block-size:48px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-pool-thumb.circle{border-radius:50%;}.photo-pool-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 160px;}.photo-pool-title{font-weight:var(--studio-weight-medium);overflow-wrap:break-word;}.photo-pool-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);overflow-wrap:break-word;}.photo-pool-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);flex-shrink:0;}.cam-preview{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.cam-preview img{inline-size:100%;max-inline-size:360px;aspect-ratio:16 / 9;object-fit:cover;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);}.log-output{max-block-size:380px;margin:0;padding:var(--studio-space-3);overflow:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);white-space:pre-wrap;}.empty-state{padding-block:var(--studio-space-3);padding-inline:0;color:var(--studio-text-secondary);}.loading-state{display:flex;align-items:center;gap:var(--studio-space-3);padding-block:var(--studio-space-5);padding-inline:0;color:var(--studio-text-secondary);}.loading-state::before{content:"";inline-size:20px;block-size:20px;border:2px solid var(--studio-divider);border-block-start-color:var(--studio-primary);border-radius:50%;animation:studio-spin 0.8s linear infinite;}.studio-root:not(.is-loading) #studio-loading{display:none;}@keyframes studio-spin{to{transform:rotate(360deg);}}.alert{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-info-tint);}.alert-error{background:var(--studio-error-tint);}.alert-warning{background:var(--studio-warning-tint);}.alert-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.alert-list{margin:0;padding-inline-start:var(--studio-space-5);}.toast{position:fixed;inset-inline-start:50%;inset-block-end:var(--studio-space-5);transform:translateX(-50%);z-index:50;max-inline-size:min(560px,calc(100vw - 32px));padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-toast-bg);color:var(--studio-toast-text);box-shadow:var(--studio-overlay-shadow);}.toast.error{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.offscreen,.sr-only{position:fixed;inset-block-start:0;inset-inline-start:0;inline-size:1px;block-size:1px;padding:0;margin:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:none;opacity:0;pointer-events:none;}`;
+const DATA_STYLES = css`.kv-list{display:flex;flex-direction:column;gap:0;}.kv-row{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:0;}.kv-row>span:first-child{color:var(--studio-text-secondary);}.kv-row>strong,.kv-value{font-weight:var(--studio-weight-medium);font-variant-numeric:tabular-nums;text-align:end;}button.kv-row{inline-size:100%;border:none;border-radius:var(--studio-radius-control);background:transparent;color:inherit;font:inherit;text-align:start;cursor:pointer;}button.kv-row:hover{background:var(--studio-hover);}button.kv-row>strong::after{content:" ›";color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}:host(:dir(rtl)) button.kv-row>strong::after{content:" ‹";}.table-wrap{inline-size:100%;overflow-x:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}table.data-table{inline-size:100%;border-collapse:collapse;text-align:start;}table.data-table th{padding:0;border-block-end:1px solid var(--studio-divider);white-space:nowrap;}.sort-btn{inline-size:100%;padding:var(--studio-space-3);border:none;background:transparent;color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:start;cursor:pointer;}.sort-btn:hover{color:var(--studio-text);}th[aria-sort="ascending"] .sort-btn,th[aria-sort="descending"] .sort-btn{color:var(--studio-primary);}table.data-table td{padding:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);white-space:nowrap;}table.data-table tbody tr:last-child td{border-block-end:none;}table.data-table tbody tr{cursor:pointer;}table.data-table tbody tr:hover,table.data-table tbody tr:focus-visible{background:var(--studio-hover);}td.col-name{font-weight:var(--studio-weight-medium);}table.data-table a{color:inherit;text-decoration:none;}table.data-table a:hover{text-decoration:underline;}td.col-open{color:var(--studio-text-secondary);text-align:end;}.chip{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:22px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);white-space:nowrap;font-variant-numeric:tabular-nums;}.chip-primary{background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.chip-success{background:var(--studio-chip-success-bg);color:var(--studio-chip-success-text);}.chip-warning{background:var(--studio-chip-warning-bg);color:var(--studio-chip-warning-text);}.chip-error{background:var(--studio-chip-danger-bg);color:var(--studio-chip-danger-text);}.status-dot{display:inline-block;inline-size:8px;block-size:8px;margin-inline-end:var(--studio-space-2);border-radius:50%;background:var(--studio-text-disabled);}.chip>.status-dot{margin-inline-end:var(--studio-space-1);}.status-dot.online{background:var(--studio-success);}.status-dot.update{background:var(--studio-warning);}.status-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);}@container (max-width:260px){.status-tiles{grid-template-columns:minmax(0,1fr);}}.status-tile{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-1);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.status-tile{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.status-tile:hover{background:var(--studio-hover);border-color:var(--studio-primary);}button.status-tile:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.status-tile-head{display:flex;align-items:center;gap:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.status-tile-head svg{inline-size:16px;block-size:16px;fill:currentColor;flex-shrink:0;}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}.status-tile-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.status-tile>.signal-track{margin-block-start:var(--studio-space-1);}@container (max-width:420px){.status-tile{gap:0;padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);}.status-tile-head{gap:var(--studio-space-1);}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-body);}.status-tile-meta{margin-block-start:var(--studio-space-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}.overview-box{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-2);inline-size:100%;padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.overview-box{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.overview-box:hover{background:var(--studio-hover);border-color:var(--studio-primary);}.overview-box-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-title{display:inline-flex;align-items:center;gap:var(--studio-space-2);font-size:var(--studio-font-body);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.overview-box-title svg{inline-size:18px;block-size:18px;fill:currentColor;color:var(--studio-text-secondary);flex-shrink:0;}.overview-box-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-chevron{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.overview-box-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.pill-list{display:flex;flex-wrap:wrap;gap:var(--studio-space-2);}.pill{display:inline-flex;align-items:center;gap:2px;min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);}.pill.enabled{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.pill-move{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-move:hover:not(:disabled){background:var(--studio-hover);color:var(--studio-primary);}.pill-move:disabled{opacity:0.4;cursor:not-allowed;}.pill-toggle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-toggle:disabled{opacity:0.5;cursor:not-allowed;}.pill .drag-handle{border-radius:var(--studio-radius-pill);color:inherit;}.swatch{display:inline-block;inline-size:20px;block-size:20px;border-radius:50%;border:1px solid var(--studio-divider);background:var(--swatch-color,var(--studio-primary));flex-shrink:0;}#card-ble-calibration{scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));}.calibrate-target-box{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.calibrate-target-box.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);background:var(--studio-primary-tint);}.calibrate-handoff-banner{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-weight:var(--studio-weight-medium);}.signal-row{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.signal-row.winner{border-color:var(--studio-primary);}.proxy-trim-details{padding-block-start:var(--studio-space-2);}.proxy-trim-details>summary{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.proxy-trim-details[open]>summary,.proxy-trim-details>summary:hover{color:var(--studio-text);}.proxy-trim-body{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);}.signal-row-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-row-title{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.signal-track,.upload-progress{block-size:6px;border-radius:var(--studio-radius-pill);background:var(--studio-surface-alt);overflow:hidden;}.signal-fill{inline-size:var(--signal-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.25s ease,width 0.25s ease;}.signal-fill.low{background:var(--studio-error);}.upload-progress-fill{inline-size:var(--upload-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.15s ease,width 0.15s ease;}.wp-upload-trigger{display:inline-flex;align-items:center;}.wp-upload-status{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);}.wp-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--studio-space-3);}.wp-card{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;}.wp-gallery>.empty-state{grid-column:1 / -1;}.wp-card.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.wp-thumb-btn{padding:0;border:none;background:transparent;border-radius:var(--studio-radius-control);cursor:pointer;line-height:0;}.wp-thumb-btn.circle{border-radius:50%;}.wp-thumb-btn:hover .wp-thumb{border-color:var(--studio-primary);}.wp-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.wp-thumb{inline-size:104px;block-size:104px;object-fit:cover;background:var(--studio-media-bg);border:1px solid var(--studio-divider);}.wp-thumb.circle{border-radius:50%;}.wp-thumb.square{border-radius:var(--studio-radius-control);}.wp-title{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow-wrap:anywhere;}.wp-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--studio-space-1);margin-block-start:auto;inline-size:100%;}.btn-icon.wp-star-btn{inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);}.btn-icon.wp-star-btn:hover{color:var(--studio-warning);background:var(--studio-warning-tint);}.btn-icon.wp-star-btn.starred{color:var(--studio-warning);}.photo-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-toolbar-start,.photo-toolbar-end{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-search-input{min-inline-size:200px;flex:1 1 220px;}.collection-strip{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.collection-chip-wrap{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);}.collection-chip-wrap.active{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.collection-chip-btn{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);cursor:pointer;}.collection-chip-action{display:inline-flex;align-items:center;justify-content:center;min-inline-size:28px;min-block-size:28px;padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;cursor:pointer;}.collection-chip-action:hover{background:var(--studio-hover);}.collection-chip-action svg{inline-size:14px;block-size:14px;fill:currentColor;}.photo-bulk-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-primary);border-radius:var(--studio-radius-control);background:var(--studio-primary-tint);}.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:var(--studio-space-3);}.photo-grid>.empty-state{grid-column:1 / -1;}.photo-tile{position:relative;display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);content-visibility:auto;contain-intrinsic-size:180px 220px;transition:border-color 0.15s ease,background-color 0.15s ease,box-shadow 0.15s ease;}.photo-tile:hover{border-color:var(--studio-primary);}.photo-tile.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-tile-thumb-btn{position:relative;display:block;inline-size:100%;padding:0;border:none;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);overflow:hidden;cursor:pointer;aspect-ratio:1 / 1;line-height:0;}.photo-tile-thumb-btn.circle{border-radius:50%;}.photo-tile-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.photo-tile-img{inline-size:100%;block-size:100%;object-fit:cover;display:block;}.photo-tile-check{position:absolute;inset-block-start:var(--studio-space-2);inset-inline-start:var(--studio-space-2);z-index:2;inline-size:20px;block-size:20px;accent-color:var(--studio-primary);cursor:pointer;}.photo-tile-badge{position:absolute;inset-block-end:var(--studio-space-1);inset-inline-end:var(--studio-space-1);padding-block:2px;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-photo-badge-bg);color:var(--studio-photo-badge-text);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.photo-tile-meta{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.photo-tile-name{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.photo-tile-sub{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);}.photo-pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);border-block-start:1px solid var(--studio-divider);}.photo-pool-preview{display:flex;flex-wrap:wrap;align-items:center;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.photo-pool-thumbs{display:flex;align-items:center;gap:var(--studio-space-1);flex-shrink:0;}.photo-pool-thumb{inline-size:48px;block-size:48px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-pool-thumb.circle{border-radius:50%;}.photo-pool-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 160px;}.photo-pool-title{font-weight:var(--studio-weight-medium);overflow-wrap:break-word;}.photo-pool-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);overflow-wrap:break-word;}.photo-pool-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);flex-shrink:0;}.cam-preview{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.cam-preview img{inline-size:100%;max-inline-size:360px;aspect-ratio:16 / 9;object-fit:cover;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);}.log-output{max-block-size:380px;margin:0;padding:var(--studio-space-3);overflow:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);white-space:pre-wrap;}.empty-state{padding-block:var(--studio-space-3);padding-inline:0;color:var(--studio-text-secondary);}.loading-state{display:flex;align-items:center;gap:var(--studio-space-3);padding-block:var(--studio-space-5);padding-inline:0;color:var(--studio-text-secondary);}.loading-state::before{content:"";inline-size:20px;block-size:20px;border:2px solid var(--studio-divider);border-block-start-color:var(--studio-primary);border-radius:50%;animation:studio-spin 0.8s linear infinite;}.studio-root:not(.is-loading) #studio-loading{display:none;}@keyframes studio-spin{to{transform:rotate(360deg);}}.alert{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-info-tint);}.alert-error{background:var(--studio-error-tint);}.alert-warning{background:var(--studio-warning-tint);}.alert-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.alert-list{margin:0;padding-inline-start:var(--studio-space-5);}.toast{position:fixed;inset-inline-start:50%;inset-block-end:var(--studio-space-5);transform:translateX(-50%);z-index:50;max-inline-size:min(560px,calc(100vw - 32px));padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-toast-bg);color:var(--studio-toast-text);box-shadow:var(--studio-overlay-shadow);}.toast.error{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.offscreen,.sr-only{position:fixed;inset-block-start:0;inset-inline-start:0;inline-size:1px;block-size:1px;padding:0;margin:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:none;opacity:0;pointer-events:none;}`;
 __latterExp(__exports, { DATA_STYLES: () => DATA_STYLES });
 //# sourceURL=latter-studio/src/styles/data.ts
 });
@@ -22526,16 +22467,14 @@ __latterExp(__exports, { renderSystemGroupsView: () => renderSystemGroupsView })
 __latterDef("src/views/system-overview-view.ts", (__exports, __req) => {
 const { renderCard, renderSvgIcon } = __req("src/components/controls.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
-const { isPhotoUploaded } = __req("src/state/photo-ops.ts");
-const { fmtNumber, issueMessage, isValidHexColor } = __req("src/utils/format.ts");
+const { fmtNumber, issueMessage } = __req("src/utils/format.ts");
 /**
- * System Overview View (`system_overview`, `D-003`, `D-004`, `D-051`, `D-061`, `D-066`):
+ * System Overview View (`system_overview`, `D-003`, `D-004`, `D-051`, `D-061`, `D-066`, `D-076`):
  * - Conditional top region for active Home Assistant Repairs (`role="region"` + heading, `D-21`)
  *   and unbound Discovered Latter hardware.
- * - Column 1: High-level Status card (`D-003` release meta, `D-004` People & roaming) +
- *   Area deployment (`area_id` matching `E-21`).
- * - Column 2: System capabilities (dynamic group names `E-25`, `"colors & wallpapers"` `E-22`,
- *   `isValidHexColor` swatch guard `A-07`).
+ * - Column 1: High-level Status card (`D-003` release meta, `D-004` People & roaming, `D-076`
+ *   Sleeping / Away / Offline / Low-battery operational distinction).
+ * - Column 2: Area deployment promoted above the fold (`area_id` matching `E-21`).
  */
 const SYS_ICON_DEVICES =
   "M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z";
@@ -22545,32 +22484,57 @@ const SYS_ICON_ROAMING =
   "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,10.84 21.79,9.69 21.39,8.61L19.79,10.21C19.93,10.8 20,11.4 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4C12.6,4 13.2,4.07 13.79,4.21L15.4,2.6C14.31,2.21 13.16,2 12,2M19,2A2,2 0 0,0 17,4A2,2 0 0,0 19,6A2,2 0 0,0 21,4A2,2 0 0,0 19,2M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12H16A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8V6M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z";
 const SYS_ICON_RELEASE =
   "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
-const SYS_ICON_HOME =
-  "M12,3L2,12H5V20H19V12H22L12,3M12,8.75A2.25,2.25 0 0,1 14.25,11A2.25,2.25 0 0,1 12,13.25A2.25,2.25 0 0,1 9.75,11A2.25,2.25 0 0,1 12,8.75M12,15C13.5,15 16.5,15.75 16.5,17.25V18H7.5V17.25C7.5,15.75 10.5,15 12,15Z";
-const SYS_ICON_CAMERA =
-  "M17,10.5V7A1,1 0 0,0 16,6H4A1,1 0 0,0 3,7V17A1,1 0 0,0 4,18H16A1,1 0 0,0 17,17V13.5L21,17.5V6.5L17,10.5Z";
-const SYS_ICON_REMOTE =
-  "M9,2A2,2 0 0,0 7,4V20A2,2 0 0,0 9,22H15A2,2 0 0,0 17,20V4A2,2 0 0,0 15,2H9M12,6A3,3 0 0,1 15,9A3,3 0 0,1 12,12A3,3 0 0,1 9,9A3,3 0 0,1 12,6M12,8A1,1 0 0,0 11,9A1,1 0 0,0 12,10A1,1 0 0,0 13,9A1,1 0 0,0 12,8M10,15H14V17H10V15M10,18H14V20H10V18Z";
-const SYS_ICON_GROUPS =
-  "M3,3H11V11H3V3M13,3H21V11H13V3M3,13H11V21H3V13M13,13H21V21H13V13M5,5V9H9V5H5M15,5V9H19V5H15M5,15V19H9V15H5M15,15V19H19V15H15Z";
-const SYS_ICON_PALETTE =
-  "M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z";
-const SYS_ICON_PHOTOS =
-  "M22,16V4A2,2 0 0,0 20,2H8A2,2 0 0,0 6,4V16A2,2 0 0,0 8,18H20A2,2 0 0,0 22,16M11,12L13.03,14.71L16,11L20,16H8M2,6V20A2,2 0 0,0 4,22H18V20H4V6";
-const SYS_ICON_SHIELD =
-  "M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M12,7C13.4,7 14.8,8.1 14.8,9.5V11C15.4,11 16,11.6 16,12.3V15.8C16,16.4 15.4,17 14.7,17H9.2C8.6,17 8,16.4 8,15.7V12.2C8,11.6 8.6,11 9.2,11V9.5C9.2,8.1 10.6,7 12,7M12,8.2C11.2,8.2 10.5,8.7 10.5,9.5V11H13.5V9.5C13.5,8.7 12.8,8.2 12,8.2Z";
+function isDeviceSleeping(d) {
+  return (
+    !d.is_online &&
+    d.kind !== "ble_tag" &&
+    String(d.status_label || "").trim().toLowerCase() === "sleeping"
+  );
+}
+function isDeviceAway(d) {
+  return (
+    !d.is_online &&
+    d.kind === "ble_tag" &&
+    (d.status_code === "away" || String(d.status_label || "").trim().toLowerCase() === "away")
+  );
+}
+function isDeviceScanning(d) {
+  return (
+    !d.is_online &&
+    d.kind === "ble_tag" &&
+    (d.status_code === "scanning" ||
+      String(d.status_label || "").trim().toLowerCase() === "scanning")
+  );
+}
+function isDeviceLowBattery(d) {
+  return (
+    d.kind !== "ble_tag" &&
+    Boolean(d.has_battery) &&
+    !d.is_charging &&
+    d.battery_level !== null &&
+    d.battery_level !== undefined &&
+    Number.isFinite(Number(d.battery_level)) &&
+    Number(d.battery_level) <= 20
+  );
+}
 function renderSystemOverviewView(store) {
   const data = store.state;
   const allDevices = data?.system_devices || [];
   const issues = data?.issues || [];
   const discoveredLatter = data?.discovered_latter_devices || [];
-  const groups = data?.device_groups || [];
   const sysCfg = data?.system_config;
   const presenceRows = data?.live?.area_presence_grid || [];
   const signatures = data?.ble_area_signatures || [];
   const totalCount = allDevices.length;
   const onlineCount = allDevices.filter((d) => d.is_online).length;
-  const offlineCount = Math.max(0, totalCount - onlineCount);
+  const sleepingCount = allDevices.filter((d) => isDeviceSleeping(d)).length;
+  const awayCount = allDevices.filter((d) => isDeviceAway(d)).length;
+  const scanningCount = allDevices.filter((d) => isDeviceScanning(d)).length;
+  const unexpectedOfflineCount = Math.max(
+    0,
+    totalCount - onlineCount - sleepingCount - awayCount - scanningCount,
+  );
+  const lowBatteryCount = allDevices.filter((d) => isDeviceLowBattery(d)).length;
   const displayCount = allDevices.filter((d) => d.kind !== "ble_tag" && d.has_display).length;
   const phoneCount = allDevices.filter(
     (d) => d.kind === "ble_tag" && d.ble_category === "phone",
@@ -22611,18 +22575,28 @@ function renderSystemOverviewView(store) {
         : store.t("sys_overview.updates_many", {
             count: fmtNumber(updatesCount, store.hass, 0),
           });
-  } else if (totalCount > 0 && offlineCount === 0) {
+  } else if (totalCount > 0 && unexpectedOfflineCount === totalCount) {
+    sysStatusLabel = store.t("status.offline");
+  } else if (totalCount > 0 && unexpectedOfflineCount > 0) {
+    sysChipClass = "chip chip-warning";
+    sysDotClass = "status-dot update";
+    sysStatusLabel = store.t("sys_overview.offline_count", {
+      count: fmtNumber(unexpectedOfflineCount, store.hass, 0),
+    });
+  } else if (totalCount > 0 && lowBatteryCount > 0) {
+    sysChipClass = "chip chip-warning";
+    sysDotClass = "status-dot update";
+    sysStatusLabel = store.t("sys_overview.low_battery_count", {
+      count: fmtNumber(lowBatteryCount, store.hass, 0),
+    });
+  } else if (totalCount > 0 && onlineCount === totalCount) {
     sysChipClass = "chip chip-success";
     sysDotClass = "status-dot online";
     sysStatusLabel = store.t("sys_overview.all_online");
-  } else if (totalCount > 0 && onlineCount > 0) {
-    sysDotClass = "status-dot online";
-    sysStatusLabel = store.t("sys_overview.online_ratio", {
-      online: fmtNumber(onlineCount, store.hass, 0),
-      total: fmtNumber(totalCount, store.hass, 0),
-    });
   } else if (totalCount > 0) {
-    sysStatusLabel = store.t("status.offline");
+    sysChipClass = "chip chip-success";
+    sysDotClass = "status-dot online";
+    sysStatusLabel = store.t("sys_overview.healthy");
   }
   const onlinePct = totalCount > 0 ? Math.round((onlineCount / totalCount) * 100) : 0;
   const onlineSigStyle = `--signal-pct:${onlinePct}%`;
@@ -22630,32 +22604,71 @@ function renderSystemOverviewView(store) {
   if (totalCount === 0) {
     devMetaParts.push(store.t("sys_overview.ready_to_onboard"));
   } else {
-    devMetaParts.push(
-      displayCount === 1
-        ? store.t("sys_overview.displays_one")
-        : store.t("sys_overview.displays_many", {
-            count: fmtNumber(displayCount, store.hass, 0),
-          }),
-    );
-    if (phoneCount > 0) {
+    const hasNonOnlineState =
+      unexpectedOfflineCount > 0 || sleepingCount > 0 || awayCount > 0 || scanningCount > 0;
+    if (unexpectedOfflineCount > 0) {
       devMetaParts.push(
-        phoneCount === 1
-          ? store.t("sys_overview.phones_one")
-          : store.t("sys_overview.phones_many", { count: fmtNumber(phoneCount, store.hass, 0) }),
+        store.t("sys_overview.offline_count", {
+          count: fmtNumber(unexpectedOfflineCount, store.hass, 0),
+        }),
       );
     }
-    if (bleTagOnlyCount > 0) {
+    if (lowBatteryCount > 0) {
       devMetaParts.push(
-        bleTagOnlyCount === 1
-          ? store.t("sys_overview.ble_tags_one")
-          : store.t("sys_overview.ble_tags_many", {
-              count: fmtNumber(bleTagOnlyCount, store.hass, 0),
+        store.t("sys_overview.low_battery_count", {
+          count: fmtNumber(lowBatteryCount, store.hass, 0),
+        }),
+      );
+    }
+    if (sleepingCount > 0) {
+      devMetaParts.push(
+        store.t("sys_overview.sleeping_count", {
+          count: fmtNumber(sleepingCount, store.hass, 0),
+        }),
+      );
+    }
+    if (awayCount > 0) {
+      devMetaParts.push(
+        store.t("sys_overview.away_count", {
+          count: fmtNumber(awayCount, store.hass, 0),
+        }),
+      );
+    }
+    if (scanningCount > 0) {
+      devMetaParts.push(
+        store.t("sys_overview.scanning_count", {
+          count: fmtNumber(scanningCount, store.hass, 0),
+        }),
+      );
+    }
+    if (!hasNonOnlineState) {
+      devMetaParts.push(
+        displayCount === 1
+          ? store.t("sys_overview.displays_one")
+          : store.t("sys_overview.displays_many", {
+              count: fmtNumber(displayCount, store.hass, 0),
             }),
       );
-    } else if (phoneCount === 0 && audioOnlyCount > 0) {
-      devMetaParts.push(
-        store.t("sys_overview.audio_count", { count: fmtNumber(audioOnlyCount, store.hass, 0) }),
-      );
+      if (phoneCount > 0) {
+        devMetaParts.push(
+          phoneCount === 1
+            ? store.t("sys_overview.phones_one")
+            : store.t("sys_overview.phones_many", { count: fmtNumber(phoneCount, store.hass, 0) }),
+        );
+      }
+      if (bleTagOnlyCount > 0) {
+        devMetaParts.push(
+          bleTagOnlyCount === 1
+            ? store.t("sys_overview.ble_tags_one")
+            : store.t("sys_overview.ble_tags_many", {
+                count: fmtNumber(bleTagOnlyCount, store.hass, 0),
+              }),
+        );
+      } else if (phoneCount === 0 && audioOnlyCount > 0) {
+        devMetaParts.push(
+          store.t("sys_overview.audio_count", { count: fmtNumber(audioOnlyCount, store.hass, 0) }),
+        );
+      }
     }
   }
   // Build unified Area Deployment map matching Areas strictly by `area_id` (E-21)
@@ -22697,7 +22710,7 @@ function renderSystemOverviewView(store) {
       .filter((d) => d.has_assigned_area && d.area_id === areaId)
       .map((d) => d.title);
     const roamingHereTitles = allDevices
-      .filter((d) => !d.has_assigned_area && d.is_online && d.area_id === areaId)
+      .filter((d) => !d.has_assigned_area && (d.is_online || isDeviceSleeping(d)) && d.area_id === areaId)
       .map((d) => d.title);
     const areaRemoteCount = remoteGroups
       .filter((rg) => rg.area_id === areaId)
@@ -22753,114 +22766,9 @@ function renderSystemOverviewView(store) {
   const roamingDevices = allDevices.filter(
     (d) => !d.has_assigned_area && (d.is_roaming || d.kind === "ble_tag"),
   );
-  const roamingOnlineCount = roamingDevices.filter((d) => d.is_online).length;
-  // System Capabilities metrics
-  const broadcastCount = (sysCfg?.broadcast_speakers || []).filter((s) =>
-    Boolean(String(s || "").trim()),
+  const roamingActiveCount = roamingDevices.filter(
+    (d) => d.is_online || isDeviceSleeping(d),
   ).length;
-  const thermCount = (sysCfg?.thermostat_entities || []).filter((s) =>
-    Boolean(String(s || "").trim()),
-  ).length;
-  const lockCount = (sysCfg?.lock_entities || []).filter((s) =>
-    Boolean(String(s || "").trim()),
-  ).length;
-  const garageCount = (sysCfg?.garage_entities || []).filter((s) =>
-    Boolean(String(s || "").trim()),
-  ).length;
-  const vacCount = (sysCfg?.vacuum_entities || []).filter((s) =>
-    Boolean(String(s || "").trim()),
-  ).length;
-  const wholeHomeStatuses = [
-    {
-      label: store.t("sys_overview.hub_weather"),
-      configured: Boolean(String(sysCfg?.weather_entity || "").trim()),
-    },
-    {
-      label: store.t("sys_overview.hub_alarm"),
-      configured: Boolean(String(sysCfg?.alarm_entity || "").trim()),
-    },
-    {
-      label:
-        broadcastCount > 1
-          ? store.t("sys_overview.hub_broadcast_speakers", {
-              count: fmtNumber(broadcastCount, store.hass, 0),
-            })
-          : store.t("sys_overview.hub_broadcast"),
-      configured: broadcastCount > 0,
-    },
-    {
-      label:
-        thermCount > 1
-          ? store.t("sys_overview.hub_zones", { count: fmtNumber(thermCount, store.hass, 0) })
-          : store.t("sys_overview.hub_thermostat"),
-      configured: thermCount > 0,
-    },
-    {
-      label:
-        lockCount > 1
-          ? store.t("sys_overview.hub_locks", { count: fmtNumber(lockCount, store.hass, 0) })
-          : store.t("sys_overview.hub_lock"),
-      configured: lockCount > 0,
-    },
-    {
-      label:
-        garageCount > 1
-          ? store.t("sys_overview.hub_garages", { count: fmtNumber(garageCount, store.hass, 0) })
-          : store.t("sys_overview.hub_garage"),
-      configured: garageCount > 0,
-    },
-    {
-      label:
-        vacCount > 1
-          ? store.t("sys_overview.hub_vacuums", { count: fmtNumber(vacCount, store.hass, 0) })
-          : store.t("sys_overview.hub_vacuum"),
-      configured: vacCount > 0,
-    },
-  ];
-  const wholeHomeActiveCount = wholeHomeStatuses.filter((s) => s.configured).length;
-  const camerasCount = (sysCfg?.camera_entities || []).filter(Boolean).length;
-  const doorbellsCount = (data?.doorbells || []).filter((b) => Boolean(b.ring_entity)).length;
-  const calendarsCount = (sysCfg?.calendar_entities || []).filter(Boolean).length;
-  const remotesCount = (sysCfg?.remotes_list || []).filter(Boolean).length;
-  const remoteGroupsCount = remoteGroups.length;
-  const volCount = (sysCfg?.volume_overrides || []).length;
-  const validPalettes = (sysCfg?.custom_palettes || []).filter((p) => isValidHexColor(p.hex));
-  const colorsCount = validPalettes.length;
-  const wallpapers = data?.system_wallpapers || [];
-  const wallpapersCount = wallpapers.length;
-  const uploadedWallpapersCount = wallpapers.filter((w) => isPhotoUploaded(w)).length;
-  const presetWallpapersCount = Math.max(0, wallpapersCount - uploadedWallpapersCount);
-  const photoCollectionsCount = (data?.photo_collections || []).length;
-  const hasSystemPin = Boolean(data?.has_security_pin);
-  const latterHardwareDevices = allDevices.filter((d) => d.kind !== "ble_tag");
-  const populatedGroupChips = [];
-  for (const g of groups) {
-    if (!g?.id || g.id === "custom") continue;
-    const cnt = latterHardwareDevices.filter((d) => d.device_group === g.id).length;
-    if (cnt > 0 || latterHardwareDevices.length === 0) {
-      populatedGroupChips.push({
-        label:
-          latterHardwareDevices.length > 0
-            ? `${g.name}: ${fmtNumber(cnt, store.hass, 0)}`
-            : g.name,
-        active: cnt > 0,
-      });
-    }
-  }
-  const customGroupCount = latterHardwareDevices.filter(
-    (d) => !d.device_group || d.device_group === "custom",
-  ).length;
-  if (customGroupCount > 0) {
-    populatedGroupChips.push({
-      label: store.t("sys_overview.custom_group_chip", {
-        count: fmtNumber(customGroupCount, store.hass, 0),
-      }),
-      active: true,
-    });
-  }
-  const configuredGroupNames = groups
-    .filter((g) => Boolean(g?.name) && g.id !== "custom")
-    .map((g) => g.name);
   const discoveredPreviewNames =
     discoveredLatter
       .slice(0, 3)
@@ -22961,7 +22869,7 @@ function renderSystemOverviewView(store) {
               ${totalCount > 0
                 ? html`<div class="signal-track" aria-hidden="true">
                     <div
-                      class="signal-fill${onlineCount === 0 ? " low" : ""}"
+                      class="signal-fill${unexpectedOfflineCount > 0 && onlineCount === 0 ? " low" : ""}"
                       style=${onlineSigStyle}
                     ></div>
                   </div>`
@@ -23078,7 +22986,9 @@ function renderSystemOverviewView(store) {
               ${store.t("sys_overview.check_fw_updates")}
             </button>`,
         })}
+      </div>
 
+      <div class="column">
         ${renderCard({
           id: "card-area-deployment",
           title: store.t("card.area_deployment"),
@@ -23104,9 +23014,9 @@ function renderSystemOverviewView(store) {
                       <span>${store.t("sys_overview.roaming_devices")}</span>
                     </span>
                     <span class="overview-box-end">
-                      <span class="chip ${roamingOnlineCount > 0 ? "chip-primary" : ""}">
+                      <span class="chip ${roamingActiveCount > 0 ? "chip-primary" : ""}">
                         ${store.t("sys_overview.roaming_active_ratio", {
-                          online: fmtNumber(roamingOnlineCount, store.hass, 0),
+                          online: fmtNumber(roamingActiveCount, store.hass, 0),
                           total: fmtNumber(roamingDevices.length, store.hass, 0),
                         })}
                       </span>
@@ -23117,7 +23027,7 @@ function renderSystemOverviewView(store) {
                     ${roamingDevices
                       .slice(0, 4)
                       .map((d) =>
-                        d.active_area_name && d.is_online
+                        d.area_id && d.active_area_name && (d.is_online || isDeviceSleeping(d))
                           ? `${d.title} (${d.active_area_name})`
                           : d.title,
                       )
@@ -23226,301 +23136,6 @@ function renderSystemOverviewView(store) {
                       })}
                 </p>`
               : nothing}`,
-        })}
-      </div>
-
-      <div class="column">
-        ${renderCard({
-          id: "card-system-capabilities",
-          title: store.t("card.system_capabilities"),
-          subtitle: store.t("sys_overview.capabilities_subtitle"),
-          contentClass: "stack",
-          body: html`<button
-              type="button"
-              id="cap-home-hub"
-              @click=${() => store.openSystemSection("shared_entities", "card-whole-home")}
-              class="overview-box"
-            >
-              <div class="overview-box-head">
-                <span class="overview-box-title">
-                  ${renderSvgIcon(SYS_ICON_HOME)}
-                  <span>${store.t("card.home_hub_weather")}</span>
-                </span>
-                <span class="overview-box-end">
-                  <span class="chip ${wholeHomeActiveCount > 0 ? "chip-primary" : ""}">
-                    ${store.t("sys_overview.active_of_seven", {
-                      count: fmtNumber(wholeHomeActiveCount, store.hass, 0),
-                    })}
-                  </span>
-                  <span class="overview-box-chevron" aria-hidden="true">›</span>
-                </span>
-              </div>
-              <div class="overview-chips">
-                ${wholeHomeStatuses.map(
-                  (s) =>
-                    html`<span class="chip ${s.configured ? "chip-primary" : ""}">
-                      ${s.configured ? `✓ ${s.label}` : s.label}
-                    </span>`,
-                )}
-              </div>
-            </button>
-
-            <button
-              type="button"
-              id="cap-cameras-calendars"
-              @click=${() =>
-                store.openSystemSection(
-                  "shared_entities",
-                  camerasCount === 0 && calendarsCount > 0
-                    ? "card-calendars"
-                    : "card-cameras-doorbell",
-                  ["card-cameras-doorbell", "card-calendars"],
-                )}
-              class="overview-box"
-            >
-              <div class="overview-box-head">
-                <span class="overview-box-title">
-                  ${renderSvgIcon(SYS_ICON_CAMERA)}
-                  <span>${store.t("sys_overview.cap_cameras_calendars")}</span>
-                </span>
-                <span class="overview-box-end">
-                  <span class="chip ${camerasCount + calendarsCount > 0 ? "chip-primary" : ""}">
-                    ${camerasCount + calendarsCount > 0
-                      ? store.t("common.active")
-                      : store.t("sys_overview.not_set")}
-                  </span>
-                  <span class="overview-box-chevron" aria-hidden="true">›</span>
-                </span>
-              </div>
-              ${camerasCount + calendarsCount > 0
-                ? html`<div class="overview-chips">
-                    <span class="chip ${camerasCount > 0 ? "chip-primary" : ""}">
-                      ${camerasCount === 1
-                        ? store.t("sys_overview.cameras_one")
-                        : store.t("sys_overview.cameras_many", {
-                            count: fmtNumber(camerasCount, store.hass, 0),
-                          })}
-                    </span>
-                    ${camerasCount > 0
-                      ? html`<span class="chip ${doorbellsCount > 0 ? "chip-primary" : ""}">
-                          ${doorbellsCount === 1
-                            ? store.t("sys_overview.doorbells_one")
-                            : store.t("sys_overview.doorbells_many", {
-                                count: fmtNumber(doorbellsCount, store.hass, 0),
-                              })}
-                        </span>`
-                      : nothing}
-                    <span class="chip ${calendarsCount > 0 ? "chip-primary" : ""}">
-                      ${calendarsCount === 1
-                        ? store.t("sys_overview.calendars_one")
-                        : store.t("sys_overview.calendars_many", {
-                            count: fmtNumber(calendarsCount, store.hass, 0),
-                          })}
-                    </span>
-                  </div>`
-                : html`<span class="overview-box-meta">
-                    ${store.t("sys_overview.cameras_calendars_empty")}
-                  </span>`}
-            </button>
-
-            <button
-              type="button"
-              id="cap-media-remotes"
-              @click=${() => store.openSystemSection("remotes")}
-              class="overview-box"
-            >
-              <div class="overview-box-head">
-                <span class="overview-box-title">
-                  ${renderSvgIcon(SYS_ICON_REMOTE)}
-                  <span>${store.t("sys_overview.cap_media_remotes")}</span>
-                </span>
-                <span class="overview-box-end">
-                  <span class="chip ${remotesCount + volCount > 0 ? "chip-primary" : ""}">
-                    ${remotesCount > 0
-                      ? remotesCount === 1
-                        ? store.t("sys_overview.remotes_one")
-                        : store.t("sys_overview.remotes_many", {
-                            count: fmtNumber(remotesCount, store.hass, 0),
-                          })
-                      : volCount > 0
-                        ? store.t("common.active")
-                        : store.t("sys_overview.not_set")}
-                  </span>
-                  <span class="overview-box-chevron" aria-hidden="true">›</span>
-                </span>
-              </div>
-              <span class="overview-box-meta">
-                ${remotesCount + remoteGroupsCount + volCount > 0
-                  ? store.t("sys_overview.remotes_meta", {
-                      groups:
-                        remoteGroupsCount === 1
-                          ? store.t("sys_overview.area_groups_one")
-                          : store.t("sys_overview.area_groups_many", {
-                              count: fmtNumber(remoteGroupsCount, store.hass, 0),
-                            }),
-                      overrides:
-                        volCount === 1
-                          ? store.t("sys_overview.vol_overrides_one")
-                          : store.t("sys_overview.vol_overrides_many", {
-                              count: fmtNumber(volCount, store.hass, 0),
-                            }),
-                    })
-                  : store.t("sys_overview.remotes_empty")}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              id="cap-device-groups"
-              @click=${() => store.openSystemSection("system_sync")}
-              class="overview-box"
-            >
-              <div class="overview-box-head">
-                <span class="overview-box-title">
-                  ${renderSvgIcon(SYS_ICON_GROUPS)}
-                  <span>${store.t("sys_overview.cap_device_groups")}</span>
-                </span>
-                <span class="overview-box-end">
-                  <span class="chip">
-                    ${groups.length === 1
-                      ? store.t("sys_overview.groups_one")
-                      : store.t("sys_overview.groups_many", {
-                          count: fmtNumber(groups.length, store.hass, 0),
-                        })}
-                  </span>
-                  <span class="overview-box-chevron" aria-hidden="true">›</span>
-                </span>
-              </div>
-              ${populatedGroupChips.length > 0
-                ? html`<div class="overview-chips">
-                    ${populatedGroupChips.map(
-                      (gc) =>
-                        html`<span class="chip ${gc.active ? "chip-primary" : ""}">
-                          ${gc.label}
-                        </span>`,
-                    )}
-                  </div>`
-                : html`<span class="overview-box-meta">
-                    ${configuredGroupNames.length > 0
-                      ? store.t("sys_overview.groups_meta_dynamic", {
-                          names: configuredGroupNames.join(", "),
-                        })
-                      : store.t("sys_overview.groups_meta_empty")}
-                  </span>`}
-            </button>
-
-            <button
-              type="button"
-              id="cap-photo-library"
-              @click=${() => store.openSystemSection("photos")}
-              class="overview-box"
-            >
-              <div class="overview-box-head">
-                <span class="overview-box-title">
-                  ${renderSvgIcon(SYS_ICON_PHOTOS)}
-                  <span>${store.t("sys_overview.cap_photo_library")}</span>
-                </span>
-                <span class="overview-box-end">
-                  <span class="chip ${uploadedWallpapersCount > 0 ? "chip-primary" : ""}">
-                    ${wallpapersCount === 1
-                      ? store.t("sys_overview.photos_count_one")
-                      : store.t("sys_overview.photos_count_many", {
-                          count: fmtNumber(wallpapersCount, store.hass, 0),
-                        })}
-                  </span>
-                  <span class="overview-box-chevron" aria-hidden="true">›</span>
-                </span>
-              </div>
-              <span class="overview-box-meta">
-                ${store.t("sys_overview.photo_library_meta", {
-                  defaults:
-                    presetWallpapersCount === 1
-                      ? store.t("sys_overview.defaults_one")
-                      : store.t("sys_overview.defaults_many", {
-                          count: fmtNumber(presetWallpapersCount, store.hass, 0),
-                        }),
-                  photos:
-                    uploadedWallpapersCount === 1
-                      ? store.t("sys_overview.photos_count_one")
-                      : store.t("sys_overview.photos_count_many", {
-                          count: fmtNumber(uploadedWallpapersCount, store.hass, 0),
-                        }),
-                  collections:
-                    photoCollectionsCount === 1
-                      ? store.t("sys_overview.collections_one")
-                      : store.t("sys_overview.collections_many", {
-                          count: fmtNumber(photoCollectionsCount, store.hass, 0),
-                        }),
-                })}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              id="cap-custom-colors"
-              @click=${() =>
-                store.openSystemSection("shared_entities", "card-custom-colors")}
-              class="overview-box"
-            >
-              <div class="overview-box-head">
-                <span class="overview-box-title">
-                  ${renderSvgIcon(SYS_ICON_PALETTE)}
-                  <span>${store.t("sys_overview.cap_custom_colors")}</span>
-                </span>
-                <span class="overview-box-end">
-                  <span class="chip ${colorsCount > 0 ? "chip-primary" : ""}">
-                    ${colorsCount === 1
-                      ? store.t("sys_overview.custom_colors_one")
-                      : store.t("sys_overview.custom_colors_many", {
-                          count: fmtNumber(colorsCount, store.hass, 0),
-                        })}
-                  </span>
-                  <span class="overview-box-chevron" aria-hidden="true">›</span>
-                </span>
-              </div>
-              ${colorsCount > 0
-                ? html`<div class="swatch-strip" aria-hidden="true">
-                    ${validPalettes.slice(0, 8).map((p) => {
-                      const swStyle = `--swatch-color:${p.hex.toUpperCase()}`;
-                      return html`<span class="swatch swatch-sm" style=${swStyle}></span>`;
-                    })}
-                    ${colorsCount > 8
-                      ? html`<span class="chip">
-                          +${fmtNumber(colorsCount - 8, store.hass, 0)}
-                        </span>`
-                      : nothing}
-                  </div>`
-                : html`<span class="overview-box-meta">
-                    ${store.t("sys_overview.custom_colors_empty")}
-                  </span>`}
-            </button>
-
-            <button
-              type="button"
-              id="cap-perimeter-security"
-              @click=${() => store.openSystemSection("system_tools", "card-perimeter-security")}
-              class="overview-box"
-            >
-              <div class="overview-box-head">
-                <span class="overview-box-title">
-                  ${renderSvgIcon(SYS_ICON_SHIELD)}
-                  <span>${store.t("card.perimeter_security")}</span>
-                </span>
-                <span class="overview-box-end">
-                  <span class="chip ${hasSystemPin ? "chip-success" : ""}">
-                    ${hasSystemPin
-                      ? store.t("sys_overview.system_pin_set")
-                      : store.t("sys_overview.no_system_pin")}
-                  </span>
-                  <span class="overview-box-chevron" aria-hidden="true">›</span>
-                </span>
-              </div>
-              <span class="overview-box-meta">
-                ${hasSystemPin
-                  ? store.t("sys_overview.pin_active_meta")
-                  : store.t("sys_overview.pin_unset_meta")}
-              </span>
-            </button>`,
         })}
       </div>
     </div>

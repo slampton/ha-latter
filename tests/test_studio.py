@@ -63,14 +63,12 @@ class TestPayloadDiet(unittest.TestCase):
     def test_doorbell_detail_is_rendered(self) -> None:
         payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
         cmds_src = (LATTER_DIR / "studio" / "commands.py").read_text(encoding="utf-8")
-        self.assertIn('"doorbells": _build_doorbells(', payload_src)
+        self.assertNotIn("_build_doorbells", payload_src)
         self.assertNotIn('"preview_url":', payload_src)
         self.assertIn('"mint_camera_preview_url"', cmds_src)
-        for field in ("camera_name", "ring_entity", "ring_name", "ring_state", "ring_at", "talk"):
-            self.assertIn(f'"{field}":', payload_src)
+        self.assertIn("resolve_camera_capabilities(", payload_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn(".doorbells", js)
-        self.assertIn(".ring_entity", js)
+        self.assertNotIn(".doorbells", js)
         self.assertNotIn("doorbell-status-list", js)
         self.assertIn("sortable-row-stacked", js)
         # Stage 6 encapsulation: zero window.* globals!
@@ -395,6 +393,7 @@ class TestViewLayout(unittest.TestCase):
 
         sys_overview = section("system_overview")
         self.assertNotIn("Configured Items", sys_overview)
+        self.assertNotIn('id: "card-system-capabilities"', sys_overview)
         for sys_ov_snippet in (
             'id="sys-issues-banner"',
             'id="sys-discovered-banner"',
@@ -405,14 +404,6 @@ class TestViewLayout(unittest.TestCase):
             'id="sys-tile-roaming"',
             'id="sys-tile-release"',
             'id: "card-area-deployment"',
-            'id: "card-system-capabilities"',
-            'id="cap-home-hub"',
-            'id="cap-cameras-calendars"',
-            'id="cap-media-remotes"',
-            'id="cap-device-groups"',
-            'id="cap-photo-library"',
-            'id="cap-custom-colors"',
-            'id="cap-perimeter-security"',
         ):
             self.assertIn(sys_ov_snippet, sys_overview)
         presence_view = section("presence")

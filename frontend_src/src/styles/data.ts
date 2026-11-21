@@ -276,22 +276,6 @@ export const DATA_STYLES = css`
     font-size:var(--studio-font-secondary);
     line-height: var(--studio-line-height-condensed);
   }
-  .overview-chips {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--studio-space-1);
-  }
-  .swatch-strip {
-    display: inline-flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--studio-space-1);
-  }
-  .swatch.swatch-sm {
-    inline-size: 14px;
-    block-size: 14px;
-  }
 
   /* >= 32px WCAG 2.2 AA pill targets & sortable pills */
   .pill-list {

@@ -211,10 +211,9 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
       add_collection: "col_nature",
     });
 
-    // Overview links Photo library to /latter/system/photos & Shared entities removed #card-system-wallpapers
+    // Overview omits retired System capabilities card & Shared entities removed #card-system-wallpapers
     const overviewHtml = renderToHtml(renderSystemOverviewView(store));
-    assert.ok(overviewHtml.includes('id="cap-photo-library"'));
-    assert.ok(overviewHtml.includes('id="cap-custom-colors"'));
+    assert.equal(overviewHtml.includes("card-system-capabilities"), false);
     const sharedHtml = renderToHtml(renderSystemSharedView(store));
     assert.equal(sharedHtml.includes("card-system-wallpapers"), false);
   });

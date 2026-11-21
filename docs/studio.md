@@ -17,9 +17,9 @@ Controls apply immediately as they change (text and number inputs commit on Ente
 Shared entities, remotes, colors, ignored discoveries, and overrides live in `.storage/latter.site` / hub entry storage; Device groups, BLE calibration, Area fusion, signing/PIN secrets, and Studio logs live in `.storage/latter.site`; wallpapers live in `.storage/latter/wallpapers/`.
 
 ### Overview
-- **Conditional alerts:** **Needs attention** banner whenever Latter has open Home Assistant Repairs (with per-issue **Open Device** and **Open Repairs**) plus **Hardware ready to adopt** whenever non-ignored unbound Latter ESPHome hardware is detected on the network (**Open Discovered**).
-- **Column 1 — Status & Area deployment:** **Status** renders a live System health chip, `2×2` glanceable tiles for **Managed Devices**, **Area presence**, **People & roaming**, and **System release**, plus **Open Repairs** and **Check for updates** footer links; underneath, **Area deployment** maps active **Roaming Devices** and deployed **Areas** with live occupancy, stationed Devices, remotes, sensors, and BLE signature/proxy coverage.
-- **Column 2 — System capabilities:** visual readiness blocks linking directly to **Home hub & weather** (6 shared domain pills), **Cameras, doorbells & calendars**, **Media & remotes**, **Device groups**, **Colors & wallpapers** (live color swatches + wallpaper counts), and **Perimeter security** (**PIN configured** / **Not set**).
+- **Conditional alerts:** **Needs attention** banner whenever Latter has open Home Assistant Repairs (with per-issue **Open Device** and **Open Repairs**) plus **Hardware ready to adopt** whenever non-ignored unbound Latter ESPHome hardware is detected on the network (**Open discovered**).
+- **Column 1 — Status:** renders a live System health chip (`All online`, `Healthy` when non-online Devices are only `Sleeping` or `Away`, or warning chips for `Offline`, `Low battery`, `Updates`, and `Issues`), `2×2` glanceable tiles for **Managed Devices**, **Area presence**, **People & roaming**, and **System release**, plus **Open Repairs** and **Check firmware updates** footer links.
+- **Column 2 — Area deployment:** promoted above the fold beside **Status**, mapping active **Roaming Devices** and deployed **Areas** with live occupancy, stationed Devices, present/sleeping roaming Devices, remotes, sensors, and BLE signature/proxy coverage.
 
 ### Shared entities
 | Card | What It Controls |
