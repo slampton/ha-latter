@@ -545,10 +545,11 @@ def _build_snapshot_from_raw(
             if pid not in existing_files or not isinstance(meta, Mapping):
                 changed = True
                 continue
-            key = parse_photo_source(pid)
-            if key is None:
+            parsed_key = parse_photo_source(pid)
+            if parsed_key is None:
                 changed = True
                 continue
+            key = parsed_key
             raw_crop = meta.get("crop")
             crop = (
                 normalize_crop(
@@ -689,9 +690,10 @@ def wallpaper_snapshot_token() -> int:
 
 async def async_refresh_wallpaper_cache(hass: HomeAssistant) -> PhotoLibrarySnapshot:
     """Populate the immutable Photo Library snapshot via awaited executor load."""
-    return await hass.async_add_executor_job(
+    snap: PhotoLibrarySnapshot = await hass.async_add_executor_job(
         _load_photo_library_sync, get_wallpaper_root(hass)
     )
+    return snap
 
 
 def get_photo_crop(source_id: str) -> PhotoCrop:

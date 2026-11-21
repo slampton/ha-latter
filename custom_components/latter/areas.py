@@ -121,13 +121,13 @@ def resolve_entity_area_id(
     if entry is None:
         return None
     if entry.area_id:
-        return entry.area_id
+        return str(entry.area_id)
     if entry.device_id:
         if dev_reg is None:
             dev_reg = dr.async_get(hass)
         device = dev_reg.async_get(entry.device_id)
         if device and device.area_id:
-            return device.area_id
+            return str(device.area_id)
     return None
 
 
@@ -157,7 +157,7 @@ def match_area_by_name_or_id(
         a_low = area.name.lower()
         a_norm = a_low.replace("_", " ").replace("-", " ").strip()
         if val_low == a_low or val_norm == a_norm or val_low == area.id.lower():
-            return area.id
+            return str(area.id)
 
     return None
 
@@ -1999,7 +1999,8 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         coordinator._cached_area_payload is not None
         and (now_m - coordinator._cached_area_payload[0]) < 0.15
     ):
-        return coordinator._cached_area_payload[1]
+        cached_payload: tuple[str, dict[str, Any]] = coordinator._cached_area_payload[1]
+        return cached_payload
     area_entry = resolve_active_area_entry(coordinator)
     area_name = area_entry.name if area_entry else "Unassigned"
     area_icon = resolve_area_icon(area_entry)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Collection, Mapping
+from collections.abc import AsyncGenerator, AsyncIterator, Collection, Mapping
 import contextlib
 from dataclasses import dataclass, field
 from functools import partial
@@ -1343,7 +1343,7 @@ class LatterCameraStreamHub:
         ):
             return frame
         eff_rot = (sub.rot - ingest.stream_rot) % 360
-        return await self.hass.async_add_executor_job(
+        out: bytes = await self.hass.async_add_executor_job(
             lambda: transcode_camera_frame(
                 frame,
                 sub.width,
@@ -1354,6 +1354,7 @@ class LatterCameraStreamHub:
                 fast_live=True,
             )
         )
+        return out
 
     async def async_get_snapshot(
         self,
@@ -1492,7 +1493,7 @@ class LatterCameraStreamHub:
         fit: str = "contain",
         rot: int = 0,
         circular_mask: bool = False,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes, None]:
         """Yield multipart MJPEG chunks with exact `Content-Length` headers for HTTP streaming."""
         async for frame in self.async_iter_stream_frames(
             entity_id,
@@ -1591,11 +1592,11 @@ class LatterCameraStreamHub:
                 t0 = time.monotonic()
                 now = t0
                 slot_frames: list[bytes | None] = []
-                for pair in attached:
-                    if pair is None:
+                for attached_pair in attached:
+                    if attached_pair is None:
                         slot_frames.append(None)
                         continue
-                    ing = pair[0]
+                    ing = attached_pair[0]
                     if (
                         ing.latest_frame is not None
                         and (now - ing.latest_frame_ts) <= stale_after_s
@@ -1620,9 +1621,9 @@ class LatterCameraStreamHub:
                 if sleep_for > 0.005:
                     await asyncio.sleep(sleep_for)
         finally:
-            for pair in attached:
-                if pair is not None:
-                    self._unsubscribe(pair[0], pair[1])
+            for attached_pair in attached:
+                if attached_pair is not None:
+                    self._unsubscribe(attached_pair[0], attached_pair[1])
 
     async def async_iter_grid_mjpeg_chunks(
         self,
@@ -1633,7 +1634,7 @@ class LatterCameraStreamHub:
         fps: int = 5,
         fit: str = "contain",
         label_overrides: Mapping[str, str] | None = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes, None]:
         """Yield multipart MJPEG chunks for the server-side 2x2 camera grid."""
         async for frame in self.async_iter_grid_frames(
             entity_ids,

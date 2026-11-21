@@ -606,7 +606,8 @@ class LatterCoordinator:
         def _remove() -> None:
             self._listeners.pop(update_callback, None)
 
-        return _remove
+        unsub: Callable[[], None] = _remove
+        return unsub
 
     @callback
     def async_update_listeners(self) -> None:
@@ -625,7 +626,8 @@ class LatterCoordinator:
         def _remove() -> None:
             self._timer_tick_listeners.pop(tick_callback, None)
 
-        return _remove
+        unsub: Callable[[], None] = _remove
+        return unsub
 
     @callback
     def _notify_timer_tick_listeners(self) -> None:
@@ -752,15 +754,15 @@ class LatterCoordinator:
     def device_mac(self) -> str | None:
         stored_mac = str(self.get_opt("mac", "") or "").strip()
         if stored_mac:
-            return dr.format_mac(stored_mac)
+            return str(dr.format_mac(stored_mac))
         esp_dev = get_bound_esphome_device(self.hass, self.esphome_device_id)
         if esp_dev is not None:
             for ctype, cval in esp_dev.connections:
                 if ctype == dr.CONNECTION_NETWORK_MAC and cval:
-                    return dr.format_mac(str(cval))
+                    return str(dr.format_mac(str(cval)))
         ble_addr = str(self.get_opt(CONF_BLE_TARGET_ADDRESS, "") or "").strip()
         return (
-            dr.format_mac(ble_addr)
+            str(dr.format_mac(ble_addr))
             if len(ble_addr) == 17 and ble_addr.count(":") == 5
             else None
         )
@@ -843,7 +845,7 @@ class LatterCoordinator:
 
     @property
     def is_ble_tag(self) -> bool:
-        return self.subentry.subentry_type == SUBENTRY_BLE_TAG
+        return bool(self.subentry.subentry_type == SUBENTRY_BLE_TAG)
 
     @property
     def has_display(self) -> bool:

@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import quote, quote_plus, urlparse, urlsplit
 import wave
 
-from aiohttp import ClientTimeout, web
+from aiohttp import ClientTimeout, MultipartReader, web
 from homeassistant.components import network as ha_network
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
@@ -782,9 +782,10 @@ async def _async_is_safe_external_artwork_url(hass: HomeAssistant, url: str) -> 
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         return False
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    return await hass.async_add_executor_job(
+    is_safe: bool = await hass.async_add_executor_job(
         _resolve_and_check_public_host, parsed.hostname, port
     )
+    return is_safe
 
 
 async def _async_serve_speaker_artwork(
@@ -1239,6 +1240,9 @@ class LatterWallpaperUploadView(HomeAssistantView):
             part = await reader.next()
             if part is None:
                 break
+            if isinstance(part, MultipartReader):
+                await part.release()
+                continue
             field_name = str(getattr(part, "name", "") or "")
             if field_name == "scope":
                 upload_scope = (await part.text()).strip().lower()

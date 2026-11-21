@@ -180,20 +180,20 @@ async def async_setup_entry(
                         area_entities_by_id[area_id] = ent
                         async_add_entities([ent])
             elif action == "update":
-                ent = area_entities_by_id.get(area_id)
+                existing_ent = area_entities_by_id.get(area_id)
                 area_entry = ar.async_get(hass).async_get_area(area_id)
-                if ent is not None and area_entry is not None:
-                    ent.update_area_metadata(area_entry.name)
+                if existing_ent is not None and area_entry is not None:
+                    existing_ent.update_area_metadata(area_entry.name)
             elif action == "remove":
                 created_area_occupants.discard(area_id)
                 entry_area_ids.discard(area_id)
-                ent = area_entities_by_id.pop(area_id, None)
-                if ent is not None:
+                removed_ent = area_entities_by_id.pop(area_id, None)
+                if removed_ent is not None:
                     ent_reg = er.async_get(hass)
-                    if ent_reg.async_get(ent.entity_id) is not None:
-                        ent_reg.async_remove(ent.entity_id)
-                    if ent.hass is not None:
-                        hass.async_create_task(ent.async_remove())
+                    if ent_reg.async_get(removed_ent.entity_id) is not None:
+                        ent_reg.async_remove(removed_ent.entity_id)
+                    if removed_ent.hass is not None:
+                        hass.async_create_task(removed_ent.async_remove())
         _async_ensure_floor_sensors()
 
     @callback

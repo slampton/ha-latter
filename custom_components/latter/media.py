@@ -597,7 +597,7 @@ def resolve_esphome_local_speaker(
         return by_suffix
     for entry in device_entities(hass, dev.id, domain="media_player"):
         if entry.platform == "esphome":
-            return entry.entity_id
+            return str(entry.entity_id)
     return ""
 
 
@@ -719,19 +719,19 @@ def _match_ma_by_identity(
                 c_entry.device_id in target_dev_ids
                 or (c_dev is not None and c_dev.via_device_id in target_dev_ids)
             ):
-                return c_entry.entity_id
+                return str(c_entry.entity_id)
     if target_ha_entities:
         for c_entry, _c_dev, _c_macs, c_ha_ents, _c_protos in cand_list:
             if target_ha_entities & c_ha_ents:
-                return c_entry.entity_id
+                return str(c_entry.entity_id)
     if target_protocol_ids:
         for c_entry, _c_dev, _c_macs, _c_ha_ents, c_protos in cand_list:
             if target_protocol_ids & c_protos:
-                return c_entry.entity_id
+                return str(c_entry.entity_id)
     if target_macs:
         for c_entry, _c_dev, c_macs, _c_ha_ents, _c_protos in cand_list:
             if target_macs & c_macs:
-                return c_entry.entity_id
+                return str(c_entry.entity_id)
     return None
 
 
@@ -2006,7 +2006,7 @@ def resolve_assist_satellite_entity(
                     STATE_UNAVAILABLE,
                     STATE_UNKNOWN,
                 ):
-                    return entry.entity_id
+                    return str(entry.entity_id)
     return None
 
 
@@ -3113,10 +3113,11 @@ async def _async_execute_favorite_toggle(
     )
     target_fav = not cur_fav
 
-    overrides: dict[str, tuple[bool, bool | None]] = getattr(
-        coordinator, "_media_favorite_overrides", None
-    )
-    if overrides is None:
+    raw_overrides = getattr(coordinator, "_media_favorite_overrides", None)
+    overrides: dict[str, tuple[bool, bool | None]]
+    if isinstance(raw_overrides, dict):
+        overrides = raw_overrides
+    else:
         overrides = {}
         coordinator._media_favorite_overrides = overrides
     for k in (

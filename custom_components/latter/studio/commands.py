@@ -2633,12 +2633,13 @@ async def ws_handle_subscribe(
                 return
             if str(delta.get("device_slug") or "") != target_coord._ble_tracker._raw_slug:
                 return
+            raw_packets = delta.get("packets_seen")
             ev_payload = {
                 "type": "ble_survey_delta",
                 "subentry_id": target_coord.subentry_id,
                 "ble_packets_seen": int(
-                    delta.get("packets_seen")
-                    if delta.get("packets_seen") is not None
+                    raw_packets
+                    if raw_packets is not None
                     else target_coord._ble_tracker.packets_seen
                 ),
                 "ble_closest_proxy": str(

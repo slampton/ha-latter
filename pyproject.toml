@@ -13,6 +13,7 @@ license = { text = "Apache-2.0" }
 [project.optional-dependencies]
 test = [
     "aiohttp>=3.9",
+    "mypy>=1.14",
     "pillow>=10.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -53,3 +54,18 @@ ignore = ["E501", "SIM105", "SIM108"]
 force-sort-within-sections = true
 combine-as-imports = true
 known-first-party = ["custom_components.latter"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+show_error_codes = true
+# Standalone HACS CI runs without installing full Home Assistant Core; allow subclassing/decorating
+# HA base classes and decorators (Entity, ConfigFlow, HomeAssistantView, @callback, @websocket_command)
+# that resolve to Any under ignore_missing_imports. All Latter signatures, generics, return types,
+# re-exports, and Optional narrowings remain strictly checked.
+disallow_subclassing_any = false
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = ["homeassistant.*", "voluptuous.*"]
+ignore_missing_imports = true

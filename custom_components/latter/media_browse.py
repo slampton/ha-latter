@@ -271,12 +271,14 @@ def _extract_item_dict(raw: Any) -> dict[str, Any]:
     if isinstance(raw, dict):
         return raw
     if hasattr(raw, "as_dict") and callable(raw.as_dict):
-        result = raw.as_dict()
-        if isinstance(result, dict):
-            return result
+        as_dict_res = raw.as_dict()
+        if isinstance(as_dict_res, dict):
+            return as_dict_res
     if hasattr(raw, "to_dict") and callable(raw.to_dict):
         try:
-            return raw.to_dict()
+            to_dict_res = raw.to_dict()
+            if isinstance(to_dict_res, dict):
+                return to_dict_res
         except Exception:  # noqa: BLE001
             pass
     result: dict[str, Any] = {}
@@ -1084,7 +1086,8 @@ def parse_lrc_lyrics(
 def _extract_meta_strings(obj: Any) -> tuple[str, str]:
     """Extract `(lyrics_text, description_text)`, preferring LRC timestamps (`lrc_lyrics`) over plain `lyrics`."""
     d = _extract_item_dict(obj)
-    meta = d.get("metadata") if "metadata" in d and d.get("metadata") is not None else d
+    raw_meta = d.get("metadata")
+    meta: Any = raw_meta if raw_meta is not None else d
     if hasattr(meta, "to_dict") and callable(meta.to_dict):
         meta = meta.to_dict()
     if not isinstance(meta, dict):

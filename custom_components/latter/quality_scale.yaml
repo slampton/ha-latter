@@ -77,4 +77,4 @@ rules:
   inject-websession:
     status: exempt
     comment: Integration does not use an external API client library; local HTTP proxy views use Home Assistant's shared aiohttp session.
-  strict-typing: todo
+  strict-typing: done

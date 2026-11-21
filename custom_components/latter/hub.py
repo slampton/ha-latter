@@ -113,8 +113,10 @@ def _iter_registry_entities(ent_reg: er.EntityRegistry) -> Iterable[er.RegistryE
     if entities is None:
         return ()
     if hasattr(entities, "values"):
-        return entities.values()
-    return entities
+        vals: Iterable[er.RegistryEntry] = entities.values()
+        return vals
+    items: Iterable[er.RegistryEntry] = entities
+    return items
 
 
 def _strip_media_tick_attrs(attrs: dict[str, Any] | Any) -> dict[str, Any]:
@@ -307,7 +309,8 @@ class AreaStateIndex:
                 if not cur:
                     self._area_listeners.pop(area_id, None)
 
-        return _unsub
+        unsub: Callable[[], None] = _unsub
+        return unsub
 
     def resolve_entity_area_id(self, entity_id: str) -> str | None:
         """Return the indexed Area ID for `entity_id` (falling back to registry lookup if unindexed)."""
@@ -320,11 +323,11 @@ class AreaStateIndex:
         if entry is None:
             return None
         if entry.area_id:
-            return entry.area_id
+            return str(entry.area_id)
         if entry.device_id:
             dev = dr.async_get(self.hass).async_get(entry.device_id)
             if dev and dev.area_id:
-                return dev.area_id
+                return str(dev.area_id)
         return None
 
     def entities_in_area(

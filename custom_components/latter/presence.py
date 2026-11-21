@@ -188,7 +188,7 @@ def rssi_to_distance_m(
             0.2,
             min(
                 50.0,
-                10.0 ** ((float(ref_power_dbm) - float(rssi_dbm)) / (10.0 * eff_n)),
+                math.pow(10.0, (float(ref_power_dbm) - float(rssi_dbm)) / (10.0 * eff_n)),
             ),
         ),
         1,
@@ -200,7 +200,7 @@ def _continuous_distance_m(norm_dbm: float, attenuation: float) -> float:
     eff_n = max(1.0, float(attenuation))
     return max(
         0.05,
-        min(100.0, 10.0 ** ((TX_POWER_1M_DBM - float(norm_dbm)) / (10.0 * eff_n))),
+        min(100.0, math.pow(10.0, (TX_POWER_1M_DBM - float(norm_dbm)) / (10.0 * eff_n))),
     )
 
 
@@ -857,11 +857,11 @@ def _resolve_device_area_or_entity_area(
 ) -> str | None:
     """Return a device's area_id, or fallback to any entity's area_id or area name in device label."""
     if dev.area_id:
-        return dev.area_id
+        return str(dev.area_id)
 
     for entry in er.async_entries_for_device(ent_reg, dev.id):
         if entry.area_id:
-            return entry.area_id
+            return str(entry.area_id)
 
     for raw_label in (dev.name_by_user, dev.name):
         if not raw_label:
@@ -875,7 +875,7 @@ def _resolve_device_area_or_entity_area(
         for area in areas_sorted:
             a_norm = area.name.lower().replace("-", " ").replace("_", " ").strip()
             if a_norm and a_norm in dev_label:
-                return area.id
+                return str(area.id)
 
     return None
 
@@ -980,7 +980,7 @@ def _resolve_scanner_area_id_uncached(
         for area in areas_sorted:
             a_norm = area.name.lower().replace("-", " ").replace("_", " ").strip()
             if a_norm and a_norm in scan_norm:
-                return area.id
+                return str(area.id)
 
     return None
 
@@ -1097,10 +1097,9 @@ def get_area_signatures_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for area in sorted(area_reg.async_list_areas(), key=lambda a: a.name.lower()):
         sig = sig_map.get(area.id)
-        scanners_dict = (
-            sig.get("scanners")
-            if isinstance(sig, dict) and isinstance(sig.get("scanners"), dict)
-            else {}
+        raw_scanners = sig.get("scanners") if isinstance(sig, dict) else None
+        scanners_dict: dict[str, Any] = (
+            raw_scanners if isinstance(raw_scanners, dict) else {}
         )
         has_sig = len(scanners_dict) > 0
         sample_count = (
@@ -1186,7 +1185,7 @@ class LatterNativeBleTracker:
         on_area_detected: Callable[[str, str], None],
         scanner_offsets: Mapping[str, float] | None = None,
         area_signatures: Mapping[str, Mapping[str, Any]] | None = None,
-        ref_power_dbm: int | float | None = None,
+        ref_power_dbm: int | float | str | None = None,
         attenuation: float = DEFAULT_BLE_ATTENUATION,
         max_radius_m: float = DEFAULT_BLE_MAX_RADIUS_M,
         max_velocity_mps: float = DEFAULT_BLE_MAX_VELOCITY_MPS,
@@ -1294,7 +1293,7 @@ class LatterNativeBleTracker:
         *,
         scanner_offsets: Mapping[str, float] | None = None,
         area_signatures: Mapping[str, Mapping[str, Any]] | None = None,
-        ref_power_dbm: int | float | None = None,
+        ref_power_dbm: int | float | str | None = None,
         attenuation: float = DEFAULT_BLE_ATTENUATION,
         max_radius_m: float = DEFAULT_BLE_MAX_RADIUS_M,
         max_velocity_mps: float = DEFAULT_BLE_MAX_VELOCITY_MPS,
@@ -2675,7 +2674,8 @@ class LatterBleFabric:
                 self._unsub_sensor_events()
                 self._unsub_sensor_events = None
 
-        return _unsub
+        unsub: Callable[[], None] = _unsub
+        return unsub
 
     @callback
     def register_survey_listener(
@@ -2690,7 +2690,8 @@ class LatterBleFabric:
             if listener in self._survey_listeners:
                 self._survey_listeners.remove(listener)
 
-        return _unsub
+        unsub: Callable[[], None] = _unsub
+        return unsub
 
     @callback
     def emit_survey_delta(self, tracker: LatterNativeBleTracker) -> None:
@@ -3115,7 +3116,8 @@ def get_ble_fabric(hass: HomeAssistant) -> LatterBleFabric:
     domain_data = hass.data.setdefault(DOMAIN, {})
     if "ble_fabric" not in domain_data:
         domain_data["ble_fabric"] = LatterBleFabric(hass)
-    return domain_data["ble_fabric"]
+    fabric: LatterBleFabric = domain_data["ble_fabric"]
+    return fabric
 
 
 def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
@@ -4136,7 +4138,7 @@ def get_discovered_ble_candidates(
         key=lambda x: (
             not bool(x.get("is_tracker", True)),
             x.get("rssi") is None,
-            -(x.get("rssi") if x.get("rssi") is not None else -999),
+            -(int(x["rssi"]) if x.get("rssi") is not None else -999),
             str(x.get("title") or "").lower(),
         )
     )

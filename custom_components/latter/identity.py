@@ -108,8 +108,10 @@ def manifest_video_caps(manifest: Mapping[str, Any]) -> dict[str, Any]:
         hw_jpeg = has_disp and bool(int(raw_video.get("hw_jpeg") or 0))
         default_w = (int(manifest.get("w") or 466) & ~15) if has_disp else 0
         default_h = (int(manifest.get("h") or 466) & ~15) if has_disp else 0
-        max_w = int(raw_video.get("max_w") if raw_video.get("max_w") is not None else default_w)
-        max_h = int(raw_video.get("max_h") if raw_video.get("max_h") is not None else default_h)
+        raw_max_w = raw_video.get("max_w")
+        raw_max_h = raw_video.get("max_h")
+        max_w = int(raw_max_w) if raw_max_w is not None else default_w
+        max_h = int(raw_max_h) if raw_max_h is not None else default_h
         max_fps = int(raw_video.get("max_fps") or ((10 if has_batt else 15) if hw_jpeg else 5))
         grid_fps = int(raw_video.get("grid_fps") or ((5 if has_batt else 8) if hw_jpeg else 2))
     else:
@@ -289,15 +291,15 @@ def find_device_entity_by_suffix(
     for sfx in suffixes:
         for entry in entries:
             if not sfx or entry.entity_id.endswith(sfx):
-                return entry.entity_id
+                return str(entry.entity_id)
     for orig in original_names:
         for entry in entries:
             if (entry.original_name or "") == orig:
-                return entry.entity_id
+                return str(entry.entity_id)
     for uid_sfx in unique_id_suffixes:
         for entry in entries:
             if uid_sfx and (entry.unique_id or "").endswith(uid_sfx):
-                return entry.entity_id
+                return str(entry.entity_id)
     return None
 
 

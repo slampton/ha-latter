@@ -924,7 +924,7 @@ _BUILTIN_GROUPS_BY_ID: dict[str, dict[str, Any]] = {
 def _same_control_val(a: Any, b: Any) -> bool:
     """Compare two control values, treating structured lists, numeric strings, and booleans consistently."""
     if isinstance(a, (list, dict)) or isinstance(b, (list, dict)):
-        return a == b
+        return bool(a == b)
     sa = str(a).strip()
     sb = str(b).strip()
     if sa == sb:

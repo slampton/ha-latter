@@ -513,7 +513,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
                     coord.async_cleanup()
         async_stop_area_state_index(hass)
         async_unregister_studio_panel(hass)
-    return unload_ok
+    return bool(unload_ok)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> None:

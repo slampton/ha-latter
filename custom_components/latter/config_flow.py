@@ -94,7 +94,7 @@ def _device_mac(dev: dr.DeviceEntry) -> str:
     """Return the ESPHome device's network MAC connection, formatted, or ''."""
     for ctype, cval in dev.connections:
         if ctype == dr.CONNECTION_NETWORK_MAC and cval:
-            return dr.format_mac(str(cval))
+            return str(dr.format_mac(str(cval)))
     return ""
 
 
@@ -182,7 +182,7 @@ def _discover_default_weather(hass: HomeAssistant) -> str | None:
         key=lambda s: s.entity_id,
     )
     if states:
-        return states[0].entity_id
+        return str(states[0].entity_id)
     return None
 
 
@@ -193,7 +193,7 @@ def _discover_default_alarm(hass: HomeAssistant) -> str | None:
         key=lambda s: s.entity_id,
     )
     if states:
-        return states[0].entity_id
+        return str(states[0].entity_id)
     return None
 
 
@@ -595,7 +595,7 @@ def _bound_elsewhere(
     return False
 
 
-class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
+class LatterConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Handle the single System hub config flow and initial ESPHome device discovery for Latter."""
 
     VERSION = 2

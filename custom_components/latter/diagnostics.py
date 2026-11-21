@@ -186,7 +186,10 @@ async def async_get_config_entry_diagnostics(
             for sub_id, coord in sys_obj.coordinators.items()
         },
     }
-    return async_redact_data(sanitize_diagnostics_payload(payload), TO_REDACT)
+    redacted: dict[str, Any] = async_redact_data(
+        sanitize_diagnostics_payload(payload), TO_REDACT
+    )
+    return redacted
 
 
 async def async_get_device_diagnostics(
@@ -197,8 +200,9 @@ async def async_get_device_diagnostics(
 
     coord = resolve_coordinator(hass, device.id)
     if coord is not None:
-        return async_redact_data(
+        dev_redacted: dict[str, Any] = async_redact_data(
             sanitize_diagnostics_payload(_build_coordinator_diagnostics(coord)),
             TO_REDACT,
         )
+        return dev_redacted
     return await async_get_config_entry_diagnostics(hass, entry)

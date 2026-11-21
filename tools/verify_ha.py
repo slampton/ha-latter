@@ -484,9 +484,22 @@ def main() -> int:
         failures.append("[HA QUALITY] custom_components/latter/quality_scale.yaml is missing")
     else:
         qtxt = qscale_path.read_text(encoding="utf-8")
-        for req_rule in ("action-setup:", "common-modules:", "config-flow:", "diagnostics:", "repair-issues:", "runtime-data:"):
+        for req_rule in (
+            "action-setup:",
+            "common-modules:",
+            "config-flow:",
+            "diagnostics:",
+            "repair-issues:",
+            "runtime-data:",
+            "strict-typing: done",
+        ):
             if req_rule not in qtxt:
-                failures.append(f"[HA QUALITY] quality_scale.yaml missing rule {req_rule[:-1]!r}")
+                failures.append(f"[HA QUALITY] quality_scale.yaml missing rule {req_rule!r}")
+    if not (LATTER_DIR / "py.typed").is_file():
+        failures.append("[HA QUALITY] custom_components/latter/py.typed PEP 561 marker is missing")
+    pyproject_txt = (ROOT / "pyproject.toml").read_text(encoding="utf-8") if (ROOT / "pyproject.toml").is_file() else ""
+    if "[tool.mypy]" not in pyproject_txt or "strict = true" not in pyproject_txt:
+        failures.append("[HA QUALITY] pyproject.toml missing [tool.mypy] strict = true configuration")
 
     services_yaml_path = LATTER_DIR / "services.yaml"
     const_txt = (LATTER_DIR / "const.py").read_text(encoding="utf-8") if (LATTER_DIR / "const.py").is_file() else ""

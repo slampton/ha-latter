@@ -1386,13 +1386,14 @@ def _build_doorbells(
         ring_ent = ring_for_cam.get(cam, "")
         ring_st = hass.states.get(ring_ent) if ring_ent else None
         ring_known = ring_st is not None and ring_st.state not in ("unavailable", "unknown")
-        if ring_ent.startswith("event.") and ring_known:
+        if ring_st is not None and ring_ent.startswith("event.") and ring_known:
             ring_at = str(ring_st.state)
-        elif ring_known:
+        elif ring_st is not None and ring_known:
             ring_at = ring_st.last_changed.isoformat(timespec="seconds")
         else:
             ring_at = ""
-        cfg_entry = cam_cfgs.get(cam) if isinstance(cam_cfgs.get(cam), dict) else {}
+        raw_cfg_entry = cam_cfgs.get(cam)
+        cfg_entry: dict[str, Any] = raw_cfg_entry if isinstance(raw_cfg_entry, dict) else {}
         custom_lbl = str(cfg_entry.get("label") or "").strip()
         friendly = str((cam_st.attributes.get("friendly_name") if cam_st else "") or cam)
         out.append(
@@ -1401,7 +1402,7 @@ def _build_doorbells(
                 "camera_name": custom_lbl or friendly,
                 "ring_entity": ring_ent,
                 "ring_name": str((ring_st.attributes.get("friendly_name") if ring_st else "") or ring_ent),
-                "ring_state": str(ring_st.state) if ring_known else "",
+                "ring_state": str(ring_st.state) if (ring_st is not None and ring_known) else "",
                 "ring_at": ring_at,
                 "talk": [
                     {"device_title": c.device_title, "state": c.doorbell_talk_state}
