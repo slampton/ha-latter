@@ -6,7 +6,8 @@
     "bluetooth",
     "bluetooth_adapters",
     "camera",
-    "ffmpeg"
+    "ffmpeg",
+    "recorder"
   ],
   "categories": [
     "ai_voice.voice_assistants",
