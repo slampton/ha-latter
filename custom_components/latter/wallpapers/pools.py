@@ -1,4 +1,4 @@
-"""Wallpaper & Screensaver Photo Frame catalog builders and rotation pool resolvers (`L1b`)."""
+"""Wallpaper & Screensaver Photo Frame catalog builders and rotation pool resolvers."""
 
 from __future__ import annotations
 

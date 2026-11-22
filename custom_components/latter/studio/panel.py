@@ -1,4 +1,4 @@
-"""Latter Studio custom panel registration, asset digest helper, and lifecycle management (`L3`)."""
+"""Latter Studio custom panel registration, asset digest helper, and lifecycle management."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""BLE Device Tracker platform for Latter (`device_tracker.<device_slug>`, `L4`)."""
+"""BLE Device Tracker platform for Latter (`device_tracker.<device_slug>`)."""
 
 from __future__ import annotations
 

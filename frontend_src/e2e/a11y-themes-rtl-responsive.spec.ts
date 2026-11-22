@@ -1,7 +1,7 @@
 /**
- * Pillar 9 WCAG 2.2 AA Accessibility (`@axe-core/playwright`), Light & Dark HA Themes,
+ * WCAG 2.2 AA Accessibility (`@axe-core/playwright`), Light & Dark HA Themes,
  * Desktop (`1440×900`) & Mobile (`360×800`) Responsive Viewports, and LTR / RTL (`dir="rtl"`)
- * Zero-Overflow Verification Suite (`M-P0-14`).
+ * Zero-Overflow Verification Suite.
  */
 
 import { expect, test } from "@playwright/test";

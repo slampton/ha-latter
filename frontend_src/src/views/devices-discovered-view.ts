@@ -1,5 +1,5 @@
 /**
- * Discovered Devices View (`discovered_devices`, `D-041`, `D-066`, `Q12`):
+ * Discovered Devices View (`discovered_devices`, `D-041`, `D-066`):
  * Two stacked full-width onboarding cards:
  * 1. `Latter Devices` — Unbound ESPHome Devices running Latter firmware ready for adoption or ignore,
  *    plus collapsible `Ignored (N)` restore drawer and Web Installer / Getting started empty-state links.

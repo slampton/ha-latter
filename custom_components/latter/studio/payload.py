@@ -1,4 +1,4 @@
-"""Cohesive state payload, entity catalog, shared controls, locale overlay, and log builder for Latter Studio (`L3`)."""
+"""Cohesive state payload, entity catalog, shared controls, locale overlay, and log builder for Latter Studio."""
 
 from __future__ import annotations
 
@@ -487,7 +487,7 @@ async def _async_preload_studio_locales(hass: HomeAssistant) -> None:
 
 
 def _schedule_locale_preload_if_needed(hass: HomeAssistant) -> None:
-    """Ensure Studio locale overlays load off the event loop when not yet cached (`M-P2-25`)."""
+    """Ensure Studio locale overlays load off the event loop when not yet cached."""
     global _LOCALES_PRELOAD_SCHEDULED
     try:
         running_loop = asyncio.get_running_loop()

@@ -1,4 +1,4 @@
-"""Site-level Calendar Agenda, Weather Forecast, and Sun/Moon Sky Telemetry Feeds (`L1b`)."""
+"""Site-level Calendar Agenda, Weather Forecast, and Sun/Moon Sky Telemetry Feeds."""
 
 from __future__ import annotations
 

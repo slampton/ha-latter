@@ -1,5 +1,5 @@
 /**
- * Deterministic Gzip / Brotli Asset Emission & Exact UTF-8 Verification (`L4`).
+ * Deterministic Gzip / Brotli Asset Emission & Exact UTF-8 Verification.
  */
 
 import fs from "node:fs";

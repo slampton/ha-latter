@@ -1,5 +1,5 @@
 /**
- * Rich, Zero-PII `STUDIO_REV = 44` Multi-Device Hub Fixture Builder for Playwright E2E (`M-P0-14`).
+ * Rich, Zero-PII `STUDIO_REV = 44` Multi-Device Hub Fixture Builder for Playwright E2E.
  *
  * Derives `device_prefs` directly from `DEVICE_PREF_SPECS_CATALOG` + `isCatalogItemSupported`
  * so E2E fixtures stay 100% aligned with `protocol/latter_v3.json` across P4 & S3 archetypes.

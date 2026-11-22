@@ -1,4 +1,4 @@
-"""Local-only signed camera snapshot, MJPEG single/grid stream, and RTSP audio stream HTTP views (`L3`, 4 of 8 HTTP views, `M-P3-03`)."""
+"""Local-only signed camera snapshot, MJPEG single/grid stream, and RTSP audio stream HTTP views."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ class _AudioStreamConfig:
 
 
 def _is_allowed_stream_url(stream_url: str | None) -> bool:
-    """Return True only when `stream_url` uses an explicit `rtsp(s)://` or `http(s)://` scheme (`M-P1-30`)."""
+    """Return True only when `stream_url` uses an explicit `rtsp(s)://` or `http(s)://` scheme."""
     if not stream_url:
         return False
     clean = stream_url.strip()
@@ -629,7 +629,7 @@ async def _async_resolve_stream_and_ffmpeg(
 def _build_camera_audio_ffmpeg_cmd(
     ffmpeg_bin: str, clean_stream_url: str, cfg: _AudioStreamConfig
 ) -> list[str]:
-    """Build hardened FFmpeg CLI arguments for live camera audio transcoding (`M-P1-30`)."""
+    """Build hardened FFmpeg CLI arguments for live camera audio transcoding."""
     filtergraph = build_noise_reduction_filter(cfg.nr_level)
     out_codec = "flac" if cfg.fmt == "flac" else "pcm_s16le"
     out_fmt = "flac" if cfg.fmt == "flac" else "wav"

@@ -1,4 +1,4 @@
-"""Curated Area entity filtering, capability bitmasks, slot naming, and media discovery (`L2b`)."""
+"""Curated Area entity filtering, capability bitmasks, slot naming, and media discovery."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def is_curated_area_entity(
     ent_reg: er.EntityRegistry | None = None,
     bound_device_ids: set[str] | None = None,
 ) -> bool:
-    """Filter out config/diagnostic entities, Latter/ESPHome bound entities, and non-MA speakers (`M-P1-22`)."""
+    """Filter out config/diagnostic entities, Latter/ESPHome bound entities, and non-MA speakers."""
     if ent_reg is None:
         ent_reg = er.async_get(hass)
     entry = ent_reg.async_get(state_obj.entity_id)

@@ -1,9 +1,9 @@
 /**
  * Managed Devices View (`select_device_prompt`, `D-041`, `D-048`, `D-061`, `D-066`):
- * - Sentence-case `store.t(...)` labels with `Inventory` card heading when filter is `"all"` (`R-8`).
- * - Typed `d.status_code` filtering, sorting, and status dot classes (`D-15`).
- * - Semantic `<a href="/latter/devices/<id>">` Device link in `.col-name` (`D-10`) + humanized `d.model_label` (`Q12`).
- * - Actionable 0-Device onboarding CTAs (`E-10`).
+ * - Sentence-case `store.t(...)` labels with `Inventory` card heading when filter is `"all"`.
+ * - Typed `d.status_code` filtering, sorting, and status dot classes.
+ * - Semantic `<a href="/latter/devices/<id>">` Device link in `.col-name` + humanized `d.model_label`.
+ * - Actionable 0-Device onboarding CTAs.
  */
 
 import { renderCard, renderSortHeader } from "../components/controls.js";

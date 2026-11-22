@@ -1,5 +1,5 @@
 /**
- * Native `<dialog>` modals, confirmation modal (`Q5`), non-truncating `.dock-row`,
+ * Native `<dialog>` modals, confirmation modal, non-truncating `.dock-row`,
  * shortcut/MDI picker grids, and HSV color wheel (`D-053`, `D-064`).
  */
 

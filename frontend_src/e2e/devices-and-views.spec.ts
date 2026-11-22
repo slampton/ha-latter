@@ -1,5 +1,5 @@
 /**
- * Playwright E2E tests for Devices table & per-Device views (`M-P0-14`, `M-P3-06`, `D-071`–`D-077`):
+ * Playwright E2E tests for Devices table & per-Device views (`D-071`–`D-077`):
  * - `Devices` list row click, Ctrl-click `_blank`, keyboard `Tab`/`Enter`/`Space`, & `Discovered` ignore/restore
  * - `Device -> Overview` (`Status` tiles, `Do not disturb` sleep-safe vs offline disabled quick actions)
  * - `Device -> Display` (`Ambient Light` live status, `Photo Frame` picker filtering `dynamic_preset`)
@@ -12,7 +12,7 @@ import { expect, test } from "@playwright/test";
 import { mountStudio } from "./studio-harness.js";
 
 test.describe("Devices List & Per-Device Views E2E", () => {
-  test("supports M-P3-06 row click, Ctrl-click new tab, keyboard Enter/Space, and Discovered ignore/restore", async ({
+  test("supports row click, Ctrl-click new tab, keyboard Enter/Space, and Discovered ignore/restore", async ({
     page,
   }) => {
     const ctrl = await mountStudio(page, { path: "/latter" });

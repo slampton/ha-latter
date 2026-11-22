@@ -1,4 +1,4 @@
-"""On-device Screen Light entity (`light.<device_slug>_screen`) for Latter Displays (`L4`)."""
+"""On-device Screen Light entity (`light.<device_slug>_screen`) for Latter Displays."""
 
 from __future__ import annotations
 

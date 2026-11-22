@@ -1,4 +1,4 @@
-"""Studio WebSocket `latter/system/command` handlers across System config, Groups, Photos, and Presence (`L3`)."""
+"""Studio WebSocket `latter/system/command` handlers across System config, Groups, Photos, and Presence."""
 
 from __future__ import annotations
 

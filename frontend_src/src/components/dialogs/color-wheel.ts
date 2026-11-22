@@ -1,5 +1,5 @@
 /**
- * Custom HSV Color Wheel Modal (`#latter-cw-modal`, `A-24`).
+ * Custom HSV Color Wheel Modal (`#latter-cw-modal`).
  * - Short-circuits closed `<dialog>` body
  * - Uses per-store `store.colorWheelModal.painted` flag (zero module-global state)
  * - Uses component-scoped pointer capture on `<canvas>` and `focusSafe` text inputs

@@ -1,4 +1,4 @@
-"""Pure-stdlib shortcut icon/state policies and PBKDF2 / PIN session-key security (`L0b`)."""
+"""Pure-stdlib shortcut icon/state policies and PBKDF2 / PIN session-key security."""
 
 from __future__ import annotations
 

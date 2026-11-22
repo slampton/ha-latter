@@ -2615,7 +2615,7 @@ var Ho=globalThis,Uo=Ho.ShadowRoot&&(Ho.ShadyCSS===void 0||Ho.ShadyCSS.nativeSha
     flex-shrink: 0;
   }
 
-  /* WAI-ARIA 1.2 searchable entity combobox (Q11) */
+  /* WAI-ARIA 1.2 searchable entity combobox */
   .combobox {
     position: relative;
     display: flex;
@@ -2724,7 +2724,7 @@ var Ho=globalThis,Uo=Ho.ShadowRoot&&(Ho.ShadyCSS===void 0||Ho.ShadyCSS.nativeSha
     border-block-start: 1px solid var(--studio-divider);
   }
 
-  /* Pointer drag-and-drop & keyboard sortable rows (U4) */
+  /* Pointer drag-and-drop & keyboard sortable rows */
   .sortable-list {
     display: flex;
     flex-direction: column;

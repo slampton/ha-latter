@@ -1,4 +1,4 @@
-"""Single-pass BLE advertisement indexing and phone/tag candidate discovery (`L1b`, `M-P2-19`)."""
+"""Single-pass BLE advertisement indexing and phone/tag candidate discovery."""
 
 from __future__ import annotations
 
@@ -161,7 +161,7 @@ def _record_ibeacon_adv(
 
 
 def _index_live_ble_advertisements(hass: HomeAssistant) -> _LiveBleIndex:
-    """Scan HA Bluetooth scanners in ONE single `O(Ads)` pass (`M-P2-19`)."""
+    """Scan HA Bluetooth scanners in ONE single `O(Ads)` pass."""
     index = _LiveBleIndex()
     area_reg = ar.async_get(hass)
     scanner_area_memo: dict[str, str] = {}

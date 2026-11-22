@@ -1,4 +1,4 @@
-"""Thread-safe LRU image caches, circular-mask surfaces, and Baseline-JPEG transcoder (`L1a`)."""
+"""Thread-safe LRU image caches, circular-mask surfaces, and Baseline-JPEG transcoder."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ _CIRCULAR_MASK_CACHE: dict[tuple[int, int], tuple[Image.Image, Image.Image]] = {
 
 
 def validate_pil_image_dimensions(img: Image.Image) -> None:
-    """Reject oversize or decompression-bomb images (`> 8192 px` side or `> 25 MP`) before decode (`M-P1-34`)."""
+    """Reject oversize or decompression-bomb images (`> 8192 px` side or `> 25 MP`) before decode."""
     w, h = img.size
     if (
         w <= 0
@@ -61,7 +61,7 @@ def clear_http_caches() -> None:
 def get_circular_mask_surfaces(
     width: int, height: int
 ) -> tuple[Image.Image, Image.Image]:
-    """Return thread-safe cached `(mask_L, black_bg_RGB)` PIL surfaces for `(width, height)` (`M-P0-03`, `M-P1-34`)."""
+    """Return thread-safe cached `(mask_L, black_bg_RGB)` PIL surfaces for `(width, height)`."""
     key = (width, height)
     with _IMAGE_CACHE_LOCK:
         cached = _CIRCULAR_MASK_CACHE.get(key)
@@ -176,7 +176,7 @@ _cache_put = cache_put
 
 
 def evict_wallpaper_lru_cache(source_id: str) -> None:
-    """Thread-safely evict all cached full-size and thumbnail entries for a deleted or recropped photo (`M-P0-03`)."""
+    """Thread-safely evict all cached full-size and thumbnail entries for a deleted or recropped photo."""
     prefix = f"wp:{source_id}"
     with _IMAGE_CACHE_LOCK:
         for cache in (_ARTWORK_LRU_CACHE, _THUMB_LRU_CACHE):

@@ -1,5 +1,5 @@
 /**
- * `store.groups` Controller (`GroupsController`, `D-050`, `D-064` / `Q6`, `D-075`):
+ * `store.groups` Controller (`GroupsController`, `D-050`, `D-064`, `D-075`):
  * - Device Groups CRUD, scope toggles (`include_display`, `include_interface`), & baseline updates
  * - Delegates staged `Batch controls` operations to `BatchController`
  * - Delegates Walk-Around BLE calibration & Area sensor/illuminance fusion to `ble-calibration-ops`

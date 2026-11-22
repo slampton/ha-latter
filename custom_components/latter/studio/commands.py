@@ -1,4 +1,4 @@
-"""Admin-gated WebSocket API endpoints and scope-based command dispatch router for Latter Studio (`L3`).
+"""Admin-gated WebSocket API endpoints and scope-based command dispatch router for Latter Studio.
 
 The websocket type is the scope (`studio/state_gates.py`): `latter/system/*` commands never act on the
 Studio's selected Device (a System command that acts on one Device names it in its own payload), and

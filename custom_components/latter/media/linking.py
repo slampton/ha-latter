@@ -1,4 +1,4 @@
-"""Music Assistant player linking, identity matching, and safe numeric parsers (`L1b`)."""
+"""Music Assistant player linking, identity matching, and safe numeric parsers."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ _SPEAKER_REBIND_CALLBACK: Callable[[Any], None] | None = None
 
 
 def register_speaker_rebind_callback(cb: Callable[[Any], None]) -> None:
-    """Register the `L2a` coordinator speaker-listener rebind callback without upward imports."""
+    """Register the coordinator speaker-listener rebind callback without introducing an import cycle."""
     global _SPEAKER_REBIND_CALLBACK
     _SPEAKER_REBIND_CALLBACK = cb
 
@@ -125,12 +125,12 @@ def safe_opt_float(val: Any) -> float | None:
 
 
 def safe_float(val: Any, default: float = 0.0) -> float:
-    """Safely parse a finite float without raising on `'unavailable'`/`'unknown'`/boolean values (`M-P1-38`)."""
+    """Safely parse a finite float without raising on `'unavailable'`/`'unknown'`/boolean values."""
     return parsed if (parsed := safe_opt_float(val)) is not None else default
 
 
 def safe_int(val: Any, default: int = 0) -> int:
-    """Safely parse an integer without raising on non-numeric strings, NaN/Inf, or booleans (`M-P2-22`)."""
+    """Safely parse an integer without raising on non-numeric strings, NaN/Inf, or booleans."""
     return round(parsed) if (parsed := safe_opt_float(val)) is not None else default
 
 
@@ -673,7 +673,7 @@ def discover_ma_player_for_device(hass: HomeAssistant, esphome_device_id: str | 
 
 
 def suggest_ma_player_for(hass: HomeAssistant, coordinator: Any) -> str | None:
-    """Suggest the MA player for one Coordinator by exact identity first, else unclaimed `(manufacturer, model)` (`M-P2-22`)."""
+    """Suggest the MA player for one Coordinator by exact identity first, else unclaimed `(manufacturer, model)`."""
     if (esp_dev := get_bound_esphome_device(hass, getattr(coordinator, "esphome_device_id", None))) is None:
         return None
     local_spk = str(getattr(coordinator, "local_speaker", "") or "")

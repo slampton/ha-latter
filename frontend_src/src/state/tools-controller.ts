@@ -1,9 +1,9 @@
 /**
- * `store.tools` Controller (`ToolsController`, `D-064` / `Q5`, `D-066`):
+ * `store.tools` Controller (`ToolsController`, `D-064`, `D-066`):
  * - Shared confirmation dialog orchestration (`confirmModal`, `openConfirm`, `closeConfirm`, `runConfirmedAction`)
  * - Security PIN, HMAC signing key rotation, System & Device diagnostics, & Support version copy
  * - Modals (`colorWheelModal.painted`, `removeModal`, `resetModal`, `addBleModal`)
- * - Discovered `adopt` (with post-adopt jump to `adopted_subentry_id` `E-10`) + `ignore` / `unignore`
+ * - Discovered `adopt` (with post-adopt jump to `adopted_subentry_id`) + `ignore` / `unignore`
  * - Announcements, strict v3 backup/restore, & timezone-formatted System/Device logs
  */
 
@@ -34,7 +34,7 @@ export class ToolsController implements ToolsControllerContract {
     this.store = store;
   }
 
-  // ---------- Shared Confirmation Dialog (`Q5` / `D-064`) ----------
+  // ---------- Shared Confirmation Dialog (`D-064`) ----------
 
   openConfirm(opts: OpenConfirmOptions): void {
     this.store.confirmModal = {
@@ -273,7 +273,7 @@ export class ToolsController implements ToolsControllerContract {
     );
   }
 
-  // ---------- Color Wheel Modal (`A-24`: per-store `painted` flag) ----------
+  // ---------- Color Wheel Modal (per-store `painted` flag) ----------
 
   openColorWheelModal(targetScope: StudioScope): void {
     const initial =
@@ -449,7 +449,7 @@ export class ToolsController implements ToolsControllerContract {
     }
   }
 
-  // ---------- Discovered Devices: Adopt (`E-10`), Ignore, & Add BLE Tag ----------
+  // ---------- Discovered Devices: Adopt, Ignore, & Add BLE Tag ----------
 
   openAddBleModal(prefill?: { name?: string; address?: string }): void {
     this.store.addBleModal = {

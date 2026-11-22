@@ -1,4 +1,4 @@
-"""Config flow, Device Subentry flow, BLE Tag Subentry flow, and hardware-detecting onboarding (`L4`).
+"""Config flow, Device Subentry flow, BLE Tag Subentry flow, and hardware-detecting onboarding.
 
 A Device subentry is bound to one ESPHome device chosen by the user (device selector) or
 offered by discovery. The subentry stores that device's ID and MAC; its slug is the ESPHome

@@ -236,7 +236,7 @@ def _coerce_finite_lux(raw: object) -> float | None:
 def area_illuminance_settings(
     hass: HomeAssistant, area_id: str | None
 ) -> dict[str, Any]:
-    """Return effective ambient light calibration settings for one Area (`D-075`, `M-P1-42`)."""
+    """Return effective ambient light calibration settings for one Area (`D-075`)."""
     entity_id = "auto"
     dark_lux = float(DEFAULT_AREA_DARK_LUX)
     bright_lux = float(DEFAULT_AREA_BRIGHT_LUX)

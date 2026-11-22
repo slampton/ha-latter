@@ -1,6 +1,6 @@
 /**
  * Event-First `latter/system/subscribe` Manager, Reconnect Backoff, BLE Delta Stream,
- * & Cross-Device Payload Isolation (`SubscriptionController`, `D-064`, `D-065`, `M-P1-49`).
+ * & Cross-Device Payload Isolation (`SubscriptionController`, `D-064`, `D-065`).
  */
 
 import { formatWsError, isStudioRevMismatchError } from "../api/ws-client.js";

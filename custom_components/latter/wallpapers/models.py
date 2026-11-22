@@ -1,4 +1,4 @@
-"""System Photo Library dataclasses, presets, focal-point crop math, and sky renderer (`L1b`)."""
+"""System Photo Library dataclasses, presets, focal-point crop math, and sky renderer."""
 
 from __future__ import annotations
 

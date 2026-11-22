@@ -1,4 +1,4 @@
-"""Home Hub summaries, `area_context` v3 payload builder, and coordinator Area listeners (`L2b`)."""
+"""Home Hub summaries, `area_context` v3 payload builder, and coordinator Area listeners."""
 
 from __future__ import annotations
 
@@ -734,7 +734,7 @@ def _build_shortcuts_listener(coordinator: Any) -> Callable[[], None] | None:
 
 @callback
 def bind_coordinator_area_listeners(coordinator: Any) -> None:
-    """Bind active Area, Home Hub, Remote Slot, and Shortcut entity listeners on `coordinator` (`M-P1-19`)."""
+    """Bind active Area, Home Hub, Remote Slot, and Shortcut entity listeners on `coordinator`."""
     coordinator.replace_area_listener_unsubs(
         area_entities=None, alarm=None, remotes=None, shortcuts=None
     )

@@ -1,0 +1,11 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Generated and auto-synced artifacts (collapse in GitHub diffs and Linguist stats)
+custom_components/latter/frontend/* linguist-generated=true
+custom_components/latter/protocol_v3.json linguist-generated=true
+custom_components/latter/studio/locales/en.json linguist-generated=true
+custom_components/latter/translations/en.json linguist-generated=true
+frontend_src/src/protocol-schema.ts linguist-generated=true
+frontend_src/src/mdi-chunks.ts linguist-generated=true
+frontend_src/package-lock.json linguist-generated=true

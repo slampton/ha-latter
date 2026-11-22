@@ -1,4 +1,4 @@
-"""Tier 2 Action Button entities (`button.<device_slug>_*`) for Latter Devices (`L4`)."""
+"""Tier 2 Action Button entities (`button.<device_slug>_*`) for Latter Devices."""
 
 from __future__ import annotations
 

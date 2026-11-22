@@ -1,4 +1,4 @@
-"""Special service targets (`occupied_areas`), curated sensor surface, and 34-module invariants."""
+"""Special service targets (`occupied_areas`), curated sensor surface, and canonical module export invariants."""
 
 from __future__ import annotations
 

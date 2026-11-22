@@ -1,4 +1,4 @@
-"""Pure-stdlib Protocol v3 schema specs, catalogs, World Clock / Alarm / Shortcut normalizers (`L0a`)."""
+"""Pure-stdlib Protocol v3 schema specs, catalogs, World Clock / Alarm / Shortcut normalizers."""
 
 from __future__ import annotations
 

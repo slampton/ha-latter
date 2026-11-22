@@ -1,4 +1,4 @@
-"""Home Assistant Repairs registry audit and repair fix flows for Latter (`L3`)."""
+"""Home Assistant Repairs registry audit and repair fix flows for Latter."""
 
 from __future__ import annotations
 

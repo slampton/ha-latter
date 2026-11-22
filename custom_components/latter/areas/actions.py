@@ -1,4 +1,4 @@
-"""Normalized Area, Home Hub, perimeter security, and light color/kelvin action executor (`L2b`)."""
+"""Normalized Area, Home Hub, perimeter security, and light color/kelvin action executor."""
 
 from __future__ import annotations
 
@@ -683,7 +683,7 @@ async def async_execute_area_action(
     blocking: bool = False,
     raise_on_missing: bool = False,
 ) -> None:
-    """Execute a normalized Area, Home Hub, or light color/kelvin action (`M-P1-44`)."""
+    """Execute a normalized Area, Home Hub, or light color/kelvin action."""
     raw_action = str(action or "").strip().lower()
     norm_action = _ALARM_ACTION_ALIASES.get(raw_action, raw_action)
     entity_id, state_obj = _resolve_target_state(hass, entity_id.strip(), norm_action)

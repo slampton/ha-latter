@@ -362,7 +362,7 @@ def _sync_active_speaker_media_snapshot(coordinator: Any) -> None:
 
 @callback
 def bind_coordinator_speaker_listener(coordinator: Any) -> None:
-    """Subscribe to state changes on the active `media_player` and its volume/MA counterparts (`M-P1-19`)."""
+    """Subscribe to state changes on the active `media_player` and its volume/MA counterparts."""
     coordinator.replace_speaker_state_unsub(None)
     coordinator.tracked_ma_counterpart = None
     if not coordinator.active_speaker:
@@ -992,7 +992,7 @@ async def execute_coordinator_media_command(
     queue_item_id: str | None = None,
     pos_shift: int | str | None = None,
 ) -> None:
-    """Execute a unified media playback, queue, or player toggle command (`M-P1-19`, `M-P2-22`)."""
+    """Execute a unified media playback, queue, or player toggle command."""
     hass = coordinator.hass
     target_spk = (speaker or coordinator.active_speaker or coordinator.local_speaker).strip()
     cmd = command.strip().lower()

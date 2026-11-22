@@ -1,10 +1,10 @@
 /**
  * System Overview View (`system_overview`, `D-003`, `D-004`, `D-051`, `D-061`, `D-066`, `D-076`):
- * - Conditional top region for active Home Assistant Repairs (`role="region"` + heading, `D-21`)
+ * - Conditional top region for active Home Assistant Repairs (`role="region"` + heading)
  *   and unbound Discovered Latter hardware.
  * - Column 1: High-level Status card (`D-003` release meta, `D-004` People & roaming, `D-076`
  *   Sleeping / Away / Offline / Low-battery operational distinction).
- * - Column 2: Area deployment promoted above the fold (`area_id` matching `E-21`).
+ * - Column 2: Area deployment promoted above the fold (strict `area_id` matching).
  */
 
 import { renderCard, renderSvgIcon } from "../components/controls.js";
@@ -237,7 +237,7 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
     }
   }
 
-  // Build unified Area Deployment map matching Areas strictly by `area_id` (E-21)
+  // Build unified Area Deployment map matching Areas strictly by `area_id`
   const sigByArea = new Map<string, BleAreaSignatureSummary>();
   for (const sig of signatures) {
     if (sig.area_id) sigByArea.set(sig.area_id, sig);

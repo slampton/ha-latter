@@ -1,6 +1,6 @@
 /**
- * Settings rows, form controls, RTL switches, buttons, WAI-ARIA combobox (`Q11`),
- * and pointer/keyboard sortable drag-and-drop rows (`U4`).
+ * Settings rows, form controls, RTL switches, buttons, WAI-ARIA combobox,
+ * and pointer/keyboard sortable drag-and-drop rows.
  */
 
 import { css } from "../lib/lit.js";
@@ -335,7 +335,7 @@ export const CONTROL_STYLES = css`
     flex-shrink: 0;
   }
 
-  /* WAI-ARIA 1.2 searchable entity combobox (Q11) */
+  /* WAI-ARIA 1.2 searchable entity combobox */
   .combobox {
     position: relative;
     display: flex;
@@ -444,7 +444,7 @@ export const CONTROL_STYLES = css`
     border-block-start: 1px solid var(--studio-divider);
   }
 
-  /* Pointer drag-and-drop & keyboard sortable rows (U4) */
+  /* Pointer drag-and-drop & keyboard sortable rows */
   .sortable-list {
     display: flex;
     flex-direction: column;

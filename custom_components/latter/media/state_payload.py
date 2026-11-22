@@ -1,4 +1,4 @@
-"""Protocol v3 `active_media` capability bitmask and payload builder (`L2a`, `M-P1-19`, `M-P1-39`)."""
+"""Protocol v3 `active_media` capability bitmask and payload builder."""
 
 from __future__ import annotations
 
@@ -360,7 +360,7 @@ def _parse_position_updated_at(attrs: dict[str, Any], m_attrs: dict[str, Any]) -
 def build_active_media_payload(
     coordinator: Any,
 ) -> tuple[str | None, dict[str, Any]]:
-    """Compute state and Protocol v3 `active_media` payload for one coordinator (`M-P1-19`)."""
+    """Compute state and Protocol v3 `active_media` payload for one coordinator."""
     now_m = time.monotonic()
     cached: tuple[float, tuple[str | None, dict[str, Any]]] | None = (
         coordinator.cached_media_payload

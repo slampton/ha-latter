@@ -808,7 +808,7 @@ def device_option_defaults(
     dev: dr.DeviceEntry | None,
     manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return the fresh-onboarding option defaults for a bound ESPHome device (`L2a`)."""
+    """Return the fresh-onboarding option defaults for a bound ESPHome device."""
     dev_id = dev.id if dev is not None else None
     hw_defaults = detect_hardware_defaults(hass, dev, manifest)
     grp_id = str(hw_defaults.get(CONF_DEVICE_GROUP) or DEFAULT_DEVICE_GROUP)

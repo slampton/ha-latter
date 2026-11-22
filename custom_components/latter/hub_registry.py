@@ -1,4 +1,4 @@
-"""Reactive O(1) `AreaStateIndex`, `LatterSystemHub` core state, and coordinator/config locks (`L1a`)."""
+"""Reactive O(1) `AreaStateIndex`, `LatterSystemHub` core state, and coordinator/config locks."""
 
 from __future__ import annotations
 
@@ -416,7 +416,7 @@ def async_stop_area_state_index(hass: HomeAssistant) -> None:
 
 @dataclass(slots=True)
 class HubRuntimeHooks:
-    """Upper-layer (`L3` `hub_sync`) factories and feed/schedule callbacks wired at setup."""
+    """Orchestration-tier (`hub_sync`) factories and feed/schedule callbacks wired at setup."""
 
     url_signer_factory: Callable[[HomeAssistant, str, bytes], Any] | None = None
     rpc_dispatcher_factory: Callable[[HomeAssistant], Any] | None = None
@@ -446,7 +446,7 @@ def register_hub_hooks(
         | None
     ) = None,
 ) -> None:
-    """Register `L3` factories and feed-sync callbacks without upward imports in `L1a`."""
+    """Register orchestration-tier factories and feed-sync callbacks without creating an import cycle."""
     if url_signer_factory is not None:
         _HUB_HOOKS.url_signer_factory = url_signer_factory
     if rpc_dispatcher_factory is not None:
@@ -474,7 +474,7 @@ def safe_hour(val: object, default: int) -> int:
 
 
 class LatterSystemHub:
-    """Represents the shared Latter System state across all configured devices (`L1a`)."""
+    """Represents the shared Latter System state across all configured devices."""
 
     def __init__(
         self,

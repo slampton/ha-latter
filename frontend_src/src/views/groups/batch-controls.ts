@@ -1,5 +1,5 @@
 /**
- * Staged Batch Controls Card (`system_sync` Column 2, `D-050`, `D-055`, `D-064` / `Q6`).
+ * Staged Batch Controls Card (`system_sync` Column 2, `D-050`, `D-055`, `D-064`).
  * - Stages edits in `store.groups.batchDraft` & `Mixed`-safe `store.groups.batchPillDrafts`
  * - Action bar with **Apply to N Devices** (`requestApplyBatchDraft`) + **Reset** (`resetBatchDraft`)
  *   and automatic `Custom` detachment note when grouped Devices are targeted

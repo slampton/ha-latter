@@ -1,4 +1,4 @@
-"""Tests for Studio rev-mismatch guards, discovered devices, offline ESPHome restore selects, and Phase 4 device actions."""
+"""Tests for Studio rev-mismatch guards, discovered devices, offline ESPHome restore selects, and device actions."""
 
 from __future__ import annotations
 
@@ -295,10 +295,10 @@ async def test_unplugged_esphome_device_with_restore_selects_is_offline_and_noti
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
-async def test_phase4_device_actions_telemetry_and_dnd_entities(
+async def test_device_actions_telemetry_and_dnd_entities(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify Phase 4 `device_action` verbs, `device_telemetry` -> Studio `live.telemetry`, and Screen/Screensaver/DND/Dismiss entities."""
+    """Verify `device_action` verbs, `device_telemetry` -> Studio `live.telemetry`, and Screen/Screensaver/DND/Dismiss entities."""
     entry, sys_obj, coord = await setup_latter_hub(hass)
     wifi_eid = f"sensor.{coord.device_slug}_system_wi_fi_signal"
     register_entity(

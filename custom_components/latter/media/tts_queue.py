@@ -368,7 +368,7 @@ async def async_play_media_with_ma_fallback(
     enqueue: str | None = None,
     radio_mode: bool = False,
 ) -> None:
-    """Play media via Music Assistant, expanding full artist/album containers without track caps (`M-P2-22`)."""
+    """Play media via Music Assistant, expanding full artist/album containers without track caps."""
     if isinstance(media_id, list):
         cleaned_ids = [str(x).strip() for x in media_id if str(x or "").strip()]
         if not cleaned_ids:
@@ -412,7 +412,7 @@ async def async_play_media_with_ma_fallback(
 async def _async_wait_entities_playing(
     hass: HomeAssistant, watched_entities: list[str], timeout_s: float
 ) -> bool:
-    """Wait reactively via `async_track_state_change_event` (zero sleep polling, `M-P2-22`)."""
+    """Wait reactively via `async_track_state_change_event` (zero sleep polling)."""
 
     def _is_playing() -> bool:
         return any(
@@ -605,7 +605,7 @@ async def async_resume_idle_speaker_queue(
     immediate: bool = False,
     already_tried_ma: bool = False,
 ) -> bool:
-    """Resume playback on an idle speaker reactively without blocking sleep loops (`M-P2-22`)."""
+    """Resume playback on an idle speaker reactively without blocking sleep loops."""
     ma_entity = resolve_ma_counterpart_entity(hass, speaker_entity_id)
     watched_entities = [
         ent_id for ent_id in dict.fromkeys((speaker_entity_id, ma_entity)) if ent_id

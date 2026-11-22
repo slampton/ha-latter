@@ -1,4 +1,4 @@
-"""Constant-time HMAC-SHA256 resource signing and LAN URL builders (`L1a`)."""
+"""Constant-time HMAC-SHA256 resource signing and LAN URL builders."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ _CROP_HASH_RESOLVER: Callable[[str], str] | None = None
 
 
 def register_crop_hash_resolver(resolver: Callable[[str], str]) -> None:
-    """Register the `L1b` photo crop-hash resolver without importing `wallpapers` upward in `L1a`."""
+    """Register the photo crop-hash resolver without importing `wallpapers` into `http.signing`."""
     global _CROP_HASH_RESOLVER
     _CROP_HASH_RESOLVER = resolver
 

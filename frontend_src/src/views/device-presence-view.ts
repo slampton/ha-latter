@@ -1,5 +1,5 @@
 /**
- * Device BLE & Area Presence View (`presence`, `D-003`, `D-032`, `D-036`, `D-066`, `Q8`):
+ * Device BLE & Area Presence View (`presence`, `D-003`, `D-032`, `D-036`, `D-066`):
  * Static Assigned Area vs. BLE Roaming, Fallback Area, and BLE identity (hidden when Static).
  */
 
@@ -21,7 +21,7 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
   const isBleOnly = cfg.kind === "ble_tag";
   const bleTracking = isBleOnly || Boolean(cfg.native_ble_tracking);
 
-  // Strict `D-003` unknown gating: never substitute a fake `-59 dBm` reading when unknown (`E-03`)
+  // Strict `D-003` unknown gating: never substitute a fake `-59 dBm` reading when unknown
   const rawDetectedRef = data?.live?.ble_detected_ref_power;
   const hasDetectedRefPower =
     rawDetectedRef !== null &&

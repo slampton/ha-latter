@@ -1,8 +1,8 @@
 /**
- * Encapsulated Reactive Store Facade for Latter Studio (`StudioStore`, `L3`, `D-023`, `D-062`, `D-064`).
+ * Encapsulated Reactive Store Facade for Latter Studio (`StudioStore`, `D-023`, `D-062`, `D-064`).
  *
- * Composes `L2` controllers (`EntityController`, `GroupsController`, `ToolsController`,
- * `SubscriptionController`, & `routing.ts`) over the `L1` `StudioStoreContext` contract.
+ * Composes state controllers (`EntityController`, `GroupsController`, `ToolsController`,
+ * `SubscriptionController`, & `routing.ts`) over the `StudioStoreContext` contract.
  */
 
 import { StudioWsClient } from "../api/ws-client.js";

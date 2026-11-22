@@ -1,5 +1,5 @@
 /**
- * Device Audio View (`audio_voice`, `D-008`, `D-031`, `D-036`, `D-066`, `Q7`, `Q8`):
+ * Device Audio View (`audio_voice`, `D-008`, `D-031`, `D-036`, `D-066`):
  * - Column 1: Voice assistant & wake word (hides `Voice Follows Me` & delay when `native_ble_tracking` is Off).
  * - Column 2: Sound & playback (keeps `area_handoff` visible in both Static and BLE modes per `D-008`,
  *   using unified `store.tPrefLabel("area_handoff")` matching System Groups).
@@ -65,7 +65,7 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
   ]);
   const soundItems = store.entity.getSectionItems("sound").filter((it) => !it.pref_key);
 
-  // Hide `Voice Follows Me` & dwell delay when `native_ble_tracking` is Off (Static mode, `Q8` / `E-13`)
+  // Hide `Voice Follows Me` & dwell delay when `native_ble_tracking` is Off (Static mode)
   const showVoiceFollowsMe =
     Boolean(cfg.native_ble_tracking) && caps.is_roaming_device !== false;
   const dwellSeconds = Number(cfg.area_follow_dwell_s ?? 10);

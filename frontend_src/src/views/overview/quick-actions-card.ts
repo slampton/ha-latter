@@ -1,5 +1,5 @@
 /**
- * Device Overview — Quick Actions Card (`views/overview/quick-actions-card.ts`, `D-066`, `M-P1-22`).
+ * Device Overview — Quick Actions Card (`views/overview/quick-actions-card.ts`, `D-066`).
  */
 
 import {

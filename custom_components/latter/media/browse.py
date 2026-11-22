@@ -1,4 +1,4 @@
-"""Music Assistant & Home Assistant media browse engine (`L2a`, `M-P2-22`)."""
+"""Music Assistant & Home Assistant media browse engine."""
 
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ def common_artist(titles: Sequence[str]) -> str:
 def album_track_slots(
     children: Iterable[Mapping[str, Any]], current_title: str = ""
 ) -> list[dict[str, Any]]:
-    """Browse slots for an album's tracks in Music Assistant's full order, numbered 1..N (`M-P2-22`)."""
+    """Browse slots for an album's tracks in Music Assistant's full order, numbered 1..N."""
     tracks = [c for c in children if _child_uri(c) and _child_title(c)]
     artist = common_artist([_child_title(c) for c in tracks])
     cur = current_title.strip().lower()
@@ -747,7 +747,7 @@ async def async_browse_media_items(
     *,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
-    """Execute the requested browse mode and return a flat list of slot dicts (`M-P2-22`)."""
+    """Execute the requested browse mode and return a flat list of slot dicts."""
     mode = mode.strip().lower()
     if mode == "speakers":
         return await _browse_speakers(hass, speaker, last_speaker, local_speaker)

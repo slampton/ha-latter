@@ -1,4 +1,4 @@
-"""Synchronous Protocol v3 camera capability bitmask and Studio metadata resolver (`L2a`, `M-P2-23`)."""
+"""Synchronous Protocol v3 camera capability bitmask and Studio metadata resolver."""
 
 from __future__ import annotations
 
@@ -102,7 +102,7 @@ def resolve_camera_capabilities(
     stream_source: str | None = None,
     has_mjpeg_stream: bool = False,
 ) -> dict[str, Any]:
-    """Compute Protocol v3 camera `caps` bitmask and Studio capability metadata synchronously (`M-P2-23`)."""
+    """Compute Protocol v3 camera `caps` bitmask and Studio capability metadata synchronously."""
     cam_ent = (camera_entity_id or "").strip()
     state = hass.states.get(cam_ent) if cam_ent else None
     attrs: Mapping[str, Any] = state.attributes if state is not None else {}

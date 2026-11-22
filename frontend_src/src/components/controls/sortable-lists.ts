@@ -1,6 +1,6 @@
 /**
  * Pointer Drag-and-Drop (`≡`) + Focus-Preserving Keyboard Sortable Lists & Pills
- * (`components/controls/sortable-lists.ts`, `U4` / `D-064`).
+ * (`components/controls/sortable-lists.ts`, `D-064`).
  */
 
 import { t } from "../../i18n/index.js";

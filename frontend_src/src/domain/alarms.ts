@@ -1,5 +1,5 @@
 /**
- * Pure alarm-slot wire parser, serializer, and duration formatter (`L1` domain leaf).
+ * Pure alarm-slot wire parser, serializer, and duration formatter.
  * Wire format: `HH:MM|<enabled 0|1>|<recurrence 0..3>;...` (3 fixed alarm slots).
  */
 

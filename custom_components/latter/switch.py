@@ -1,4 +1,4 @@
-"""Curated Switch entities (`switch.<device_slug>_*`) for Latter Devices (`L4`)."""
+"""Curated Switch entities (`switch.<device_slug>_*`) for Latter Devices."""
 
 from __future__ import annotations
 

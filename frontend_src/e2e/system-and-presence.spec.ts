@@ -1,5 +1,5 @@
 /**
- * Playwright E2E tests for System views (`M-P0-14`, `D-072`, `D-073`, `D-074`, `D-075`, `D-076`):
+ * Playwright E2E tests for System views (`D-072`–`D-076`):
  * - `System -> Overview` two-card layout (`Status` + Column 2 `Area deployment`), `Sleeping` vs
  *   `Away` vs unexpected `Offline` vs `<= 20%` discharging `Low battery` health badges
  * - `System -> BLE & Area presence` (`D-075` Area-Aware `Ambient Light` & 7-day Recorder

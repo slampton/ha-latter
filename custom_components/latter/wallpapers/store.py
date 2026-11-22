@@ -1,4 +1,4 @@
-"""Transactional System Photo Library index store, CRUD mutations, and backup restore (`L1b`, `M-P1-32`)."""
+"""Transactional System Photo Library index store, CRUD mutations, and backup restore."""
 
 from __future__ import annotations
 
@@ -286,7 +286,7 @@ def _load_photo_library_sync(root: Path) -> PhotoLibrarySnapshot:
 
 
 def ensure_loaded_locked(root: Path) -> PhotoLibrarySnapshot:
-    """Load `index.json` from disk when the in-memory snapshot doesn't match `root` yet (`M-P1-32`)."""
+    """Load `index.json` from disk when the in-memory snapshot doesn't match `root` yet."""
     if root.resolve() != _LOADED_WALLPAPER_ROOT:
         return _load_photo_library_sync(root)
     return _PHOTO_LIBRARY_SNAPSHOT
@@ -638,7 +638,7 @@ def bulk_update_photos(
     remove_collection: str | None = None,
     delete: bool = False,
 ) -> dict[str, Any]:
-    """Batch-assign/remove a collection or batch-delete custom photos in one atomic index write (`M-P1-32`)."""
+    """Batch-assign/remove a collection or batch-delete custom photos in one atomic index write."""
     root = get_wallpaper_root(hass)
     target_ids = list(dict.fromkeys(str(p or "").strip() for p in (photo_ids or ()) if str(p or "").strip()))
     if not target_ids:
@@ -714,7 +714,7 @@ def save_uploaded_photo_bytes(
     source_kind: str = "upload",
     media_source_path: str = "",
 ) -> dict[str, Any]:
-    """Validate, EXIF-transpose, downscale to `<= 1600 px` outside lock, and save into the Photo Library (`M-P1-32`)."""
+    """Validate, EXIF-transpose, downscale to `<= 1600 px` outside lock, and save into the Photo Library."""
     if not raw_bytes:
         raise ValueError("Empty photo upload")
     if len(raw_bytes) > MAX_WALLPAPER_UPLOAD_BYTES:

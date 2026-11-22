@@ -1,4 +1,4 @@
-"""Home Assistant Diagnostics platform and PII/secret redaction pipeline for Latter (`L3`)."""
+"""Home Assistant Diagnostics platform and PII/secret redaction pipeline for Latter."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""BLE scanner-to-Area resolution, iBeacon identity parsing, Floor helpers, and Area signatures (`L1b`)."""
+"""BLE scanner-to-Area resolution, iBeacon identity parsing, Floor helpers, and Area signatures."""
 
 from __future__ import annotations
 

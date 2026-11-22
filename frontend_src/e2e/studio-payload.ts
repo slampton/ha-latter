@@ -1,7 +1,7 @@
 /**
- * `STUDIO_REV = 44` `StudioStatePayload` Builder for Playwright E2E (`M-P0-14`).
+ * `STUDIO_REV = 44` `StudioStatePayload` Builder for Playwright E2E.
  *
- * Separated from `studio-fixtures.ts` so every E2E module stays `< 650` LOC (`<= 800` LOC cap).
+ * Separated from `studio-fixtures.ts` to keep fixture definitions and payload assembly modular.
  */
 
 import {

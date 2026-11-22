@@ -1,7 +1,7 @@
 /**
  * Pure Node TypeScript unit tests for non-destructive photo crop math (`crop-math.ts`),
  * alarm wire codecs (`domain/alarms.ts`), world-clock codecs (`domain/world-clocks.ts`),
- * 7,447-icon MDI catalog parity (`mdi-catalog.ts`), and combobox fuzzy ranking (`M-P0-14`).
+ * 7,447-icon MDI catalog parity (`mdi-catalog.ts`), and combobox fuzzy ranking.
  */
 
 import assert from "node:assert/strict";

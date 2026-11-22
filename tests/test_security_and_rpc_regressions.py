@@ -1,4 +1,4 @@
-"""Phase 4 dedicated regression suite (`M-P0-01`..`M-P0-07`, `M-P1-22`)."""
+"""Security, RPC outbox, LRU cache concurrency, sensor fusion, and broadcast/DND regression suite."""
 
 from __future__ import annotations
 
@@ -69,10 +69,10 @@ from tests.helpers import (
 )
 
 
-async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
+async def test_pin_session_key_crypto_bounds_and_exponential_lockout(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify M-P0-01 v1 session-key PIN wrap/unwrap, 4..12 digit bounds, anti-replay, and 5-try lockout."""
+    """Verify v1 session-key PIN wrap/unwrap, 4..12 digit bounds, anti-replay, and 5-try lockout."""
     assert (MIN_PIN_LEN, MAX_PIN_LEN) == (4, 12)
     key_id, key_bytes = mint_pin_session_key()
     assert len(key_id) == 8 and key_id == key_id.lower()
@@ -272,10 +272,10 @@ async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
-async def test_m_p0_02_rpc_receiver_rebind_silent_seed_no_replay_and_hidden_outbox(
+async def test_rpc_receiver_rebind_silent_seed_no_replay_and_hidden_outbox(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify M-P0-02 rebind() seeds (boot_id, seq) silently without replay and auto-hides outbox."""
+    """Verify rebind() seeds (boot_id, seq) silently without replay and auto-hides outbox."""
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     ent_reg = er.async_get(hass)
     rpc_eid = f"sensor.{coord.device_slug}_system_rpc_outbox"
@@ -332,8 +332,8 @@ async def test_m_p0_02_rpc_receiver_rebind_silent_seed_no_replay_and_hidden_outb
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
-def test_m_p0_03_multithreaded_lru_cache_and_mask_concurrency_stress() -> None:
-    """Verify M-P0-03 concurrent _ARTWORK_LRU_CACHE / _THUMB_LRU_CACHE reads, writes, and evictions never raise."""
+def test_multithreaded_lru_cache_and_mask_concurrency_stress() -> None:
+    """Verify concurrent _ARTWORK_LRU_CACHE / _THUMB_LRU_CACHE reads, writes, and evictions never raise."""
     errors: list[BaseException] = []
     barrier = threading.Barrier(8)
 
@@ -364,15 +364,15 @@ def test_m_p0_03_multithreaded_lru_cache_and_mask_concurrency_stress() -> None:
     assert errors == []
 
 
-async def test_m_p0_04_and_m_p0_05_own_occupancy_exclusion_and_ble_and_sensor_fail_closed(
+async def test_own_occupancy_exclusion_and_ble_and_sensor_fail_closed(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify M-P0-04 self-feedback rejection on binary_sensor.<area>_occupancy and M-P0-05 fail-closed ble_and_sensor."""
+    """Verify self-feedback rejection on binary_sensor.<area>_occupancy and fail-closed ble_and_sensor."""
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     ent_reg = er.async_get(hass)
     fabric = get_ble_fabric(hass)
 
-    # 1. M-P0-04: binary_sensor.living_room_occupancy exists and is NEVER discovered or accepted as physical input
+    # 1. Self-feedback exclusion: binary_sensor.living_room_occupancy exists and is NEVER discovered or accepted as physical input
     own_occ_eid = "binary_sensor.living_room_occupancy"
     assert hass.states.get(own_occ_eid) is not None
     assert ent_reg.async_get(own_occ_eid) is not None
@@ -400,7 +400,7 @@ async def test_m_p0_04_and_m_p0_05_own_occupancy_exclusion_and_ble_and_sensor_fa
     await hass.async_block_till_done()
     assert hass.states.get(own_occ_eid).state == "off"
 
-    # 2. M-P0-05: ble_and_sensor fails closed when configured physical sensor is unavailable or unknown
+    # 2. Fail-closed fusion: ble_and_sensor fails closed when configured physical sensor is unavailable or unknown
     mmwave_eid = "binary_sensor.living_room_mmwave"
     register_entity(
         hass,
@@ -457,10 +457,10 @@ async def test_m_p0_04_and_m_p0_05_own_occupancy_exclusion_and_ble_and_sensor_fa
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
-async def test_m_p0_07_and_m_p1_22_broadcast_caller_exclusion_empty_pool_and_dnd_behavior(
+async def test_broadcast_caller_exclusion_empty_pool_and_dnd_behavior(
     hass: Any, setup_latter_hub: Any, make_esphome_device: Any
 ) -> None:
-    """Verify M-P0-07 caller_subentry_id & empty broadcast_speakers error, plus M-P1-22 DND suppression & silent doorbell."""
+    """Verify caller_subentry_id & empty broadcast_speakers error, plus DND suppression & silent doorbell."""
     entry, _initial_sys, _initial_pocket = await setup_latter_hub(hass)
 
     # Add a second display Device in Kitchen (`desk_panel`) via real ConfigSubentry + reload
@@ -516,7 +516,7 @@ async def test_m_p0_07_and_m_p1_22_broadcast_caller_exclusion_empty_pool_and_dnd
         lambda call: desk_notifies.append(dict(call.data)),
     )
 
-    # 1. M-P0-07: Empty broadcast_speakers raises ServiceValidationError(translation_key="no_broadcast_speakers")
+    # 1. Empty broadcast_speakers raises ServiceValidationError(translation_key="no_broadcast_speakers")
     hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_BROADCAST_SPEAKERS] = []
     with pytest.raises(ServiceValidationError) as exc_empty:
         await hass.services.async_call(
@@ -554,7 +554,7 @@ async def test_m_p0_07_and_m_p1_22_broadcast_caller_exclusion_empty_pool_and_dnd
     assert len(tts_calls) == 1
     assert tts_calls[0]["media_player_entity_id"] == ["media_player.desk_panel_music"]
 
-    # 2. M-P1-22: Enable Do Not Disturb on desk_panel -> suppresses normal/warning notify & intercom_broadcast,
+    # 2. Enable Do Not Disturb on desk_panel -> suppresses normal/warning notify & intercom_broadcast,
     # critical notify breaks through, and doorbell ring dispatches silent visual popup (chime=False)!
     coord_desk.update_device_config(
         {**coord_desk.device_data, CONF_DO_NOT_DISTURB: True}

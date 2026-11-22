@@ -1,4 +1,4 @@
-"""Private bound-device `LatterRpcDispatcher` and Perimeter Security Policy (`M-P0-01`, `M-P1-28`, `M-P2-24`)."""
+"""Private bound-device `LatterRpcDispatcher` and Perimeter Security Policy."""
 
 from __future__ import annotations
 
@@ -175,7 +175,7 @@ def unwrap_rpc_pin_code(
     *,
     now_m: float | None = None,
 ) -> str | None:
-    """Unwrap an authenticated `v1:...` RPC PIN envelope, rejecting plaintext or replayed PINs (`M-P0-01`)."""
+    """Unwrap an authenticated `v1:...` RPC PIN envelope, rejecting plaintext or replayed PINs."""
     hass = coord.hass
     code_str = str(raw_code or "").strip()
     if not code_str:

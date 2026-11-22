@@ -1,4 +1,4 @@
-"""Per-Area Occupancy and per-Device Timer/Alarm Binary Sensors for Latter (`L4`)."""
+"""Per-Area Occupancy and per-Device Timer/Alarm Binary Sensors for Latter."""
 
 from __future__ import annotations
 

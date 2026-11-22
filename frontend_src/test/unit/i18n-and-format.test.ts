@@ -1,6 +1,6 @@
 /**
  * Pure Node TypeScript unit tests for Studio i18n catalogs, UTF-8 byte truncation,
- * locale-aware formatting, Sentence-case humanizers, and telemetry row parsers (`M-P0-14`).
+ * locale-aware formatting, Sentence-case humanizers, and telemetry row parsers.
  */
 
 import assert from "node:assert/strict";

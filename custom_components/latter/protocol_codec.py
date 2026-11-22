@@ -1,4 +1,4 @@
-"""Pure-stdlib Protocol v3 payload packer, multi-tier delimiter escaping, and record formatters (`L0b`)."""
+"""Pure-stdlib Protocol v3 payload packer, multi-tier delimiter escaping, and record formatters."""
 
 from __future__ import annotations
 

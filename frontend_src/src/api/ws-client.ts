@@ -1,8 +1,8 @@
 /**
  * Admin-gated WebSocket & Bearer-authenticated XHR multipart client for Latter Studio (`D-025`, `D-065`).
- * - Sends mandatory `studio_rev: STUDIO_REV` (`34`) on all 9 WS endpoints
- * - Enforces literal-union & runtime `SYSTEM_WS_COMMANDS` / `DEVICE_WS_COMMANDS` checks (`A-25`)
- * - Applies per-command `Promise.race` timeouts (`15_000 ms` standard, `60_000 ms` import/reset/update) (`B-15`)
+ * - Sends mandatory `studio_rev: STUDIO_REV` on all 9 WS endpoints
+ * - Enforces literal-union & runtime `SYSTEM_WS_COMMANDS` / `DEVICE_WS_COMMANDS` checks
+ * - Applies per-command `Promise.race` timeouts (`15_000 ms` standard, `60_000 ms` import/reset/update)
  * - Supports on-demand 600 s `mint_camera_preview_url`, Discovered `ignore`/`unignore`, & `expected_config_rev`
  */
 

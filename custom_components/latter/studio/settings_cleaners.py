@@ -1,4 +1,4 @@
-"""Pure-stdlib Studio System & Device settings cleaners, view builders, and TypedDicts (`L0b`)."""
+"""Pure-stdlib Studio System & Device settings cleaners, view builders, and TypedDicts."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ from ..protocol_specs import (
 )
 
 # ---------------------------------------------------------------------------
-# Concrete TypedDicts for Studio Settings (`M-P2-25`)
+# Concrete TypedDicts for Studio Settings
 # ---------------------------------------------------------------------------
 
 

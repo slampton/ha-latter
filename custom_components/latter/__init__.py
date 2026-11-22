@@ -1,4 +1,4 @@
-"""The Latter integration: Home Assistant middleware for Latter displays (`L4`)."""
+"""The Latter integration: Home Assistant middleware for Latter displays."""
 
 from __future__ import annotations
 

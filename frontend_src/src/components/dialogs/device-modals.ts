@@ -1,6 +1,6 @@
 /**
  * Device & Group Lifecycle Modals (`#latter-rm-modal`, `#latter-reset-modal`,
- * `#latter-add-dev-modal`, `#latter-save-group-modal`, `Q5`, `E-19`, `F-06`).
+ * `#latter-add-dev-modal`, `#latter-save-group-modal`).
  * - Short-circuits closed `<dialog>` shells
  * - Inline "Download backup first" + explicit consequence text on Remove & Reset
  * - `focusSafe` text inputs across BLE tag & Save custom group forms

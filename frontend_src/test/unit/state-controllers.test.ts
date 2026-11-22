@@ -1,6 +1,6 @@
 /**
  * Pure Node TypeScript unit tests for `group-overlay.ts`, `routing.ts`, `StudioStore`,
- * `BatchController`, and `StudioWsClient` payload construction with ZERO fake DOM (`M-P0-14`).
+ * `BatchController`, and `StudioWsClient` payload construction with ZERO fake DOM.
  */
 
 import assert from "node:assert/strict";

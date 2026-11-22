@@ -134,7 +134,7 @@ export const EN_STRINGS = {
   "signal.fair": "Fair",
   "signal.weak": "Weak",
 
-  // WAI-ARIA entity combobox (D-062 / Q11)
+  // WAI-ARIA entity combobox (D-062)
   "combobox.placeholder": "Search name, Area, or entity ID…",
   "combobox.no_matches": "No matching entities",
   "combobox.clear": "Clear selection",
@@ -402,7 +402,7 @@ export const EN_STRINGS = {
   "remotes.add_remotes_first": "Add remote controls first.",
   "remotes.empty_groups": "No remote groups yet.",
 
-  // Device groups & staged Batch controls (D-050 / D-064 / Q6 / R-8)
+  // Device groups & staged Batch controls (D-050 / D-064)
   "groups.card_title": "Group presets & custom groups",
   "groups.card_subtitle":
     "Built-in hardware presets and custom Device groups that keep assigned Devices aligned.",
@@ -859,7 +859,7 @@ export const EN_STRINGS = {
   "dialogs.save_group_name_placeholder": "e.g. Nightstands, Guest suites",
   "dialogs.save_group_desc_placeholder": "Optional summary of these settings",
 
-  // Confirmation dialogs (D-064 / Q5 — all destructive / System-wide actions)
+  // Confirmation dialogs (D-064 — all destructive / System-wide actions)
   "confirm.blast_radius_one": "Affects 1 Device",
   "confirm.blast_radius_many": "Affects {count} Devices",
   "confirm.remove_device.title": "Remove {title}?",
@@ -1057,7 +1057,7 @@ export const EN_STRINGS = {
   "offline.ble_tx_off_body":
     "Enable the BLE Transmitter sensor in the Home Assistant Companion App on this phone so Bluetooth proxies can detect its Area.",
 
-  // Device card titles & disambiguated display sections (D-066 / Q7 / Q8)
+  // Device card titles & disambiguated display sections (D-066)
   "card.status": "Status",
   "card.quick_actions": "Quick actions",
   "card.assignments": "Assignments",
@@ -1076,7 +1076,7 @@ export const EN_STRINGS = {
     "Replaced a physical board or reflashed under a new ESPHome node? Use Reconfigure on this Device entry in Home Assistant Integrations to rebind its hardware identity while keeping all shortcuts, Area rules, and settings.",
   "card.danger_zone": "Danger zone",
 
-  // Device list & discovered devices (D-041 / D-066 / Q12)
+  // Device list & discovered devices (D-041 / D-066)
   "devices.inventory_heading": "Inventory",
   "devices.col_device": "Device",
   "devices.col_model": "Model",
@@ -1140,12 +1140,12 @@ export const EN_STRINGS = {
   "discovered.ignored_toast": "Ignored \"{title}\"",
   "discovered.restored_toast": "Restored \"{title}\" to discovered list",
 
-  // Wallpaper gallery & multipart upload (D-25 / Q5)
+  // Wallpaper gallery & multipart upload (D-025)
   "wp_gallery.builtin": "Built-in",
   "wp_gallery.uploading": "Uploading…",
   "wp_gallery.upload_progress_aria": "Wallpaper upload progress",
 
-  // Device -> Overview (D-003 / D-066 / F-01)
+  // Device -> Overview (D-003 / D-066)
   "dev_overview.waiting_for_reading": "Waiting for reading",
   "dev_overview.tile_area": "Area",
   "dev_overview.tile_current_area": "Current Area",
@@ -1266,7 +1266,7 @@ export const EN_STRINGS = {
   "dev_display.rot_360": "Every 6 hours",
   "dev_display.rot_1440": "Once a day",
 
-  // Device -> Interface (D-053 / D-064 / D-069 / U4)
+  // Device -> Interface (D-053 / D-064 / D-069)
   "dev_interface.enable_home_desc":
     "Provides the Home screen and App Dock. Turn off to lock this Device to a single start screen app.",
   "dev_interface.start_screen_multi_desc":
@@ -1340,7 +1340,7 @@ export const EN_STRINGS = {
     "Custom • {action} • Confirm • {target}",
   "dev_interface.custom_entity_tap_meta": "Custom • {action} • 1-tap • {target}",
 
-  // Device -> Audio (D-008 / D-031 / D-066 / Q8)
+  // Device -> Audio (D-008 / D-031 / D-066)
   "dev_audio.card_voice_wake": "Voice assistant & wake word",
   "dev_audio.card_sound_playback": "Sound & playback",
   "dev_audio.vfm_desc":
@@ -1371,7 +1371,7 @@ export const EN_STRINGS = {
   "dev_power.card_power_battery": "Power & battery",
   "dev_power.empty": "No sleep or battery entities reported by this Device.",
 
-  // Device -> Presence (D-032 / D-066 / Q8)
+  // Device -> Presence (D-032 / D-066)
   "dev_presence.card_area_tracking": "Area tracking",
   "dev_presence.card_ble_identity": "BLE identity",
   "dev_presence.track_ble_label": "Track Area with BLE proxies",
@@ -1405,7 +1405,7 @@ export const EN_STRINGS = {
   "dev_presence.ibeacon_uuid_label": "iBeacon UUID",
   "dev_presence.ibeacon_uuid_placeholder": "Generated automatically per System",
 
-  // Device -> Tools (D-027 / D-064 / D-066 / Q8 / Q12)
+  // Device -> Tools (D-027 / D-064 / D-066)
   "dev_tools.ble_signal": "BLE signal",
   "dev_tools.ble_target": "BLE target",
   "dev_tools.model": "Model",

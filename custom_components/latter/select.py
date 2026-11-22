@@ -1,4 +1,4 @@
-"""Sleep-safe Tier 2 Select entities (`select.<device_slug>_*`) for Latter Devices (`L4`)."""
+"""Sleep-safe Tier 2 Select entities (`select.<device_slug>_*`) for Latter Devices."""
 
 from __future__ import annotations
 

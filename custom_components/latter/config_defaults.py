@@ -1,4 +1,4 @@
-"""Pure-stdlib Device Group preset defaults, hardware trait defaults, and BLE tag defaults (`L0a`)."""
+"""Pure-stdlib Device Group preset defaults, hardware trait defaults, and BLE tag defaults."""
 
 from __future__ import annotations
 

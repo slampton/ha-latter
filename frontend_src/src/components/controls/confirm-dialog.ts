@@ -1,5 +1,5 @@
 /**
- * Shared Confirmation `<dialog>` Builder & Modal Lifecycle Sync (`components/controls/confirm-dialog.ts`, `Q5` / `D-064`).
+ * Shared Confirmation `<dialog>` Builder & Modal Lifecycle Sync (`components/controls/confirm-dialog.ts`, `D-064`).
  */
 
 import { t } from "../../i18n/index.js";

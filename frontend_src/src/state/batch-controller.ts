@@ -1,5 +1,5 @@
 /**
- * Staged `Batch controls` Draft Controller (`BatchController`, `Q6` / `D-064`, `M-P1-48`).
+ * Staged `Batch controls` Draft Controller (`BatchController`, `D-064`).
  *
  * - Preserves untouched per-Device tokens during `Mixed` pill toggling (`batchPillDrafts`).
  * - Applies `expected_config_rev` per Device, clears committed drafts incrementally, and
@@ -21,7 +21,7 @@ function parseCsvTokens(raw: string | undefined | null): string[] {
 export class BatchController {
   private readonly store: StudioStoreContext;
 
-  /** Per-`pref_key` token delta map (`{ [token]: true | false }`) preserving untouched per-Device tokens (`Q6`). */
+  /** Per-`pref_key` token delta map (`{ [token]: true | false }`) preserving untouched per-Device tokens. */
   readonly batchPillDrafts = new Map<string, Record<string, boolean>>();
   batchBusy = false;
 

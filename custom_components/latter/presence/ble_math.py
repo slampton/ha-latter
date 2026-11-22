@@ -1,4 +1,4 @@
-"""Pure-stdlib BLE spatial scoring math, path-loss distance, and Voice Follows Me dwell gate (`L0b`)."""
+"""Pure-stdlib BLE spatial scoring math, path-loss distance, and Voice Follows Me dwell gate."""
 
 from __future__ import annotations
 

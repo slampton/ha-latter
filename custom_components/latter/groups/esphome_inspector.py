@@ -1,4 +1,4 @@
-"""ESPHome entity section classification and bound-device entity inspection for Latter Studio (`L2a`)."""
+"""ESPHome entity section classification and bound-device entity inspection for Latter Studio."""
 
 from __future__ import annotations
 

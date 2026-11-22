@@ -1,4 +1,4 @@
-"""Local-only signed artwork transcoder and brand icon HTTP views (`L3`, 2 of 8 HTTP views, `M-P3-03`)."""
+"""Local-only signed artwork transcoder and brand icon HTTP views."""
 
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def _parse_render_params(
 
 
 def _is_private_or_loopback_client(request: web.Request) -> bool:
-    """Return True when `request.remote` is absent (in-process test) or a private/loopback/link-local LAN IP (`M-P1-33`)."""
+    """Return True when `request.remote` is absent (in-process test) or a private/loopback/link-local LAN IP."""
     host_str = str(getattr(request, "remote", None) or "").strip()
     if not host_str:
         return True
@@ -243,7 +243,7 @@ async def _async_fetch_local_ha_artwork(
     pic_path: str | None,
     dims: tuple[int, int, bool],
 ) -> tuple[bytes | None, tuple[str, int, int, bool, float] | None, web.Response | None]:
-    """Fetch local `/` HA artwork path with redirect blocking and 8 MB byte ceiling (`M-P1-31`)."""
+    """Fetch local `/` HA artwork path with redirect blocking and 8 MB byte ceiling."""
     if not pic_path:
         return None, None, web.Response(status=HTTPStatus.NOT_FOUND, text="No artwork")
     raw_pic = str(pic_path).strip()
@@ -277,7 +277,7 @@ async def _async_serve_speaker_artwork(
     request: web.Request,
     coordinator: LatterCoordinator,
 ) -> web.Response:
-    """Fetch active speaker artwork strictly via HA Core `media_player` entity or local `/` HA paths (`M-P1-31`, Zero-WAN)."""
+    """Fetch active speaker artwork strictly via HA Core `media_player` entity or local `/` HA paths (Zero-WAN)."""
     width, height, circular, shape_str = _parse_render_params(
         request, coordinator, default_circle=None
     )

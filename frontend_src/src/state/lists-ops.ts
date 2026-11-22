@@ -1,6 +1,6 @@
 /**
  * System String-List Slots, Volume Overrides, Remote Control Groups, & Per-Device
- * Broadcast/Camera List Operations (`L2` leaf).
+ * Broadcast/Camera List Operations.
  */
 
 import type { RemoteGroup, VolumeOverride } from "../types.js";

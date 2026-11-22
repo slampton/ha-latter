@@ -1,4 +1,4 @@
-"""Home Assistant Backup platform callbacks and System/Device JSON export/import bundles (`L2b`)."""
+"""Home Assistant Backup platform callbacks and System/Device JSON export/import bundles."""
 
 from __future__ import annotations
 

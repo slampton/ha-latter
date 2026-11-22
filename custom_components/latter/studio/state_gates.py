@@ -1,4 +1,4 @@
-"""Pure-stdlib Studio subscription content-digest gates, command scopes, and target guards (`L1a`)."""
+"""Pure-stdlib Studio subscription content-digest gates, command scopes, and target guards."""
 
 from __future__ import annotations
 

@@ -375,7 +375,7 @@ def _filter_broadcast_speakers(
     *,
     explicit: bool,
 ) -> list[str]:
-    """Exclude caller anti-echo speaker and (unless explicit) quiet-mode Devices (`D-074`, `M-P1-22`)."""
+    """Exclude caller anti-echo speaker and (unless explicit) quiet-mode Devices (`D-074`)."""
     quiet_coords = (
         []
         if explicit
@@ -475,7 +475,7 @@ async def _async_execute_intercom_broadcast(
     *,
     caller_subentry_id: str | None = None,
 ) -> IntercomBroadcastResult | IntercomBroadcastSkippedResult:
-    """Execute an intercom broadcast enforcing `D-074` speaker pools, caller anti-echo, and quiet modes (`M-P0-07`, `M-P1-22`)."""
+    """Execute an intercom broadcast enforcing `D-074` speaker pools, caller anti-echo, and quiet modes."""
     message = str(data.get("message") or "").strip()
     media_url = str(data.get("media_url") or "").strip()
     if media_url and not media_url.startswith(("media-source://", "/api/latter/")):
@@ -554,7 +554,7 @@ async def _async_execute_intercom_broadcast(
 
 
 def is_coord_in_quiet_mode(coord: LatterCoordinator) -> bool:
-    """Return True when a display Device is in Bedtime Mode or Do Not Disturb (`M-P1-22`)."""
+    """Return True when a display Device is in Bedtime Mode or Do Not Disturb."""
     if coord.is_ble_tag or not coord.has_display:
         return False
     return bool(coord.get_device_pref("bedtime_active")) or coord.do_not_disturb

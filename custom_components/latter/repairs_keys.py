@@ -1,4 +1,4 @@
-"""Pure-stdlib Repairs issue ID builders and device-hello health evaluator (`L0a`)."""
+"""Pure-stdlib Repairs issue ID builders and device-hello health evaluator."""
 
 from __future__ import annotations
 

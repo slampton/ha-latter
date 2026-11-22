@@ -1,4 +1,4 @@
-"""Symlink-confined Home Assistant `/media` folder browser and lock-free batch importer (`L1b`, `M-P1-32`)."""
+"""Symlink-confined Home Assistant `/media` folder browser and lock-free batch importer."""
 
 from __future__ import annotations
 
@@ -328,7 +328,7 @@ def import_media_photos_sync(
     collection_id: str | None = None,
     deduplicate: bool = True,
 ) -> dict[str, Any]:
-    """Batch-import images from HA `/media` into the Photo Library with lock-free PIL decode (`M-P1-32`)."""
+    """Batch-import images from HA `/media` into the Photo Library with lock-free PIL decode."""
     root_key = str(root or "").strip()
     if not isinstance(media_dirs, Mapping) or root_key not in media_dirs:
         raise ValueError(f"Unknown media folder root '{root_key}'")

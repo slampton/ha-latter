@@ -1,4 +1,4 @@
-"""Shared `LatterBleFabric` singleton and per-Area presence summary builder (`L2b`, `M-P2-19`)."""
+"""Shared `LatterBleFabric` singleton and per-Area presence summary builder."""
 
 from __future__ import annotations
 
@@ -315,7 +315,7 @@ class LatterBleFabric:
 
     @callback
     def notify_occupancy_listeners(self) -> None:
-        """Notify all registered occupancy listeners with single-pass coordinator/Area batching (`M-P2-19`)."""
+        """Notify all registered occupancy listeners with single-pass coordinator/Area batching."""
         if not self._occupancy_listeners:
             return
         was_outer = self._batch_occ_cache is None

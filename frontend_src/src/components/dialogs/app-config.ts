@@ -1,10 +1,10 @@
 /**
- * Native App Configuration Modal (`#latter-app-config-modal`, `D-053`, `D-054`, `D-064`, `Q7`).
- * - Short-circuits closed `<dialog>` body (`F-06`, `B-18`, `R-5`)
- * - Zero `FALLBACK_*` option arrays & zero `typeof store.x === "function"` guards (`A-12`, `A-13`, `F-16`)
- * - Editable `Clock` modal (`app === "clock"`, `Q7`)
- * - `renderSortableList` / `renderPillList` across Pinned, World clocks, Home categories, Area categories, Tools, & Games (`U4`)
- * - Single `isCatalogItemSupported(item, caps)` gate (`A-14`)
+ * Native App Configuration Modal (`#latter-app-config-modal`, `D-053`, `D-054`, `D-064`).
+ * - Short-circuits closed `<dialog>` body
+ * - Uses generated schema catalogs directly without fallback option arrays or runtime store method checks
+ * - Editable `Clock` modal (`app === "clock"`)
+ * - `renderSortableList` / `renderPillList` across Pinned, World clocks, Home categories, Area categories, Tools, & Games
+ * - Single `isCatalogItemSupported(item, caps)` capability gate
  */
 
 import {

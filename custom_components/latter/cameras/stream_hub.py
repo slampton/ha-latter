@@ -1,4 +1,4 @@
-"""Shared 1-ingest-per-camera live MJPEG fan-out hub, 2x2 grid stream, and warm snapshots (`L2a`)."""
+"""Shared 1-ingest-per-camera live MJPEG fan-out hub, 2x2 grid stream, and warm snapshots."""
 
 from __future__ import annotations
 
@@ -150,7 +150,7 @@ class LatterCameraStreamHub:
         self, entity_id: str, width: int, height: int, fps: int,
         *, fit: str = "contain", rot: int = 0, circular_mask: bool = False,
     ) -> tuple[_CameraIngest, _CameraSubscriber]:
-        """Attach a subscriber to the shared `_CameraIngest` for `entity_id`, serialized per camera (`M-P1-30`)."""
+        """Attach a subscriber to the shared `_CameraIngest` for `entity_id`, serialized per camera."""
         cam_lock = self._subscribe_locks.setdefault(entity_id, asyncio.Lock())
         async with cam_lock:
             norm_fit = normalize_fit_mode(fit)
@@ -547,7 +547,7 @@ class LatterCameraStreamHub:
         return (not queue_eof), got_frame
 
     async def _async_run_mjpeg_tier(self, ingest: _CameraIngest) -> bool:
-        """Attempt Tier 2 native MJPEG ingest with clean `FIRST_COMPLETED` pending cleanup (`M-P2-23`)."""
+        """Attempt Tier 2 native MJPEG ingest with clean `FIRST_COMPLETED` pending cleanup."""
         try:
             from homeassistant.components import camera as ha_camera
         except Exception:  # noqa: BLE001

@@ -1,9 +1,9 @@
 /**
  * Serialized System & Per-Device Settings Save Controller (`SettingsSaveController`, `D-062`, `D-064`).
  *
- * - Serialized `systemSaveChain` & per-Device `deviceSaveChains` with `inFlight` patch overlays (`B-08`).
- * - Monotonic per-key edit ownership so failed saves never clobber newer pending/in-flight edits (`B-09`).
- * - `expected_config_rev` optimistic concurrency with automatic `"conflict"` state resync (`M-P1-49`).
+ * - Serialized `systemSaveChain` & per-Device `deviceSaveChains` with `inFlight` patch overlays.
+ * - Monotonic per-key edit ownership so failed saves never clobber newer pending/in-flight edits.
+ * - `expected_config_rev` optimistic concurrency with automatic `"conflict"` state resync.
  */
 
 import { formatWsError, isConflictError } from "../api/ws-client.js";

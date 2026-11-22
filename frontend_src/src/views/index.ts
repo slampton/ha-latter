@@ -1,5 +1,5 @@
 /**
- * Active-View-Only Router (`D-023`, `D-026`, `E-14`):
+ * Active-View-Only Router (`D-023`, `D-026`):
  * Renders ONLY the currently active Studio view and gates Device routes via `store.deviceHasView`.
  */
 

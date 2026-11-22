@@ -1,4 +1,4 @@
-"""Constants and target classifiers for the Latter integration (`L0a`, pure Python stdlib)."""
+"""Constants and target classifiers for the Latter integration (pure Python stdlib)."""
 
 from __future__ import annotations
 

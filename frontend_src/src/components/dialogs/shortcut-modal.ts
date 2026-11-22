@@ -1,9 +1,9 @@
 /**
- * Add / Edit Shortcut Modal (`#latter-shortcut-modal`, `D-047`, `D-062`, `Q11`).
- * - Short-circuits closed `<dialog>` body (`F-06`, `B-18`, `R-5`)
- * - Roving-arrow `tablist` + `tabpanel` for Shortcut type (`D-07`)
- * - WAI-ARIA `renderEntityCombobox` replacing 1,000+-option `<select>` (`Q11`, `D-18`)
- * - Accessible MDI icon picker (`role="group"` of `aria-pressed` buttons + humanized labels + cached `searchMdiIcons`, `D-08`, `F-07`)
+ * Add / Edit Shortcut Modal (`#latter-shortcut-modal`, `D-047`, `D-062`).
+ * - Short-circuits closed `<dialog>` body
+ * - Roving-arrow `tablist` + `tabpanel` for Shortcut type
+ * - WAI-ARIA `renderEntityCombobox` replacing unbounded entity `<select>` menus
+ * - Accessible MDI icon picker (`role="group"` of `aria-pressed` buttons + humanized labels + cached `searchMdiIcons`)
  * - `focusSafe` text inputs
  */
 

@@ -1,5 +1,5 @@
 /**
- * Front-coded Pictogrammers @mdi/js v7.4.47 catalog chunks (L0 leaf).
+ * Front-coded Pictogrammers @mdi/js v7.4.47 catalog chunks.
  * Exact 1:1 parity with firmware ui_mdi.cpp (7,447 Material Design Icons).
  */
 

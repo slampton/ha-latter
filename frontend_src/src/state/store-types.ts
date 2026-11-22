@@ -1,8 +1,8 @@
 /**
- * Shared `L1` Store Context & Modal/Pending Contracts (`StudioStoreContext`, `dag_split_map.md §4`).
+ * Shared Store Context & Modal/Pending Contracts (`StudioStoreContext`).
  *
- * Breaks the 6-file `state/` strongly connected component by providing a pure `L1` contract
- * that every `L2` state module imports instead of importing `state/store.ts` (`L3`).
+ * Keeps `state/` strictly acyclic by providing a contract interface that every
+ * `state/` sub-controller imports instead of importing `state/store.ts`.
  */
 
 import type { StudioWsClient } from "../api/ws-client.js";
@@ -37,7 +37,7 @@ import type {
 import { DEFAULT_PHOTO_CROP } from "../utils/crop-math.js";
 
 /**
- * Single canonical trait-driven capability gate (`A-14`).
+ * Single canonical trait-driven capability gate.
  * Never hides or rejects items when `caps` or an individual trait is `undefined` (unknown).
  */
 export function isCatalogItemSupported(

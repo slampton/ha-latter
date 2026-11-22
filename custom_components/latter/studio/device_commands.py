@@ -1,4 +1,4 @@
-"""Studio WebSocket `latter/device/command` handlers and Device setting validators (`L3`)."""
+"""Studio WebSocket `latter/device/command` handlers and Device setting validators."""
 
 from __future__ import annotations
 

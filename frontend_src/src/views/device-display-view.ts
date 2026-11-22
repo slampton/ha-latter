@@ -225,7 +225,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     return true;
   });
 
-  // Column 2: Colors card (`isValidHexColor` validation, `A-07`)
+  // Column 2: Colors card (`isValidHexColor` validation)
   const colorProfilePref = store.entity.getPref("color_profile");
   const rawThemeHex = defaultThemeHex(store.host);
   const safeThemeHex = isValidHexColor(rawThemeHex)

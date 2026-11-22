@@ -1,4 +1,4 @@
-"""Unified TV/AV Remote slot discovery, `remote_config` Protocol v3 builder, and command maps (`L1b`)."""
+"""Unified TV/AV Remote slot discovery, `remote_config` Protocol v3 builder, and command maps."""
 
 from __future__ import annotations
 
@@ -329,7 +329,7 @@ async def _async_step_mp_volume(hass: HomeAssistant, target: str, st: Any, actio
 async def _async_step_remote_volume_target(
     hass: HomeAssistant, target_entity_id: str, action: str
 ) -> bool:
-    """Execute `volume_up`, `volume_down`, or `volume_mute` on a volume target without `L2a` imports."""
+    """Execute `volume_up`, `volume_down`, or `volume_mute` on a volume target directly."""
     target = (target_entity_id or "").strip()
     if not target or "." not in target:
         return False

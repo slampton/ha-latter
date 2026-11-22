@@ -1,6 +1,6 @@
 /**
  * Playwright E2E tests for Device Groups, Staged Batch Controls, Non-Detaching `Do Not Disturb`
- * (`group_tier = null`), WAI-ARIA Entity Combobox, and Shared Confirmation Dialogs (`M-P0-14`).
+ * (`group_tier = null`), WAI-ARIA Entity Combobox, and Shared Confirmation Dialogs.
  */
 
 import { expect, test } from "@playwright/test";

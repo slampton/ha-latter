@@ -1,5 +1,5 @@
 /**
- * Real Chromium Host Harness & `@axe-core/playwright` Helper for `<latter-studio>` (`M-P0-14`).
+ * Real Chromium Host Harness & `@axe-core/playwright` Helper for `<latter-studio>`.
  *
  * - Intercepts `http://studio.local/**` in-memory via `page.route` (zero TCP ports needed)
  *   serving the real committed `latter-studio.js` and lazy `latter-studio-mdi.js` ESM bundles.

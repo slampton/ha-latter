@@ -1,8 +1,8 @@
 /**
  * System Device Groups & Staged Batch Controls View (`system_sync`, `D-048`, `D-050`, `D-055`, `D-064`).
- * - Column 1: Non-stuttering `Group presets & custom groups` card (`R-8`) with on-demand creation form,
+ * - Column 1: `Group presets & custom groups` card with on-demand creation form,
  *   enclosed group containers (`requestDeleteDeviceGroup` confirmation), and read-only
- *   `Custom (individual settings)` summary container (`Q6`).
+ *   `Custom (individual settings)` summary container.
  * - Column 2: Staged `Batch controls` (`batch-controls.ts`) behind **Apply to N Devices** & **Reset**.
  */
 

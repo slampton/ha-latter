@@ -1,7 +1,7 @@
 /**
- * URL Routing, Active-Device Lifecycle Transitions, & Section Handoff Scrolling (`L2` leaf).
+ * URL Routing, Active-Device Lifecycle Transitions, & Section Handoff Scrolling.
  *
- * Imports strictly `L0` (`constants.ts`, `types.ts`) and `L1` (`utils/format.ts`, `store-types.ts`).
+ * Imports strictly leaf constants/types (`constants.ts`, `types.ts`), `utils/format.ts`, and `store-types.ts`.
  */
 
 import { DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS } from "../constants.js";
@@ -31,7 +31,7 @@ function slugToView<T extends string>(map: Readonly<Record<T, string>>, slug: st
 }
 
 /**
- * Shared capability predicate used by BOTH sidebar navigation and payload capability redirect (`B-06`, `E-14`).
+ * Shared capability predicate used by both sidebar navigation and payload capability redirects.
  * Never redirects or hides a tab when capability flags are `undefined` (not yet loaded).
  */
 export function deviceHasView(

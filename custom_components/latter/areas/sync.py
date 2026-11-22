@@ -1,4 +1,4 @@
-"""Voice Follows Me bound ESPHome Device Registry `area_id` synchronization (`L2b`)."""
+"""Voice Follows Me bound ESPHome Device Registry `area_id` synchronization."""
 
 from __future__ import annotations
 

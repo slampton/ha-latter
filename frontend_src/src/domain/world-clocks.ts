@@ -1,5 +1,5 @@
 /**
- * Pure World Clocks wire parser, serializer, and UTF-8 byte-bounded label sanitizer (`L1` domain leaf, `D-038`).
+ * Pure World Clocks wire parser, serializer, and UTF-8 byte-bounded label sanitizer (`D-038`).
  * Wire format: `<label>|<iana>;<label>|<iana>;...` (up to `MAX_WORLD_CLOCKS` zones, excluding pinned UTC).
  */
 

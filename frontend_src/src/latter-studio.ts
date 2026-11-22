@@ -2,10 +2,10 @@
  * `<latter-studio>` Custom Element — Modular TypeScript + Stock `lit` Shell (`D-023`, `D-061`, `D-062`, `D-078`).
  *
  * - Zero `window.*` property bindings; state is owned per element by `StudioStore`.
- * - `_applyRoute()` runs before `super.connectedCallback()` so `hostConnected` subscribes once (`B-01`).
- * - Sidebar `<a href="/latter/...">` links with `aria-current="page"` and SPA click interception (`D-22`).
- * - Promoted `<h1>` `#unified-page-title`, persistent polite/assertive live regions, sticky error toast (`D-01`),
- *   `.loading-state` skeleton during `store.deviceLoading` (`B-02`), and shared `renderConfirmDialog` (`Q5`).
+ * - `_applyRoute()` runs before `super.connectedCallback()` so `hostConnected` subscribes once.
+ * - Sidebar `<a href="/latter/...">` links with `aria-current="page"` and SPA click interception.
+ * - Promoted `<h1>` `#unified-page-title`, persistent polite/assertive live regions, sticky error toast,
+ *   `.loading-state` skeleton during `store.deviceLoading`, and shared `renderConfirmDialog`.
  */
 
 import { renderConfirmDialog, syncDialogElement } from "./components/controls.js";

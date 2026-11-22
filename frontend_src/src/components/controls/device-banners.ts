@@ -1,5 +1,5 @@
 /**
- * Shared Device Offline Banner & Home Assistant Entity Row Renderer (`components/controls/device-banners.ts`, `M-P2-31`).
+ * Shared Device Offline Banner & Home Assistant Entity Row Renderer (`components/controls/device-banners.ts`).
  *
  * Extracted from `views/device-overview-view.ts` so all `views/device-*-view.ts` modules
  * import strictly downward from `components/controls/*` with zero horizontal view-to-view edges.
@@ -14,7 +14,7 @@ import { renderNativeControlRow } from "./entity-adapters.js";
 import { renderSettingsRow } from "./rows.js";
 
 /**
- * Shared calm offline / sleeping banner rendered at the top of Device views (`Q8` / `E-04`).
+ * Shared calm offline / sleeping banner rendered at the top of Device views.
  */
 export function renderDeviceOfflineBanner(store: StudioStore): TemplateResult | typeof nothing {
   const data = store.state;
@@ -45,7 +45,7 @@ export function renderDeviceOfflineBanner(store: StudioStore): TemplateResult | 
 }
 
 /**
- * Formats non-pref Home Assistant entity `select` options and sensor states via `formatHaEntityState` (`D-13`),
+ * Formats non-pref Home Assistant entity `select` options and sensor states via `formatHaEntityState`,
  * while delegating preference-backed, switch, number, button, and update controls to `renderNativeControlRow`.
  */
 export function renderDeviceEntityRow(

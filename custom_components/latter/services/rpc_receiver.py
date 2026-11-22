@@ -1,4 +1,4 @@
-"""Chunked `System: RPC Outbox` wire-frame parser, reassembler, and bound listener (`M-P0-02`)."""
+"""Chunked `System: RPC Outbox` wire-frame parser, reassembler, and bound listener."""
 
 from __future__ import annotations
 
@@ -184,7 +184,7 @@ class RpcReassembler:
         return _decode_envelope(assembled)
 
     def seed_silent(self, raw: str | None) -> None:
-        """Seed current `(boot_id, seq)` silently on `rebind()` without dispatching (`M-P0-02`)."""
+        """Seed current `(boot_id, seq)` silently on `rebind()` without dispatching."""
         frame = parse_rpc_frame(raw)
         if frame is None:
             return

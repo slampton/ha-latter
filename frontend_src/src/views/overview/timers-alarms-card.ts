@@ -1,5 +1,5 @@
 /**
- * Device Overview — Timers & Alarms Card (`views/overview/timers-alarms-card.ts`, `F-01`, `B-17`, `M-P1-50`).
+ * Device Overview — Timers & Alarms Card (`views/overview/timers-alarms-card.ts`).
  */
 
 import {

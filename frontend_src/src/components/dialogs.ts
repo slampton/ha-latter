@@ -1,8 +1,8 @@
 /**
  * Modular Native `<dialog>` Orchestrator for Latter Studio (`D-053`, `D-062`, `D-064`).
  * - Two-pass close-before-open orchestration so two modals are never open simultaneously
- * - Closed `<dialog>` shells render empty (`!modal.open` short-circuit, `F-06`, `B-18`, `R-5`)
- * - Zero dead `setAttribute("open")` catch fallback (`A-22`) & zero module-global `cwWheelPainted` (`A-24`)
+ * - Closed `<dialog>` shells render empty (`!modal.open` short-circuit)
+ * - Uses native `showModal()` lifecycle and per-store `colorWheelModal.painted` state (no module globals)
  */
 
 import { html, type TemplateResult } from "../lib/lit.js";

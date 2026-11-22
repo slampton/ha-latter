@@ -1,4 +1,4 @@
-"""Zero-WAN Music Assistant LRC/plain lyrics parser, 64-entry LRU cache, and chunk pusher (`L1b`, `M-P1-37`)."""
+"""Zero-WAN Music Assistant LRC/plain lyrics parser, 64-entry LRU cache, and chunk pusher."""
 
 from __future__ import annotations
 
@@ -465,7 +465,7 @@ async def async_fetch_track_lyrics(
     fallback_album: str = "",
     max_lines: int = MAX_LYRIC_LINES,
 ) -> tuple[str, bool, list[dict[str, Any]]]:
-    """Fetch full-track LRC or plain lyrics strictly from local Music Assistant (`M-P1-37`)."""
+    """Fetch full-track LRC or plain lyrics strictly from local Music Assistant."""
     title, artist, album, clean_title, _clean_album, cache_key = _normalize_search_metadata(
         hass, speaker, search, (fallback_title, fallback_artist, fallback_album)
     )
@@ -615,7 +615,7 @@ async def browse_track_lyrics_or_bio(
     fallback_artist: str = "",
     fallback_album: str = "",
 ) -> list[dict[str, Any]]:
-    """Fetch unwrapped lyrics or artist/album metadata strictly from local Music Assistant (`M-P1-37`)."""
+    """Fetch unwrapped lyrics or artist/album metadata strictly from local Music Assistant."""
     if mode == "lyrics":
         _tkey, _synced, parsed_lines = await async_fetch_track_lyrics(
             hass,

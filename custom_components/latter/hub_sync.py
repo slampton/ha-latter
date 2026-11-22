@@ -1,4 +1,4 @@
-"""System-level feed listeners, bedtime schedule evaluation, HMAC rotation, and global config broadcast (`L3`)."""
+"""System-level feed listeners, bedtime schedule evaluation, HMAC rotation, and global config broadcast."""
 
 from __future__ import annotations
 
@@ -451,7 +451,7 @@ async def async_refresh_hub_calendar(
 
 
 def _register_default_hub_hooks() -> None:
-    """Register `L3` `UrlSigner` and feed/schedule hooks onto `L1a` `hub_registry`."""
+    """Register `UrlSigner` and feed/schedule hooks onto `hub_registry`."""
 
     async def _eval_bedtime(sys_obj: LatterSystemHub, now: datetime | None) -> None:
         await async_evaluate_hub_bedtime_schedules(sys_obj, now=now)
@@ -478,7 +478,7 @@ _register_default_hub_hooks()
 
 
 def attach_hub_sync_methods(sys_obj: LatterSystemHub) -> LatterSystemHub:
-    """Ensure `L3` `hub_sync` hooks and runtime state are initialized on `sys_obj`."""
+    """Ensure `hub_sync` hooks and runtime state are initialized on `sys_obj`."""
     _register_default_hub_hooks()
     _get_feed_runtime(sys_obj)
     return sys_obj

@@ -1,4 +1,4 @@
-"""Weighted Area BLE + physical binary_sensor fusion engine (`L1b`, `M-P0-04`, `M-P0-05`)."""
+"""Weighted Area BLE + physical binary_sensor fusion engine."""
 
 from __future__ import annotations
 

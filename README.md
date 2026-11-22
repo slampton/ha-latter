@@ -18,6 +18,39 @@ You need both repos for the touch displays. If you only want BLE Area presence a
 
 ---
 
+## What It Does
+
+### Devices Know Which Area They're In
+Latter reads RSSI from your existing Bluetooth proxies to track Latter displays, phones and watches (via Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration), and iBeacons.
+- **Voice Follows Me:** when a roaming handheld or watch moves to a new Area, Latter updates its Home Assistant Area so *"Turn off the lights"* to Assist targets where you're standing. Fixed panels sync their **Assigned Area** two-way with Home Assistant.
+- **Cross-floor & sensor fusion:** per-Area occupancy binary sensors (`binary_sensor.<area>_occupancy`) fuse BLE with mmWave, PIR, and door sensors, applying a 6 dB cross-floor penalty so upstairs devices don't flap into downstairs Areas.
+
+→ [How presence works, and how it compares to Bermuda](docs/presence.md)
+
+### Music Assistant on a Small Screen
+- **Paginated browsing:** favorites, playlists, artists, albums, podcasts, radio, and audiobooks sized to each screen's geometry.
+- **Speaker moves & grouping:** transfer playback queues across speakers (holding metadata and album art steady across spin-up and healing cold/idle queues automatically) or join/unjoin speaker groups.
+- **Lyrics & universal transport:** pulls synced and plain lyrics directly from Music Assistant over your LAN; transport, seek, and AV-receiver volume overrides work with any `media_player`.
+
+### Dynamic Area Control, 5-Tab Home Hub, Live Cameras & Time
+- **Area Control:** scenes, lights (brightness, HSV color wheel, 2700–6500 K temperature), blinds/curtains, fans, switches, climate, and media—ordered and filtered automatically to entities present in the active Area.
+- **5-Tab Home Hub, 4-Tab Cameras & PIN Policies:** whole-home **Alarm**, **Broadcast** intercom (inline Assist STT `Speak` + paginated Quick Phrases), **Thermostat**, **Entry & Garage**, and **Vacuum**, plus a dedicated **Cameras** app (**Grid** 2×2 live MJPEG, **Single** live view + doorbell intercom, **Carousel** auto-rotation, and **Settings**). Home Assistant `alarm_control_panel` codes pass straight through for arming/disarming (`alarm_caps`), while per-device **Perimeter Security Policies** (`Auto`, `Allow`, `Require PIN`, or `Block`) guard locks, garage covers, and code-less alarms with HMAC session-key PIN unwrapping and brute-force lockout.
+- **Time, Calendar, World Clocks & 2-Way Alarms:** 4-tab **Calendar** (`Overview`, `Day`, `Week`, `Month` + local event create/delete), custom-labeled World Clocks, optional UTC card, local countdown timers, stopwatch, and 3 recurring NVS alarms synced two-way between the screen and Studio.
+
+### Auto-Detected Doorbell Popups
+Latter detects your doorbell's ring entity automatically, wakes displays for 20 seconds with a live camera view, and lets you **listen** (FFmpeg noise-reduced audio) or **reply by push-to-talk** and quick replies (spoken via TTS on the doorbell's speaker; [experimental](#requirements--project-status)).
+
+### Latter Studio
+An admin-only sidebar control plane where every change pushes live without reflashing (and queues automatically for sleeping battery Devices):
+- **System scope:** shared Home Hub & weather entities (searchable WAI-ARIA comboboxes), cameras (on-demand signed previews) & doorbell audio filter, dedicated **Photos** library (`/latter/system/photos`: 6 built-in presets, 15 MB multi-photo uploads with interactive crop staging, Home Assistant `/media` folder import, and collections), 24-swatch custom color library, TV/AV remotes & remote groups, operational Device groups + staged **Batch controls**, live WebSocket BLE calibration + 1-click 7-day illuminance auto-calibration, doorbell speaker testing, HMAC key rotation, JSON backup/restore, and **Support & diagnostics**.
+- **Per-Device scope:** **Overview** (status tiles, quick actions, sleep-safe **Do not disturb**, **Open in Home Assistant**, assignments, and 2-way **Timers & alarms**), **Display** (**Screensaver** including *Photo frame*, **Voice assistant**, **Brightness** including per-Area *Ambient light*, **Colors**, and **Wallpapers**), **Interface** (Single-App kiosk mode, **Home screen**, drag-and-drop **App Dock**, and per-app configuration modals for **Pinned**, **Home hub**, **Cameras**, **Area control**, **Music**, **Remote**, **Sky & weather**, **Time**, **Calendar**, **Clock face**, **Tools**, and **Games**), **Audio**, **Power**, **Presence**, and **Tools** (**Developer & telemetry**).
+
+![Latter Studio — System Overview](docs/media/studio-system-overview.png)
+
+→ [Latter Studio guide](docs/studio.md)
+
+---
+
 ## Get Started in Minutes
 
 **1. Pick a supported board.** All five run the full Latter OS without modification:
@@ -40,39 +73,6 @@ You need both repos for the touch displays. If you only want BLE Area presence a
 
 ---
 
-## What It Does
-
-### Devices Know Which Area They're In
-Latter reads RSSI from your existing Bluetooth proxies to track Latter displays, phones and watches (via Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration), and iBeacons.
-- **Voice Follows Me:** when a roaming handheld or watch moves to a new Area, Latter updates its Home Assistant Area so *"Turn off the lights"* to Assist targets where you're standing. Fixed panels sync their **Assigned Area** two-way with Home Assistant.
-- **Cross-floor & sensor fusion:** per-Area occupancy binary sensors (`binary_sensor.<area>_occupancy`) fuse BLE with mmWave, PIR, and door sensors, applying a 6 dB cross-floor penalty so upstairs devices don't flap into downstairs Areas.
-
-→ [How presence works, and how it compares to Bermuda](docs/presence.md)
-
-### Music Assistant on a Small Screen
-- **Paginated browsing:** favorites, playlists, artists, albums, podcasts, radio, and audiobooks sized to each screen's geometry.
-- **Seamless speaker moves & grouping:** transfer playback queues across speakers (holding metadata and album art steady across spin-up and healing cold/idle queues automatically) or join/unjoin speaker groups.
-- **Lyrics & universal transport:** pulls synced and plain lyrics directly from Music Assistant over your LAN; transport, seek, and AV-receiver volume overrides work with any `media_player`.
-
-### Dynamic Area Control, 5-Tab Home Hub, Live Cameras & Time
-- **Area Control:** scenes, lights (brightness, HSV color wheel, 2700–6500 K temperature), blinds/curtains, fans, switches, climate, and media—ordered and filtered automatically to entities present in the active Area.
-- **5-Tab Home Hub, 4-Tab Cameras & PIN Policies:** whole-home **Alarm**, **Broadcast** intercom (inline Assist STT `Speak` + paginated Quick Phrases), **Thermostat**, **Entry & Garage**, and **Vacuum**, plus a dedicated **Cameras** app (**Grid** 2×2 live MJPEG, **Single** live view + doorbell intercom, **Carousel** auto-rotation, and **Settings**). Home Assistant `alarm_control_panel` codes pass straight through for arming/disarming (`alarm_caps`), while per-device **Perimeter Security Policies** (`Auto`, `Allow`, `Require PIN`, or `Block`) guard locks, garage covers, and code-less alarms with HMAC session-key PIN unwrapping and brute-force lockout.
-- **Time, Calendar, World Clocks & 2-Way Alarms:** 4-tab **Calendar** (`Overview`, `Day`, `Week`, `Month` + local event create/delete), custom-labeled World Clocks, optional UTC card, local countdown timers, stopwatch, and 3 recurring NVS alarms synced two-way between the screen and Studio.
-
-### Auto-Detected Doorbell Popups
-Latter detects your doorbell's ring entity automatically, wakes displays for 20 seconds with a live camera view, and lets you **listen** (FFmpeg noise-reduced audio) or **reply by push-to-talk** and quick replies (spoken via TTS on the doorbell's speaker; [experimental](#requirements--project-status)).
-
-### Latter Studio
-An admin-only sidebar control plane where every change pushes live without reflashing (and queues automatically for sleeping battery Devices):
-- **System scope:** shared Home Hub & weather entities (searchable WAI-ARIA comboboxes), cameras (on-demand signed previews) & doorbell audio filter, dedicated **Photos** library (`/latter/system/photos`: 6 built-in presets, 15 MB multi-photo uploads with interactive crop staging, Home Assistant `/media` folder import, and collections), 24-swatch custom color library, TV/AV remotes & remote groups, operational Device groups + staged **Batch controls**, live WebSocket BLE calibration + 1-click 7-day illuminance auto-calibration, doorbell speaker testing, HMAC key rotation, JSON backup/restore, and **Support & diagnostics**.
-- **Per-Device scope:** **Overview** (status tiles, quick actions, sleep-safe **Do not disturb**, **Open in Home Assistant**, assignments, and 2-way **Timers & alarms**), **Display** (**Screensaver** including *Photo frame*, **Voice assistant**, **Brightness** including per-Area *Ambient light*, **Colors**, and **Wallpapers**), **Interface** (Single-App kiosk mode, **Home screen**, drag-and-drop **App Dock**, and per-app configuration modals for **Pinned**, **Home hub**, **Cameras**, **Area control**, **Music**, **Remote**, **Sky & weather**, **Time**, **Calendar**, **Clock face**, **Tools**, and **Games**), **Audio**, **Power**, **Presence**, and **Tools** (**Developer & telemetry**).
-
-![Latter Studio — System Overview](docs/media/studio-system-overview.png)
-
-→ [Latter Studio guide](docs/studio.md)
-
----
-
 ## Under the Hood
 
 ```mermaid
@@ -84,9 +84,9 @@ flowchart LR
     HA <--> ECOSYS["HA Areas · Assist · Music Assistant"]
 ```
 
-- **Zero-Privilege Bound RPC & 7-Domain Protocol v3 Push.** Devices bind strictly by `esphome_device_id` and hardware MAC (`via_device_id`). Outbound device taps emit compact chunked frames on auto-hidden `System: RPC Outbox` (`services/rpc_receiver.py` -> private `LatterRpcDispatcher`) and inbound state pushes directly over `esphome.<node>_latter_push_v3` across 7 content-hashed domains (`area_context`, `active_media`, `remote_config`, `weather_forecast`, `calendar_agenda`, `device_prefs`, `shortcuts`) plus `latter_set_slots`—requiring neither `allow_service_calls` nor `device_slug` YAML substitutions, and keeping signed URLs and preference blobs off Home Assistant's `state_changed` bus and SQLite recorder.
-- **3-Tier Sleep-Safe Entity Architecture & `O(1)` `AreaStateIndex`.** All 63 typed device preferences persist in subentries (`studio/settings_cleaners.py`) and reconcile offline NVS edits on `device_hello`, so Studio and Device groups work even while battery handhelds hibernate. Home Assistant gets a clean 8-platform Tier 2 automation surface (`light.<slug>_screen`, `switch.<slug>_screensaver`, `switch.<slug>_do_not_disturb`, `switch.<slug>_bedtime_mode`, `button.<slug>_dismiss_alert`, `button.<slug>_find_my_device`, `select.<slug>_device_group`, `select.<slug>_wake_word_mode`, `number.<slug>_alert_volume`, `binary_sensor.<slug>_timer_active`, `sensor.<slug>_timer_remaining`, `binary_sensor.<slug>_alarm_ringing`, `binary_sensor.<area>_occupancy`, and `UnitOfLength.METERS` BLE distance) backed by an isolated 1 Hz local `Timer Remaining` tick and an incremental `O(1)` `AreaStateIndex` (`hub_registry.py`—never calling `hass.states.async_all()`).
-- **ESP32-Native Signed Local Media Proxy.** ESP-IDF's JPEG decoder rejects progressive JPEGs and can't resolve `.local` mDNS hostnames. Latter re-encodes local artwork, `720p` wallpapers, camera snapshots, and live single/2×2 MJPEG streams as baseline 4:2:0 JPEG on executor threads—applying circular masks on round panels—and serves them over Home Assistant's numeric LAN IPv4 with constant-time, parameter-scoped HMAC signatures (`http/`).
+- **Zero-Privilege Bound RPC & Protocol v3 Push.** Displays bind strictly by `esphome_device_id` and hardware MAC (`via_device_id`), requiring neither `allow_service_calls` nor `device_slug` YAML substitutions. Outbound taps stream over an auto-hidden `System: RPC Outbox` entity into a private `LatterRpcDispatcher`, while inbound state pushes across 7 content-hashed domains (`area_context`, `active_media`, `remote_config`, `weather_forecast`, `calendar_agenda`, `device_prefs`, `shortcuts`) via `latter_push_v3` and `latter_set_slots`. Signed URLs and preference payloads stay off Home Assistant's `state_changed` bus and SQLite recorder.
+- **Sleep-Safe Preferences & `O(1)` Area Index.** All 63 typed device preferences persist in config subentries and reconcile offline NVS edits on `device_hello`, so Studio and Device Groups work while battery handhelds hibernate. Home Assistant exposes a curated 8-platform entity surface (screen light, screensaver/DND/bedtime switches, dismiss/find buttons, group/wake-word selects, alert volume, timer/alarm states, Area occupancy, and metric BLE distance). Runtime lookups run against an incremental `O(1)` `AreaStateIndex` (`hub_registry.py`) instead of scanning `hass.states.async_all()`.
+- **ESP32-Native Signed Local Media Proxy.** ESP-IDF's JPEG decoder rejects progressive JPEGs and cannot resolve `.local` mDNS hostnames. Latter re-encodes local artwork, `720p` wallpapers, camera snapshots, and live single or 2×2 MJPEG streams as baseline 4:2:0 JPEG on executor threads, applying circular masks for round screens. Every media endpoint serves over Home Assistant's numeric LAN IPv4 with constant-time, parameter-scoped HMAC signatures (`http/`).
 
 ---
 
@@ -120,7 +120,7 @@ flowchart LR
 **Version `3.0.0` Status:**
 - **Stable:** device discovery, Latter Studio, 7-domain Protocol v3 sync, Area control, Home Hub, Time/Alarms, Music Assistant browsing & transfer, BLE Area presence & sensor fusion, doorbell camera popups, and JSON backup/restore.
 - **Experimental / Current Limits:** doorbell listen & push-to-talk TTS reply (no live device-to-door audio or on-device echo cancellation yet); BLE calibration uses per-scanner gain trim + multi-scanner Area signatures rather than `(x, y, z)` floorplan coordinates.
-- **CI Gate:** every push to `dev` runs `hassfest`, HACS validation, `ruff`, `mypy` against real `homeassistant-stubs` on Python `3.14`, `tools/verify_ha.py` (`L0a`–`L4` Tarjan SCC + layer verifier), TypeScript + `lit-html` Studio bundle, Playwright Chromium & `@axe-core/playwright` WCAG 2.2 AA suites (`npm --prefix frontend_src run check && npm --prefix frontend_src test`), and the real-Home-Assistant `pytest` suite (`>= 75%` coverage across the `L0a`–`L4` acyclic DAG backend) before fast-forwarding `main`.
+- **CI Gate:** `dev` fast-forwards `main` only after `hassfest`, HACS validation, `ruff`, `mypy --strict`, `pytest`, and the stock `esbuild` + `lit` Studio build and Playwright / axe-core E2E suites pass (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 Bugs and feature requests: [GitHub Issues](https://github.com/slampton/ha-latter/issues).
 

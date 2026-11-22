@@ -1,5 +1,5 @@
 /**
- * Playwright Global Teardown (`M-P0-14`).
+ * Playwright Global Teardown.
  *
  * Cleans up Windows Chromium ANGLE/Vulkan `debug.log` written to `frontend_src/` CWD so
  * `git status` and workspace hygiene gates stay 100% clean after every `playwright test` run.

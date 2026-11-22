@@ -1,5 +1,5 @@
 /**
- * Device Tools View (`tools`, `D-027`, `D-064`, `D-066`, `Q5`, `Q8`, `Q12`):
+ * Device Tools View (`tools`, `D-027`, `D-064`, `D-066`):
  * - Column 1: Diagnostics + collapsed Developer & telemetry drawer + `Open in Home Assistant`.
  * - Column 2: Perimeter security policy + write-only PIN (`focusSafe` + `requestClearSecurityPin`),
  *   Replace hardware (lossless Home Assistant Reconfigure + `Download backup`), & Danger zone.

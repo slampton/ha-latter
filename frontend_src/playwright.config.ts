@@ -1,5 +1,5 @@
 /**
- * Playwright Headless Chromium + `@axe-core/playwright` Configuration (`M-P0-14`, Pillar 9).
+ * Playwright Headless Chromium + `@axe-core/playwright` Configuration.
  *
  * - Serves `<latter-studio>` in-memory via `page.route("http://studio.local/**", ...)` with zero
  *   TCP port binding so tests run deterministically in ~50 ms inside Windows/Linux sandboxes.

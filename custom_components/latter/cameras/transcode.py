@@ -1,4 +1,4 @@
-"""16px-aligned Baseline 4:2:0 JPEG transcoder, 2x2 grid compositor, FFmpeg builder, and MJPEG parser (`L2a`)."""
+"""16px-aligned Baseline 4:2:0 JPEG transcoder, 2x2 grid compositor, FFmpeg builder, and MJPEG parser."""
 
 from __future__ import annotations
 
@@ -330,7 +330,7 @@ def _draw_offline_tile(
     rect: tuple[int, int, int, int],
     label: str,
 ) -> None:
-    """Draw a readable centered placeholder tile (`>= 13 px` scaled font) for an offline quadrant (`M-P2-23`)."""
+    """Draw a readable centered placeholder tile (`>= 13 px` scaled font) for an offline quadrant."""
     x0, y0, cell_w, cell_h = rect
     draw.rectangle(
         (x0, y0, x0 + cell_w - 1, y0 + cell_h - 1),
@@ -458,7 +458,7 @@ def build_ffmpeg_video_cmd(
     fit: str = "contain",
     rot: int = 0,
 ) -> list[str]:
-    """Build low-latency FFmpeg command producing 16px-aligned Baseline 4:2:0 MJPEG on stdout (`M-P1-30`)."""
+    """Build low-latency FFmpeg command producing 16px-aligned Baseline 4:2:0 MJPEG on stdout."""
     target_w = align16(width)
     target_h = align16(height)
     target_fps = normalize_fps(fps)

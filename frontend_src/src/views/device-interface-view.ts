@@ -1,5 +1,5 @@
 /**
- * Device Interface View (`interface`, `D-026`, `D-035`, `D-047`, `D-053`, `D-064`, `D-069`, `U4`):
+ * Device Interface View (`interface`, `D-026`, `D-035`, `D-047`, `D-053`, `D-064`, `D-069`):
  * - Column 1: Home screen (`home_screen_enabled`, `start_screen` + inline `Configure`, `time_format`,
  *   `home_clock_tap_action` + conditional `clock_face`, `home_date_tap_action`, `return_to_home_timeout`,
  *   `wake_greeting`, `weather_background` + conditional `home_sun`/`home_moon` pills, `activity_card`,
@@ -238,7 +238,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
   }));
   const clockFaceVal = store.tPrefOption("clock_face", resolvedClockFaceValue);
 
-  // Default unset `time_format` from `hass.locale?.time_format` (`D-14`)
+  // Default unset `time_format` from `hass.locale?.time_format`
   const timeFormatPref = store.entity.getPref("time_format");
   const timeFormatSpec = store.entity.getPrefSpec("time_format");
   const rawTimeFormatOpts =

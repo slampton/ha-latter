@@ -1,4 +1,4 @@
-"""Canonical ESPHome device identity, hardware traits, and unbound device discovery (`L1b`)."""
+"""Canonical ESPHome device identity, hardware traits, and unbound device discovery."""
 
 from __future__ import annotations
 
@@ -457,7 +457,7 @@ def read_device_hardware_manifest(
 
 
 # ---------------------------------------------------------------------------
-# Unbound Latter ESPHome Discovery Queries (`L1b`)
+# Unbound Latter ESPHome Discovery Queries
 # ---------------------------------------------------------------------------
 
 

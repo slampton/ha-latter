@@ -2,8 +2,8 @@
  * System Shared Entities View (`shared_entities`, `D-022`, `D-059`, `D-064`, `D-065`, `D-074`):
  * - Home hub & weather (singleton Weather/Alarm + multi-entity sortable domain boxes)
  * - Calendars & Cameras with pointer/keyboard reordering (`reorderStringListRows`) & native `<select>` pickers
- * - On-demand 600 s camera preview signing (`store.entity.previewCamera`, `Q4`)
- * - Custom colors (`isValidHexColor` swatch guard `A-07`)
+ * - On-demand 600 s camera preview signing (`store.entity.previewCamera`)
+ * - Custom colors (`isValidHexColor` swatch guard)
  */
 
 import {

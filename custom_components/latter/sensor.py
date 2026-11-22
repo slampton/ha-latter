@@ -1,4 +1,4 @@
-"""Sensor platform for Latter exposing device-scoped (`sensor.<device_slug>_*`) and System-scoped entities (`L4`)."""
+"""Sensor platform for Latter exposing device-scoped (`sensor.<device_slug>_*`) and System-scoped entities."""
 
 from __future__ import annotations
 

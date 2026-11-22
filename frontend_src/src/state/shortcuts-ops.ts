@@ -1,6 +1,6 @@
 /**
- * Unified `createTokenListOps` CSV pill factory (`A-14`) & Shortcut (`dock_items` / `pinned_items`)
- * normalization and modal operations (`L2` leaf).
+ * Unified `createTokenListOps` CSV pill factory & Shortcut (`dock_items` / `pinned_items`)
+ * normalization and modal operations.
  */
 
 import {

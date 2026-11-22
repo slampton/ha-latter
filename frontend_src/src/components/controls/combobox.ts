@@ -1,5 +1,5 @@
 /**
- * Reusable WAI-ARIA 1.2 Searchable Entity Combobox (`components/controls/combobox.ts`, `Q11` / `D-062`).
+ * Reusable WAI-ARIA 1.2 Searchable Entity Combobox (`components/controls/combobox.ts`, `D-062`).
  */
 
 import { t } from "../../i18n/index.js";

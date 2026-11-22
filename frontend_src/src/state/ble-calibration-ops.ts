@@ -1,6 +1,6 @@
 /**
  * Walk-Around BLE Calibration, Scanner Antenna Trim, Area Sensor Fusion,
- * & Area Illuminance Calibration Operations (`L2` leaf, `D-064`, `D-075`).
+ * & Area Illuminance Calibration Operations (`D-064`, `D-075`).
  */
 
 import { formatWsError } from "../api/ws-client.js";

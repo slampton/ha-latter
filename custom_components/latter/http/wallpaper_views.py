@@ -1,4 +1,4 @@
-"""Signed wallpaper/screensaver proxy and admin multipart photo upload HTTP views (`L3`, 2 of 8 HTTP views, `M-P3-03`)."""
+"""Signed wallpaper/screensaver proxy and admin multipart photo upload HTTP views."""
 
 from __future__ import annotations
 
@@ -500,7 +500,7 @@ def _parse_multipart_float(raw: str, default: float) -> float:
 async def _async_read_bounded_part_text(
     part: BodyPartReader, max_bytes: int = MAX_MULTIPART_TEXT_BYTES
 ) -> str:
-    """Read a multipart text field up to `max_bytes`, rejecting oversize metadata fields (`M-P1-34`)."""
+    """Read a multipart text field up to `max_bytes`, rejecting oversize metadata fields."""
     buf = bytearray()
     while True:
         chunk = await part.read_chunk(min(1024, max_bytes + 1))

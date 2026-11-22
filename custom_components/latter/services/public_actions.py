@@ -1,4 +1,4 @@
-"""Registration and flattened handlers for the 5 public Latter user actions (`M-P1-28`, `M-P3-03`)."""
+"""Registration and flattened handlers for the 5 public Latter user actions."""
 
 from __future__ import annotations
 
@@ -229,7 +229,7 @@ async def _async_handle_reset_device(call: ServiceCall) -> None:
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
-    """Register ONLY the 5 public Latter user actions on `hass.services` (`M-P1-28`, `M-P3-03`)."""
+    """Register ONLY the 5 public Latter user actions on `hass.services`."""
     if hass.services.has_service(DOMAIN, SERVICE_NOTIFY):
         return
 
@@ -323,6 +323,6 @@ def _remove_service_if_present(hass: HomeAssistant, service: str) -> None:
 
 
 async def async_unload_services(hass: HomeAssistant) -> None:
-    """Unregister all 5 public Latter user actions from `hass.services` (`M-P3-03`)."""
+    """Unregister all 5 public Latter user actions from `hass.services`."""
     for svc in PUBLIC_SERVICES:
         _remove_service_if_present(hass, svc)

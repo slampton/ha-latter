@@ -1,7 +1,7 @@
 /**
- * Optimistic Device-Group Baseline & Pending-Entity Payload Overlays (`L2` leaf).
+ * Optimistic Device-Group Baseline & Pending-Entity Payload Overlays.
  *
- * Imports strictly `L0` (`constants.ts`, `types.ts`) and `L1` (`store-types.ts`).
+ * Imports strictly leaf constants/types (`constants.ts`, `types.ts`) and `store-types.ts`.
  */
 
 import {

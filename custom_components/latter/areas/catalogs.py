@@ -1,4 +1,4 @@
-"""Curated Area summaries, domain availability, and controllable entity catalogs (`L2b`)."""
+"""Curated Area summaries, domain availability, and controllable entity catalogs."""
 
 from __future__ import annotations
 
