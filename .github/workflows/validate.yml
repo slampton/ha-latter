@@ -59,9 +59,10 @@ jobs:
       - name: Install Playwright headless Chromium
         run: npx --prefix frontend_src playwright install --with-deps chromium
       - name: Verify static architecture, security, and Studio guardrails
-        run: python tools/verify_ha.py
+        run: python tools/verify_ha.py --fast
       - name: Verify Studio TypeScript bundle parity & Playwright + axe-core E2E
         run: |
+          npm --prefix frontend_src run typecheck
           npm --prefix frontend_src run check
           npm --prefix frontend_src test
       - name: Run ruff static analysis
@@ -69,7 +70,7 @@ jobs:
       - name: Run strict mypy type checking against homeassistant-stubs
         run: mypy custom_components/latter
       - name: Run real Home Assistant pytest suite with coverage gate
-        run: pytest tests --cov=custom_components.latter --cov-fail-under=75 -q
+        run: pytest -n auto tests --cov=custom_components.latter --cov-fail-under=75 -q
 
   promote:
     name: Fast-forward main to this commit

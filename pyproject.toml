@@ -24,10 +24,14 @@ test = [
     "probatio>=0.13",
     "pytest-cov>=7.0",
     "pytest-homeassistant-custom-component==0.13.375",
+    "pytest-xdist>=3.8",
     "ruff>=0.17",
     "serialx>=1.11",
     "voluptuous>=0.16",
 ]
+
+[tool.setuptools]
+packages = []
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

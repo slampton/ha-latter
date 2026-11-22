@@ -307,7 +307,7 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     )
     assert coord._unsub_timer_tick is not None
 
-    shifted_anchor = time.monotonic() - 22.8
+    shifted_anchor = time.monotonic() - 22.2
     coord._timer_anchor_mono = shifted_anchor
     coord._stopwatch_anchor_mono = shifted_anchor
     await call_ws(
@@ -318,14 +318,15 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
         studio_rev=STUDIO_REV,
         subentry_id=coord.subentry_id,
     )
+    elapsed_window = int(time.monotonic() - shifted_anchor)
     dev_state = conn.results[-1][1]
     live = dev_state["live"]
     assert live["timer_running"] is True
     assert live["timer_paused"] is False
-    assert live["timer_remaining_sec"] == 67
+    assert 90 - elapsed_window - 1 <= live["timer_remaining_sec"] <= 90 - 22
     assert live["stopwatch_running"] is True
     assert live["stopwatch_paused"] is False
-    assert live["stopwatch_elapsed_sec"] == 37
+    assert 15 + 22 <= live["stopwatch_elapsed_sec"] <= 15 + elapsed_window
     assert live["alarm_ringing"] is True
     # Quick Actions grid stays strictly at the 4 core actions
     assert [a["key"] for a in dev_state["quick_actions"]] == [

@@ -195,6 +195,7 @@ async def ensure_bluetooth_manager(hass: HomeAssistant) -> HomeAssistantBluetoot
     set_manager(manager)
     hass.data[DATA_MANAGER] = manager
     await manager.async_setup()
+    hass.config.components.add("usb")
     hass.config.components.add("bluetooth")
     return manager
 
@@ -262,6 +263,7 @@ async def seed_ble_proxies(
         unsubs.extend([unsub_reg, unsub_setup])
         scanners_by_source[src_upper] = scanner
 
+    await hass.async_block_till_done()
     return scanners_by_source
 
 
