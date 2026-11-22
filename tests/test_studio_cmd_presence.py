@@ -12,7 +12,7 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.latter.const import CONF_SECURITY_PIN_HASH, STUDIO_REV
 from custom_components.latter.presence.ble_fabric import get_ble_fabric
-from custom_components.latter.studio.payload_shared import log_studio_event
+from custom_components.latter.studio.payload import log_studio_event
 from tests.helpers import (
     call_ws,
     ensure_area,

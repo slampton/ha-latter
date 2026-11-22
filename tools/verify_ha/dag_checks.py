@@ -134,12 +134,9 @@ LAYER_MAP: Final[dict[str, str]] = {
     "http/camera_views.py": "L3",
     "http/views_register.py": "L3",
     "studio/panel.py": "L3",
-    "studio/payload_shared.py": "L3",
-    "studio/payload_sections.py": "L3",
     "studio/payload.py": "L3",
-    "studio/cmd_presence_devices.py": "L3",
-    "studio/cmd_photos_media.py": "L3",
-    "studio/cmd_groups_security.py": "L3",
+    "studio/device_commands.py": "L3",
+    "studio/system_commands.py": "L3",
     "studio/commands.py": "L3",
     "repairs.py": "L3",
     "diagnostics.py": "L3",
@@ -427,6 +424,12 @@ def check_dag_and_layers(
         f"[DAG UNCLASSIFIED] {LATTER_REL_PREFIX}{mod} is not classified in LAYER_MAP "
         "(rogue module or un-deleted monolith)"
         for mod in unclassified
+    )
+    stale_mapped = sorted(set(LAYER_MAP.keys()) - set(short_trees.keys()))
+    failures.extend(
+        f"[DAG STALE MAP] {LATTER_REL_PREFIX}{mod} is listed in LAYER_MAP "
+        "but no longer exists on disk"
+        for mod in stale_mapped
     )
 
     _check_multilayer_inits(short_trees, failures)

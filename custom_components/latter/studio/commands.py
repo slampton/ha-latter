@@ -1,4 +1,4 @@
-"""Admin-gated WebSocket API endpoints and command dispatch router for Latter Studio (`L3`).
+"""Admin-gated WebSocket API endpoints and scope-based command dispatch router for Latter Studio (`L3`).
 
 The websocket type is the scope (`studio/state_gates.py`): `latter/system/*` commands never act on the
 Studio's selected Device (a System command that acts on one Device names it in its own payload), and
@@ -7,10 +7,9 @@ Studio's selected Device (a System command that acts on one Device names it in i
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 import copy
 import logging
-import math
 import time
 from typing import Any, Final
 
@@ -25,14 +24,17 @@ from homeassistant.components.websocket_api.messages import event_message
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    area_registry as ar,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 import probatio as vol
 
 from ..backup import async_restore_backup_bundle, build_backup_bundle
 from ..const import (
     CONF_BLE_AREA_SIGNATURES,
-    CONF_BLE_CATEGORY,
     DATA_GLOBAL_CONFIG,
     DOMAIN,
     INTEGRATION_VERSION,
@@ -45,11 +47,15 @@ from ..identity import device_entities
 from ..presence.ble_fabric import get_all_areas_presence_summary, get_ble_fabric
 from ..presence.ble_registry import get_area_signatures_summary
 from ..wallpapers.store import wallpaper_snapshot_token
-from . import cmd_groups_security, cmd_photos_media, cmd_presence_devices
-from .payload import build_studio_state_payload
-from .payload_shared import (
+from .device_commands import (
+    DEVICE_COMMAND_HANDLERS,
+    DEVICE_COMMAND_SCHEMAS,
+    CommandHandler,
+)
+from .payload import (
     STUDIO_BULK_CONTROL_DOMAINS,
     StudioCommandError,
+    build_studio_state_payload,
     log_studio_event,
     resolve_target_coordinator,
 )
@@ -63,6 +69,7 @@ from .state_gates import (
     command_scope,
     find_by_subentry_id,
 )
+from .system_commands import SYSTEM_COMMAND_HANDLERS, SYSTEM_COMMAND_SCHEMAS
 
 _LOGGER = logging.getLogger(__name__)
 _SURVEY_COALESCE_INTERVAL_S: Final = 0.25
@@ -70,104 +77,16 @@ _MIN_SURVEY_DELAY_S: Final = 0.05
 _PUSH_DEBOUNCE_S: Final = 0.4
 
 _STUDIO_STATUS_WATCH_SUFFIXES: Final[tuple[str, ...]] = (
-    "_system_rpc_outbox", "_rpc_outbox", "_system_wi_fi_signal", "_wi_fi_signal",
-    "_ip_address", "_battery_level", "_battery_charging", "_usb_power_connected", "_project_firmware",
+    "_system_rpc_outbox",
+    "_rpc_outbox",
+    "_system_wi_fi_signal",
+    "_wi_fi_signal",
+    "_ip_address",
+    "_battery_level",
+    "_battery_charging",
+    "_usb_power_connected",
+    "_project_firmware",
 )
-
-_cmd_save_device_config = cmd_groups_security._cmd_save_device_config
-_cmd_save_system_config = cmd_groups_security._cmd_save_system_config
-compute_illuminance_calibration_from_stats = cmd_presence_devices.compute_illuminance_calibration_from_stats
-
-
-async def _cmd_set_device_photo_pool(
-    hass: HomeAssistant,
-    coordinator: LatterCoordinator | None,
-    body: dict[str, Any],
-    global_cfg: dict[str, Any],
-    extra: dict[str, Any],
-) -> None:
-    """Delegate `set_device_photo_pool` to `cmd_photos_media`."""
-    await cmd_photos_media._cmd_set_device_photo_pool(hass, coordinator, body, global_cfg, extra)
-
-
-def _str_cap(max_len: int) -> Any:
-    return vol.All(str, vol.Length(max=max_len))
-
-
-def _non_bool_number(val: Any) -> int | float:
-    if isinstance(val, bool) or not isinstance(val, (int, float)):
-        raise vol.Invalid("Expected a number")
-    if not math.isfinite(float(val)):
-        raise vol.Invalid("Expected a finite number")
-    return val
-
-
-def _schema(fields: dict[Any, Any]) -> vol.Schema:
-    return vol.Schema(fields, extra=vol.PREVENT_EXTRA)
-
-
-_COMMAND_PAYLOAD_SCHEMAS: dict[str, vol.Schema] = {
-    "set_ble_scanner_offset": _schema({vol.Optional("scanner_source"): _str_cap(128), vol.Optional("offset_db"): vol.Any(_non_bool_number, None)}),
-    "set_area_fusion": _schema({vol.Optional("area_id"): _str_cap(128), vol.Optional("mode"): _str_cap(32), vol.Optional("threshold_pct"): vol.Any(_non_bool_number, str), vol.Optional("sensors"): [_str_cap(128)]}),
-    "set_area_illuminance": _schema({vol.Optional("area_id"): _str_cap(128), vol.Optional("entity_id"): _str_cap(128), vol.Optional("dark_lux"): vol.Any(_non_bool_number, str), vol.Optional("bright_lux"): vol.Any(_non_bool_number, str)}),
-    "calibrate_area_illuminance": _schema({vol.Optional("area_id"): _str_cap(128)}),
-    "capture_ble_area_signature": _schema({vol.Optional("area_id"): _str_cap(128), vol.Optional("survey_subentry_id"): _str_cap(128)}),
-    "clear_ble_area_signature": _schema({vol.Optional("area_id"): _str_cap(128)}),
-    "esphome_entity_action": _schema({vol.Optional("entity_id"): vol.Any(_str_cap(128), None), vol.Optional("action"): _str_cap(64), vol.Optional("level"): vol.Any(_non_bool_number, str, None), vol.Optional("option"): vol.Any(_str_cap(128), None)}),
-    "device_action": _schema({vol.Optional("action"): _str_cap(64)}),
-    "check_system_updates": _schema({}),
-    "clear_internal_logs": _schema({}),
-    "ignore_discovered_device": _schema({vol.Optional("esphome_device_id"): _str_cap(128)}),
-    "unignore_discovered_device": _schema({vol.Optional("esphome_device_id"): _str_cap(128)}),
-    "remove_device": _schema({vol.Optional("subentry_id"): _str_cap(128)}),
-    "add_latter_device": _schema({vol.Optional("esphome_device_id"): _str_cap(128), vol.Optional("device_group"): _str_cap(64), vol.Optional("assigned_person"): _str_cap(128)}),
-    "add_ble_device": _schema({vol.Optional("name"): _str_cap(64), vol.Optional("target_address"): _str_cap(128), vol.Optional("assigned_person"): _str_cap(128), vol.Optional(CONF_BLE_CATEGORY): _str_cap(32)}),
-    **cmd_photos_media.PHOTOS_MEDIA_SCHEMAS,
-    **cmd_groups_security.GROUPS_SECURITY_SCHEMAS,
-}
-
-_CommandHandler = Callable[
-    [HomeAssistant, LatterCoordinator | None, dict[str, Any], dict[str, Any], dict[str, Any]],
-    Awaitable[None],
-]
-
-_STUDIO_COMMAND_HANDLERS: dict[str, _CommandHandler] = {
-    "set_ble_scanner_offset": cmd_presence_devices._cmd_set_ble_scanner_offset,
-    "set_area_fusion": cmd_presence_devices._cmd_set_area_fusion,
-    "set_area_illuminance": cmd_presence_devices._cmd_set_area_illuminance,
-    "calibrate_area_illuminance": cmd_presence_devices._cmd_calibrate_area_illuminance,
-    "capture_ble_area_signature": cmd_presence_devices._cmd_capture_ble_area_signature,
-    "clear_ble_area_signature": cmd_presence_devices._cmd_clear_ble_area_signature,
-    "esphome_entity_action": cmd_presence_devices._cmd_esphome_entity_action,
-    "test_doorbell_speaker": cmd_photos_media._cmd_test_doorbell_speaker,
-    "send_announcement": cmd_photos_media._cmd_send_announcement,
-    "check_system_updates": cmd_presence_devices._cmd_check_system_updates,
-    "create_photo_collection": cmd_photos_media._cmd_create_photo_collection,
-    "rename_photo_collection": cmd_photos_media._cmd_rename_photo_collection,
-    "delete_photo_collection": cmd_photos_media._cmd_delete_photo_collection,
-    "update_photo_metadata": cmd_photos_media._cmd_update_photo_metadata,
-    "bulk_update_photos": cmd_photos_media._cmd_bulk_update_photos,
-    "delete_photo": cmd_photos_media._cmd_delete_photo,
-    "browse_media_folder": cmd_photos_media._cmd_browse_media_folder,
-    "import_media_photos": cmd_photos_media._cmd_import_media_photos,
-    "set_device_photo_pool": _cmd_set_device_photo_pool,
-    "mint_camera_preview_url": cmd_photos_media._cmd_mint_camera_preview_url,
-    "ignore_discovered_device": cmd_presence_devices._cmd_ignore_discovered_device,
-    "unignore_discovered_device": cmd_presence_devices._cmd_unignore_discovered_device,
-    "save_system_config": _cmd_save_system_config,
-    "save_device_config": _cmd_save_device_config,
-    "device_action": cmd_presence_devices._cmd_device_action,
-    "clear_internal_logs": cmd_presence_devices._cmd_clear_internal_logs,
-    "remove_device": cmd_presence_devices._cmd_remove_device,
-    "add_latter_device": cmd_presence_devices._cmd_add_latter_device,
-    "add_ble_device": cmd_presence_devices._cmd_add_ble_device,
-    "create_device_group": cmd_groups_security._cmd_create_device_group,
-    "delete_device_group": cmd_groups_security._cmd_delete_device_group,
-    "update_group_baseline": cmd_groups_security._cmd_update_group_baseline,
-    "apply_batch_device_setting": cmd_groups_security._cmd_apply_batch_device_setting,
-    "rotate_signing_key": cmd_groups_security._cmd_rotate_signing_key,
-    "set_security_pin": cmd_groups_security._cmd_set_security_pin,
-}
 
 
 def _check_studio_rev(
@@ -185,17 +104,24 @@ def _check_studio_rev(
     return True
 
 
-async def _async_execute_studio_command(
+async def _async_dispatch_scoped_command(
     hass: HomeAssistant,
+    scope: Scope,
     coordinator: LatterCoordinator | None,
     cmd: str,
     body: dict[str, Any],
 ) -> dict[str, Any]:
-    """Validate payload schema, execute a Studio command, and return extra response fields."""
-    handler = _STUDIO_COMMAND_HANDLERS.get(cmd)
+    """Validate payload schema and dispatch `cmd` to `system_commands` or `device_commands`."""
+    handlers: dict[str, CommandHandler] = (
+        DEVICE_COMMAND_HANDLERS if scope == "device" else SYSTEM_COMMAND_HANDLERS
+    )
+    schemas: dict[str, vol.Schema] = (
+        DEVICE_COMMAND_SCHEMAS if scope == "device" else SYSTEM_COMMAND_SCHEMAS
+    )
+    handler = handlers.get(cmd)
     if handler is None:
         raise StudioCommandError("unknown_command", f"Unsupported Studio command: {cmd}")
-    schema = _COMMAND_PAYLOAD_SCHEMAS.get(cmd)
+    schema = schemas.get(cmd)
     if schema is not None:
         try:
             body = dict(schema(body))
@@ -390,6 +316,7 @@ def _rebind_subscribed_entity_states(
         or e.domain == "update"
         or e.entity_id.endswith(_STUDIO_STATUS_WATCH_SUFFIXES)
     })
+
     @callback
     def _entity_changed(_ev: Any) -> None:
         schedule_push()
@@ -590,8 +517,8 @@ async def _async_handle_ws_command_impl(
             raise StudioCommandError(
                 "not_found", f"No Latter Device with subentry_id '{msg.get('subentry_id')}'"
             )
-        extra = await _async_execute_studio_command(
-            hass, selected if scope == "device" else None, cmd, body
+        extra = await _async_dispatch_scoped_command(
+            hass, scope, selected if scope == "device" else None, cmd, body
         )
     except StudioCommandError as err:
         connection.send_error(msg["id"], err.code, str(err))
@@ -745,7 +672,12 @@ async def _async_restore_bundle(
 
 
 @require_admin
-@websocket_command({vol.Required("type"): "latter/system/import", vol.Optional("subentry_id"): vol.Any(str, None), vol.Required("bundle"): dict, vol.Required("studio_rev"): int})
+@websocket_command({
+    vol.Required("type"): "latter/system/import",
+    vol.Optional("subentry_id"): vol.Any(str, None),
+    vol.Required("bundle"): dict,
+    vol.Required("studio_rev"): int,
+})
 @async_response
 async def ws_handle_system_import(
     hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
@@ -754,13 +686,22 @@ async def ws_handle_system_import(
     if not _check_studio_rev(connection, msg):
         return
     if str(msg["bundle"].get("scope") or "") != "system":
-        connection.send_error(msg["id"], "invalid_format", "This is a Device backup: choose the Device to restore it onto")
+        connection.send_error(
+            msg["id"],
+            "invalid_format",
+            "This is a Device backup: choose the Device to restore it onto",
+        )
         return
     await _async_restore_bundle(hass, connection, msg, None)
 
 
 @require_admin
-@websocket_command({vol.Required("type"): "latter/device/import", vol.Required("subentry_id"): str, vol.Required("bundle"): dict, vol.Required("studio_rev"): int})
+@websocket_command({
+    vol.Required("type"): "latter/device/import",
+    vol.Required("subentry_id"): str,
+    vol.Required("bundle"): dict,
+    vol.Required("studio_rev"): int,
+})
 @async_response
 async def ws_handle_device_import(
     hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
@@ -769,17 +710,31 @@ async def ws_handle_device_import(
     if not _check_studio_rev(connection, msg):
         return
     if str(msg["bundle"].get("scope") or "") != "device":
-        connection.send_error(msg["id"], "invalid_format", "This is a System backup: restore it without choosing a Device")
+        connection.send_error(
+            msg["id"],
+            "invalid_format",
+            "This is a System backup: restore it without choosing a Device",
+        )
         return
     coord = resolve_target_coordinator(hass, msg["subentry_id"])
     if coord is None:
-        connection.send_error(msg["id"], "not_found", f"No Latter Device with subentry_id '{msg['subentry_id']}'")
+        connection.send_error(
+            msg["id"],
+            "not_found",
+            f"No Latter Device with subentry_id '{msg['subentry_id']}'",
+        )
         return
     await _async_restore_bundle(hass, connection, msg, coord)
 
 
 @require_admin
-@websocket_command({vol.Required("type"): "latter/device/reset", vol.Required("subentry_id"): str, vol.Optional("device_settings", default=True): bool, vol.Optional("latter_options", default=True): bool, vol.Required("studio_rev"): int})
+@websocket_command({
+    vol.Required("type"): "latter/device/reset",
+    vol.Required("subentry_id"): str,
+    vol.Optional("device_settings", default=True): bool,
+    vol.Optional("latter_options", default=True): bool,
+    vol.Required("studio_rev"): int,
+})
 @async_response
 async def ws_handle_device_reset(
     hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
@@ -789,19 +744,39 @@ async def ws_handle_device_reset(
         return
     coord = resolve_target_coordinator(hass, msg["subentry_id"])
     if coord is None:
-        connection.send_error(msg["id"], "not_found", f"No Latter device with subentry_id '{msg['subentry_id']}'")
+        connection.send_error(
+            msg["id"],
+            "not_found",
+            f"No Latter device with subentry_id '{msg['subentry_id']}'",
+        )
         return
     try:
-        await async_reset_device(hass, coord, device_settings=msg["device_settings"], latter_options=msg["latter_options"])
+        await async_reset_device(
+            hass,
+            coord,
+            device_settings=msg["device_settings"],
+            latter_options=msg["latter_options"],
+        )
     except ServiceValidationError as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
         return
     except HomeAssistantError as err:
         connection.send_error(msg["id"], "command_failed", str(err))
         return
-    parts = [p for p, on in (("device settings", msg["device_settings"]), ("Latter options", msg["latter_options"])) if on]
-    log_studio_event(hass, "INFO", coord.device_slug, f"Reset to defaults ({', '.join(parts)})")
-    connection.send_result(msg["id"], build_studio_state_payload(hass, coord, include_catalog=False))
+    parts = [
+        p
+        for p, on in (
+            ("device settings", msg["device_settings"]),
+            ("Latter options", msg["latter_options"]),
+        )
+        if on
+    ]
+    log_studio_event(
+        hass, "INFO", coord.device_slug, f"Reset to defaults ({', '.join(parts)})"
+    )
+    connection.send_result(
+        msg["id"], build_studio_state_payload(hass, coord, include_catalog=False)
+    )
 
 
 @callback
@@ -812,24 +787,24 @@ def async_register_studio_ws_commands(hass: HomeAssistant) -> None:
         return
     domain_data["_studio_ws_registered"] = INTEGRATION_VERSION
     for handler in (
-        ws_handle_get_state, ws_handle_subscribe, ws_handle_system_command,
-        ws_handle_device_command, ws_handle_system_export, ws_handle_device_export,
-        ws_handle_system_import, ws_handle_device_import, ws_handle_device_reset,
+        ws_handle_get_state,
+        ws_handle_subscribe,
+        ws_handle_system_command,
+        ws_handle_device_command,
+        ws_handle_system_export,
+        ws_handle_device_export,
+        ws_handle_system_import,
+        ws_handle_device_import,
+        ws_handle_device_reset,
     ):
         async_register_command(hass, handler)
 
 
 __all__ = [
     "STUDIO_REV",
-    "_COMMAND_PAYLOAD_SCHEMAS",
-    "_STUDIO_COMMAND_HANDLERS",
     "StudioCommandError",
-    "_async_execute_studio_command",
-    "_cmd_save_device_config",
-    "_cmd_save_system_config",
-    "_cmd_set_device_photo_pool",
+    "_async_dispatch_scoped_command",
     "async_register_studio_ws_commands",
-    "compute_illuminance_calibration_from_stats",
     "ws_handle_device_command",
     "ws_handle_device_export",
     "ws_handle_device_import",

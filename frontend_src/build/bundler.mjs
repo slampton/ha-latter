@@ -80,16 +80,7 @@ export function buildEnLocaleJson(enI18nFile) {
   if (!fs.existsSync(enI18nFile)) {
     throw new Error("Missing src/i18n/en.ts");
   }
-  const i18nDir = path.dirname(enI18nFile);
   const sandbox = vm.createContext(Object.create(null));
-  for (const sliceName of ["en-common.ts", "en-system.ts", "en-devices.ts"]) {
-    const slicePath = path.join(i18nDir, sliceName);
-    if (!fs.existsSync(slicePath)) continue;
-    const rawSlice = fs.readFileSync(slicePath, "utf8").replace(/\r\n/g, "\n");
-    const strippedSlice = stripTypeScriptTypes(rawSlice, { mode: "strip" });
-    const parsedSlice = analyzeAndTransformModule(strippedSlice);
-    vm.runInContext(parsedSlice.body, sandbox, { filename: `src/i18n/${sliceName}` });
-  }
   const rawTs = fs.readFileSync(enI18nFile, "utf8").replace(/\r\n/g, "\n");
   const stripped = stripTypeScriptTypes(rawTs, { mode: "strip" });
   const parsed = analyzeAndTransformModule(stripped);

@@ -40,13 +40,13 @@ from custom_components.latter.http.camera_views import (
     LatterCameraSnapshotView,
     LatterCameraStreamView,
 )
-from custom_components.latter.studio.cmd_groups_security import (
-    _cmd_save_device_config,
-    _cmd_save_system_config,
+from custom_components.latter.studio.device_commands import _cmd_save_device_config
+from custom_components.latter.studio.payload import (
+    StudioCommandError,
+    build_studio_state_payload,
 )
-from custom_components.latter.studio.cmd_presence_devices import StudioCommandError
-from custom_components.latter.studio.payload import build_studio_state_payload
 from custom_components.latter.studio.settings_cleaners import SettingsScopeError
+from custom_components.latter.studio.system_commands import _cmd_save_system_config
 from tests.helpers import (
     install_camera_mocks,
     make_jpeg_bytes,

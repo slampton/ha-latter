@@ -8,14 +8,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { EN_COMMON_STRINGS } from "../../src/i18n/en-common.js";
-import { EN_DEVICES_STRINGS } from "../../src/i18n/en-devices.js";
-import { EN_SYSTEM_STRINGS } from "../../src/i18n/en-system.js";
 import {
   buildStudioEnLocaleCatalog,
   EN_STRINGS,
   formatHaEntityState,
   localizeRepairIssue,
+  PREF_LABELS,
+  PREF_OPTION_LABELS,
   t,
   tPrefLabel,
   tPrefOption,
@@ -58,19 +57,25 @@ function utf8ByteLength(value: string): number {
 }
 
 describe("i18n catalogs, UTF-8 byte bounds, locale formatters & telemetry parsers", () => {
-  it("keeps EN_STRINGS slices disjoint and in 1:1 parity with studio/locales/en.json", () => {
-    const commonKeys = Object.keys(EN_COMMON_STRINGS);
-    const systemKeys = Object.keys(EN_SYSTEM_STRINGS);
-    const deviceKeys = Object.keys(EN_DEVICES_STRINGS);
-
-    const seen = new Set<string>();
-    for (const k of [...commonKeys, ...systemKeys, ...deviceKeys]) {
-      assert.equal(seen.has(k), false, `Duplicate translation key across en-*.ts slices: ${k}`);
-      seen.add(k);
+  it("keeps EN_STRINGS non-empty, collision-free, and in 1:1 parity with studio/locales/en.json", () => {
+    const enKeys = Object.keys(EN_STRINGS);
+    assert.ok(enKeys.length > 0);
+    for (const [k, v] of Object.entries(EN_STRINGS)) {
+      assert.ok(k.length > 0, "Empty key in EN_STRINGS");
+      assert.equal(typeof v, "string", `Non-string value in EN_STRINGS for ${k}`);
+      assert.ok(v.length > 0, `Empty translation string in EN_STRINGS for ${k}`);
+      assert.equal(
+        k.startsWith("pref.") || k.startsWith("pref_option."),
+        false,
+        `EN_STRINGS key must not collide with pref/pref_option namespace: ${k}`,
+      );
     }
-    assert.equal(Object.keys(EN_STRINGS).length, seen.size);
 
     const expectedCatalog = buildStudioEnLocaleCatalog();
+    assert.equal(
+      Object.keys(expectedCatalog).length,
+      enKeys.length + Object.keys(PREF_LABELS).length + Object.keys(PREF_OPTION_LABELS).length,
+    );
     const diskCatalog = JSON.parse(fs.readFileSync(EN_LOCALE_JSON_PATH, "utf8")) as Record<
       string,
       string

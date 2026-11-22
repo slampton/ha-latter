@@ -823,11 +823,13 @@ const LABEL_ACRONYMS = {
 __latterExp(__exports, { ACTIVITY_SOURCES_CATALOG: () => ACTIVITY_SOURCES_CATALOG, ALLOWED_DEVICE_ACTIONS: () => ALLOWED_DEVICE_ACTIONS, AREA_CATEGORIES_CATALOG: () => AREA_CATEGORIES_CATALOG, DEFAULT_ACTIVITY_SOURCES: () => DEFAULT_ACTIVITY_SOURCES, DEFAULT_ACTIVITY_SOURCES_TOKENS: () => DEFAULT_ACTIVITY_SOURCES_TOKENS, DEFAULT_AREA_CATEGORIES: () => DEFAULT_AREA_CATEGORIES, DEFAULT_AREA_CATEGORIES_TOKENS: () => DEFAULT_AREA_CATEGORIES_TOKENS, DEFAULT_DOCK_ROUTES: () => DEFAULT_DOCK_ROUTES, DEFAULT_DOCK_ROUTES_TOKENS: () => DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS: () => DEFAULT_GAMES_ITEMS, DEFAULT_GAMES_ITEMS_TOKENS: () => DEFAULT_GAMES_ITEMS_TOKENS, DEFAULT_HOME_CATEGORIES: () => DEFAULT_HOME_CATEGORIES, DEFAULT_HOME_CATEGORIES_TOKENS: () => DEFAULT_HOME_CATEGORIES_TOKENS, DEFAULT_TOOLS_ITEMS: () => DEFAULT_TOOLS_ITEMS, DEFAULT_TOOLS_ITEMS_TOKENS: () => DEFAULT_TOOLS_ITEMS_TOKENS, DEVICE_PREF_SPECS_CATALOG: () => DEVICE_PREF_SPECS_CATALOG, DEVICE_PREF_SPECS_MAP: () => DEVICE_PREF_SPECS_MAP, DEVICE_WS_COMMANDS: () => DEVICE_WS_COMMANDS, GAMES_ITEMS_CATALOG: () => GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG: () => HOME_CATEGORIES_CATALOG, SHORTCUT_ROUTES_CATALOG: () => SHORTCUT_ROUTES_CATALOG, STUDIO_REV: () => STUDIO_REV, SYSTEM_WS_COMMANDS: () => SYSTEM_WS_COMMANDS, TOOLS_ITEMS_CATALOG: () => TOOLS_ITEMS_CATALOG, WORLD_CLOCK_ZONES_CATALOG: () => WORLD_CLOCK_ZONES_CATALOG, MAX_DOCK_ITEMS: () => MAX_DOCK_ITEMS, MAX_PINNED_ITEMS: () => MAX_PINNED_ITEMS, SHORTCUT_LABEL_MAX: () => SHORTCUT_LABEL_MAX, NATIVE_DOCK_APP_TOKENS: () => NATIVE_DOCK_APP_TOKENS, NATIVE_DOCK_CONFIG_APP_MAP: () => NATIVE_DOCK_CONFIG_APP_MAP, START_SCREEN_CONFIG_APP_MAP: () => START_SCREEN_CONFIG_APP_MAP, MAX_WALLPAPER_UPLOAD_BYTES: () => MAX_WALLPAPER_UPLOAD_BYTES, PHOTO_LIBRARY_PAGE_SIZE: () => PHOTO_LIBRARY_PAGE_SIZE, VIRTUAL_COLLECTION_ALL: () => VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS: () => VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UPLOADS: () => VIRTUAL_COLLECTION_UPLOADS, VIRTUAL_COLLECTION_UNCATEGORIZED: () => VIRTUAL_COLLECTION_UNCATEGORIZED, DEVICE_VIEW_SLUGS: () => DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS: () => SYSTEM_VIEW_SLUGS, START_SCREEN_OPTIONS: () => START_SCREEN_OPTIONS, HOME_CLOCK_TAP_OPTIONS: () => HOME_CLOCK_TAP_OPTIONS, HOME_DATE_TAP_OPTIONS: () => HOME_DATE_TAP_OPTIONS, CALENDAR_LOOKAHEAD_DAYS: () => CALENDAR_LOOKAHEAD_DAYS, CALENDAR_WEEK_START_OPTIONS: () => CALENDAR_WEEK_START_OPTIONS, MAX_WORLD_CLOCKS: () => MAX_WORLD_CLOCKS, DEFAULT_ALARMS_SUMMARY: () => DEFAULT_ALARMS_SUMMARY, RETURN_TO_HOME_TIMEOUT_OPTIONS: () => RETURN_TO_HOME_TIMEOUT_OPTIONS, SECURITY_PIN_POLICIES: () => SECURITY_PIN_POLICIES, WALLPAPER_ROTATION_MINUTES: () => WALLPAPER_ROTATION_MINUTES, DEFAULT_DEVICE_GROUP_IDS: () => DEFAULT_DEVICE_GROUP_IDS, GROUP_BEHAVIOR_NON_PREF_KEYS: () => GROUP_BEHAVIOR_NON_PREF_KEYS, GROUP_DISPLAY_NON_PREF_KEYS: () => GROUP_DISPLAY_NON_PREF_KEYS, GROUP_INTERFACE_NON_PREF_KEYS: () => GROUP_INTERFACE_NON_PREF_KEYS, LABEL_ACRONYMS: () => LABEL_ACRONYMS });
 //# sourceURL=latter-studio/src/constants.ts
 });
-__latterDef("src/i18n/en-common.ts", (__exports, __req) => {
+__latterDef("src/i18n/en.ts", (__exports, __req) => {
 /**
- * Shared shell, navigation, action, status, combobox, sync, & Repairs strings (`D-061` — HA Sentence case).
+ * Canonical English Studio UI string catalog (`D-061` — Home Assistant Sentence case).
+ * Single searchable `EN_STRINGS` catalog mirrored deterministically to
+ * `custom_components/latter/studio/locales/en.json` by `build.mjs`.
  */
-const EN_COMMON_STRINGS = {
+const EN_STRINGS = {
   // Shell & navigation
   "shell.title": "Latter",
   "shell.toggle_ha_sidebar": "Toggle the Home Assistant sidebar",
@@ -979,442 +981,6 @@ const EN_COMMON_STRINGS = {
   "issue.firmware_rolled_back":
     "A firmware update failed to start; the previous firmware is running.",
   "issue.generic": "Repair: {label}.",
-};
-__latterExp(__exports, { EN_COMMON_STRINGS: () => EN_COMMON_STRINGS });
-//# sourceURL=latter-studio/src/i18n/en-common.ts
-});
-__latterDef("src/i18n/en-devices.ts", (__exports, __req) => {
-/**
- * Device-scope, Managed inventory, Wallpaper gallery, & Discovered onboarding UI strings
- * (`D-061` — Home Assistant Sentence case).
- */
-const EN_DEVICES_STRINGS = {
-  // Offline / sleeping & BLE transmitter banners (D-066)
-  "offline.device_banner_title": "Device is offline or hibernating",
-  "offline.device_sleeping_title": "Device is sleeping",
-  "offline.device_banner_body":
-    "Settings saved here are queued in Home Assistant and sync automatically when this Device wakes or reconnects. Live quick actions are unavailable while offline.",
-  "offline.ble_tx_off_title": "BLE transmitter not active ({state})",
-  "offline.ble_tx_off_body":
-    "Enable the BLE Transmitter sensor in the Home Assistant Companion App on this phone so Bluetooth proxies can detect its Area.",
-  // Device card titles & disambiguated display sections (D-066 / Q7 / Q8)
-  "card.status": "Status",
-  "card.quick_actions": "Quick actions",
-  "card.assignments": "Assignments",
-  "card.timers_alarms": "Timers & alarms",
-  "card.sensors_controls": "Sensors & controls",
-  "card.wallpapers": "Wallpapers",
-  "card.brightness": "Brightness",
-  "card.colors": "Colors",
-  "card.screensaver": "Screensaver",
-  "card.home_screen": "Home screen",
-  "card.app_dock": "App Dock",
-  "card.diagnostics": "Diagnostics",
-  "card.developer_telemetry": "Developer & telemetry",
-  "card.replace_hardware": "Replace hardware",
-  "card.replace_hardware_body":
-    "Replaced a physical board or reflashed under a new ESPHome node? Use Reconfigure on this Device entry in Home Assistant Integrations to rebind its hardware identity while keeping all shortcuts, Area rules, and settings.",
-  "card.danger_zone": "Danger zone",
-  // Device list & discovered devices (D-041 / D-066 / Q12)
-  "devices.inventory_heading": "Inventory",
-  "devices.col_device": "Device",
-  "devices.col_model": "Model",
-  "devices.col_area": "Area",
-  "devices.col_group": "Group",
-  "devices.col_status": "Status",
-  "devices.filter_aria": "Filter managed Devices by category",
-  "devices.all": "All Devices",
-  "devices.online": "Online Devices",
-  "devices.roaming": "Roaming Devices",
-  "devices.stationary": "Stationary Devices",
-  "devices.latter_displays": "Latter displays",
-  "devices.ble_tracked": "BLE-tracked Devices",
-  "devices.phones": "Phones",
-  "devices.ble_tags": "BLE tags",
-  "devices.assigned_person": "Assigned to a person",
-  "devices.updates_available": "Updates available",
-  "devices.group_prefix": "Group: {name}",
-  "devices.empty_filtered": "No Devices match this category.",
-  "devices.empty_zero_title": "No managed Devices yet",
-  "devices.empty_zero_body":
-    "Adopt discovered Latter displays, add Bluetooth tags for Area presence, or configure System Area sensor fusion.",
-  "devices.open_discovered": "Open Discovered",
-  "devices.open_area_presence": "Configure Area presence",
-  "discovered.latter_devices": "Latter Devices",
-  "discovered.bluetooth_devices": "Bluetooth devices",
-  "discovered.empty_latter":
-    "No unconfigured Latter Devices found in Home Assistant. Newly added ESPHome Devices running Latter firmware appear here automatically.",
-  "discovered.web_installer": "Open Web Installer",
-  "discovered.getting_started": "Getting started guide",
-  "discovered.ignored_count": "Ignored ({count})",
-  "discovered.default_latter_title": "Latter Device",
-  "discovered.default_latter_model": "Latter ESPHome Device",
-  "discovered.default_ble_kind": "BLE device",
-  "discovered.meta_node": "Node: {node}",
-  "discovered.meta_area": "Area: {area}",
-  "discovered.meta_nearest_area": "Nearest Area: {area}",
-  "discovered.group_select_aria": "Device group for {title}",
-  "discovered.auto_group_option": "Auto ({group})",
-  "discovered.person_select_aria": "Assigned person for {title}",
-  "discovered.ignore_aria": "Ignore {title}",
-  "discovered.restore_aria": "Restore {title}",
-  "discovered.search_ble_aria": "Search discovered Bluetooth devices",
-  "discovered.search_ble_placeholder": "Search name, address, or Area…",
-  "discovered.filter_ble_aria": "Filter discovered Bluetooth devices",
-  "discovered.all_ble": "All Bluetooth devices",
-  "discovered.phones_trackers": "Phones & trackers",
-  "discovered.named_ble": "Named BLE advertisements",
-  "discovered.sort_ble_aria": "Sort discovered Bluetooth devices",
-  "discovered.sort_name": "Sort: Name (A–Z)",
-  "discovered.sort_rssi": "Sort: Signal strength",
-  "discovered.sort_area": "Sort: Nearest Area",
-  "discovered.pause_list": "Pause list",
-  "discovered.resume_list": "Resume list",
-  "discovered.paused_hint":
-    "List updates paused ({count} shown). Select Resume list to refresh.",
-  "discovered.empty_ble_filtered": "No Bluetooth devices match this filter.",
-  "discovered.empty_ble_none": "No unadopted Bluetooth devices nearby.",
-  "discovered.adopted_toast": "Adopted \"{title}\"",
-  "discovered.ignored_toast": "Ignored \"{title}\"",
-  "discovered.restored_toast": "Restored \"{title}\" to discovered list",
-  // Wallpaper gallery & multipart upload (D-25 / Q5)
-  "wp_gallery.builtin": "Built-in",
-  "wp_gallery.uploading": "Uploading…",
-  "wp_gallery.upload_progress_aria": "Wallpaper upload progress",
-  // Device -> Overview (D-003 / D-066 / F-01)
-  "dev_overview.waiting_for_reading": "Waiting for reading",
-  "dev_overview.tile_area": "Area",
-  "dev_overview.tile_current_area": "Current Area",
-  "dev_overview.tile_closest_proxy": "Closest proxy",
-  "dev_overview.ble_presence_meta": "BLE presence",
-  "dev_overview.tile_battery": "Battery",
-  "dev_overview.tile_power": "Power",
-  "dev_overview.tile_ble_signal": "BLE signal",
-  "dev_overview.tile_wifi_signal": "Wi-Fi signal",
-  "dev_overview.tile_ble_target": "BLE target",
-  "dev_overview.ble_address_meta": "Bluetooth address",
-  "dev_overview.tile_firmware": "Firmware",
-  "dev_overview.qa_find_my": "Find my Device",
-  "dev_overview.qa_trigger_va": "Trigger voice assistant",
-  "dev_overview.qa_activate_screensaver": "Activate screensaver",
-  "dev_overview.qa_exit_screensaver": "Exit screensaver",
-  "dev_overview.qa_restart": "Restart Device",
-  "dev_overview.restart_device": "Restart Device",
-  "dev_overview.restart_device_desc":
-    "Reboots this Device; Wi-Fi and active sessions reconnect automatically.",
-  "dev_overview.restart_btn": "Restart",
-  "dev_overview.empty_quick_actions": "No live actions reported by this Device.",
-  "dev_overview.device_group_label": "Device group",
-  "dev_overview.device_group_custom_desc":
-    "Uses individual operational settings; save as a reusable group or pick an existing preset.",
-  "dev_overview.device_group_preset_desc":
-    "Applies shared operational settings (power, wake word, brightness, BLE).",
-  "dev_overview.device_category_label": "Device category",
-  "dev_overview.device_category_desc":
-    "Classifies this Bluetooth Device under Phones or BLE tags across Managed devices.",
-  "dev_overview.auto_category_option": "Auto ({category})",
-  "dev_overview.assigned_person_label": "Assigned person",
-  "dev_overview.assigned_person_desc":
-    "Links this Device's Area presence to a Home Assistant person entity.",
-  "dev_overview.unassigned_option": "— Unassigned —",
-  "dev_overview.remote_group_label": "Remote control scope",
-  "dev_overview.remote_group_desc":
-    "Controls which TV and AV remotes appear in the Remote app.",
-  "dev_overview.remote_follow_area": "Follow Area",
-  "dev_overview.remote_all_system": "All System remotes",
-  "dev_overview.ringing_alert_text": "An alarm or timer is ringing on this Device.",
-  "dev_overview.dismissed_ringing_toast": "Dismissed ringing alert",
-  "dev_overview.active_timer_label": "Active timer",
-  "dev_overview.no_active_timer": "No active timer",
-  "dev_overview.running": "Running",
-  "dev_overview.paused": "Paused",
-  "dev_overview.cancel_timer": "Cancel timer",
-  "dev_overview.cancelled_timer_toast": "Cancelled timer",
-  "dev_overview.stopwatch_label": "Stopwatch",
-  "dev_overview.not_running": "Not running",
-  "dev_overview.reset_stopwatch": "Reset stopwatch",
-  "dev_overview.reset_stopwatch_toast": "Reset stopwatch",
-  "dev_overview.alarms_label": "Alarms",
-  "dev_overview.alarms_enabled_summary": "{count} enabled • {nextTime}",
-  "dev_overview.alarms_desc":
-    "Syncs 2-way with on-device alarm edits (1-minute precision).",
-  "dev_overview.alarms_group_aria": "Device alarms",
-  "dev_overview.alarm_time_label": "Alarm {index} time",
-  "dev_overview.alarm_schedule_label": "Alarm {index} schedule",
-  "dev_overview.alarm_rec_daily": "Daily",
-  "dev_overview.alarm_rec_weekdays": "Weekdays",
-  "dev_overview.alarm_rec_weekends": "Weekends",
-  "dev_overview.alarm_rec_once": "Once",
-  // Device -> Display (D-034 / D-069 / D-070)
-  "dev_display.card_voice_assistant": "Voice assistant",
-  "dev_display.bedtime_brightness_override_note":
-    "Bedtime mode is currently active and overriding screen brightness.",
-  "dev_display.bright_brightness_label": "Bright brightness",
-  "dev_display.dark_brightness_label": "Dark brightness",
-  "dev_display.ambient_live_status": "{area} · {lux} lx ({level}% ambient)",
-  "dev_display.ambient_fallback_status":
-    "No ambient light sensor in {area} — using Sun synchronized fallback.",
-  "dev_display.ambient_unassigned_status":
-    "Locate or assign this Device to an Area to use ambient light.",
-  "dev_display.screensaver_preview_desc":
-    "Starts the screensaver on this Device immediately.",
-  "dev_display.screensaver_exit_desc":
-    "Wakes the display and exits the active screensaver immediately.",
-  "dev_display.preview_btn": "Preview",
-  "dev_display.exit_screensaver_btn": "Exit screensaver",
-  "dev_display.screensaver_photo_clock_desc":
-    "Draws a compact subtle clock in the corner while displaying photos.",
-  "dev_display.screensaver_pool_label": "Photo frame photos",
-  "dev_display.screensaver_pool_empty": "No photos selected — choose photos or a collection.",
-  "dev_display.screensaver_choose_photos": "Choose photos…",
-  "dev_display.screensaver_shuffle_desc":
-    "Randomizes photo order instead of advancing alphabetically.",
-  "dev_display.custom_color_label": "Custom color",
-  "dev_display.custom_color_desc": "Used when Color profile is set to Custom.",
-  "dev_display.current_color_option": "Current ({hex})",
-  "dev_display.add_color_btn": "Add color",
-  "dev_display.wallpapers_subtitle":
-    "Shared photo library and collections cropped automatically for this display.",
-  "dev_display.choose_wallpaper": "Choose wallpaper…",
-  "dev_display.manage_photo_library": "Manage photo library",
-  "dev_display.pool_single_meta": "Single photo • {name}",
-  "dev_display.pool_collection_meta": "Collection: {collection} ({count} photos)",
-  "dev_display.pool_collection_one_meta": "Collection: {collection} (1 photo)",
-  "dev_display.pool_custom_meta": "Custom selection ({count} photos)",
-  "dev_display.pool_custom_one_meta": "Custom selection (1 photo)",
-  "dev_display.pool_off_meta": "Off — no photos selected.",
-  "dev_display.wp_override_home_and_weather":
-    "Live weather background is active on Home and Sky & weather — wallpapers appear on other screens.",
-  "dev_display.wp_override_home_only":
-    "Weather background is enabled on Home — wallpapers appear across other screens.",
-  "dev_display.wp_override_weather_only":
-    "Live weather background is active in Sky & weather — wallpapers appear on Home and other screens.",
-  "dev_display.open_interface": "Open Interface",
-  "dev_display.turn_off_wallpaper": "Turn off wallpaper",
-  "dev_display.rotation_interval_label": "Rotation interval",
-  "dev_display.rotation_interval_aria": "Wallpaper rotation interval",
-  "dev_display.rot_0": "Do not rotate",
-  "dev_display.rot_5": "Every 5 minutes",
-  "dev_display.rot_15": "Every 15 minutes",
-  "dev_display.rot_30": "Every 30 minutes",
-  "dev_display.rot_60": "Every hour",
-  "dev_display.rot_360": "Every 6 hours",
-  "dev_display.rot_1440": "Once a day",
-  // Device -> Interface (D-053 / D-064 / D-069 / U4)
-  "dev_interface.enable_home_desc":
-    "Provides the Home screen and App Dock. Turn off to lock this Device to a single start screen app.",
-  "dev_interface.start_screen_multi_desc":
-    "Choose the screen shown on startup. Swipe up from the bottom to return to Home.",
-  "dev_interface.start_screen_single_desc":
-    "Single-app screen shown at all times while the Home screen is disabled.",
-  "dev_interface.time_format_desc":
-    "Applies 12-hour or 24-hour time across Home, alarms, calendar, and schedules.",
-  "dev_interface.home_clock_tap_desc":
-    "Choose whether tapping the clock readout on Home opens the Time app or the standalone clock face.",
-  "dev_interface.clock_face_desc":
-    "Visual style for the standalone clock face screen.",
-  "dev_interface.home_date_tap_desc":
-    "Choose whether tapping the date readout on Home opens Day view or Overview in the Calendar app.",
-  "dev_interface.return_timeout_desc":
-    "Resets idle screens back to Home unless media is playing or a live activity is active.",
-  "dev_interface.wake_greeting_desc":
-    "Shows a brief morning, afternoon, or evening greeting after waking from standby.",
-  "dev_interface.weather_bg_desc":
-    "Replaces the Home screen backdrop with a live sky matching current conditions.",
-  "dev_interface.sun_moon_label": "Sun & Moon",
-  "dev_interface.sun_moon_desc":
-    "Choose which sky bodies appear on the live weather background.",
-  "dev_interface.activity_card_desc":
-    "Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.",
-  "dev_interface.activity_sources_desc":
-    "Choose and reorder which live items appear in the Activity card.",
-  "dev_interface.activity_src_calendar": "Calendar",
-  "dev_interface.activity_src_music_queue": "Music queue",
-  "dev_interface.activity_src_stopwatch": "Stopwatch",
-  "dev_interface.activity_src_alarms": "Alarms",
-  "dev_interface.activity_src_timers": "Timers",
-  "dev_interface.app_dock_desc":
-    "Toggle, drag to reorder, and configure apps on the App Dock, or add custom subpage and Home Assistant entity shortcuts. Pinned hides automatically when empty.",
-  "dev_interface.active_dock_aria": "Active on App Dock",
-  "dev_interface.show_on_dock_aria": "Show {title} on App Dock",
-  "dev_interface.settings_title": "Settings",
-  "dev_interface.settings_locked_meta": "Always shown last on the App Dock",
-  "dev_interface.hidden_from_dock": "Hidden from dock",
-  "dev_interface.pinned_empty_meta": "Empty — auto-hidden on dock",
-  "dev_interface.pinned_count_meta": "{count} {shortcutWord} • {pages} {pageWord}",
-  "dev_interface.word_shortcut_one": "shortcut",
-  "dev_interface.word_shortcut_many": "shortcuts",
-  "dev_interface.word_page_one": "page",
-  "dev_interface.word_page_many": "pages",
-  "dev_interface.music_meta": "Art: {art} • Albums: {albums}",
-  "dev_interface.cameras_empty_meta": "No cameras configured",
-  "dev_interface.cameras_meta_one": "{view} • {framing} • 1 camera",
-  "dev_interface.cameras_meta_many": "{view} • {framing} • {count} cameras",
-  "dev_interface.categories_enabled_one": "1 category enabled",
-  "dev_interface.categories_enabled_many": "{count} categories enabled",
-  "dev_interface.remote_follow_area": "Follow the active Area",
-  "dev_interface.remote_all": "All System remotes",
-  "dev_interface.weather_meta_live_sky": "Live weather sky",
-  "dev_interface.weather_meta_wallpaper": "Uses device wallpaper",
-  "dev_interface.time_utc_world_one": "UTC + 1 world clock",
-  "dev_interface.time_utc_world_many": "UTC + {count} world clocks",
-  "dev_interface.time_world_one": "1 world clock",
-  "dev_interface.time_world_many": "{count} world clocks",
-  "dev_interface.time_local_utc": "Local time + UTC",
-  "dev_interface.time_local": "Local time",
-  "dev_interface.clock_24h": "24-hour",
-  "dev_interface.clock_12h": "12-hour",
-  "dev_interface.calendar_meta": "{days}-day lookahead • Starts {weekday}",
-  "dev_interface.tools_enabled_one": "1 tool enabled",
-  "dev_interface.tools_enabled_many": "{count} tools enabled",
-  "dev_interface.games_enabled_one": "1 game enabled",
-  "dev_interface.games_enabled_many": "{count} games enabled",
-  "dev_interface.custom_route_meta": "Custom • {target}",
-  "dev_interface.custom_entity_confirm_meta":
-    "Custom • {action} • Confirm • {target}",
-  "dev_interface.custom_entity_tap_meta": "Custom • {action} • 1-tap • {target}",
-  // Device -> Audio (D-008 / D-031 / D-066 / Q8)
-  "dev_audio.card_voice_wake": "Voice assistant & wake word",
-  "dev_audio.card_sound_playback": "Sound & playback",
-  "dev_audio.vfm_desc":
-    "Updates this roaming Device's Home Assistant Area when BLE presence settles in a new Area, so Area-less voice commands target where you are.",
-  "dev_audio.vfm_delay_label": "Voice Follows Me delay",
-  "dev_audio.vfm_delay_desc":
-    "How long a BLE-detected Area stays stable before moving the Device (3 to 60 seconds).",
-  "dev_audio.ww_sensitivity_summary": "Wake word sensitivity (per model)",
-  "dev_audio.default_speaker_label": "Default speaker",
-  "dev_audio.default_speaker_desc":
-    "Primary speaker controlled from Music and Home when this Device starts up.",
-  "dev_audio.default_speaker_auto": "— Automatic (built-in or Area) —",
-  "dev_audio.ma_player_label": "Music Assistant player",
-  "dev_audio.ma_player_unmatched_desc":
-    "Automatic match did not find {entity} in Music Assistant. Choose this Device's player for library playback, queues, and lyrics.",
-  "dev_audio.ma_player_manual_desc":
-    "Linked manually ({entity} was not used). Clear to return to automatic matching.",
-  "dev_audio.ma_player_fallback_target": "this Device's player",
-  "dev_audio.ma_player_auto": "— Automatic match —",
-  "dev_audio.area_handoff_desc":
-    "Transfers active Music Assistant playback when this Device moves to or selects another Area.",
-  // Device -> Power (D-027 / D-068)
-  "dev_power.card_sleep_wake": "Sleep & wake",
-  "dev_power.card_bedtime": "Bedtime mode",
-  "dev_power.card_bedtime_subtitle":
-    "Turns off or dims the display overnight and silences non-critical notification chimes.",
-  "dev_power.card_power_battery": "Power & battery",
-  "dev_power.empty": "No sleep or battery entities reported by this Device.",
-  // Device -> Presence (D-032 / D-066 / Q8)
-  "dev_presence.card_area_tracking": "Area tracking",
-  "dev_presence.card_ble_identity": "BLE identity",
-  "dev_presence.track_ble_label": "Track Area with BLE proxies",
-  "dev_presence.track_ble_desc":
-    "Uses Home Assistant Area-assigned Bluetooth proxies to locate this Device automatically. Turn off to pin it to one assigned Area.",
-  "dev_presence.auto_switch_desc":
-    "Switches the Device's active Area controls automatically when BLE detects a move.",
-  "dev_presence.fallback_area_label": "Fallback Area",
-  "dev_presence.fallback_area_desc":
-    "Default Home Assistant Area when no Bluetooth proxy is in range.",
-  "dev_presence.fallback_area_auto": "— Automatic (ESPHome Area) —",
-  "dev_presence.assigned_area_label": "Assigned Area",
-  "dev_presence.assigned_area_desc":
-    "Pins this Device's Area controls and Home Assistant Device Area to one location.",
-  "dev_presence.target_addr_label": "BLE target address or entity",
-  "dev_presence.target_addr_placeholder":
-    "AA:BB:CC:DD:EE:FF or device_tracker.phone_ble",
-  "dev_presence.target_addr_help":
-    "Leave blank on Latter displays to track their built-in BLE beacon MAC automatically.",
-  "dev_presence.ref_power_label": "Reference power (1 meter)",
-  "dev_presence.ref_power_placeholder_detected": "Auto ({dbm} dBm)",
-  "dev_presence.ref_power_help":
-    "Leave blank to use auto-detected beacon power in dBm, or enter -90 to -30 dBm to calibrate this Device.",
-  "dev_presence.companion_low_title": "Companion App low-power beacon detected",
-  "dev_presence.companion_low_body":
-    "This phone is advertising at {txPower} power{modeSuffix}.{refSuffix} Setting Transmit Power to Medium or High and Advertise Mode to Balanced in the Home Assistant Companion App improves multi-Area accuracy through walls.",
-  "dev_presence.companion_mode_suffix": " ({mode} mode)",
-  "dev_presence.companion_ref_suffix":
-    " Latter automatically compensates its 1 m reference power ({dbm} dBm).",
-  "dev_presence.companion_default_power": "default",
-  "dev_presence.ibeacon_uuid_label": "iBeacon UUID",
-  "dev_presence.ibeacon_uuid_placeholder": "Generated automatically per System",
-  // Device -> Tools (D-027 / D-064 / D-066 / Q8 / Q12)
-  "dev_tools.ble_signal": "BLE signal",
-  "dev_tools.ble_target": "BLE target",
-  "dev_tools.model": "Model",
-  "dev_tools.esphome_node": "ESPHome node",
-  "dev_tools.firmware_version": "Firmware version",
-  "dev_tools.latter_sdk": "Latter SDK",
-  "dev_tools.wifi_signal": "Wi-Fi signal",
-  "dev_tools.ip_address": "IP address",
-  "dev_tools.mac_address": "MAC address",
-  "dev_tools.diagnostics_file_label": "Diagnostics file",
-  "dev_tools.diagnostics_file_desc":
-    "Downloads redacted Home Assistant diagnostics for troubleshooting.",
-  "dev_tools.backup_row_label": "Device backup",
-  "dev_tools.backup_row_desc":
-    "Downloads this Device's Latter configuration and settings as JSON.",
-  "dev_tools.perimeter_subtitle":
-    "Governs unlocking doors, disarming alarms, and opening garage or gate covers from this Device.",
-  "dev_tools.pin_policy_desc_prefix":
-    "Auto requires a PIN on stationary wall panels when configured and allows roaming personal Devices. Effective policy:",
-  "dev_tools.security_pin_label": "Security PIN",
-  "dev_tools.security_pin_desc":
-    "Write-only 4 to 12 digit numeric PIN verified by Home Assistant when the on-device keypad prompts. Never shown again after saving.",
-  "dev_tools.pin_input_aria": "New security PIN (4 to 12 digits)",
-  "dev_tools.pin_placeholder_replace": "Enter new PIN to replace…",
-  "dev_tools.pin_placeholder_new": "4 to 12 digits",
-  "dev_tools.save_pin": "Save PIN",
-  "dev_tools.clear_pin": "Clear PIN",
-  "dev_tools.reconfigure_in_ha": "Reconfigure in Home Assistant",
-  "dev_tools.reset_defaults_label": "Reset to defaults",
-  "dev_tools.reset_defaults_desc":
-    "Resets on-device preferences and/or Latter settings while keeping Wi-Fi and Home Assistant pairing.",
-  "dev_tools.remove_device_label": "Remove Device",
-  "dev_tools.remove_device_desc":
-    "Removes this Device from Latter. Your ESPHome device stays in Home Assistant.",
-  "dev_tools.telem_uptime": "Session uptime",
-  "dev_tools.profiler_label": "Telemetry profiler",
-  "dev_tools.profiler_desc":
-    "Streams frame and subsystem timing logs over ESPHome logs for troubleshooting.",
-  "dev_tools.refresh_telemetry_label": "Runtime telemetry",
-  "dev_tools.refresh_telemetry_desc":
-    "Requests an immediate RAM, PSRAM, and Wi-Fi link snapshot from this Device.",
-  "dev_tools.refresh_telemetry_toast": "Requested telemetry snapshot",
-  "dev_tools.telem_int_ram": "Internal RAM (free / min / largest)",
-  "dev_tools.telem_psram_min": "PSRAM low-water mark",
-  "dev_tools.telem_ble_beacon": "BLE beacon radio",
-  "dev_tools.telem_last_reset": "Last reset",
-  "dev_tools.telem_wifi_disc": "Wi-Fi disconnects",
-  "dev_tools.telem_beacon_timeouts": " ({count} beacon timeouts)",
-  "dev_tools.telem_wifi_avg_min": "Wi-Fi avg / min",
-  "dev_tools.telem_ha_sessions": "Home Assistant sessions",
-  "dev_tools.telem_max_gap": " (max gap {duration})",
-  "dev_tools.telem_light_sleep": "Light sleep duty",
-  "dev_tools.telem_cycles": " ({count} cycles)",
-  "dev_tools.telem_nvs_writes": "NVS flash writes",
-  "dev_tools.telem_nvs_value":
-    "{writes} writes ({erases} erases, {maxMs} ms max)",
-  "dev_tools.telem_board": "Hardware board",
-  "dev_tools.telem_processor": "Processor & PSRAM",
-  "dev_tools.telem_psram_suffix": " • {mb} MB PSRAM",
-  "dev_tools.telem_display_panel": "Display panel",
-  "dev_tools.telem_headless": "Headless",
-  "dev_tools.telem_traits": "Hardware traits",
-  "dev_tools.trait_touch": "Touch",
-  "dev_tools.trait_mic": "Mic",
-  "dev_tools.trait_speaker": "Speaker",
-  "dev_tools.trait_audio": "Audio",
-  "dev_tools.trait_imu": "IMU",
-  "dev_tools.trait_battery": "Battery",
-  "dev_tools.trait_wearable": "Wearable",
-  "dev_tools.trait_stationary": "Stationary",
-};
-__latterExp(__exports, { EN_DEVICES_STRINGS: () => EN_DEVICES_STRINGS });
-//# sourceURL=latter-studio/src/i18n/en-devices.ts
-});
-__latterDef("src/i18n/en-system.ts", (__exports, __req) => {
-/**
- * System-scope & modal dialog UI strings (`D-061` — Home Assistant Sentence case).
- */
-const EN_SYSTEM_STRINGS = {
   // System card titles
   "card.perimeter_security": "Perimeter security",
   "card.perimeter_security_signing": "Perimeter security & signing",
@@ -2280,23 +1846,423 @@ const EN_SYSTEM_STRINGS = {
   "confirm.apply_batch.body":
     "Pushes {settingCount} staged setting changes to {count} target Devices.",
   "confirm.apply_batch.confirm": "Apply changes",
-};
-__latterExp(__exports, { EN_SYSTEM_STRINGS: () => EN_SYSTEM_STRINGS });
-//# sourceURL=latter-studio/src/i18n/en-system.ts
-});
-__latterDef("src/i18n/en.ts", (__exports, __req) => {
-const { EN_COMMON_STRINGS } = __req("src/i18n/en-common.ts");
-const { EN_DEVICES_STRINGS } = __req("src/i18n/en-devices.ts");
-const { EN_SYSTEM_STRINGS } = __req("src/i18n/en-system.ts");
-/**
- * Canonical English Studio UI string catalog (`D-061` — Home Assistant Sentence case).
- * Composed from disjoint slices (`en-common.ts`, `en-system.ts`, `en-devices.ts`) and mirrored
- * deterministically to `custom_components/latter/studio/locales/en.json` by `build.mjs`.
- */
-const EN_STRINGS = {
-  ...EN_COMMON_STRINGS,
-  ...EN_SYSTEM_STRINGS,
-  ...EN_DEVICES_STRINGS,
+  // Offline / sleeping & BLE transmitter banners (D-066)
+  "offline.device_banner_title": "Device is offline or hibernating",
+  "offline.device_sleeping_title": "Device is sleeping",
+  "offline.device_banner_body":
+    "Settings saved here are queued in Home Assistant and sync automatically when this Device wakes or reconnects. Live quick actions are unavailable while offline.",
+  "offline.ble_tx_off_title": "BLE transmitter not active ({state})",
+  "offline.ble_tx_off_body":
+    "Enable the BLE Transmitter sensor in the Home Assistant Companion App on this phone so Bluetooth proxies can detect its Area.",
+  // Device card titles & disambiguated display sections (D-066 / Q7 / Q8)
+  "card.status": "Status",
+  "card.quick_actions": "Quick actions",
+  "card.assignments": "Assignments",
+  "card.timers_alarms": "Timers & alarms",
+  "card.sensors_controls": "Sensors & controls",
+  "card.wallpapers": "Wallpapers",
+  "card.brightness": "Brightness",
+  "card.colors": "Colors",
+  "card.screensaver": "Screensaver",
+  "card.home_screen": "Home screen",
+  "card.app_dock": "App Dock",
+  "card.diagnostics": "Diagnostics",
+  "card.developer_telemetry": "Developer & telemetry",
+  "card.replace_hardware": "Replace hardware",
+  "card.replace_hardware_body":
+    "Replaced a physical board or reflashed under a new ESPHome node? Use Reconfigure on this Device entry in Home Assistant Integrations to rebind its hardware identity while keeping all shortcuts, Area rules, and settings.",
+  "card.danger_zone": "Danger zone",
+  // Device list & discovered devices (D-041 / D-066 / Q12)
+  "devices.inventory_heading": "Inventory",
+  "devices.col_device": "Device",
+  "devices.col_model": "Model",
+  "devices.col_area": "Area",
+  "devices.col_group": "Group",
+  "devices.col_status": "Status",
+  "devices.filter_aria": "Filter managed Devices by category",
+  "devices.all": "All Devices",
+  "devices.online": "Online Devices",
+  "devices.roaming": "Roaming Devices",
+  "devices.stationary": "Stationary Devices",
+  "devices.latter_displays": "Latter displays",
+  "devices.ble_tracked": "BLE-tracked Devices",
+  "devices.phones": "Phones",
+  "devices.ble_tags": "BLE tags",
+  "devices.assigned_person": "Assigned to a person",
+  "devices.updates_available": "Updates available",
+  "devices.group_prefix": "Group: {name}",
+  "devices.empty_filtered": "No Devices match this category.",
+  "devices.empty_zero_title": "No managed Devices yet",
+  "devices.empty_zero_body":
+    "Adopt discovered Latter displays, add Bluetooth tags for Area presence, or configure System Area sensor fusion.",
+  "devices.open_discovered": "Open Discovered",
+  "devices.open_area_presence": "Configure Area presence",
+  "discovered.latter_devices": "Latter Devices",
+  "discovered.bluetooth_devices": "Bluetooth devices",
+  "discovered.empty_latter":
+    "No unconfigured Latter Devices found in Home Assistant. Newly added ESPHome Devices running Latter firmware appear here automatically.",
+  "discovered.web_installer": "Open Web Installer",
+  "discovered.getting_started": "Getting started guide",
+  "discovered.ignored_count": "Ignored ({count})",
+  "discovered.default_latter_title": "Latter Device",
+  "discovered.default_latter_model": "Latter ESPHome Device",
+  "discovered.default_ble_kind": "BLE device",
+  "discovered.meta_node": "Node: {node}",
+  "discovered.meta_area": "Area: {area}",
+  "discovered.meta_nearest_area": "Nearest Area: {area}",
+  "discovered.group_select_aria": "Device group for {title}",
+  "discovered.auto_group_option": "Auto ({group})",
+  "discovered.person_select_aria": "Assigned person for {title}",
+  "discovered.ignore_aria": "Ignore {title}",
+  "discovered.restore_aria": "Restore {title}",
+  "discovered.search_ble_aria": "Search discovered Bluetooth devices",
+  "discovered.search_ble_placeholder": "Search name, address, or Area…",
+  "discovered.filter_ble_aria": "Filter discovered Bluetooth devices",
+  "discovered.all_ble": "All Bluetooth devices",
+  "discovered.phones_trackers": "Phones & trackers",
+  "discovered.named_ble": "Named BLE advertisements",
+  "discovered.sort_ble_aria": "Sort discovered Bluetooth devices",
+  "discovered.sort_name": "Sort: Name (A–Z)",
+  "discovered.sort_rssi": "Sort: Signal strength",
+  "discovered.sort_area": "Sort: Nearest Area",
+  "discovered.pause_list": "Pause list",
+  "discovered.resume_list": "Resume list",
+  "discovered.paused_hint":
+    "List updates paused ({count} shown). Select Resume list to refresh.",
+  "discovered.empty_ble_filtered": "No Bluetooth devices match this filter.",
+  "discovered.empty_ble_none": "No unadopted Bluetooth devices nearby.",
+  "discovered.adopted_toast": "Adopted \"{title}\"",
+  "discovered.ignored_toast": "Ignored \"{title}\"",
+  "discovered.restored_toast": "Restored \"{title}\" to discovered list",
+  // Wallpaper gallery & multipart upload (D-25 / Q5)
+  "wp_gallery.builtin": "Built-in",
+  "wp_gallery.uploading": "Uploading…",
+  "wp_gallery.upload_progress_aria": "Wallpaper upload progress",
+  // Device -> Overview (D-003 / D-066 / F-01)
+  "dev_overview.waiting_for_reading": "Waiting for reading",
+  "dev_overview.tile_area": "Area",
+  "dev_overview.tile_current_area": "Current Area",
+  "dev_overview.tile_closest_proxy": "Closest proxy",
+  "dev_overview.ble_presence_meta": "BLE presence",
+  "dev_overview.tile_battery": "Battery",
+  "dev_overview.tile_power": "Power",
+  "dev_overview.tile_ble_signal": "BLE signal",
+  "dev_overview.tile_wifi_signal": "Wi-Fi signal",
+  "dev_overview.tile_ble_target": "BLE target",
+  "dev_overview.ble_address_meta": "Bluetooth address",
+  "dev_overview.tile_firmware": "Firmware",
+  "dev_overview.qa_find_my": "Find my Device",
+  "dev_overview.qa_trigger_va": "Trigger voice assistant",
+  "dev_overview.qa_activate_screensaver": "Activate screensaver",
+  "dev_overview.qa_exit_screensaver": "Exit screensaver",
+  "dev_overview.qa_restart": "Restart Device",
+  "dev_overview.restart_device": "Restart Device",
+  "dev_overview.restart_device_desc":
+    "Reboots this Device; Wi-Fi and active sessions reconnect automatically.",
+  "dev_overview.restart_btn": "Restart",
+  "dev_overview.empty_quick_actions": "No live actions reported by this Device.",
+  "dev_overview.device_group_label": "Device group",
+  "dev_overview.device_group_custom_desc":
+    "Uses individual operational settings; save as a reusable group or pick an existing preset.",
+  "dev_overview.device_group_preset_desc":
+    "Applies shared operational settings (power, wake word, brightness, BLE).",
+  "dev_overview.device_category_label": "Device category",
+  "dev_overview.device_category_desc":
+    "Classifies this Bluetooth Device under Phones or BLE tags across Managed devices.",
+  "dev_overview.auto_category_option": "Auto ({category})",
+  "dev_overview.assigned_person_label": "Assigned person",
+  "dev_overview.assigned_person_desc":
+    "Links this Device's Area presence to a Home Assistant person entity.",
+  "dev_overview.unassigned_option": "— Unassigned —",
+  "dev_overview.remote_group_label": "Remote control scope",
+  "dev_overview.remote_group_desc":
+    "Controls which TV and AV remotes appear in the Remote app.",
+  "dev_overview.remote_follow_area": "Follow Area",
+  "dev_overview.remote_all_system": "All System remotes",
+  "dev_overview.ringing_alert_text": "An alarm or timer is ringing on this Device.",
+  "dev_overview.dismissed_ringing_toast": "Dismissed ringing alert",
+  "dev_overview.active_timer_label": "Active timer",
+  "dev_overview.no_active_timer": "No active timer",
+  "dev_overview.running": "Running",
+  "dev_overview.paused": "Paused",
+  "dev_overview.cancel_timer": "Cancel timer",
+  "dev_overview.cancelled_timer_toast": "Cancelled timer",
+  "dev_overview.stopwatch_label": "Stopwatch",
+  "dev_overview.not_running": "Not running",
+  "dev_overview.reset_stopwatch": "Reset stopwatch",
+  "dev_overview.reset_stopwatch_toast": "Reset stopwatch",
+  "dev_overview.alarms_label": "Alarms",
+  "dev_overview.alarms_enabled_summary": "{count} enabled • {nextTime}",
+  "dev_overview.alarms_desc":
+    "Syncs 2-way with on-device alarm edits (1-minute precision).",
+  "dev_overview.alarms_group_aria": "Device alarms",
+  "dev_overview.alarm_time_label": "Alarm {index} time",
+  "dev_overview.alarm_schedule_label": "Alarm {index} schedule",
+  "dev_overview.alarm_rec_daily": "Daily",
+  "dev_overview.alarm_rec_weekdays": "Weekdays",
+  "dev_overview.alarm_rec_weekends": "Weekends",
+  "dev_overview.alarm_rec_once": "Once",
+  // Device -> Display (D-034 / D-069 / D-070)
+  "dev_display.card_voice_assistant": "Voice assistant",
+  "dev_display.bedtime_brightness_override_note":
+    "Bedtime mode is currently active and overriding screen brightness.",
+  "dev_display.bright_brightness_label": "Bright brightness",
+  "dev_display.dark_brightness_label": "Dark brightness",
+  "dev_display.ambient_live_status": "{area} · {lux} lx ({level}% ambient)",
+  "dev_display.ambient_fallback_status":
+    "No ambient light sensor in {area} — using Sun synchronized fallback.",
+  "dev_display.ambient_unassigned_status":
+    "Locate or assign this Device to an Area to use ambient light.",
+  "dev_display.screensaver_preview_desc":
+    "Starts the screensaver on this Device immediately.",
+  "dev_display.screensaver_exit_desc":
+    "Wakes the display and exits the active screensaver immediately.",
+  "dev_display.preview_btn": "Preview",
+  "dev_display.exit_screensaver_btn": "Exit screensaver",
+  "dev_display.screensaver_photo_clock_desc":
+    "Draws a compact subtle clock in the corner while displaying photos.",
+  "dev_display.screensaver_pool_label": "Photo frame photos",
+  "dev_display.screensaver_pool_empty": "No photos selected — choose photos or a collection.",
+  "dev_display.screensaver_choose_photos": "Choose photos…",
+  "dev_display.screensaver_shuffle_desc":
+    "Randomizes photo order instead of advancing alphabetically.",
+  "dev_display.custom_color_label": "Custom color",
+  "dev_display.custom_color_desc": "Used when Color profile is set to Custom.",
+  "dev_display.current_color_option": "Current ({hex})",
+  "dev_display.add_color_btn": "Add color",
+  "dev_display.wallpapers_subtitle":
+    "Shared photo library and collections cropped automatically for this display.",
+  "dev_display.choose_wallpaper": "Choose wallpaper…",
+  "dev_display.manage_photo_library": "Manage photo library",
+  "dev_display.pool_single_meta": "Single photo • {name}",
+  "dev_display.pool_collection_meta": "Collection: {collection} ({count} photos)",
+  "dev_display.pool_collection_one_meta": "Collection: {collection} (1 photo)",
+  "dev_display.pool_custom_meta": "Custom selection ({count} photos)",
+  "dev_display.pool_custom_one_meta": "Custom selection (1 photo)",
+  "dev_display.pool_off_meta": "Off — no photos selected.",
+  "dev_display.wp_override_home_and_weather":
+    "Live weather background is active on Home and Sky & weather — wallpapers appear on other screens.",
+  "dev_display.wp_override_home_only":
+    "Weather background is enabled on Home — wallpapers appear across other screens.",
+  "dev_display.wp_override_weather_only":
+    "Live weather background is active in Sky & weather — wallpapers appear on Home and other screens.",
+  "dev_display.open_interface": "Open Interface",
+  "dev_display.turn_off_wallpaper": "Turn off wallpaper",
+  "dev_display.rotation_interval_label": "Rotation interval",
+  "dev_display.rotation_interval_aria": "Wallpaper rotation interval",
+  "dev_display.rot_0": "Do not rotate",
+  "dev_display.rot_5": "Every 5 minutes",
+  "dev_display.rot_15": "Every 15 minutes",
+  "dev_display.rot_30": "Every 30 minutes",
+  "dev_display.rot_60": "Every hour",
+  "dev_display.rot_360": "Every 6 hours",
+  "dev_display.rot_1440": "Once a day",
+  // Device -> Interface (D-053 / D-064 / D-069 / U4)
+  "dev_interface.enable_home_desc":
+    "Provides the Home screen and App Dock. Turn off to lock this Device to a single start screen app.",
+  "dev_interface.start_screen_multi_desc":
+    "Choose the screen shown on startup. Swipe up from the bottom to return to Home.",
+  "dev_interface.start_screen_single_desc":
+    "Single-app screen shown at all times while the Home screen is disabled.",
+  "dev_interface.time_format_desc":
+    "Applies 12-hour or 24-hour time across Home, alarms, calendar, and schedules.",
+  "dev_interface.home_clock_tap_desc":
+    "Choose whether tapping the clock readout on Home opens the Time app or the standalone clock face.",
+  "dev_interface.clock_face_desc":
+    "Visual style for the standalone clock face screen.",
+  "dev_interface.home_date_tap_desc":
+    "Choose whether tapping the date readout on Home opens Day view or Overview in the Calendar app.",
+  "dev_interface.return_timeout_desc":
+    "Resets idle screens back to Home unless media is playing or a live activity is active.",
+  "dev_interface.wake_greeting_desc":
+    "Shows a brief morning, afternoon, or evening greeting after waking from standby.",
+  "dev_interface.weather_bg_desc":
+    "Replaces the Home screen backdrop with a live sky matching current conditions.",
+  "dev_interface.sun_moon_label": "Sun & Moon",
+  "dev_interface.sun_moon_desc":
+    "Choose which sky bodies appear on the live weather background.",
+  "dev_interface.activity_card_desc":
+    "Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.",
+  "dev_interface.activity_sources_desc":
+    "Choose and reorder which live items appear in the Activity card.",
+  "dev_interface.activity_src_calendar": "Calendar",
+  "dev_interface.activity_src_music_queue": "Music queue",
+  "dev_interface.activity_src_stopwatch": "Stopwatch",
+  "dev_interface.activity_src_alarms": "Alarms",
+  "dev_interface.activity_src_timers": "Timers",
+  "dev_interface.app_dock_desc":
+    "Toggle, drag to reorder, and configure apps on the App Dock, or add custom subpage and Home Assistant entity shortcuts. Pinned hides automatically when empty.",
+  "dev_interface.active_dock_aria": "Active on App Dock",
+  "dev_interface.show_on_dock_aria": "Show {title} on App Dock",
+  "dev_interface.settings_title": "Settings",
+  "dev_interface.settings_locked_meta": "Always shown last on the App Dock",
+  "dev_interface.hidden_from_dock": "Hidden from dock",
+  "dev_interface.pinned_empty_meta": "Empty — auto-hidden on dock",
+  "dev_interface.pinned_count_meta": "{count} {shortcutWord} • {pages} {pageWord}",
+  "dev_interface.word_shortcut_one": "shortcut",
+  "dev_interface.word_shortcut_many": "shortcuts",
+  "dev_interface.word_page_one": "page",
+  "dev_interface.word_page_many": "pages",
+  "dev_interface.music_meta": "Art: {art} • Albums: {albums}",
+  "dev_interface.cameras_empty_meta": "No cameras configured",
+  "dev_interface.cameras_meta_one": "{view} • {framing} • 1 camera",
+  "dev_interface.cameras_meta_many": "{view} • {framing} • {count} cameras",
+  "dev_interface.categories_enabled_one": "1 category enabled",
+  "dev_interface.categories_enabled_many": "{count} categories enabled",
+  "dev_interface.remote_follow_area": "Follow the active Area",
+  "dev_interface.remote_all": "All System remotes",
+  "dev_interface.weather_meta_live_sky": "Live weather sky",
+  "dev_interface.weather_meta_wallpaper": "Uses device wallpaper",
+  "dev_interface.time_utc_world_one": "UTC + 1 world clock",
+  "dev_interface.time_utc_world_many": "UTC + {count} world clocks",
+  "dev_interface.time_world_one": "1 world clock",
+  "dev_interface.time_world_many": "{count} world clocks",
+  "dev_interface.time_local_utc": "Local time + UTC",
+  "dev_interface.time_local": "Local time",
+  "dev_interface.clock_24h": "24-hour",
+  "dev_interface.clock_12h": "12-hour",
+  "dev_interface.calendar_meta": "{days}-day lookahead • Starts {weekday}",
+  "dev_interface.tools_enabled_one": "1 tool enabled",
+  "dev_interface.tools_enabled_many": "{count} tools enabled",
+  "dev_interface.games_enabled_one": "1 game enabled",
+  "dev_interface.games_enabled_many": "{count} games enabled",
+  "dev_interface.custom_route_meta": "Custom • {target}",
+  "dev_interface.custom_entity_confirm_meta":
+    "Custom • {action} • Confirm • {target}",
+  "dev_interface.custom_entity_tap_meta": "Custom • {action} • 1-tap • {target}",
+  // Device -> Audio (D-008 / D-031 / D-066 / Q8)
+  "dev_audio.card_voice_wake": "Voice assistant & wake word",
+  "dev_audio.card_sound_playback": "Sound & playback",
+  "dev_audio.vfm_desc":
+    "Updates this roaming Device's Home Assistant Area when BLE presence settles in a new Area, so Area-less voice commands target where you are.",
+  "dev_audio.vfm_delay_label": "Voice Follows Me delay",
+  "dev_audio.vfm_delay_desc":
+    "How long a BLE-detected Area stays stable before moving the Device (3 to 60 seconds).",
+  "dev_audio.ww_sensitivity_summary": "Wake word sensitivity (per model)",
+  "dev_audio.default_speaker_label": "Default speaker",
+  "dev_audio.default_speaker_desc":
+    "Primary speaker controlled from Music and Home when this Device starts up.",
+  "dev_audio.default_speaker_auto": "— Automatic (built-in or Area) —",
+  "dev_audio.ma_player_label": "Music Assistant player",
+  "dev_audio.ma_player_unmatched_desc":
+    "Automatic match did not find {entity} in Music Assistant. Choose this Device's player for library playback, queues, and lyrics.",
+  "dev_audio.ma_player_manual_desc":
+    "Linked manually ({entity} was not used). Clear to return to automatic matching.",
+  "dev_audio.ma_player_fallback_target": "this Device's player",
+  "dev_audio.ma_player_auto": "— Automatic match —",
+  "dev_audio.area_handoff_desc":
+    "Transfers active Music Assistant playback when this Device moves to or selects another Area.",
+  // Device -> Power (D-027 / D-068)
+  "dev_power.card_sleep_wake": "Sleep & wake",
+  "dev_power.card_bedtime": "Bedtime mode",
+  "dev_power.card_bedtime_subtitle":
+    "Turns off or dims the display overnight and silences non-critical notification chimes.",
+  "dev_power.card_power_battery": "Power & battery",
+  "dev_power.empty": "No sleep or battery entities reported by this Device.",
+  // Device -> Presence (D-032 / D-066 / Q8)
+  "dev_presence.card_area_tracking": "Area tracking",
+  "dev_presence.card_ble_identity": "BLE identity",
+  "dev_presence.track_ble_label": "Track Area with BLE proxies",
+  "dev_presence.track_ble_desc":
+    "Uses Home Assistant Area-assigned Bluetooth proxies to locate this Device automatically. Turn off to pin it to one assigned Area.",
+  "dev_presence.auto_switch_desc":
+    "Switches the Device's active Area controls automatically when BLE detects a move.",
+  "dev_presence.fallback_area_label": "Fallback Area",
+  "dev_presence.fallback_area_desc":
+    "Default Home Assistant Area when no Bluetooth proxy is in range.",
+  "dev_presence.fallback_area_auto": "— Automatic (ESPHome Area) —",
+  "dev_presence.assigned_area_label": "Assigned Area",
+  "dev_presence.assigned_area_desc":
+    "Pins this Device's Area controls and Home Assistant Device Area to one location.",
+  "dev_presence.target_addr_label": "BLE target address or entity",
+  "dev_presence.target_addr_placeholder":
+    "AA:BB:CC:DD:EE:FF or device_tracker.phone_ble",
+  "dev_presence.target_addr_help":
+    "Leave blank on Latter displays to track their built-in BLE beacon MAC automatically.",
+  "dev_presence.ref_power_label": "Reference power (1 meter)",
+  "dev_presence.ref_power_placeholder_detected": "Auto ({dbm} dBm)",
+  "dev_presence.ref_power_help":
+    "Leave blank to use auto-detected beacon power in dBm, or enter -90 to -30 dBm to calibrate this Device.",
+  "dev_presence.companion_low_title": "Companion App low-power beacon detected",
+  "dev_presence.companion_low_body":
+    "This phone is advertising at {txPower} power{modeSuffix}.{refSuffix} Setting Transmit Power to Medium or High and Advertise Mode to Balanced in the Home Assistant Companion App improves multi-Area accuracy through walls.",
+  "dev_presence.companion_mode_suffix": " ({mode} mode)",
+  "dev_presence.companion_ref_suffix":
+    " Latter automatically compensates its 1 m reference power ({dbm} dBm).",
+  "dev_presence.companion_default_power": "default",
+  "dev_presence.ibeacon_uuid_label": "iBeacon UUID",
+  "dev_presence.ibeacon_uuid_placeholder": "Generated automatically per System",
+  // Device -> Tools (D-027 / D-064 / D-066 / Q8 / Q12)
+  "dev_tools.ble_signal": "BLE signal",
+  "dev_tools.ble_target": "BLE target",
+  "dev_tools.model": "Model",
+  "dev_tools.esphome_node": "ESPHome node",
+  "dev_tools.firmware_version": "Firmware version",
+  "dev_tools.latter_sdk": "Latter SDK",
+  "dev_tools.wifi_signal": "Wi-Fi signal",
+  "dev_tools.ip_address": "IP address",
+  "dev_tools.mac_address": "MAC address",
+  "dev_tools.diagnostics_file_label": "Diagnostics file",
+  "dev_tools.diagnostics_file_desc":
+    "Downloads redacted Home Assistant diagnostics for troubleshooting.",
+  "dev_tools.backup_row_label": "Device backup",
+  "dev_tools.backup_row_desc":
+    "Downloads this Device's Latter configuration and settings as JSON.",
+  "dev_tools.perimeter_subtitle":
+    "Governs unlocking doors, disarming alarms, and opening garage or gate covers from this Device.",
+  "dev_tools.pin_policy_desc_prefix":
+    "Auto requires a PIN on stationary wall panels when configured and allows roaming personal Devices. Effective policy:",
+  "dev_tools.security_pin_label": "Security PIN",
+  "dev_tools.security_pin_desc":
+    "Write-only 4 to 12 digit numeric PIN verified by Home Assistant when the on-device keypad prompts. Never shown again after saving.",
+  "dev_tools.pin_input_aria": "New security PIN (4 to 12 digits)",
+  "dev_tools.pin_placeholder_replace": "Enter new PIN to replace…",
+  "dev_tools.pin_placeholder_new": "4 to 12 digits",
+  "dev_tools.save_pin": "Save PIN",
+  "dev_tools.clear_pin": "Clear PIN",
+  "dev_tools.reconfigure_in_ha": "Reconfigure in Home Assistant",
+  "dev_tools.reset_defaults_label": "Reset to defaults",
+  "dev_tools.reset_defaults_desc":
+    "Resets on-device preferences and/or Latter settings while keeping Wi-Fi and Home Assistant pairing.",
+  "dev_tools.remove_device_label": "Remove Device",
+  "dev_tools.remove_device_desc":
+    "Removes this Device from Latter. Your ESPHome device stays in Home Assistant.",
+  "dev_tools.telem_uptime": "Session uptime",
+  "dev_tools.profiler_label": "Telemetry profiler",
+  "dev_tools.profiler_desc":
+    "Streams frame and subsystem timing logs over ESPHome logs for troubleshooting.",
+  "dev_tools.refresh_telemetry_label": "Runtime telemetry",
+  "dev_tools.refresh_telemetry_desc":
+    "Requests an immediate RAM, PSRAM, and Wi-Fi link snapshot from this Device.",
+  "dev_tools.refresh_telemetry_toast": "Requested telemetry snapshot",
+  "dev_tools.telem_int_ram": "Internal RAM (free / min / largest)",
+  "dev_tools.telem_psram_min": "PSRAM low-water mark",
+  "dev_tools.telem_ble_beacon": "BLE beacon radio",
+  "dev_tools.telem_last_reset": "Last reset",
+  "dev_tools.telem_wifi_disc": "Wi-Fi disconnects",
+  "dev_tools.telem_beacon_timeouts": " ({count} beacon timeouts)",
+  "dev_tools.telem_wifi_avg_min": "Wi-Fi avg / min",
+  "dev_tools.telem_ha_sessions": "Home Assistant sessions",
+  "dev_tools.telem_max_gap": " (max gap {duration})",
+  "dev_tools.telem_light_sleep": "Light sleep duty",
+  "dev_tools.telem_cycles": " ({count} cycles)",
+  "dev_tools.telem_nvs_writes": "NVS flash writes",
+  "dev_tools.telem_nvs_value":
+    "{writes} writes ({erases} erases, {maxMs} ms max)",
+  "dev_tools.telem_board": "Hardware board",
+  "dev_tools.telem_processor": "Processor & PSRAM",
+  "dev_tools.telem_psram_suffix": " • {mb} MB PSRAM",
+  "dev_tools.telem_display_panel": "Display panel",
+  "dev_tools.telem_headless": "Headless",
+  "dev_tools.telem_traits": "Hardware traits",
+  "dev_tools.trait_touch": "Touch",
+  "dev_tools.trait_mic": "Mic",
+  "dev_tools.trait_speaker": "Speaker",
+  "dev_tools.trait_audio": "Audio",
+  "dev_tools.trait_imu": "IMU",
+  "dev_tools.trait_battery": "Battery",
+  "dev_tools.trait_wearable": "Wearable",
+  "dev_tools.trait_stationary": "Stationary",
 };
 /**
  * Sentence-case labels for all 61 `DevicePrefSpec` keys + group/device setting keys.
@@ -2529,7 +2495,7 @@ function buildStudioEnLocaleCatalog() {
   }
   return out;
 }
-__latterExp(__exports, { EN_COMMON_STRINGS: () => EN_COMMON_STRINGS, EN_DEVICES_STRINGS: () => EN_DEVICES_STRINGS, EN_SYSTEM_STRINGS: () => EN_SYSTEM_STRINGS, EN_STRINGS: () => EN_STRINGS, PREF_LABELS: () => PREF_LABELS, PREF_OPTION_LABELS: () => PREF_OPTION_LABELS, buildStudioEnLocaleCatalog: () => buildStudioEnLocaleCatalog });
+__latterExp(__exports, { EN_STRINGS: () => EN_STRINGS, PREF_LABELS: () => PREF_LABELS, PREF_OPTION_LABELS: () => PREF_OPTION_LABELS, buildStudioEnLocaleCatalog: () => buildStudioEnLocaleCatalog });
 //# sourceURL=latter-studio/src/i18n/en.ts
 });
 __latterDef("src/i18n/index.ts", (__exports, __req) => {
@@ -16932,17 +16898,6 @@ function renderStudioDialogs(store) {
 __latterExp(__exports, { renderAppConfigModalBody: () => renderAppConfigModalBody, syncStudioDialogs: () => syncStudioDialogs, renderStudioDialogs: () => renderStudioDialogs });
 //# sourceURL=latter-studio/src/components/dialogs.ts
 });
-__latterDef("src/styles/base.ts", (__exports, __req) => {
-const { css } = __req("src/lib/lit.ts");
-/**
- * Latter Studio Design System Tokens, RTL Root Direction, Banners, & Reduced-Motion Reset
- * (`docs/studio-design.md` §3, `D-061`, `D-066`).
- * Literal font sizes, pixel spacing, and colors appear ONLY inside `:host` / `:host([dark])`.
- */
-const BASE_STYLES = css`:host{--studio-font-family:var(--ha-font-family-body,inherit);--studio-font-code:var(--ha-font-family-code,monospace);--studio-font-title:var(--ha-font-size-xl,20px);--studio-font-section:var(--ha-font-size-l,16px);--studio-font-body:var(--ha-font-size-m,14px);--studio-font-secondary:var(--ha-font-size-s,12px);--studio-font-caption:var(--ha-font-size-s,12px);--studio-weight-regular:var(--ha-font-weight-normal,400);--studio-weight-medium:var(--ha-font-weight-medium,500);--studio-line-height:var(--ha-line-height-normal,1.6);--studio-line-height-condensed:var(--ha-line-height-condensed,1.2);--studio-font-card-title:var(--ha-card-header-font-size,var(--ha-font-size-2xl,24px));--studio-card-title-tracking:-0.012em;--studio-space-1:var(--ha-space-1,4px);--studio-space-2:var(--ha-space-2,8px);--studio-space-3:var(--ha-space-3,12px);--studio-space-4:var(--ha-space-4,16px);--studio-space-card-top:var(--ha-space-5,20px);--studio-space-5:var(--ha-space-6,24px);--studio-radius-card:var(--ha-card-border-radius,var(--ha-border-radius-lg,12px));--studio-radius-control:var(--ha-border-radius-md,8px);--studio-radius-field:var(--ha-border-radius-sm,4px);--studio-radius-button:var(--ha-button-border-radius,var(--ha-border-radius-pill,9999px));--studio-radius-dialog:var(--ha-dialog-border-radius,var(--ha-border-radius-3xl,24px));--studio-radius-pill:var(--ha-border-radius-pill,9999px);--studio-card-border-width:var(--ha-card-border-width,1px);--studio-control-height:var(--ha-button-height,40px);--studio-control-height-compact:32px;--studio-row-min-height:56px;--studio-header-height:var(--header-height,56px);--studio-sidebar-width:244px;--studio-bg:var(--primary-background-color,#fafafa);--studio-surface:var(--ha-card-background,var(--card-background-color,#ffffff));--studio-surface-alt:var(--secondary-background-color,#f0f0f0);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#ffffff));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#212121));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#616161));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(0,0,0,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#ffffff));--studio-input-bg:var(--input-fill-color,rgba(0,0,0,0.04));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#f5f5f5));--studio-field-bg-hover:var(--ha-color-form-background-hover,var(--studio-field-bg));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(0,0,0,0.42)));--studio-popup-bg:var(--card-background-color,#ffffff);--studio-divider:var(--divider-color,rgba(0,0,0,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(0,0,0,0.12)));--studio-text:var(--primary-text-color,#212121);--studio-text-secondary:var(--secondary-text-color,#5f6368);--studio-text-disabled:var(--disabled-text-color,#9e9e9e);--studio-primary:var(--primary-color,#007299);--studio-primary-tint:rgba(var(--rgb-primary-color,0,154,199),0.12);--studio-hover:rgba(var(--rgb-primary-text-color,33,33,33),0.06);--studio-btn-accent-bg:var(--ha-color-fill-primary-loud-resting,var(--primary-color,#007da3));--studio-btn-accent-bg-hover:var(--ha-color-fill-primary-loud-hover,var(--studio-btn-accent-bg));--studio-btn-accent-text:var(--ha-color-on-primary-loud,var(--text-primary-color,#ffffff));--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#c2e6f2);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#005b78);--studio-btn-plain-hover:var(--ha-color-fill-primary-quiet-resting,var(--studio-primary-tint));--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-nav-active-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#dcf2df);--studio-chip-success-text:var(--ha-color-on-success-normal,#1b5e20);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#fff0d1);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#7a4900);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,#c62828);--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#e0e0e0));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#616161));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#d8eff7));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#005b78));--studio-switch-thumb-shadow:var(--ha-switch-thumb-box-shadow,var(--ha-box-shadow-s,0 1px 2px rgba(0,0,0,0.3)));--studio-toast-bg:var(--primary-text-color,#212121);--studio-toast-text:var(--card-background-color,#ffffff);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(140,140,140));--studio-success:var(--success-color,#2e7d32);--studio-warning:var(--warning-color,#ef6c00);--studio-error:var(--error-color,#c62828);--studio-info:var(--info-color,#0277bd);--studio-warning-tint:color-mix(in srgb,var(--studio-warning) 14%,transparent);--studio-error-tint:color-mix(in srgb,var(--studio-error) 14%,transparent);--studio-info-tint:color-mix(in srgb,var(--studio-info) 14%,transparent);--studio-card-shadow:var(--ha-card-box-shadow,none);--studio-handoff-surface:color-mix(in srgb,var(--studio-primary) 8%,var(--studio-surface));--studio-handoff-ring:inset 0 0 0 1px var(--studio-primary);--studio-card-handoff-shadow:inset 0 0 0 1px var(--studio-primary),var(--studio-card-shadow);--studio-overlay-shadow:0 8px 24px rgba(0,0,0,0.35);--studio-scrim:rgba(0,0,0,0.5);--studio-media-bg:var(--secondary-background-color,#000000);--studio-photo-badge-bg:rgba(0,0,0,0.68);--studio-photo-badge-text:#ffffff;--studio-photo-ring-selected:0 0 0 2px var(--studio-primary);--studio-dropzone-bg:color-mix(in srgb,var(--studio-primary) 6%,var(--studio-input-bg));--studio-nav-scroll-mask:linear-gradient( to right,transparent 0,#000000 12px,#000000 calc(100% - 16px),transparent 100% );display:block;min-height:100vh;min-height:100dvh;background:var(--studio-bg);color:var(--studio-text);font-family:var(--studio-font-family);font-size:var(--studio-font-body);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height);-webkit-tap-highlight-color:transparent;color-scheme:light;scrollbar-color:var(--studio-scrollbar-thumb) transparent;scrollbar-width:thin;}:host([dark]){--studio-bg:var(--primary-background-color,#111111);--studio-surface:var(--ha-card-background,var(--card-background-color,#1c1c1c));--studio-surface-alt:var(--secondary-background-color,#282828);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#1c1c1c));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#e1e1e1));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#9b9b9b));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(225,225,225,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#1c1c1c));--studio-input-bg:var(--input-fill-color,rgba(255,255,255,0.05));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#363636));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(255,255,255,0.42)));--studio-popup-bg:var(--card-background-color,#1c1c1c);--studio-divider:var(--divider-color,rgba(225,225,225,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(225,225,225,0.12)));--studio-text:var(--primary-text-color,#e1e1e1);--studio-text-secondary:var(--secondary-text-color,#a8a8a8);--studio-text-disabled:var(--disabled-text-color,#6f6f6f);--studio-primary:var(--primary-color,#38bdf8);--studio-hover:rgba(var(--rgb-primary-text-color,225,225,225),0.06);--studio-btn-accent-bg:var(--ha-color-fill-primary-loud-resting,#006a8e);--studio-btn-accent-bg-hover:var(--ha-color-fill-primary-loud-hover,#007da3);--studio-btn-accent-text:var(--ha-color-on-primary-loud,#ffffff);--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#104559);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-nav-active-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#143619);--studio-chip-success-text:var(--ha-color-on-success-normal,#81e287);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#3b2a07);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#ffd166);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,#c62828);--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#202020));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#989898));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#0b3545));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#7bd6f5));--studio-toast-bg:var(--primary-text-color,#e1e1e1);--studio-toast-text:var(--card-background-color,#1c1c1c);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(110,110,110));--studio-success:var(--success-color,#43a047);--studio-warning:var(--warning-color,#ffa600);--studio-error:var(--error-color,#db4437);--studio-info:var(--info-color,#039be5);color-scheme:dark;}*{box-sizing:border-box;}.hidden{display:none !important;}.studio-root{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--studio-bg);}h2,h3,h4,p{margin:0;}code,.mono{font-family:var(--studio-font-code);font-size:var(--studio-font-secondary);}a{color:var(--studio-primary);}.studio-rev-banner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-2) var(--studio-space-4);background:var(--studio-chip-warning-bg);border-block-end:1px solid var(--studio-warning);color:var(--studio-chip-warning-text);z-index:40;}.offline-banner,.alert.offline-banner{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-3) var(--studio-space-4);border:1px solid var(--studio-divider);border-inline-start:4px solid var(--studio-warning);border-radius:var(--studio-radius-control);background:var(--studio-surface);color:var(--studio-text);}.offline-banner-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 260px;}.offline-banner-body>span{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;scroll-behavior:auto !important;}}`;
-__latterExp(__exports, { BASE_STYLES: () => BASE_STYLES });
-//# sourceURL=latter-studio/src/styles/base.ts
-});
 __latterDef("src/styles/cards.ts", (__exports, __req) => {
 const { css } = __req("src/lib/lit.ts");
 /**
@@ -16958,7 +16913,7 @@ const { css } = __req("src/lib/lit.ts");
  * Settings rows, form controls, RTL switches, buttons, WAI-ARIA combobox (`Q11`),
  * and pointer/keyboard sortable drag-and-drop rows (`U4`).
  */
-const CONTROL_STYLES = css`.settings-list{display:flex;flex-direction:column;}.settings-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--studio-space-4);min-height:var(--studio-row-min-height);padding-block:var(--studio-space-2);padding-inline:0;}.settings-row-text{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.row-label{font-weight:var(--studio-weight-regular);}.row-description{line-height:normal;}.settings-row-control{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);}.settings-row-control select,.settings-row-control .combobox,.settings-row-control input[type="text"],.settings-row-control input[type="search"],.settings-row-control input[type="number"],.settings-row-control input[type="time"],.settings-row-control input[type="password"]{inline-size:260px;max-inline-size:100%;}.settings-row-control input[type="number"],.settings-row-control input[type="time"],.settings-row-control input[type="password"]{inline-size:140px;}.settings-row.stacked{grid-template-columns:minmax(0,1fr);}.settings-row.stacked .settings-row-control{justify-content:stretch;}.settings-row.stacked .settings-row-control>*{flex:1 1 200px;inline-size:auto;}select,input[type="text"],input[type="search"],input[type="number"],input[type="time"],input[type="password"],textarea{min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-block-end:1px solid var(--studio-field-line);border-radius:var(--studio-radius-field) var(--studio-radius-field) 0 0;background:var(--studio-field-bg);color:var(--studio-text);color-scheme:inherit;font:inherit;transition:background-color 0.15s ease-out;}textarea{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);resize:vertical;}select:hover,input[type="text"]:hover,input[type="search"]:hover,input[type="number"]:hover,input[type="time"]:hover,input[type="password"]:hover,textarea:hover{background:var(--studio-field-bg-hover);}select option,select optgroup{background-color:var(--studio-popup-bg);color:var(--studio-text);}input::placeholder,textarea::placeholder{color:var(--studio-text-secondary);opacity:1;}input[readonly]{color:var(--studio-text-secondary);}input[type="file"]{color:var(--studio-text-secondary);font:inherit;}input[type="range"]{inline-size:140px;accent-color:var(--studio-primary);}select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}select:focus-visible,input[type="text"]:focus-visible,input[type="search"]:focus-visible,input[type="number"]:focus-visible,input[type="time"]:focus-visible,input[type="password"]:focus-visible,textarea:focus-visible{outline:none;border-block-end-color:var(--studio-primary);box-shadow:inset 0 -1px 0 var(--studio-primary);}.switch{appearance:none;position:relative;inline-size:48px;block-size:24px;margin:0;border:1px solid var(--studio-switch-border);border-radius:var(--studio-radius-pill);background:var(--studio-switch-track);cursor:pointer;flex-shrink:0;transition:background-color 0.15s ease,border-color 0.15s ease;}.switch::after{content:"";position:absolute;inset-block-start:2px;inset-inline-start:2px;inline-size:18px;block-size:18px;border-radius:50%;background:var(--studio-switch-thumb);box-shadow:var(--studio-switch-thumb-shadow);transition:transform 0.15s ease,background-color 0.15s ease;}.switch:checked{background:var(--studio-switch-on-track);border-color:var(--studio-switch-on-border);}.switch:checked::after{transform:translateX(24px);background:var(--studio-switch-on-thumb);}:host(:dir(rtl)) .switch:checked::after{transform:translateX(-24px);}.switch:disabled{opacity:0.3;cursor:not-allowed;}.input-action-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.input-action-row>input:not([type="file"]),.input-action-row>select,.input-action-row>.combobox{flex:1 1 180px;min-inline-size:0;}.input-action-row>input[type="file"]{flex:0 1 auto;max-inline-size:100%;}.segmented{display:inline-flex;gap:var(--studio-space-1);padding:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);}.segmented button{min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:var(--studio-text-secondary);font:inherit;cursor:pointer;}.segmented button[aria-checked="true"]{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.inline-switch{display:inline-flex;align-items:center;gap:var(--studio-space-2);cursor:pointer;white-space:nowrap;}.list-row{display:flex;align-items:flex-end;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.list-row-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--studio-space-2);flex:1;min-inline-size:0;}.list-row-grow{flex:1;min-inline-size:0;}.list-block{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.list-row-head{display:flex;align-items:flex-end;gap:var(--studio-space-2);}.stacked-field{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.stacked-field>label,.stacked-field>.field-label{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.stacked-field>select,.stacked-field>input,.stacked-field>.combobox{inline-size:100%;}.stack{display:flex;flex-direction:column;gap:var(--studio-space-2);}.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--studio-space-1);min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-4);border:none;border-radius:var(--studio-radius-button);font:inherit;font-weight:var(--studio-weight-medium);line-height:1;text-decoration:none;white-space:nowrap;cursor:pointer;transition:background-color 0.15s ease-out;}.btn:disabled{opacity:0.5;cursor:not-allowed;}.btn-compact{min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-3);}.btn-primary{background:var(--studio-btn-accent-bg);color:var(--studio-btn-accent-text);}.btn-primary:hover:not(:disabled){background:var(--studio-btn-accent-bg-hover);}.btn-secondary{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.btn-secondary:hover:not(:disabled){background:var(--studio-btn-tonal-bg-hover);}.btn-text{background:transparent;color:var(--studio-btn-tonal-text);padding-block:0;padding-inline:var(--studio-space-3);}.btn-text:hover:not(:disabled){background:var(--studio-btn-plain-hover);}.btn-danger{background:var(--studio-danger-tonal-bg);color:var(--studio-danger-tonal-text);}.btn-danger:hover:not(:disabled){filter:brightness(0.95);}.btn-danger-filled{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.btn-icon{display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height);block-size:var(--studio-control-height);padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;}.btn-icon:disabled{opacity:0.4;cursor:not-allowed;}.btn-icon:hover:not(:disabled){background:var(--studio-hover);}.btn-icon.danger{color:var(--studio-error);}.btn-icon svg{inline-size:20px;block-size:20px;fill:currentColor;}.quick-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);padding-block-end:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);}.quick-action-grid:last-child{padding-block-end:0;border-block-end:none;}.quick-action-btn{justify-content:flex-start;gap:var(--studio-space-2);min-height:var(--studio-control-height);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border-radius:var(--studio-radius-control);white-space:normal;text-align:start;line-height:var(--studio-line-height-condensed);}.quick-action-btn svg{inline-size:18px;block-size:18px;fill:currentColor;flex-shrink:0;}.combobox{position:relative;display:flex;flex-direction:column;min-inline-size:0;}.combobox-input-wrap{position:relative;display:flex;align-items:center;inline-size:100%;}.combobox-input-wrap>input[role="combobox"]{inline-size:100%;padding-inline-end:calc(var(--studio-control-height-compact) + var(--studio-space-2));}.combobox-clear{position:absolute;inset-inline-end:var(--studio-space-1);display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:50%;background:transparent;color:var(--studio-text-secondary);font:inherit;cursor:pointer;}.combobox-clear:hover{background:var(--studio-hover);color:var(--studio-text);}.combobox-listbox{position:absolute;inset-block-start:calc(100% + var(--studio-space-1));inset-inline:0;z-index:45;max-height:280px;margin:0;padding:var(--studio-space-1);list-style:none;overflow-y:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-popup-bg);box-shadow:var(--studio-overlay-shadow);}.combobox-option{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-field);cursor:pointer;}.combobox-option:hover,.combobox-option.active{background:var(--studio-hover);}.combobox-option[aria-selected="true"]{background:var(--studio-nav-active-bg);color:var(--studio-nav-active-text);}.combobox-option-main{display:flex;flex-direction:column;min-inline-size:0;flex:1;}.combobox-option-title{font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.combobox-option-id{color:var(--studio-text-secondary);font-family:var(--studio-font-code);font-size:var(--studio-font-caption);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.combobox-option-chips{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);flex-shrink:0;}.combobox-empty,.combobox-footer{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);}.combobox-footer{border-block-start:1px solid var(--studio-divider);}.sortable-list{display:flex;flex-direction:column;gap:var(--studio-space-2);}.sortable-row{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.12s ease,opacity 0.12s ease,background-color 0.12s ease;}.sortable-row.dragging,.pill.dragging{opacity:0.65;border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);}.sortable-row.drag-over-before{border-block-start:2px solid var(--studio-primary);}.sortable-row.drag-over-after{border-block-end:2px solid var(--studio-primary);}.pill.drag-over-before{box-shadow:inset 2px 0 0 var(--studio-primary);}.pill.drag-over-after{box-shadow:inset -2px 0 0 var(--studio-primary);}:host(:dir(rtl)) .pill.drag-over-before{box-shadow:inset -2px 0 0 var(--studio-primary);}:host(:dir(rtl)) .pill.drag-over-after{box-shadow:inset 2px 0 0 var(--studio-primary);}.drag-handle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-field);background:transparent;color:var(--studio-text-secondary);font:inherit;line-height:1;cursor:grab;touch-action:none;user-select:none;flex-shrink:0;}.drag-handle:hover{background:var(--studio-hover);color:var(--studio-text);}.drag-handle:active{cursor:grabbing;}.sortable-row-content{flex:1;min-inline-size:0;}.sortable-row-actions{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);min-inline-size:0;max-inline-size:100%;}.sortable-row-stacked{flex-direction:column;align-items:stretch;gap:var(--studio-space-2);padding-block:var(--studio-space-3);}.sortable-row-head{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);inline-size:100%;}.sortable-row-title{flex:1 1 auto;min-inline-size:0;}.sortable-row-stacked>.sortable-row-content{inline-size:100%;}`;
+const CONTROL_STYLES = css`.settings-list{display:flex;flex-direction:column;}.settings-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--studio-space-4);min-height:var(--studio-row-min-height);padding-block:var(--studio-space-2);padding-inline:0;}.settings-row-text{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.row-label{font-weight:var(--studio-weight-regular);}.row-description{line-height:normal;}.settings-row-control{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);}.settings-row-control select,.settings-row-control .combobox,.settings-row-control input[type="text"],.settings-row-control input[type="search"],.settings-row-control input[type="number"],.settings-row-control input[type="time"],.settings-row-control input[type="password"]{inline-size:260px;max-inline-size:100%;}.settings-row-control input[type="number"],.settings-row-control input[type="time"],.settings-row-control input[type="password"]{inline-size:140px;}.settings-row.stacked{grid-template-columns:minmax(0,1fr);}.settings-row.stacked .settings-row-control{justify-content:stretch;}.settings-row.stacked .settings-row-control>*{flex:1 1 200px;inline-size:auto;}select,input[type="text"],input[type="search"],input[type="number"],input[type="time"],input[type="password"],textarea{min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-block-end:1px solid var(--studio-field-line);border-radius:var(--studio-radius-field) var(--studio-radius-field) 0 0;background:var(--studio-field-bg);color:var(--studio-text);color-scheme:inherit;font:inherit;transition:background-color 0.15s ease-out;}textarea{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);resize:vertical;}select:hover,input[type="text"]:hover,input[type="search"]:hover,input[type="number"]:hover,input[type="time"]:hover,input[type="password"]:hover,textarea:hover{background:var(--studio-field-bg-hover);}select option,select optgroup{background-color:var(--studio-popup-bg);color:var(--studio-text);}input::placeholder,textarea::placeholder{color:var(--studio-text-secondary);opacity:1;}input[readonly]{color:var(--studio-text-secondary);}input[type="file"]{color:var(--studio-text-secondary);font:inherit;}input[type="range"]{inline-size:140px;accent-color:var(--studio-primary);}select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}select:focus-visible,input[type="text"]:focus-visible,input[type="search"]:focus-visible,input[type="number"]:focus-visible,input[type="time"]:focus-visible,input[type="password"]:focus-visible,textarea:focus-visible{outline:none;border-block-end-color:var(--studio-primary);box-shadow:inset 0 -1px 0 var(--studio-primary);}.switch{appearance:none;position:relative;inline-size:48px;block-size:24px;margin:0;border:1px solid var(--studio-switch-border);border-radius:var(--studio-radius-pill);background:var(--studio-switch-track);cursor:pointer;flex-shrink:0;transition:background-color 0.15s ease,border-color 0.15s ease;}.switch::after{content:"";position:absolute;inset-block-start:2px;inset-inline-start:2px;inline-size:18px;block-size:18px;border-radius:50%;background:var(--studio-switch-thumb);box-shadow:var(--studio-switch-thumb-shadow);transition:transform 0.15s ease,background-color 0.15s ease;}.switch:checked{background:var(--studio-switch-on-track);border-color:var(--studio-switch-on-border);}.switch:checked::after{transform:translateX(24px);background:var(--studio-switch-on-thumb);}:host(:dir(rtl)) .switch:checked::after{transform:translateX(-24px);}.switch:disabled{opacity:0.3;cursor:not-allowed;}.input-action-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.input-action-row>input:not([type="file"]),.input-action-row>select,.input-action-row>.combobox{flex:1 1 180px;min-inline-size:0;}.input-action-row>input[type="file"]{flex:0 1 auto;max-inline-size:100%;}.segmented{display:inline-flex;gap:var(--studio-space-1);padding:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);}.segmented button{min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:var(--studio-text-secondary);font:inherit;cursor:pointer;}.segmented button[aria-checked="true"]{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.inline-switch{display:inline-flex;align-items:center;gap:var(--studio-space-2);cursor:pointer;white-space:nowrap;}.list-row{display:flex;align-items:flex-end;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.list-row-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--studio-space-2);flex:1;min-inline-size:0;}.list-row-grow{flex:1;min-inline-size:0;}.list-block{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.list-row-head{display:flex;align-items:flex-end;gap:var(--studio-space-2);}.stacked-field{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.stacked-field>label,.stacked-field>.field-label{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.stacked-field>select,.stacked-field>input,.stacked-field>.combobox{inline-size:100%;}.stack{display:flex;flex-direction:column;gap:var(--studio-space-2);}.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--studio-space-1);min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-4);border:none;border-radius:var(--studio-radius-button);font:inherit;font-weight:var(--studio-weight-medium);line-height:1;text-decoration:none;white-space:nowrap;cursor:pointer;transition:background-color 0.15s ease-out;}.btn:disabled{opacity:0.5;cursor:not-allowed;}.btn-compact{min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-3);}.btn-primary{background:var(--studio-btn-accent-bg);color:var(--studio-btn-accent-text);}.btn-primary:hover:not(:disabled){background:var(--studio-btn-accent-bg-hover);}.btn-secondary{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.btn-secondary:hover:not(:disabled){background:var(--studio-btn-tonal-bg-hover);}.btn-text{background:transparent;color:var(--studio-btn-tonal-text);padding-block:0;padding-inline:var(--studio-space-3);}.btn-text:hover:not(:disabled){background:var(--studio-btn-plain-hover);}.btn-danger{background:var(--studio-danger-tonal-bg);color:var(--studio-danger-tonal-text);}.btn-danger:hover:not(:disabled){filter:brightness(0.95);}.btn-danger-filled{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.btn-icon{display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height);block-size:var(--studio-control-height);padding:0;border:none;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer;}.btn-icon:disabled{opacity:0.4;cursor:not-allowed;}.btn-icon:hover:not(:disabled){background:var(--studio-hover);}.btn-icon.danger{color:var(--studio-error);}.btn-icon svg{inline-size:20px;block-size:20px;fill:currentColor;}.quick-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);padding-block-end:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);}.quick-action-grid:last-child{padding-block-end:0;border-block-end:none;}.quick-action-btn{justify-content:flex-start;gap:var(--studio-space-2);min-height:var(--studio-control-height);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border-radius:var(--studio-radius-control);white-space:normal;text-align:start;line-height:var(--studio-line-height-condensed);}.quick-action-btn svg{inline-size:18px;block-size:18px;fill:currentColor;flex-shrink:0;}.combobox{position:relative;display:flex;flex-direction:column;min-inline-size:0;}.combobox-input-wrap{position:relative;display:flex;align-items:center;inline-size:100%;}.combobox-input-wrap>input[role="combobox"]{inline-size:100%;padding-inline-end:calc(var(--studio-control-height-compact) + var(--studio-space-2));}.combobox-clear{position:absolute;inset-inline-end:var(--studio-space-1);display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:50%;background:transparent;color:var(--studio-text-secondary);font:inherit;cursor:pointer;}.combobox-clear:hover{background:var(--studio-hover);color:var(--studio-text);}.combobox-listbox{position:absolute;inset-block-start:calc(100% + var(--studio-space-1));inset-inline:0;z-index:45;max-height:280px;margin:0;padding:var(--studio-space-1);list-style:none;overflow-y:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-popup-bg);box-shadow:var(--studio-overlay-shadow);}.combobox-option{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-field);cursor:pointer;}.combobox-option:hover,.combobox-option.active{background:var(--studio-hover);}.combobox-option[aria-selected="true"]{background:var(--studio-nav-active-bg);color:var(--studio-nav-active-text);}.combobox-option-main{display:flex;flex-direction:column;min-inline-size:0;flex:1;}.combobox-option-title{font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.combobox-option-id{color:var(--studio-text-secondary);font-family:var(--studio-font-code);font-size:var(--studio-font-caption);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.combobox-option-chips{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);flex-shrink:0;}.combobox-empty,.combobox-footer{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);}.combobox-footer{border-block-start:1px solid var(--studio-divider);}.sortable-list{display:flex;flex-direction:column;gap:var(--studio-space-2);}.sortable-row{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.12s ease,opacity 0.12s ease,background-color 0.12s ease;}.sortable-row.dragging,.pill.dragging{opacity:0.65;border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);}.sortable-row.drag-over-before{border-block-start:2px solid var(--studio-primary);}.sortable-row.drag-over-after{border-block-end:2px solid var(--studio-primary);}.pill.drag-over-before{box-shadow:inset 2px 0 0 var(--studio-primary);}.pill.drag-over-after{box-shadow:inset -2px 0 0 var(--studio-primary);}:host(:dir(rtl)) .pill.drag-over-before{box-shadow:inset -2px 0 0 var(--studio-primary);}:host(:dir(rtl)) .pill.drag-over-after{box-shadow:inset 2px 0 0 var(--studio-primary);}.drag-handle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-field);background:transparent;color:var(--studio-text-secondary);font:inherit;line-height:1;cursor:grab;touch-action:none;user-select:none;flex-shrink:0;}.drag-handle:hover{background:var(--studio-hover);color:var(--studio-text);}.drag-handle:active{cursor:grabbing;}.sortable-row-content{flex:1;min-inline-size:0;}.sortable-row-actions{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);min-inline-size:0;max-inline-size:100%;}.sortable-row-stacked{flex-direction:column;align-items:stretch;gap:var(--studio-space-2);padding-block:var(--studio-space-3);}.sortable-row-head{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);inline-size:100%;}.sortable-row-title{flex:1 1 auto;min-inline-size:0;}.sortable-row-stacked>.sortable-row-content{inline-size:100%;}@container (max-width:520px){.settings-row{grid-template-columns:minmax(0,1fr);}.settings-row + .settings-row{border-block-start:1px solid var(--studio-divider);}.settings-row-control{justify-content:flex-start;}.settings-row-control select,.settings-row-control .combobox,.settings-row-control input[type="text"],.settings-row-control input[type="search"],.settings-row-control input[type="password"]{inline-size:100%;}}@container (max-width:360px){.quick-action-grid{grid-template-columns:minmax(0,1fr);}}@media (max-width:860px){.settings-row{grid-template-columns:minmax(0,1fr);}.settings-row + .settings-row{border-block-start:1px solid var(--studio-divider);}.settings-row-control{justify-content:flex-start;}.settings-row-control select,.settings-row-control .combobox,.settings-row-control input[type="text"],.settings-row-control input[type="search"],.settings-row-control input[type="password"]{inline-size:100%;}}@media (max-width:480px){.list-row{flex-wrap:wrap;}.list-row-head{flex-wrap:wrap;}.list-row-main{grid-template-columns:minmax(0,1fr);inline-size:100%;}}`;
 __latterExp(__exports, { CONTROL_STYLES: () => CONTROL_STYLES });
 //# sourceURL=latter-studio/src/styles/controls.ts
 });
@@ -16987,34 +16942,25 @@ const { css } = __req("src/lib/lit.ts");
 /**
  * Title bar, two-pane RTL-safe sidebar shell, navigation badges, & two-column layout (`D-014`).
  */
-const LAYOUT_STYLES = css`header.latter-top-titlebar{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);height:var(--studio-header-height);padding-block:0;padding-inline:var(--studio-space-3);background:var(--studio-header-bg);color:var(--studio-header-text);border-block-end:var(--studio-header-border);position:sticky;inset-block-start:0;z-index:30;}.titlebar-brand{display:flex;align-items:center;gap:var(--studio-space-3);font-size:var(--studio-font-title);font-weight:var(--studio-weight-regular);user-select:none;}.titlebar-brand .ha-menu-btn{color:var(--studio-header-icon);display:none;}:host([show-menu]) .titlebar-brand .ha-menu-btn{display:inline-flex;}.titlebar-title{padding-inline-start:var(--studio-space-3);}:host([show-menu]) .titlebar-title{padding-inline-start:0;}.titlebar-actions{display:flex;align-items:center;gap:var(--studio-space-2);}.app-shell{display:grid;grid-template-columns:var(--studio-sidebar-width) minmax(0,1fr);min-height:calc(100vh - var(--studio-header-height));min-height:calc(100dvh - var(--studio-header-height));}aside.sidebar{min-inline-size:0;background:var(--studio-sidebar-bg);border-inline-end:1px solid var(--studio-divider);display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block:var(--studio-space-4);padding-inline:var(--studio-space-3);position:sticky;inset-block-start:var(--studio-header-height);height:calc(100vh - var(--studio-header-height));height:calc(100dvh - var(--studio-header-height));overflow-y:auto;}.scope-tabs{display:grid;grid-template-columns:1fr 1fr;gap:var(--studio-space-1);padding:var(--studio-space-1);background:var(--studio-input-bg);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.scope-tab{min-height:var(--studio-control-height-compact);border:none;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text-secondary);font:inherit;font-weight:var(--studio-weight-medium);cursor:pointer;}.scope-tab.active{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.nav-list{display:flex;flex-direction:column;gap:var(--studio-space-1);}.nav-btn{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);width:100%;min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text);font:inherit;font-weight:var(--studio-weight-medium);text-align:start;text-decoration:none;white-space:nowrap;cursor:pointer;}.nav-btn:hover{background:var(--studio-hover);}.nav-btn.active{background:var(--studio-nav-active-bg);color:var(--studio-nav-active-text);}.nav-btn.nav-back-btn{color:var(--studio-text-secondary);}.nav-device-title{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border-block-start:1px solid var(--studio-divider);border-block-end:1px solid var(--studio-divider);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}#nav-scope-device .nav-btn:not(.nav-back-btn){padding-inline-start:var(--studio-space-4);}.nav-badge{min-inline-size:20px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:center;font-variant-numeric:tabular-nums;}.main-area{min-inline-size:0;}.content-wrap{max-inline-size:1140px;margin-block:0;margin-inline:auto;padding:var(--studio-space-5);display:flex;flex-direction:column;gap:var(--studio-space-4);container-type:inline-size;container-name:studio-content;}.content-wrap>section{display:flex;flex-direction:column;gap:var(--studio-space-4);min-inline-size:0;}.page-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--studio-space-2);font-size:var(--studio-font-title);font-weight:var(--studio-weight-regular);}.page-subtitle{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.is-loading .content-wrap>section{display:none !important;}.columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-4);align-items:start;}.column{display:flex;flex-direction:column;gap:var(--studio-space-4);min-inline-size:0;}@container studio-content (max-width:760px){.columns{grid-template-columns:minmax(0,1fr);}}`;
+const LAYOUT_STYLES = css`header.latter-top-titlebar{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);height:var(--studio-header-height);padding-block:0;padding-inline:var(--studio-space-3);background:var(--studio-header-bg);color:var(--studio-header-text);border-block-end:var(--studio-header-border);position:sticky;inset-block-start:0;z-index:30;}.titlebar-brand{display:flex;align-items:center;gap:var(--studio-space-3);font-size:var(--studio-font-title);font-weight:var(--studio-weight-regular);user-select:none;}.titlebar-brand .ha-menu-btn{color:var(--studio-header-icon);display:none;}:host([show-menu]) .titlebar-brand .ha-menu-btn{display:inline-flex;}.titlebar-title{padding-inline-start:var(--studio-space-3);}:host([show-menu]) .titlebar-title{padding-inline-start:0;}.titlebar-actions{display:flex;align-items:center;gap:var(--studio-space-2);}.app-shell{display:grid;grid-template-columns:var(--studio-sidebar-width) minmax(0,1fr);min-height:calc(100vh - var(--studio-header-height));min-height:calc(100dvh - var(--studio-header-height));}aside.sidebar{min-inline-size:0;background:var(--studio-sidebar-bg);border-inline-end:1px solid var(--studio-divider);display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block:var(--studio-space-4);padding-inline:var(--studio-space-3);position:sticky;inset-block-start:var(--studio-header-height);height:calc(100vh - var(--studio-header-height));height:calc(100dvh - var(--studio-header-height));overflow-y:auto;}.scope-tabs{display:grid;grid-template-columns:1fr 1fr;gap:var(--studio-space-1);padding:var(--studio-space-1);background:var(--studio-input-bg);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}.scope-tab{min-height:var(--studio-control-height-compact);border:none;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text-secondary);font:inherit;font-weight:var(--studio-weight-medium);cursor:pointer;}.scope-tab.active{background:var(--studio-btn-tonal-bg);color:var(--studio-btn-tonal-text);}.nav-list{display:flex;flex-direction:column;gap:var(--studio-space-1);}.nav-btn{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);width:100%;min-height:var(--studio-control-height);padding-block:0;padding-inline:var(--studio-space-3);border:none;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text);font:inherit;font-weight:var(--studio-weight-medium);text-align:start;text-decoration:none;white-space:nowrap;cursor:pointer;}.nav-btn:hover{background:var(--studio-hover);}.nav-btn.active{background:var(--studio-nav-active-bg);color:var(--studio-nav-active-text);}.nav-btn.nav-back-btn{color:var(--studio-text-secondary);}.nav-device-title{padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border-block-start:1px solid var(--studio-divider);border-block-end:1px solid var(--studio-divider);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}#nav-scope-device .nav-btn:not(.nav-back-btn){padding-inline-start:var(--studio-space-4);}.nav-badge{min-inline-size:20px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:center;font-variant-numeric:tabular-nums;}.main-area{min-inline-size:0;}.content-wrap{max-inline-size:1140px;margin-block:0;margin-inline:auto;padding:var(--studio-space-5);display:flex;flex-direction:column;gap:var(--studio-space-4);container-type:inline-size;container-name:studio-content;}.content-wrap>section{display:flex;flex-direction:column;gap:var(--studio-space-4);min-inline-size:0;}.page-title{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--studio-space-2);font-size:var(--studio-font-title);font-weight:var(--studio-weight-regular);}.page-subtitle{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.is-loading .content-wrap>section{display:none !important;}.columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-4);align-items:start;}.column{display:flex;flex-direction:column;gap:var(--studio-space-4);min-inline-size:0;}@container studio-content (max-width:760px){.columns{grid-template-columns:minmax(0,1fr);}}@media (max-width:860px){.titlebar-brand .ha-menu-btn{display:inline-flex;}.titlebar-title{padding-inline-start:0;}.app-shell{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr;}aside.sidebar{align-self:start;position:sticky;inset-block-start:var(--studio-header-height);z-index:25;block-size:auto;padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border-inline-end:none;border-block-end:1px solid var(--studio-divider);}.nav-device-title{display:none;}.nav-list{flex-direction:row;overflow-x:auto;scrollbar-width:none;padding-inline:var(--studio-space-1);-webkit-mask-image:var(--studio-nav-scroll-mask);mask-image:var(--studio-nav-scroll-mask);}.nav-list::-webkit-scrollbar{display:none;}.nav-btn{inline-size:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);}#nav-scope-device .nav-btn:not(.nav-back-btn){padding-inline-start:var(--studio-space-3);}.content-wrap{padding-block:var(--studio-space-4) var(--studio-space-5);padding-inline:var(--studio-space-3);}}`;
 __latterExp(__exports, { LAYOUT_STYLES: () => LAYOUT_STYLES });
 //# sourceURL=latter-studio/src/styles/layout.ts
 });
-__latterDef("src/styles/narrow.ts", (__exports, __req) => {
-const { css } = __req("src/lib/lit.ts");
-/**
- * Container queries & mobile breakpoints, including horizontal `.nav-list` scroll fade mask.
- */
-const NARROW_STYLES = css`@container (max-width:520px){.settings-row{grid-template-columns:minmax(0,1fr);}.settings-row + .settings-row{border-block-start:1px solid var(--studio-divider);}.settings-row-control{justify-content:flex-start;}.settings-row-control select,.settings-row-control .combobox,.settings-row-control input[type="text"],.settings-row-control input[type="search"],.settings-row-control input[type="password"]{inline-size:100%;}}@container (max-width:360px){.quick-action-grid{grid-template-columns:minmax(0,1fr);}}@media (max-width:860px){.titlebar-brand .ha-menu-btn{display:inline-flex;}.titlebar-title{padding-inline-start:0;}.app-shell{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr;}aside.sidebar{align-self:start;position:sticky;inset-block-start:var(--studio-header-height);z-index:25;block-size:auto;padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border-inline-end:none;border-block-end:1px solid var(--studio-divider);}.nav-device-title{display:none;}.nav-list{flex-direction:row;overflow-x:auto;scrollbar-width:none;padding-inline:var(--studio-space-1);-webkit-mask-image:var(--studio-nav-scroll-mask);mask-image:var(--studio-nav-scroll-mask);}.nav-list::-webkit-scrollbar{display:none;}.nav-btn{inline-size:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);}#nav-scope-device .nav-btn:not(.nav-back-btn){padding-inline-start:var(--studio-space-3);}.content-wrap{padding-block:var(--studio-space-4) var(--studio-space-5);padding-inline:var(--studio-space-3);}.settings-row{grid-template-columns:minmax(0,1fr);}.settings-row + .settings-row{border-block-start:1px solid var(--studio-divider);}.settings-row-control{justify-content:flex-start;}.settings-row-control select,.settings-row-control .combobox,.settings-row-control input[type="text"],.settings-row-control input[type="search"],.settings-row-control input[type="password"]{inline-size:100%;}}@media (max-width:480px){.list-row{flex-wrap:wrap;}.list-row-head{flex-wrap:wrap;}.list-row-main{grid-template-columns:minmax(0,1fr);inline-size:100%;}}`;
-__latterExp(__exports, { NARROW_STYLES: () => NARROW_STYLES });
-//# sourceURL=latter-studio/src/styles/narrow.ts
-});
 __latterDef("src/styles/tokens.ts", (__exports, __req) => {
 const { css } = __req("src/lib/lit.ts");
-const { BASE_STYLES } = __req("src/styles/base.ts");
 const { CARD_STYLES } = __req("src/styles/cards.ts");
 const { CONTROL_STYLES } = __req("src/styles/controls.ts");
 const { DATA_STYLES } = __req("src/styles/data.ts");
 const { DIALOG_STYLES } = __req("src/styles/dialogs.ts");
 const { LAYOUT_STYLES } = __req("src/styles/layout.ts");
-const { NARROW_STYLES } = __req("src/styles/narrow.ts");
 /**
- * Composed Latter Studio Design System Stylesheet (`STUDIO_STYLES`), re-exporting
- * modular stylesheet slices (`base`, `layout`, `cards`, `controls`, `data`, `dialogs`, `narrow`).
+ * Latter Studio Design System Tokens (`:host`, `:host([dark])`), RTL Root Reset,
+ * Upgrade/Offline Banners, Reduced-Motion Reset, & Composed `STUDIO_STYLES` (`docs/studio-design.md` §3, `D-061`, `D-066`).
+ * Literal font sizes, pixel spacing, and colors appear ONLY inside `:host` / `:host([dark])`.
  */
-const STUDIO_STYLES = css`${BASE_STYLES}${LAYOUT_STYLES}${CARD_STYLES}${CONTROL_STYLES}${DATA_STYLES}${DIALOG_STYLES}${NARROW_STYLES}`;
-__latterExp(__exports, { BASE_STYLES: () => BASE_STYLES, CARD_STYLES: () => CARD_STYLES, CONTROL_STYLES: () => CONTROL_STYLES, DATA_STYLES: () => DATA_STYLES, DIALOG_STYLES: () => DIALOG_STYLES, LAYOUT_STYLES: () => LAYOUT_STYLES, NARROW_STYLES: () => NARROW_STYLES, STUDIO_STYLES: () => STUDIO_STYLES });
+const TOKEN_STYLES = css`:host{--studio-font-family:var(--ha-font-family-body,inherit);--studio-font-code:var(--ha-font-family-code,monospace);--studio-font-title:var(--ha-font-size-xl,20px);--studio-font-section:var(--ha-font-size-l,16px);--studio-font-body:var(--ha-font-size-m,14px);--studio-font-secondary:var(--ha-font-size-s,12px);--studio-font-caption:var(--ha-font-size-s,12px);--studio-weight-regular:var(--ha-font-weight-normal,400);--studio-weight-medium:var(--ha-font-weight-medium,500);--studio-line-height:var(--ha-line-height-normal,1.6);--studio-line-height-condensed:var(--ha-line-height-condensed,1.2);--studio-font-card-title:var(--ha-card-header-font-size,var(--ha-font-size-2xl,24px));--studio-card-title-tracking:-0.012em;--studio-space-1:var(--ha-space-1,4px);--studio-space-2:var(--ha-space-2,8px);--studio-space-3:var(--ha-space-3,12px);--studio-space-4:var(--ha-space-4,16px);--studio-space-card-top:var(--ha-space-5,20px);--studio-space-5:var(--ha-space-6,24px);--studio-radius-card:var(--ha-card-border-radius,var(--ha-border-radius-lg,12px));--studio-radius-control:var(--ha-border-radius-md,8px);--studio-radius-field:var(--ha-border-radius-sm,4px);--studio-radius-button:var(--ha-button-border-radius,var(--ha-border-radius-pill,9999px));--studio-radius-dialog:var(--ha-dialog-border-radius,var(--ha-border-radius-3xl,24px));--studio-radius-pill:var(--ha-border-radius-pill,9999px);--studio-card-border-width:var(--ha-card-border-width,1px);--studio-control-height:var(--ha-button-height,40px);--studio-control-height-compact:32px;--studio-row-min-height:56px;--studio-header-height:var(--header-height,56px);--studio-sidebar-width:244px;--studio-bg:var(--primary-background-color,#fafafa);--studio-surface:var(--ha-card-background,var(--card-background-color,#ffffff));--studio-surface-alt:var(--secondary-background-color,#f0f0f0);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#ffffff));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#212121));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#616161));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(0,0,0,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#ffffff));--studio-input-bg:var(--input-fill-color,rgba(0,0,0,0.04));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#f5f5f5));--studio-field-bg-hover:var(--ha-color-form-background-hover,var(--studio-field-bg));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(0,0,0,0.42)));--studio-popup-bg:var(--card-background-color,#ffffff);--studio-divider:var(--divider-color,rgba(0,0,0,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(0,0,0,0.12)));--studio-text:var(--primary-text-color,#212121);--studio-text-secondary:var(--secondary-text-color,#5f6368);--studio-text-disabled:var(--disabled-text-color,#9e9e9e);--studio-primary:var(--primary-color,#007299);--studio-primary-tint:rgba(var(--rgb-primary-color,0,154,199),0.12);--studio-hover:rgba(var(--rgb-primary-text-color,33,33,33),0.06);--studio-btn-accent-bg:var(--ha-color-fill-primary-loud-resting,var(--primary-color,#007da3));--studio-btn-accent-bg-hover:var(--ha-color-fill-primary-loud-hover,var(--studio-btn-accent-bg));--studio-btn-accent-text:var(--ha-color-on-primary-loud,var(--text-primary-color,#ffffff));--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#c2e6f2);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#005b78);--studio-btn-plain-hover:var(--ha-color-fill-primary-quiet-resting,var(--studio-primary-tint));--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-nav-active-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#dcf2df);--studio-chip-success-text:var(--ha-color-on-success-normal,#1b5e20);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#fff0d1);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#7a4900);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,#c62828);--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#e0e0e0));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#616161));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#d8eff7));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#005b78));--studio-switch-thumb-shadow:var(--ha-switch-thumb-box-shadow,var(--ha-box-shadow-s,0 1px 2px rgba(0,0,0,0.3)));--studio-toast-bg:var(--primary-text-color,#212121);--studio-toast-text:var(--card-background-color,#ffffff);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(140,140,140));--studio-success:var(--success-color,#2e7d32);--studio-warning:var(--warning-color,#ef6c00);--studio-error:var(--error-color,#c62828);--studio-info:var(--info-color,#0277bd);--studio-warning-tint:color-mix(in srgb,var(--studio-warning) 14%,transparent);--studio-error-tint:color-mix(in srgb,var(--studio-error) 14%,transparent);--studio-info-tint:color-mix(in srgb,var(--studio-info) 14%,transparent);--studio-card-shadow:var(--ha-card-box-shadow,none);--studio-handoff-surface:color-mix(in srgb,var(--studio-primary) 8%,var(--studio-surface));--studio-handoff-ring:inset 0 0 0 1px var(--studio-primary);--studio-card-handoff-shadow:inset 0 0 0 1px var(--studio-primary),var(--studio-card-shadow);--studio-overlay-shadow:0 8px 24px rgba(0,0,0,0.35);--studio-scrim:rgba(0,0,0,0.5);--studio-media-bg:var(--secondary-background-color,#000000);--studio-photo-badge-bg:rgba(0,0,0,0.68);--studio-photo-badge-text:#ffffff;--studio-photo-ring-selected:0 0 0 2px var(--studio-primary);--studio-dropzone-bg:color-mix(in srgb,var(--studio-primary) 6%,var(--studio-input-bg));--studio-nav-scroll-mask:linear-gradient( to right,transparent 0,#000000 12px,#000000 calc(100% - 16px),transparent 100% );display:block;min-height:100vh;min-height:100dvh;background:var(--studio-bg);color:var(--studio-text);font-family:var(--studio-font-family);font-size:var(--studio-font-body);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height);-webkit-tap-highlight-color:transparent;color-scheme:light;scrollbar-color:var(--studio-scrollbar-thumb) transparent;scrollbar-width:thin;}:host([dark]){--studio-bg:var(--primary-background-color,#111111);--studio-surface:var(--ha-card-background,var(--card-background-color,#1c1c1c));--studio-surface-alt:var(--secondary-background-color,#282828);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#1c1c1c));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#e1e1e1));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#9b9b9b));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(225,225,225,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#1c1c1c));--studio-input-bg:var(--input-fill-color,rgba(255,255,255,0.05));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#363636));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(255,255,255,0.42)));--studio-popup-bg:var(--card-background-color,#1c1c1c);--studio-divider:var(--divider-color,rgba(225,225,225,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(225,225,225,0.12)));--studio-text:var(--primary-text-color,#e1e1e1);--studio-text-secondary:var(--secondary-text-color,#a8a8a8);--studio-text-disabled:var(--disabled-text-color,#6f6f6f);--studio-primary:var(--primary-color,#38bdf8);--studio-hover:rgba(var(--rgb-primary-text-color,225,225,225),0.06);--studio-btn-accent-bg:var(--ha-color-fill-primary-loud-resting,#006a8e);--studio-btn-accent-bg-hover:var(--ha-color-fill-primary-loud-hover,#007da3);--studio-btn-accent-text:var(--ha-color-on-primary-loud,#ffffff);--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#104559);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-nav-active-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#143619);--studio-chip-success-text:var(--ha-color-on-success-normal,#81e287);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#3b2a07);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#ffd166);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,#c62828);--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#202020));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#989898));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#0b3545));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#7bd6f5));--studio-toast-bg:var(--primary-text-color,#e1e1e1);--studio-toast-text:var(--card-background-color,#1c1c1c);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(110,110,110));--studio-success:var(--success-color,#43a047);--studio-warning:var(--warning-color,#ffa600);--studio-error:var(--error-color,#db4437);--studio-info:var(--info-color,#039be5);color-scheme:dark;}*{box-sizing:border-box;}.hidden{display:none !important;}.studio-root{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--studio-bg);}h2,h3,h4,p{margin:0;}code,.mono{font-family:var(--studio-font-code);font-size:var(--studio-font-secondary);}a{color:var(--studio-primary);}.studio-rev-banner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-2) var(--studio-space-4);background:var(--studio-chip-warning-bg);border-block-end:1px solid var(--studio-warning);color:var(--studio-chip-warning-text);z-index:40;}.offline-banner,.alert.offline-banner{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-3) var(--studio-space-4);border:1px solid var(--studio-divider);border-inline-start:4px solid var(--studio-warning);border-radius:var(--studio-radius-control);background:var(--studio-surface);color:var(--studio-text);}.offline-banner-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 260px;}.offline-banner-body>span{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;scroll-behavior:auto !important;}}`;
+const STUDIO_STYLES = css`${TOKEN_STYLES}${LAYOUT_STYLES}${CARD_STYLES}${CONTROL_STYLES}${DATA_STYLES}${DIALOG_STYLES}`;
+__latterExp(__exports, { TOKEN_STYLES: () => TOKEN_STYLES, CARD_STYLES: () => CARD_STYLES, CONTROL_STYLES: () => CONTROL_STYLES, DATA_STYLES: () => DATA_STYLES, DIALOG_STYLES: () => DIALOG_STYLES, LAYOUT_STYLES: () => LAYOUT_STYLES, STUDIO_STYLES: () => STUDIO_STYLES });
 //# sourceURL=latter-studio/src/styles/tokens.ts
 });
 __latterDef("src/views/device-audio-view.ts", (__exports, __req) => {
@@ -21956,571 +21902,18 @@ function renderBatchControlsCard(
 __latterExp(__exports, { renderBatchControlsCard: () => renderBatchControlsCard });
 //# sourceURL=latter-studio/src/views/groups/batch-controls.ts
 });
-__latterDef("src/views/groups/baseline-behavior-section.ts", (__exports, __req) => {
-const { renderSwitchRow } = __req("src/components/controls.ts");
-const { SECURITY_PIN_POLICY_OPTIONS } = __req("src/i18n/index.ts");
-const { html, nothing } = __req("src/lib/lit.ts");
-/**
- * Group Baseline Drawer — Behavior Sections (`views/groups/baseline-behavior-section.ts`):
- * - Power & brightness
- * - Audio & voice
- * - BLE & Area presence + Security PIN policy
- */
-function renderBaselineBehaviorSection(
-  store,
-  group,
-  h,
-) {
-  const gid = group.id;
-  const cfg = group.device_config || {};
-  const { caps } = h;
-  const autoBrt = String(cfg.auto_brightness_mode || "Sun Synchronized");
-  const wwMode = String(cfg.wake_word_mode || "Docked Only");
-  const bleOn = Boolean(cfg.native_ble_tracking);
-  const autoSw = cfg.ble_auto_switch !== undefined ? Boolean(cfg.ble_auto_switch) : bleOn;
-  const vfm = Boolean(cfg.sync_device_area);
-  const handoff = Boolean(cfg.area_handoff);
-  const pinPolicy = String(cfg.security_pin_policy || "auto");
-  const groupSsMode = String(cfg.screensaver_mode ?? "Docked Only");
-  return html`<details class="sub-collapsible" open>
-      <summary>${store.t("groups.section_power_brightness")}</summary>
-      <div class="card-content settings-list">
-        ${h.renderSpecSelect("tap_to_wake", cfg.tap_to_wake)}
-        ${h.renderSpecSelect("pickup_to_wake", cfg.pickup_to_wake)}
-        ${h.renderSpecSelect("battery_screen_timeout", cfg.battery_screen_timeout)}
-        ${h.renderSpecSelect("battery_hibernate_timeout", cfg.battery_hibernate_timeout)}
-        ${h.renderSpecSelect("screensaver_mode", cfg.screensaver_mode)}
-        ${caps.has_battery !== false || groupSsMode !== "Never"
-          ? h.renderSpecSelect("docked_idle_timeout", cfg.docked_idle_timeout)
-          : nothing}
-        ${h.renderSpecSelect("auto_brightness_mode", cfg.auto_brightness_mode)}
-        ${autoBrt === "Disabled"
-          ? h.renderSpecRange("manual_brightness", cfg.manual_brightness)
-          : html`${h.renderSpecRange("day_brightness", cfg.day_brightness)}
-              ${h.renderSpecRange("night_brightness", cfg.night_brightness)}`}
-        ${autoBrt === "Time Schedule"
-          ? html`${h.renderSpecHourSelect("day_start_hour", cfg.day_start_hour)}
-              ${h.renderSpecHourSelect("night_start_hour", cfg.night_start_hour)}`
-          : nothing}
-        ${h.renderSpecSelect("bedtime_display", cfg.bedtime_display)}
-        ${h.renderSpecRange("bedtime_brightness", cfg.bedtime_brightness)}
-        ${h.renderSpecSwitch("bedtime_schedule", cfg.bedtime_schedule)}
-        ${Boolean(cfg.bedtime_schedule)
-          ? html`${h.renderSpecHourSelect("bedtime_start_hour", cfg.bedtime_start_hour)}
-              ${h.renderSpecHourSelect("bedtime_end_hour", cfg.bedtime_end_hour)}`
-          : nothing}
-      </div>
-    </details>
-
-    <details class="sub-collapsible">
-      <summary>${store.t("groups.section_audio_voice")}</summary>
-      <div class="card-content settings-list">
-        ${h.renderSpecSelect("wake_word_mode", cfg.wake_word_mode)}
-        ${wwMode !== "Disabled"
-          ? html`${h.renderSpecSelect("ww_sens_okay_nabu", cfg.ww_sens_okay_nabu)}
-              ${h.renderSpecSelect("ww_sens_hey_luna", cfg.ww_sens_hey_luna)}
-              ${h.renderSpecSelect("ww_sens_hey_jarvis", cfg.ww_sens_hey_jarvis)}
-              ${h.renderSpecSelect("ww_sens_hey_mycroft", cfg.ww_sens_hey_mycroft)}
-              ${h.renderSpecSelect("ww_sens_alexa", cfg.ww_sens_alexa)}`
-          : nothing}
-        ${h.renderSpecSwitch("wake_screen_on_assist", cfg.wake_screen_on_assist)}
-        ${h.renderSpecRange("alert_volume", cfg.alert_volume)}
-        ${h.renderSpecRange("volume_step_size", cfg.volume_step_size)}
-        ${h.renderSpecSwitch("game_sound_effects", cfg.game_sound_effects)}
-        ${bleOn && caps.is_roaming_device !== false
-          ? html`${renderSwitchRow({
-                label: store.tPrefLabel("sync_device_area"),
-                ariaLabel: store.t("groups.for_group_aria", {
-                  label: store.tPrefLabel("sync_device_area"),
-                  group: group.name,
-                }),
-                checked: vfm,
-                onChange: (checked) =>
-                  void store.groups.updateGroupBaseline(gid, { sync_device_area: checked }),
-              })}
-              ${vfm
-                ? h.renderSpecRange("area_follow_dwell_s", cfg.area_follow_dwell_s, {
-                    min: 3,
-                    max: 60,
-                    step: 1,
-                    unit: "s",
-                    defaultVal: 10,
-                  })
-                : nothing}`
-          : nothing}
-        ${renderSwitchRow({
-          label: store.tPrefLabel("area_handoff"),
-          ariaLabel: store.t("groups.for_group_aria", {
-            label: store.tPrefLabel("area_handoff"),
-            group: group.name,
-          }),
-          checked: handoff,
-          onChange: (checked) =>
-            void store.groups.updateGroupBaseline(gid, { area_handoff: checked }),
-        })}
-      </div>
-    </details>
-
-    <details class="sub-collapsible">
-      <summary>${store.t("groups.section_presence_security")}</summary>
-      <div class="card-content settings-list">
-        ${renderSwitchRow({
-          label: store.tPrefLabel("native_ble_tracking"),
-          ariaLabel: store.t("groups.for_group_aria", {
-            label: store.tPrefLabel("native_ble_tracking"),
-            group: group.name,
-          }),
-          checked: bleOn,
-          onChange: (checked) =>
-            void store.groups.updateGroupBaseline(gid, { native_ble_tracking: checked }),
-        })}
-        ${bleOn
-          ? html`${renderSwitchRow({
-                label: store.tPrefLabel("ble_auto_switch"),
-                ariaLabel: store.t("groups.for_group_aria", {
-                  label: store.tPrefLabel("ble_auto_switch"),
-                  group: group.name,
-                }),
-                checked: autoSw,
-                onChange: (checked) =>
-                  void store.groups.updateGroupBaseline(gid, { ble_auto_switch: checked }),
-              })}
-              ${h.renderSpecSelect("ble_beacon_mode", cfg.ble_beacon_mode)}`
-          : nothing}
-        ${h.renderLabeledSelect(
-          "security_pin_policy",
-          pinPolicy,
-          SECURITY_PIN_POLICY_OPTIONS.map((opt) => ({
-            value: opt.value,
-            label: store.tPrefOption("security_pin_policy", opt.value),
-          })),
-          "auto",
-        )}
-      </div>
-    </details>`;
-}
-__latterExp(__exports, { renderBaselineBehaviorSection: () => renderBaselineBehaviorSection });
-//# sourceURL=latter-studio/src/views/groups/baseline-behavior-section.ts
-});
-__latterDef("src/views/groups/baseline-display-section.ts", (__exports, __req) => {
-const { renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
-const { VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UPLOADS } = __req("src/constants.ts");
-const { WALLPAPER_ROTATION_OPTIONS } = __req("src/i18n/index.ts");
-const { html, nothing } = __req("src/lib/lit.ts");
-const { isPhotoDynamic } = __req("src/state/photo-ops.ts");
-const { isValidHexColor } = __req("src/utils/format.ts");
-/**
- * Group Baseline Drawer — Display Section (`views/groups/baseline-display-section.ts`, `D-072`):
- * - Wallpaper & Photo Frame Screensaver pool selectors, rotation, shuffle, clock overlay
- * - Color profile, custom accent hex, & voice visual profile
- */
-function encodePoolSelectValue(modeVal, sourceVal, colVal) {
-  const mode = String(modeVal || "");
-  const src = String(sourceVal || "");
-  const col = String(colVal || "");
-  if (mode === "collection" && col) return `collection:${col}`;
-  if (mode === "single" && src) return `single:${src}`;
-  if (!mode && src) return `single:${src}`;
-  return "off";
-}
-function renderBaselineDisplaySection(
-  store,
-  group,
-  h,
-) {
-  if (!group.include_display || h.caps.has_display === false) {
-    return nothing;
-  }
-  const gid = group.id;
-  const cfg = group.device_config || {};
-  const colorProfile = String(cfg.color_profile || "Steel Blue");
-  const rawCustomHex =
-    typeof cfg.device_custom_color === "string" ? cfg.device_custom_color : null;
-  const customHex = isValidHexColor(rawCustomHex)
-    ? String(rawCustomHex).toUpperCase()
-    : "#3898FF";
-  const groupSsStyle = String(cfg.screensaver_style ?? "Ambient Clock");
-  const sysWallpapers = store.state?.system_wallpapers || [];
-  const photoCollections = store.state?.photo_collections || [];
-  const buildCompactPoolOptions = (
-    excludeDynamic,
-  ) => {
-    const photos = excludeDynamic
-      ? sysWallpapers.filter((wp) => !isPhotoDynamic(wp))
-      : sysWallpapers;
-    return [
-      { value: "off", label: store.t("groups.pool_off") },
-      { value: `collection:${VIRTUAL_COLLECTION_ALL}`, label: store.t("groups.pool_all") },
-      {
-        value: `collection:${VIRTUAL_COLLECTION_DEFAULTS}`,
-        label: store.t("groups.pool_defaults"),
-      },
-      {
-        value: `collection:${VIRTUAL_COLLECTION_UPLOADS}`,
-        label: store.t("groups.pool_uploads"),
-      },
-      ...photoCollections.map((c) => ({
-        value: `collection:${c.id}`,
-        label: store.t("groups.pool_collection_prefix", { name: c.name }),
-      })),
-      ...photos.map((wp) => ({
-        value: `single:${wp.id}`,
-        label: store.t("groups.pool_photo_prefix", { name: wp.name || wp.id }),
-      })),
-    ];
-  };
-  const wpPoolOptions = buildCompactPoolOptions(false);
-  const wpPoolCurrent = encodePoolSelectValue(
-    cfg.wallpaper_mode,
-    cfg.wallpaper_source,
-    cfg.wallpaper_collection,
-  );
-  const ssPoolOptions = buildCompactPoolOptions(true);
-  const ssPoolCurrent = encodePoolSelectValue(
-    cfg.screensaver_photo_mode,
-    cfg.screensaver_photo_source,
-    cfg.screensaver_photo_collection,
-  );
-  const rotationOptions = WALLPAPER_ROTATION_OPTIONS.map(
-    (o) => ({ value: String(o.value), label: o.label }),
-  );
-  return html`<details class="sub-collapsible" open>
-    <summary>${store.t("groups.section_display")}</summary>
-    <div class="card-content settings-list">
-      ${renderSettingsRow({
-        label: store.t("groups.wallpaper_pool_label"),
-        control: html`<select
-          aria-label=${store.t("groups.for_group_aria", {
-            label: store.t("groups.wallpaper_pool_label"),
-            group: group.name,
-          })}
-          .value=${wpPoolCurrent}
-          @change=${(ev) => {
-            const raw = (ev.currentTarget).value;
-            if (raw.startsWith("collection:")) {
-              void store.groups.updateGroupBaseline(gid, {
-                wallpaper_mode: "collection",
-                wallpaper_collection: raw.slice(11),
-                wallpaper_source: "",
-              });
-            } else if (raw.startsWith("single:")) {
-              void store.groups.updateGroupBaseline(gid, {
-                wallpaper_mode: "single",
-                wallpaper_source: raw.slice(7),
-                wallpaper_collection: "",
-              });
-            } else {
-              void store.groups.updateGroupBaseline(gid, {
-                wallpaper_mode: "off",
-                wallpaper_source: "",
-                wallpaper_collection: "",
-              });
-            }
-          }}
-        >
-          ${wpPoolOptions.map(
-            (opt) => html`<option value=${opt.value} ?selected=${opt.value === wpPoolCurrent}>
-              ${opt.label}
-            </option>`,
-          )}
-        </select>`,
-      })}
-      ${h.renderLabeledSelect(
-        "wallpaper_cycle_minutes",
-        cfg.wallpaper_cycle_minutes,
-        rotationOptions,
-        "0",
-        true,
-      )}
-      ${h.renderSpecSelect("screensaver_style", cfg.screensaver_style)}
-      ${groupSsStyle === "Photo Frame"
-        ? html`${renderSettingsRow({
-              label: store.t("groups.screensaver_pool_label"),
-              control: html`<select
-                aria-label=${store.t("groups.for_group_aria", {
-                  label: store.t("groups.screensaver_pool_label"),
-                  group: group.name,
-                })}
-                .value=${ssPoolCurrent}
-                @change=${(ev) => {
-                  const raw = (ev.currentTarget).value;
-                  if (raw.startsWith("collection:")) {
-                    void store.groups.updateGroupBaseline(gid, {
-                      screensaver_photo_mode: "collection",
-                      screensaver_photo_collection: raw.slice(11),
-                      screensaver_photo_source: "",
-                    });
-                  } else if (raw.startsWith("single:")) {
-                    void store.groups.updateGroupBaseline(gid, {
-                      screensaver_photo_mode: "single",
-                      screensaver_photo_source: raw.slice(7),
-                      screensaver_photo_collection: "",
-                    });
-                  } else {
-                    void store.groups.updateGroupBaseline(gid, {
-                      screensaver_photo_mode: "off",
-                      screensaver_photo_source: "",
-                      screensaver_photo_collection: "",
-                    });
-                  }
-                }}
-              >
-                ${ssPoolOptions.map(
-                  (opt) => html`<option
-                    value=${opt.value}
-                    ?selected=${opt.value === ssPoolCurrent}
-                  >
-                    ${opt.label}
-                  </option>`,
-                )}
-              </select>`,
-            })}
-            ${h.renderLabeledSelect(
-              "screensaver_cycle_minutes",
-              cfg.screensaver_cycle_minutes,
-              rotationOptions,
-              "15",
-              true,
-            )}
-            ${renderSwitchRow({
-              label: store.tPrefLabel("screensaver_shuffle"),
-              ariaLabel: store.t("groups.for_group_aria", {
-                label: store.tPrefLabel("screensaver_shuffle"),
-                group: group.name,
-              }),
-              checked: Boolean(cfg.screensaver_shuffle),
-              onChange: (checked) =>
-                void store.groups.updateGroupBaseline(gid, {
-                  screensaver_shuffle: checked,
-                }),
-            })}
-            ${h.renderSpecSwitch("screensaver_photo_clock", cfg.screensaver_photo_clock)}`
-        : nothing}
-      ${h.renderSpecSelect("color_profile", cfg.color_profile)}
-      ${colorProfile === "Custom"
-        ? renderSettingsRow({
-            label: store.tPrefLabel("device_custom_color"),
-            control: html`<input
-                type="color"
-                aria-label=${store.t("groups.for_group_aria", {
-                  label: store.tPrefLabel("device_custom_color"),
-                  group: group.name,
-                })}
-                .value=${customHex}
-                @change=${(ev) => {
-                  const raw = (ev.currentTarget).value.toUpperCase();
-                  if (isValidHexColor(raw)) {
-                    void store.groups.updateGroupBaseline(gid, {
-                      device_custom_color: raw,
-                    });
-                  }
-                }}
-              />
-              <span class="chip">${customHex}</span>`,
-          })
-        : nothing}
-      ${h.renderSpecSelect("va_visual_profile", cfg.va_visual_profile)}
-    </div>
-  </details>`;
-}
-__latterExp(__exports, { renderBaselineDisplaySection: () => renderBaselineDisplaySection });
-//# sourceURL=latter-studio/src/views/groups/baseline-display-section.ts
-});
-__latterDef("src/views/groups/baseline-interface-section.ts", (__exports, __req) => {
-const { renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
-const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, DEFAULT_ACTIVITY_SOURCES, DEFAULT_AREA_CATEGORIES, DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS, DEFAULT_HOME_CATEGORIES, DEFAULT_TOOLS_ITEMS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, TOOLS_ITEMS_CATALOG } = __req("src/constants.ts");
-const { CALENDAR_LOOKAHEAD_OPTIONS } = __req("src/i18n/index.ts");
-const { html, nothing } = __req("src/lib/lit.ts");
-const { fmtNumber } = __req("src/utils/format.ts");
-/**
- * Group Baseline Drawer — Interface Section (`views/groups/baseline-interface-section.ts`, `D-069`, `D-071`):
- * - Home screen, Clock/Date actions, Sky & weather, Activity card & sources
- * - Home Hub, Area Controls, Tools, Games category pills, Remote scope, Calendar, Music, & Cameras
- * - App Dock, Pinned shortcuts, & World clocks copy-from-Device rows
- */
-function renderBaselineInterfaceSection(
-  store,
-  group,
-  h,
-) {
-  if (!group.include_interface || h.caps.has_display === false) {
-    return nothing;
-  }
-  const gid = group.id;
-  const cfg = group.device_config || {};
-  const lookaheadOptions = CALENDAR_LOOKAHEAD_OPTIONS.map(
-    (o) => ({ value: String(o.value), label: o.label }),
-  );
-  const remoteGroups = store.state?.system_config?.remote_groups || [];
-  const remoteScopeOptions = [
-    { value: "area_auto", label: store.t("groups.remote_match_area") },
-    ...remoteGroups.map((rg) => ({
-      value: `group:${rg.id}`,
-      label: store.t("groups.remote_group_prefix", { name: rg.name }),
-    })),
-    { value: "all", label: store.t("groups.remote_all_system") },
-  ];
-  const dockCount = Array.isArray(cfg.dock_items)
-    ? cfg.dock_items.length
-    : DEFAULT_DOCK_ROUTES_TOKENS.length;
-  const pinnedCount = Array.isArray(cfg.pinned_items) ? cfg.pinned_items.length : 0;
-  const worldClocksStr = typeof cfg.world_clocks === "string" ? cfg.world_clocks.trim() : "";
-  const clockCount = worldClocksStr ? worldClocksStr.split(";").filter(Boolean).length : 0;
-  return html`<details class="sub-collapsible" open>
-    <summary>${store.t("groups.section_interface")}</summary>
-    <div class="card-content settings-list">
-      ${h.renderSpecSwitch("home_screen_enabled", cfg.home_screen_enabled)}
-      ${h.renderSpecSelect("start_screen", cfg.start_screen)}
-      ${h.renderSpecSelect("time_format", cfg.time_format)}
-      ${h.renderSpecSelect("home_clock_tap_action", cfg.home_clock_tap_action)}
-      ${h.renderSpecSelect("clock_face", cfg.clock_face)}
-      ${h.renderSpecSelect("home_date_tap_action", cfg.home_date_tap_action)}
-      ${h.renderSpecSelect("return_to_home_timeout", cfg.return_to_home_timeout)}
-      ${h.renderSpecSwitch("wake_greeting", cfg.wake_greeting)}
-      ${h.renderSpecSwitch("weather_background", cfg.weather_background)}
-      ${h.renderSpecSwitch("weather_app_background", cfg.weather_app_background)}
-      ${h.renderSpecSwitch("home_sun", cfg.home_sun)}
-      ${h.renderSpecSwitch("home_moon", cfg.home_moon)}
-      ${renderSwitchRow({
-        label: store.tPrefLabel("activity_card"),
-        ariaLabel: store.t("groups.for_group_aria", {
-          label: store.tPrefLabel("activity_card"),
-          group: group.name,
-        }),
-        checked: cfg.activity_card !== false,
-        onChange: (checked) =>
-          void store.groups.updateGroupBaseline(gid, { activity_card: checked }),
-      })}
-      ${h.renderPills(
-        "activity_sources",
-        cfg.activity_sources,
-        ACTIVITY_SOURCES_CATALOG,
-        DEFAULT_ACTIVITY_SOURCES,
-        0,
-      )}
-      ${h.renderPills(
-        "home_categories",
-        cfg.home_categories,
-        HOME_CATEGORIES_CATALOG,
-        DEFAULT_HOME_CATEGORIES,
-        1,
-      )}
-      ${h.renderPills(
-        "area_categories",
-        cfg.area_categories,
-        AREA_CATEGORIES_CATALOG,
-        DEFAULT_AREA_CATEGORIES,
-        1,
-      )}
-      ${h.renderPills(
-        "tools_items",
-        cfg.tools_items,
-        TOOLS_ITEMS_CATALOG,
-        DEFAULT_TOOLS_ITEMS,
-        1,
-      )}
-      ${h.renderPills(
-        "games_items",
-        cfg.games_items,
-        GAMES_ITEMS_CATALOG,
-        DEFAULT_GAMES_ITEMS,
-        1,
-      )}
-      ${h.renderLabeledSelect(
-        "device_remote_group",
-        cfg.device_remote_group,
-        remoteScopeOptions,
-        "area_auto",
-      )}
-      ${h.renderSpecSwitch("show_utc_clock", cfg.show_utc_clock)}
-      ${h.renderLabeledSelect(
-        "calendar_lookahead_days",
-        cfg.calendar_lookahead_days ?? 30,
-        lookaheadOptions,
-        "30",
-        true,
-      )}
-      ${h.renderSpecSelect("calendar_week_start", cfg.calendar_week_start)}
-      ${h.renderSpecSelect("album_art_style", cfg.album_art_style)}
-      ${h.renderSpecSelect("music_overlay_style", cfg.music_overlay_style)}
-      ${h.renderSpecSelect("album_sort_order", cfg.album_sort_order)}
-      ${h.renderSpecSelect("artist_album_sort_order", cfg.artist_album_sort_order)}
-      ${h.renderSpecSelect("podcast_sort_order", cfg.podcast_sort_order)}
-      ${h.renderSpecSelect("camera_default_view", cfg.camera_default_view)}
-      ${h.renderSpecSelect("camera_framing", cfg.camera_framing)}
-      ${h.renderSpecSelect("camera_carousel_interval", cfg.camera_carousel_interval)}
-      ${h.renderSpecSelect("camera_stream_mode", cfg.camera_stream_mode)}
-      ${h.renderSpecSelect("camera_doorbell_popup", cfg.camera_doorbell_popup)}
-      ${h.hasLatterDevices
-        ? html`${renderSettingsRow({
-              label: store.t("card.app_dock"),
-              description:
-                dockCount === 1
-                  ? store.t("groups.dock_baseline_desc_one")
-                  : store.t("groups.dock_baseline_desc_many", {
-                      count: fmtNumber(dockCount, store.hass, 0),
-                    }),
-              control: html`<button
-                type="button"
-                @click=${() => h.requestCopyKeys(["dock_items"], store.t("card.app_dock"))}
-                class="btn btn-secondary btn-compact"
-              >
-                ${store.t("groups.copy_dock")}
-              </button>`,
-            })}
-            ${renderSettingsRow({
-              label: store.t("dialogs.pinned_label"),
-              description:
-                pinnedCount === 1
-                  ? store.t("groups.pinned_baseline_desc_one")
-                  : store.t("groups.pinned_baseline_desc_many", {
-                      count: fmtNumber(pinnedCount, store.hass, 0),
-                    }),
-              control: html`<button
-                type="button"
-                @click=${() =>
-                  h.requestCopyKeys(["pinned_items"], store.t("dialogs.pinned_label"))}
-                class="btn btn-secondary btn-compact"
-              >
-                ${store.t("groups.copy_pinned")}
-              </button>`,
-            })}
-            ${renderSettingsRow({
-              label: store.t("dialogs.world_clocks_label"),
-              description:
-                clockCount === 1
-                  ? store.t("groups.clocks_baseline_desc_one")
-                  : store.t("groups.clocks_baseline_desc_many", {
-                      count: fmtNumber(clockCount, store.hass, 0),
-                    }),
-              control: html`<button
-                type="button"
-                @click=${() =>
-                  h.requestCopyKeys(["world_clocks"], store.t("dialogs.world_clocks_label"))}
-                class="btn btn-secondary btn-compact"
-              >
-                ${store.t("groups.copy_clocks")}
-              </button>`,
-            })}`
-        : nothing}
-    </div>
-  </details>`;
-}
-__latterExp(__exports, { renderBaselineInterfaceSection: () => renderBaselineInterfaceSection });
-//# sourceURL=latter-studio/src/views/groups/baseline-interface-section.ts
-});
 __latterDef("src/views/groups/group-baseline-drawer.ts", (__exports, __req) => {
 const { renderHourSelectRow, renderRangeRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
+const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, DEFAULT_ACTIVITY_SOURCES, DEFAULT_AREA_CATEGORIES, DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS, DEFAULT_HOME_CATEGORIES, DEFAULT_TOOLS_ITEMS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, TOOLS_ITEMS_CATALOG, VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UPLOADS } = __req("src/constants.ts");
+const { CALENDAR_LOOKAHEAD_OPTIONS, SECURITY_PIN_POLICY_OPTIONS, WALLPAPER_ROTATION_OPTIONS } = __req("src/i18n/index.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
+const { isPhotoDynamic } = __req("src/state/photo-ops.ts");
 const { isCatalogItemSupported } = __req("src/state/store.ts");
-const { defaultLocaleTimeFormat } = __req("src/utils/format.ts");
-const { renderBaselineBehaviorSection } = __req("src/views/groups/baseline-behavior-section.ts");
-const { renderBaselineDisplaySection } = __req("src/views/groups/baseline-display-section.ts");
-const { renderBaselineInterfaceSection } = __req("src/views/groups/baseline-interface-section.ts");
+const { defaultLocaleTimeFormat, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
 /**
- * Group Baseline Drawer (`system_sync` Column 1, `D-048`, `D-050`, `D-063`, `D-064`).
+ * Group Baseline Drawer (`system_sync` Column 1, `D-048`, `D-050`, `D-063`, `D-064`, `D-069`, `D-071`, `D-072`).
  *
- * Composes `baseline-{behavior,display,interface}-section.ts` with trait-gated
+ * Renders the Behavior, Display, and Interface baseline sections with trait-gated
  * spec adapters (`isCatalogItemSupported`) and confirmation-guarded copy-from-Device actions.
  */
 function deriveGroupCapabilities(
@@ -22833,6 +22226,516 @@ function requestCopyDeviceIntoGroup(
       await store.groups.copyDeviceToGroupBaseline(group.id, sourceSubentryId, copyKeys);
     },
   });
+}
+function encodePoolSelectValue(modeVal, sourceVal, colVal) {
+  const mode = String(modeVal || "");
+  const src = String(sourceVal || "");
+  const col = String(colVal || "");
+  if (mode === "collection" && col) return `collection:${col}`;
+  if (mode === "single" && src) return `single:${src}`;
+  if (!mode && src) return `single:${src}`;
+  return "off";
+}
+function renderBaselineBehaviorSection(
+  store,
+  group,
+  h,
+) {
+  const gid = group.id;
+  const cfg = group.device_config || {};
+  const { caps } = h;
+  const autoBrt = String(cfg.auto_brightness_mode || "Sun Synchronized");
+  const wwMode = String(cfg.wake_word_mode || "Docked Only");
+  const bleOn = Boolean(cfg.native_ble_tracking);
+  const autoSw = cfg.ble_auto_switch !== undefined ? Boolean(cfg.ble_auto_switch) : bleOn;
+  const vfm = Boolean(cfg.sync_device_area);
+  const handoff = Boolean(cfg.area_handoff);
+  const pinPolicy = String(cfg.security_pin_policy || "auto");
+  const groupSsMode = String(cfg.screensaver_mode ?? "Docked Only");
+  return html`<details class="sub-collapsible" open>
+      <summary>${store.t("groups.section_power_brightness")}</summary>
+      <div class="card-content settings-list">
+        ${h.renderSpecSelect("tap_to_wake", cfg.tap_to_wake)}
+        ${h.renderSpecSelect("pickup_to_wake", cfg.pickup_to_wake)}
+        ${h.renderSpecSelect("battery_screen_timeout", cfg.battery_screen_timeout)}
+        ${h.renderSpecSelect("battery_hibernate_timeout", cfg.battery_hibernate_timeout)}
+        ${h.renderSpecSelect("screensaver_mode", cfg.screensaver_mode)}
+        ${caps.has_battery !== false || groupSsMode !== "Never"
+          ? h.renderSpecSelect("docked_idle_timeout", cfg.docked_idle_timeout)
+          : nothing}
+        ${h.renderSpecSelect("auto_brightness_mode", cfg.auto_brightness_mode)}
+        ${autoBrt === "Disabled"
+          ? h.renderSpecRange("manual_brightness", cfg.manual_brightness)
+          : html`${h.renderSpecRange("day_brightness", cfg.day_brightness)}
+              ${h.renderSpecRange("night_brightness", cfg.night_brightness)}`}
+        ${autoBrt === "Time Schedule"
+          ? html`${h.renderSpecHourSelect("day_start_hour", cfg.day_start_hour)}
+              ${h.renderSpecHourSelect("night_start_hour", cfg.night_start_hour)}`
+          : nothing}
+        ${h.renderSpecSelect("bedtime_display", cfg.bedtime_display)}
+        ${h.renderSpecRange("bedtime_brightness", cfg.bedtime_brightness)}
+        ${h.renderSpecSwitch("bedtime_schedule", cfg.bedtime_schedule)}
+        ${Boolean(cfg.bedtime_schedule)
+          ? html`${h.renderSpecHourSelect("bedtime_start_hour", cfg.bedtime_start_hour)}
+              ${h.renderSpecHourSelect("bedtime_end_hour", cfg.bedtime_end_hour)}`
+          : nothing}
+      </div>
+    </details>
+
+    <details class="sub-collapsible">
+      <summary>${store.t("groups.section_audio_voice")}</summary>
+      <div class="card-content settings-list">
+        ${h.renderSpecSelect("wake_word_mode", cfg.wake_word_mode)}
+        ${wwMode !== "Disabled"
+          ? html`${h.renderSpecSelect("ww_sens_okay_nabu", cfg.ww_sens_okay_nabu)}
+              ${h.renderSpecSelect("ww_sens_hey_luna", cfg.ww_sens_hey_luna)}
+              ${h.renderSpecSelect("ww_sens_hey_jarvis", cfg.ww_sens_hey_jarvis)}
+              ${h.renderSpecSelect("ww_sens_hey_mycroft", cfg.ww_sens_hey_mycroft)}
+              ${h.renderSpecSelect("ww_sens_alexa", cfg.ww_sens_alexa)}`
+          : nothing}
+        ${h.renderSpecSwitch("wake_screen_on_assist", cfg.wake_screen_on_assist)}
+        ${h.renderSpecRange("alert_volume", cfg.alert_volume)}
+        ${h.renderSpecRange("volume_step_size", cfg.volume_step_size)}
+        ${h.renderSpecSwitch("game_sound_effects", cfg.game_sound_effects)}
+        ${bleOn && caps.is_roaming_device !== false
+          ? html`${renderSwitchRow({
+                label: store.tPrefLabel("sync_device_area"),
+                ariaLabel: store.t("groups.for_group_aria", {
+                  label: store.tPrefLabel("sync_device_area"),
+                  group: group.name,
+                }),
+                checked: vfm,
+                onChange: (checked) =>
+                  void store.groups.updateGroupBaseline(gid, { sync_device_area: checked }),
+              })}
+              ${vfm
+                ? h.renderSpecRange("area_follow_dwell_s", cfg.area_follow_dwell_s, {
+                    min: 3,
+                    max: 60,
+                    step: 1,
+                    unit: "s",
+                    defaultVal: 10,
+                  })
+                : nothing}`
+          : nothing}
+        ${renderSwitchRow({
+          label: store.tPrefLabel("area_handoff"),
+          ariaLabel: store.t("groups.for_group_aria", {
+            label: store.tPrefLabel("area_handoff"),
+            group: group.name,
+          }),
+          checked: handoff,
+          onChange: (checked) =>
+            void store.groups.updateGroupBaseline(gid, { area_handoff: checked }),
+        })}
+      </div>
+    </details>
+
+    <details class="sub-collapsible">
+      <summary>${store.t("groups.section_presence_security")}</summary>
+      <div class="card-content settings-list">
+        ${renderSwitchRow({
+          label: store.tPrefLabel("native_ble_tracking"),
+          ariaLabel: store.t("groups.for_group_aria", {
+            label: store.tPrefLabel("native_ble_tracking"),
+            group: group.name,
+          }),
+          checked: bleOn,
+          onChange: (checked) =>
+            void store.groups.updateGroupBaseline(gid, { native_ble_tracking: checked }),
+        })}
+        ${bleOn
+          ? html`${renderSwitchRow({
+                label: store.tPrefLabel("ble_auto_switch"),
+                ariaLabel: store.t("groups.for_group_aria", {
+                  label: store.tPrefLabel("ble_auto_switch"),
+                  group: group.name,
+                }),
+                checked: autoSw,
+                onChange: (checked) =>
+                  void store.groups.updateGroupBaseline(gid, { ble_auto_switch: checked }),
+              })}
+              ${h.renderSpecSelect("ble_beacon_mode", cfg.ble_beacon_mode)}`
+          : nothing}
+        ${h.renderLabeledSelect(
+          "security_pin_policy",
+          pinPolicy,
+          SECURITY_PIN_POLICY_OPTIONS.map((opt) => ({
+            value: opt.value,
+            label: store.tPrefOption("security_pin_policy", opt.value),
+          })),
+          "auto",
+        )}
+      </div>
+    </details>`;
+}
+function renderBaselineDisplaySection(
+  store,
+  group,
+  h,
+) {
+  if (!group.include_display || h.caps.has_display === false) {
+    return nothing;
+  }
+  const gid = group.id;
+  const cfg = group.device_config || {};
+  const colorProfile = String(cfg.color_profile || "Steel Blue");
+  const rawCustomHex =
+    typeof cfg.device_custom_color === "string" ? cfg.device_custom_color : null;
+  const customHex = isValidHexColor(rawCustomHex)
+    ? String(rawCustomHex).toUpperCase()
+    : "#3898FF";
+  const groupSsStyle = String(cfg.screensaver_style ?? "Ambient Clock");
+  const sysWallpapers = store.state?.system_wallpapers || [];
+  const photoCollections = store.state?.photo_collections || [];
+  const buildCompactPoolOptions = (
+    excludeDynamic,
+  ) => {
+    const photos = excludeDynamic
+      ? sysWallpapers.filter((wp) => !isPhotoDynamic(wp))
+      : sysWallpapers;
+    return [
+      { value: "off", label: store.t("groups.pool_off") },
+      { value: `collection:${VIRTUAL_COLLECTION_ALL}`, label: store.t("groups.pool_all") },
+      {
+        value: `collection:${VIRTUAL_COLLECTION_DEFAULTS}`,
+        label: store.t("groups.pool_defaults"),
+      },
+      {
+        value: `collection:${VIRTUAL_COLLECTION_UPLOADS}`,
+        label: store.t("groups.pool_uploads"),
+      },
+      ...photoCollections.map((c) => ({
+        value: `collection:${c.id}`,
+        label: store.t("groups.pool_collection_prefix", { name: c.name }),
+      })),
+      ...photos.map((wp) => ({
+        value: `single:${wp.id}`,
+        label: store.t("groups.pool_photo_prefix", { name: wp.name || wp.id }),
+      })),
+    ];
+  };
+  const wpPoolOptions = buildCompactPoolOptions(false);
+  const wpPoolCurrent = encodePoolSelectValue(
+    cfg.wallpaper_mode,
+    cfg.wallpaper_source,
+    cfg.wallpaper_collection,
+  );
+  const ssPoolOptions = buildCompactPoolOptions(true);
+  const ssPoolCurrent = encodePoolSelectValue(
+    cfg.screensaver_photo_mode,
+    cfg.screensaver_photo_source,
+    cfg.screensaver_photo_collection,
+  );
+  const rotationOptions = WALLPAPER_ROTATION_OPTIONS.map(
+    (o) => ({ value: String(o.value), label: o.label }),
+  );
+  return html`<details class="sub-collapsible" open>
+    <summary>${store.t("groups.section_display")}</summary>
+    <div class="card-content settings-list">
+      ${renderSettingsRow({
+        label: store.t("groups.wallpaper_pool_label"),
+        control: html`<select
+          aria-label=${store.t("groups.for_group_aria", {
+            label: store.t("groups.wallpaper_pool_label"),
+            group: group.name,
+          })}
+          .value=${wpPoolCurrent}
+          @change=${(ev) => {
+            const raw = (ev.currentTarget).value;
+            if (raw.startsWith("collection:")) {
+              void store.groups.updateGroupBaseline(gid, {
+                wallpaper_mode: "collection",
+                wallpaper_collection: raw.slice(11),
+                wallpaper_source: "",
+              });
+            } else if (raw.startsWith("single:")) {
+              void store.groups.updateGroupBaseline(gid, {
+                wallpaper_mode: "single",
+                wallpaper_source: raw.slice(7),
+                wallpaper_collection: "",
+              });
+            } else {
+              void store.groups.updateGroupBaseline(gid, {
+                wallpaper_mode: "off",
+                wallpaper_source: "",
+                wallpaper_collection: "",
+              });
+            }
+          }}
+        >
+          ${wpPoolOptions.map(
+            (opt) => html`<option value=${opt.value} ?selected=${opt.value === wpPoolCurrent}>
+              ${opt.label}
+            </option>`,
+          )}
+        </select>`,
+      })}
+      ${h.renderLabeledSelect(
+        "wallpaper_cycle_minutes",
+        cfg.wallpaper_cycle_minutes,
+        rotationOptions,
+        "0",
+        true,
+      )}
+      ${h.renderSpecSelect("screensaver_style", cfg.screensaver_style)}
+      ${groupSsStyle === "Photo Frame"
+        ? html`${renderSettingsRow({
+              label: store.t("groups.screensaver_pool_label"),
+              control: html`<select
+                aria-label=${store.t("groups.for_group_aria", {
+                  label: store.t("groups.screensaver_pool_label"),
+                  group: group.name,
+                })}
+                .value=${ssPoolCurrent}
+                @change=${(ev) => {
+                  const raw = (ev.currentTarget).value;
+                  if (raw.startsWith("collection:")) {
+                    void store.groups.updateGroupBaseline(gid, {
+                      screensaver_photo_mode: "collection",
+                      screensaver_photo_collection: raw.slice(11),
+                      screensaver_photo_source: "",
+                    });
+                  } else if (raw.startsWith("single:")) {
+                    void store.groups.updateGroupBaseline(gid, {
+                      screensaver_photo_mode: "single",
+                      screensaver_photo_source: raw.slice(7),
+                      screensaver_photo_collection: "",
+                    });
+                  } else {
+                    void store.groups.updateGroupBaseline(gid, {
+                      screensaver_photo_mode: "off",
+                      screensaver_photo_source: "",
+                      screensaver_photo_collection: "",
+                    });
+                  }
+                }}
+              >
+                ${ssPoolOptions.map(
+                  (opt) => html`<option
+                    value=${opt.value}
+                    ?selected=${opt.value === ssPoolCurrent}
+                  >
+                    ${opt.label}
+                  </option>`,
+                )}
+              </select>`,
+            })}
+            ${h.renderLabeledSelect(
+              "screensaver_cycle_minutes",
+              cfg.screensaver_cycle_minutes,
+              rotationOptions,
+              "15",
+              true,
+            )}
+            ${renderSwitchRow({
+              label: store.tPrefLabel("screensaver_shuffle"),
+              ariaLabel: store.t("groups.for_group_aria", {
+                label: store.tPrefLabel("screensaver_shuffle"),
+                group: group.name,
+              }),
+              checked: Boolean(cfg.screensaver_shuffle),
+              onChange: (checked) =>
+                void store.groups.updateGroupBaseline(gid, {
+                  screensaver_shuffle: checked,
+                }),
+            })}
+            ${h.renderSpecSwitch("screensaver_photo_clock", cfg.screensaver_photo_clock)}`
+        : nothing}
+      ${h.renderSpecSelect("color_profile", cfg.color_profile)}
+      ${colorProfile === "Custom"
+        ? renderSettingsRow({
+            label: store.tPrefLabel("device_custom_color"),
+            control: html`<input
+                type="color"
+                aria-label=${store.t("groups.for_group_aria", {
+                  label: store.tPrefLabel("device_custom_color"),
+                  group: group.name,
+                })}
+                .value=${customHex}
+                @change=${(ev) => {
+                  const raw = (ev.currentTarget).value.toUpperCase();
+                  if (isValidHexColor(raw)) {
+                    void store.groups.updateGroupBaseline(gid, {
+                      device_custom_color: raw,
+                    });
+                  }
+                }}
+              />
+              <span class="chip">${customHex}</span>`,
+          })
+        : nothing}
+      ${h.renderSpecSelect("va_visual_profile", cfg.va_visual_profile)}
+    </div>
+  </details>`;
+}
+function renderBaselineInterfaceSection(
+  store,
+  group,
+  h,
+) {
+  if (!group.include_interface || h.caps.has_display === false) {
+    return nothing;
+  }
+  const gid = group.id;
+  const cfg = group.device_config || {};
+  const lookaheadOptions = CALENDAR_LOOKAHEAD_OPTIONS.map(
+    (o) => ({ value: String(o.value), label: o.label }),
+  );
+  const remoteGroups = store.state?.system_config?.remote_groups || [];
+  const remoteScopeOptions = [
+    { value: "area_auto", label: store.t("groups.remote_match_area") },
+    ...remoteGroups.map((rg) => ({
+      value: `group:${rg.id}`,
+      label: store.t("groups.remote_group_prefix", { name: rg.name }),
+    })),
+    { value: "all", label: store.t("groups.remote_all_system") },
+  ];
+  const dockCount = Array.isArray(cfg.dock_items)
+    ? cfg.dock_items.length
+    : DEFAULT_DOCK_ROUTES_TOKENS.length;
+  const pinnedCount = Array.isArray(cfg.pinned_items) ? cfg.pinned_items.length : 0;
+  const worldClocksStr = typeof cfg.world_clocks === "string" ? cfg.world_clocks.trim() : "";
+  const clockCount = worldClocksStr ? worldClocksStr.split(";").filter(Boolean).length : 0;
+  return html`<details class="sub-collapsible" open>
+    <summary>${store.t("groups.section_interface")}</summary>
+    <div class="card-content settings-list">
+      ${h.renderSpecSwitch("home_screen_enabled", cfg.home_screen_enabled)}
+      ${h.renderSpecSelect("start_screen", cfg.start_screen)}
+      ${h.renderSpecSelect("time_format", cfg.time_format)}
+      ${h.renderSpecSelect("home_clock_tap_action", cfg.home_clock_tap_action)}
+      ${h.renderSpecSelect("clock_face", cfg.clock_face)}
+      ${h.renderSpecSelect("home_date_tap_action", cfg.home_date_tap_action)}
+      ${h.renderSpecSelect("return_to_home_timeout", cfg.return_to_home_timeout)}
+      ${h.renderSpecSwitch("wake_greeting", cfg.wake_greeting)}
+      ${h.renderSpecSwitch("weather_background", cfg.weather_background)}
+      ${h.renderSpecSwitch("weather_app_background", cfg.weather_app_background)}
+      ${h.renderSpecSwitch("home_sun", cfg.home_sun)}
+      ${h.renderSpecSwitch("home_moon", cfg.home_moon)}
+      ${renderSwitchRow({
+        label: store.tPrefLabel("activity_card"),
+        ariaLabel: store.t("groups.for_group_aria", {
+          label: store.tPrefLabel("activity_card"),
+          group: group.name,
+        }),
+        checked: cfg.activity_card !== false,
+        onChange: (checked) =>
+          void store.groups.updateGroupBaseline(gid, { activity_card: checked }),
+      })}
+      ${h.renderPills(
+        "activity_sources",
+        cfg.activity_sources,
+        ACTIVITY_SOURCES_CATALOG,
+        DEFAULT_ACTIVITY_SOURCES,
+        0,
+      )}
+      ${h.renderPills(
+        "home_categories",
+        cfg.home_categories,
+        HOME_CATEGORIES_CATALOG,
+        DEFAULT_HOME_CATEGORIES,
+        1,
+      )}
+      ${h.renderPills(
+        "area_categories",
+        cfg.area_categories,
+        AREA_CATEGORIES_CATALOG,
+        DEFAULT_AREA_CATEGORIES,
+        1,
+      )}
+      ${h.renderPills(
+        "tools_items",
+        cfg.tools_items,
+        TOOLS_ITEMS_CATALOG,
+        DEFAULT_TOOLS_ITEMS,
+        1,
+      )}
+      ${h.renderPills(
+        "games_items",
+        cfg.games_items,
+        GAMES_ITEMS_CATALOG,
+        DEFAULT_GAMES_ITEMS,
+        1,
+      )}
+      ${h.renderLabeledSelect(
+        "device_remote_group",
+        cfg.device_remote_group,
+        remoteScopeOptions,
+        "area_auto",
+      )}
+      ${h.renderSpecSwitch("show_utc_clock", cfg.show_utc_clock)}
+      ${h.renderLabeledSelect(
+        "calendar_lookahead_days",
+        cfg.calendar_lookahead_days ?? 30,
+        lookaheadOptions,
+        "30",
+        true,
+      )}
+      ${h.renderSpecSelect("calendar_week_start", cfg.calendar_week_start)}
+      ${h.renderSpecSelect("album_art_style", cfg.album_art_style)}
+      ${h.renderSpecSelect("music_overlay_style", cfg.music_overlay_style)}
+      ${h.renderSpecSelect("album_sort_order", cfg.album_sort_order)}
+      ${h.renderSpecSelect("artist_album_sort_order", cfg.artist_album_sort_order)}
+      ${h.renderSpecSelect("podcast_sort_order", cfg.podcast_sort_order)}
+      ${h.renderSpecSelect("camera_default_view", cfg.camera_default_view)}
+      ${h.renderSpecSelect("camera_framing", cfg.camera_framing)}
+      ${h.renderSpecSelect("camera_carousel_interval", cfg.camera_carousel_interval)}
+      ${h.renderSpecSelect("camera_stream_mode", cfg.camera_stream_mode)}
+      ${h.renderSpecSelect("camera_doorbell_popup", cfg.camera_doorbell_popup)}
+      ${h.hasLatterDevices
+        ? html`${renderSettingsRow({
+              label: store.t("card.app_dock"),
+              description:
+                dockCount === 1
+                  ? store.t("groups.dock_baseline_desc_one")
+                  : store.t("groups.dock_baseline_desc_many", {
+                      count: fmtNumber(dockCount, store.hass, 0),
+                    }),
+              control: html`<button
+                type="button"
+                @click=${() => h.requestCopyKeys(["dock_items"], store.t("card.app_dock"))}
+                class="btn btn-secondary btn-compact"
+              >
+                ${store.t("groups.copy_dock")}
+              </button>`,
+            })}
+            ${renderSettingsRow({
+              label: store.t("dialogs.pinned_label"),
+              description:
+                pinnedCount === 1
+                  ? store.t("groups.pinned_baseline_desc_one")
+                  : store.t("groups.pinned_baseline_desc_many", {
+                      count: fmtNumber(pinnedCount, store.hass, 0),
+                    }),
+              control: html`<button
+                type="button"
+                @click=${() =>
+                  h.requestCopyKeys(["pinned_items"], store.t("dialogs.pinned_label"))}
+                class="btn btn-secondary btn-compact"
+              >
+                ${store.t("groups.copy_pinned")}
+              </button>`,
+            })}
+            ${renderSettingsRow({
+              label: store.t("dialogs.world_clocks_label"),
+              description:
+                clockCount === 1
+                  ? store.t("groups.clocks_baseline_desc_one")
+                  : store.t("groups.clocks_baseline_desc_many", {
+                      count: fmtNumber(clockCount, store.hass, 0),
+                    }),
+              control: html`<button
+                type="button"
+                @click=${() =>
+                  h.requestCopyKeys(["world_clocks"], store.t("dialogs.world_clocks_label"))}
+                class="btn btn-secondary btn-compact"
+              >
+                ${store.t("groups.copy_clocks")}
+              </button>`,
+            })}`
+        : nothing}
+    </div>
+  </details>`;
 }
 function renderGroupBaselineDrawer(
   store,

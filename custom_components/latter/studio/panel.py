@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 
 from ..const import DOMAIN, INTEGRATION_VERSION
 from .commands import async_register_studio_ws_commands
-from .payload_shared import load_studio_locales_sync, log_studio_event
+from .payload import load_studio_locales_sync, log_studio_event
 
 _LOGGER = logging.getLogger(__name__)
 

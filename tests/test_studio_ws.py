@@ -65,9 +65,8 @@ class TestLiveConditionalRows(unittest.TestCase):
         self.assertIn("executeEntityAction(", STUDIO_JS)
         cmds = read_py_tree(
             "studio/commands.py",
-            "studio/cmd_presence_devices.py",
-            "studio/cmd_photos_media.py",
-            "studio/cmd_groups_security.py",
+            "studio/system_commands.py",
+            "studio/device_commands.py",
         )
         self.assertRegex(
             cmds,

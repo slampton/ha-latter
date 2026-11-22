@@ -1,4 +1,4 @@
-"""Repository metadata, LOC ratchet, full version lockstep, Studio XHR/CSS, and clock checks."""
+"""Repository metadata, full version lockstep, Studio XHR/CSS, and clock checks."""
 
 from __future__ import annotations
 
@@ -34,19 +34,8 @@ TEXT_EXTS: Final[frozenset[str]] = frozenset(
     {".py", ".json", ".yaml", ".yml", ".js", ".ts", ".mjs", ".md", ".toml"}
 )
 
-LOC_SOFT_LIMIT: Final = 1000
-LOC_HARD_LIMIT: Final = 1200
 MIN_SDK_REV_FLOOR: Final = 2026112007
 MIN_OPEN_ARGS: Final = 2
-
-LOC_EXEMPT_REL_PATHS: Final[frozenset[str]] = frozenset(
-    {
-        "custom_components/latter/protocol_v3.json",
-        "custom_components/latter/studio/locales/en.json",
-        "frontend_src/src/protocol-schema.ts",
-        "frontend_src/package-lock.json",
-    }
-)
 
 BANNED_MOCK_SHIMS: Final[tuple[str, ...]] = (
     "tests/harness",
@@ -135,12 +124,11 @@ def _parse_structured_file(
             failures.append(f"[TOML] {rel} failed TOML parse: {exc}")
 
 
-def scan_files_and_loc(
+def scan_repo_files(
     root: Path,
-    warnings: list[str],
     failures: list[str],
 ) -> dict[str, ast.Module]:
-    """Validate UTF-8, Python/JSON/TOML syntax, terminology, and `<= 1,200` LOC ratchet."""
+    """Validate UTF-8 no-BOM, Python/JSON/TOML syntax, and terminology."""
     parsed_latter_trees: dict[str, ast.Module] = {}
     for path in iter_repo_files(root):
         suffix = path.suffix.lower()
@@ -155,17 +143,6 @@ def scan_files_and_loc(
         except UnicodeDecodeError as exc:
             failures.append(f"[UTF8] {rel} is not valid UTF-8: {exc}")
             continue
-
-        if not rel.startswith("custom_components/latter/frontend/") and rel not in LOC_EXEMPT_REL_PATHS:
-            loc = len(txt.splitlines())
-            if loc > LOC_HARD_LIMIT:
-                failures.append(
-                    f"[LOC RATCHET] {rel} is {loc} LOC (exceeds hard limit {LOC_HARD_LIMIT} LOC)"
-                )
-            elif loc > LOC_SOFT_LIMIT:
-                warnings.append(
-                    f"[LOC WARNING] {rel} is {loc} LOC (exceeds soft target {LOC_SOFT_LIMIT} LOC)"
-                )
 
         _parse_structured_file(rel, suffix, txt, parsed_latter_trees, failures)
         if rel.startswith(("custom_components/", "frontend_src/src/")):

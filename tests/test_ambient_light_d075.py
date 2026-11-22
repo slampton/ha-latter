@@ -21,12 +21,12 @@ from custom_components.latter.const import (
     DOMAIN,
     STUDIO_REV,
 )
-from custom_components.latter.studio.cmd_presence_devices import (
-    compute_illuminance_calibration_from_stats,
-)
 from custom_components.latter.studio.settings_cleaners import (
     SettingsScopeError,
     clean_area_illuminance,
+)
+from custom_components.latter.studio.system_commands import (
+    compute_illuminance_calibration_from_stats,
 )
 from tests.helpers.ble_and_ws import call_ws, make_ws_connection
 from tests.helpers.ha_setup import ensure_area, register_entity

@@ -542,4 +542,37 @@ export const CONTROL_STYLES = css`
   .sortable-row-stacked > .sortable-row-content {
     inline-size: 100%;
   }
+
+  @container (max-width: 520px) {
+    .settings-row { grid-template-columns: minmax(0, 1fr); }
+    .settings-row + .settings-row { border-block-start: 1px solid var(--studio-divider); }
+    .settings-row-control { justify-content: flex-start; }
+    .settings-row-control select,
+    .settings-row-control .combobox,
+    .settings-row-control input[type="text"],
+    .settings-row-control input[type="search"],
+    .settings-row-control input[type="password"] {
+      inline-size: 100%;
+    }
+  }
+  @container (max-width: 360px) {
+    .quick-action-grid { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 860px) {
+    .settings-row { grid-template-columns: minmax(0, 1fr); }
+    .settings-row + .settings-row { border-block-start: 1px solid var(--studio-divider); }
+    .settings-row-control { justify-content: flex-start; }
+    .settings-row-control select,
+    .settings-row-control .combobox,
+    .settings-row-control input[type="text"],
+    .settings-row-control input[type="search"],
+    .settings-row-control input[type="password"] {
+      inline-size: 100%;
+    }
+  }
+  @media (max-width: 480px) {
+    .list-row { flex-wrap: wrap; }
+    .list-row-head { flex-wrap: wrap; }
+    .list-row-main { grid-template-columns: minmax(0, 1fr); inline-size: 100%; }
+  }
 `;

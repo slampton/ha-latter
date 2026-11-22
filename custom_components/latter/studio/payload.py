@@ -1,9 +1,15 @@
-"""State payload builder for Latter Studio (`L3`)."""
+"""Cohesive state payload, entity catalog, shared controls, locale overlay, and log builder for Latter Studio (`L3`)."""
 
 from __future__ import annotations
 
-from collections.abc import Collection
-from typing import Any, Final
+import asyncio
+from collections.abc import Callable, Collection
+from datetime import UTC, datetime
+import json
+import logging
+from pathlib import Path
+import re
+from typing import Any, Final, NotRequired, TypedDict, Unpack
 
 import homeassistant.const as ha_const
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -12,9 +18,12 @@ from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
     entity_registry as er,
+    issue_registry as ir,
 )
+from homeassistant.util import dt as dt_util
 
 from ..areas.registry import resolve_area_ambient_light
+from ..cameras.capabilities import resolve_camera_capabilities
 from ..const import (
     CONF_ACTIVITY_CARD,
     CONF_ACTIVITY_SOURCES,
@@ -65,13 +74,24 @@ from ..const import (
     STUDIO_REV,
 )
 from ..coordinator import LatterCoordinator
-from ..groups.device_groups import get_device_groups
+from ..doorbell_targets import resolve_doorbell_ring_entities
+from ..groups.device_groups import (
+    coordinator_supports_pref,
+    get_device_groups,
+    resolve_behavior_key_value,
+)
 from ..groups.esphome_inspector import (
     get_esphome_device_entities,
     present_section_ids,
 )
-from ..hub_registry import get_latter_system, get_system_config_rev, iter_coordinators
+from ..hub_registry import (
+    get_area_state_index,
+    get_latter_system,
+    get_system_config_rev,
+    iter_coordinators,
+)
 from ..identity import esphome_service, get_discovered_latter_devices
+from ..media.linking import is_music_assistant_player, ma_player_entities
 from ..presence.ble_discovery import (
     describe_ble_target_model,
     get_discovered_ble_candidates,
@@ -82,37 +102,1464 @@ from ..presence.ble_registry import (
     count_area_ble_proxies,
     get_area_signatures_summary,
 )
+from ..protocol_policy import resolve_shortcut_entity_icon
 from ..protocol_specs import (
+    ACTIVITY_SOURCES_CATALOG,
+    AREA_CATEGORIES_CATALOG,
     DEVICE_PREF_SPECS,
+    GAMES_ITEMS_CATALOG,
+    HOME_CATEGORIES_CATALOG,
+    SHORTCUT_SUPPORTED_DOMAINS,
+    TOOLS_ITEMS_CATALOG,
     WORLD_CLOCK_ZONES,
     humanize_device_model_label,
     resolve_device_pref_value,
 )
+from ..repairs_keys import parse_device_issue_id
+from ..wallpapers.models import (
+    VIRTUAL_COLLECTION_ALL,
+    VIRTUAL_COLLECTION_DEFAULTS,
+    VIRTUAL_COLLECTION_UNCATEGORIZED,
+    VIRTUAL_COLLECTION_UPLOADS,
+)
 from ..wallpapers.pools import list_photo_collections, list_wallpaper_catalog
-from .payload_sections import (
-    build_entity_catalog,
-    build_system_shared_controls,
-)
-from .payload_shared import (
-    MAX_INTERNAL_LOGS,
-    STUDIO_BULK_CONTROL_DOMAINS,
-    _build_issues,
-    build_device_prefs_payload,
-    build_issues,
-    build_pref_specs_catalog,
-    build_quick_actions_payload,
-    build_speaker_volume_payload,
-    get_combined_system_and_studio_logs,
-    is_coordinator_online_for_studio,
-    load_studio_locales_sync,
-    log_studio_event,
-    resolve_studio_locale_strings,
-    resolve_target_coordinator,
-)
 from .settings_cleaners import system_settings_view
+from .state_gates import find_by_subentry_id
 
+_LOGGER = logging.getLogger(__name__)
+
+MAX_INTERNAL_LOGS: Final = 150
+_MAX_SYSLOG_SCAN: Final = 200
+_MAX_SYSLOG_MSG_CHARS: Final = 600
+_MUSIC_SUFFIX_LEN: Final = 6
+_SHARED_SECTION_FALLBACK_ORDER: Final = 99
 _DEFAULT_BLE_REF_POWER_DBM: Final = -59
 _DEFAULT_BRIGHTNESS_PCT: Final = 80
+
+STUDIO_BULK_CONTROL_DOMAINS: Final[frozenset[str]] = frozenset(
+    {"select", "switch", "number"}
+)
+
+_SYSLOG_KEYWORDS: Final[tuple[str, ...]] = (
+    "latter",
+    "esphome",
+    "aioesphomeapi",
+    "sendspin",
+    "music_assistant",
+    "assist_satellite",
+)
+
+_CATALOG_DOMAINS: Final[tuple[str, ...]] = (
+    "media_player",
+    "remote",
+    "number",
+    "input_number",
+    "alarm_control_panel",
+    "camera",
+    "climate",
+    "lock",
+    "cover",
+    "vacuum",
+    "weather",
+    "calendar",
+    "person",
+)
+
+_SHARED_SECTION_TITLES: Final[dict[str, str]] = {
+    "display": "Display",
+    "interface": "Interface",
+    "audio": "Audio",
+    "power": "Power",
+    "presence": "Presence",
+    "security": "Security",
+}
+
+_SHARED_SECTION_ORDER: Final[dict[str, int]] = {
+    "display": 0,
+    "interface": 1,
+    "audio": 2,
+    "power": 3,
+    "presence": 4,
+    "security": 5,
+}
+
+_LOCALE_OVERLAYS_CACHE: dict[str, dict[str, str]] = {}
+_LOCALES_LOADED: bool = False
+_LOCALES_PRELOAD_SCHEDULED: bool = False
+_LOCALES_PRELOAD_TASKS: set[asyncio.Task[None]] = set()
+
+_CoordMeta = list[tuple[LatterCoordinator, bool, bool]]
+
+
+class StudioCommandError(Exception):
+    """A Studio command rejected its input; sent to the panel as a websocket error with `code`."""
+
+    def __init__(self, code: str, message: str) -> None:
+        """Store the websocket error code alongside the message."""
+        super().__init__(message)
+        self.code = code
+
+
+class StudioLogEntry(TypedDict):
+    """Single Studio or Home Assistant `system_log` diagnostic entry."""
+
+    ts: str
+    level: str
+    source: str
+    message: str
+
+
+class StudioSystemInfo(TypedDict):
+    """System-level version and protocol lockstep metadata."""
+
+    ha_version: str
+    integration_version: str
+    min_firmware_sdk_rev: int
+    studio_rev: int
+
+
+class StudioIssueItem(TypedDict):
+    """Active Home Assistant repair issue attributed to a Latter Device or System."""
+
+    issue_id: str
+    kind: str
+    severity: str
+    subentry_id: str
+    device_title: str
+    detail: str
+
+
+class StudioDiscoveredDevice(TypedDict):
+    """Unbound Latter ESPHome device available for Studio adoption."""
+
+    esphome_device_id: str
+    node_name: str
+    title: str
+    model_label: str
+    area_name: str
+    default_group: str
+
+
+class StudioDevicePrefItem(TypedDict):
+    """Typed native `device_prefs` descriptor for a Latter Device."""
+
+    key: str
+    label: str
+    section: str
+    group_tier: str | None
+    domain: str
+    value: Any
+    options: list[str]
+    min: int | float | None
+    max: int | float | None
+    step: int | float | None
+    unit: str
+
+
+class StudioSpeakerVolumePayload(TypedDict):
+    """Local speaker volume control descriptor outside `esphome.sections`."""
+
+    entity_id: str
+    name: str
+    domain: str
+    volume_pct: int | None
+    state: str
+    min: int
+    max: int
+    step: int
+    unit: str
+
+
+class StudioQuickActionItem(TypedDict):
+    """Quick action button descriptor outside `esphome.sections`."""
+
+    key: str
+    device_command: str
+    label: str
+    domain: str
+    state: str
+    device_class: str
+
+
+class StudioSharedControlTarget(TypedDict):
+    """Per-Device state entry inside a System batch control."""
+
+    device_slug: str
+    device_group: str
+    is_online: bool
+    is_roaming: bool
+    pref_key: str
+    state: str
+
+
+class StudioSharedControlItem(TypedDict):
+    """Tab-aligned System batch control descriptor."""
+
+    key: str
+    pref_key: str
+    tier: str | None
+    section: str
+    section_title: str
+    name: str
+    domain: str
+    state: str
+    options: list[str]
+    option_labels: NotRequired[dict[str, str]]
+    min: int | float | None
+    max: int | float | None
+    step: int | float | None
+    unit: str
+    targets: list[StudioSharedControlTarget]
+
+
+class StudioEntityOption(TypedDict):
+    """Generic entity option entry in Studio's entity catalog."""
+
+    id: str
+    name: str
+    area_name: NotRequired[str]
+    stream_kind: NotRequired[str]
+    has_audio: NotRequired[bool]
+    has_talkback: NotRequired[bool]
+    is_doorbell: NotRequired[bool]
+
+
+class StudioShortcutEntityItem(TypedDict):
+    """Entity option for Dock and Pinned shortcut pickers."""
+
+    id: str
+    name: str
+    domain: str
+    device_class: str
+    icon: str
+    area_name: str
+
+
+class StudioEntityCatalog(TypedDict):
+    """Domain-grouped entity catalog for Studio pickers."""
+
+    areas: list[dict[str, str]]
+    ma_speakers: list[dict[str, Any]]
+    ma_players: list[dict[str, str]]
+    volume_targets: list[dict[str, str]]
+    remotes: list[dict[str, str]]
+    alarms: list[dict[str, Any]]
+    cameras: list[dict[str, Any]]
+    climates: list[dict[str, Any]]
+    locks: list[dict[str, Any]]
+    garages: list[dict[str, Any]]
+    vacuums: list[dict[str, Any]]
+    weathers: list[dict[str, Any]]
+    calendars: list[dict[str, str]]
+    persons: list[dict[str, str]]
+    shortcut_entities: list[StudioShortcutEntityItem]
+
+
+class StudioSystemDeviceItem(TypedDict):
+    """Per-Device summary row in `system_devices`."""
+
+    subentry_id: str
+    device_slug: str
+    title: str
+    model_label: str
+    area_id: str
+    has_assigned_area: bool
+    area_label: str
+    status_code: str
+    status_label: str
+    is_online: bool
+    kind: str
+    ble_category: str
+    has_display: bool
+    has_battery: bool
+    is_roaming: bool
+    hw_jpeg: bool
+    device_group: str
+    device_remote_group: str
+    device_group_name: str
+    assigned_person: str
+    active_area_name: str
+    is_latter_native: bool
+    battery_level: int | None
+    is_charging: bool
+    is_usb_connected: bool
+    wifi_rssi: int | None
+    ip_address: str
+    has_ble: bool
+    ble_tracked: bool
+    ble_survey_rows: list[dict[str, Any]]
+    ble_packets_seen: int
+    is_current: bool
+
+
+class StudioDeviceCapabilities(TypedDict):
+    """Capability traits exposed to Studio for the selected Device."""
+
+    has_display: bool
+    has_imu: bool
+    is_round: bool
+    has_battery: bool
+    has_power: bool
+    has_voice: bool
+    has_audio: bool
+    has_ble_beacon: bool
+    is_roaming_device: bool
+    hw_jpeg: bool
+    video_max_fps: int
+    video_grid_fps: int
+
+
+class StudioLinksPayload(TypedDict):
+    """Home Assistant registry link identifiers for the selected Device."""
+
+    entry_id: str
+    esphome_device_id: str
+    latter_device_id: str
+
+
+class StudioPrefSpecItem(TypedDict):
+    """Serialized `DevicePrefSpec` entry for Studio runtime consumers."""
+
+    key: str
+    label: str
+    domain: str
+    default: Any
+    section: str
+    group_tier: str | None
+    options: list[str]
+    min: int | float | None
+    max: int | float | None
+    step: int | float | None
+    unit: str
+    capability: str | None
+
+
+class _ControlExtraOpts(TypedDict, total=False):
+    state: str
+    options: list[str]
+    option_labels: dict[str, str]
+    min_val: int | float | None
+    max_val: int | float | None
+    step: int | float | None
+    unit: str
+
+
+# ---------------------------------------------------------------------------
+# Locale Overlays, Diagnostic Ring Buffer, and Device Target Helpers
+# ---------------------------------------------------------------------------
+
+
+def load_studio_locales_sync() -> dict[str, dict[str, str]]:
+    """Load optional `<lang>.json` Studio translation overlays from `studio/locales/` (executor)."""
+    global _LOCALES_LOADED
+    locales_dir = Path(__file__).resolve().parent / "locales"
+    loaded: dict[str, dict[str, str]] = {}
+    if locales_dir.is_dir():
+        for path in sorted(locales_dir.glob("*.json")):
+            code = path.stem.strip().lower().replace("_", "-")
+            if not code or code == "en":
+                continue
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(raw, dict):
+                loaded[code] = {
+                    str(k): str(v)
+                    for k, v in raw.items()
+                    if isinstance(k, str) and isinstance(v, str)
+                }
+    _LOCALE_OVERLAYS_CACHE.clear()
+    _LOCALE_OVERLAYS_CACHE.update(loaded)
+    _LOCALES_LOADED = True
+    return loaded
+
+
+async def _async_preload_studio_locales(hass: HomeAssistant) -> None:
+    """Populate `_LOCALE_OVERLAYS_CACHE` on the executor without blocking the event loop."""
+    global _LOCALES_PRELOAD_SCHEDULED
+    try:
+        await hass.async_add_executor_job(load_studio_locales_sync)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("Studio locale overlay preload skipped: %s", err)
+    finally:
+        _LOCALES_PRELOAD_SCHEDULED = False
+
+
+def _schedule_locale_preload_if_needed(hass: HomeAssistant) -> None:
+    """Ensure Studio locale overlays load off the event loop when not yet cached (`M-P2-25`)."""
+    global _LOCALES_PRELOAD_SCHEDULED
+    try:
+        running_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        load_studio_locales_sync()
+        return
+
+    if _LOCALES_PRELOAD_SCHEDULED:
+        return
+    _LOCALES_PRELOAD_SCHEDULED = True
+    if hasattr(hass, "async_create_task"):
+        hass.async_create_task(
+            _async_preload_studio_locales(hass),
+            "latter_studio_locales_preload",
+        )
+    else:
+        task = running_loop.create_task(_async_preload_studio_locales(hass))
+        _LOCALES_PRELOAD_TASKS.add(task)
+        task.add_done_callback(_LOCALES_PRELOAD_TASKS.discard)
+
+
+def resolve_studio_locale_strings(hass: HomeAssistant) -> dict[str, str]:
+    """Return cached non-English Studio translation strings for `hass.config.language`, or `{}`."""
+    lang = (
+        str(getattr(getattr(hass, "config", None), "language", "") or "en")
+        .strip()
+        .lower()
+        .replace("_", "-")
+    )
+    if not lang or lang == "en" or lang.startswith("en-"):
+        return {}
+    if not _LOCALES_LOADED:
+        _schedule_locale_preload_if_needed(hass)
+        if not _LOCALES_LOADED:
+            return {}
+    exact = _LOCALE_OVERLAYS_CACHE.get(lang)
+    if exact is not None:
+        return dict(exact)
+    base = lang.split("-", 1)[0]
+    fallback = _LOCALE_OVERLAYS_CACHE.get(base)
+    return dict(fallback) if fallback is not None else {}
+
+
+def log_studio_event(
+    hass: HomeAssistant, level: str, source: str, message: str
+) -> None:
+    """Append a diagnostic event (UTC ISO timestamp; Studio formats it for the user) to the Studio ring buffer."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    logs: list[dict[str, str]] = domain_data.setdefault("internal_logs", [])
+    ts = dt_util.utcnow().isoformat(timespec="seconds")
+    logs.insert(
+        0,
+        {
+            "ts": ts,
+            "level": level.upper(),
+            "source": source,
+            "message": str(message),
+        },
+    )
+    del logs[MAX_INTERNAL_LOGS:]
+
+
+def _extract_system_log_entry(rec: Any) -> dict[str, str] | None:
+    """Convert one Home Assistant `system_log` record into a `StudioLogEntry` if Latter-related."""
+    d = rec.to_dict() if hasattr(rec, "to_dict") else {}
+    logger_name = str(d.get("name") or "")
+    msgs = d.get("message")
+    msg_str = str(msgs[0] if isinstance(msgs, list) and msgs else (msgs or ""))
+    exc_str = str(d.get("exception") or "").strip()
+    haystack = f"{logger_name} {msg_str} {exc_str}".lower()
+    if not any(k in haystack for k in _SYSLOG_KEYWORDS):
+        return None
+    ts_val = d.get("timestamp")
+    ts_str = (
+        datetime.fromtimestamp(float(ts_val), tz=UTC).isoformat(timespec="seconds")
+        if ts_val
+        else ""
+    )
+    full_msg = f"{msg_str}\n{exc_str}".strip() if exc_str else msg_str
+    return {
+        "ts": ts_str,
+        "level": str(d.get("level") or "ERROR").upper(),
+        "source": f"ha:{logger_name}",
+        "message": full_msg[:_MAX_SYSLOG_MSG_CHARS],
+    }
+
+
+def get_combined_system_and_studio_logs(hass: HomeAssistant) -> list[dict[str, str]]:
+    """Combine Latter Studio events with live entries from Home Assistant's native `system_log` handler."""
+    combined: list[dict[str, str]] = list(
+        hass.data.get(DOMAIN, {}).get("internal_logs", [])
+    )
+    try:
+        sys_log = hass.data.get("system_log")
+        records = getattr(sys_log, "records", None)
+        if records is not None:
+            raw_list = (
+                list(records.values())
+                if hasattr(records, "values")
+                else list(records)
+            )
+            for rec in reversed(raw_list[-_MAX_SYSLOG_SCAN:]):
+                entry = _extract_system_log_entry(rec)
+                if entry is not None:
+                    combined.append(entry)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("Reading system_log records skipped: %s", err)
+
+    combined.sort(key=lambda x: x.get("ts") or "", reverse=True)
+    return combined[:MAX_INTERNAL_LOGS]
+
+
+def resolve_target_coordinator(
+    hass: HomeAssistant, subentry_id: str | None
+) -> LatterCoordinator | None:
+    """Return the Device coordinator whose `subentry_id` equals `subentry_id` exactly, else `None`."""
+    return find_by_subentry_id(iter_coordinators(hass), subentry_id)
+
+
+def _has_active_esphome_entity(hass: HomeAssistant, esphome_device_id: str) -> bool:
+    """Fallback online check across non-restore ESPHome entities when Wi-Fi/IP sensors are absent."""
+    ent_reg = er.async_get(hass)
+    for e_reg in er.async_entries_for_device(ent_reg, esphome_device_id):
+        if e_reg.platform != "esphome" or e_reg.domain in (
+            "select",
+            "update",
+            "button",
+        ):
+            continue
+        st_e = hass.states.get(e_reg.entity_id)
+        if st_e is None or st_e.state in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
+            continue
+        if (
+            e_reg.domain == "binary_sensor"
+            and (
+                st_e.attributes.get("device_class") or e_reg.original_device_class
+            )
+            == "connectivity"
+        ):
+            if st_e.state == "on":
+                return True
+            continue
+        return True
+    return False
+
+
+def is_coordinator_online_for_studio(
+    hass: HomeAssistant,
+    coord: LatterCoordinator,
+) -> bool:
+    """Return True when `coord` is online using Studio's unified connection state check."""
+    if coord.is_ble_tag:
+        tracker = coord.ble_tracker
+        return bool(
+            tracker is not None
+            and tracker.packets_seen > 0
+            and coord.is_online
+        )
+    if coord.is_rpc_outbox_unavailable():
+        return False
+    if coord.is_online:
+        return True
+    if coord.device_entity(
+        "sensor", "_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"
+    ):
+        return False
+    c_dev_id = coord.esphome_device_id
+    return _has_active_esphome_entity(hass, c_dev_id) if c_dev_id else False
+
+
+def build_device_prefs_payload(
+    coordinator: LatterCoordinator,
+) -> list[dict[str, Any]]:
+    """Build the clean native typed `device_prefs` list for a `LatterCoordinator`."""
+    if coordinator.is_ble_tag:
+        return []
+
+    dev_data = coordinator.device_data
+    prefs: list[dict[str, Any]] = []
+    for spec in DEVICE_PREF_SPECS:
+        if not coordinator_supports_pref(coordinator, spec):
+            continue
+        val = resolve_device_pref_value(dev_data, spec.key)
+        opts = list(spec.options)
+        if (
+            spec.key == "start_screen"
+            and not resolve_device_pref_value(dev_data, "home_screen_enabled")
+            and val == "Home"
+        ):
+            val = "Time App"
+        elif spec.key == "clock_face" and not coordinator.is_round_display:
+            opts = [o for o in opts if o != "Modern Analog"]
+            if val == "Modern Analog":
+                val = "Minimal Digital"
+        prefs.append(
+            {
+                "key": spec.key,
+                "label": spec.label,
+                "section": spec.section,
+                "group_tier": spec.group_tier,
+                "domain": spec.domain,
+                "value": val,
+                "options": opts,
+                "min": spec.min_val,
+                "max": spec.max_val,
+                "step": spec.step,
+                "unit": spec.unit,
+            }
+        )
+    return prefs
+
+
+def build_speaker_volume_payload(
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator,
+) -> dict[str, Any] | None:
+    """Return local speaker volume metadata outside `esphome.sections`."""
+    if coordinator.is_ble_tag or not coordinator.has_speaker:
+        return None
+    local_spk = coordinator.local_speaker
+    if not local_spk:
+        return None
+    spk_st = hass.states.get(local_spk)
+    vol_raw = (
+        spk_st.attributes.get("volume_level")
+        if spk_st is not None and spk_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+        else None
+    )
+    vol_pct = (
+        round(float(vol_raw) * 100)
+        if isinstance(vol_raw, (int, float))
+        else None
+    )
+    return {
+        "entity_id": local_spk,
+        "name": "Speaker Volume",
+        "domain": "number",
+        "volume_pct": vol_pct,
+        "state": str(vol_pct) if vol_pct is not None else "unavailable",
+        "min": 0,
+        "max": 100,
+        "step": int(resolve_device_pref_value(coordinator.device_data, "volume_step_size")),
+        "unit": "%",
+    }
+
+
+def build_quick_actions_payload(
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator,
+) -> list[dict[str, Any]]:
+    """Return quick action buttons outside `esphome.sections`."""
+    if coordinator.is_ble_tag:
+        return []
+    can_run_cmd = is_coordinator_online_for_studio(hass, coordinator) and bool(
+        coordinator.is_online
+        or esphome_service(hass, coordinator.esphome_device_id, "latter_device_command")
+    )
+    cmd_state = "unknown" if can_run_cmd else "unavailable"
+    action_specs: list[tuple[str, str, str]] = []
+    if coordinator.has_speaker:
+        action_specs.append(("find_my", "Find My Device", "identify"))
+    if coordinator.has_mic:
+        action_specs.append(("trigger_va", "Trigger Voice Assistant", ""))
+    if coordinator.has_display:
+        if bool(getattr(coordinator, "screensaver_active", False)):
+            action_specs.append(("deactivate_screensaver", "Exit Screensaver", ""))
+        else:
+            action_specs.append(("activate_screensaver", "Activate Screensaver", ""))
+    action_specs.append(("restart", "Restart Device", "restart"))
+
+    return [
+        {
+            "key": cmd_key,
+            "device_command": cmd_key,
+            "label": label,
+            "domain": "button",
+            "state": cmd_state,
+            "device_class": dclass,
+        }
+        for cmd_key, label, dclass in action_specs
+    ]
+
+
+def build_pref_specs_catalog() -> list[dict[str, Any]]:
+    """Serialize canonical `DevicePrefSpec` metadata for Studio runtime consumers."""
+    return [
+        {
+            "key": spec.key,
+            "label": spec.label,
+            "domain": spec.domain,
+            "default": spec.default,
+            "section": spec.section,
+            "group_tier": spec.group_tier,
+            "options": list(spec.options),
+            "min": spec.min_val,
+            "max": spec.max_val,
+            "step": spec.step,
+            "unit": spec.unit,
+            "capability": spec.capability,
+        }
+        for spec in DEVICE_PREF_SPECS
+    ]
+
+
+def build_issues(
+    hass: HomeAssistant, coords: list[LatterCoordinator]
+) -> list[dict[str, str]]:
+    """Return Latter's active Home Assistant repairs (the same ones Settings -> Repairs shows)."""
+    by_sub = {c.subentry_id: c for c in coords}
+    out: list[dict[str, str]] = []
+    for issue in ir.async_get(hass).issues.values():
+        if (
+            issue.domain != DOMAIN
+            or not issue.active
+            or issue.dismissed_version is not None
+        ):
+            continue
+        parsed = parse_device_issue_id(issue.issue_id, set(by_sub))
+        kind, sub_id = (
+            parsed if parsed else (str(issue.translation_key or issue.issue_id), "")
+        )
+        placeholders = issue.translation_placeholders or {}
+        severity = getattr(issue.severity, "value", issue.severity)
+        out.append(
+            {
+                "issue_id": issue.issue_id,
+                "kind": kind,
+                "severity": str(severity or "warning"),
+                "subentry_id": sub_id,
+                "device_title": by_sub[sub_id].device_title if sub_id else "",
+                "detail": str(
+                    placeholders.get("reason")
+                    or placeholders.get("missing_list")
+                    or ""
+                ),
+            }
+        )
+    out.sort(key=lambda i: (i["device_title"].lower(), i["kind"]))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# System Shared Controls & Entity Catalog Builders
+# ---------------------------------------------------------------------------
+
+
+def _make_shared_control(
+    ident: tuple[str, str | None, str, str],
+    name: str,
+    targets: list[dict[str, Any]],
+    **opts: Unpack[_ControlExtraOpts],
+) -> dict[str, Any]:
+    """Construct a canonical `StudioSharedControlItem` entry."""
+    pref_key, tier, section, domain = ident
+    entry: dict[str, Any] = {
+        "key": f"{section}:{domain}:{name.lower()}",
+        "pref_key": pref_key,
+        "tier": tier,
+        "section": section,
+        "section_title": _SHARED_SECTION_TITLES.get(section, section.title()),
+        "name": name,
+        "domain": domain,
+        "state": opts.get("state", ""),
+        "options": opts.get("options", []),
+        "min": opts.get("min_val"),
+        "max": opts.get("max_val"),
+        "step": opts.get("step"),
+        "unit": opts.get("unit", ""),
+        "targets": targets,
+    }
+    if "option_labels" in opts:
+        entry["option_labels"] = opts["option_labels"]
+    return entry
+
+
+def _targets_for_shared_control(
+    coord_meta: _CoordMeta,
+    conf_key: str,
+    state_fn: Callable[[LatterCoordinator], str],
+    *,
+    roaming_only: bool = False,
+    display_only: bool = False,
+) -> list[dict[str, Any]]:
+    """Collect per-Device state targets for a shared System control."""
+    return [
+        {
+            "device_slug": coord.device_slug,
+            "device_group": coord.device_group,
+            "is_online": is_online,
+            "is_roaming": is_roaming,
+            "pref_key": conf_key,
+            "state": str(state_fn(coord)),
+        }
+        for coord, is_online, is_roaming in coord_meta
+        if (not roaming_only or is_roaming)
+        and (not display_only or coord.has_display)
+    ]
+
+
+def _append_pref_spec_shared_controls(
+    controls: list[dict[str, Any]], coord_meta: _CoordMeta
+) -> None:
+    """Append native `DEVICE_PREF_SPECS` entries into `controls`."""
+    for spec in DEVICE_PREF_SPECS:
+        if (
+            spec.group_tier is None
+            and spec.key not in ("bedtime_active", "do_not_disturb")
+        ) or spec.domain not in STUDIO_BULK_CONTROL_DOMAINS:
+            continue
+        targets: list[dict[str, Any]] = []
+        for coord, is_online, is_roaming in coord_meta:
+            if not coordinator_supports_pref(coord, spec):
+                continue
+            cur_val = resolve_device_pref_value(coord.device_data, spec.key)
+            if (
+                spec.key == "clock_face"
+                and not coord.is_round_display
+                and cur_val == "Modern Analog"
+            ):
+                cur_val = "Minimal Digital"
+            state_val = (
+                ("on" if cur_val else "off")
+                if spec.domain == "switch"
+                else str(cur_val)
+            )
+            targets.append(
+                {
+                    "device_slug": coord.device_slug,
+                    "device_group": coord.device_group,
+                    "is_online": is_online,
+                    "is_roaming": is_roaming,
+                    "pref_key": spec.key,
+                    "state": state_val,
+                }
+            )
+        if targets:
+            def_state = (
+                ("on" if spec.default else "off")
+                if spec.domain == "switch"
+                else str(spec.default)
+            )
+            controls.append(
+                _make_shared_control(
+                    (spec.key, spec.group_tier, spec.section, spec.domain),
+                    spec.label,
+                    targets,
+                    state=def_state,
+                    options=list(spec.options),
+                    min_val=spec.min_val,
+                    max_val=spec.max_val,
+                    step=spec.step,
+                    unit=spec.unit,
+                )
+            )
+
+
+def _append_behavior_shared_controls(
+    controls: list[dict[str, Any]], coord_meta: _CoordMeta
+) -> None:
+    """Append presence, audio handoff, dwell, and perimeter security controls."""
+    for conf_key, label, sec_id, roaming_only in (
+        (CONF_NATIVE_BLE_TRACKING, "Track the Area with BLE Proxies", "presence", False),
+        (CONF_BLE_AUTO_SWITCH, "Auto-Switch Active Area", "presence", False),
+        (CONF_SYNC_DEVICE_AREA, "Voice Follows Me", "audio", True),
+        (CONF_AREA_HANDOFF, "Media Follows Device to New Area", "audio", False),
+    ):
+        def _switch_val(
+            coord: LatterCoordinator, ck: str = conf_key
+        ) -> str:
+            return (
+                "on"
+                if bool(resolve_behavior_key_value(coord.device_data, ck))
+                else "off"
+            )
+
+        targets = _targets_for_shared_control(
+            coord_meta,
+            conf_key,
+            _switch_val,
+            roaming_only=roaming_only,
+        )
+        if targets:
+            controls.append(
+                _make_shared_control(
+                    (conf_key, "behavior", sec_id, "switch"),
+                    label,
+                    targets,
+                    state="off",
+                )
+            )
+
+    dwell_targets = _targets_for_shared_control(
+        coord_meta,
+        CONF_AREA_FOLLOW_DWELL_S,
+        lambda c: str(resolve_behavior_key_value(c.device_data, CONF_AREA_FOLLOW_DWELL_S)),
+        roaming_only=True,
+    )
+    if dwell_targets:
+        controls.append(
+            _make_shared_control(
+                (CONF_AREA_FOLLOW_DWELL_S, "behavior", "audio", "number"),
+                "Area Follow Dwell",
+                dwell_targets,
+                state="10",
+                min_val=3,
+                max_val=60,
+                step=1,
+                unit="s",
+            )
+        )
+
+    pin_targets = _targets_for_shared_control(
+        coord_meta,
+        CONF_SECURITY_PIN_POLICY,
+        lambda c: str(resolve_behavior_key_value(c.device_data, CONF_SECURITY_PIN_POLICY)),
+    )
+    if pin_targets:
+        controls.append(
+            _make_shared_control(
+                (CONF_SECURITY_PIN_POLICY, "behavior", "security", "select"),
+                "Perimeter Security Policy",
+                pin_targets,
+                state="auto",
+                options=["auto", "allow", "require_pin", "block"],
+                option_labels={
+                    "auto": "Auto (Roaming Requires PIN)",
+                    "allow": "Allow Without PIN",
+                    "require_pin": "Always Require PIN",
+                    "block": "Block Sensitive Actions",
+                },
+            )
+        )
+
+
+def _append_display_shared_controls(
+    hass: HomeAssistant, controls: list[dict[str, Any]], coord_meta: _CoordMeta
+) -> None:
+    """Append custom color, wallpaper, and Photo Frame screensaver controls."""
+    color_targets = _targets_for_shared_control(
+        coord_meta, CONF_DEVICE_CUSTOM_COLOR, lambda c: c.device_custom_color, display_only=True
+    )
+    if color_targets:
+        controls.append(
+            _make_shared_control(
+                (CONF_DEVICE_CUSTOM_COLOR, "display", "display", "color"),
+                "Custom Accent Color",
+                color_targets,
+                state="#3898FF",
+            )
+        )
+
+    wp_targets = _targets_for_shared_control(
+        coord_meta, CONF_WALLPAPER_SOURCE, lambda c: c.wallpaper_source, display_only=True
+    )
+    if wp_targets:
+        sys_wps = list_wallpaper_catalog(
+            hass, "system", "", [], sign_resource=None, display_shape="square"
+        )
+        wp_opts: list[str] = [""]
+        wp_labels: dict[str, str] = {"": "None (Weather / Solid)"}
+        for wp in sys_wps:
+            sid = str(wp.get("id") or "").strip()
+            if sid and sid not in wp_labels:
+                wp_opts.append(sid)
+                wp_labels[sid] = str(wp.get("name") or wp.get("label") or sid)
+        controls.append(
+            _make_shared_control(
+                (CONF_WALLPAPER_SOURCE, "display", "display", "select"),
+                "Wallpaper",
+                wp_targets,
+                options=wp_opts,
+                option_labels=wp_labels,
+            )
+        )
+
+    wp_rot_targets = _targets_for_shared_control(
+        coord_meta,
+        CONF_WALLPAPER_CYCLE_MINUTES,
+        lambda c: str(c.wallpaper_cycle_minutes),
+        display_only=True,
+    )
+    if wp_rot_targets:
+        controls.append(
+            _make_shared_control(
+                (CONF_WALLPAPER_CYCLE_MINUTES, "display", "display", "select"),
+                "Wallpaper Rotation",
+                wp_rot_targets,
+                state="0",
+                options=["0", "5", "15", "30", "60", "360", "1440"],
+                option_labels={
+                    "0": "Off (Static)",
+                    "5": "Every 5 min",
+                    "15": "Every 15 min",
+                    "30": "Every 30 min",
+                    "60": "Every 1 hr",
+                    "360": "Every 6 hr",
+                    "1440": "Every 24 hr",
+                },
+            )
+        )
+
+    col_opts = [
+        VIRTUAL_COLLECTION_ALL,
+        VIRTUAL_COLLECTION_DEFAULTS,
+        VIRTUAL_COLLECTION_UPLOADS,
+        VIRTUAL_COLLECTION_UNCATEGORIZED,
+    ]
+    col_labels: dict[str, str] = {
+        VIRTUAL_COLLECTION_ALL: "All photos",
+        VIRTUAL_COLLECTION_DEFAULTS: "Defaults",
+        VIRTUAL_COLLECTION_UPLOADS: "My photos",
+        VIRTUAL_COLLECTION_UNCATEGORIZED: "Uncategorized",
+    }
+    for col in list_photo_collections():
+        cid = str(col.get("id") or "").strip()
+        if cid and cid not in col_labels:
+            col_opts.append(cid)
+            col_labels[cid] = str(col.get("name") or cid)
+
+    wp_col_targets = _targets_for_shared_control(
+        coord_meta, CONF_WALLPAPER_COLLECTION, lambda c: c.wallpaper_collection, display_only=True
+    )
+    if wp_col_targets:
+        controls.append(
+            _make_shared_control(
+                (CONF_WALLPAPER_COLLECTION, "display", "display", "select"),
+                "Wallpaper collection",
+                wp_col_targets,
+                options=["", *col_opts],
+                option_labels={"": "Not using a collection", **col_labels},
+            )
+        )
+
+    ss_col_targets = _targets_for_shared_control(
+        coord_meta,
+        CONF_SCREENSAVER_PHOTO_COLLECTION,
+        lambda c: c.screensaver_photo_collection,
+        display_only=True,
+    )
+    if ss_col_targets:
+        controls.append(
+            _make_shared_control(
+                (CONF_SCREENSAVER_PHOTO_COLLECTION, "display", "display", "select"),
+                "Photo Frame collection",
+                ss_col_targets,
+                state=VIRTUAL_COLLECTION_ALL,
+                options=col_opts,
+                option_labels=col_labels,
+            )
+        )
+
+    ss_rot_targets = _targets_for_shared_control(
+        coord_meta,
+        CONF_SCREENSAVER_CYCLE_MINUTES,
+        lambda c: str(c.screensaver_cycle_minutes),
+        display_only=True,
+    )
+    if ss_rot_targets:
+        controls.append(
+            _make_shared_control(
+                (CONF_SCREENSAVER_CYCLE_MINUTES, "display", "display", "select"),
+                "Photo Frame rotation",
+                ss_rot_targets,
+                state="5",
+                options=["0", "1", "5", "15", "30", "60"],
+                option_labels={
+                    "0": "Off (Static)",
+                    "1": "Every 1 min",
+                    "5": "Every 5 min",
+                    "15": "Every 15 min",
+                    "30": "Every 30 min",
+                    "60": "Every 1 hr",
+                },
+            )
+        )
+
+    ss_shuf_targets = _targets_for_shared_control(
+        coord_meta,
+        CONF_SCREENSAVER_SHUFFLE,
+        lambda c: "on" if c.screensaver_shuffle else "off",
+        display_only=True,
+    )
+    if ss_shuf_targets:
+        controls.append(
+            _make_shared_control(
+                (CONF_SCREENSAVER_SHUFFLE, "display", "display", "switch"),
+                "Shuffle Photo Frame photos",
+                ss_shuf_targets,
+                state="off",
+            )
+        )
+
+
+def _append_interface_shared_controls(
+    hass: HomeAssistant, controls: list[dict[str, Any]], coord_meta: _CoordMeta
+) -> None:
+    """Append interface pill catalogs and remote control scope controls."""
+    act_card_targets = _targets_for_shared_control(
+        coord_meta,
+        CONF_ACTIVITY_CARD,
+        lambda c: "on" if c.activity_card_enabled else "off",
+        display_only=True,
+    )
+    if act_card_targets:
+        controls.append(
+            _make_shared_control(
+                (CONF_ACTIVITY_CARD, "interface", "interface", "switch"),
+                "Home Activity Card",
+                act_card_targets,
+                state="on",
+            )
+        )
+
+    for conf_key, label, min_count, catalog, getter in (
+        (
+            CONF_ACTIVITY_SOURCES,
+            "Activity Card Sources",
+            0,
+            ACTIVITY_SOURCES_CATALOG,
+            lambda c: c.activity_sources_csv,
+        ),
+        (
+            CONF_HOME_CATEGORIES,
+            "Home Hub Categories",
+            1,
+            HOME_CATEGORIES_CATALOG,
+            lambda c: c.home_categories_csv,
+        ),
+        (
+            CONF_AREA_CATEGORIES,
+            "Area Control Categories",
+            1,
+            AREA_CATEGORIES_CATALOG,
+            lambda c: c.area_categories_csv,
+        ),
+        (CONF_TOOLS_ITEMS, "Tools", 1, TOOLS_ITEMS_CATALOG, lambda c: c.tools_items_csv),
+        (CONF_GAMES_ITEMS, "Games", 1, GAMES_ITEMS_CATALOG, lambda c: c.games_items_csv),
+    ):
+        targets = _targets_for_shared_control(coord_meta, conf_key, getter, display_only=True)
+        if targets:
+            controls.append(
+                _make_shared_control(
+                    (conf_key, "interface", "interface", "pills"),
+                    label,
+                    targets,
+                    options=[str(c["token"]) for c in catalog],
+                    option_labels={str(c["token"]): str(c["label"]) for c in catalog},
+                    min_val=min_count,
+                )
+            )
+
+    rem_targets = _targets_for_shared_control(
+        coord_meta, CONF_DEVICE_REMOTE_GROUP, lambda c: c.device_remote_group, display_only=True
+    )
+    if rem_targets:
+        raw_global_cfg = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
+        rem_groups = system_settings_view(raw_global_cfg).get("remote_groups") or []
+        rem_opts: list[str] = ["area_auto"]
+        rem_labels: dict[str, str] = {"area_auto": "Match Active Area"}
+        for rg in rem_groups:
+            rg_id = f"group:{rg['id']}"
+            rem_opts.append(rg_id)
+            rem_labels[rg_id] = f"Group: {rg['name']}"
+        rem_opts.append("all")
+        rem_labels["all"] = "All System Remotes"
+        controls.append(
+            _make_shared_control(
+                (CONF_DEVICE_REMOTE_GROUP, "interface", "interface", "select"),
+                "Remote Control Scope",
+                rem_targets,
+                state="area_auto",
+                options=rem_opts,
+                option_labels=rem_labels,
+            )
+        )
+
+
+def build_system_shared_controls(
+    hass: HomeAssistant,
+    coords: list[LatterCoordinator] | None = None,
+) -> list[dict[str, Any]]:
+    """Build tab-aligned shared controls across all onboarded Latter Devices."""
+    all_coords = [
+        c
+        for c in (coords if coords is not None else iter_coordinators(hass))
+        if not c.is_ble_tag
+    ]
+    coord_meta: _CoordMeta = [
+        (c, is_coordinator_online_for_studio(hass, c), c.is_roaming_device)
+        for c in all_coords
+    ]
+    controls: list[dict[str, Any]] = []
+    _append_pref_spec_shared_controls(controls, coord_meta)
+    _append_behavior_shared_controls(controls, coord_meta)
+    _append_display_shared_controls(hass, controls, coord_meta)
+    _append_interface_shared_controls(hass, controls, coord_meta)
+
+    return sorted(
+        controls,
+        key=lambda x: (
+            _SHARED_SECTION_ORDER.get(x["section"], _SHARED_SECTION_FALLBACK_ORDER),
+            x["name"].lower(),
+        ),
+    )
+
+
+def _is_garage_cover_state(state_obj: Any) -> bool:
+    """Return True strictly for garage door `cover.*` entities."""
+    dev_class = str(state_obj.attributes.get("device_class") or "").strip().lower()
+    if dev_class == "garage":
+        return True
+    if dev_class != "":
+        return False
+    friendly = str(state_obj.attributes.get("friendly_name") or "")
+    return "garage" in f"{state_obj.entity_id} {friendly}".lower()
+
+
+def _enrich_hub_catalog_item(
+    base_item: dict[str, str], state_obj: Any, idx: Any, area_reg: ar.AreaRegistry
+) -> dict[str, Any]:
+    """Attach `area_name` for Studio Home Hub & Camera catalog entries."""
+    enriched: dict[str, Any] = dict(base_item)
+    area_id = idx.resolve_entity_area_id(state_obj.entity_id) or ""
+    area_entry = area_reg.async_get_area(area_id) if area_id else None
+    if area_entry is not None:
+        enriched["area_name"] = area_entry.name
+    return enriched
+
+
+def _extract_volume_overrides_map(hass: HomeAssistant) -> dict[str, str]:
+    """Read System `volume_overrides` into a `{speaker_entity: target_entity}` map."""
+    global_cfg = (hass.data.get(DOMAIN, {}) or {}).get(DATA_GLOBAL_CONFIG) or {}
+    raw_vol_ov = global_cfg.get("volume_overrides")
+    vol_overrides_map: dict[str, str] = {}
+    if isinstance(raw_vol_ov, list):
+        for ov in raw_vol_ov:
+            if isinstance(ov, dict):
+                spk = str(ov.get("speaker") or "").strip()
+                tgt = str(ov.get("target") or "").strip()
+                if spk and tgt:
+                    vol_overrides_map[spk] = tgt
+    elif isinstance(raw_vol_ov, dict):
+        for k, v in raw_vol_ov.items():
+            if k and v:
+                vol_overrides_map[str(k).strip()] = str(v).strip()
+    return vol_overrides_map
+
+
+def _build_ma_players_catalog(hass: HomeAssistant) -> list[dict[str, str]]:
+    """Build sorted Music Assistant player entity options."""
+    ma_players: list[dict[str, str]] = []
+    for ma_entry in ma_player_entities(hass):
+        ma_st = hass.states.get(ma_entry.entity_id)
+        ma_name = str(
+            (ma_st.attributes.get("friendly_name") if ma_st else None)
+            or ma_entry.name
+            or ma_entry.original_name
+            or ma_entry.entity_id
+        )
+        ma_suffix = (
+            " (unavailable)"
+            if ma_st is not None and ma_st.state == STATE_UNAVAILABLE
+            else ""
+        )
+        ma_players.append(
+            {
+                "id": ma_entry.entity_id,
+                "name": f"{ma_name} ({ma_entry.entity_id}){ma_suffix}",
+            }
+        )
+    ma_players.sort(key=lambda item: item["name"].lower())
+    return ma_players
+
+
+def _build_shortcut_entities_catalog(
+    idx: Any, area_name_by_id: dict[str, str]
+) -> list[dict[str, str]]:
+    """Build sorted shortcut entity picker entries from `AreaStateIndex`."""
+    shortcut_entities: list[dict[str, str]] = []
+    seen_sc_ids: set[str] = set()
+    for sc_dom in sorted(SHORTCUT_SUPPORTED_DOMAINS):
+        for st_obj in idx.states_for_domain(sc_dom):
+            eid = st_obj.entity_id
+            if eid in seen_sc_ids:
+                continue
+            seen_sc_ids.add(eid)
+            friendly_lbl = str(st_obj.attributes.get("friendly_name") or eid)
+            dclass = str(st_obj.attributes.get("device_class") or "")
+            ent_icon = resolve_shortcut_entity_icon(
+                sc_dom,
+                device_class=dclass,
+                entity_icon=str(st_obj.attributes.get("icon") or ""),
+                state=str(st_obj.state or ""),
+            )
+            aid = idx.resolve_entity_area_id(eid) or ""
+            shortcut_entities.append(
+                {
+                    "id": eid,
+                    "name": friendly_lbl,
+                    "domain": sc_dom,
+                    "device_class": dclass,
+                    "icon": ent_icon,
+                    "area_name": area_name_by_id.get(aid, ""),
+                }
+            )
+    shortcut_entities.sort(
+        key=lambda item: (
+            item["area_name"] == "",
+            item["area_name"].lower(),
+            item["name"].lower(),
+            item["id"],
+        )
+    )
+    return shortcut_entities
+
+
+def _append_media_player_catalog_entry(
+    hass: HomeAssistant,
+    state_obj: Any,
+    item: dict[str, str],
+    ctx: tuple[str, str, Any, ar.AreaRegistry, list[dict[str, Any]]],
+) -> None:
+    """Append MA or local built-in speaker options for a `media_player` state."""
+    local_spk_id, local_ma_id, idx, area_reg, ma_speakers = ctx
+    ent_id = state_obj.entity_id
+    if (
+        local_spk_id
+        and local_ma_id
+        and ent_id == local_ma_id
+        and local_ma_id != local_spk_id
+    ):
+        return
+    if ent_id == local_spk_id:
+        friendly = str(state_obj.attributes.get("friendly_name") or ent_id)
+        suffix_state = " (unavailable)" if state_obj.state == STATE_UNAVAILABLE else ""
+        clean_lbl = (
+            friendly[:-_MUSIC_SUFFIX_LEN].strip()
+            if friendly.lower().endswith(" music") and len(friendly) > _MUSIC_SUFFIX_LEN
+            else friendly
+        )
+        ma_speakers.append(
+            _enrich_hub_catalog_item(
+                {
+                    "id": ent_id,
+                    "name": f"{clean_lbl} — built-in speaker ({ent_id}){suffix_state}",
+                },
+                state_obj,
+                idx,
+                area_reg,
+            )
+        )
+    elif is_music_assistant_player(hass, state_obj):
+        ma_speakers.append(_enrich_hub_catalog_item(item, state_obj, idx, area_reg))
+
+
+def build_entity_catalog(
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator | None,
+    all_coords: list[LatterCoordinator] | None = None,
+) -> dict[str, Any]:
+    """Build the entity pickers for Studio using `AreaStateIndex` (zero full-state scans)."""
+    _ = all_coords
+    area_reg = ar.async_get(hass)
+    areas_list = [
+        {"id": a.id, "name": a.name}
+        for a in sorted(area_reg.async_list_areas(), key=lambda x: x.name.lower())
+    ]
+
+    buckets: dict[str, list[Any]] = {
+        "ma_speakers": [],
+        "remotes": [],
+        "volume_targets": [],
+        "alarms": [],
+        "cameras": [],
+        "climates": [],
+        "locks": [],
+        "garages": [],
+        "vacuums": [],
+        "weathers": [],
+        "calendars": [],
+        "persons": [],
+    }
+    enriched_domain_map: dict[str, str] = {
+        "alarm_control_panel": "alarms",
+        "climate": "climates",
+        "lock": "locks",
+        "vacuum": "vacuums",
+        "weather": "weathers",
+    }
+
+    local_spk_id = coordinator.local_speaker if coordinator is not None else ""
+    local_ma_id = coordinator.local_ma_speaker if coordinator is not None else ""
+    idx = get_area_state_index(hass)
+    catalog_states = [
+        st_obj for dom in _CATALOG_DOMAINS for st_obj in idx.states_for_domain(dom)
+    ]
+    all_cam_ids = [s.entity_id for s in catalog_states if s.domain == "camera"]
+    doorbell_ring_map = (
+        resolve_doorbell_ring_entities(hass, all_cam_ids) if all_cam_ids else {}
+    )
+    vol_overrides_map = _extract_volume_overrides_map(hass)
+    mp_ctx = (local_spk_id, local_ma_id, idx, area_reg, buckets["ma_speakers"])
+
+    for state_obj in sorted(catalog_states, key=lambda s: s.entity_id):
+        ent_id = state_obj.entity_id
+        domain = state_obj.domain
+        friendly = str(state_obj.attributes.get("friendly_name") or ent_id)
+        suffix_state = " (unavailable)" if state_obj.state == STATE_UNAVAILABLE else ""
+        item = {"id": ent_id, "name": f"{friendly} ({ent_id}){suffix_state}"}
+
+        if domain == "media_player":
+            buckets["remotes"].append(item)
+            buckets["volume_targets"].append(item)
+            _append_media_player_catalog_entry(hass, state_obj, item, mp_ctx)
+        elif domain == "remote":
+            buckets["remotes"].append(item)
+        elif domain in ("number", "input_number"):
+            buckets["volume_targets"].append(item)
+        elif domain in enriched_domain_map:
+            buckets[enriched_domain_map[domain]].append(
+                _enrich_hub_catalog_item(item, state_obj, idx, area_reg)
+            )
+        elif domain == "camera":
+            enriched_cam = _enrich_hub_catalog_item(item, state_obj, idx, area_reg)
+            cam_caps = resolve_camera_capabilities(
+                hass,
+                ent_id,
+                doorbell_ring_map=doorbell_ring_map,
+                volume_overrides=vol_overrides_map,
+            )
+            enriched_cam["stream_kind"] = cam_caps["stream_kind"]
+            enriched_cam["has_audio"] = cam_caps["has_audio"]
+            enriched_cam["has_talkback"] = cam_caps["has_talkback"]
+            enriched_cam["is_doorbell"] = cam_caps["is_doorbell"]
+            buckets["cameras"].append(enriched_cam)
+        elif domain == "cover" and _is_garage_cover_state(state_obj):
+            buckets["garages"].append(
+                _enrich_hub_catalog_item(item, state_obj, idx, area_reg)
+            )
+        elif domain == "calendar":
+            buckets["calendars"].append(item)
+        elif domain == "person":
+            p_slug = re.sub(
+                r"[^a-z0-9]+", "_", ent_id.split(".", 1)[-1].lower()
+            ).strip("_")
+            buckets["persons"].append(
+                {"id": ent_id, "name": f"{friendly} (sensor.{p_slug}_current_area)"}
+            )
+
+    area_name_by_id = {a["id"]: a["name"] for a in areas_list}
+    return {
+        "areas": areas_list,
+        "ma_speakers": buckets["ma_speakers"],
+        "ma_players": _build_ma_players_catalog(hass),
+        "volume_targets": buckets["volume_targets"],
+        "remotes": buckets["remotes"],
+        "alarms": buckets["alarms"],
+        "cameras": buckets["cameras"],
+        "climates": buckets["climates"],
+        "locks": buckets["locks"],
+        "garages": buckets["garages"],
+        "vacuums": buckets["vacuums"],
+        "weathers": buckets["weathers"],
+        "calendars": buckets["calendars"],
+        "persons": buckets["persons"],
+        "shortcut_entities": _build_shortcut_entities_catalog(idx, area_name_by_id),
+    }
+
+
+# ---------------------------------------------------------------------------
+# System & Device Studio State Payload Builders
+# ---------------------------------------------------------------------------
 
 
 def _parse_rounded_sensor_int(state_obj: Any) -> int | None:
@@ -391,9 +1838,6 @@ def build_system_section(
             display_shape="square",
         )
     return section
-
-
-_build_system_section = build_system_section
 
 
 def _build_device_capabilities(
@@ -789,8 +2233,23 @@ def build_studio_state_payload(
 __all__ = [
     "MAX_INTERNAL_LOGS",
     "STUDIO_BULK_CONTROL_DOMAINS",
-    "_build_issues",
-    "_build_system_section",
+    "StudioCommandError",
+    "StudioDeviceCapabilities",
+    "StudioDevicePrefItem",
+    "StudioDiscoveredDevice",
+    "StudioEntityCatalog",
+    "StudioEntityOption",
+    "StudioIssueItem",
+    "StudioLinksPayload",
+    "StudioLogEntry",
+    "StudioPrefSpecItem",
+    "StudioQuickActionItem",
+    "StudioSharedControlItem",
+    "StudioSharedControlTarget",
+    "StudioShortcutEntityItem",
+    "StudioSpeakerVolumePayload",
+    "StudioSystemDeviceItem",
+    "StudioSystemInfo",
     "build_device_prefs_payload",
     "build_entity_catalog",
     "build_issues",
@@ -800,6 +2259,7 @@ __all__ = [
     "build_studio_state_payload",
     "build_system_section",
     "build_system_shared_controls",
+    "get_combined_system_and_studio_logs",
     "is_coordinator_online_for_studio",
     "load_studio_locales_sync",
     "log_studio_event",

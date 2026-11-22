@@ -183,4 +183,40 @@ export const LAYOUT_STYLES = css`
   @container studio-content (max-width: 760px) {
     .columns { grid-template-columns: minmax(0, 1fr); }
   }
+  @media (max-width: 860px) {
+    .titlebar-brand .ha-menu-btn { display: inline-flex; }
+    .titlebar-title { padding-inline-start: 0; }
+    .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+    aside.sidebar {
+      align-self: start;
+      position: sticky;
+      inset-block-start: var(--studio-header-height);
+      z-index: 25;
+      block-size: auto;
+      padding-block: var(--studio-space-2);
+      padding-inline: var(--studio-space-3);
+      border-inline-end: none;
+      border-block-end: 1px solid var(--studio-divider);
+    }
+    .nav-device-title { display: none; }
+    .nav-list {
+      flex-direction: row;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-inline: var(--studio-space-1);
+      -webkit-mask-image: var(--studio-nav-scroll-mask);
+      mask-image: var(--studio-nav-scroll-mask);
+    }
+    .nav-list::-webkit-scrollbar { display: none; }
+    .nav-btn {
+      inline-size: auto;
+      border: 1px solid var(--studio-divider);
+      border-radius: var(--studio-radius-pill);
+    }
+    #nav-scope-device .nav-btn:not(.nav-back-btn) { padding-inline-start: var(--studio-space-3); }
+    .content-wrap {
+      padding-block: var(--studio-space-4) var(--studio-space-5);
+      padding-inline: var(--studio-space-3);
+    }
+  }
 `;

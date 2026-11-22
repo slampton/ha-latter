@@ -4,8 +4,8 @@
  *
  * Orchestrates `frontend_src/build/{lexer,compactor,bundler,assets,guardrails}.mjs`:
  *   node build.mjs              -> Run `tsc --noEmit`, bundle `latter-studio.js` + `latter-studio-mdi.js`
- *                                  + `.gz`/`.br` + `studio/locales/en.json`, and run Studio DAG/LOC/UI guardrails
- *   node build.mjs --typecheck  -> Run `tsc --noEmit` + TS strip + module-scoped ESM graph + DAG/LOC/UI guardrails
+ *                                  + `.gz`/`.br` + `studio/locales/en.json`, and run Studio DAG/UI guardrails
+ *   node build.mjs --typecheck  -> Run `tsc --noEmit` + TS strip + module-scoped ESM graph + DAG/UI guardrails
  *   node build.mjs --check      -> Run `--typecheck` + verify committed bundles, `.gz`/`.br`, and `en.json`
  */
 
@@ -77,7 +77,7 @@ try {
     verifyCompressedAssets(OUT_MDI_FILE, mdiBuf, "latter-studio-mdi.js");
     runStaticGuardrails(FRONTEND_DIR, bundle, mdiBundle);
     process.stdout.write(
-      `Studio check PASSED (${moduleCount} modules, ${bundleBuf.length} B core + ${mdiBuf.length} B lazy MDI [v=${mdiDigest}], .gz/.br + locales/en.json in sync, 0 DAG/LOC/UI guardrail issues).\n`,
+      `Studio check PASSED (${moduleCount} modules, ${bundleBuf.length} B core + ${mdiBuf.length} B lazy MDI [v=${mdiDigest}], .gz/.br + locales/en.json in sync, 0 DAG/UI guardrail issues).\n`,
     );
     process.exit(0);
   }

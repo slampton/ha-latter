@@ -44,9 +44,13 @@ class TestPayloadDiet(unittest.TestCase):
         self.assertFalse(gate.take())
 
     def test_only_get_state_and_registry_changes_carry_the_catalog(self) -> None:
-        payload_src = read_py_tree("studio/payload.py", "studio/payload_sections.py", "studio/payload_shared.py")
+        payload_src = read_py_tree("studio/payload.py")
         self.assertIn('    if include_catalog:\n        base["catalog"]', payload_src)
-        cmds = read_py_tree("studio/commands.py", "studio/cmd_presence_devices.py", "studio/cmd_photos_media.py", "studio/cmd_groups_security.py")
+        cmds = read_py_tree(
+            "studio/commands.py",
+            "studio/system_commands.py",
+            "studio/device_commands.py",
+        )
         self.assertIn("include_catalog=catalog_gate.take()", cmds)
         for event in ("EVENT_ENTITY_REGISTRY_UPDATED", "EVENT_DEVICE_REGISTRY_UPDATED", "EVENT_AREA_REGISTRY_UPDATED"):
             self.assertIn(event, cmds)
@@ -61,8 +65,12 @@ class TestPayloadDiet(unittest.TestCase):
         self.assertIn(".catalog", js)
 
     def test_doorbell_detail_is_rendered(self) -> None:
-        payload_src = read_py_tree("studio/payload.py", "studio/payload_sections.py", "studio/payload_shared.py")
-        cmds_src = read_py_tree("studio/commands.py", "studio/cmd_presence_devices.py", "studio/cmd_photos_media.py", "studio/cmd_groups_security.py")
+        payload_src = read_py_tree("studio/payload.py")
+        cmds_src = read_py_tree(
+            "studio/commands.py",
+            "studio/system_commands.py",
+            "studio/device_commands.py",
+        )
         self.assertNotIn("_build_doorbells", payload_src)
         self.assertNotIn('"preview_url":', payload_src)
         self.assertIn('"mint_camera_preview_url"', cmds_src)
@@ -77,7 +85,7 @@ class TestPayloadDiet(unittest.TestCase):
         self.assertNotIn("onAssignedPersonChanged", js)
 
     def test_status_card_renders_its_fields(self) -> None:
-        payload_src = read_py_tree("studio/payload.py", "studio/payload_sections.py", "studio/payload_shared.py")
+        payload_src = read_py_tree("studio/payload.py")
         en_json = json.loads((LATTER_DIR / "studio" / "locales" / "en.json").read_text(encoding="utf-8"))
         self.assertIn('"sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),', payload_src)
         self.assertNotIn("_build_now_playing", payload_src)

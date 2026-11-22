@@ -162,9 +162,7 @@ class TestEntitySections(unittest.TestCase):
         self.assertEqual(
             entity_sections.present_section_ids([{"id": "battery", "items": []}, "junk"]), set()
         )
-        payload_src = read_py_tree(
-            "studio/payload.py", "studio/payload_sections.py", "studio/payload_shared.py"
-        )
+        payload_src = read_py_tree("studio/payload.py")
         self.assertIn('sec_ids = present_section_ids(esphome_inspector.get("sections"))', payload_src)
         self.assertIn('("sleep" in sec_ids)', payload_src)
         self.assertIn('("battery" in sec_ids)', payload_src)

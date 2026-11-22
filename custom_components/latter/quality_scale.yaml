@@ -7,7 +7,7 @@ rules:
   brands: done
   common-modules:
     status: done
-    comment: Acyclic L0a-L4 DAG layout across focused subpackages (areas/, cameras/, coordinator/, groups/, http/, media/, presence/, services/, studio/, wallpapers/), shared root modules (const.py, config_defaults.py, repairs_keys.py, protocol_*.py, media_cache.py, hub_registry.py, hub_sync.py, identity.py, feeds.py, remotes.py, doorbell*.py, backup.py, repairs.py, diagnostics.py), and 8 entity platforms, verified cycle-free by tools/verify_ha.py.
+    comment: Functional domain cohesion and strict acyclic L0a-L4 Tarjan zero-cycle DAG layout across focused subpackages (areas/, cameras/, coordinator/, groups/, http/, media/, presence/, services/, studio/{settings_cleaners,state_gates,panel,payload,commands,system_commands,device_commands}.py, wallpapers/), shared root modules (const.py, config_defaults.py, repairs_keys.py, protocol_*.py, media_cache.py, hub_registry.py, hub_sync.py, identity.py, feeds.py, remotes.py, doorbell*.py, backup.py, repairs.py, diagnostics.py), and 8 entity platforms, verified cycle-free by tools/verify_ha.py with bounded function complexity (ruff PLR).
   config-flow: done
   config-flow-test-coverage: done
   dependency-transparency: done

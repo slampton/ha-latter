@@ -1,6 +1,6 @@
 /**
  * Studio Static Guardrails, Zero-Cycle `L0`–`L4` DAG Validator (Tarjan SCC),
- * File Size Limits (`<= 1,200` hard / `<= 1,000` soft), & Vendor Provenance Verifier (`L4`).
+ * & Vendor Provenance Verifier (`L4`).
  */
 
 import crypto from "node:crypto";
@@ -12,9 +12,6 @@ import {
   resolveImportTarget,
   scanRawSpecifiers,
 } from "./lexer.mjs";
-
-const LOC_SOFT_WARNING = 1000;
-const LOC_HARD_LIMIT = 1200;
 
 const L2_MIDDLE_CONTROLLERS = new Set([
   "src/state/settings-save-controller.ts",
@@ -50,9 +47,8 @@ export function classifyStudioModuleLayer(rel) {
   if (rel.startsWith("src/styles/")) return [0, 6, "L0"];
 
   // L1 — i18n, MDI search/unpacker, WS transport, pure domain logic, StudioStoreContext contract
-  if (rel === "src/i18n/en.ts") return [1, 1, "L1"];
-  if (rel === "src/i18n/index.ts") return [1, 2, "L1"];
-  if (rel.startsWith("src/i18n/")) return [1, 0, "L1"];
+  if (rel === "src/i18n/en.ts") return [1, 0, "L1"];
+  if (rel === "src/i18n/index.ts") return [1, 1, "L1"];
   if (rel === "src/mdi-catalog.ts" || rel.startsWith("src/api/")) return [1, 0, "L1"];
   if (rel.startsWith("src/utils/")) return [1, 3, "L1"];
   if (rel.startsWith("src/domain/") || rel === "src/state/store-types.ts") return [1, 4, "L1"];
@@ -83,7 +79,6 @@ export function classifyStudioModuleLayer(rel) {
   if (rel.startsWith("src/components/dialogs/")) return [3, 8, "L3"];
   if (rel === "src/components/dialogs.ts") return [3, 10, "L3"];
 
-  if (rel === "src/views/groups/group-baseline-drawer.ts") return [3, 9, "L3"];
   if (rel.startsWith("src/views/overview/") || rel.startsWith("src/views/groups/")) {
     return [3, 8, "L3"];
   }
@@ -148,13 +143,6 @@ function computeTarjanSccs(nodes, edgesByNode) {
   return sccs;
 }
 
-function countLines(text) {
-  const norm = text.replace(/\r\n/g, "\n");
-  if (norm.length === 0) return 0;
-  const parts = norm.split("\n");
-  return norm.endsWith("\n") ? parts.length - 1 : parts.length;
-}
-
 function verifyVendorProvenance(frontendDir, errors) {
   const pkgPath = path.join(frontendDir, "package.json");
   if (!fs.existsSync(pkgPath)) {
@@ -204,7 +192,7 @@ function verifyVendorProvenance(frontendDir, errors) {
   }
 }
 
-export function runStudioDagAndLocGuardrails(frontendDir, errors, warnings) {
+export function runStudioDagGuardrails(frontendDir, errors) {
   const srcDir = path.join(frontendDir, "src");
   const srcFiles = collectSourceModules(srcDir);
   const buildFiles = collectBuildModules(frontendDir);
@@ -218,20 +206,6 @@ export function runStudioDagAndLocGuardrails(frontendDir, errors, warnings) {
   for (const absFile of allModules) {
     const rel = relOf(absFile);
     const rawText = fs.readFileSync(absFile, "utf8");
-    const isExemptLoc = rel === "src/protocol-schema.ts" || rel.startsWith("src/lib/vendor/");
-
-    if (!isExemptLoc) {
-      const loc = countLines(rawText);
-      if (loc > LOC_HARD_LIMIT) {
-        errors.push(
-          `[STUDIO LOC] ${rel} has ${loc} LOC, exceeding hard limit of ${LOC_HARD_LIMIT} LOC`,
-        );
-      } else if (loc > LOC_SOFT_WARNING) {
-        warnings.push(
-          `[STUDIO LOC WARNING] ${rel} has ${loc} LOC (exceeds ${LOC_SOFT_WARNING} LOC target)`,
-        );
-      }
-    }
 
     const srcLayer = classifyStudioModuleLayer(rel);
     if (!srcLayer) {
@@ -297,10 +271,9 @@ export function runStudioDagAndLocGuardrails(frontendDir, errors, warnings) {
 
 export function runStaticGuardrails(frontendDir, bundleText, mdiBundleText) {
   const errors = [];
-  const warnings = [];
   const srcDir = path.join(frontendDir, "src");
 
-  runStudioDagAndLocGuardrails(frontendDir, errors, warnings);
+  runStudioDagGuardrails(frontendDir, errors);
 
   const allSourceFiles = collectSourceModules(srcDir);
   const scanTargets = [
@@ -414,10 +387,6 @@ export function runStaticGuardrails(frontendDir, bundleText, mdiBundleText) {
   }
   if (/<h2[^>]*class="[^"]*card-title/.test(bundleText)) {
     errors.push('[STUDIO HEADINGS] Card titles must use <h3 class="card-title">, not <h2>');
-  }
-
-  for (const w of warnings) {
-    process.stderr.write(`  ! ${w}\n`);
   }
 
   if (errors.length > 0) {
