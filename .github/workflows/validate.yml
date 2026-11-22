@@ -53,7 +53,7 @@ jobs:
       - name: Install native media and TurboJPEG system libraries
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libturbojpeg0-dev
       - name: Install pinned test and stub dependencies
-        run: pip install --upgrade pip && pip install -e ".[test]"
+        run: pip install --upgrade pip && pip install --group test
       - name: Install Studio frontend toolchain
         run: npm --prefix frontend_src ci --no-audit --no-fund
       - name: Install Playwright headless Chromium

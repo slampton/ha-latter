@@ -7,6 +7,7 @@ import {
   Directive,
   directive,
   html,
+  live,
   noChange,
   nothing,
   PartType,
@@ -100,14 +101,14 @@ export function renderSelectOptions(
   const list = choices || [];
   const hasSelected = !cur || list.some((c) => c.id === cur);
   const out: TemplateResult[] = [
-    html`<option value="" ?selected=${cur === ""}>${emptyOptionLabel}</option>`,
+    html`<option value="" .selected=${live(cur === "")}>${emptyOptionLabel}</option>`,
   ];
   if (cur && !hasSelected) {
-    out.push(html`<option value=${cur} selected>${cur} (missing)</option>`);
+    out.push(html`<option value=${cur} .selected=${live(true)}>${cur} (missing)</option>`);
   }
   for (const item of list) {
     out.push(
-      html`<option value=${item.id} ?selected=${item.id === cur}>${item.name || item.id}</option>`,
+      html`<option value=${item.id} .selected=${live(item.id === cur)}>${item.name || item.id}</option>`,
     );
   }
   return out;

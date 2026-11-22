@@ -393,7 +393,7 @@ async def _async_dispatch_media_or_volume_cmd(
     return False
 
 
-async def _async_dispatch_platform_nav_cmd(  # noqa: PLR0913
+async def _async_dispatch_platform_nav_cmd(
     hass: HomeAssistant,
     *,
     raw_cmd: str,
@@ -461,7 +461,7 @@ async def _async_dispatch_platform_nav_cmd(  # noqa: PLR0913
         )
 
 
-async def async_execute_remote_action(  # noqa: PLR0913
+async def async_execute_remote_action(
     hass: HomeAssistant,
     coord: LatterCoordinator,
     *,

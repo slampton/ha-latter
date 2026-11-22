@@ -1,4 +1,4 @@
-"""Area name/icon matching, `D-075` illuminance calibration, and active/person Area resolution (`L1b`)."""
+"""Area name/icon matching, AreaStateIndex helpers, `D-075` illuminance calibration, and active/person Area resolution."""
 
 from __future__ import annotations
 
@@ -19,13 +19,22 @@ from ..const import (
     AMBIENT_LIGHT_DEADBAND_PCT,
     CONF_AREA_ILLUMINANCE_CONFIG,
     CONF_DEFAULT_AREA,
+    CONF_ESPHOME_DEVICE_ID,
     DATA_GLOBAL_CONFIG,
     DEFAULT_AREA_BRIGHT_LUX,
     DEFAULT_AREA_DARK_LUX,
     DOMAIN,
+    SUBENTRY_DEVICE,
 )
-from ..hub_registry import iter_coordinators
-from .state_index import get_area_state_index, latter_bound_esphome_device_ids
+from ..hub_registry import (
+    INDEXED_DOMAINS as INDEXED_DOMAINS,
+    AreaStateIndex as AreaStateIndex,
+    async_stop_area_state_index as async_stop_area_state_index,
+    get_area_state_index as get_area_state_index,
+    is_media_position_only_tick as is_media_position_only_tick,
+    iter_coordinators,
+)
+from ..identity import resolve_bound_esphome_device_id
 
 DEFAULT_UNMATCHED_AREA_ICON: Final = "mdi:map-marker-outline"
 
@@ -37,7 +46,6 @@ _MAX_CLAMPED_LUX: Final = 100000.0
 _DECIMAL_LUX_CEILING: Final = 10.0
 _MAX_DARK_LUX: Final = 500.0
 _MAX_BRIGHT_LUX: Final = 100000.0
-_PERCENT_MAX: Final = 100
 
 _CAMEL_SPLIT_RE: Final = re.compile(r"([a-z0-9])([A-Z])")
 _AREA_ARCHETYPE_PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = tuple(
@@ -69,6 +77,53 @@ _AREA_ARCHETYPE_PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = tuple
         (r"\b(?:primary|master|guest|bed\w*|bunk|dorm\w*)\b", "mdi:bed-king-outline"),
     )
 )
+
+
+def resolve_entity_area_id(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    ent_reg: er.EntityRegistry | None = None,
+    dev_reg: dr.DeviceRegistry | None = None,
+) -> str | None:
+    """Resolve the Home Assistant `area_id` for an entity (directly or via its parent device)."""
+    if ent_reg is None and dev_reg is None:
+        return get_area_state_index(hass).resolve_entity_area_id(entity_id)
+    if ent_reg is None:
+        ent_reg = er.async_get(hass)
+
+    entry = ent_reg.async_get(entity_id)
+    if entry is None:
+        return None
+    if entry.area_id:
+        return str(entry.area_id)
+    if entry.device_id:
+        if dev_reg is None:
+            dev_reg = dr.async_get(hass)
+        device = dev_reg.async_get(entry.device_id)
+        if device and device.area_id:
+            return str(device.area_id)
+    return None
+
+
+def latter_bound_esphome_device_ids(hass: HomeAssistant) -> set[str]:
+    """Return all Device Registry IDs belonging to Latter or its bound ESPHome devices."""
+    out: set[str] = set()
+    dev_reg = dr.async_get(hass)
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for child_dev in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
+            out.add(child_dev.id)
+        for sub in entry.subentries.values():
+            if sub.subentry_type != SUBENTRY_DEVICE:
+                continue
+            dev_id = resolve_bound_esphome_device_id(
+                hass,
+                str(sub.data.get(CONF_ESPHOME_DEVICE_ID) or "") or None,
+                str(sub.data.get("mac") or "") or None,
+            )
+            if dev_id:
+                out.add(dev_id)
+    return out
 
 
 def apply_ha_display_precision(
@@ -154,7 +209,7 @@ def normalize_ambient_lux(
     above = max(0.0, float(lux) - lo)
     span = max(1.0, hi - lo)
     norm = math.log1p(above) / math.log1p(span)
-    return max(0, min(_PERCENT_MAX, round(norm * float(_PERCENT_MAX))))
+    return max(0, min(100, round(norm * 100.0)))
 
 
 def format_ambient_lux(lux: float) -> str:
@@ -351,7 +406,7 @@ def apply_ambient_light_deadband(
         or prev_pct is None
     ):
         return (area_id, ambient_pct, wire)
-    if ambient_pct in (0, _PERCENT_MAX) and ambient_pct != prev_pct:
+    if ambient_pct in (0, 100) and ambient_pct != prev_pct:
         return (area_id, ambient_pct, wire)
     if abs(ambient_pct - prev_pct) >= max(1, int(deadband_pct)):
         return (area_id, ambient_pct, wire)

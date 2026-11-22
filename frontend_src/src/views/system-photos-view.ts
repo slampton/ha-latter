@@ -15,7 +15,7 @@ import {
   VIRTUAL_COLLECTION_UNCATEGORIZED,
   VIRTUAL_COLLECTION_UPLOADS,
 } from "../constants.js";
-import { focusSafe, html, nothing, repeat, type TemplateResult } from "../lib/lit.js";
+import { focusSafe, html, live, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import {
   filterLibraryPhotos,
   isPhotoDynamic,
@@ -355,7 +355,7 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
                   ? html`<select
                         id="select-bulk-collection"
                         aria-label=${store.t("photos.bulk_collection_aria")}
-                        .value=${store.photosBulkTargetCollectionId}
+                        .value=${live(store.photosBulkTargetCollectionId)}
                         @change=${(ev: Event) => {
                           store.photosBulkTargetCollectionId = (
                             ev.currentTarget as HTMLSelectElement
@@ -363,13 +363,13 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
                           store.host.requestUpdate();
                         }}
                       >
-                        <option value="" ?selected=${!store.photosBulkTargetCollectionId}>
+                        <option value="" .selected=${live(!store.photosBulkTargetCollectionId)}>
                           ${store.t("photos.bulk_choose_collection")}
                         </option>
                         ${collections.map(
                           (col) => html`<option
                             value=${col.id}
-                            ?selected=${store.photosBulkTargetCollectionId === col.id}
+                            .selected=${live(store.photosBulkTargetCollectionId === col.id)}
                           >
                             ${col.name}
                           </option>`,
@@ -456,7 +456,7 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
                           aria-label=${store.t("photos.select_photo_aria", {
                             name: photo.name || photo.id,
                           })}
-                          .checked=${isSelected}
+                          .checked=${live(isSelected)}
                           @change=${() => toggleSelectPhoto(photo.id)}
                           class="photo-tile-check"
                         />`

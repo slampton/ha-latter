@@ -51,7 +51,7 @@ from custom_components.latter.media.linking import (
     clear_ma_counterpart_cache,
     resolve_ma_counterpart_entity,
 )
-from custom_components.latter.media.volume import (
+from custom_components.latter.media.playback import (
     VOLUME_MUTE_FLAG,
     VOLUME_STEP_FLAG,
     async_execute_volume_action,

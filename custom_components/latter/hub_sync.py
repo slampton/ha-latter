@@ -189,86 +189,108 @@ def _seed_bedtime_schedule_trackers(
 
 
 @callback
+def _handle_core_config_updated(sys_obj: LatterSystemHub) -> None:
+    if sys_obj.url_signer is not None:
+        sys_obj.url_signer.invalidate_lan_base_url()
+    for coord in list(sys_obj.coordinators.values()):
+        coord.url_signer.invalidate_lan_base_url()
+
+
+@callback
+def _handle_sky_state_change(sys_obj: LatterSystemHub) -> None:
+    if sys_obj.weather_snapshot is not None:
+        recs, fields = sys_obj.weather_snapshot
+        merged = {**fields, **read_sun_and_moon_fields(sys_obj.hass)}
+        if merged == fields:
+            return
+        sys_obj.weather_snapshot = (recs, merged)
+        weather_ent = _hub_weather_entity(sys_obj)
+        for coord in list(sys_obj.coordinators.values()):
+            if not coord.is_ble_tag:
+                coord.apply_weather_snapshot(weather_ent, sys_obj.weather_snapshot)
+        return
+    _spawn_hub_task(
+        sys_obj,
+        async_refresh_hub_weather(sys_obj, coalesce=True),
+        "latter_system_sky_refresh",
+    )
+
+
+@callback
+def _rebind_weather_listener(sys_obj: LatterSystemHub, rt: _HubFeedRuntime) -> None:
+    weather_ent = _hub_weather_entity(sys_obj)
+    if weather_ent == rt.tracked_weather_entity and (
+        not weather_ent or rt.unsub_weather_state is not None
+    ):
+        return
+    if rt.unsub_weather_state is not None:
+        rt.unsub_weather_state()
+        rt.unsub_weather_state = None
+    rt.tracked_weather_entity = weather_ent
+    if weather_ent:
+
+        @callback
+        def _on_weather_state_change(_event: Event[EventStateChangedData]) -> None:
+            _spawn_hub_task(
+                sys_obj,
+                async_refresh_hub_weather(sys_obj),
+                "latter_system_weather_refresh",
+            )
+
+        rt.unsub_weather_state = async_track_state_change_event(
+            sys_obj.hass, [weather_ent], _on_weather_state_change
+        )
+
+
+@callback
 def bind_hub_feed_listeners(sys_obj: LatterSystemHub) -> None:
     """Bind or rebind System-level weather, sun/moon, and periodic feed listeners."""
     rt = _get_feed_runtime(sys_obj)
 
-    @callback
-    def _on_core_config_updated(_event: Event[Any]) -> None:
-        if sys_obj.url_signer is not None:
-            sys_obj.url_signer.invalidate_lan_base_url()
-        for coord in list(sys_obj.coordinators.values()):
-            coord.url_signer.invalidate_lan_base_url()
-
-    @callback
-    def _on_weather_state_change(_event: Event[EventStateChangedData]) -> None:
-        _spawn_hub_task(
-            sys_obj,
-            async_refresh_hub_weather(sys_obj),
-            "latter_system_weather_refresh",
-        )
-
-    @callback
-    def _on_sky_state_change(_event: Event[EventStateChangedData]) -> None:
-        if sys_obj.weather_snapshot is not None:
-            recs, fields = sys_obj.weather_snapshot
-            merged = {**fields, **read_sun_and_moon_fields(sys_obj.hass)}
-            if merged == fields:
-                return
-            sys_obj.weather_snapshot = (recs, merged)
-            weather_ent = _hub_weather_entity(sys_obj)
-            for coord in list(sys_obj.coordinators.values()):
-                if not coord.is_ble_tag:
-                    coord.apply_weather_snapshot(weather_ent, sys_obj.weather_snapshot)
-            return
-        _spawn_hub_task(
-            sys_obj,
-            async_refresh_hub_weather(sys_obj, coalesce=True),
-            "latter_system_sky_refresh",
-        )
-
-    async def _periodic_weather(_now: datetime) -> None:
-        await async_refresh_hub_weather(sys_obj)
-
-    async def _periodic_calendar(_now: datetime) -> None:
-        await async_refresh_hub_calendar(sys_obj)
-
-    async def _periodic_bedtime(now: datetime) -> None:
-        await async_evaluate_hub_bedtime_schedules(sys_obj, now=now)
-
     if rt.unsub_core_config is None:
+
+        @callback
+        def _on_core_config_updated(_event: Event[Any]) -> None:
+            _handle_core_config_updated(sys_obj)
+
         rt.unsub_core_config = sys_obj.hass.bus.async_listen(
             EVENT_CORE_CONFIG_UPDATE, _on_core_config_updated
         )
-    weather_ent = _hub_weather_entity(sys_obj)
-    if weather_ent != rt.tracked_weather_entity or (
-        weather_ent and rt.unsub_weather_state is None
-    ):
-        if rt.unsub_weather_state is not None:
-            rt.unsub_weather_state()
-            rt.unsub_weather_state = None
-        rt.tracked_weather_entity = weather_ent
-        if weather_ent:
-            rt.unsub_weather_state = async_track_state_change_event(
-                sys_obj.hass, [weather_ent], _on_weather_state_change
-            )
+    _rebind_weather_listener(sys_obj, rt)
     if rt.unsub_sky_state is None:
+
+        @callback
+        def _on_sky_state_change(_event: Event[EventStateChangedData]) -> None:
+            _handle_sky_state_change(sys_obj)
+
         rt.unsub_sky_state = async_track_state_change_event(
             sys_obj.hass, list(_SKY_TRACKED_ENTITIES), _on_sky_state_change
         )
     if rt.unsub_forecast_timer is None:
+
+        async def _periodic_weather(_now: datetime) -> None:
+            await async_refresh_hub_weather(sys_obj)
+
         rt.unsub_forecast_timer = async_track_time_interval(
             sys_obj.hass,
             _periodic_weather,
             timedelta(minutes=FORECAST_REFRESH_INTERVAL_MINUTES),
         )
     if rt.unsub_calendar_timer is None:
+
+        async def _periodic_calendar(_now: datetime) -> None:
+            await async_refresh_hub_calendar(sys_obj)
+
         rt.unsub_calendar_timer = async_track_time_interval(
             sys_obj.hass,
             _periodic_calendar,
             timedelta(minutes=CALENDAR_REFRESH_INTERVAL_MINUTES),
         )
     if rt.unsub_bedtime_timer is None:
+
+        async def _periodic_bedtime(now: datetime) -> None:
+            await async_evaluate_hub_bedtime_schedules(sys_obj, now=now)
+
         rt.unsub_bedtime_timer = async_track_time_interval(
             sys_obj.hass,
             _periodic_bedtime,

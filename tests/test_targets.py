@@ -23,7 +23,6 @@ from custom_components.latter.media import (
     browse as media_browse,
     lyrics as media_lyrics,
     playback as media_playback,
-    volume as media_volume,
 )
 from custom_components.latter.presence import ble_math as presence
 from custom_components.latter.studio import settings_cleaners as settings
@@ -244,7 +243,7 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
     def test_canonical_module_exports(self) -> None:
         self.assertEqual(media_browse.MAX_BROWSE_CACHE_ENTRIES, 64)
         self.assertTrue(callable(vars(media_lyrics).get("_resolve_speaker_playing_metadata") or vars(media_lyrics).get("browse_track_lyrics_or_bio") or vars(media_browse).get("_resolve_speaker_playing_metadata")))
-        self.assertTrue(callable(media_volume.async_execute_volume_action))
+        self.assertTrue(callable(media_playback.async_execute_volume_action))
         self.assertTrue(callable(media_playback.async_play_media_with_ma_fallback))
         self.assertEqual(presence.RSSI_HYSTERESIS_DEADBAND_DBM, 3.0)
         self.assertTrue(issubclass(wallpaper_views.LatterWallpaperUploadView, object))

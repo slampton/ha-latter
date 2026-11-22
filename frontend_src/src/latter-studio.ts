@@ -1,5 +1,5 @@
 /**
- * `<latter-studio>` Custom Element — Modular TypeScript + Vendored `lit-html` Shell (`D-023`, `D-061`, `D-062`).
+ * `<latter-studio>` Custom Element — Modular TypeScript + Stock `lit` Shell (`D-023`, `D-061`, `D-062`, `D-078`).
  *
  * - Zero `window.*` property bindings; state is owned per element by `StudioStore`.
  * - `_applyRoute()` runs before `super.connectedCallback()` so `hostConnected` subscribes once (`B-01`).
@@ -12,7 +12,13 @@ import { renderConfirmDialog, syncDialogElement } from "./components/controls.js
 import { renderStudioDialogs, syncStudioDialogs } from "./components/dialogs.js";
 import { DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS } from "./constants.js";
 import type { StudioTranslationKey } from "./i18n/index.js";
-import { html, LitElement, nothing, type TemplateResult } from "./lib/lit.js";
+import {
+  html,
+  LitElement,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from "./lib/lit.js";
 import { StudioStore } from "./state/store.js";
 import { STUDIO_STYLES } from "./styles/tokens.js";
 import type { DeviceViewId, HassRoute, HomeAssistant, SystemViewId } from "./types.js";
@@ -206,9 +212,10 @@ export class LatterStudio extends LitElement {
     }
   }
 
-  protected override updated(): void {
-    syncStudioDialogs(this.renderRoot, this.store);
-    const confirmDlg = this.renderRoot.getElementById(
+  protected override updated(_changedProperties: PropertyValues): void {
+    const root = this.renderRoot as ShadowRoot;
+    syncStudioDialogs(root, this.store);
+    const confirmDlg = root.getElementById(
       "latter-confirm-modal",
     ) as HTMLDialogElement | null;
     syncDialogElement(confirmDlg, this.store.confirmModal.open);
@@ -219,9 +226,9 @@ export class LatterStudio extends LitElement {
         ? `${this.store.pageTitle} — ${this.store.pageSubtitle}`
         : this.store.pageTitle;
       this.store.announcePolite(titleText);
-      const activeEl = this.renderRoot.activeElement as HTMLElement | null;
+      const activeEl = root.activeElement as HTMLElement | null;
       if (activeEl && activeEl.classList?.contains("nav-btn")) {
-        const headingEl = this.renderRoot.getElementById(
+        const headingEl = root.getElementById(
           "unified-page-title",
         ) as HTMLElement | null;
         headingEl?.focus?.({ preventScroll: true });

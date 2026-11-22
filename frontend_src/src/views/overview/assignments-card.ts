@@ -7,7 +7,7 @@ import {
   renderSelectRow,
   renderSettingsRow,
 } from "../../components/controls.js";
-import { html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import type { SystemDeviceEntry } from "../../types.js";
 
@@ -58,7 +58,7 @@ export function renderOverviewAssignmentsCard(
                 : store.t("dev_overview.device_group_preset_desc"),
             control: html`<select
                 id="cfg-device_group"
-                .value=${curGroupId}
+                .value=${live(curGroupId)}
                 @change=${(ev: Event) =>
                   store.entity.stageDeviceSetting(
                     "device_group",
@@ -66,12 +66,12 @@ export function renderOverviewAssignmentsCard(
                     "cfg-device_group",
                   )}
               >
-                <option value="custom" ?selected=${curGroupId === "custom"}>
+                <option value="custom" .selected=${live(curGroupId === "custom")}>
                   ${store.t("common.custom")}
                 </option>
                 ${groups.map(
                   (g) =>
-                    html`<option value=${g.id} ?selected=${g.id === curGroupId}>
+                    html`<option value=${g.id} .selected=${live(g.id === curGroupId)}>
                       ${g.name}
                     </option>`,
                 )}
@@ -101,7 +101,7 @@ export function renderOverviewAssignmentsCard(
             description: store.t("dev_overview.device_category_desc"),
             control: html`<select
               id="cfg-ble_category"
-              .value=${curBleCat}
+              .value=${live(curBleCat)}
               @change=${(ev: Event) =>
                 store.entity.stageDeviceSetting(
                   "ble_category",
@@ -109,7 +109,7 @@ export function renderOverviewAssignmentsCard(
                   "cfg-ble_category",
                 )}
             >
-              <option value="auto" ?selected=${curBleCat === "auto"}>
+              <option value="auto" .selected=${live(curBleCat === "auto")}>
                 ${store.t("dev_overview.auto_category_option", {
                   category:
                     effBleCat === "phone"
@@ -117,10 +117,10 @@ export function renderOverviewAssignmentsCard(
                       : store.t("status.ble_tag"),
                 })}
               </option>
-              <option value="phone" ?selected=${curBleCat === "phone"}>
+              <option value="phone" .selected=${live(curBleCat === "phone")}>
                 ${store.t("status.phone")}
               </option>
-              <option value="ble_tag" ?selected=${curBleCat === "ble_tag"}>
+              <option value="ble_tag" .selected=${live(curBleCat === "ble_tag")}>
                 ${store.t("status.ble_tag")}
               </option>
             </select>`,

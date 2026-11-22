@@ -53,12 +53,17 @@ from .groups.device_groups import (
     async_sync_coordinators_to_builtin_presets,
     upgrade_stored_builtin_groups,
 )
-from .http.signing import register_crop_hash_resolver
-from .http.views_register import (
-    async_register_http_views,
+from .http.camera_views import (
+    LatterCameraAudioStreamView,
+    LatterCameraGridView,
+    LatterCameraSnapshotView,
+    LatterCameraStreamView,
     async_shutdown_camera_feeds,
     async_shutdown_doorbell_streams,
 )
+from .http.proxy_views import LatterArtworkTranscoderView, LatterBrandIconView
+from .http.signing import register_crop_hash_resolver
+from .http.wallpaper_views import LatterWallpaperProxyView, LatterWallpaperUploadView
 from .hub_registry import (
     LatterSystemHub,
     async_stop_area_state_index,
@@ -107,6 +112,23 @@ _OWN_WRITE_SUPPRESS_S = 2.0
 register_crop_hash_resolver(get_photo_crop_hash)
 register_hub_hooks(rpc_dispatcher_factory=LatterRpcDispatcher)
 register_rpc_receiver_factory(LatterRpcReceiver)
+
+
+@callback
+def async_register_http_views(hass: HomeAssistant) -> None:
+    """Register all 8 local-only signed/admin HTTP views once on `hass.http`."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if domain_data.get("views_registered"):
+        return
+    domain_data["views_registered"] = True
+    hass.http.register_view(LatterArtworkTranscoderView(hass))
+    hass.http.register_view(LatterWallpaperProxyView(hass))
+    hass.http.register_view(LatterWallpaperUploadView(hass))
+    hass.http.register_view(LatterCameraSnapshotView(hass))
+    hass.http.register_view(LatterCameraStreamView(hass))
+    hass.http.register_view(LatterCameraGridView(hass))
+    hass.http.register_view(LatterCameraAudioStreamView(hass))
+    hass.http.register_view(LatterBrandIconView(hass))
 
 
 async def async_ping_bound_devices(

@@ -41,7 +41,7 @@ from ..const import (
     STUDIO_REV,
 )
 from ..coordinator import LatterCoordinator
-from ..groups.device_reset import async_reset_device
+from ..groups.device_groups import async_reset_device
 from ..hub_registry import get_latter_system, iter_coordinators
 from ..identity import device_entities
 from ..presence.ble_fabric import get_all_areas_presence_summary, get_ble_fabric

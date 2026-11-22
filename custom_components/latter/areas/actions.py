@@ -17,18 +17,16 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from ..const import CONF_ALARM_ENTITY, DATA_GLOBAL_CONFIG, DOMAIN
-from ..media.volume import async_execute_volume_action
+from ..media.playback import async_execute_volume_action
 from ..protocol_policy import is_valid_pin_digits
 from .curation import get_entity_level, get_home_alarm_summary
 
 _LOGGER = logging.getLogger(__name__)
 
-_HEX_RGB_LEN: Final = 6
 _MIN_KELVIN: Final = 2000
 _MAX_KELVIN: Final = 6500
 _MIN_CLIMATE_STEP_TEMP: Final = 5
 _DEFAULT_CLIMATE_BASE_TEMP: Final = 20
-_PERCENT_MAX: Final = 100
 _LEVEL_STEP: Final = 10
 
 _ALARM_ACTION_ALIASES: Final[dict[str, str]] = {
@@ -176,7 +174,7 @@ def _compute_climate_step_level(state_obj: State, action: str) -> int:
     except (TypeError, ValueError):
         base_t = _DEFAULT_CLIMATE_BASE_TEMP
     delta = 1 if action == "step_up" else -1
-    return max(_MIN_CLIMATE_STEP_TEMP, min(_PERCENT_MAX, base_t + delta))
+    return max(_MIN_CLIMATE_STEP_TEMP, min(100, base_t + delta))
 
 
 async def _execute_media_step(
@@ -188,9 +186,9 @@ async def _execute_media_step(
         try:
             f_val = float(raw_v)
             if math.isfinite(f_val):
-                base_v = round(f_val * _PERCENT_MAX)
+                base_v = round(f_val * 100)
                 delta = _LEVEL_STEP if action == "step_up" else -_LEVEL_STEP
-                step_lvl = float(max(0, min(_PERCENT_MAX, base_v + delta)))
+                step_lvl = float(max(0, min(100, base_v + delta)))
         except (TypeError, ValueError):
             step_lvl = None
     await async_execute_volume_action(
@@ -212,14 +210,14 @@ async def _try_light_special_action(
     level, code = params
     if action == "set_color" and code:
         hex_s = code.strip().lstrip("#")
-        if len(hex_s) == _HEX_RGB_LEN:
+        if len(hex_s) == 6:
             try:
                 rgb = [int(hex_s[0:2], 16), int(hex_s[2:4], 16), int(hex_s[4:6], 16)]
             except ValueError:
                 return False
             payload_c: dict[str, Any] = {ATTR_ENTITY_ID: entity_id, "rgb_color": rgb}
             if level is not None and int(level) > 0:
-                payload_c["brightness_pct"] = max(1, min(_PERCENT_MAX, int(level)))
+                payload_c["brightness_pct"] = max(1, min(100, int(level)))
             await hass.services.async_call(
                 "light", "turn_on", payload_c, blocking=blocking
             )
@@ -407,7 +405,7 @@ async def _try_set_level_action(
 ) -> bool:
     domain = state_obj.domain
     entity_id = state_obj.entity_id
-    lvl = max(0, min(_PERCENT_MAX, int(level)))
+    lvl = max(0, min(100, int(level)))
     if domain == "light":
         if lvl == 0:
             await hass.services.async_call(
@@ -448,7 +446,7 @@ async def _try_set_level_action(
     return False
 
 
-async def _try_stateless_or_helper_domain(  # noqa: PLR0913
+async def _try_stateless_or_helper_domain(
     hass: HomeAssistant,
     state_obj: State,
     action: str,
@@ -615,7 +613,66 @@ def _normalize_effective_action(
     return "set_level" if level is not None else "toggle"
 
 
-async def async_execute_area_action(  # noqa: PLR0911, PLR0912, PLR0913, PLR0917
+_MEDIA_TRANSPORT_ACTIONS: Final[frozenset[str]] = frozenset(
+    {"media_play_pause", "media_next_track", "media_previous_track"}
+)
+_COVER_EXPLICIT_ACTIONS: Final[dict[str, str]] = {
+    "open_cover": "open_cover",
+    "open": "open_cover",
+    "close_cover": "close_cover",
+    "close": "close_cover",
+    "stop_cover": "stop_cover",
+    "stop": "stop_cover",
+}
+
+
+async def _try_domain_specific_action(
+    hass: HomeAssistant,
+    state_obj: State,
+    eff_action: str,
+    level: float | None,
+    code: str | None,
+    *,
+    blocking: bool,
+) -> bool:
+    """Dispatch media transport, light color/kelvin, climate, explicit cover, vacuum, and slider levels."""
+    domain = state_obj.domain
+    entity_id = state_obj.entity_id
+    if domain == "media_player" and eff_action in _MEDIA_TRANSPORT_ACTIONS:
+        await hass.services.async_call(
+            "media_player", eff_action, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
+        )
+        return True
+    if domain == "light" and await _try_light_special_action(
+        hass, entity_id, eff_action, (level, code), blocking=blocking
+    ):
+        return True
+    if domain == "climate" and await _try_climate_action(
+        hass, state_obj, eff_action, level, blocking=blocking
+    ):
+        return True
+    if domain == "cover" and (svc_cover := _COVER_EXPLICIT_ACTIONS.get(eff_action)):
+        await hass.services.async_call(
+            "cover", svc_cover, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
+        )
+        return True
+    if domain == "vacuum":
+        await _execute_vacuum_action(hass, state_obj, eff_action, blocking=blocking)
+        return True
+    if eff_action == "set_level" and level is not None:
+        return await _try_set_level_action(hass, state_obj, level, blocking=blocking)
+    return False
+
+
+def _compute_step_level(state_obj: State, eff_action: str) -> float:
+    if state_obj.domain == "climate":
+        return float(_compute_climate_step_level(state_obj, eff_action))
+    cur_level = max(0, get_entity_level(state_obj))
+    delta = _LEVEL_STEP if eff_action == "step_up" else -_LEVEL_STEP
+    return float(max(0, min(100, cur_level + delta)))
+
+
+async def async_execute_area_action(
     hass: HomeAssistant,
     entity_id: str,
     action: str = "toggle",
@@ -673,61 +730,14 @@ async def async_execute_area_action(  # noqa: PLR0911, PLR0912, PLR0913, PLR0917
         if domain == "media_player":
             await _execute_media_step(hass, state_obj, eff_action)
             return
-        if domain == "climate":
-            level = float(_compute_climate_step_level(state_obj, eff_action))
-        else:
-            cur_level = max(0, get_entity_level(state_obj))
-            delta = _LEVEL_STEP if eff_action == "step_up" else -_LEVEL_STEP
-            level = float(max(0, min(_PERCENT_MAX, cur_level + delta)))
+        level = _compute_step_level(state_obj, eff_action)
         eff_action = "set_level"
 
     if await _try_utility_domain_action(hass, state_obj, eff_action, blocking=blocking):
         return
 
-    if domain == "media_player" and eff_action in (
-        "media_play_pause",
-        "media_next_track",
-        "media_previous_track",
-    ):
-        await hass.services.async_call(
-            "media_player", eff_action, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
-        )
-        return
-
-    if domain == "light" and await _try_light_special_action(
-        hass, entity_id, eff_action, (level, code), blocking=blocking
-    ):
-        return
-
-    if domain == "climate" and await _try_climate_action(
-        hass, state_obj, eff_action, level, blocking=blocking
-    ):
-        return
-
-    if domain == "cover" and eff_action in (
-        "open_cover",
-        "open",
-        "close_cover",
-        "close",
-        "stop_cover",
-        "stop",
-    ):
-        svc_cover = (
-            "open_cover"
-            if eff_action in ("open_cover", "open")
-            else ("close_cover" if eff_action in ("close_cover", "close") else "stop_cover")
-        )
-        await hass.services.async_call(
-            "cover", svc_cover, {ATTR_ENTITY_ID: entity_id}, blocking=blocking
-        )
-        return
-
-    if domain == "vacuum":
-        await _execute_vacuum_action(hass, state_obj, eff_action, blocking=blocking)
-        return
-
-    if eff_action == "set_level" and level is not None and await _try_set_level_action(
-        hass, state_obj, level, blocking=blocking
+    if await _try_domain_specific_action(
+        hass, state_obj, eff_action, level, code, blocking=blocking
     ):
         return
 

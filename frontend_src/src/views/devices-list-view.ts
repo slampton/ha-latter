@@ -7,7 +7,7 @@
  */
 
 import { renderCard, renderSortHeader } from "../components/controls.js";
-import { html, nothing, repeat, type TemplateResult } from "../lib/lit.js";
+import { html, live, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { DeviceStatusCode, SystemDeviceEntry } from "../types.js";
 import { entityLabel } from "../utils/format.js";
@@ -151,14 +151,14 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
         ? html`<select
             id="device-category-filter"
             aria-label=${store.t("devices.filter_aria")}
-            .value=${cat}
+            .value=${live(cat)}
             @change=${(ev: Event) => {
               store.deviceCategoryFilter = (ev.currentTarget as HTMLSelectElement).value || "all";
               store.host.requestUpdate();
             }}
           >
             ${baseCategories.map(
-              (o) => html`<option value=${o.id} ?selected=${o.id === cat}>${o.label}</option>`,
+              (o) => html`<option value=${o.id} .selected=${live(o.id === cat)}>${o.label}</option>`,
             )}
           </select>`
         : nothing,

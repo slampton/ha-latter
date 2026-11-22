@@ -74,7 +74,7 @@ from ..const import (
     STUDIO_REV,
 )
 from ..coordinator import LatterCoordinator
-from ..doorbell_targets import resolve_doorbell_ring_entities
+from ..doorbell import resolve_doorbell_ring_entities
 from ..groups.device_groups import (
     coordinator_supports_pref,
     get_device_groups,

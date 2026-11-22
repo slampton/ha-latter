@@ -14,7 +14,7 @@ import {
   parseAlarmsSummary,
   serializeAlarmsSummary,
 } from "../../domain/alarms.js";
-import { html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import { fmtNumber, formatClockHhMm } from "../../utils/format.js";
 
@@ -28,7 +28,7 @@ export function renderOverviewTimersAlarmsCard(
   const { isBleOnly, isOffline } = opts;
   const data = store.state;
   const cfg = data?.config || {};
-  const live = data?.live || {};
+  const liveData = data?.live || {};
   const caps = data?.capabilities || {};
 
   if (isBleOnly || !caps.has_display) return nothing;
@@ -56,23 +56,23 @@ export function renderOverviewTimersAlarmsCard(
   };
 
   const nowMs = Number.isFinite(store.liveClockNowMs) ? store.liveClockNowMs : Date.now();
-  const timerEndsMs = live.timer_ends_at ? Date.parse(live.timer_ends_at) : Number.NaN;
+  const timerEndsMs = liveData.timer_ends_at ? Date.parse(liveData.timer_ends_at) : Number.NaN;
   const liveTimerRemainingSec =
-    live.timer_running && Number.isFinite(timerEndsMs)
+    liveData.timer_running && Number.isFinite(timerEndsMs)
       ? Math.max(0, Math.ceil((timerEndsMs - nowMs) / 1000))
-      : Math.max(0, Math.round(Number(live.timer_remaining_sec || 0)));
+      : Math.max(0, Math.round(Number(liveData.timer_remaining_sec || 0)));
 
-  const stopwatchStartedMs = live.stopwatch_started_at
-    ? Date.parse(live.stopwatch_started_at)
+  const stopwatchStartedMs = liveData.stopwatch_started_at
+    ? Date.parse(liveData.stopwatch_started_at)
     : Number.NaN;
   const liveStopwatchElapsedSec =
-    live.stopwatch_running && Number.isFinite(stopwatchStartedMs)
+    liveData.stopwatch_running && Number.isFinite(stopwatchStartedMs)
       ? Math.max(0, Math.floor((nowMs - stopwatchStartedMs) / 1000))
-      : Math.max(0, Math.round(Number(live.stopwatch_elapsed_sec || 0)));
+      : Math.max(0, Math.round(Number(liveData.stopwatch_elapsed_sec || 0)));
 
-  const timerActive = Boolean(live.timer_running || live.timer_paused);
-  const stopwatchActive = Boolean(live.stopwatch_running || live.stopwatch_paused);
-  const alarmRinging = Boolean(live.alarm_ringing);
+  const timerActive = Boolean(liveData.timer_running || liveData.timer_paused);
+  const stopwatchActive = Boolean(liveData.stopwatch_running || liveData.stopwatch_paused);
+  const alarmRinging = Boolean(liveData.alarm_ringing);
   const enabledAlarmSlots = alarmSlots
     .filter((s) => s.enabled)
     .sort((a, b) => a.time.localeCompare(b.time));
@@ -120,8 +120,8 @@ export function renderOverviewTimersAlarmsCard(
           label: store.t("dev_overview.active_timer_label"),
           description: timerActive ? undefined : store.t("dev_overview.no_active_timer"),
           control: timerActive
-            ? html`<span class="chip ${live.timer_running ? "chip-primary" : ""}">
-                  ${live.timer_running
+            ? html`<span class="chip ${liveData.timer_running ? "chip-primary" : ""}">
+                  ${liveData.timer_running
                     ? store.t("dev_overview.running")
                     : store.t("dev_overview.paused")}
                 </span>
@@ -148,8 +148,8 @@ export function renderOverviewTimersAlarmsCard(
           label: store.t("dev_overview.stopwatch_label"),
           description: stopwatchActive ? undefined : store.t("dev_overview.not_running"),
           control: stopwatchActive
-            ? html`<span class="chip ${live.stopwatch_running ? "chip-primary" : ""}">
-                  ${live.stopwatch_running
+            ? html`<span class="chip ${liveData.stopwatch_running ? "chip-primary" : ""}">
+                  ${liveData.stopwatch_running
                     ? store.t("dev_overview.running")
                     : store.t("dev_overview.paused")}
                 </span>
@@ -210,7 +210,7 @@ export function renderOverviewTimersAlarmsCard(
                         type="time"
                         id=${timeId}
                         step="60"
-                        .value=${slot.time}
+                        .value=${live(slot.time)}
                         @change=${(ev: Event) => {
                           const val = (ev.currentTarget as HTMLInputElement).value;
                           if (val) {
@@ -225,7 +225,7 @@ export function renderOverviewTimersAlarmsCard(
                       </label>
                       <select
                         id=${recId}
-                        .value=${String(slot.recurrence)}
+                        .value=${live(String(slot.recurrence))}
                         @change=${(ev: Event) =>
                           updateAlarmSlot(
                             idx,
@@ -241,7 +241,7 @@ export function renderOverviewTimersAlarmsCard(
                           (opt) =>
                             html`<option
                               value=${String(opt.value)}
-                              ?selected=${opt.value === slot.recurrence}
+                              .selected=${live(opt.value === slot.recurrence)}
                             >
                               ${opt.label}
                             </option>`,
@@ -254,7 +254,7 @@ export function renderOverviewTimersAlarmsCard(
                     <input
                       type="checkbox"
                       id=${enId}
-                      .checked=${slot.enabled}
+                      .checked=${live(slot.enabled)}
                       @change=${(ev: Event) =>
                         updateAlarmSlot(
                           idx,

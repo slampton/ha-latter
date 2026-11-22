@@ -350,7 +350,7 @@ def normalize_temp_unit(unit: object) -> str:
     return "F" if raw in ("F", "FAHRENHEIT") else ""
 
 
-def pack_weather_forecast_fields(  # noqa: PLR0913, PLR0917
+def pack_weather_forecast_fields(
     condition: Any = "",
     temperature: Any = None,
     humidity: Any = None,
@@ -397,7 +397,7 @@ def _clamp_volume_field(volume: int | float | None) -> int | str:
         return ""
 
 
-def pack_active_media_fields(  # noqa: PLR0913, PLR0917
+def pack_active_media_fields(
     state: Any = "",
     title: Any = "",
     artist: Any = "",
@@ -660,7 +660,7 @@ def _apply_pref_trait_clamps(
     return val
 
 
-def _resolve_pref_body_field(  # noqa: PLR0913
+def _resolve_pref_body_field(
     name: str,
     cfg: Mapping[str, Any],
     *,
@@ -681,7 +681,7 @@ def _resolve_pref_body_field(  # noqa: PLR0913
     )
 
 
-def pack_device_prefs_fields(  # noqa: PLR0913
+def pack_device_prefs_fields(
     prefs_seq: int,
     cfg: Mapping[str, Any],
     *,

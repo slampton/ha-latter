@@ -439,7 +439,7 @@ def _noise_reduction(val: object) -> str:
     return level if level in NOISE_REDUCTION_LEVELS else DEFAULT_NOISE_REDUCTION
 
 
-def _ble_float(  # noqa: PLR0913
+def _ble_float(
     val: object, default: float, lo: float, hi: float, ndigits: int, *, strict: bool = False
 ) -> float:
     if val is None or (isinstance(val, str) and not val.strip()):
@@ -856,7 +856,7 @@ def _validate_device_enum_strings(incoming: Mapping[str, object], out: dict[str,
         out["ble_category"] = ble_cat
 
 
-def _apply_device_enums_and_traits(  # noqa: PLR0913
+def _apply_device_enums_and_traits(
     incoming: Mapping[str, object],
     current: Mapping[str, object] | None,
     out: dict[str, SettingValue],

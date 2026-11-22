@@ -10,7 +10,7 @@ import {
   renderSelectOptions,
   renderTrashIconButton,
 } from "../components/controls.js";
-import { focusSafe, html, type TemplateResult } from "../lib/lit.js";
+import { focusSafe, html, live, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 
 export function renderSystemRemotesView(store: StudioStore): TemplateResult {
@@ -83,7 +83,7 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
                         <span class="field-label">${store.t("remotes.when_playing_on")}</span>
                         <select
                           aria-label=${store.t("remotes.speaker_aria")}
-                          .value=${vo.speaker}
+                          .value=${live(vo.speaker)}
                           @change=${(ev: Event) =>
                             store.entity.updateVolumeOverrideRow(
                               idx,
@@ -102,7 +102,7 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
                         <span class="field-label">${store.t("remotes.change_volume_on")}</span>
                         <select
                           aria-label=${store.t("remotes.volume_target_aria")}
-                          .value=${vo.target}
+                          .value=${live(vo.target)}
                           @change=${(ev: Event) =>
                             store.entity.updateVolumeOverrideRow(
                               idx,
@@ -174,7 +174,7 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
                           <select
                             id=${areaId}
                             aria-label=${store.t("remotes.area_aria")}
-                            .value=${grp.area_id || ""}
+                            .value=${live(grp.area_id || "")}
                             @change=${(ev: Event) =>
                               store.entity.updateRemoteGroupField(
                                 grp.id,
@@ -182,10 +182,12 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
                                 (ev.currentTarget as HTMLSelectElement).value,
                               )}
                           >
-                            <option value="">${store.t("remotes.no_area_option")}</option>
+                            <option value="" .selected=${live(!(grp.area_id || ""))}>
+                              ${store.t("remotes.no_area_option")}
+                            </option>
                             ${areas.map(
                               (a) =>
-                                html`<option value=${a.id} ?selected=${a.id === grp.area_id}>
+                                html`<option value=${a.id} .selected=${live(a.id === grp.area_id)}>
                                   ${a.name}
                                 </option>`,
                             )}

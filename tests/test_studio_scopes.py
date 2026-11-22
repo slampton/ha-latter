@@ -6,25 +6,22 @@ import ast
 import json
 from pathlib import Path
 import tempfile
-from types import SimpleNamespace
 import unittest
 
 from custom_components.latter import (
     backup,
     repairs_keys as issue_ids,
 )
-from custom_components.latter.groups import (
-    device_groups,
-    device_reset as reset_policy,
-)
+from custom_components.latter.groups import device_groups
 from custom_components.latter.studio import (
     panel as assets,
     settings_cleaners as settings,
     state_gates as scope,
 )
-from tests.conftest import LATTER_DIR, read_py_tree
+from tests.conftest import LATTER_DIR, read_py_tree, read_ts_tree
 
-groups = SimpleNamespace(**(vars(device_groups) | vars(reset_policy)))
+groups = device_groups
+reset_policy = device_groups
 
 
 class TestShortcutPolicy(unittest.TestCase):
@@ -85,16 +82,19 @@ class TestShortcutPolicy(unittest.TestCase):
         self.assertEqual(settings.DEFAULT_DOCK_ROUTES, default_routes)
         const_src = (LATTER_DIR / "const.py").read_text(encoding="utf-8")
         self.assertIn(f'DEFAULT_DOCK_ROUTES: Final = "{default_routes}"\n', const_src)
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        protocol_ts = read_ts_tree("protocol-schema.ts")
+        bundle_js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         for route in protocol_json["catalogs"]["shortcut_routes"]:
-            self.assertIn(f'token: "{route["token"]}"', js)
+            self.assertIn(f'token: "{route["token"]}"', protocol_ts)
+            self.assertIn(f'"{route["token"]}"', bundle_js)
         for music_tok, music_lbl in (
             ("music:album_tracks", "Album Tracks"),
             ("music:lyrics", "Music Lyrics"),
             ("music:info", "Track Info"),
         ):
             self.assertEqual(settings.SHORTCUT_ROUTE_MAP[music_tok]["label"], music_lbl)
-            self.assertIn(f'token: "{music_tok}", label: "{music_lbl}"', js)
+            self.assertIn(f'token: "{music_tok}", label: "{music_lbl}"', protocol_ts)
+            self.assertIn(f'"{music_tok}"', bundle_js)
         self.assertNotIn("shortcut_action", protocol_json["ha_services"])
         self.assertEqual(
             protocol_json["rpc_methods"]["shortcut_action"]["fields"],
@@ -142,8 +142,7 @@ class TestIssueAttribution(unittest.TestCase):
             (LATTER_DIR / "studio" / "locales" / "en.json").read_text(encoding="utf-8")
         )
         self.assertTrue(set(issue_ids.DEVICE_ISSUE_KINDS) <= set(strings["issues"]))
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn("localizeRepairIssue", js)
+        self.assertIn("localizeRepairIssue", read_ts_tree("i18n", "utils"))
         for kind in issue_ids.DEVICE_ISSUE_KINDS:
             self.assertIn(f"issue.{kind}", en_json, f"Studio locale catalog missing issue.{kind}")
 

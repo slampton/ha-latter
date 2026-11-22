@@ -146,7 +146,7 @@ class LatterCameraStreamHub:
         if idle_candidates:
             await self._async_stop_ingest(min(idle_candidates, key=lambda ing: ing.idle_since))
 
-    async def _subscribe(  # noqa: PLR0913
+    async def _subscribe(
         self, entity_id: str, width: int, height: int, fps: int,
         *, fit: str = "contain", rot: int = 0, circular_mask: bool = False,
     ) -> tuple[_CameraIngest, _CameraSubscriber]:
@@ -659,7 +659,7 @@ class LatterCameraStreamHub:
         )
         return out
 
-    async def async_get_snapshot(  # noqa: PLR0913
+    async def async_get_snapshot(
         self,
         entity_id: str,
         width: int,
@@ -730,7 +730,7 @@ class LatterCameraStreamHub:
             raise CameraFetchError(str(ingest.latest_error)) from ingest.latest_error
         return None
 
-    async def async_iter_stream_frames(  # noqa: PLR0913
+    async def async_iter_stream_frames(
         self,
         entity_id: str,
         width: int,
@@ -773,7 +773,7 @@ class LatterCameraStreamHub:
         finally:
             self._unsubscribe(ingest, sub)
 
-    async def async_iter_mjpeg_chunks(  # noqa: PLR0913
+    async def async_iter_mjpeg_chunks(
         self,
         entity_id: str,
         width: int,
@@ -829,7 +829,7 @@ class LatterCameraStreamHub:
             attached.append(pair)
         return attached, limit_err
 
-    async def async_iter_grid_frames(  # noqa: PLR0913
+    async def async_iter_grid_frames(
         self,
         entity_ids: list[str],
         width: int,
@@ -896,7 +896,7 @@ class LatterCameraStreamHub:
                 if pair is not None:
                     self._unsubscribe(pair[0], pair[1])
 
-    async def async_iter_grid_mjpeg_chunks(  # noqa: PLR0913
+    async def async_iter_grid_mjpeg_chunks(
         self,
         entity_ids: list[str],
         width: int,

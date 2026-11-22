@@ -35,8 +35,8 @@ from ..coordinator import LatterCoordinator, resolve_coordinator
 from ..feeds import async_fetch_calendar_window, discover_calendars
 from ..hub_registry import iter_coordinators
 from ..identity import esphome_service
-from ..media.announce import async_announce_on_targets
 from ..media.linking import resolve_ma_counterpart_entity
+from ..media.tts_queue import async_announce_on_targets
 from ..presence.ble_fabric import get_ble_fabric
 from ..protocol_codec import pack_calendar_window_chunks, utf8_safe_truncate
 from ..repairs_keys import slot_push_failing_issue_id

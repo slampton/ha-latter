@@ -1,8 +1,27 @@
 /**
- * Vendored `lit-html` (v3.3.3, BSD-3-Clause) wrapper, thin `LitElement` reactive host,
- * `focusSafe` property directive (`D-039`), and duplicate-key-safe `repeat` directive (`D-062`).
+ * Stock `lit` (v3.3.3, BSD-3-Clause) re-exports, `focusSafe` property directive (`D-039`),
+ * `live` directive, and duplicate-key-safe `repeat` directive (`D-062`, `D-078`).
  */
 
+import {
+  css,
+  html,
+  LitElement,
+  noChange,
+  nothing,
+  render,
+  svg,
+  type CSSResult,
+  type CSSResultGroup,
+  type HTMLTemplateResult,
+  type PropertyValues,
+  type ReactiveController,
+  type ReactiveControllerHost,
+  type RenderOptions,
+  type RootPart,
+  type SVGTemplateResult,
+  type TemplateResult,
+} from "lit";
 import {
   Directive,
   directive,
@@ -17,30 +36,21 @@ import {
   type Part,
   type PartInfo,
   type PropertyPart,
-} from "./vendor/directive.js";
+} from "lit/directive.js";
+import { live } from "lit/directives/live.js";
 import {
   repeat as litRepeat,
   type ItemTemplate,
   type KeyFn,
-} from "./vendor/directives/repeat.js";
-import {
-  html,
-  noChange,
-  nothing,
-  render,
-  svg,
-  type HTMLTemplateResult,
-  type RenderOptions,
-  type RenderRootNode,
-  type RootPart,
-  type SVGTemplateResult,
-  type TemplateResult,
-} from "./vendor/lit-html.js";
+} from "lit/directives/repeat.js";
 
 export {
+  css,
   Directive,
   directive,
   html,
+  LitElement,
+  live,
   noChange,
   nothing,
   PartType,
@@ -49,6 +59,8 @@ export {
   type AttributePart,
   type BooleanAttributePart,
   type ChildPart,
+  type CSSResult,
+  type CSSResultGroup,
   type DirectiveClass,
   type DirectiveResult,
   type ElementPart,
@@ -59,60 +71,14 @@ export {
   type Part,
   type PartInfo,
   type PropertyPart,
+  type PropertyValues,
+  type ReactiveController,
+  type ReactiveControllerHost,
   type RenderOptions,
-  type RenderRootNode,
   type RootPart,
   type SVGTemplateResult,
   type TemplateResult,
 };
-
-export type KeyedResult = unknown;
-
-export interface CSSResult {
-  readonly styleSheetText: string;
-}
-
-const STYLE_SHEET_CACHE = new WeakMap<CSSResult, CSSStyleSheet>();
-
-export function css(strings: TemplateStringsArray, ...values: unknown[]): CSSResult {
-  let out = "";
-  for (let i = 0; i < strings.length; i += 1) {
-    out += strings[i];
-    if (i < values.length) {
-      const v = values[i];
-      if (v && typeof v === "object" && "styleSheetText" in (v as CSSResult)) {
-        out += (v as CSSResult).styleSheetText;
-      } else if (v !== undefined && v !== null) {
-        out += String(v);
-      }
-    }
-  }
-  return { styleSheetText: out };
-}
-
-function getCachedStyleSheet(res: CSSResult): CSSStyleSheet {
-  let sheet = STYLE_SHEET_CACHE.get(res);
-  if (!sheet) {
-    sheet = new CSSStyleSheet();
-    sheet.replaceSync(res.styleSheetText);
-    STYLE_SHEET_CACHE.set(res, sheet);
-  }
-  return sheet;
-}
-
-export interface ReactiveController {
-  hostConnected?(): void;
-  hostDisconnected?(): void;
-  hostUpdate?(): void;
-  hostUpdated?(): void;
-}
-
-export interface ReactiveControllerHost {
-  addController(controller: ReactiveController): void;
-  removeController(controller: ReactiveController): void;
-  requestUpdate(): void;
-  readonly updateComplete: Promise<boolean>;
-}
 
 const NON_TEXT_INPUT_TYPES = new Set([
   "button",
@@ -212,116 +178,4 @@ export function repeat<T>(
     return `${String(rawKey)}__dup_${prevCount}`;
   };
   return litRepeat(items, safeKeyFn, template);
-}
-
-const BaseHTMLElement: typeof HTMLElement =
-  typeof HTMLElement !== "undefined"
-    ? HTMLElement
-    : (class {} as unknown as typeof HTMLElement);
-
-export class LitElement extends BaseHTMLElement implements ReactiveControllerHost {
-  static styles?: CSSResult | readonly CSSResult[];
-
-  readonly renderRoot: ShadowRoot;
-  private readonly _controllers = new Set<ReactiveController>();
-  private _updatePending = false;
-  private _hasUpdated = false;
-  private _updatePromise: Promise<boolean> = Promise.resolve(true);
-  private _rootPart: RootPart | null = null;
-  private _stylesAdopted = false;
-
-  constructor() {
-    super();
-    this.renderRoot = this.attachShadow({ mode: "open" });
-  }
-
-  addController(controller: ReactiveController): void {
-    this._controllers.add(controller);
-    if (this.isConnected && controller.hostConnected) {
-      controller.hostConnected();
-    }
-  }
-
-  removeController(controller: ReactiveController): void {
-    this._controllers.delete(controller);
-  }
-
-  connectedCallback(): void {
-    this._adoptStylesOnce();
-    this._rootPart?.setConnected(true);
-    for (const c of this._controllers) {
-      c.hostConnected?.();
-    }
-    this.requestUpdate();
-  }
-
-  disconnectedCallback(): void {
-    for (const c of this._controllers) {
-      c.hostDisconnected?.();
-    }
-    this._rootPart?.setConnected(false);
-  }
-
-  get updateComplete(): Promise<boolean> {
-    return this._updatePromise;
-  }
-
-  requestUpdate(): void {
-    if (this._updatePending) return;
-    this._updatePending = true;
-    let resolveCycle!: (val: boolean) => void;
-    this._updatePromise = new Promise<boolean>((resolve) => {
-      resolveCycle = resolve;
-    });
-    queueMicrotask(() => this._performUpdate(resolveCycle));
-  }
-
-  private _adoptStylesOnce(): void {
-    if (this._stylesAdopted) return;
-    this._stylesAdopted = true;
-    const ctor = this.constructor as typeof LitElement;
-    if (!ctor.styles) return;
-    const list = Array.isArray(ctor.styles) ? ctor.styles : [ctor.styles];
-    if (typeof CSSStyleSheet !== "undefined" && "adoptedStyleSheets" in this.renderRoot) {
-      this.renderRoot.adoptedStyleSheets = list.map((s) => getCachedStyleSheet(s));
-    }
-  }
-
-  private _performUpdate(resolveCycle: (val: boolean) => void): void {
-    this._updatePending = false;
-    if (!this.isConnected) {
-      resolveCycle(false);
-      return;
-    }
-    let completed = false;
-    try {
-      this._adoptStylesOnce();
-      for (const c of this._controllers) {
-        c.hostUpdate?.();
-      }
-      const rendered = this.render();
-      this._rootPart = render(rendered, this.renderRoot, { host: this });
-      if (!this._hasUpdated) {
-        this._hasUpdated = true;
-        this.firstUpdated();
-      }
-      this.updated();
-      for (const c of this._controllers) {
-        c.hostUpdated?.();
-      }
-      completed = true;
-    } catch (err) {
-      console.error("[latter-studio] Render update failed:", err);
-    } finally {
-      resolveCycle(completed);
-    }
-  }
-
-  protected render(): unknown {
-    return nothing;
-  }
-
-  protected firstUpdated(): void {}
-
-  protected updated(): void {}
 }

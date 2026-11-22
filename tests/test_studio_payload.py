@@ -47,11 +47,12 @@ class TestEntityLabels(unittest.TestCase):
         self.assertEqual(dict(zip(cases, got, strict=True)), cases)
 
     def test_every_entity_label_goes_through_it(self) -> None:
+        format_ts = read_ts_tree("utils/format.ts")
         controls_ts = read_ts_tree("components/controls.ts", "components/controls")
         shared_ts = (FRONTEND_SRC / "views" / "system-shared-view.ts").read_text(encoding="utf-8")
+        self.assertIn("export function entityLabel(", format_ts)
         self.assertIn("entityLabel(", controls_ts)
         self.assertIn("entityLabel(", shared_ts)
-        self.assertIn("entityLabel(", STUDIO_JS)
         self.assertNotIn("window.entityLabel", STUDIO_JS)
 
 

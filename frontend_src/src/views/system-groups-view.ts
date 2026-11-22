@@ -8,7 +8,7 @@
 
 import { renderCard, renderTrashIconButton } from "../components/controls.js";
 import { DEFAULT_DEVICE_GROUP_IDS } from "../constants.js";
-import { focusSafe, html, nothing, repeat, type TemplateResult } from "../lib/lit.js";
+import { focusSafe, html, live, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import { fmtNumber } from "../utils/format.js";
 import { renderBatchControlsCard } from "./groups/batch-controls.js";
@@ -104,21 +104,21 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
                     <select
                       id="new-group-source"
                       aria-label=${store.t("groups.copy_from_aria")}
-                      .value=${store.newGroupSourceSubentryId}
+                      .value=${live(store.newGroupSourceSubentryId)}
                       @change=${(ev: Event) => {
                         store.newGroupSourceSubentryId = (
                           ev.currentTarget as HTMLSelectElement
                         ).value;
                       }}
                     >
-                      <option value="" ?selected=${!store.newGroupSourceSubentryId}>
+                      <option value="" .selected=${live(!store.newGroupSourceSubentryId)}>
                         ${store.t("groups.start_from_defaults")}
                       </option>
                       ${latterDevices.map(
                         (d) =>
                           html`<option
                             value=${d.subentry_id}
-                            ?selected=${d.subentry_id === store.newGroupSourceSubentryId}
+                            .selected=${live(d.subentry_id === store.newGroupSourceSubentryId)}
                           >
                             ${store.t("groups.copy_from_prefix", { title: d.title })}
                           </option>`,

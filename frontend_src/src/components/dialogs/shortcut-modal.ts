@@ -13,7 +13,7 @@ import {
   SHORTCUT_ROUTES_CATALOG,
 } from "../../constants.js";
 import { formatHaEntityState } from "../../i18n/index.js";
-import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import {
   isKnownMdiIcon,
   isMdiCatalogLoaded,
@@ -267,7 +267,7 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
               </label>
               <select
                 id="shortcut-route-select"
-                .value=${effectiveRouteTarget}
+                .value=${live(effectiveRouteTarget)}
                 @change=${(ev: Event) => {
                   const val = (ev.currentTarget as HTMLSelectElement).value;
                   store.shortcutModal = { ...store.shortcutModal, routeTarget: val };
@@ -279,7 +279,7 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
                     ${grp.items.map(
                       (item) => html`<option
                         value=${item.token}
-                        ?selected=${item.token === effectiveRouteTarget}
+                        .selected=${live(item.token === effectiveRouteTarget)}
                       >
                         ${item.label}
                       </option>`,
@@ -294,7 +294,7 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
                 </label>
                 <select
                   id="shortcut-domain-filter"
-                  .value=${scModal.entityDomainFilter}
+                  .value=${live(scModal.entityDomainFilter)}
                   @change=${(ev: Event) => {
                     const nextDom = (ev.currentTarget as HTMLSelectElement).value;
                     const nextList = allShortcutEntities.filter(
@@ -314,13 +314,13 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
                     store.host.requestUpdate();
                   }}
                 >
-                  <option value="all" ?selected=${scModal.entityDomainFilter === "all"}>
+                  <option value="all" .selected=${live(scModal.entityDomainFilter === "all")}>
                     ${store.t("dialogs.sc_all_domains")}
                   </option>
                   ${availableDomains.map(
                     (dom) => html`<option
                       value=${dom}
-                      ?selected=${dom === scModal.entityDomainFilter}
+                      .selected=${live(dom === scModal.entityDomainFilter)}
                     >
                       ${SHORTCUT_DOMAIN_LABELS[dom] || dom}
                     </option>`,
@@ -361,7 +361,7 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
                 </label>
                 <select
                   id="shortcut-action-select"
-                  .value=${scModal.action}
+                  .value=${live(scModal.action)}
                   @change=${(ev: Event) => {
                     store.shortcutModal = {
                       ...store.shortcutModal,
@@ -373,7 +373,7 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
                   ${availableEntityActions.map(
                     (act) => html`<option
                       value=${act.action}
-                      ?selected=${act.action === scModal.action}
+                      .selected=${live(act.action === scModal.action)}
                     >
                       ${act.label}
                     </option>`,

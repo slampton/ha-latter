@@ -81,7 +81,7 @@ def get_circular_mask_surfaces(
 _get_circular_mask_surfaces = get_circular_mask_surfaces
 
 
-def transcode_to_baseline_jpeg(  # noqa: PLR0913, PLR0917
+def transcode_to_baseline_jpeg(
     raw_bytes: bytes,
     width: int,
     height: int,

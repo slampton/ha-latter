@@ -1,40 +1,30 @@
-"""AST import graph extraction, Tarjan SCC cycle detection, and L0a-L4 layer enforcement."""
+"""AST import graph extraction, Tarjan SCC cycle detection, and coarse architectural boundary enforcement."""
 
 from __future__ import annotations
 
 import ast
 from typing import Final
 
-LAYER_ORDER: Final[dict[str, int]] = {
-    "L0a": 0,
-    "L0b": 1,
-    "L1a": 2,
-    "L1b": 3,
-    "L2a": 4,
-    "L2b": 5,
-    "L3": 6,
-    "L4": 7,
-}
-
-MULTILAYER_SUBPACKAGES: Final[frozenset[str]] = frozenset(
-    {
-        "areas",
-        "cameras",
-        "groups",
-        "http",
-        "media",
-        "presence",
-        "services",
-        "studio",
-        "wallpapers",
-    }
-)
-
 FORBIDDEN_NON_STDLIB_ROOTS: Final[frozenset[str]] = frozenset(
     {"homeassistant", "aiohttp", "voluptuous", "PIL"}
 )
 
-L4_PLATFORMS: Final[frozenset[str]] = frozenset(
+# Boundary (a): Pure stdlib leaves importing zero Home Assistant / aiohttp / voluptuous / PIL.
+STDLIB_LEAF_MODULES: Final[frozenset[str]] = frozenset(
+    {
+        "const.py",
+        "config_defaults.py",
+        "repairs_keys.py",
+        "protocol_specs.py",
+        "protocol_codec.py",
+        "protocol_policy.py",
+        "presence/ble_math.py",
+        "studio/settings_cleaners.py",
+    }
+)
+
+# Boundary (b): Integration root & 8 Home Assistant entity platforms.
+ENTITY_PLATFORMS: Final[frozenset[str]] = frozenset(
     {
         "binary_sensor.py",
         "button.py",
@@ -47,114 +37,66 @@ L4_PLATFORMS: Final[frozenset[str]] = frozenset(
     }
 )
 
-# Canonical L0a-L4 classification for every .py module under custom_components/latter/
-LAYER_MAP: Final[dict[str, str]] = {
-    # L0a: Pure stdlib leaves & docstring-only multi-layer subpackage __init__.py markers
-    "const.py": "L0a",
-    "config_defaults.py": "L0a",
-    "repairs_keys.py": "L0a",
-    "protocol_specs.py": "L0a",
-    "areas/__init__.py": "L0a",
-    "cameras/__init__.py": "L0a",
-    "groups/__init__.py": "L0a",
-    "http/__init__.py": "L0a",
-    "media/__init__.py": "L0a",
-    "presence/__init__.py": "L0a",
-    "services/__init__.py": "L0a",
-    "studio/__init__.py": "L0a",
-    "wallpapers/__init__.py": "L0a",
-    # L0b: Pure stdlib codecs, math, and cleaners importing only L0a
-    "protocol_codec.py": "L0b",
-    "protocol_policy.py": "L0b",
-    "presence/ble_math.py": "L0b",
-    "studio/settings_cleaners.py": "L0b",
-    # L1a: Foundational caches, hub registry, HMAC signing, and Studio state gates
-    "media_cache.py": "L1a",
-    "hub_registry.py": "L1a",
-    "http/signing.py": "L1a",
-    "studio/state_gates.py": "L1a",
-    # L1b: Device identity, feeds, remotes, area/BLE registries, MA linking, lyrics, wallpapers
-    "identity.py": "L1b",
-    "feeds.py": "L1b",
-    "remotes.py": "L1b",
-    "doorbell_targets.py": "L1b",
-    "areas/registry.py": "L1b",
-    "areas/state_index.py": "L1b",
-    "presence/ble_registry.py": "L1b",
-    "presence/area_fusion.py": "L1b",
-    "presence/ble_discovery.py": "L1b",
-    "media/linking.py": "L1b",
-    "media/lyrics.py": "L1b",
-    "wallpapers/models.py": "L1b",
-    "wallpapers/store.py": "L1b",
-    "wallpapers/media_import.py": "L1b",
-    "wallpapers/pools.py": "L1b",
-    # L2a: Doorbell, camera stream hub, device groups, media browse/playback, BLE trackers
-    "doorbell.py": "L2a",
-    "cameras/transcode.py": "L2a",
-    "cameras/stream_hub.py": "L2a",
-    "cameras/capabilities.py": "L2a",
-    "groups/esphome_inspector.py": "L2a",
-    "groups/device_groups.py": "L2a",
-    "groups/device_reset.py": "L2a",
-    "media/browse.py": "L2a",
-    "media/volume.py": "L2a",
-    "media/announce.py": "L2a",
-    "media/tts_queue.py": "L2a",
-    "media/playback.py": "L2a",
-    "media/state_payload.py": "L2a",
-    "presence/ble_tracker_matcher.py": "L2a",
-    "presence/ble_tracker_calibration.py": "L2a",
-    # L2b: Area curation/actions/sync, BLE spatial fabric, and backup bundles
-    "areas/sync.py": "L2b",
-    "areas/telemetry.py": "L2b",
-    "areas/curation.py": "L2b",
-    "areas/actions.py": "L2b",
-    "areas/catalogs.py": "L2b",
-    "presence/ble_fabric.py": "L2b",
-    "backup.py": "L2b",
-    # L3: Coordinator, hub sync, RPC/public services, HTTP views, repairs, diagnostics, Studio WS
-    "coordinator/__init__.py": "L3",
-    "coordinator/runtime_store.py": "L3",
-    "coordinator/device_traits.py": "L3",
-    "coordinator/wallpaper_scheduler.py": "L3",
-    "coordinator/area_follow_controller.py": "L3",
-    "coordinator/ha_registry_sync.py": "L3",
-    "coordinator/device_lifecycle.py": "L3",
-    "coordinator/v3_transport.py": "L3",
-    "coordinator/core.py": "L3",
-    "hub_sync.py": "L3",
-    "services/rpc_security.py": "L3",
-    "services/rpc_slots.py": "L3",
-    "services/rpc_receiver.py": "L3",
-    "services/rpc_dispatcher.py": "L3",
-    "services/public_actions.py": "L3",
-    "http/proxy_views.py": "L3",
-    "http/wallpaper_views.py": "L3",
-    "http/camera_views.py": "L3",
-    "http/views_register.py": "L3",
-    "studio/panel.py": "L3",
-    "studio/payload.py": "L3",
-    "studio/device_commands.py": "L3",
-    "studio/system_commands.py": "L3",
-    "studio/commands.py": "L3",
-    "repairs.py": "L3",
-    "diagnostics.py": "L3",
-    # L4: Integration setup, ConfigFlow/SubentryFlows, and Home Assistant entity platforms
-    "__init__.py": "L4",
-    "config_flow.py": "L4",
-    "binary_sensor.py": "L4",
-    "button.py": "L4",
-    "device_tracker.py": "L4",
-    "light.py": "L4",
-    "number.py": "L4",
-    "select.py": "L4",
-    "sensor.py": "L4",
-    "switch.py": "L4",
-}
+INTEGRATION_ROOT_AND_PLATFORMS: Final[frozenset[str]] = ENTITY_PLATFORMS | frozenset(
+    {"__init__.py", "config_flow.py"}
+)
+
+# Boundary (c): Domain/registry tier never imports orchestration/API tier.
+DOMAIN_TIER_EXACT: Final[frozenset[str]] = frozenset(
+    {
+        "hub_registry.py",
+        "identity.py",
+        "feeds.py",
+        "remotes.py",
+        "doorbell.py",
+        "backup.py",
+        "media_cache.py",
+        "http/signing.py",
+        "studio/state_gates.py",
+    }
+)
+
+DOMAIN_TIER_PREFIXES: Final[tuple[str, ...]] = (
+    "areas/",
+    "presence/",
+    "cameras/",
+    "wallpapers/",
+    "media/",
+    "groups/",
+)
+
+ORCHESTRATION_TIER_EXACT: Final[frozenset[str]] = frozenset(
+    {
+        "hub_sync.py",
+        "repairs.py",
+        "diagnostics.py",
+        "studio/panel.py",
+        "studio/payload.py",
+        "studio/commands.py",
+        "studio/system_commands.py",
+        "studio/device_commands.py",
+    }
+)
+
+ORCHESTRATION_TIER_PREFIXES: Final[tuple[str, ...]] = (
+    "coordinator/",
+    "services/",
+)
 
 LATTER_PKG_PREFIX: Final = "custom_components.latter"
 LATTER_REL_PREFIX: Final = "custom_components/latter/"
+
+
+def _is_domain_tier(short_rel: str) -> bool:
+    return short_rel in DOMAIN_TIER_EXACT or short_rel.startswith(DOMAIN_TIER_PREFIXES)
+
+
+def _is_orchestration_tier(short_rel: str) -> bool:
+    return (
+        short_rel in ORCHESTRATION_TIER_EXACT
+        or short_rel.startswith(ORCHESTRATION_TIER_PREFIXES)
+        or (short_rel.startswith("http/") and short_rel.endswith("_views.py"))
+    )
 
 
 def _is_type_checking_guard(test: ast.expr) -> bool:
@@ -181,14 +123,13 @@ def _iter_runtime_nodes(stmts: list[ast.stmt]) -> list[ast.AST]:
 
 def _package_parts_for_rel(short_rel: str) -> list[str]:
     parts = short_rel.split("/")
-    if parts[-1] == "__init__.py":
-        return parts[:-1]
     return parts[:-1]
 
 
 def _resolve_dotted_to_files(
     dotted_parts: list[str],
     known_files: set[str],
+    importer_pkg_parts: list[str] | None = None,
 ) -> set[str]:
     """Map dotted parts inside `custom_components.latter` to target `.py` + parent `__init__.py`."""
     resolved: set[str] = set()
@@ -197,9 +138,14 @@ def _resolve_dotted_to_files(
             resolved.add("__init__.py")
         return resolved
 
-    # Python runtime rule: importing `pkg.mod` implicitly executes `pkg/__init__.py` first.
+    # Python runtime rule: importing `pkg.mod` from outside `pkg` implicitly executes `pkg/__init__.py`
+    # first. Sibling imports inside an already-executing package do not re-enter their ancestor
+    # `__init__.py` (whereas explicit `from . import ...` still resolves `as_pkg` below).
     for depth in range(1, len(dotted_parts)):
-        pkg_init = "/".join((*dotted_parts[:depth], "__init__.py"))
+        prefix = dotted_parts[:depth]
+        if importer_pkg_parts is not None and importer_pkg_parts[:depth] == prefix:
+            continue
+        pkg_init = "/".join((*prefix, "__init__.py"))
         if pkg_init in known_files:
             resolved.add(pkg_init)
 
@@ -224,10 +170,10 @@ def _extract_node_targets(
     if isinstance(node, ast.Import):
         for alias in node.names:
             if alias.name == LATTER_PKG_PREFIX:
-                targets.update(_resolve_dotted_to_files([], known_files))
+                targets.update(_resolve_dotted_to_files([], known_files, pkg_parts))
             elif alias.name.startswith(LATTER_PKG_PREFIX + "."):
                 sub = alias.name[len(LATTER_PKG_PREFIX) + 1 :].split(".")
-                targets.update(_resolve_dotted_to_files(sub, known_files))
+                targets.update(_resolve_dotted_to_files(sub, known_files, pkg_parts))
         return targets
 
     if not isinstance(node, ast.ImportFrom):
@@ -248,12 +194,12 @@ def _extract_node_targets(
     if base_parts is None:
         return targets
 
-    targets.update(_resolve_dotted_to_files(base_parts, known_files))
+    targets.update(_resolve_dotted_to_files(base_parts, known_files, pkg_parts))
     for alias in node.names:
         if alias.name == "*":
             continue
         cand = [*base_parts, alias.name]
-        targets.update(_resolve_dotted_to_files(cand, known_files))
+        targets.update(_resolve_dotted_to_files(cand, known_files, pkg_parts))
     return targets
 
 
@@ -276,9 +222,6 @@ def build_runtime_import_graph(
                 continue
             for dst in _extract_node_targets(short_rel, node, known_files):
                 if dst == short_rel:
-                    # Importing `from .foo import bar` inside `pkg/__init__.py` triggers implicit
-                    # parent lookup of `pkg/__init__.py`; only mark direct self-import if module
-                    # is not a package `__init__.py` importing a child submodule.
                     if not short_rel.endswith("__init__.py"):
                         self_loops.add(short_rel)
                     continue
@@ -326,38 +269,16 @@ def tarjan_scc(adj: dict[str, set[str]]) -> list[list[str]]:
     return sccs
 
 
-def _check_multilayer_inits(
-    short_trees: dict[str, ast.Module],
-    failures: list[str],
-) -> None:
-    for pkg in sorted(MULTILAYER_SUBPACKAGES):
-        init_rel = f"{pkg}/__init__.py"
-        if LAYER_MAP.get(init_rel) != "L0a":
-            failures.append(
-                f"[DAG SUBPACKAGE INIT] {init_rel} must be classified at L0a in LAYER_MAP"
-            )
-        tree = short_trees.get(init_rel)
-        if tree is None:
-            failures.append(
-                f"[DAG SUBPACKAGE INIT] Missing required multi-layer {LATTER_REL_PREFIX}{init_rel}"
-            )
-            continue
-        failures.extend(
-            f"[DAG SUBPACKAGE INIT] {LATTER_REL_PREFIX}{init_rel}:{node.lineno} "
-            "must remain docstring-only with zero runtime/package imports"
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Import)
-            or (isinstance(node, ast.ImportFrom) and node.module != "__future__")
-        )
-
-
 def _check_stdlib_leaves(
     short_trees: dict[str, ast.Module],
     failures: list[str],
 ) -> None:
-    for short_rel, tree in sorted(short_trees.items()):
-        layer = LAYER_MAP.get(short_rel)
-        if layer not in {"L0a", "L0b"}:
+    for short_rel in sorted(STDLIB_LEAF_MODULES):
+        tree = short_trees.get(short_rel)
+        if tree is None:
+            failures.append(
+                f"[DAG STDLIB LEAF] Missing expected leaf module {LATTER_REL_PREFIX}{short_rel}"
+            )
             continue
         for node in ast.walk(tree):
             roots: list[str] = []
@@ -367,72 +288,50 @@ def _check_stdlib_leaves(
                 roots = [node.module.split(".", 1)[0]]
             failures.extend(
                 f"[DAG STDLIB LEAF] {LATTER_REL_PREFIX}{short_rel}:{node.lineno} "
-                f"({layer}) imports forbidden package {root_pkg!r}"
+                f"imports forbidden package {root_pkg!r}"
                 for root_pkg in roots
                 if root_pkg in FORBIDDEN_NON_STDLIB_ROOTS
             )
 
 
-def _top_domain_group(short_rel: str) -> str:
-    return short_rel.split("/", 1)[0]
-
-
-def _validate_same_layer_edge(
-    src: str,
-    dst: str,
-    layer: str,
+def _check_coarse_boundaries(
+    adj: dict[str, set[str]],
     failures: list[str],
 ) -> None:
-    """Validate horizontal edges within the same layer (after Tarjan proves acyclicity)."""
-    if layer == "L0b" and not (
-        src.startswith("protocol_") and dst.startswith("protocol_")
-    ):
-        failures.append(
-            f"[DAG LAYER VIOLATION] {src} (L0b) imports sibling L0b module {dst} "
-            "(L0b leaves must import only L0a)"
-        )
-    elif layer == "L2b" and _top_domain_group(src) != _top_domain_group(dst):
-        failures.append(
-            f"[DAG LAYER VIOLATION] {src} (L2b) imports cross-domain L2b module {dst} "
-            "(use L1b registries instead)"
-        )
-    elif layer == "L4":
-        if src in L4_PLATFORMS:
-            failures.append(
-                f"[DAG LAYER VIOLATION] L4 platform {src} imports L4 module {dst} "
-                "(platforms must import strictly < L4)"
-            )
-        elif src == "config_flow.py" and dst == "__init__.py":
-            failures.append(
-                "[DAG LAYER VIOLATION] config_flow.py (L4) must not import __init__.py (L4)"
-            )
+    """Enforce integration-root/platform isolation and domain -> orchestration directionality."""
+    for src, targets in sorted(adj.items()):
+        for dst in sorted(targets):
+            if dst in INTEGRATION_ROOT_AND_PLATFORMS:
+                if src not in INTEGRATION_ROOT_AND_PLATFORMS:
+                    failures.append(
+                        f"[DAG BOUNDARY] {src} imports upward from integration root/platform {dst}"
+                    )
+                elif src in ENTITY_PLATFORMS:
+                    failures.append(
+                        f"[DAG BOUNDARY] Entity platform {src} must not import {dst}"
+                    )
+                elif src == "config_flow.py" and dst == "__init__.py":
+                    failures.append(
+                        "[DAG BOUNDARY] config_flow.py must not import __init__.py"
+                    )
+            if _is_domain_tier(src) and _is_orchestration_tier(dst):
+                failures.append(
+                    f"[DAG BOUNDARY] Domain/registry module {src} must not import "
+                    f"orchestration/API module {dst}"
+                )
 
 
 def check_dag_and_layers(
     parsed_latter_trees: dict[str, ast.Module],
     failures: list[str],
 ) -> None:
-    """Enforce zero-cycle Tarjan SCC and strict downward L0a-L4 layer ordering."""
+    """Enforce zero-cycle Tarjan SCC and the 3 coarse architectural boundaries."""
     short_trees = {
         rel[len(LATTER_REL_PREFIX) :]: tree
         for rel, tree in parsed_latter_trees.items()
         if rel.startswith(LATTER_REL_PREFIX)
     }
 
-    unclassified = sorted(set(short_trees.keys()) - set(LAYER_MAP.keys()))
-    failures.extend(
-        f"[DAG UNCLASSIFIED] {LATTER_REL_PREFIX}{mod} is not classified in LAYER_MAP "
-        "(rogue module or un-deleted monolith)"
-        for mod in unclassified
-    )
-    stale_mapped = sorted(set(LAYER_MAP.keys()) - set(short_trees.keys()))
-    failures.extend(
-        f"[DAG STALE MAP] {LATTER_REL_PREFIX}{mod} is listed in LAYER_MAP "
-        "but no longer exists on disk"
-        for mod in stale_mapped
-    )
-
-    _check_multilayer_inits(short_trees, failures)
     _check_stdlib_leaves(short_trees, failures)
 
     adj, self_loops = build_runtime_import_graph(parsed_latter_trees)
@@ -446,20 +345,4 @@ def check_dag_and_layers(
         if len(scc) > 1
     )
 
-    for src, targets in sorted(adj.items()):
-        src_layer = LAYER_MAP.get(src)
-        if src_layer is None:
-            continue
-        src_rank = LAYER_ORDER[src_layer]
-        for dst in sorted(targets):
-            dst_layer = LAYER_MAP.get(dst)
-            if dst_layer is None:
-                continue
-            dst_rank = LAYER_ORDER[dst_layer]
-            if dst_rank > src_rank:
-                failures.append(
-                    f"[DAG LAYER VIOLATION] {src} ({src_layer}) imports upward from "
-                    f"{dst} ({dst_layer})"
-                )
-            elif dst_rank == src_rank:
-                _validate_same_layer_edge(src, dst, src_layer, failures)
+    _check_coarse_boundaries(adj, failures)

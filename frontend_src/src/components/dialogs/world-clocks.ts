@@ -12,7 +12,7 @@ import {
   serializeWorldClocksSpec,
   type WorldClockItemView,
 } from "../../domain/world-clocks.js";
-import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import { defaultLocaleTimeFormat } from "../../utils/format.js";
 import {
@@ -69,11 +69,11 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
   const renderWorldClockZoneOptions = (selectedIana: string): TemplateResult => {
     const missingSelected =
       selectedIana && !knownZoneSet.has(selectedIana)
-        ? html`<option value=${selectedIana} selected>${selectedIana}</option>`
+        ? html`<option value=${selectedIana} .selected=${live(true)}>${selectedIana}</option>`
         : nothing;
     return html`${missingSelected}${zonesCatalog.map(
       (z) =>
-        html`<option value=${z.iana} ?selected=${z.iana === selectedIana}>${z.label}</option>`,
+        html`<option value=${z.iana} .selected=${live(z.iana === selectedIana)}>${z.label}</option>`,
     )}`;
   };
 
@@ -357,7 +357,7 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
                     </label>
                     <select
                       id=${zoneId}
-                      .value=${entry.iana}
+                      .value=${live(entry.iana)}
                       @change=${(ev: Event) =>
                         updateWorldClockItem(
                           idx,
@@ -409,13 +409,13 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
               <select
                 id="cfg-world_clocks_add"
                 ?disabled=${atWorldClockLimit}
-                .value=${store.worldClockNewZone}
+                .value=${live(store.worldClockNewZone)}
                 @change=${(ev: Event) => {
                   store.worldClockNewZone = (ev.currentTarget as HTMLSelectElement).value;
                   store.host.requestUpdate();
                 }}
               >
-                <option value="" ?selected=${!store.worldClockNewZone}>
+                <option value="" .selected=${live(!store.worldClockNewZone)}>
                   ${atWorldClockLimit
                     ? store.t("dialogs.max_world_clocks")
                     : store.t("dialogs.select_tz_placeholder")}

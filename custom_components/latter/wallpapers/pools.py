@@ -83,7 +83,7 @@ def _serialize_photo_item(
     }
 
 
-def list_wallpaper_catalog(  # noqa: PLR0913
+def list_wallpaper_catalog(
     hass: HomeAssistant,
     device_slug: str,
     active_source: str,
@@ -195,7 +195,7 @@ def _resolve_collection_pool(
     return []
 
 
-def resolve_photo_pool(  # noqa: PLR0913
+def resolve_photo_pool(
     mode: str,
     single_source: str,
     collection_id: str,

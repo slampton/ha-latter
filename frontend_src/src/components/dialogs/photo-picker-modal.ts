@@ -12,7 +12,7 @@ import {
   VIRTUAL_COLLECTION_UNCATEGORIZED,
   VIRTUAL_COLLECTION_UPLOADS,
 } from "../../constants.js";
-import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import {
   filterEligiblePhotoIds,
   filterLibraryPhotos,
@@ -181,7 +181,7 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
               </label>
               <select
                 id="photo-picker-collection-select"
-                .value=${modal.collectionId}
+                .value=${live(modal.collectionId)}
                 @change=${(ev: Event) => {
                   store.photoPickerModal = {
                     ...store.photoPickerModal,
@@ -191,12 +191,12 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
                 }}
               >
                 ${virtualCollectionOptions.map(
-                  (v) => html`<option value=${v.id} ?selected=${modal.collectionId === v.id}>
+                  (v) => html`<option value=${v.id} .selected=${live(modal.collectionId === v.id)}>
                     ${v.label}
                   </option>`,
                 )}
                 ${collections.map(
-                  (col) => html`<option value=${col.id} ?selected=${modal.collectionId === col.id}>
+                  (col) => html`<option value=${col.id} .selected=${live(modal.collectionId === col.id)}>
                     ${col.name} (${fmtNumber(col.count, store.hass, 0)})
                   </option>`,
                 )}
@@ -249,7 +249,7 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
               <select
                 id="photo-picker-filter-col"
                 aria-label=${store.t("photo_picker.collection_label")}
-                .value=${modal.filterCollection}
+                .value=${live(modal.filterCollection)}
                 @change=${(ev: Event) => {
                   store.photoPickerModal = {
                     ...store.photoPickerModal,
@@ -259,14 +259,14 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
                 }}
               >
                 ${virtualCollectionOptions.map(
-                  (v) => html`<option value=${v.id} ?selected=${modal.filterCollection === v.id}>
+                  (v) => html`<option value=${v.id} .selected=${live(modal.filterCollection === v.id)}>
                     ${v.label}
                   </option>`,
                 )}
                 ${collections.map(
                   (col) => html`<option
                     value=${col.id}
-                    ?selected=${modal.filterCollection === col.id}
+                    .selected=${live(modal.filterCollection === col.id)}
                   >
                     ${col.name}
                   </option>`,

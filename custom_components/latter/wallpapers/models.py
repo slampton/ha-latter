@@ -265,7 +265,7 @@ def read_photo_bytes(root: Path, source: str) -> bytes | None:
     return path.read_bytes()
 
 
-def compute_crop_box(  # noqa: PLR0913, PLR0917
+def compute_crop_box(
     src_w: int,
     src_h: int,
     dst_w: int,
@@ -304,7 +304,7 @@ def compute_crop_box(  # noqa: PLR0913, PLR0917
     return (left, top, right, bottom)
 
 
-def crop_and_fit_image(  # noqa: PLR0913, PLR0917
+def crop_and_fit_image(
     img: Image.Image,
     dst_w: int,
     dst_h: int,

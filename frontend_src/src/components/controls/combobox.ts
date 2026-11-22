@@ -3,7 +3,7 @@
  */
 
 import { t } from "../../i18n/index.js";
-import { focusSafe, html, nothing, repeat, type TemplateResult } from "../../lib/lit.js";
+import { focusSafe, html, live, nothing, repeat, type TemplateResult } from "../../lib/lit.js";
 
 export interface ComboboxOptionItem {
   id: string;
@@ -339,7 +339,7 @@ export function renderEntityCombobox(opts: EntityComboboxOptions): TemplateResul
         aria-describedby=${opts.ariaDescribedBy || nothing}
         placeholder=${placeholderText}
         ?disabled=${Boolean(opts.disabled)}
-        .value=${ui.open ? focusSafe(ui.query) : closedDisplayValue}
+        .value=${ui.open ? focusSafe(ui.query) : live(closedDisplayValue)}
         @focus=${(ev: Event) => openMenu(ev.currentTarget as Element)}
         @click=${(ev: Event) => openMenu(ev.currentTarget as Element)}
         @input=${onInput}

@@ -33,7 +33,7 @@ import {
   TOOLS_ITEMS_CATALOG,
 } from "../constants.js";
 import type { StudioTranslationKey } from "../i18n/index.js";
-import { html, nothing, repeat, type TemplateResult } from "../lib/lit.js";
+import { html, live, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import { ROUTE_PREVIEW_ICONS, shortcutActionLabel } from "../mdi-catalog.js";
 import { isCatalogItemSupported, type StudioStore } from "../state/store.js";
 import type { ShortcutItem } from "../types.js";
@@ -547,7 +547,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                 : store.t("dev_interface.start_screen_single_desc"),
               control: html`<select
                   id="cfg-start_screen"
-                  .value=${startScreenValue}
+                  .value=${live(startScreenValue)}
                   @change=${(ev: Event) => {
                     store.entity.stageDeviceSetting(
                       "start_screen",
@@ -558,7 +558,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                 >
                   ${visibleStartOptions.map(
                     (o) =>
-                      html`<option value=${o.value} ?selected=${o.value === startScreenValue}>
+                      html`<option value=${o.value} .selected=${live(o.value === startScreenValue)}>
                         ${o.label}
                       </option>`,
                   )}
@@ -767,7 +767,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                             aria-label=${store.t("dev_interface.show_on_dock_aria", {
                               title: info.title,
                             })}
-                            .checked=${true}
+                            .checked=${live(true)}
                             @change=${(ev: Event) =>
                               store.entity.toggleNativeDockApp(
                                 item.target,
@@ -869,7 +869,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                                 title: displayTitle,
                               })}
                               ?disabled=${dockItems.length >= MAX_DOCK_ITEMS}
-                              .checked=${false}
+                              .checked=${live(false)}
                               @change=${(ev: Event) =>
                                 store.entity.toggleNativeDockApp(
                                   tok,

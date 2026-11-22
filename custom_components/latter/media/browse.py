@@ -730,7 +730,7 @@ async def _dispatch_ma_browse_tail(
     )
 
 
-async def async_browse_media_items(  # noqa: PLR0913, PLR0917
+async def async_browse_media_items(
     hass: HomeAssistant,
     mode: str,
     speaker: str,

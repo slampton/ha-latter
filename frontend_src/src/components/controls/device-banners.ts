@@ -6,7 +6,7 @@
  */
 
 import { formatHaEntityState, type StudioTranslationKey } from "../../i18n/index.js";
-import { html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import type { EspHomeEntityItem } from "../../types.js";
 import { entityLabel, fmtNumber } from "../../utils/format.js";
@@ -73,10 +73,10 @@ export function renderDeviceEntityRow(
     };
     return renderSettingsRow({
       label,
-      control: html`<select aria-label=${label} ?disabled=${unavailable} .value=${st} @change=${onChange}>
+      control: html`<select aria-label=${label} ?disabled=${unavailable} .value=${live(st)} @change=${onChange}>
         ${opts.map(
           (opt) =>
-            html`<option value=${opt} ?selected=${opt === st}>
+            html`<option value=${opt} .selected=${live(opt === st)}>
               ${formatHaEntityState(store.hass, item.entity_id, opt)}
             </option>`,
         )}

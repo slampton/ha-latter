@@ -20,7 +20,7 @@ import {
   openCameraConfigModal,
   resolveEffectiveCameraConfig,
 } from "../components/dialogs/camera-config-modal.js";
-import { focusSafe, html, nothing, type TemplateResult } from "../lib/lit.js";
+import { focusSafe, html, live, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StringListKey, StudioStore } from "../state/store.js";
 import type { CatalogChoice, SystemConfig } from "../types.js";
 import { entityLabel, fmtNumber, isValidHexColor } from "../utils/format.js";
@@ -170,7 +170,7 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
                   forId: selectId,
                   control: html`<select
                     id=${selectId}
-                    .value=${curVal}
+                    .value=${live(curVal)}
                     @change=${(ev: Event) =>
                       store.entity.stageSystemSetting(
                         f.key,
@@ -226,7 +226,7 @@ export function renderSystemSharedView(store: StudioStore): TemplateResult {
                         return html`<div class="hub-slot-row">
                           <select
                             aria-label=${g.selectAriaLabel}
-                            .value=${val}
+                            .value=${live(val)}
                             @change=${(ev: Event) =>
                               store.entity.updateStringListRow(
                                 g.key,

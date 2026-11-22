@@ -4,7 +4,7 @@
  */
 
 import { t } from "../../i18n/index.js";
-import { html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { CatalogChoice, HomeAssistant } from "../../types.js";
 import {
   defaultLocaleTimeFormat,
@@ -125,12 +125,12 @@ export function renderSelectRow(opts: SelectRowOptions): TemplateResult {
       aria-label=${opts.id ? nothing : opts.ariaLabel || opts.label}
       aria-describedby=${resolvedDescId || nothing}
       ?disabled=${Boolean(opts.disabled)}
-      .value=${cur}
+      .value=${live(cur)}
       @change=${(ev: Event) => opts.onChange((ev.currentTarget as HTMLSelectElement).value)}
     >
       ${opts.rawOptions
         ? opts.rawOptions.map(
-            (o) => html`<option value=${o.value} ?selected=${o.value === cur}>${o.label}</option>`,
+            (o) => html`<option value=${o.value} .selected=${live(o.value === cur)}>${o.label}</option>`,
           )
         : renderSelectOptions(opts.choices, cur, opts.emptyOptionLabel)}
     </select>`,
@@ -170,7 +170,7 @@ export function renderSwitchRow(opts: SwitchRowOptions): TemplateResult {
       aria-label=${opts.id ? nothing : opts.ariaLabel || opts.label}
       aria-describedby=${resolvedDescId || nothing}
       ?disabled=${Boolean(opts.disabled)}
-      .checked=${opts.checked}
+      .checked=${live(opts.checked)}
       @change=${(ev: Event) => opts.onChange((ev.currentTarget as HTMLInputElement).checked)}
       class="switch"
     />`,
@@ -238,7 +238,7 @@ export function renderRangeControl(opts: RangeControlOptions): TemplateResult {
       max=${String(opts.max)}
       step=${String(step)}
       ?disabled=${Boolean(opts.disabled)}
-      .value=${String(opts.value)}
+      .value=${live(String(opts.value))}
       @input=${handleLiveInput}
       @change=${handleCommit}
     />`;
@@ -296,7 +296,7 @@ export function renderHourSelectControl(opts: HourSelectControlOptions): Templat
     aria-label=${opts.ariaLabel}
     aria-describedby=${opts.ariaDescribedBy || nothing}
     ?disabled=${Boolean(opts.disabled)}
-    .value=${selectValue}
+    .value=${live(selectValue)}
     @change=${(ev: Event) => {
       const raw = (ev.currentTarget as HTMLSelectElement).value;
       if (raw === "__mixed__") return;
@@ -307,13 +307,13 @@ export function renderHourSelectControl(opts: HourSelectControlOptions): Templat
     }}
   >
     ${opts.mixed
-      ? html`<option value="__mixed__" selected disabled>
+      ? html`<option value="__mixed__" .selected=${live(true)} disabled>
           ${opts.mixedLabel || t("batch.mixed_badge")}
         </option>`
       : nothing}
     ${Array.from({ length: 24 }, (_, h) => {
       const valStr = String(h);
-      return html`<option value=${valStr} ?selected=${!opts.mixed && h === normalizedHour}>
+      return html`<option value=${valStr} .selected=${live(!opts.mixed && h === normalizedHour)}>
         ${formatHourSlot(h, resolvedIs24h)}
       </option>`;
     })}

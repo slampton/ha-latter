@@ -28,7 +28,7 @@ git commit -s -m "Short summary of your change"
 
 ## Local Pre-Flight Checks
 
-Before opening a pull request, install test dependencies (`pip install -e ".[test]"` on Python 3.14+ and `npm --prefix frontend_src ci && npx --prefix frontend_src playwright install chromium` on Node 24+) and run from `ha-latter/`:
+Before opening a pull request, install test dependencies (`pip install --group test` on Python 3.14+ and `npm --prefix frontend_src ci && npx --prefix frontend_src playwright install chromium` on Node 24+) and run from `ha-latter/`:
 
 ```bash
 python tools/verify_ha.py

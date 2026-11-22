@@ -5,7 +5,7 @@
  * - Uses component-scoped pointer capture on `<canvas>` and `focusSafe` text inputs
  */
 
-import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import { hsvToHex, hsvToRgbJS, isValidHexColor } from "../../utils/format.js";
 
@@ -161,7 +161,7 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
           type="color"
           id="latter-cw-native"
           aria-label=${store.t("dialogs.cw_color_aria")}
-          .value=${cwValidHex}
+          .value=${live(cwValidHex)}
           @input=${onCwHexInput}
         />
         <input

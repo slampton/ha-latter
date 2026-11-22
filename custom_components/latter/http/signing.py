@@ -186,7 +186,7 @@ class UrlSigner:
         self._cached_lan_base_url_mono = now_m
         return resolved
 
-    def build_camera_snapshot_url(  # noqa: PLR0913, PLR0917
+    def build_camera_snapshot_url(
         self,
         device_slug: str,
         camera_entity_id: str | None,
@@ -207,7 +207,7 @@ class UrlSigner:
             f"?entity_id={cam_ent}&w={width}&h={height}&shape={shape}&sig={sig}&v={v_tag}"
         )
 
-    def build_camera_allowlist_snapshot_url(  # noqa: PLR0913, PLR0917
+    def build_camera_allowlist_snapshot_url(
         self,
         device_slug: str,
         allowed_cameras: Iterable[str],
@@ -275,7 +275,7 @@ class UrlSigner:
             f"&v={int(time.time())}&sig={sig}"
         )
 
-    def build_wallpaper_url(  # noqa: PLR0913
+    def build_wallpaper_url(
         self,
         device_slug: str,
         wallpaper_source: str,

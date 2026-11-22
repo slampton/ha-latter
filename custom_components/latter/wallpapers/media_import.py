@@ -320,7 +320,7 @@ def _commit_prepared_media_batch(
     return imported, skipped, commit_failures, created_photos
 
 
-def import_media_photos_sync(  # noqa: PLR0913, PLR0917
+def import_media_photos_sync(
     hass: HomeAssistant,
     media_dirs: Mapping[str, str] | None,
     root: str,

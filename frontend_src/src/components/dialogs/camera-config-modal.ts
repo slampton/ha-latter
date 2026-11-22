@@ -5,7 +5,7 @@
  * - Explicit Unlock / Open Lock or Garage Door entity binding (`None` hides button)
  */
 
-import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import type { CameraConfig, CatalogChoice } from "../../types.js";
 import { entityLabel } from "../../utils/format.js";
@@ -199,7 +199,7 @@ export function renderCameraConfigDialog(store: StudioStore): TemplateResult {
           forId: "cam-cfg-unlock",
           control: html`<select
             id="cam-cfg-unlock"
-            .value=${m.unlockEntity}
+            .value=${live(m.unlockEntity)}
             @change=${(ev: Event) => {
               store.cameraConfigModal = {
                 ...store.cameraConfigModal,
@@ -208,16 +208,16 @@ export function renderCameraConfigDialog(store: StudioStore): TemplateResult {
               store.host.requestUpdate();
             }}
           >
-            <option value="" ?selected=${!m.unlockEntity}>
+            <option value="" .selected=${live(!m.unlockEntity)}>
               ${store.t("shared.cam_cfg_unlock_none")}
             </option>
             ${!hasUnlockChoice && m.unlockEntity
-              ? html`<option value=${m.unlockEntity} selected>${m.unlockEntity}</option>`
+              ? html`<option value=${m.unlockEntity} .selected=${live(true)}>${m.unlockEntity}</option>`
               : nothing}
             ${locks.length
               ? html`<optgroup label=${store.t("shared.door_locks")}>
                   ${locks.map(
-                    (l) => html`<option value=${l.id} ?selected=${m.unlockEntity === l.id}>
+                    (l) => html`<option value=${l.id} .selected=${live(m.unlockEntity === l.id)}>
                       ${entityLabel(l.name)}
                     </option>`,
                   )}
@@ -226,7 +226,7 @@ export function renderCameraConfigDialog(store: StudioStore): TemplateResult {
             ${garages.length
               ? html`<optgroup label=${store.t("shared.garage_doors")}>
                   ${garages.map(
-                    (g) => html`<option value=${g.id} ?selected=${m.unlockEntity === g.id}>
+                    (g) => html`<option value=${g.id} .selected=${live(m.unlockEntity === g.id)}>
                       ${entityLabel(g.name)}
                     </option>`,
                   )}

@@ -26,8 +26,11 @@ from .curation import (
     get_home_alarm_summary,
     is_curated_area_entity,
 )
-from .registry import apply_ha_display_precision
-from .state_index import get_area_state_index, latter_bound_esphome_device_ids
+from .registry import (
+    apply_ha_display_precision,
+    get_area_state_index,
+    latter_bound_esphome_device_ids,
+)
 
 __all__ = [
     "find_area_media_entities",

@@ -49,8 +49,7 @@ from .ble_registry import (
     resolve_floor_info,
     set_scanner_area_cache_active,
 )
-from .ble_tracker_calibration import LatterNativeBleTracker
-from .ble_tracker_matcher import register_ble_fabric_getter
+from .ble_tracker import LatterNativeBleTracker, register_ble_fabric_getter
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@
  * - `focusSafe` text inputs across BLE tag & Save custom group forms
  */
 
-import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import { renderSelectOptions, renderSwitchRow } from "../controls.js";
 
@@ -210,17 +210,19 @@ export function renderAddBleDialog(store: StudioStore): TemplateResult {
         <label for="ble-candidate-picker">${store.t("dialogs.ble_discovered_label")}</label>
         <select
           id="ble-candidate-picker"
-          .value=${modal.candidateAddr}
+          .value=${live(modal.candidateAddr)}
           @change=${(ev: Event) =>
             store.tools.selectBleCandidateInModal((ev.currentTarget as HTMLSelectElement).value)}
         >
-          <option value="">${store.t("dialogs.ble_enter_manually")}</option>
+          <option value="" .selected=${live(!modal.candidateAddr)}>
+            ${store.t("dialogs.ble_enter_manually")}
+          </option>
           ${candidates.map((c) => {
             const addr = c.target_address || "";
             const lbl =
               c.label ||
               `${c.title || addr}${c.area_name ? ` (${c.area_name})` : ""}`;
-            return html`<option value=${addr} ?selected=${addr === modal.candidateAddr}>
+            return html`<option value=${addr} .selected=${live(addr === modal.candidateAddr)}>
               ${lbl}
             </option>`;
           })}
@@ -262,7 +264,7 @@ export function renderAddBleDialog(store: StudioStore): TemplateResult {
         <label for="ble-custom-person">${store.t("dialogs.ble_person_label")}</label>
         <select
           id="ble-custom-person"
-          .value=${modal.assignedPerson}
+          .value=${live(modal.assignedPerson)}
           @change=${(ev: Event) => {
             store.addBleModal = {
               ...store.addBleModal,

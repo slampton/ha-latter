@@ -33,7 +33,7 @@ import {
   SECURITY_PIN_POLICY_OPTIONS,
   WALLPAPER_ROTATION_OPTIONS,
 } from "../../i18n/index.js";
-import { html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import { isPhotoDynamic } from "../../state/photo-ops.js";
 import { isCatalogItemSupported, type StudioStore } from "../../state/store.js";
 import type {
@@ -168,14 +168,14 @@ function renderSpecSelect(
     label,
     control: html`<select
       aria-label=${store.t("groups.for_group_aria", { label, group: group.name })}
-      .value=${cur}
+      .value=${live(cur)}
       @change=${(ev: Event) =>
         void store.groups.updateGroupBaseline(group.id, {
           [key]: (ev.currentTarget as HTMLSelectElement).value,
         })}
     >
       ${options.map(
-        (opt) => html`<option value=${opt} ?selected=${opt === cur}>
+        (opt) => html`<option value=${opt} .selected=${live(opt === cur)}>
           ${store.tPrefOption(key, opt)}
         </option>`,
       )}
@@ -286,7 +286,7 @@ function renderBaselineLabeledSelect(
     label,
     control: html`<select
       aria-label=${store.t("groups.for_group_aria", { label, group: group.name })}
-      .value=${cur}
+      .value=${live(cur)}
       @change=${(ev: Event) => {
         const raw = (ev.currentTarget as HTMLSelectElement).value;
         const val = asNumber ? Number(raw) || 0 : raw;
@@ -295,7 +295,7 @@ function renderBaselineLabeledSelect(
     >
       ${options.map(
         (opt) =>
-          html`<option value=${opt.value} ?selected=${opt.value === cur}>
+          html`<option value=${opt.value} .selected=${live(opt.value === cur)}>
             ${opt.label}
           </option>`,
       )}
@@ -623,7 +623,7 @@ function renderBaselineDisplaySection(
             label: store.t("groups.wallpaper_pool_label"),
             group: group.name,
           })}
-          .value=${wpPoolCurrent}
+          .value=${live(wpPoolCurrent)}
           @change=${(ev: Event) => {
             const raw = (ev.currentTarget as HTMLSelectElement).value;
             if (raw.startsWith("collection:")) {
@@ -648,7 +648,7 @@ function renderBaselineDisplaySection(
           }}
         >
           ${wpPoolOptions.map(
-            (opt) => html`<option value=${opt.value} ?selected=${opt.value === wpPoolCurrent}>
+            (opt) => html`<option value=${opt.value} .selected=${live(opt.value === wpPoolCurrent)}>
               ${opt.label}
             </option>`,
           )}
@@ -670,7 +670,7 @@ function renderBaselineDisplaySection(
                   label: store.t("groups.screensaver_pool_label"),
                   group: group.name,
                 })}
-                .value=${ssPoolCurrent}
+                .value=${live(ssPoolCurrent)}
                 @change=${(ev: Event) => {
                   const raw = (ev.currentTarget as HTMLSelectElement).value;
                   if (raw.startsWith("collection:")) {
@@ -697,7 +697,7 @@ function renderBaselineDisplaySection(
                 ${ssPoolOptions.map(
                   (opt) => html`<option
                     value=${opt.value}
-                    ?selected=${opt.value === ssPoolCurrent}
+                    .selected=${live(opt.value === ssPoolCurrent)}
                   >
                     ${opt.label}
                   </option>`,
@@ -735,7 +735,7 @@ function renderBaselineDisplaySection(
                   label: store.tPrefLabel("device_custom_color"),
                   group: group.name,
                 })}
-                .value=${customHex}
+                .value=${live(customHex)}
                 @change=${(ev: Event) => {
                   const raw = (ev.currentTarget as HTMLInputElement).value.toUpperCase();
                   if (isValidHexColor(raw)) {
@@ -1031,7 +1031,7 @@ export function renderGroupBaselineDrawer(
               description: store.t("groups.source_device_desc"),
               control: html`<select
                   aria-label=${store.t("groups.copy_into_aria", { name: group.name })}
-                  .value=${copySrc}
+                  .value=${live(copySrc)}
                   @change=${(ev: Event) => {
                     store.groupCopySourceDrafts.set(
                       gid,
@@ -1042,7 +1042,7 @@ export function renderGroupBaselineDrawer(
                 >
                   ${latterDevices.map(
                     (d) =>
-                      html`<option value=${d.subentry_id} ?selected=${d.subentry_id === copySrc}>
+                      html`<option value=${d.subentry_id} .selected=${live(d.subentry_id === copySrc)}>
                         ${d.title}
                       </option>`,
                   )}

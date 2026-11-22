@@ -701,7 +701,7 @@ def delete_photo(hass: HomeAssistant, photo_id: str) -> bool:
     return bool(bulk_update_photos(hass, [photo_id], delete=True)["deleted_ids"])
 
 
-def save_uploaded_photo_bytes(  # noqa: PLR0913
+def save_uploaded_photo_bytes(
     hass: HomeAssistant,
     filename: str,
     raw_bytes: bytes,

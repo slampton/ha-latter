@@ -58,14 +58,12 @@ from .registry import (
     apply_ha_display_precision,
     area_illuminance_sensor_choices,
     area_illuminance_settings,
-    resolve_active_area_entry,
-    resolve_area_ambient_light,
-    resolve_area_icon,
-)
-from .state_index import (
     get_area_state_index,
     is_media_position_only_tick,
     latter_bound_esphome_device_ids,
+    resolve_active_area_entry,
+    resolve_area_ambient_light,
+    resolve_area_icon,
     resolve_entity_area_id,
 )
 
@@ -296,7 +294,7 @@ def _is_intercom_available(
     return False
 
 
-def get_available_home_categories(  # noqa: PLR0913
+def get_available_home_categories(
     alarm_info: Mapping[str, Any],
     hub_info: Mapping[str, Any],
     home_categories: str | None = None,

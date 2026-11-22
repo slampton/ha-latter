@@ -1,17 +1,20 @@
-"""Device Groups, group baselines, hardware-detecting option defaults, and batch apply (`L2a`)."""
+"""Device Groups, group baselines, hardware-detecting option defaults, batch apply, and factory/options reset."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Any, Final
+import logging
+from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from ..config_defaults import (
     BUILTIN_GROUP_PRESET_VERSION as BUILTIN_GROUP_PRESET_VERSION,
     CONF_BUILTIN_GROUP_PRESET_VERSION as CONF_BUILTIN_GROUP_PRESET_VERSION,
     DEFAULT_DEVICE_GROUPS as DEFAULT_DEVICE_GROUPS,
+    ble_tag_option_defaults,
     compute_hardware_defaults,
     merge_device_option_defaults,
 )
@@ -22,6 +25,7 @@ from ..const import (
     CONF_AREA_FOLLOW_DWELL_S,
     CONF_AREA_HANDOFF,
     CONF_BLE_AUTO_SWITCH,
+    CONF_BLE_TARGET_ADDRESS,
     CONF_BROADCAST_SPEAKER_ENTITIES,
     CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_CAMERA_VISIBLE_ENTITIES,
@@ -63,14 +67,17 @@ from ..const import (
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DEFAULT_WALLPAPER_MODE,
     DOMAIN,
+    MIN_FIRMWARE_SDK_REV,
 )
 from ..identity import (
     esphome_service,
     find_device_entity_by_suffix,
+    get_bound_esphome_device,
     read_device_hardware_manifest,
 )
 from ..media.linking import discover_ma_player_for_device
 from ..protocol_specs import (
+    DEVICE_PREF_KEYS,
     DEVICE_PREF_SPEC_MAP,
     DEVICE_PREF_SPECS,
     DevicePrefSpec,
@@ -85,6 +92,30 @@ from ..protocol_specs import (
     resolve_device_pref_value,
 )
 from ..studio.settings_cleaners import clean_device_settings
+
+if TYPE_CHECKING:
+    from ..coordinator import LatterCoordinator
+
+_LOGGER = logging.getLogger(__name__)
+
+DEVICE_IDENTITY_KEYS: Final[tuple[str, ...]] = (
+    "esphome_device_id",
+    "mac",
+    "device_slug",
+    "ma_player_entity",
+)
+
+BLE_TAG_IDENTITY_KEYS: Final[tuple[str, ...]] = (
+    "device_slug",
+    "ble_target_address",
+)
+
+FACTORY_RESET_MIN_SDK_REV: Final = MIN_FIRMWARE_SDK_REV
+
+_FLAG_ERRORS: Final[dict[str, str]] = {
+    "reset_nothing_selected": "Select what to reset: the device settings, the Latter options, or both.",
+    "reset_ble_tag_has_no_device_settings": "A BLE tag has no device settings to reset. Reset only its Latter options.",
+}
 
 _DWELL_MIN_S: Final = 3
 _DWELL_MAX_S: Final = 60
@@ -801,3 +832,109 @@ def device_option_defaults(
         default_speaker=default_spk,
         ma_player_entity=discovered_ma,
     )
+
+
+def reset_flags_error(
+    device_settings: bool, latter_options: bool, *, is_ble_tag: bool
+) -> str | None:
+    """Return the translation key of the reason a reset request is invalid, or `None` if valid."""
+    if not device_settings and not latter_options:
+        return "reset_nothing_selected"
+    if device_settings and is_ble_tag:
+        return "reset_ble_tag_has_no_device_settings"
+    return None
+
+
+def reset_subentry_data(
+    current: Mapping[str, Any],
+    defaults: Mapping[str, Any],
+    identity_keys: tuple[str, ...],
+) -> dict[str, Any]:
+    """Return the subentry data after a reset: defaults plus the identity keys from `current`."""
+    out = {k: v for k, v in defaults.items() if k not in identity_keys}
+    for key in identity_keys:
+        if key in current:
+            out[key] = current[key]
+    return out
+
+
+async def async_reset_device(
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator,
+    *,
+    device_settings: bool = True,
+    latter_options: bool = True,
+) -> None:
+    """Reset a Latter Device's on-device NVS preferences and/or Home Assistant Latter options."""
+    error_key = reset_flags_error(
+        device_settings, latter_options, is_ble_tag=coordinator.is_ble_tag
+    )
+    if error_key is not None:
+        raise ServiceValidationError(
+            _FLAG_ERRORS[error_key],
+            translation_domain=DOMAIN,
+            translation_key=error_key,
+        )
+
+    reset_action: str | None = None
+    if device_settings:
+        reset_action = esphome_service(
+            hass, coordinator.esphome_device_id, "latter_factory_reset"
+        )
+        if reset_action is None:
+            raise ServiceValidationError(
+                f"{coordinator.device_title} doesn't offer Reset to defaults. Update its firmware "
+                f"to Latter SDK rev {FACTORY_RESET_MIN_SDK_REV} or later.",
+                translation_domain=DOMAIN,
+                translation_key="factory_reset_unsupported",
+                translation_placeholders={
+                    "device": coordinator.device_title,
+                    "sdk_rev": str(FACTORY_RESET_MIN_SDK_REV),
+                },
+            )
+
+    if latter_options:
+        current = coordinator.device_data
+        if coordinator.is_ble_tag:
+            defaults = ble_tag_option_defaults(
+                coordinator.device_slug, str(current.get(CONF_BLE_TARGET_ADDRESS) or "")
+            )
+            identity_keys = BLE_TAG_IDENTITY_KEYS
+        else:
+            defaults = device_option_defaults(
+                hass,
+                get_bound_esphome_device(hass, coordinator.esphome_device_id),
+                coordinator.hardware_manifest,
+            )
+            identity_keys = DEVICE_IDENTITY_KEYS
+        coordinator.update_device_config(reset_subentry_data(current, defaults, identity_keys))
+        await coordinator.async_apply_options()
+        coordinator.bind_wallpaper_cycle_timer()
+        coordinator.bind_screensaver_cycle_timer()
+        coordinator.async_notify_listeners()
+        _LOGGER.info("Reset the Latter options of '%s' to defaults", coordinator.device_slug)
+    elif device_settings and not coordinator.is_ble_tag:
+        stripped = {
+            k: v for k, v in coordinator.device_data.items() if k not in DEVICE_PREF_KEYS
+        }
+        if stripped != coordinator.device_data:
+            coordinator.update_device_config(stripped)
+            coordinator.async_notify_listeners()
+
+    if reset_action is not None:
+        try:
+            await hass.services.async_call("esphome", reset_action, {}, blocking=True)
+        except HomeAssistantError as err:
+            raise HomeAssistantError(
+                f"{coordinator.device_title} didn't accept Reset to defaults: {err}",
+                translation_domain=DOMAIN,
+                translation_key="factory_reset_failed",
+                translation_placeholders={
+                    "device": coordinator.device_title,
+                    "error": str(err),
+                },
+            ) from err
+        _LOGGER.info(
+            "Sent latter_factory_reset to '%s'; the device erases its saved settings and restarts",
+            coordinator.device_slug,
+        )

@@ -8,11 +8,11 @@ Apache License, Version 2.0.
 Third-Party Attributions
 ------------------------
 
-1. lit-html v3.3.3 (`frontend_src/src/lib/vendor/`, bundled into
+1. lit / lit-html v3.3.3 (bundled via esbuild into
    `custom_components/latter/frontend/latter-studio.js`)
    Source: https://github.com/lit/lit
    Copyright Google LLC
-   Licensed under the BSD 3-Clause License (see `frontend_src/src/lib/vendor/LICENSE`).
+   Licensed under the BSD 3-Clause License.
 
 2. Pictogrammers Material Design Icons (`@mdi/js` v7.4.47, packed in
    `frontend_src/src/mdi-chunks.ts` and `custom_components/latter/frontend/latter-studio-mdi.js`)

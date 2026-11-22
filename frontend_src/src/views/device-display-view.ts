@@ -19,7 +19,7 @@ import {
   type StudioTranslationKey,
   WALLPAPER_ROTATION_OPTIONS,
 } from "../i18n/index.js";
-import { html, nothing, type TemplateResult } from "../lib/lit.js";
+import { html, live, nothing, type TemplateResult } from "../lib/lit.js";
 import {
   resolveCollectionDisplayName,
   resolvePoolPhotos,
@@ -100,7 +100,7 @@ function describePoolSummary(
 export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
   const data = store.state;
   const cfg = data?.config || {};
-  const live = data?.live || {};
+  const liveData = data?.live || {};
   const palettes = (data?.system_config?.custom_palettes || []).filter((p) =>
     isValidHexColor(p.hex),
   );
@@ -154,8 +154,8 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     allPhotos,
   );
   const ssPreviewThumbs: string[] = [];
-  if (live.active_screensaver_photo_thumb_url) {
-    ssPreviewThumbs.push(live.active_screensaver_photo_thumb_url);
+  if (liveData.active_screensaver_photo_thumb_url) {
+    ssPreviewThumbs.push(liveData.active_screensaver_photo_thumb_url);
   }
   for (const p of ssPoolPhotos) {
     const u = p.thumb_url || p.preview_url || "";
@@ -164,7 +164,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     }
   }
 
-  const ssActive = Boolean(live.screensaver_active);
+  const ssActive = Boolean(liveData.screensaver_active);
   const hasScreensaverCard = Boolean(ssModePref || ssStylePref || ssIdlePref);
 
   // Voice assistant card
@@ -179,11 +179,11 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
   const autoBrtOff = autoBrtState === "Disabled" || autoBrtState === "off";
   const autoBrtTimeSchedule = autoBrtState === "Time Schedule";
   const autoBrtAmbient = autoBrtState === "Ambient Light";
-  const activeAreaName = String(live.active_area_name || "").trim();
-  const activeAreaLux = String(live.active_area_lux_display || "").trim();
+  const activeAreaName = String(liveData.active_area_name || "").trim();
+  const activeAreaLux = String(liveData.active_area_lux_display || "").trim();
   const activeAreaAmbPct =
-    live.active_area_ambient_pct !== null && live.active_area_ambient_pct !== undefined
-      ? Number(live.active_area_ambient_pct)
+    liveData.active_area_ambient_pct !== null && liveData.active_area_ambient_pct !== undefined
+      ? Number(liveData.active_area_ambient_pct)
       : null;
   let ambientBrightnessSubtitle: string | undefined;
   if (autoBrtAmbient) {
@@ -265,7 +265,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     wpCustomIds,
   );
   const wpActiveItem =
-    allPhotos.find((w) => w.id === live.active_wallpaper_id) ||
+    allPhotos.find((w) => w.id === liveData.active_wallpaper_id) ||
     allPhotos.find((w) => Boolean(w.active)) ||
     wpPoolPhotos[0] ||
     null;
@@ -280,8 +280,8 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
   );
 
   const wpPreviewThumbs: string[] = [];
-  if (live.active_wallpaper_thumb_url) {
-    wpPreviewThumbs.push(live.active_wallpaper_thumb_url);
+  if (liveData.active_wallpaper_thumb_url) {
+    wpPreviewThumbs.push(liveData.active_wallpaper_thumb_url);
   } else if (wpActiveItem?.thumb_url || wpActiveItem?.preview_url) {
     wpPreviewThumbs.push(wpActiveItem.thumb_url || wpActiveItem.preview_url || "");
   }
@@ -363,7 +363,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                           forId: "cfg-screensaver_cycle_minutes",
                           control: html`<select
                             id="cfg-screensaver_cycle_minutes"
-                            .value=${String(ssCycle)}
+                            .value=${live(String(ssCycle))}
                             @change=${(ev: Event) =>
                               void store.entity.setScreensaverRotation(
                                 Number((ev.currentTarget as HTMLSelectElement).value) || 0,
@@ -372,7 +372,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                             ${WALLPAPER_ROTATION_OPTIONS.map(
                               (opt) => html`<option
                                 value=${String(opt.value)}
-                                ?selected=${opt.value === ssCycle}
+                                .selected=${live(opt.value === ssCycle)}
                               >
                                 ${rotationLabel(store, opt.value, opt.label)}
                               </option>`,
@@ -486,7 +486,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
               control: html`<span class="swatch" style=${swatchStyle} aria-hidden="true"></span>
                 <select
                   id="dev-custom-palette-select"
-                  .value=${curHex}
+                  .value=${live(curHex)}
                   @change=${(ev: Event) => {
                     const val = (ev.currentTarget as HTMLSelectElement).value;
                     if (isValidHexColor(val)) {
@@ -495,18 +495,18 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                   }}
                 >
                   ${!palettes.length
-                    ? html`<option value=${curHex} selected>
+                    ? html`<option value=${curHex} .selected=${live(true)}>
                         ${store.t("dev_display.current_color_option", { hex: curHex })}
                       </option>`
                     : html`
                         ${!palettes.some((p) => p.hex.toUpperCase() === curHex)
-                          ? html`<option value=${curHex} selected>
+                          ? html`<option value=${curHex} .selected=${live(true)}>
                               ${store.t("dev_display.current_color_option", { hex: curHex })}
                             </option>`
                           : nothing}
                         ${palettes.map((p) => {
                           const h = p.hex.toUpperCase();
-                          return html`<option value=${h} ?selected=${h === curHex}>
+                          return html`<option value=${h} .selected=${live(h === curHex)}>
                             ${p.name || h} (${h})
                           </option>`;
                         })}
@@ -587,7 +587,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                     control: html`<select
                       id="cfg-wallpaper_cycle_minutes"
                       aria-label=${store.t("dev_display.rotation_interval_aria")}
-                      .value=${String(wpCycle)}
+                      .value=${live(String(wpCycle))}
                       @change=${(ev: Event) =>
                         void store.entity.setWallpaperRotation(
                           Number((ev.currentTarget as HTMLSelectElement).value) || 0,
@@ -596,7 +596,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                       ${WALLPAPER_ROTATION_OPTIONS.map(
                         (opt) => html`<option
                           value=${String(opt.value)}
-                          ?selected=${opt.value === wpCycle}
+                          .selected=${live(opt.value === wpCycle)}
                         >
                           ${rotationLabel(store, opt.value, opt.label)}
                         </option>`,

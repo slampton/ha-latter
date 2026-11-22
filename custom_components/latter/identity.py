@@ -337,7 +337,7 @@ def device_entities(
     return [e for e in entries if e.domain == domain] if domain else entries
 
 
-def find_device_entity_by_suffix(  # noqa: PLR0913, PLR0917
+def find_device_entity_by_suffix(
     hass: HomeAssistant,
     device_or_id: dr.DeviceEntry | str | None,
     domain: str,

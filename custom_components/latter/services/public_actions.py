@@ -27,10 +27,10 @@ from ..const import (
     target_kind,
 )
 from ..coordinator import LatterCoordinator
-from ..groups.device_reset import async_reset_device
+from ..groups.device_groups import async_reset_device
 from ..hub_registry import iter_coordinators
 from ..identity import esphome_service
-from ..media.announce import async_announce_on_targets, resolve_assist_satellite_entity
+from ..media.tts_queue import async_announce_on_targets, resolve_assist_satellite_entity
 from ..protocol_codec import utf8_safe_truncate
 from .rpc_slots import (
     BASE_TARGET_FIELDS,

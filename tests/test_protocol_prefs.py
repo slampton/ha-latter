@@ -9,7 +9,7 @@ from typing import Any, ClassVar
 import unittest
 
 from custom_components.latter import protocol_codec, protocol_policy, protocol_specs
-from custom_components.latter.groups import device_reset as reset_policy
+from custom_components.latter.groups import device_groups as reset_policy
 from custom_components.latter.studio import settings_cleaners as studio_scope
 from tests.conftest import LATTER_DIR
 

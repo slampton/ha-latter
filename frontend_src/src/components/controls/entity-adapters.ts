@@ -4,7 +4,7 @@
  */
 
 import { t, tPrefLabel, tPrefOption } from "../../i18n/index.js";
-import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import type { CatalogChoice, DevicePrefItem, EspHomeEntityItem } from "../../types.js";
 import { entityLabel, fmtNumber } from "../../utils/format.js";
@@ -52,7 +52,7 @@ export function renderEntitySlotList(opts: EntitySlotListOptions): TemplateResul
       : nothing}
     <select
       aria-label=${opts.selectAriaLabel}
-      .value=${val}
+      .value=${live(val)}
       @change=${(ev: Event) =>
         opts.onChange(idx, (ev.currentTarget as HTMLSelectElement).value)}
     >
@@ -133,7 +133,7 @@ export function renderNativeControlRow(store: StudioStore, item: EspHomeEntityIt
         role="switch"
         aria-label=${label}
         ?disabled=${unavailable}
-        .checked=${isOn}
+        .checked=${live(isOn)}
         @change=${onToggle}
         class="switch"
       />`,
@@ -152,10 +152,10 @@ export function renderNativeControlRow(store: StudioStore, item: EspHomeEntityIt
     };
     return renderSettingsRow({
       label,
-      control: html`<select aria-label=${label} ?disabled=${unavailable} .value=${st} @change=${onChange}>
+      control: html`<select aria-label=${label} ?disabled=${unavailable} .value=${live(st)} @change=${onChange}>
         ${opts.map(
           (opt) =>
-            html`<option value=${opt} ?selected=${opt === st}>
+            html`<option value=${opt} .selected=${live(opt === st)}>
               ${tPrefOption(prefKey, opt, overlay)}
             </option>`,
         )}
@@ -288,7 +288,7 @@ export function renderPrefControlRow(
         type="checkbox"
         role="switch"
         aria-label=${label}
-        .checked=${isOn}
+        .checked=${live(isOn)}
         @change=${onToggle}
         class="switch"
       />`,
@@ -304,10 +304,10 @@ export function renderPrefControlRow(
     };
     return renderSettingsRow({
       label,
-      control: html`<select aria-label=${label} .value=${st} @change=${onChange}>
+      control: html`<select aria-label=${label} .value=${live(st)} @change=${onChange}>
         ${opts.map(
           (opt) =>
-            html`<option value=${opt} ?selected=${opt === st}>
+            html`<option value=${opt} .selected=${live(opt === st)}>
               ${tPrefOption(pref.key, opt, overlay)}
             </option>`,
         )}

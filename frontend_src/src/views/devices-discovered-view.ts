@@ -8,7 +8,7 @@
  */
 
 import { renderCard, renderSettingsRow } from "../components/controls.js";
-import { focusSafe, html, nothing, repeat, type TemplateResult } from "../lib/lit.js";
+import { focusSafe, html, live, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { DiscoveredBleCandidate, DiscoveredLatterDevice } from "../types.js";
 import { entityLabel, fmtNumber } from "../utils/format.js";
@@ -132,7 +132,7 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                     description: meta.join(" • "),
                     control: html`<select
                         aria-label=${store.t("discovered.group_select_aria", { title })}
-                        .value=${curGrp}
+                        .value=${live(curGrp)}
                         @change=${(ev: Event) => {
                           latterDraftGroups.set(
                             d.esphome_device_id,
@@ -141,22 +141,22 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                           store.host.requestUpdate();
                         }}
                       >
-                        <option value="auto" ?selected=${curGrp === "auto"}>
+                        <option value="auto" .selected=${live(curGrp === "auto")}>
                           ${store.t("discovered.auto_group_option", { group: defGrpName })}
                         </option>
-                        <option value="custom" ?selected=${curGrp === "custom"}>
+                        <option value="custom" .selected=${live(curGrp === "custom")}>
                           ${store.t("common.custom")}
                         </option>
                         ${groups.map(
                           (g) =>
-                            html`<option value=${g.id} ?selected=${curGrp === g.id}>
+                            html`<option value=${g.id} .selected=${live(curGrp === g.id)}>
                               ${g.name}
                             </option>`,
                         )}
                       </select>
                       <select
                         aria-label=${store.t("discovered.person_select_aria", { title })}
-                        .value=${curPerson}
+                        .value=${live(curPerson)}
                         @change=${(ev: Event) => {
                           latterDraftPersons.set(
                             d.esphome_device_id,
@@ -165,12 +165,12 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                           store.host.requestUpdate();
                         }}
                       >
-                        <option value="" ?selected=${!curPerson}>
+                        <option value="" .selected=${live(!curPerson)}>
                           ${store.t("common.no_person")}
                         </option>
                         ${persons.map(
                           (p) =>
-                            html`<option value=${p.id} ?selected=${curPerson === p.id}>
+                            html`<option value=${p.id} .selected=${live(curPerson === p.id)}>
                               ${p.name}
                             </option>`,
                         )}
@@ -295,7 +295,7 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
         <select
           id="discovered-ble-filter"
           aria-label=${store.t("discovered.filter_ble_aria")}
-          .value=${kindFilter}
+          .value=${live(kindFilter)}
           @change=${(ev: Event) => {
             const val = (ev.currentTarget as HTMLSelectElement).value;
             store.discoveredBleKindFilter =
@@ -303,20 +303,20 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
             store.host.requestUpdate();
           }}
         >
-          <option value="all" ?selected=${kindFilter === "all"}>
+          <option value="all" .selected=${live(kindFilter === "all")}>
             ${store.t("discovered.all_ble")}
           </option>
-          <option value="tracker" ?selected=${kindFilter === "tracker"}>
+          <option value="tracker" .selected=${live(kindFilter === "tracker")}>
             ${store.t("discovered.phones_trackers")}
           </option>
-          <option value="named" ?selected=${kindFilter === "named"}>
+          <option value="named" .selected=${live(kindFilter === "named")}>
             ${store.t("discovered.named_ble")}
           </option>
         </select>
         <select
           id="discovered-ble-sort"
           aria-label=${store.t("discovered.sort_ble_aria")}
-          .value=${sortMode}
+          .value=${live(sortMode)}
           @change=${(ev: Event) => {
             const val = (ev.currentTarget as HTMLSelectElement).value;
             store.discoveredBleSort =
@@ -324,13 +324,13 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
             store.host.requestUpdate();
           }}
         >
-          <option value="name" ?selected=${sortMode === "name"}>
+          <option value="name" .selected=${live(sortMode === "name")}>
             ${store.t("discovered.sort_name")}
           </option>
-          <option value="rssi" ?selected=${sortMode === "rssi"}>
+          <option value="rssi" .selected=${live(sortMode === "rssi")}>
             ${store.t("discovered.sort_rssi")}
           </option>
-          <option value="area" ?selected=${sortMode === "area"}>
+          <option value="area" .selected=${live(sortMode === "area")}>
             ${store.t("discovered.sort_area")}
           </option>
         </select>
@@ -385,7 +385,7 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                   description: meta.join(" • "),
                   control: html`<select
                       aria-label=${store.t("discovered.person_select_aria", { title })}
-                      .value=${curPerson}
+                      .value=${live(curPerson)}
                       @change=${(ev: Event) => {
                         bleDraftPersons.set(
                           addrKey,
@@ -394,12 +394,12 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                         store.host.requestUpdate();
                       }}
                     >
-                      <option value="" ?selected=${!curPerson}>
+                      <option value="" .selected=${live(!curPerson)}>
                         ${store.t("common.no_person")}
                       </option>
                       ${persons.map(
                         (p) =>
-                          html`<option value=${p.id} ?selected=${curPerson === p.id}>
+                          html`<option value=${p.id} .selected=${live(curPerson === p.id)}>
                             ${p.name}
                           </option>`,
                       )}

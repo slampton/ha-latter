@@ -4,7 +4,7 @@
  */
 
 import { renderCard, renderRangeRow, renderSettingsRow } from "../components/controls.js";
-import { focusSafe, html, nothing, repeat, type TemplateResult } from "../lib/lit.js";
+import { focusSafe, html, live, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { AreaPresenceRow, BleAreaSignatureSummary } from "../types.js";
 import {
@@ -295,7 +295,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                         label: store.t("presence_sys.presence_mode"),
                         control: html`<select
                           aria-label=${store.t("presence_sys.presence_mode_aria", { area: areaName })}
-                          .value=${curMode}
+                          .value=${live(curMode)}
                           @change=${(ev: Event) =>
                             void store.groups.setAreaFusion(areaId, {
                               mode: (ev.currentTarget as HTMLSelectElement).value,
@@ -303,7 +303,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                         >
                           ${fusionModeOptions.map(
                             (m) =>
-                              html`<option value=${m.val} ?selected=${m.val === curMode}>
+                              html`<option value=${m.val} .selected=${live(m.val === curMode)}>
                                 ${m.label}
                               </option>`,
                           )}
@@ -390,13 +390,13 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                                     aria-label=${store.t("presence_sys.ambient_sensor_aria", {
                                       area: areaName,
                                     })}
-                                    .value=${luxEntity}
+                                    .value=${live(luxEntity)}
                                     @change=${(ev: Event) =>
                                       void store.groups.setAreaIlluminance(areaId, {
                                         entity_id: (ev.currentTarget as HTMLSelectElement).value,
                                       })}
                                   >
-                                    <option value="auto" ?selected=${luxEntity === "auto"}>
+                                    <option value="auto" .selected=${live(luxEntity === "auto")}>
                                       ${luxResolvedName && luxEntity === "auto"
                                         ? store.t("presence_sys.ambient_sensor_auto", {
                                             sensor: luxResolvedName,
@@ -407,12 +407,12 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                                       (s) =>
                                         html`<option
                                           value=${s.entity_id}
-                                          ?selected=${luxEntity === s.entity_id}
+                                          .selected=${live(luxEntity === s.entity_id)}
                                         >
                                           ${s.name}${s.lux_display ? ` (${s.lux_display} lx)` : ""}
                                         </option>`,
                                     )}
-                                    <option value="disabled" ?selected=${luxEntity === "disabled"}>
+                                    <option value="disabled" .selected=${live(luxEntity === "disabled")}>
                                       ${store.t("presence_sys.ambient_sensor_disabled")}
                                     </option>
                                   </select>`,
@@ -576,7 +576,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                       description: store.t("presence_sys.carried_device_desc"),
                       control: html`<select
                         id="ble-survey-device-picker"
-                        .value=${activeSurveyDev?.subentry_id || ""}
+                        .value=${live(activeSurveyDev?.subentry_id || "")}
                         @change=${(ev: Event) =>
                           store.groups.selectBleSurveyDevice(
                             (ev.currentTarget as HTMLSelectElement).value,
@@ -586,7 +586,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                           (d) =>
                             html`<option
                               value=${d.subentry_id}
-                              ?selected=${d.subentry_id === activeSurveyDev?.subentry_id}
+                              .selected=${live(d.subentry_id === activeSurveyDev?.subentry_id)}
                             >
                               ${d.title} (${d.active_area_name || store.t("common.unassigned")})
                             </option>`,
@@ -616,7 +616,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                       control: html`<div class="input-action-row">
                         <select
                           id="ble-calibrate-area-select"
-                          .value=${targetAreaId}
+                          .value=${live(targetAreaId)}
                           @change=${(ev: Event) =>
                             store.groups.selectBleCalibrateArea(
                               (ev.currentTarget as HTMLSelectElement).value,
@@ -632,12 +632,14 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                                     : "";
                                 return html`<option
                                   value=${a.area_id}
-                                  ?selected=${a.area_id === targetAreaId}
+                                  .selected=${live(a.area_id === targetAreaId)}
                                 >
                                   ${a.area_name}${suffix}
                                 </option>`;
                               })
-                            : html`<option value="">${store.t("presence_sys.no_ha_areas_option")}</option>`}
+                            : html`<option value="" .selected=${live(!targetAreaId)}>
+                                ${store.t("presence_sys.no_ha_areas_option")}
+                              </option>`}
                         </select>
                         <button
                           id="btn-capture-area-signature"

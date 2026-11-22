@@ -21,15 +21,17 @@ from ..const import DOMAIN
 from ..protocol_codec import pack_active_media_fields
 from .linking import resolve_ma_counterpart_entity, safe_float
 from .playback import (
+    VOLUME_MUTE_FLAG,
+    VOLUME_SET_FLAG,
     SpeakerMediaSnapshot,
     normalize_repeat_mode,
     read_live_ma_queue_state,
+    read_volume_from_target,
     resolve_effective_favorite,
     resolve_raw_source_favorite,
     resolve_speaker_media_snapshot,
 )
 from .tts_queue import is_ephemeral_announcement_uri
-from .volume import VOLUME_MUTE_FLAG, VOLUME_SET_FLAG, read_volume_from_target
 
 MEDIA_CAP_PAUSE: Final[int] = 1
 MEDIA_CAP_SEEK: Final[int] = 2
@@ -104,7 +106,7 @@ def _apply_volume_entity_caps(caps: int, vol_st: State | None) -> int:
     return caps
 
 
-def compute_media_caps(  # noqa: PLR0913
+def compute_media_caps(
     hass: HomeAssistant,
     state_obj: State | None,
     ma_st: State | None,

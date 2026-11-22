@@ -18,62 +18,8 @@
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.65.1",
-    "lit-html": "3.3.3",
+    "esbuild": "0.28.2",
+    "lit": "3.3.3",
     "typescript": "5.9.3"
-  },
-  "vendorProvenance": {
-    "lit-html": {
-      "package": "lit-html",
-      "version": "3.3.3",
-      "license": "BSD-3-Clause",
-      "tarballIntegrity": "sha512-el8M6jK2o3RXBnrSHX3ZKrsN8zEV63pSExTO1wYJz7QndGYZ8353e2a5PPX+qHe2aGayfnchQmkAojaWAREOIA==",
-      "vendorRoot": "src/lib/vendor",
-      "files": {
-        "LICENSE": {
-          "upstreamSha256Lf": "2b66f9390afde29edfe4314daff93f01fb182e1178053e228120178987e5db75",
-          "vendoredSha256Lf": "2b66f9390afde29edfe4314daff93f01fb182e1178053e228120178987e5db75"
-        },
-        "lit-html.js": {
-          "upstreamSha256Lf": "b878e7f95dec8a9b6e9b217faca6b6a11bad82ebc44c0caa77419ed83edd81f2",
-          "vendoredSha256Lf": "63b9622ca167e90d36ba84dfc11af911c05db87ac7a23717f7564fa6e34f2e0e",
-          "adaptation": "Live DOM comparison on PropertyPart (class I) and post-children <select .value> sync (class R.p); sourceMappingURL stripped."
-        },
-        "lit-html.d.ts": {
-          "upstreamSha256Lf": "79d831bb717b5e64e92fcb612e1bda4b605d55d4137ca58f60720ad220f32033",
-          "vendoredSha256Lf": "13a85cd38c496b0764887118d7c5055fe6cb3b4d472e9f152ab85f934e917ef8",
-          "adaptation": "Self-contained TrustedHTML type alias without external @types/trusted-types import; sourceMappingURL stripped."
-        },
-        "directive.js": {
-          "upstreamSha256Lf": "3344c4f41c69cd0701d3937e8f9ef90bd845614bf6456d0b8314b7c51d415b9d",
-          "vendoredSha256Lf": "cc56909e0c340075f1b565c0c554b954ae73054ae9064570f22a8ca832711d3a",
-          "adaptation": "sourceMappingURL stripped."
-        },
-        "directive.d.ts": {
-          "upstreamSha256Lf": "38e68fc600b21dcc36b2bf955848cbae2051f56742034bf68f1f47b1a37c10a3",
-          "vendoredSha256Lf": "958d02996bbe8de5a03b72aa0445151e50788b722c32cbf21aec46b99d5c9fc4",
-          "adaptation": "sourceMappingURL stripped."
-        },
-        "directive-helpers.js": {
-          "upstreamSha256Lf": "f7fb1154b8f72ed2cc08b05eaeed71c99270e9ad2d48620ed24688a1af4c2b62",
-          "vendoredSha256Lf": "533286a071b6ac1ae28f35a047790cf2d779e25bb0fe07d5ebc21ca4f72c15bb",
-          "adaptation": "sourceMappingURL stripped."
-        },
-        "directive-helpers.d.ts": {
-          "upstreamSha256Lf": "3ffdb1d9f183d75aa5b1fd3881f72cb5d50afd5852db13f8a1e5382cc0044f80",
-          "vendoredSha256Lf": "ee439c8bffe6a14f562b43c43813e6b239dac363007d0add424519e1f57361b9",
-          "adaptation": "sourceMappingURL stripped."
-        },
-        "directives/repeat.js": {
-          "upstreamSha256Lf": "083140026ecd8665fedd15b17769f9d516252a9f1502f1e91e6967686ee82626",
-          "vendoredSha256Lf": "d6d45a7562a5bc392dc10a452470a2c411b52e62b6c56d406cb6dbceb9be9528",
-          "adaptation": "sourceMappingURL stripped."
-        },
-        "directives/repeat.d.ts": {
-          "upstreamSha256Lf": "25f99f07f8fe189bedab93389438ac90b66fb6eae33a76634ed7a11d49715c44",
-          "vendoredSha256Lf": "dd448eb6135e4737377b710036aeca514b84620808ad05ceae9a5d0390501a46",
-          "adaptation": "sourceMappingURL stripped."
-        }
-      }
-    }
   }
 }

@@ -271,7 +271,7 @@ def _validate_pin_key_material(key_id: str, key_bytes: bytes) -> tuple[str, byte
     return kid, raw_key
 
 
-def wrap_pin_code(  # noqa: PLR0913, PLR0917
+def wrap_pin_code(
     key_id: str,
     key_bytes: bytes,
     nonce: int,
@@ -329,7 +329,7 @@ def _parse_wrapped_pin_envelope(wrapped: str) -> tuple[str, str, str, str]:
     return wire_kid, nonce_hex8, ct_hex, wire_mac
 
 
-def unwrap_pin_code(  # noqa: PLR0913, PLR0917
+def unwrap_pin_code(
     key_id: str,
     key_bytes: bytes,
     last_nonce: int,

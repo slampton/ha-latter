@@ -16,20 +16,36 @@ from custom_components.latter import (
 )
 from custom_components.latter.groups import (
     device_groups,
-    device_reset as reset_policy,
     esphome_inspector as entity_sections,
 )
 from custom_components.latter.studio import (
     settings_cleaners as settings,
     state_gates as scope,
 )
-from tests.conftest import LATTER_DIR, read_py_tree
+from tests.conftest import LATTER_DIR, REPO_ROOT, read_py_tree
+
+FRONTEND_SRC_DIR = REPO_ROOT / "frontend_src" / "src"
 
 activity_policy = SimpleNamespace(**(vars(protocol_specs) | vars(protocol_policy)))
-groups = SimpleNamespace(
-    **(vars(device_groups) | vars(reset_policy) | vars(entity_sections))
-)
+groups = SimpleNamespace(**(vars(device_groups) | vars(entity_sections)))
 catalog_gate = scope
+
+
+def _read_frontend_ts(*rel_paths: str) -> str:
+    """Read canonical Studio TypeScript source files under `frontend_src/src/` (excluding `.d.ts`)."""
+    targets = rel_paths or ("",)
+    chunks: list[str] = []
+    for rel in targets:
+        target = FRONTEND_SRC_DIR / rel if rel else FRONTEND_SRC_DIR
+        if target.is_file():
+            chunks.append(target.read_text(encoding="utf-8"))
+        elif target.is_dir():
+            chunks.extend(
+                path.read_text(encoding="utf-8")
+                for path in sorted(target.rglob("*.ts"))
+                if not path.name.endswith(".d.ts")
+            )
+    return "\n".join(chunks)
 
 
 class TestPayloadDiet(unittest.TestCase):
@@ -61,8 +77,14 @@ class TestPayloadDiet(unittest.TestCase):
         views_src = read_py_tree("http")
         self.assertIn("esphome_inspector", payload_src)
         self.assertIn("self._cached_bytes", views_src)
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn(".catalog", js)
+        studio_bundle = LATTER_DIR / "frontend" / "latter-studio.js"
+        self.assertTrue(studio_bundle.is_file())
+        self.assertGreater(studio_bundle.stat().st_size, 0)
+        self.assertTrue(studio_bundle.with_name("latter-studio.js.gz").is_file())
+        self.assertTrue((LATTER_DIR / "frontend" / "latter-studio-mdi.js").is_file())
+        self.assertTrue((LATTER_DIR / "frontend" / "latter-studio-mdi.js.gz").is_file())
+        ts_src = _read_frontend_ts()
+        self.assertIn(".catalog", ts_src)
 
     def test_doorbell_detail_is_rendered(self) -> None:
         payload_src = read_py_tree("studio/payload.py")
@@ -75,28 +97,28 @@ class TestPayloadDiet(unittest.TestCase):
         self.assertNotIn('"preview_url":', payload_src)
         self.assertIn('"mint_camera_preview_url"', cmds_src)
         self.assertIn("resolve_camera_capabilities(", payload_src)
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertNotIn(".doorbells", js)
-        self.assertNotIn("doorbell-status-list", js)
-        self.assertIn("sortable-row-stacked", js)
+        ts_src = _read_frontend_ts()
+        self.assertNotIn(".doorbells", ts_src)
+        self.assertNotIn("doorbell-status-list", ts_src)
+        self.assertIn("sortable-row-stacked", ts_src)
         # Stage 6 encapsulation: zero window.* globals!
-        self.assertNotIn("window.fmtPercent", js)
-        self.assertNotIn("dialog-title danger", js)
-        self.assertNotIn("onAssignedPersonChanged", js)
+        self.assertNotIn("window.fmtPercent", ts_src)
+        self.assertNotIn("dialog-title danger", ts_src)
+        self.assertNotIn("onAssignedPersonChanged", ts_src)
 
     def test_status_card_renders_its_fields(self) -> None:
         payload_src = read_py_tree("studio/payload.py")
         en_json = json.loads((LATTER_DIR / "studio" / "locales" / "en.json").read_text(encoding="utf-8"))
         self.assertIn('"sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),', payload_src)
         self.assertNotIn("_build_now_playing", payload_src)
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        ts_src = _read_frontend_ts()
         self.assertEqual(en_json["card.status"], "Status")
-        self.assertEqual(js.count('store.t("card.status")'), 2)
-        self.assertIn('id="diag-sdk-rev"', js)
-        self.assertIn('class="status-tiles"', js)
-        self.assertRegex(js, r"@container\s*\(max-width:\s*420px\)")
-        self.assertRegex(js, r"@container\s*\(max-width:\s*260px\)")
-        self.assertNotIn("status-assignments", js)
+        self.assertEqual(ts_src.count('store.t("card.status")'), 2)
+        self.assertIn('id="diag-sdk-rev"', ts_src)
+        self.assertIn('class="status-tiles"', ts_src)
+        self.assertRegex(ts_src, r"@container\s*\(max-width:\s*420px\)")
+        self.assertRegex(ts_src, r"@container\s*\(max-width:\s*260px\)")
+        self.assertNotIn("status-assignments", ts_src)
         for gone in (
             'class="stat-grid"',
             'id="dash-sdk-rev"',
@@ -105,14 +127,14 @@ class TestPayloadDiet(unittest.TestCase):
             '<h3 class="card-title">Now</h3>',
             '<h3 class="card-title">Device Status</h3>',
         ):
-            self.assertNotIn(gone, js)
+            self.assertNotIn(gone, ts_src)
 
 
 class TestViewLayout(unittest.TestCase):
     """D-014 & D-061: every view is two independent column stacks with HA Sentence-case titles."""
 
     def test_view_names_are_unqualified(self) -> None:
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        ts_src = _read_frontend_ts()
         en_json = json.loads((LATTER_DIR / "studio" / "locales" / "en.json").read_text(encoding="utf-8"))
         names = [
             v for k, v in en_json.items() if k.startswith("view.")
@@ -134,37 +156,42 @@ class TestViewLayout(unittest.TestCase):
             self.assertFalse(name.startswith("System "), name)
             if name != "Device groups":
                 self.assertFalse(name.startswith("Device "), name)
-        self.assertNotRegex(js, r"<span>(System|Device) (Overview|Settings)</span>")
+        self.assertNotRegex(ts_src, r"<span>(System|Device) (Overview|Settings)</span>")
 
     def test_information_architecture(self) -> None:
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
+        ts_src = _read_frontend_ts()
+        views_ts = _read_frontend_ts("views")
         en_json = json.loads((LATTER_DIR / "studio" / "locales" / "en.json").read_text(encoding="utf-8"))
-        self.assertIn('dashboard: "overview"', js)
-        self.assertIn('display: "display"', js)
-        self.assertIn('interface: "interface"', js)
-        self.assertIn('system_sync: "groups"', js)
-        self.assertIn('area_tracking: "presence"', js)
-        self.assertIn('system_tools: "tools"', js)
-        self.assertNotIn("nav-esp-badge", js)
-        self.assertNotIn("set_device_remote_group", js)
-        self.assertNotIn("assignDeviceRemoteGroup", js)
-        self.assertEqual(js.count('class="nav-badge"'), 2)
-        self.assertIn('href="/latter/devices"', js)
-        self.assertIn('href="/latter/devices/discovered"', js)
+        self.assertIn('dashboard: "overview"', ts_src)
+        self.assertIn('display: "display"', ts_src)
+        self.assertIn('interface: "interface"', ts_src)
+        self.assertIn('system_sync: "groups"', ts_src)
+        self.assertIn('area_tracking: "presence"', ts_src)
+        self.assertIn('system_tools: "tools"', ts_src)
+        self.assertNotIn("nav-esp-badge", ts_src)
+        self.assertNotIn("set_device_remote_group", ts_src)
+        self.assertNotIn("assignDeviceRemoteGroup", ts_src)
+        self.assertEqual(ts_src.count('class="nav-badge"'), 2)
+        self.assertIn('href="/latter/devices"', ts_src)
+        self.assertIn('href="/latter/devices/discovered"', ts_src)
         self.assertEqual(en_json["nav.managed"], "Managed")
         self.assertEqual(en_json["nav.discovered"], "Discovered")
         self.assertEqual(en_json["nav.back_managed"], "← Managed")
-        self.assertNotIn("<span>&larr; All Devices</span>", js)
+        self.assertNotIn("<span>&larr; All Devices</span>", ts_src)
 
         view_fns = {
             m.group(1): m.group(0)
-            for mod in re.findall(r'__latterDef\("src/views/[^"]+",[\s\S]*?\n\}\);', js)
-            for m in re.finditer(r"\nfunction (render\w+)\([\s\S]*?\n\}\n", mod)
+            for path in sorted((FRONTEND_SRC_DIR / "views").rglob("*.ts"))
+            if not path.name.endswith(".d.ts")
+            for m in re.finditer(
+                r"(?:^|\n)(?:export\s+)?function (render\w+)\([\s\S]*?\n\}(?=\n|\Z)",
+                path.read_text(encoding="utf-8"),
+            )
         }
 
         def section(view: str) -> str:
-            start = js.index(f'<section id="view-{view}"')
-            out = js[start:js.index("</section>", start)]
+            start = views_ts.index(f'<section id="view-{view}"')
+            out = views_ts[start:views_ts.index("</section>", start)]
             expanded: set[str] = set()
             for _ in range(3):
                 out = re.sub(
@@ -188,29 +215,29 @@ class TestViewLayout(unittest.TestCase):
         )
         self.assertIn('id="latter-adopt-table-box"', discovered_view)
         self.assertIn('id="ble-adopt-table-box"', discovered_view)
-        self.assertIn("c.is_tracker", js)
-        self.assertNotIn("TRACKER_KIND_TOKENS", js)
+        self.assertIn("c.is_tracker", ts_src)
+        self.assertNotIn("TRACKER_KIND_TOKENS", ts_src)
         self.assertIn("ignoreDiscoveredDevice", discovered_view)
         self.assertIn("unignoreDiscoveredDevice", discovered_view)
         self.assertEqual(latter_const.STUDIO_REV, 44)
-        self.assertNotIn("hold_crown_power_off", js)
-        self.assertIn(f"const STUDIO_REV = {latter_const.STUDIO_REV};", js)
-        self.assertIn(".card.handoff-active", js)
-        self.assertIn(".area-presence-box.handoff-active", js)
-        self.assertIn(".calibrate-target-box.handoff-active", js)
-        self.assertNotIn("border:2px solid var(--studio-warning)", js)
-        self.assertIn("cfg-home_date_tap_action", js)
-        self.assertIn("cfg-calendar_lookahead_days", js)
-        self.assertIn("cfg-calendar_week_start", js)
-        self.assertNotIn("tools:calendar", js)
-        self.assertNotIn("Power Profile", js)
-        self.assertNotIn("fusion-area", js)
-        self.assertNotIn("d.has_ble ||", js)
-        self.assertNotIn(".area-presence-box.occupied", js)
+        self.assertNotIn("hold_crown_power_off", ts_src)
+        self.assertIn(f"const STUDIO_REV = {latter_const.STUDIO_REV};", ts_src)
+        self.assertIn(".card.handoff-active", ts_src)
+        self.assertIn(".area-presence-box.handoff-active", ts_src)
+        self.assertIn(".calibrate-target-box.handoff-active", ts_src)
+        self.assertNotIn("border:2px solid var(--studio-warning)", ts_src)
+        self.assertIn("cfg-home_date_tap_action", ts_src)
+        self.assertIn("cfg-calendar_lookahead_days", ts_src)
+        self.assertIn("cfg-calendar_week_start", ts_src)
+        self.assertNotIn("tools:calendar", ts_src)
+        self.assertNotIn("Power Profile", ts_src)
+        self.assertNotIn("fusion-area", ts_src)
+        self.assertNotIn("d.has_ble ||", ts_src)
+        self.assertNotIn(".area-presence-box.occupied", ts_src)
         self.assertNotIn('? " occupied"', area_tracking_view)
-        self.assertNotIn('id="ble-proxy-trim-drawer"', js)
-        self.assertNotIn("proxyTrimOpen", js)
-        self.assertGreaterEqual(js.count('d.ble_tracked || d.kind === "ble_tag"'), 2)
+        self.assertNotIn('id="ble-proxy-trim-drawer"', ts_src)
+        self.assertNotIn("proxyTrimOpen", ts_src)
+        self.assertGreaterEqual(ts_src.count('d.ble_tracked || d.kind === "ble_tag"'), 2)
         self.assertNotIn("Discovered Bluetooth Devices", area_tracking_view)
         self.assertNotIn('id="ble-adopt-table-box"', area_tracking_view)
         self.assertNotIn("d.has_ble", area_tracking_view)
@@ -286,8 +313,8 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('store.t("card.developer_telemetry")', tools)
         self.assertIn('id="btn-tools-open-in-ha"', tools)
         self.assertEqual(en_json["action.open_in_ha"], "Open in Home Assistant")
-        self.assertNotIn("All Entities", js)
-        self.assertNotIn("entitySearchQuery", js)
+        self.assertNotIn("All Entities", ts_src)
+        self.assertNotIn("entitySearchQuery", ts_src)
         for key in (
             "card.notifications_announcements",
             "card.backup_restore",
@@ -337,18 +364,18 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="dock-shortcuts-container"', interface_view)
         self.assertIn('id="dock-hidden-native-apps"', interface_view)
         self.assertIn('id="btn-configure-start-screen"', interface_view)
-        self.assertIn('id="latter-app-config-modal"', js)
-        self.assertIn('id: "home-categories-pills"', js)
-        self.assertIn('id: "area-categories-pills"', js)
-        self.assertIn('id: "tools-items-pills"', js)
-        self.assertIn('id: "games-items-pills"', js)
+        self.assertIn('id="latter-app-config-modal"', ts_src)
+        self.assertIn('id: "home-categories-pills"', ts_src)
+        self.assertIn('id: "area-categories-pills"', ts_src)
+        self.assertIn('id: "tools-items-pills"', ts_src)
+        self.assertIn('id: "games-items-pills"', ts_src)
         for retired_music_pref in (
             'id: "media-player-shortcuts"',
             "show_speaker_shortcut",
             "show_library_shortcut",
         ):
-            self.assertNotIn(retired_music_pref, js)
-        self.assertIn('id: "cfg-device_remote_group"', js)
+            self.assertNotIn(retired_music_pref, ts_src)
+        self.assertIn('id: "cfg-device_remote_group"', ts_src)
         audio_view = section("audio_voice")
         self.assertIn('store.t("dev_audio.card_sound_playback")', audio_view)
         for key in ("card.remote_controls", "card.volume_overrides", "card.remote_groups"):
@@ -358,9 +385,9 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="btn-open-create-group"', groups_sec)
         self.assertIn('id="create-group-form"', groups_sec)
         self.assertIn('id="group-box-custom"', groups_sec)
-        self.assertIn('id="btn-batch-reset"', js)
-        self.assertIn('id="btn-batch-apply"', js)
-        self.assertIn('id="latter-save-group-modal"', js)
+        self.assertIn('id="btn-batch-reset"', ts_src)
+        self.assertIn('id="btn-batch-apply"', ts_src)
+        self.assertIn('id="latter-save-group-modal"', ts_src)
         for retired_group_ui in (
             "batch-latter-behavior-list",
             "group_sync_status",
@@ -369,8 +396,8 @@ class TestViewLayout(unittest.TestCase):
             "trait:roaming",
             "trait:stationary",
         ):
-            self.assertNotIn(retired_group_ui, js)
-        self.assertIn('"pocket_carry"', js)
+            self.assertNotIn(retired_group_ui, ts_src)
+        self.assertIn('"pocket_carry"', ts_src)
         self.assertIn('id="btn-choose-wallpaper"', display_view)
         self.assertIn('id="btn-manage-photo-library"', display_view)
         self.assertIn('id="btn-photos-upload"', photos_view)
@@ -437,13 +464,13 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="cfg-ble_ref_power"', presence_view)
         self.assertIn('id="ble-companion-power-tip"', presence_view)
         for gone in ("In Home Assistant</h3>", "Location &amp; BLE</h3>", 'id="cfg-device_slug"', 'id="st-group"'):
-            self.assertNotIn(gone, js)
+            self.assertNotIn(gone, ts_src)
         self.assertNotIn('"count": len(', read_py_tree("areas"))
 
     def test_entity_only_cards_hide_when_empty(self) -> None:
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        start = js.index('<section id="view-power"')
-        power = js[start:js.index("</section>", start)]
+        power_src = _read_frontend_ts("views/device-power-view.ts")
+        start = power_src.index('<section id="view-power"')
+        power = power_src[start:power_src.index("</section>", start)]
         self.assertEqual(power.count('<div class="card" data-entity-card>'), 2)
         self.assertIn("sleepItems.length", power)
         self.assertIn("batteryItems.length", power)
@@ -461,26 +488,28 @@ class TestViewLayout(unittest.TestCase):
             ),
             ("other", None),
         )
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn('"weather_background"', js)
-        self.assertIn('"home_sun"', js)
-        self.assertIn('"home_moon"', js)
-        self.assertNotIn("Area Cards Per Page", js)
-        self.assertNotIn("cfg-default_page_size", js)
-        disp_fn_start = js.index("function renderDeviceDisplayView(")
-        disp_view = js[disp_fn_start:js.index("</section>", disp_fn_start)]
+        ts_src = _read_frontend_ts()
+        self.assertIn('"weather_background"', ts_src)
+        self.assertIn('"home_sun"', ts_src)
+        self.assertIn('"home_moon"', ts_src)
+        self.assertNotIn("Area Cards Per Page", ts_src)
+        self.assertNotIn("cfg-default_page_size", ts_src)
+        disp_src = _read_frontend_ts("views/device-display-view.ts")
+        disp_fn_start = disp_src.index("function renderDeviceDisplayView(")
+        disp_view = disp_src[disp_fn_start:disp_src.index("</section>", disp_fn_start)]
         self.assertNotIn("weather-celestial-bodies", disp_view)
         self.assertIn('id="wp-weather-override-note"', disp_view)
-        start = js.index('<section id="view-interface"')
-        view = js[start:js.index("</section>", start)]
+        iface_src = _read_frontend_ts("views/device-interface-view.ts")
+        start = iface_src.index('<section id="view-interface"')
+        view = iface_src[start:iface_src.index("</section>", start)]
         self.assertIn('store.t("card.home_screen")', view)
         self.assertIn('store.t("card.app_dock")', view)
         self.assertIn('id: "weather-celestial-bodies"', view)
         self.assertIn('id: "weather-celestial-pills"', view)
         self.assertIn('id="dock-shortcuts-container"', view)
         self.assertIn('id="dock-hidden-native-apps"', view)
-        self.assertIn('id: "pinned-shortcuts-container"', js)
-        self.assertIn('id: "area-categories-pills"', js)
+        self.assertIn('id: "pinned-shortcuts-container"', ts_src)
+        self.assertIn('id: "area-categories-pills"', ts_src)
         self.assertNotIn('id="embedded-area-ui"', view)
         self.assertNotIn('id="embedded-home"', view)
 
@@ -507,6 +536,7 @@ class TestViewLayout(unittest.TestCase):
         for gone in ("LatterSidebarIconJsView", "sidebar_icon.js", "API_SIDEBAR_ICON_JS_PATH"):
             for path in LATTER_DIR.rglob("*.py"):
                 self.assertNotIn(gone, path.read_text(encoding="utf-8"), f"{gone} in {path.name}")
+        self.assertNotIn("brand-logo", _read_frontend_ts())
         studio_js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertNotIn("brand-logo", studio_js)
 
@@ -533,21 +563,22 @@ class TestViewLayout(unittest.TestCase):
         self.assertEqual((sizes["dark_logo.png"], sizes["dark_logo@2x.png"]), (256, 512))
 
     def test_native_popups_follow_ha_dark_mode(self) -> None:
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertIn('this.toggleAttribute("dark",', js)
-        self.assertRegex(js, r"color-scheme:\s*light")
-        self.assertIn(":host([dark])", js)
-        self.assertRegex(js, r"background-color:\s*var\(--studio-popup-bg\);\s*color:\s*var\(--studio-text\)")
+        ts_src = _read_frontend_ts()
+        self.assertIn('this.toggleAttribute("dark",', ts_src)
+        self.assertRegex(ts_src, r"color-scheme:\s*light")
+        self.assertIn(":host([dark])", ts_src)
+        self.assertRegex(ts_src, r"background-color:\s*var\(--studio-popup-bg\);\s*color:\s*var\(--studio-text\)")
 
     def test_columns_everywhere(self) -> None:
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        self.assertNotIn("grid-2", js)
+        ts_src = _read_frontend_ts()
+        views_ts = _read_frontend_ts("views")
+        self.assertNotIn("grid-2", ts_src)
         for view in (
             "system_overview", "shared_entities", "remotes", "system_sync", "area_tracking", "system_tools",
             "dashboard", "display", "interface", "audio_voice", "power", "presence", "tools",
         ):
-            start = js.index(f'<section id="view-{view}"')
-            body = js[start:js.index("</section>", start)]
+            start = views_ts.index(f'<section id="view-{view}"')
+            body = views_ts[start:views_ts.index("</section>", start)]
             self.assertEqual(body.count('<div class="columns">'), 1, view)
             self.assertEqual(body.count('<div class="column">'), 2, view)
 
@@ -596,9 +627,10 @@ class TestActivityCard(unittest.TestCase):
         self.assertIn("coordinator.activity_card_enabled, coordinator.activity_sources_csv", ctx_src)
 
     def test_studio_rows(self) -> None:
-        js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
-        fn_start = js.index("function renderDeviceInterfaceView(")
-        view = js[js.index('<section id="view-interface"', fn_start):js.index("</section>", fn_start)]
+        ts_src = _read_frontend_ts()
+        iface_src = _read_frontend_ts("views/device-interface-view.ts")
+        fn_start = iface_src.index("function renderDeviceInterfaceView(")
+        view = iface_src[iface_src.index('<section id="view-interface"', fn_start):iface_src.index("</section>", fn_start)]
         self.assertNotIn('<h3 class="card-title">Activity Card</h3>', view)
         self.assertLess(
             view.index('store.t("card.home_screen")'),
@@ -612,7 +644,7 @@ class TestActivityCard(unittest.TestCase):
         self.assertIn("store.entity.toggleActivitySource(", view)
         self.assertIn("store.entity.reorderActivitySources(", view)
         for label in ("Calendar", "Music Queue", "Stopwatch", "Alarms", "Timers"):
-            self.assertIn(f'label: "{label}"', js)
+            self.assertIn(f'label: "{label}"', ts_src)
 
 
 if __name__ == "__main__":

@@ -227,7 +227,7 @@ def _apply_rotation(img: Image.Image, rot: int) -> Image.Image:
     return img
 
 
-def transcode_camera_frame(  # noqa: PLR0913
+def transcode_camera_frame(
     raw_bytes: bytes,
     max_w: int,
     max_h: int,
@@ -397,7 +397,7 @@ def _paste_grid_quadrant(
         _draw_offline_tile(draw, rect, label)
 
 
-def compose_grid_frame(  # noqa: PLR0913
+def compose_grid_frame(
     frames: list[bytes | None],
     labels: list[str],
     width: int,
@@ -448,7 +448,7 @@ def compose_grid_frame(  # noqa: PLR0913
     return out.getvalue()
 
 
-def build_ffmpeg_video_cmd(  # noqa: PLR0913
+def build_ffmpeg_video_cmd(
     ffmpeg_bin: str,
     stream_url: str,
     width: int,

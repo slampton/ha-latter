@@ -5,7 +5,7 @@
  *   and batch `import_media_photos` with summary toast.
  */
 
-import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import { fmtNumber } from "../../utils/format.js";
 import { renderSvgIcon } from "../controls.js";
@@ -88,7 +88,7 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
               id="media-import-root-select"
               aria-label=${store.t("media_import.root_label")}
               ?disabled=${modal.loading || modal.importing}
-              .value=${modal.root}
+              .value=${live(modal.root)}
               @change=${(ev: Event) =>
                 void store.entity.browseMediaFolder(
                   (ev.currentTarget as HTMLSelectElement).value,
@@ -96,7 +96,7 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
                 )}
             >
               ${modal.roots.map(
-                (r) => html`<option value=${r.id} ?selected=${r.id === modal.root}>
+                (r) => html`<option value=${r.id} .selected=${live(r.id === modal.root)}>
                   ${r.name}
                 </option>`,
               )}
@@ -195,7 +195,7 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
                               type="checkbox"
                               aria-label=${img.name}
                               ?disabled=${img.too_large || modal.importing}
-                              .checked=${isSelected}
+                              .checked=${live(isSelected)}
                               @change=${() => toggleImagePath(img.relpath)}
                               class="photo-tile-check"
                             />
@@ -239,7 +239,7 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
                 id="media-import-collection"
                 aria-label=${store.t("media_import.collection_label")}
                 ?disabled=${modal.importing || modal.useNewFolderCollection}
-                .value=${modal.collectionId}
+                .value=${live(modal.collectionId)}
                 @change=${(ev: Event) => {
                   store.mediaImportModal = {
                     ...store.mediaImportModal,
@@ -248,11 +248,11 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
                   store.host.requestUpdate();
                 }}
               >
-                <option value="" ?selected=${!modal.collectionId}>
+                <option value="" .selected=${live(!modal.collectionId)}>
                   ${store.t("photo_upload.no_collection")}
                 </option>
                 ${collections.map(
-                  (col) => html`<option value=${col.id} ?selected=${modal.collectionId === col.id}>
+                  (col) => html`<option value=${col.id} .selected=${live(modal.collectionId === col.id)}>
                     ${col.name}
                   </option>`,
                 )}

@@ -1,7 +1,3 @@
-[build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "ha-latter"
 version = "3.0.0"
@@ -10,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 license = { text = "Apache-2.0" }
 
-[project.optional-dependencies]
+[dependency-groups]
 test = [
     "PyTurboJPEG>=1.8",
     "aiohttp>=3.14",
@@ -29,9 +25,6 @@ test = [
     "serialx>=1.11",
     "voluptuous>=0.16",
 ]
-
-[tool.setuptools]
-packages = []
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -58,12 +51,15 @@ line-length = 110
 extend-exclude = ["custom_components/latter/frontend"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "BLE", "SIM", "ASYNC", "RUF", "S", "PERF", "PLR"]
-ignore = ["E501", "SIM105", "SIM108"]
+select = ["E", "F", "W", "I", "UP", "B", "BLE", "SIM", "ASYNC", "RUF", "S", "PERF", "PLR", "C901"]
+ignore = ["E501", "SIM105", "SIM108", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917", "PLR2004"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 18
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917", "PLR1711", "PLR2004"]
-"**/tests/**" = ["S101", "S105", "S106", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917", "PLR1711", "PLR2004"]
+"tests/**" = ["S101", "S105", "S106", "C901", "PLR1711"]
+"**/tests/**" = ["S101", "S105", "S106", "C901", "PLR1711"]
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true

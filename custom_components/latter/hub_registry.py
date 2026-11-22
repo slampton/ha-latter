@@ -433,7 +433,7 @@ class HubRuntimeHooks:
 _HUB_HOOKS = HubRuntimeHooks()
 
 
-def register_hub_hooks(  # noqa: PLR0913
+def register_hub_hooks(
     *,
     url_signer_factory: Callable[[HomeAssistant, str, bytes], Any] | None = None,
     rpc_dispatcher_factory: Callable[[HomeAssistant], Any] | None = None,

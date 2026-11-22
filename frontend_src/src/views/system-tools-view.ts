@@ -6,7 +6,7 @@
 
 import { renderCard, renderSettingsRow } from "../components/controls.js";
 import { STUDIO_REV } from "../constants.js";
-import { focusSafe, html, nothing, type TemplateResult } from "../lib/lit.js";
+import { focusSafe, html, live, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 
 const DOCS_URL = "https://github.com/slampton/ha-latter";
@@ -100,18 +100,18 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
               <label for="ann-target">${store.t("tools_sys.target_label")}</label>
               <select
                 id="ann-target"
-                .value=${store.announceTarget}
+                .value=${live(store.announceTarget)}
                 @change=${(ev: Event) => {
                   store.announceTarget = (ev.currentTarget as HTMLSelectElement).value || "all";
                   store.host.requestUpdate();
                 }}
               >
-                <option value="all" ?selected=${store.announceTarget === "all"}>
+                <option value="all" .selected=${live(store.announceTarget === "all")}>
                   ${store.t("tools_sys.all_displays")}
                 </option>
                 <option
                   value="occupied_areas"
-                  ?selected=${store.announceTarget === "occupied_areas"}
+                  .selected=${live(store.announceTarget === "occupied_areas")}
                 >
                   ${store.t("tools_sys.occupied_areas_only")}
                 </option>
@@ -119,7 +119,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                   (d) =>
                     html`<option
                       value=${d.device_slug}
-                      ?selected=${store.announceTarget === d.device_slug}
+                      .selected=${live(store.announceTarget === d.device_slug)}
                     >
                       ${store.t("tools_sys.device_prefix", { title: d.title })}
                     </option>`,
@@ -145,7 +145,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                       <label for="ann-priority">${store.t("tools_sys.priority")}</label>
                       <select
                         id="ann-priority"
-                        .value=${store.announcePriority}
+                        .value=${live(store.announcePriority)}
                         @change=${(ev: Event) => {
                           store.announcePriority = (ev.currentTarget as HTMLSelectElement).value as
                             | "normal"
@@ -153,16 +153,22 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                             | "critical";
                         }}
                       >
-                        <option value="normal">${store.t("tools_sys.priority_normal")}</option>
-                        <option value="warning">${store.t("tools_sys.priority_warning")}</option>
-                        <option value="critical">${store.t("tools_sys.priority_critical")}</option>
+                        <option value="normal" .selected=${live(store.announcePriority === "normal")}>
+                          ${store.t("tools_sys.priority_normal")}
+                        </option>
+                        <option value="warning" .selected=${live(store.announcePriority === "warning")}>
+                          ${store.t("tools_sys.priority_warning")}
+                        </option>
+                        <option value="critical" .selected=${live(store.announcePriority === "critical")}>
+                          ${store.t("tools_sys.priority_critical")}
+                        </option>
                       </select>
                     </div>
                     <label class="inline-switch">
                       <input
                         type="checkbox"
                         role="switch"
-                        .checked=${store.announceIncludeCamera}
+                        .checked=${live(store.announceIncludeCamera)}
                         @change=${(ev: Event) => {
                           store.announceIncludeCamera = (
                             ev.currentTarget as HTMLInputElement
@@ -212,7 +218,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
               control: html`<select
                 id="doorbell-test-device"
                 ?disabled=${!canTestDoorbell}
-                .value=${store.doorbellTestSubentryId}
+                .value=${live(store.doorbellTestSubentryId)}
                 @change=${(ev: Event) => {
                   store.doorbellTestSubentryId = (ev.currentTarget as HTMLSelectElement).value;
                   store.host.requestUpdate();
@@ -223,12 +229,14 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                       (d) =>
                         html`<option
                           value=${d.subentry_id}
-                          ?selected=${d.subentry_id === store.doorbellTestSubentryId}
+                          .selected=${live(d.subentry_id === store.doorbellTestSubentryId)}
                         >
                           ${d.title}
                         </option>`,
                     )
-                  : html`<option value="">${store.t("tools_sys.no_latter_devices")}</option>`}
+                  : html`<option value="" .selected=${live(!store.doorbellTestSubentryId)}>
+                      ${store.t("tools_sys.no_latter_devices")}
+                    </option>`}
               </select>`,
             })}
             ${renderSettingsRow({
@@ -288,26 +296,26 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
             <div class="input-action-row">
               <select
                 aria-label=${store.t("tools_sys.logs_filter_aria")}
-                .value=${store.logFilter}
+                .value=${live(store.logFilter)}
                 @change=${(ev: Event) => {
                   store.logFilter = (ev.currentTarget as HTMLSelectElement).value || "all";
                   store.host.requestUpdate();
                 }}
               >
-                <option value="all" ?selected=${store.logFilter === "all"}>
+                <option value="all" .selected=${live(store.logFilter === "all")}>
                   ${store.t("tools_sys.logs_all")}
                 </option>
-                <option value="latter" ?selected=${store.logFilter === "latter"}>
+                <option value="latter" .selected=${live(store.logFilter === "latter")}>
                   ${store.t("tools_sys.logs_studio")}
                 </option>
-                <option value="errors" ?selected=${store.logFilter === "errors"}>
+                <option value="errors" .selected=${live(store.logFilter === "errors")}>
                   ${store.t("tools_sys.logs_errors")}
                 </option>
                 ${allDevices.map(
                   (d) =>
                     html`<option
                       value=${`device:${d.device_slug}`}
-                      ?selected=${store.logFilter === `device:${d.device_slug}`}
+                      .selected=${live(store.logFilter === `device:${d.device_slug}`)}
                     >
                       ${store.t("tools_sys.device_prefix", { title: d.title })}
                     </option>`,
@@ -360,20 +368,20 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
               <div class="input-action-row">
                 <select
                   id="bkp-scope-select"
-                  .value=${store.backupExportScope}
+                  .value=${live(store.backupExportScope)}
                   @change=${(ev: Event) => {
                     store.backupExportScope = (ev.currentTarget as HTMLSelectElement).value;
                     store.host.requestUpdate();
                   }}
                 >
-                  <option value="system" ?selected=${store.backupExportScope === "system"}>
+                  <option value="system" .selected=${live(store.backupExportScope === "system")}>
                     ${store.t("tools_sys.entire_system")}
                   </option>
                   ${allDevices.map(
                     (d) =>
                       html`<option
                         value=${`device:${d.subentry_id}`}
-                        ?selected=${store.backupExportScope === `device:${d.subentry_id}`}
+                        .selected=${live(store.backupExportScope === `device:${d.subentry_id}`)}
                       >
                         ${store.t("tools_sys.device_prefix", { title: d.title })}
                       </option>`,
@@ -408,18 +416,20 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
               <label for="bkp-restore-device">${store.t("tools_sys.target_device_restore")}</label>
               <select
                 id="bkp-restore-device"
-                .value=${store.backupRestoreSubentryId}
+                .value=${live(store.backupRestoreSubentryId)}
                 @change=${(ev: Event) => {
                   store.backupRestoreSubentryId = (ev.currentTarget as HTMLSelectElement).value;
                   store.host.requestUpdate();
                 }}
               >
-                <option value="">${store.t("tools_sys.auto_system_backup")}</option>
+                <option value="" .selected=${live(!store.backupRestoreSubentryId)}>
+                  ${store.t("tools_sys.auto_system_backup")}
+                </option>
                 ${allDevices.map(
                   (d) =>
                     html`<option
                       value=${d.subentry_id}
-                      ?selected=${d.subentry_id === store.backupRestoreSubentryId}
+                      .selected=${live(d.subentry_id === store.backupRestoreSubentryId)}
                     >
                       ${d.title}
                     </option>`,

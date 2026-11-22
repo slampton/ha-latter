@@ -6,13 +6,11 @@ from typing import Any
 import unittest
 
 from tests.conftest import (
-    LATTER_DIR,
     NODE_BIN as NODE,
     read_py_tree,
+    read_ts_tree,
     run_studio_node_esm as _run_node_esm,
 )
-
-STUDIO_JS = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
 
 
 @unittest.skipUnless(NODE, "node is not installed")
@@ -61,8 +59,9 @@ class TestLiveConditionalRows(unittest.TestCase):
         )
 
     def test_wiring(self) -> None:
-        self.assertIn("overlayPendingEntityStates(", STUDIO_JS)
-        self.assertIn("executeEntityAction(", STUDIO_JS)
+        state_ts = read_ts_tree("state")
+        self.assertIn("overlayPendingEntityStates(", state_ts)
+        self.assertIn("executeEntityAction(", state_ts)
         cmds = read_py_tree(
             "studio/commands.py",
             "studio/system_commands.py",
@@ -489,8 +488,8 @@ class TestStudioInteractiveFlows(unittest.TestCase):
             const devTargetsAfterOutsideFocus = Array.from(store.handoffTargetIds);
 
             const cssText = Array.isArray(STUDIO_STYLES)
-              ? STUDIO_STYLES.map((s) => s.styleSheetText).join("\\n")
-              : STUDIO_STYLES.styleSheetText;
+              ? STUDIO_STYLES.map((s) => s.cssText).join("\\n")
+              : STUDIO_STYLES.cssText;
             process.stdout.write(JSON.stringify({
               cssText,
               areaTargets,

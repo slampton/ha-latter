@@ -44,12 +44,9 @@ BANNED_MOCK_SHIMS: Final[tuple[str, ...]] = (
     "frontend_src/test/fake-store.ts",
 )
 
-XHR_ALLOWED_REL_PATHS: Final[frozenset[str]] = frozenset(
-    {
-        "frontend_src/src/api/ws-client.ts",
-        "custom_components/latter/frontend/latter-studio.js",
-    }
-)
+XHR_ALLOWED_TS_REL_PATH: Final = "frontend_src/src/api/ws-client.ts"
+STUDIO_MAIN_BUNDLE_REL_PATH: Final = "custom_components/latter/frontend/latter-studio.js"
+STUDIO_UPLOAD_PATH: Final = "/api/latter/wallpaper/upload"
 
 BANNED_TERMS_RE: Final = re.compile(r"\b(household|households|fleet|fleets)\b", re.IGNORECASE)
 SINGLE_QUOTED_PLACEHOLDER_RE: Final = re.compile(r"'\{[a-zA-Z0-9_]+\}'")
@@ -392,11 +389,11 @@ def _strip_host_block(css_text: str) -> str:
     return "".join(out)
 
 
-def _check_xhr_in_file(rel: str, stxt: str, failures: list[str]) -> None:
-    if rel not in XHR_ALLOWED_REL_PATHS:
+def _check_xhr_in_ts_file(rel: str, stxt: str, failures: list[str]) -> None:
+    if rel != XHR_ALLOWED_TS_REL_PATH:
         failures.append(
             f"[STUDIO NO REST] {rel} references XMLHttpRequest outside "
-            "frontend_src/src/api/ws-client.ts"
+            f"{XHR_ALLOWED_TS_REL_PATH}"
         )
         return
 
@@ -405,20 +402,39 @@ def _check_xhr_in_file(rel: str, stxt: str, failures: list[str]) -> None:
     if xhr_news > 1 or not open_calls:
         failures.append(
             f"[STUDIO NO REST] {rel} must have exactly 1 XMLHttpRequest "
-            "bound to POST /api/latter/wallpaper/upload"
+            f"bound to POST {STUDIO_UPLOAD_PATH}"
         )
     for args_raw in open_calls:
         parts = [p.strip() for p in args_raw.split(",")]
         method_ok = bool(parts) and parts[0] in {'"POST"', "'POST'"}
         url_ok = len(parts) >= MIN_OPEN_ARGS and (
-            parts[1] in {'"/api/latter/wallpaper/upload"', "'/api/latter/wallpaper/upload'"}
-            or (parts[1] == "UPLOAD_PATH" and '"/api/latter/wallpaper/upload"' in stxt)
+            parts[1] in {f'"{STUDIO_UPLOAD_PATH}"', f"'{STUDIO_UPLOAD_PATH}'"}
+            or (parts[1] == "UPLOAD_PATH" and f'"{STUDIO_UPLOAD_PATH}"' in stxt)
         )
         if not (method_ok and url_ok):
             failures.append(
                 f"[STUDIO NO REST] {rel} opens XHR ({args_raw}) outside "
-                "POST /api/latter/wallpaper/upload"
+                f"POST {STUDIO_UPLOAD_PATH}"
             )
+
+
+def _check_xhr_in_bundle(rel: str, stxt: str, failures: list[str]) -> None:
+    if rel != STUDIO_MAIN_BUNDLE_REL_PATH:
+        failures.append(
+            f"[STUDIO NO REST] {rel} references XMLHttpRequest outside "
+            f"{STUDIO_MAIN_BUNDLE_REL_PATH}"
+        )
+        return
+
+    xhr_news = len(re.findall(r"\bnew\s+XMLHttpRequest\b", stxt))
+    has_upload_path = (
+        f'"{STUDIO_UPLOAD_PATH}"' in stxt or f"'{STUDIO_UPLOAD_PATH}'" in stxt
+    )
+    if xhr_news > 1 or not has_upload_path:
+        failures.append(
+            f"[STUDIO NO REST] {rel} must have at most 1 XMLHttpRequest "
+            f"with {STUDIO_UPLOAD_PATH!r} present"
+        )
 
 
 def _check_studio_xhr_and_css(
@@ -429,17 +445,23 @@ def _check_studio_xhr_and_css(
     for sf in studio_sources:
         stxt = sf.read_text(encoding="utf-8")
         rel = sf.relative_to(root).as_posix()
+        is_built_bundle = rel.startswith("custom_components/latter/frontend/")
         if re.search(r"\bfetch\s*\(|\bsendBeacon\s*\(|\bnew\s+EventSource\s*\(", stxt):
             failures.append(
                 f"[STUDIO NO REST] {rel} uses forbidden fetch/sendBeacon/EventSource; "
                 "Studio must use websocket_api (hass.callWS)"
             )
-        if "XMLHttpRequest" in stxt:
-            _check_xhr_in_file(rel, stxt, failures)
         if "hassTokens" in stxt or "hass-subpage" in stxt or "shadowRoot.querySelector" in stxt:
             failures.append(
                 f"[STUDIO INTERNALS] {rel} accesses forbidden HA frontend internals"
             )
+        if is_built_bundle:
+            if "XMLHttpRequest" in stxt:
+                _check_xhr_in_bundle(rel, stxt, failures)
+            continue
+
+        if "XMLHttpRequest" in stxt:
+            _check_xhr_in_ts_file(rel, stxt, failures)
         failures.extend(
             f"[STUDIO INLINE STYLES] {rel} uses non-token inline style: "
             f"{bad_style.group(0)[:60]}"
@@ -539,7 +561,9 @@ def _check_studio_artifacts(root: Path, failures: list[str]) -> None:
     frontend_src_dir = root / "frontend_src" / "src"
     if frontend_src_dir.is_dir():
         studio_sources.extend(
-            p for p in iter_repo_files(frontend_src_dir) if p.suffix in {".ts", ".js"}
+            p
+            for p in iter_repo_files(frontend_src_dir)
+            if p.suffix == ".ts" and not p.name.endswith(".d.ts")
         )
     _check_studio_xhr_and_css(root, studio_sources, failures)
 

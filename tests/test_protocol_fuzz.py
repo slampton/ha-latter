@@ -23,10 +23,10 @@ from custom_components.latter.media import linking as ma_link
 from custom_components.latter.presence import ble_math
 from custom_components.latter.services import rpc_receiver as rpc_protocol
 from custom_components.latter.studio import state_gates as studio_scope
+from tests.conftest import LATTER_DIR, read_ts_tree
 
 configuration.set_hypothesis_home_dir(Path(tempfile.gettempdir()) / "latter_hypothesis")
 
-LATTER_DIR = Path(__file__).resolve().parents[1] / "custom_components" / "latter"
 STUDIO_JS = LATTER_DIR / "frontend" / "latter-studio.js"
 
 issue_ids = health
@@ -273,8 +273,8 @@ class _Dev:
         self.device_slug = slug
 
 
-def _js_command_set(js_src: str, const_name: str) -> set[str]:
-    match = re.search(rf"const {const_name}\s*=\s*new Set\(\[(.*?)\]\);", js_src, re.S)
+def _ts_command_set(ts_src: str, const_name: str) -> set[str]:
+    match = re.search(rf"const {const_name}(?::\s*[^=]+)?\s*=\s*new Set\(\[(.*?)\]\);", ts_src, re.S)
     assert match is not None, const_name
     return set(re.findall(r'"([a-z_]+)"', match.group(1)))
 
@@ -307,10 +307,18 @@ class TestStudioTargeting(unittest.TestCase):
                 scope(retired)
 
     def test_studio_js_command_sets_match_backend(self) -> None:
-        js_src = STUDIO_JS.read_text(encoding="utf-8")
-        self.assertEqual(_js_command_set(js_src, "SYSTEM_WS_COMMANDS"), set(studio_scope.SYSTEM_COMMANDS))
-        self.assertEqual(_js_command_set(js_src, "DEVICE_WS_COMMANDS"), set(studio_scope.DEVICE_COMMANDS))
-        sent = set(re.findall(r'command:\s*"([a-z_]+)"', js_src))
+        schema_ts = read_ts_tree("protocol-schema.ts")
+        self.assertEqual(
+            _ts_command_set(schema_ts, "SYSTEM_WS_COMMANDS"), set(studio_scope.SYSTEM_COMMANDS)
+        )
+        self.assertEqual(
+            _ts_command_set(schema_ts, "DEVICE_WS_COMMANDS"), set(studio_scope.DEVICE_COMMANDS)
+        )
+        all_ts = read_ts_tree(".")
+        bundle_js = STUDIO_JS.read_text(encoding="utf-8")
+        sent = set(re.findall(r'command:\s*"([a-z_]+)"', all_ts)) | set(
+            re.findall(r'command:\s*"([a-z_]+)"', bundle_js)
+        )
         known = studio_scope.SYSTEM_COMMANDS | studio_scope.DEVICE_COMMANDS
         self.assertFalse(sent - known, f"Studio sends unknown commands: {sorted(sent - known)}")
 

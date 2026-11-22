@@ -161,7 +161,7 @@ def get_ma_config_entry_id(hass: HomeAssistant) -> str | None:
     return str(entries[0].entry_id) if entries else None
 
 
-async def call_ma_get_library(  # noqa: PLR0913
+async def call_ma_get_library(
     hass: HomeAssistant,
     config_entry_id: str,
     media_type: str,
@@ -455,7 +455,7 @@ async def _search_library_track_lyrics(
     return (raw_lyrics or fallback_plain), matched_track
 
 
-async def async_fetch_track_lyrics(  # noqa: PLR0913
+async def async_fetch_track_lyrics(
     hass: HomeAssistant,
     speaker: str,
     search: str = "",
@@ -605,7 +605,7 @@ def _format_and_cache_bio_lines(
     return bio_lines
 
 
-async def browse_track_lyrics_or_bio(  # noqa: PLR0913, PLR0917
+async def browse_track_lyrics_or_bio(
     hass: HomeAssistant,
     config_entry_id: str | None,
     speaker: str,
@@ -664,7 +664,7 @@ async def browse_track_lyrics_or_bio(  # noqa: PLR0913, PLR0917
 _browse_track_lyrics_or_bio = browse_track_lyrics_or_bio
 
 
-async def async_push_music_lyrics(  # noqa: PLR0913
+async def async_push_music_lyrics(
     hass: HomeAssistant,
     coordinator: Any,
     *,
@@ -721,7 +721,7 @@ async def async_push_music_lyrics(  # noqa: PLR0913
     return True
 
 
-async def async_fetch_and_push_music_lyrics(  # noqa: PLR0913
+async def async_fetch_and_push_music_lyrics(
     hass: HomeAssistant,
     coordinator: Any,
     *,

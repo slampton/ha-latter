@@ -17,7 +17,7 @@ from homeassistant.helpers import entity_registry as er
 from ..const import DOMAIN
 from ..media.linking import is_music_assistant_player
 from ..protocol_codec import ha_value
-from .state_index import get_area_state_index, latter_bound_esphome_device_ids
+from .registry import get_area_state_index, latter_bound_esphome_device_ids
 
 AREA_CONTROL_DOMAINS: Final[tuple[str, ...]] = (
     "scene",
@@ -56,8 +56,6 @@ _WINDOW_COVER_KEYWORDS: Final[tuple[str, ...]] = (
     "shutter",
     "window",
 )
-_MAX_BRI_BYTE: Final = 255.0
-_PERCENT_MAX: Final = 100
 
 
 def _safe_finite_float(val: object) -> float | None:
@@ -128,9 +126,9 @@ def get_entity_level(state_obj: State) -> int:
     if domain == "cover":
         pos_f = _safe_finite_float(attrs.get("current_position"))
         return (
-            max(0, min(_PERCENT_MAX, round(pos_f)))
+            max(0, min(100, round(pos_f)))
             if pos_f is not None
-            else (_PERCENT_MAX if state_obj.state == STATE_OPEN else 0)
+            else (100 if state_obj.state == STATE_OPEN else 0)
         )
 
     if not is_active:
@@ -138,13 +136,13 @@ def get_entity_level(state_obj: State) -> int:
     if domain == "light":
         bri_f = _safe_finite_float(attrs.get("brightness"))
         return (
-            max(1, min(_PERCENT_MAX, round((bri_f / _MAX_BRI_BYTE) * _PERCENT_MAX)))
+            max(1, min(100, round((bri_f / 255.0) * 100)))
             if bri_f is not None
-            else _PERCENT_MAX
+            else 100
         )
 
     pct_f = _safe_finite_float(attrs.get("percentage"))
-    return max(1, min(_PERCENT_MAX, round(pct_f))) if pct_f is not None else _PERCENT_MAX
+    return max(1, min(100, round(pct_f))) if pct_f is not None else 100
 
 
 def format_entity_slot_name(state_obj: State, area_name: str = "") -> str:

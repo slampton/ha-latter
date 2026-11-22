@@ -147,7 +147,7 @@ def _classify_by_domain_and_keywords(
     return "other"
 
 
-def classify_esphome_entity_section(  # noqa: PLR0913, PLR0917
+def classify_esphome_entity_section(
     entity_id: str,
     friendly_name: str,
     domain: str,

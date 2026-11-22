@@ -5,7 +5,7 @@
  * - Zero non-`--*` inline styles; canvas image cache scoped to WeakMap / bounded Map
  */
 
-import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import { isPhotoUploaded } from "../../state/photo-ops.js";
 import type { StudioStore } from "../../state/store.js";
 import type { CropPreviewAspect, PhotoCrop } from "../../types.js";
@@ -373,7 +373,7 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
                   max="3"
                   step="0.05"
                   ?disabled=${modal.uploading}
-                  .value=${String(active?.crop.zoom ?? 1)}
+                  .value=${live(String(active?.crop.zoom ?? 1))}
                   @input=${(ev: Event) => {
                     const z = Number((ev.currentTarget as HTMLInputElement).value) || 1;
                     updateActiveItem({
@@ -460,7 +460,7 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
               <select
                 id="upload-photo-collection"
                 ?disabled=${modal.uploading || modal.creatingCollection}
-                .value=${modal.collectionId}
+                .value=${live(modal.collectionId)}
                 @change=${(ev: Event) => {
                   store.photoUploadModal = {
                     ...store.photoUploadModal,
@@ -469,11 +469,11 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
                   store.host.requestUpdate();
                 }}
               >
-                <option value="" ?selected=${!modal.collectionId}>
+                <option value="" .selected=${live(!modal.collectionId)}>
                   ${store.t("photo_upload.no_collection")}
                 </option>
                 ${collections.map(
-                  (col) => html`<option value=${col.id} ?selected=${modal.collectionId === col.id}>
+                  (col) => html`<option value=${col.id} .selected=${live(modal.collectionId === col.id)}>
                     ${col.name}
                   </option>`,
                 )}
@@ -719,7 +719,7 @@ export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
                     max="3"
                     step="0.05"
                     ?disabled=${modal.busy}
-                    .value=${String(modal.crop.zoom)}
+                    .value=${live(String(modal.crop.zoom))}
                     @input=${(ev: Event) => {
                       const z = Number((ev.currentTarget as HTMLInputElement).value) || 1;
                       store.photoEditModal = {

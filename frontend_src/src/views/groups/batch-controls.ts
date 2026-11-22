@@ -12,7 +12,7 @@ import {
   renderSettingsRow,
 } from "../../components/controls.js";
 import type { StudioTranslationKey } from "../../i18n/index.js";
-import { html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import type {
   DeviceGroup,
@@ -74,7 +74,7 @@ function renderBatchControlRow(
     control = html`${statusBadge}
       <select
         aria-label=${label}
-        .value=${selectValue}
+        .value=${live(selectValue)}
         @change=${(ev: Event) => {
           const val = (ev.currentTarget as HTMLSelectElement).value;
           if (val !== "__mixed__" && prefKey) {
@@ -83,7 +83,7 @@ function renderBatchControlRow(
         }}
       >
         ${mixed && !staged
-          ? html`<option value="__mixed__" selected disabled>
+          ? html`<option value="__mixed__" .selected=${live(true)} disabled>
               ${store.t("batch.mixed_badge")}
             </option>`
           : nothing}
@@ -92,7 +92,7 @@ function renderBatchControlRow(
             optLabels[opt] || (prefKey ? store.tPrefOption(prefKey, opt) : opt);
           return html`<option
             value=${opt}
-            ?selected=${!(mixed && !staged) && opt === curState}
+            .selected=${live(!(mixed && !staged) && opt === curState)}
           >
             ${optText}
           </option>`;
@@ -105,7 +105,7 @@ function renderBatchControlRow(
         type="checkbox"
         role="switch"
         aria-label=${label}
-        .checked=${checked}
+        .checked=${live(checked)}
         @change=${(ev: Event) => {
           if (prefKey) {
             store.groups.stageBatchSetting(
@@ -155,7 +155,7 @@ function renderBatchControlRow(
       <input
         type="color"
         aria-label=${label}
-        .value=${hexVal}
+        .value=${live(hexVal)}
         @change=${(ev: Event) =>
           store.groups.stageBatchColor(fc, (ev.currentTarget as HTMLInputElement).value)}
       />
@@ -297,7 +297,7 @@ export function renderBatchControlsCard(
         control: html`<select
           id="batch-copy-source"
           aria-label=${store.t("batch.template_device_aria")}
-          .value=${batchCopySrc}
+          .value=${live(batchCopySrc)}
           @change=${(ev: Event) => {
             store.batchCopySourceSubentryId = (ev.currentTarget as HTMLSelectElement).value;
             store.host.requestUpdate();
@@ -305,7 +305,7 @@ export function renderBatchControlsCard(
         >
           ${latterDevices.map(
             (d) =>
-              html`<option value=${d.subentry_id} ?selected=${d.subentry_id === batchCopySrc}>
+              html`<option value=${d.subentry_id} .selected=${live(d.subentry_id === batchCopySrc)}>
                 ${d.title}
               </option>`,
           )}
@@ -376,50 +376,50 @@ export function renderBatchControlsCard(
       <select
         id="batch-target-filter"
         aria-label=${store.t("batch.target_filter_aria")}
-        .value=${activeFilter}
+        .value=${live(activeFilter)}
         @change=${(ev: Event) =>
           store.groups.setBatchTargetFilter((ev.currentTarget as HTMLSelectElement).value || "all")}
       >
-        <option value="all" ?selected=${activeFilter === "all"}>
+        <option value="all" .selected=${live(activeFilter === "all")}>
           ${store.t("batch.all_latter_devices")}
         </option>
-        <option value="online" ?selected=${activeFilter === "online"}>
+        <option value="online" .selected=${live(activeFilter === "online")}>
           ${store.t("batch.online_devices")}
         </option>
-        <option value="roaming" ?selected=${activeFilter === "roaming"}>
+        <option value="roaming" .selected=${live(activeFilter === "roaming")}>
           ${store.t("batch.roaming_devices")}
         </option>
-        <option value="stationary" ?selected=${activeFilter === "stationary"}>
+        <option value="stationary" .selected=${live(activeFilter === "stationary")}>
           ${store.t("batch.stationary_devices")}
         </option>
         ${groups.map(
           (g) =>
             html`<option
               value=${`group:${g.id}`}
-              ?selected=${activeFilter === `group:${g.id}`}
+              .selected=${live(activeFilter === `group:${g.id}`)}
             >
               ${g.name}
             </option>`,
         )}
-        <option value="group:custom" ?selected=${activeFilter === "group:custom"}>
+        <option value="group:custom" .selected=${live(activeFilter === "group:custom")}>
           ${store.t("common.custom")}
         </option>
       </select>
       <select
         id="batch-cat-filter"
         aria-label=${store.t("batch.category_filter_aria")}
-        .value=${activeCat}
+        .value=${live(activeCat)}
         @change=${(ev: Event) => {
           store.batchCategoryFilter = (ev.currentTarget as HTMLSelectElement).value || "all";
           store.host.requestUpdate();
         }}
       >
-        <option value="all" ?selected=${activeCat === "all"}>
+        <option value="all" .selected=${live(activeCat === "all")}>
           ${store.t("batch.all_categories")}
         </option>
         ${BATCH_CATEGORY_META.map(
           (cat) =>
-            html`<option value=${cat.id} ?selected=${activeCat === cat.id}>
+            html`<option value=${cat.id} .selected=${live(activeCat === cat.id)}>
               ${store.t(cat.labelKey)}
             </option>`,
         )}

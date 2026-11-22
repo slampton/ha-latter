@@ -8,7 +8,7 @@ from typing import Any, Final
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
-from ..doorbell_targets import resolve_doorbell_targets
+from ..doorbell import resolve_doorbell_targets
 from ..hub_registry import get_area_state_index
 from .transcode import (
     CAMERA_CAP_HAS_AUDIO as CAMERA_CAP_HAS_AUDIO,
@@ -66,7 +66,7 @@ def _resolve_camera_has_audio(
     )
 
 
-def _compute_camera_caps_bitmask(  # noqa: PLR0913
+def _compute_camera_caps_bitmask(
     *,
     show_listen: bool,
     show_talk: bool,
@@ -91,7 +91,7 @@ def _compute_camera_caps_bitmask(  # noqa: PLR0913
     return caps
 
 
-def resolve_camera_capabilities(  # noqa: PLR0913
+def resolve_camera_capabilities(
     hass: HomeAssistant,
     camera_entity_id: str,
     *,
