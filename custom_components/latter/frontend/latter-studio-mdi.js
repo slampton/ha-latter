@@ -1,5 +1,5 @@
 // AUTO-GENERATED FILE — DO NOT EDIT DIRECTLY.
-// Source: ha-latter/frontend_src/src/mdi-catalog.ts (build via `node ha-latter/frontend_src/build.mjs`).
+// Source: ha-latter/frontend_src/src/mdi-chunks.ts (build via `node ha-latter/frontend_src/build.mjs`).
 export const PACKED_MDI_CHUNKS = [
   "0ab-testing|2acus|2jad-arabic|6hebrew|2ugida-devanagari|8thai|1ccess-point|c-check|dminus|dnetwork|k-off",
   "doff|dplus|dremove|3ount|7-alert|d-outline|9rrow-down|i-outline|eleft|i-outline|eright|j-outline|eup",

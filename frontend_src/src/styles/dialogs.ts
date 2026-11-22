@@ -154,6 +154,18 @@ export const DIALOG_STYLES = css`
     border-color: var(--studio-primary);
     background: var(--studio-primary-tint);
   }
+  .crop-filmstrip-btn {
+    padding: 0;
+    border: none;
+    background: transparent;
+    border-radius: var(--studio-radius-control);
+    cursor: pointer;
+    line-height: 0;
+  }
+  .crop-filmstrip-btn:focus-visible {
+    outline: 2px solid var(--studio-primary);
+    outline-offset: 2px;
+  }
   .crop-filmstrip-thumb {
     inline-size: 56px;
     block-size: 56px;

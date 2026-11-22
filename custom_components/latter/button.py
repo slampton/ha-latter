@@ -1,4 +1,4 @@
-"""Tier 2 Action Button entities (`button.<device_slug>_*`) for Latter Devices."""
+"""Tier 2 Action Button entities (`button.<device_slug>_*`) for Latter Devices (`L4`)."""
 
 from __future__ import annotations
 
@@ -11,20 +11,20 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN, build_device_entity_id
 from .coordinator import LatterCoordinator
-from .hub import LatterSystemHub, get_latter_system
+from .hub_registry import LatterSystemHub, get_latter_system
 
 PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: ConfigEntry[LatterSystemHub],
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up curated Latter action buttons for each Device subentry."""
-    runtime = entry.runtime_data
+    runtime = getattr(entry, "runtime_data", None)
     if isinstance(runtime, LatterSystemHub):
-        coordinators = list(runtime.coordinators.values())
+        coordinators: list[LatterCoordinator] = list(runtime.coordinators.values())
     else:
         sys_obj = get_latter_system(hass)
         coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
@@ -64,7 +64,7 @@ class _BaseLatterButton(ButtonEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo."""
+        """Return canonical Latter `DeviceInfo`."""
         return self.coordinator.get_device_info()
 
     @property

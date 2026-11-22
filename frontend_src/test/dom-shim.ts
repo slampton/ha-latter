@@ -174,14 +174,14 @@ export class SimNode {
     if (!this.parentNode) return null;
     const siblings = this.parentNode.childNodes;
     const idx = siblings.indexOf(this);
-    return idx >= 0 && idx + 1 < siblings.length ? siblings[idx + 1] : null;
+    return idx >= 0 && idx + 1 < siblings.length ? (siblings[idx + 1] ?? null) : null;
   }
 
   get previousSibling(): SimNode | null {
     if (!this.parentNode) return null;
     const siblings = this.parentNode.childNodes;
     const idx = siblings.indexOf(this);
-    return idx > 0 ? siblings[idx - 1] : null;
+    return idx > 0 ? (siblings[idx - 1] ?? null) : null;
   }
 
   get parentElement(): SimElement | null {
@@ -302,7 +302,9 @@ export class SimNode {
 
   set textContent(val: string) {
     while (this.childNodes.length > 0) {
-      this.removeChild(this.childNodes[0]);
+      const first = this.childNodes[0];
+      if (!first) break;
+      this.removeChild(first);
     }
     const str = String(val ?? "");
     if (str) {
@@ -502,7 +504,9 @@ export class SimDocumentFragment extends SimNode {
 
   set innerHTML(markup: string) {
     while (this.childNodes.length > 0) {
-      this.removeChild(this.childNodes[0]);
+      const first = this.childNodes[0];
+      if (!first) break;
+      this.removeChild(first);
     }
     parseHtmlInto(String(markup ?? ""), this, this.ownerDocument ?? simDocument);
   }
@@ -699,7 +703,9 @@ export class SimElement extends SimNode {
 
   set innerHTML(markup: string) {
     while (this.childNodes.length > 0) {
-      this.removeChild(this.childNodes[0]);
+      const first = this.childNodes[0];
+      if (!first) break;
+      this.removeChild(first);
     }
     parseHtmlInto(String(markup ?? ""), this, this.ownerDocument ?? simDocument);
   }
@@ -1033,13 +1039,13 @@ function parseAttributes(attrText: string, el: SimElement): void {
   let i = 0;
   const n = attrText.length;
   while (i < n) {
-    while (i < n && /\s/.test(attrText[i])) i += 1;
+    while (i < n && /\s/.test(attrText[i] ?? "")) i += 1;
     if (i >= n || attrText[i] === "/") {
       i += 1;
       continue;
     }
     let nameEnd = i;
-    while (nameEnd < n && !/[\s=/>]/.test(attrText[nameEnd])) {
+    while (nameEnd < n && !/[\s=/>]/.test(attrText[nameEnd] ?? "")) {
       nameEnd += 1;
     }
     const rawName = attrText.slice(i, nameEnd);
@@ -1048,11 +1054,11 @@ function parseAttributes(attrText: string, el: SimElement): void {
       i += 1;
       continue;
     }
-    while (i < n && /\s/.test(attrText[i])) i += 1;
+    while (i < n && /\s/.test(attrText[i] ?? "")) i += 1;
     let val = "";
     if (i < n && attrText[i] === "=") {
       i += 1;
-      while (i < n && /\s/.test(attrText[i])) i += 1;
+      while (i < n && /\s/.test(attrText[i] ?? "")) i += 1;
       if (i < n && (attrText[i] === '"' || attrText[i] === "'")) {
         const q = attrText[i];
         i += 1;
@@ -1062,7 +1068,7 @@ function parseAttributes(attrText: string, el: SimElement): void {
         if (i < n && attrText[i] === q) i += 1;
       } else {
         const start = i;
-        while (i < n && !/[\s>]/.test(attrText[i])) i += 1;
+        while (i < n && !/[\s>]/.test(attrText[i] ?? "")) i += 1;
         val = decodeEntities(attrText.slice(start, i));
       }
     }
@@ -1076,7 +1082,7 @@ function parseHtmlInto(html: string, root: SimNode, doc: SimDocument): void {
   const n = html.length;
 
   while (i < n) {
-    const curParent = stack[stack.length - 1];
+    const curParent = stack[stack.length - 1] ?? root;
     const lt = html.indexOf("<", i);
     if (lt === -1) {
       const tail = decodeEntities(html.slice(i));
@@ -1118,7 +1124,7 @@ function parseHtmlInto(html: string, root: SimNode, doc: SimDocument): void {
         .toUpperCase();
       for (let s = stack.length - 1; s >= 1; s -= 1) {
         const candidate = stack[s];
-        if (candidate.nodeType === 1 && (candidate as SimElement).tagName === closeTag) {
+        if (candidate && candidate.nodeType === 1 && (candidate as SimElement).tagName === closeTag) {
           stack.length = s;
           break;
         }
@@ -1150,7 +1156,7 @@ function parseHtmlInto(html: string, root: SimNode, doc: SimDocument): void {
     const selfClosing = inside.trimEnd().endsWith("/");
     const bodyWithoutSlash = selfClosing ? inside.replace(/\/\s*$/, "") : inside;
     const mTag = /^([A-Za-z][A-Za-z0-9:_-]*)([\s\S]*)$/.exec(bodyWithoutSlash.trimStart());
-    if (!mTag) {
+    if (!mTag || !mTag[1]) {
       curParent.appendChild(doc.createComment(inside));
       i = gt + 1;
       continue;
@@ -1283,7 +1289,7 @@ function matchesSingleCompoundSelector(el: SimElement, compound: string): boolea
 
   const clsMatches = [...rest.matchAll(/\.([A-Za-z0-9_:-]+)/g)];
   for (const m of clsMatches) {
-    if (!el.classList.contains(m[1])) return false;
+    if (!m[1] || !el.classList.contains(m[1])) return false;
   }
   rest = rest.replace(/\.[A-Za-z0-9_:-]+/g, "").trim();
 
@@ -1298,11 +1304,14 @@ function matchesComplexSelector(el: SimElement, selector: string): boolean {
     .trim()
     .split(/\s+/)
     .filter(Boolean);
-  if (parts.length === 0) return false;
-  if (!matchesSingleCompoundSelector(el, parts[parts.length - 1])) return false;
+  const lastPart = parts[parts.length - 1];
+  if (!lastPart) return false;
+  if (!matchesSingleCompoundSelector(el, lastPart)) return false;
   let cur: SimElement | null = el.parentElement;
   for (let i = parts.length - 2; i >= 0; i -= 1) {
-    while (cur && !matchesSingleCompoundSelector(cur, parts[i])) {
+    const part = parts[i];
+    if (!part) continue;
+    while (cur && !matchesSingleCompoundSelector(cur, part)) {
       cur = cur.parentElement;
     }
     if (!cur) return false;
@@ -1334,7 +1343,9 @@ export const simDocument = new SimDocument();
 
 export function resetDomBody(): SimElement {
   while (simDocument.body.childNodes.length > 0) {
-    simDocument.body.removeChild(simDocument.body.childNodes[0]);
+    const first = simDocument.body.childNodes[0];
+    if (!first) break;
+    simDocument.body.removeChild(first);
   }
   simDocument.activeElement = null;
   return simDocument.body;

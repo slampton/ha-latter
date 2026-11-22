@@ -156,8 +156,6 @@ export const EN_SYSTEM_STRINGS = {
   "shared.empty_calendars": "No calendars configured yet.",
   "shared.calendar_aria": "Calendar",
   "shared.remove_calendar": "Remove calendar",
-  "shared.wallpapers_subtitle":
-    "Shared System wallpapers and presets available to every Latter display.",
   "shared.cameras_subtitle":
     "Up to 10 cameras. Doorbell ring sensors wake displays automatically with listen audio and push-to-talk TTS replies.",
   "shared.add_camera": "Add camera",
@@ -179,7 +177,6 @@ export const EN_SYSTEM_STRINGS = {
   "shared.cam_cap_rtsp": "RTSP",
   "shared.cam_cap_mjpeg": "MJPEG",
   "shared.cam_cap_snapshot": "Snapshot",
-  "shared.cam_cap_audio": "Audio",
   "shared.cam_cap_doorbell": "Doorbell",
   "shared.cam_cap_label": "Label: {label}",
   "shared.cam_cap_listen": "Listen",
@@ -243,7 +240,6 @@ export const EN_SYSTEM_STRINGS = {
   "remotes.empty_groups": "No remote groups yet.",
 
   // Device groups & staged Batch controls (D-050 / D-064 / Q6 / R-8)
-  "groups.title": "Device groups",
   "groups.card_title": "Group presets & custom groups",
   "groups.card_subtitle":
     "Built-in hardware presets and custom Device groups that keep assigned Devices aligned.",
@@ -278,7 +274,6 @@ export const EN_SYSTEM_STRINGS = {
   "groups.section_display": "Display",
   "groups.section_interface": "Interface & shortcuts",
   "groups.for_group_aria": "{label} for {group}",
-  "groups.wallpaper_none": "None (weather / solid)",
   "groups.remote_match_area": "Follow the active Area",
   "groups.remote_group_prefix": "Group: {name}",
   "groups.remote_all_system": "All System remotes",
@@ -319,7 +314,6 @@ export const EN_SYSTEM_STRINGS = {
   "batch.title": "Batch controls",
   "batch.subtitle":
     "Stage changes across a filtered set of Devices, then apply them together without altering saved group baselines.",
-  "batch.target_filter": "Target Devices",
   "batch.target_filter_aria": "Target Devices for batch controls",
   "batch.category_filter_aria": "Filter batch controls by category",
   "batch.all_latter_devices": "All Latter Devices",
@@ -798,7 +792,6 @@ export const EN_SYSTEM_STRINGS = {
   "photo_edit.title": "Edit photo",
   "photo_edit.name_label": "Photo name",
   "photo_edit.name_placeholder": "Enter a photo name…",
-  "photo_edit.crop_heading": "Framing & focal point",
   "photo_edit.crop_hint":
     "Drag to pan and use the slider to zoom. Originals are kept intact so every display shape stays sharp.",
   "photo_edit.aspect_aria": "Preview display shape",

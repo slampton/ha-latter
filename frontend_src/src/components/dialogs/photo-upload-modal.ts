@@ -68,6 +68,7 @@ export function syncPhotoCropCanvases(renderRoot: ShadowRoot, store: StudioStore
 
     for (let i = 0; i < modal.files.length; i += 1) {
       const staged = modal.files[i];
+      if (!staged) continue;
       const thumbCanvas = renderRoot.getElementById(
         `latter-upload-thumb-${staged.id}`,
       ) as HTMLCanvasElement | null;
@@ -427,7 +428,7 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
                         };
                         store.host.requestUpdate();
                       }}
-                      class="wp-thumb-btn"
+                      class="crop-filmstrip-btn"
                     >
                       <canvas
                         id=${`latter-upload-thumb-${item.id}`}
@@ -561,7 +562,7 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
 
           ${modal.uploading
             ? html`<div class="stack">
-                <div class="wp-upload-status">
+                <div class="photo-upload-status">
                   <span>
                     ${store.t("photo_upload.uploading_progress", {
                       current: fmtNumber(modal.currentIndex, store.hass, 0),

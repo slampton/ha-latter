@@ -28,7 +28,7 @@ export function renderSystemRemotesView(store: StudioStore): TemplateResult {
 
   const friendlyRemoteLabel = (entId: string): string => {
     const found = (cat.remotes || []).find((r) => r.id === entId);
-    return found ? found.name.split(" (")[0] : entId;
+    return found ? (found.name.split(" (")[0] || entId) : entId;
   };
 
   return html`<section id="view-remotes">

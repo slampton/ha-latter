@@ -1,4 +1,4 @@
-"""BLE Device Tracker platform for Latter (`device_tracker.<device_slug>` for Home/Away person tracking)."""
+"""BLE Device Tracker platform for Latter (`device_tracker.<device_slug>`, `L4`)."""
 
 from __future__ import annotations
 
@@ -12,22 +12,22 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import LatterCoordinator
-from .hub import LatterSystemHub, get_latter_system
+from .hub_registry import LatterSystemHub, get_latter_system
 from .identity import find_device_entity_by_suffix
-from .presence import get_ble_fabric
+from .presence.ble_fabric import get_ble_fabric
 
 PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: ConfigEntry[LatterSystemHub],
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up `device_tracker.<device_slug>` entities for each Latter device and BLE tag subentry."""
-    runtime = entry.runtime_data
+    runtime = getattr(entry, "runtime_data", None)
     if isinstance(runtime, LatterSystemHub):
-        coordinators = list(runtime.coordinators.values())
+        coordinators: list[LatterCoordinator] = list(runtime.coordinators.values())
     else:
         sys_obj = get_latter_system(hass)
         coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
@@ -48,7 +48,7 @@ class LatterBleDeviceTracker(TrackerEntity):
     _attr_translation_key = "ble_tracker"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
-        """Initialize the BLE device tracker under its Latter DeviceEntry."""
+        """Initialize the BLE device tracker under its Latter `DeviceEntry`."""
         self.coordinator = coordinator
         slug = coordinator.device_slug
         self._attr_unique_id = f"{coordinator.subentry_id}_ble_tracker"
@@ -56,7 +56,7 @@ class LatterBleDeviceTracker(TrackerEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Attach to the canonical Latter DeviceEntry for this subentry."""
+        """Attach to the canonical Latter `DeviceEntry` for this subentry."""
         return self.coordinator.get_device_info()
 
     @property
@@ -66,12 +66,12 @@ class LatterBleDeviceTracker(TrackerEntity):
 
     @property
     def in_zones(self) -> list[str] | None:
-        """Return ['zone.home'] when home, [] when away, or None when BLE tracking is disabled or awaiting initial fix."""
+        """Return `['zone.home']` when home, `[]` when away, or `None` when disabled/awaiting initial fix."""
         if not self.coordinator.native_ble_tracking_enabled:
             return None
         if self.coordinator.is_device_away():
             return []
-        tracker = self.coordinator._ble_tracker
+        tracker = self.coordinator.ble_tracker
         if tracker is not None and (tracker.packets_seen > 0 or tracker.current_area_id):
             return ["zone.home"]
         if not self.coordinator.is_ble_tag and self.coordinator.esphome_device_id:
@@ -79,7 +79,7 @@ class LatterBleDeviceTracker(TrackerEntity):
                 self.coordinator.hass,
                 self.coordinator.esphome_device_id,
                 "sensor",
-                ("_wi_fi_signal", "_ip_address"),
+                ("_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"),
             )
             wifi_st = (
                 self.coordinator.hass.states.get(wifi_ent_id) if wifi_ent_id else None

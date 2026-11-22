@@ -1,12 +1,11 @@
-"""Home Assistant Repairs, Issue IDs, and Device Health Monitor for Latter."""
+"""Home Assistant Repairs registry audit and repair fix flows for Latter (`L3`)."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import entity_registry as er, issue_registry as ir, selector
@@ -19,162 +18,69 @@ from .const import (
     CONF_WEATHER_ENTITY,
     DOMAIN,
 )
-from .hub import get_latter_system
-
-if TYPE_CHECKING:
-    from .coordinator import LatterCoordinator
-
-# ---------------------------------------------------------------------------
-# Per-Device Repair Issue IDs
-# ---------------------------------------------------------------------------
-
-
-def link_ma_player_issue_id(subentry_id: str) -> str:
-    """Issue: the Device's speaker has no Music Assistant counterpart."""
-    return f"link_ma_player_{subentry_id}"
-
-
-def missing_mapped_entity_issue_id(subentry_id: str) -> str:
-    """Issue: an entity mapped for the Device no longer exists."""
-    return f"missing_mapped_entity_{subentry_id}"
-
-
-def ble_no_proxies_issue_id(subentry_id: str) -> str:
-    """Issue: BLE Area tracking is on but no Area-assigned Bluetooth proxy exists."""
-    return f"ble_no_proxies_{subentry_id}"
-
-
-def slot_push_failing_issue_id(subentry_id: str) -> str:
-    """Issue: pushing browse/Area slots to the Device keeps failing."""
-    return f"slot_push_failing_{subentry_id}"
-
-
-def device_health_issue_id(kind: str, subentry_id: str) -> str:
-    """Issue: a device health problem (device_crashed, device_brownout, firmware_rolled_back)."""
-    return f"{kind}_{subentry_id}"
-
-
-DEVICE_HEALTH_ISSUE_KINDS: tuple[str, ...] = (
-    "device_crashed",
-    "device_brownout",
-    "firmware_rolled_back",
+from .hub_registry import get_latter_system, iter_coordinators
+from .media.linking import (
+    async_set_ma_player_link,
+    ma_player_entities,
+    suggest_ma_player_for,
+)
+from .presence.ble_registry import (
+    get_ble_proxy_area_ids,
+    get_ble_signature_area_ids,
+)
+from .repairs_keys import (
+    BROWNOUT_RESET,
+    CLEAN_RESETS,
+    CRASH_RESETS,
+    DEVICE_HEALTH_ISSUE_KINDS,
+    DEVICE_ISSUE_KINDS,
+    ISSUE_BROWNOUT,
+    ISSUE_CRASHED,
+    ISSUE_ROLLED_BACK,
+    DeviceHealth,
+    HealthActions,
+    ble_no_proxies_issue_id,
+    device_health_issue_id,
+    device_issue_ids,
+    evaluate_device_health,
+    link_ma_player_issue_id,
+    missing_mapped_entity_issue_id,
+    parse_device_health,
+    parse_device_issue_id,
+    slot_push_failing_issue_id,
 )
 
 
-def device_issue_ids(subentry_id: str) -> list[str]:
-    """Return every repair issue ID that can exist for one Device."""
-    return [
-        link_ma_player_issue_id(subentry_id),
-        missing_mapped_entity_issue_id(subentry_id),
-        ble_no_proxies_issue_id(subentry_id),
-        slot_push_failing_issue_id(subentry_id),
-        *(device_health_issue_id(kind, subentry_id) for kind in DEVICE_HEALTH_ISSUE_KINDS),
-    ]
+class _BleTrackerLike(Protocol):
+    @property
+    def packets_seen(self) -> int: ...
 
 
-DEVICE_ISSUE_KINDS: tuple[str, ...] = (
-    "link_ma_player",
-    "missing_mapped_entity",
-    "ble_no_proxies",
-    "slot_push_failing",
-    *DEVICE_HEALTH_ISSUE_KINDS,
-)
+class CoordinatorHealthTarget(Protocol):
+    """Structural interface audited by `async_audit_coordinator_health` (avoids `coordinator` cycle)."""
 
+    entry: ConfigEntry[Any]
+    subentry_id: str
 
-def parse_device_issue_id(issue_id: str, subentry_ids: set[str]) -> tuple[str, str] | None:
-    """Return (kind, subentry_id) for a per-Device issue of a known Device, else None."""
-    for kind in DEVICE_ISSUE_KINDS:
-        prefix = f"{kind}_"
-        if issue_id.startswith(prefix) and issue_id[len(prefix) :] in subentry_ids:
-            return kind, issue_id[len(prefix) :]
-    return None
+    @property
+    def device_slug(self) -> str: ...
 
+    @property
+    def ble_tracker(self) -> _BleTrackerLike | None: ...
 
-# ---------------------------------------------------------------------------
-# Device Health Evaluation (`device_hello` Manifest)
-# ---------------------------------------------------------------------------
+    @property
+    def ble_scanner_offsets(self) -> dict[str, float]: ...
 
-CRASH_RESETS: frozenset[str] = frozenset({"panic", "int-wdt", "task-wdt", "wdt", "stall"})
-BROWNOUT_RESET = "brownout"
-CLEAN_RESETS: frozenset[str] = frozenset(
-    {"power-on", "external", "software", "deep-sleep", "usb"}
-)
+    @property
+    def ble_area_signatures(self) -> dict[str, dict[str, Any]]: ...
 
-ISSUE_CRASHED = "device_crashed"
-ISSUE_BROWNOUT = "device_brownout"
-ISSUE_ROLLED_BACK = "firmware_rolled_back"
+    @property
+    def native_ble_tracking_enabled(self) -> bool: ...
 
+    @property
+    def is_roaming_device(self) -> bool: ...
 
-@dataclass(frozen=True)
-class DeviceHealth:
-    """Health fields of one device_hello manifest (None when the firmware didn't report them)."""
-
-    sdk: int | None
-    reset: str | None
-    crash: bool | None
-    rollback: bool | None
-
-
-@dataclass(frozen=True)
-class HealthActions:
-    """Repairs to raise (issue kind -> extra placeholders) and to delete (issue kinds)."""
-
-    raise_issues: dict[str, dict[str, str]] = field(default_factory=dict)
-    delete_issues: frozenset[str] = frozenset()
-
-
-def _int_or_none(value: Any) -> int | None:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def parse_device_health(manifest: Mapping[str, Any] | None) -> DeviceHealth:
-    """Extract the health fields from a device_hello manifest."""
-    m = manifest or {}
-    reset = str(m["reset"]).strip().lower() if m.get("reset") not in (None, "") else None
-    crash = _int_or_none(m.get("crash"))
-    rollback = _int_or_none(m.get("rollback"))
-    return DeviceHealth(
-        sdk=_int_or_none(m.get("sdk")),
-        reset=reset,
-        crash=None if crash is None else crash == 1,
-        rollback=None if rollback is None else rollback == 1,
-    )
-
-
-def evaluate_device_health(health: DeviceHealth) -> HealthActions:
-    """Decide which health repairs one boot's hello raises or clears."""
-    raise_issues: dict[str, dict[str, str]] = {}
-    delete: set[str] = set()
-    sdk = str(health.sdk) if health.sdk is not None else "unknown"
-
-    if health.reset in CRASH_RESETS or health.crash is True:
-        reason = (
-            health.reset
-            if health.reset in CRASH_RESETS
-            else (health.reset or "crash")
-        )
-        raise_issues[ISSUE_CRASHED] = {"reason": reason, "sdk": sdk}
-        if health.reset == BROWNOUT_RESET:
-            raise_issues[ISSUE_BROWNOUT] = {"sdk": sdk}
-    elif health.reset == BROWNOUT_RESET:
-        raise_issues[ISSUE_BROWNOUT] = {"sdk": sdk}
-    elif health.reset in CLEAN_RESETS:
-        delete.update({ISSUE_CRASHED, ISSUE_BROWNOUT})
-
-    if health.rollback is True:
-        raise_issues[ISSUE_ROLLED_BACK] = {"sdk": sdk}
-    elif health.rollback is False:
-        delete.add(ISSUE_ROLLED_BACK)
-
-    return HealthActions(raise_issues=raise_issues, delete_issues=frozenset(delete))
-
-
-# ---------------------------------------------------------------------------
-# Repairs Registry Audit & Fix Flows
-# ---------------------------------------------------------------------------
+    def get_opt(self, key: str, default: Any = None) -> Any: ...
 
 
 def _entity_exists_in_ha(hass: HomeAssistant, entity_id: str) -> bool:
@@ -189,15 +95,13 @@ def _entity_exists_in_ha(hass: HomeAssistant, entity_id: str) -> bool:
 
 @callback
 def async_audit_coordinator_health(
-    hass: HomeAssistant, coordinator: LatterCoordinator
+    hass: HomeAssistant, coordinator: CoordinatorHealthTarget
 ) -> list[dict[str, str]]:
     """Audit mapped entities and BLE proxy availability, updating HA Repairs and returning active warnings."""
     entry_id = coordinator.entry.entry_id
     sub_id = coordinator.subentry_id
     slug = coordinator.device_slug
     warnings: list[dict[str, str]] = []
-
-    from .hub import iter_coordinators
 
     all_coords = iter_coordinators(hass)
     is_primary = not all_coords or all_coords[0].subentry_id == sub_id
@@ -207,12 +111,10 @@ def async_audit_coordinator_health(
         (CONF_ALARM_ENTITY, "Home Security Alarm", True),
         (CONF_DEFAULT_SPEAKER, "Default Speaker", False),
     )
-    missing_labels: list[str] = []
     repair_labels: list[str] = []
     for conf_key, label, is_system_scope in checked_keys:
         ent_id = str(coordinator.get_opt(conf_key) or "").strip()
         if ent_id and not _entity_exists_in_ha(hass, ent_id):
-            missing_labels.append(f"{label} ({ent_id})")
             if not is_system_scope or is_primary:
                 repair_labels.append(f"{label} ({ent_id})")
             warnings.append(
@@ -250,7 +152,7 @@ def async_audit_coordinator_health(
         ir.async_delete_issue(hass, DOMAIN, missing_issue_id)
 
     ble_issue_id = ble_no_proxies_issue_id(sub_id)
-    tracker = coordinator._ble_tracker
+    tracker = coordinator.ble_tracker
     has_seen_ble = bool(
         (tracker is not None and tracker.packets_seen > 0)
         or coordinator.ble_scanner_offsets
@@ -262,14 +164,15 @@ def async_audit_coordinator_health(
         and coordinator.is_roaming_device
         and not has_seen_ble
     ):
-        from .presence import get_ble_proxy_area_ids, get_ble_signature_area_ids
-
         proxy_areas = get_ble_proxy_area_ids(hass) | get_ble_signature_area_ids(hass)
         if not proxy_areas:
             warnings.append(
                 {
                     "code": "ble_no_proxies",
-                    "message": "Built-in BLE Area Tracking is enabled, but no Bluetooth proxies assigned to a Home Assistant Area were found.",
+                    "message": (
+                        "Built-in BLE Area Tracking is enabled, but no Bluetooth proxies "
+                        "assigned to a Home Assistant Area were found."
+                    ),
                 }
             )
             _create_scoped_issue(
@@ -309,18 +212,13 @@ class LinkMaPlayerRepairFlow(RepairsFlow):
         self, user_input: dict[str, str] | None = None
     ) -> FlowResult:
         """Start at the player picker."""
+        _ = user_input
         return await self.async_step_pick()
 
     async def async_step_pick(
         self, user_input: dict[str, str] | None = None
     ) -> FlowResult:
         """Show the MA player picker and save the choice."""
-        from .media import (
-            async_set_ma_player_link,
-            ma_player_entities,
-            suggest_ma_player_for,
-        )
-
         sys_obj = get_latter_system(self.hass)
         coordinator = sys_obj.coordinators.get(self._subentry_id) if sys_obj else None
         if coordinator is None:
@@ -369,6 +267,35 @@ async def async_create_fix_flow(
     data: dict[str, str | int | float | None] | None,
 ) -> RepairsFlow:
     """Create the fix flow for a Latter repair: the MA player picker, or a plain confirm."""
+    _ = hass, data
     if issue_id.startswith("link_ma_player_"):
         return LinkMaPlayerRepairFlow(issue_id.removeprefix("link_ma_player_"))
     return ConfirmRepairFlow()
+
+
+__all__ = [
+    "BROWNOUT_RESET",
+    "CLEAN_RESETS",
+    "CRASH_RESETS",
+    "DEVICE_HEALTH_ISSUE_KINDS",
+    "DEVICE_ISSUE_KINDS",
+    "ISSUE_BROWNOUT",
+    "ISSUE_CRASHED",
+    "ISSUE_ROLLED_BACK",
+    "CoordinatorHealthTarget",
+    "DeviceHealth",
+    "HealthActions",
+    "LinkMaPlayerRepairFlow",
+    "async_audit_coordinator_health",
+    "async_create_fix_flow",
+    "async_delete_device_issues",
+    "ble_no_proxies_issue_id",
+    "device_health_issue_id",
+    "device_issue_ids",
+    "evaluate_device_health",
+    "link_ma_player_issue_id",
+    "missing_mapped_entity_issue_id",
+    "parse_device_health",
+    "parse_device_issue_id",
+    "slot_push_failing_issue_id",
+]

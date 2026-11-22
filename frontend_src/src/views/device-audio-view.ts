@@ -7,6 +7,8 @@
 
 import {
   renderCard,
+  renderDeviceEntityRow,
+  renderDeviceOfflineBanner,
   renderPrefControlRow,
   renderRangeRow,
   renderSelectRow,
@@ -14,7 +16,6 @@ import {
 } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import { renderDeviceEntityRow, renderDeviceOfflineBanner } from "./device-overview-view.js";
 
 export function renderDeviceAudioView(store: StudioStore): TemplateResult {
   const data = store.state;

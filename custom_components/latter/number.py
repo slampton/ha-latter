@@ -1,4 +1,4 @@
-"""Sleep-safe Tier 2 Number entities (`number.<device_slug>_*`) for Latter Devices."""
+"""Sleep-safe Tier 2 Number entities (`number.<device_slug>_*`) for Latter Devices (`L4`)."""
 
 from __future__ import annotations
 
@@ -11,20 +11,23 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import build_device_entity_id
 from .coordinator import LatterCoordinator
-from .hub import LatterSystemHub, get_latter_system
+from .hub_registry import LatterSystemHub, get_latter_system
 
 PARALLEL_UPDATES = 0
+_MIN_ALERT_VOL = 20
+_MAX_ALERT_VOL = 100
+_STEP_ALERT_VOL = 5
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: ConfigEntry[LatterSystemHub],
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up curated sleep-safe Latter number controls for each Device subentry."""
-    runtime = entry.runtime_data
+    runtime = getattr(entry, "runtime_data", None)
     if isinstance(runtime, LatterSystemHub):
-        coordinators = list(runtime.coordinators.values())
+        coordinators: list[LatterCoordinator] = list(runtime.coordinators.values())
     else:
         sys_obj = get_latter_system(hass)
         coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
@@ -39,14 +42,14 @@ async def async_setup_entry(
 
 
 class LatterAlertVolumeNumber(NumberEntity):
-    """Exposes number.<device_slug>_alert_volume backed by the Device subentry."""
+    """Exposes `number.<device_slug>_alert_volume` backed by the Device subentry."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_translation_key = "alert_volume"
-    _attr_native_min_value = 20.0
-    _attr_native_max_value = 100.0
-    _attr_native_step = 5.0
+    _attr_native_min_value = float(_MIN_ALERT_VOL)
+    _attr_native_max_value = float(_MAX_ALERT_VOL)
+    _attr_native_step = float(_STEP_ALERT_VOL)
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_mode = NumberMode.SLIDER
 
@@ -60,7 +63,7 @@ class LatterAlertVolumeNumber(NumberEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo."""
+        """Return canonical Latter `DeviceInfo`."""
         return self.coordinator.get_device_info()
 
     async def async_added_to_hass(self) -> None:
@@ -81,5 +84,8 @@ class LatterAlertVolumeNumber(NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Persist the alert volume in the Device subentry (pushes immediately when online)."""
-        stepped = max(20, min(100, int(round(value / 5.0) * 5)))
+        stepped = max(
+            _MIN_ALERT_VOL,
+            min(_MAX_ALERT_VOL, int(round(value / _STEP_ALERT_VOL) * _STEP_ALERT_VOL)),
+        )
         await self.coordinator.async_update_device_prefs({"alert_volume": stepped})

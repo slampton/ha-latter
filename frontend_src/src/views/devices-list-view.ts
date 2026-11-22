@@ -60,8 +60,9 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
     (d) => d.kind !== "ble_tag" && (!d.device_group || d.device_group === "custom"),
   );
 
+  const defaultCategory = { id: "all", label: store.t("devices.all") };
   const baseCategories: Array<{ id: string; label: string }> = [
-    { id: "all", label: store.t("devices.all") },
+    defaultCategory,
     { id: "online", label: store.t("devices.online") },
     { id: "roaming", label: store.t("devices.roaming") },
     { id: "stationary", label: store.t("devices.stationary") },
@@ -102,7 +103,7 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
     });
   }
 
-  const activeCategory = baseCategories.find((o) => o.id === rawCat) || baseCategories[0];
+  const activeCategory = baseCategories.find((o) => o.id === rawCat) ?? defaultCategory;
   const cat = activeCategory.id;
   const cardHeadingTitle =
     cat === "all" ? store.t("devices.inventory_heading") : activeCategory.label;
@@ -229,14 +230,39 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
                       ev.stopPropagation();
                       void store.switchSystemDevice(d.subentry_id);
                     };
+                    const onLinkKeydown = (ev: KeyboardEvent): void => {
+                      if (
+                        ev.key === " " &&
+                        !ev.metaKey &&
+                        !ev.ctrlKey &&
+                        !ev.shiftKey &&
+                        !ev.altKey
+                      ) {
+                        ev.preventDefault();
+                        void store.switchSystemDevice(d.subentry_id);
+                      }
+                    };
                     const onRowClick = (ev: MouseEvent): void => {
+                      if (ev.defaultPrevented || ev.button !== 0 || ev.shiftKey || ev.altKey) {
+                        return;
+                      }
                       const target = ev.target as Element | null;
                       if (target?.closest?.("a, button, input, select")) return;
+                      if (
+                        typeof globalThis.getSelection === "function" &&
+                        String(globalThis.getSelection()?.toString() || "").trim() !== ""
+                      ) {
+                        return;
+                      }
+                      if (ev.metaKey || ev.ctrlKey) {
+                        globalThis.open?.(href, "_blank", "noopener,noreferrer");
+                        return;
+                      }
                       void store.switchSystemDevice(d.subentry_id);
                     };
                     return html`<tr @click=${onRowClick}>
                       <td class="col-name">
-                        <a href=${href} @click=${onLinkClick}>${d.title}</a>
+                        <a href=${href} @click=${onLinkClick} @keydown=${onLinkKeydown}>${d.title}</a>
                       </td>
                       <td>${d.model_label || store.t("common.unknown")}</td>
                       <td>${d.area_label || store.t("common.unknown")}</td>

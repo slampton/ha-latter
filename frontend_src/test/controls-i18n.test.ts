@@ -32,7 +32,6 @@ import {
   tPrefLabel,
   tPrefOption,
 } from "../src/i18n/index.js";
-import { render } from "../src/lib/lit.js";
 import { StudioStore } from "../src/state/store.js";
 import type { HomeAssistant, SharedControlItem, StudioStatePayload } from "../src/types.js";
 import { renderBatchControlsCard } from "../src/views/groups/batch-controls.js";
@@ -40,8 +39,11 @@ import {
   resetDomBody,
   simDocument,
   SimEvent,
+  SimHTMLInputElement,
+  SimHTMLSelectElement,
   SimKeyboardEvent,
 } from "./dom-shim.js";
+import { render } from "./fake-store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -199,7 +201,7 @@ describe("i18n parity, WAI-ARIA combobox, confirm dialog & Mixed-safe Batch cont
     };
 
     rerender();
-    const input = container.querySelector("#test-entity-cb") as unknown as HTMLInputElement;
+    const input = container.querySelector("#test-entity-cb") as SimHTMLInputElement;
     assert.equal(input.getAttribute("role"), "combobox");
     assert.equal(input.getAttribute("aria-expanded"), "false");
     assert.equal(input.value, "Area Lamp 1");
@@ -273,6 +275,8 @@ describe("i18n parity, WAI-ARIA combobox, confirm dialog & Mixed-safe Batch cont
 
     const buttons = container.querySelectorAll("button");
     assert.equal(buttons.length, 3);
+    assert.ok(buttons[0]);
+    assert.ok(buttons[1]);
     assert.ok(buttons[0].textContent.includes("Download backup first"));
     buttons[0].click();
     assert.equal(backupClicked, 1);
@@ -300,11 +304,11 @@ describe("i18n parity, WAI-ARIA combobox, confirm dialog & Mixed-safe Batch cont
     const devCalls: Array<{ subentryId: string; command: string; payload: Record<string, unknown> }> = [];
     const store = new StudioStore(fakeHost as unknown as ConstructorParameters<typeof StudioStore>[0]);
     store.ensureSubscription = async () => {};
-    store.ws.runSystemCommand = async (command, payload) => {
+    store.ws.runSystemCommand = async (command, payload = {}) => {
       sysCalls.push({ command, payload: structuredClone(payload) });
       return structuredClone(store.state) as StudioStatePayload;
     };
-    store.ws.runDeviceCommand = async (subentryId, command, payload) => {
+    store.ws.runDeviceCommand = async (subentryId, command, payload = {}) => {
       devCalls.push({ subentryId, command, payload: structuredClone(payload) });
       return structuredClone(store.state) as StudioStatePayload;
     };
@@ -461,7 +465,9 @@ describe("i18n parity, WAI-ARIA combobox, confirm dialog & Mixed-safe Batch cont
           onReorder: (from, to) => {
             const copy = [...items];
             const [moved] = copy.splice(from, 1);
-            copy.splice(to, 0, moved);
+            if (moved !== undefined) {
+              copy.splice(to, 0, moved);
+            }
             items = copy;
             rerenderSortable();
           },
@@ -518,7 +524,7 @@ describe("i18n parity, WAI-ARIA combobox, confirm dialog & Mixed-safe Batch cont
       }),
       rangeContainer,
     );
-    const rng = rangeContainer.querySelector("#rng-dwell") as unknown as HTMLInputElement;
+    const rng = rangeContainer.querySelector("#rng-dwell") as SimHTMLInputElement;
     assert.equal(rng.getAttribute("aria-describedby"), "rng-dwell-desc");
     assert.equal(rng.getAttribute("aria-valuetext"), "10 s");
     rng.value = "25";
@@ -550,7 +556,7 @@ describe("i18n parity, WAI-ARIA combobox, confirm dialog & Mixed-safe Batch cont
       }),
       pctContainer,
     );
-    const pctInput = pctContainer.querySelector("#rng-bri") as unknown as HTMLInputElement;
+    const pctInput = pctContainer.querySelector("#rng-bri") as SimHTMLInputElement;
     assert.equal(pctInput.getAttribute("aria-valuetext"), "80%");
     assert.equal(pctContainer.querySelector(".kv-value")?.textContent, "80%");
     pctInput.value = "15";
@@ -575,7 +581,7 @@ describe("i18n parity, WAI-ARIA combobox, confirm dialog & Mixed-safe Batch cont
       }),
       hr12Container,
     );
-    const sel12 = hr12Container.querySelector("#sel-hr-12") as unknown as HTMLSelectElement;
+    const sel12 = hr12Container.querySelector("#sel-hr-12") as SimHTMLSelectElement;
     const opts12 = Array.from(sel12.querySelectorAll("option"));
     assert.equal(opts12.length, 24);
     assert.equal(opts12[0]?.textContent?.trim(), "12:00 AM");

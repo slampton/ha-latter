@@ -79,7 +79,7 @@ Not all keychain finders work the same way over RF. Local BLE beacons broadcast 
 
 ## How the spatial engine decides
 
-All filtering, trilateration, hysteresis, and sensor-fusion parameters live in [`presence.py`](../custom_components/latter/presence.py), with environmental constants tunable live in **Studio → System → BLE & Area Presence → Advanced BLE Settings**.
+All filtering, trilateration, hysteresis, and sensor-fusion parameters live in [`custom_components/latter/presence/`](../custom_components/latter/presence/), with environmental constants tunable live in **Studio → System → BLE & Area Presence → Advanced BLE Settings**.
 
 1. **Collect.** Latter registers passive Home Assistant Bluetooth callbacks (`BluetoothCallbackMatcher(connectable=False)` in `PASSIVE` mode, indexing into Home Assistant's connectable-wildcard bucket so both `connectable=True` and `connectable=False` `ADV_NONCONN_IND` beacons deliver live callbacks) plus per-address advertisement listeners for static-payload beacons and instant `state_changed` RPA handoff for `private_ble_device` trackers. Readings at or below `−100 dBm` are dropped, and a **3.0 dBm RSSI hysteresis deadband** suppresses minor fluctuations while the winning Area is unchanged.
 2. **Filter per scanner (never blended).** Every scanner (`source` MAC) maintains its own `ScannerObservationState`—two proxies in the same Area never contaminate each other's filter:

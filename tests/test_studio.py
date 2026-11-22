@@ -6,30 +6,36 @@ import ast
 import itertools
 import json
 from pathlib import Path
+import re
 import tempfile
+from types import SimpleNamespace
 import unittest
 
 from custom_components.latter import (
     backup,
     const as latter_const,
-    groups,
-    protocol,
-    repairs,
-    studio as studio_init,
+    protocol_policy,
+    protocol_specs,
+    repairs_keys as issue_ids,
 )
-from custom_components.latter.studio import settings
+from custom_components.latter.groups import (
+    device_groups,
+    device_reset as reset_policy,
+    esphome_inspector as entity_sections,
+)
+from custom_components.latter.studio import (
+    panel as assets,
+    settings_cleaners as settings,
+    state_gates as scope,
+)
+from tests.conftest import LATTER_DIR, read_py_tree
 
-activity_policy = protocol
-dock_policy = protocol
-entity_sections = groups
-issue_ids = repairs
-reset_policy = groups
-assets = studio_init
-catalog_gate = settings
-scope = settings
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
+activity_policy = SimpleNamespace(**(vars(protocol_specs) | vars(protocol_policy)))
+dock_policy = activity_policy
+groups = SimpleNamespace(
+    **(vars(device_groups) | vars(reset_policy) | vars(entity_sections))
+)
+catalog_gate = scope
 
 
 class TestPayloadDiet(unittest.TestCase):
@@ -44,9 +50,9 @@ class TestPayloadDiet(unittest.TestCase):
         self.assertFalse(gate.take())
 
     def test_only_get_state_and_registry_changes_carry_the_catalog(self) -> None:
-        payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
+        payload_src = read_py_tree("studio/payload.py", "studio/payload_sections.py", "studio/payload_shared.py")
         self.assertIn('    if include_catalog:\n        base["catalog"]', payload_src)
-        cmds = (LATTER_DIR / "studio" / "commands.py").read_text(encoding="utf-8")
+        cmds = read_py_tree("studio/commands.py", "studio/cmd_presence_devices.py", "studio/cmd_photos_media.py", "studio/cmd_groups_security.py")
         self.assertIn("include_catalog=catalog_gate.take()", cmds)
         for event in ("EVENT_ENTITY_REGISTRY_UPDATED", "EVENT_DEVICE_REGISTRY_UPDATED", "EVENT_AREA_REGISTRY_UPDATED"):
             self.assertIn(event, cmds)
@@ -54,15 +60,15 @@ class TestPayloadDiet(unittest.TestCase):
         self.assertIn("_track_coordinators()", cmds)
         self.assertIn("_track_device_states()", cmds)
         self.assertIn("_cmd_set_device_photo_pool(", cmds)
-        views_src = (LATTER_DIR / "http.py").read_text(encoding="utf-8")
+        views_src = read_py_tree("http")
         self.assertIn("esphome_inspector", payload_src)
         self.assertIn("self._cached_bytes", views_src)
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
         self.assertIn(".catalog", js)
 
     def test_doorbell_detail_is_rendered(self) -> None:
-        payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
-        cmds_src = (LATTER_DIR / "studio" / "commands.py").read_text(encoding="utf-8")
+        payload_src = read_py_tree("studio/payload.py", "studio/payload_sections.py", "studio/payload_shared.py")
+        cmds_src = read_py_tree("studio/commands.py", "studio/cmd_presence_devices.py", "studio/cmd_photos_media.py", "studio/cmd_groups_security.py")
         self.assertNotIn("_build_doorbells", payload_src)
         self.assertNotIn('"preview_url":', payload_src)
         self.assertIn('"mint_camera_preview_url"', cmds_src)
@@ -77,7 +83,7 @@ class TestPayloadDiet(unittest.TestCase):
         self.assertNotIn("onAssignedPersonChanged", js)
 
     def test_status_card_renders_its_fields(self) -> None:
-        payload_src = (LATTER_DIR / "studio" / "payload.py").read_text(encoding="utf-8")
+        payload_src = read_py_tree("studio/payload.py", "studio/payload_sections.py", "studio/payload_shared.py")
         en_json = json.loads((LATTER_DIR / "studio" / "locales" / "en.json").read_text(encoding="utf-8"))
         self.assertIn('"sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),', payload_src)
         self.assertNotIn("_build_now_playing", payload_src)
@@ -148,9 +154,27 @@ class TestViewLayout(unittest.TestCase):
         self.assertEqual(en_json["nav.back_managed"], "← Managed")
         self.assertNotIn("<span>&larr; All Devices</span>", js)
 
+        view_fns = {
+            m.group(1): m.group(0)
+            for mod in re.findall(r'__latterDef\("src/views/[^"]+",[\s\S]*?\n\}\);', js)
+            for m in re.finditer(r"\nfunction (render\w+)\([\s\S]*?\n\}\n", mod)
+        }
+
         def section(view: str) -> str:
             start = js.index(f'<section id="view-{view}"')
-            return js[start:js.index("</section>", start)]
+            out = js[start:js.index("</section>", start)]
+            expanded: set[str] = set()
+            for _ in range(3):
+                out = re.sub(
+                    r"(render\w+)\(",
+                    lambda m: (
+                        f"{view_fns[m.group(1)]}\n{m.group(0)}"
+                        if m.group(1) in view_fns and m.group(1) not in expanded and (expanded.add(m.group(1)) or True)
+                        else m.group(0)
+                    ),
+                    out,
+                )
+            return out
 
         discovered_view = section("discovered_devices")
         area_tracking_view = section("area_tracking")
@@ -412,7 +436,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertIn('id="ble-companion-power-tip"', presence_view)
         for gone in ("In Home Assistant</h3>", "Location &amp; BLE</h3>", 'id="cfg-device_slug"', 'id="st-group"'):
             self.assertNotIn(gone, js)
-        self.assertNotIn('"count": len(', (LATTER_DIR / "areas.py").read_text(encoding="utf-8"))
+        self.assertNotIn('"count": len(', read_py_tree("areas"))
 
     def test_entity_only_cards_hide_when_empty(self) -> None:
         js = (LATTER_DIR / "frontend" / "latter-studio.js").read_text(encoding="utf-8")
@@ -459,7 +483,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn('id="embedded-home"', view)
 
     def test_sidebar_icon_module(self) -> None:
-        panel_src = (LATTER_DIR / "studio" / "__init__.py").read_text(encoding="utf-8")
+        panel_src = read_py_tree("studio/panel.py")
         self.assertIn('SIDEBAR_ICON = "latter:logo"', panel_src)
         self.assertIn('SIDEBAR_ICON_FALLBACK = "mdi:ladder"', panel_src)
         self.assertIn("sidebar_icon=sidebar_icon,", panel_src)
@@ -565,7 +589,7 @@ class TestActivityCard(unittest.TestCase):
         self.assertIn("activity_card", backup.DEVICE_CONFIG_EXPORT_KEYS)
         self.assertIn("activity_sources", backup.DEVICE_CONFIG_EXPORT_KEYS)
         self.assertIn("activity_sources", groups.GROUP_APPEARANCE_DEVICE_KEYS)
-        ctx_src = (LATTER_DIR / "areas.py").read_text(encoding="utf-8")
+        ctx_src = read_py_tree("areas")
         self.assertIn("*activity_payload(", ctx_src)
         self.assertIn("coordinator.activity_card_enabled, coordinator.activity_sources_csv", ctx_src)
 
@@ -652,15 +676,15 @@ class TestShortcutPolicy(unittest.TestCase):
             self.assertIn(key, settings.DEVICE_SETTING_KEYS)
             self.assertIn(key, groups.GROUP_APPEARANCE_DEVICE_KEYS)
             self.assertIn(key, backup.DEVICE_CONFIG_EXPORT_KEYS)
-        self.assertNotIn("dock_apps", (LATTER_DIR / "coordinator.py").read_text(encoding="utf-8"))
-        self.assertNotIn("set_dock_apps", (LATTER_DIR / "services.py").read_text(encoding="utf-8"))
+        self.assertNotIn("dock_apps", read_py_tree("coordinator"))
+        self.assertNotIn("set_dock_apps", read_py_tree("services"))
 
     def test_media_handoff_is_one_latter_setting(self) -> None:
         protocol_json = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
         self.assertNotIn("handoff_media", protocol_json["ha_services"]["set_active_area"]["fields"])
         for rpc in ("set_active_area", "area_browse"):
             self.assertNotIn("handoff_media", protocol_json["rpc_methods"][rpc]["fields"])
-        services_src = (LATTER_DIR / "services.py").read_text(encoding="utf-8")
+        services_src = read_py_tree("services")
         self.assertNotIn('"handoff_media"', services_src)
         self.assertIn("area_handoff", settings.DEVICE_SETTING_KEYS)
 
@@ -704,7 +728,7 @@ class TestPanelCacheBuster(unittest.TestCase):
             first = assets.content_digest(f)
             f.write_text("two", encoding="utf-8")
             self.assertNotEqual(first, assets.content_digest(f))
-        panel_src = (LATTER_DIR / "studio" / "__init__.py").read_text(encoding="utf-8")
+        panel_src = read_py_tree("studio/panel.py")
         self.assertIn('latter-studio.js?v={js_digest}"', panel_src)
         self.assertIn("def content_digest(", panel_src)
         self.assertIn("cache_headers=True,", panel_src)

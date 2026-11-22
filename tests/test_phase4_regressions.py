@@ -34,7 +34,7 @@ from custom_components.latter.const import (
 )
 from custom_components.latter.coordinator import LatterCoordinator
 from custom_components.latter.doorbell import bind_coordinator_doorbell_listener
-from custom_components.latter.http import (
+from custom_components.latter.media_cache import (
     _ARTWORK_LRU_CACHE,
     _THUMB_LRU_CACHE,
     _cache_get,
@@ -42,13 +42,15 @@ from custom_components.latter.http import (
     evict_wallpaper_lru_cache,
     get_circular_mask_surfaces,
 )
-from custom_components.latter.presence import (
+from custom_components.latter.presence.area_fusion import (
     discover_area_fusion_sensors,
     evaluate_area_sensor_fusion,
+)
+from custom_components.latter.presence.ble_fabric import (
     get_all_areas_presence_summary,
     get_ble_fabric,
 )
-from custom_components.latter.protocol import (
+from custom_components.latter.protocol_policy import (
     MAX_PIN_LEN,
     MIN_PIN_LEN,
     PinLockoutTracker,
@@ -58,7 +60,9 @@ from custom_components.latter.protocol import (
     unwrap_pin_code,
     wrap_pin_code,
 )
-from custom_components.latter.services import _async_execute_intercom_broadcast
+from custom_components.latter.services.rpc_slots import (
+    async_execute_intercom_broadcast as _async_execute_intercom_broadcast,
+)
 
 
 @pytest.mark.asyncio
@@ -173,8 +177,8 @@ async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
     # Attempts 2..4 with wrong wrapped PIN -> security_pin_invalid
     for nonce in (1, 2, 3):
         bad_wrapped = wrap_pin_code(
-            coord._pin_key_id,
-            coord._pin_key_bytes,
+            coord.pin_session_key_id,
+            coord.pin_session_key_bytes,
             nonce,
             "lock.front_door",
             "unlock",
@@ -190,7 +194,7 @@ async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
 
     # 5th failure triggers security_pin_locked_out
     bad_wrapped_5 = wrap_pin_code(
-        coord._pin_key_id, coord._pin_key_bytes, 4, "lock.front_door", "unlock", "1111"
+        coord.pin_session_key_id, coord.pin_session_key_bytes, 4, "lock.front_door", "unlock", "1111"
     )
     with pytest.raises(ServiceValidationError) as exc_lock5:
         await sys_obj.rpc_dispatcher.async_dispatch(
@@ -202,8 +206,8 @@ async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
 
     # Even the VALID 12-digit PIN is blocked while locked out!
     valid_during_lockout = wrap_pin_code(
-        coord._pin_key_id,
-        coord._pin_key_bytes,
+        coord.pin_session_key_id,
+        coord.pin_session_key_bytes,
         5,
         "lock.front_door",
         "unlock",
@@ -225,8 +229,8 @@ async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
     # Advance past 60s cooldown -> valid 12-digit wrapped PIN succeeds and resets failure count
     clock_val += 61.0
     valid_after_cooldown = wrap_pin_code(
-        coord._pin_key_id,
-        coord._pin_key_bytes,
+        coord.pin_session_key_id,
+        coord.pin_session_key_bytes,
         6,
         "lock.front_door",
         "unlock",
@@ -373,9 +377,9 @@ async def test_m_p0_04_and_m_p0_05_own_occupancy_exclusion_and_ble_and_sensor_fa
     assert own_occ_eid not in avail
 
     # When BLE leaves living_room -> kitchen, living_room clears cleanly with zero self-latch!
-    assert coord._ble_tracker is not None
-    coord._ble_tracker.current_area_id = "kitchen"
-    coord._ble_tracker.is_away = False
+    assert coord.ble_tracker is not None
+    coord.ble_tracker.current_area_id = "kitchen"
+    coord.ble_tracker.is_away = False
     fabric.notify_occupancy_listeners()
     await hass.async_block_till_done()
     assert hass.states.get(own_occ_eid).state == "off"
@@ -397,8 +401,8 @@ async def test_m_p0_04_and_m_p0_05_own_occupancy_exclusion_and_ble_and_sensor_fa
             "threshold_pct": 50,
         }
     }
-    coord._ble_tracker.current_area_id = "living_room"
-    coord._ble_tracker.is_away = False
+    coord.ble_tracker.current_area_id = "living_room"
+    coord.ble_tracker.is_away = False
 
     # Physical sensor ON + BLE present -> occupied
     hass.states.async_set(
@@ -469,7 +473,7 @@ async def test_m_p0_07_and_m_p1_22_broadcast_caller_exclusion_empty_pool_and_dnd
     coord_desk = LatterCoordinator(
         hass=hass,
         entry=entry,
-        hmac_secret=hass.data[DOMAIN]["hmac_secret"],
+        hmac_secret=sys_obj.hmac_secret,
         subentry=sub_desk,
     )
     sys_obj.coordinators["sub_desk"] = coord_desk

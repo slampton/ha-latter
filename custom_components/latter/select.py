@@ -1,4 +1,4 @@
-"""Sleep-safe Tier 2 Select entities (`select.<device_slug>_*`) for Latter Devices."""
+"""Sleep-safe Tier 2 Select entities (`select.<device_slug>_*`) for Latter Devices (`L4`)."""
 
 from __future__ import annotations
 
@@ -9,24 +9,32 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import CONF_DEVICE_GROUP, DEFAULT_DEVICE_GROUP, DOMAIN, build_device_entity_id
+from .const import (
+    CONF_DEVICE_GROUP,
+    DEFAULT_DEVICE_GROUP,
+    DOMAIN,
+    build_device_entity_id,
+)
 from .coordinator import LatterCoordinator
-from .groups import async_apply_group_baseline_to_coordinators, get_device_groups
-from .hub import LatterSystemHub, get_latter_system
-from .studio.settings import WAKE_WORD_MODE_OPTIONS
+from .groups.device_groups import (
+    async_apply_group_baseline_to_coordinators,
+    get_device_groups,
+)
+from .hub_registry import LatterSystemHub, get_latter_system
+from .protocol_specs import WAKE_WORD_MODE_OPTIONS
 
 PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: ConfigEntry[LatterSystemHub],
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up curated sleep-safe Latter select controls for each Device subentry."""
-    runtime = entry.runtime_data
+    runtime = getattr(entry, "runtime_data", None)
     if isinstance(runtime, LatterSystemHub):
-        coordinators = list(runtime.coordinators.values())
+        coordinators: list[LatterCoordinator] = list(runtime.coordinators.values())
     else:
         sys_obj = get_latter_system(hass)
         coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
@@ -64,7 +72,7 @@ class _BaseLatterSelect(SelectEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo."""
+        """Return canonical Latter `DeviceInfo`."""
         return self.coordinator.get_device_info()
 
     async def async_added_to_hass(self) -> None:
@@ -89,7 +97,7 @@ class _BaseLatterSelect(SelectEntity):
 
 
 class LatterDeviceGroupSelect(SelectEntity):
-    """Exposes select.<device_slug>_device_group across built-in/custom Device Groups and Custom."""
+    """Exposes `select.<device_slug>_device_group` across built-in/custom Device Groups and Custom."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -105,7 +113,7 @@ class LatterDeviceGroupSelect(SelectEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo."""
+        """Return canonical Latter `DeviceInfo`."""
         return self.coordinator.get_device_info()
 
     async def async_added_to_hass(self) -> None:
@@ -121,13 +129,13 @@ class LatterDeviceGroupSelect(SelectEntity):
 
     @property
     def options(self) -> list[str]:
-        """Return all configured Device Group names plus Custom."""
+        """Return all configured Device Group names plus `Custom`."""
         groups = get_device_groups(self.coordinator.hass)
-        return [str(g["name"]) for g in groups] + ["Custom"]
+        return [*(str(g["name"]) for g in groups), "Custom"]
 
     @property
     def current_option(self) -> str | None:
-        """Return the active Device Group display name or 'Custom'."""
+        """Return the active Device Group display name or `'Custom'`."""
         gid = self.coordinator.device_group
         if not gid or gid == DEFAULT_DEVICE_GROUP:
             return "Custom"
@@ -165,7 +173,7 @@ class LatterDeviceGroupSelect(SelectEntity):
 
 
 class LatterWakeWordModeSelect(_BaseLatterSelect):
-    """Exposes select.<device_slug>_wake_word_mode."""
+    """Exposes `select.<device_slug>_wake_word_mode`."""
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize Wake Word Mode select."""

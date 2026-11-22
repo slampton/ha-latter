@@ -1,6 +1,6 @@
 /**
  * Key-value lists, data tables, WCAG 2.2 AA chips, >= 32px pills, BLE signal bars,
- * wallpaper gallery, camera previews, logs, & alerts (`D-061`, `D-064`).
+ * photo library, camera previews, logs, & alerts (`D-061`, `D-064`, `D-072`).
  */
 
 import { css } from "../lib/lit.js";
@@ -83,12 +83,18 @@ export const DATA_STYLES = css`
   table.data-table tbody tr:last-child td { border-block-end: none; }
   table.data-table tbody tr { cursor: pointer; }
   table.data-table tbody tr:hover,
+  table.data-table tbody tr:focus-within,
   table.data-table tbody tr:focus-visible {
     background: var(--studio-hover);
   }
   td.col-name { font-weight: var(--studio-weight-medium); }
-  table.data-table a { color: inherit; text-decoration: none; }
+  table.data-table a { color: inherit; text-decoration: none; border-radius: var(--studio-radius-field); }
   table.data-table a:hover { text-decoration: underline; }
+  table.data-table a:focus-visible {
+    outline: 2px solid var(--studio-primary);
+    outline-offset: 2px;
+    text-decoration: underline;
+  }
   td.col-open { color: var(--studio-text-secondary); text-align: end; }
 
   /* WCAG 2.2 AA >= 4.5:1 semantic chips */
@@ -438,12 +444,8 @@ export const DATA_STYLES = css`
     transition: inline-size 0.15s ease, width 0.15s ease;
   }
 
-  /* Wallpapers, camera previews & logs */
-  .wp-upload-trigger {
-    display: inline-flex;
-    align-items: center;
-  }
-  .wp-upload-status {
+  /* Photo Library, Collection Filter Strip, Bulk Toolbar & Compact Pool Previews (D-072) */
+  .photo-upload-status {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -451,74 +453,6 @@ export const DATA_STYLES = css`
     font-size:var(--studio-font-secondary);
     color: var(--studio-text-secondary);
   }
-  .wp-gallery {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: var(--studio-space-3);
-  }
-  .wp-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--studio-space-2);
-    padding: var(--studio-space-3);
-    border: 1px solid var(--studio-divider);
-    border-radius: var(--studio-radius-control);
-    background: var(--studio-input-bg);
-    text-align: center;
-  }
-  .wp-gallery > .empty-state { grid-column: 1 / -1; }
-  .wp-card.active { border-color: var(--studio-primary); background: var(--studio-primary-tint); }
-  .wp-thumb-btn {
-    padding: 0;
-    border: none;
-    background: transparent;
-    border-radius: var(--studio-radius-control);
-    cursor: pointer;
-    line-height: 0;
-  }
-  .wp-thumb-btn.circle { border-radius: 50%; }
-  .wp-thumb-btn:hover .wp-thumb { border-color: var(--studio-primary); }
-  .wp-thumb-btn:focus-visible {
-    outline: 2px solid var(--studio-primary);
-    outline-offset: 2px;
-  }
-  .wp-thumb {
-    inline-size: 104px;
-    block-size: 104px;
-    object-fit: cover;
-    background: var(--studio-media-bg);
-    border: 1px solid var(--studio-divider);
-  }
-  .wp-thumb.circle { border-radius: 50%; }
-  .wp-thumb.square { border-radius: var(--studio-radius-control); }
-  .wp-title {
-    font-size:var(--studio-font-secondary);
-    font-weight: var(--studio-weight-medium);
-    overflow-wrap: anywhere;
-  }
-  .wp-actions {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: var(--studio-space-1);
-    margin-block-start: auto;
-    inline-size: 100%;
-  }
-  .btn-icon.wp-star-btn {
-    inline-size: var(--studio-control-height-compact);
-    block-size: var(--studio-control-height-compact);
-  }
-  .btn-icon.wp-star-btn:hover {
-    color: var(--studio-warning);
-    background: var(--studio-warning-tint);
-  }
-  .btn-icon.wp-star-btn.starred {
-    color: var(--studio-warning);
-  }
-
-  /* Photo Library, Collection Filter Strip, Bulk Toolbar & Compact Pool Previews (D-072) */
   .photo-toolbar {
     display: flex;
     align-items: center;

@@ -4,57 +4,36 @@
 
 ---
 
-## 1. Exact 34-Module Architecture (`custom_components/latter/`)
+## 1. Acyclic `L0a`–`L4` DAG Architecture (`custom_components/latter/`)
 
-Do **not** create backward-compatibility shims, `try/except ImportError` wrappers, or splinter subpackages. Every subsystem has one canonical owner across **30 flat root modules** + **4 `studio/` modules**:
+Do **not** create backward-compatibility shims, `try/except ImportError` wrappers, or upward/cyclic imports. Every hand-authored `.py` and `.ts` file stays `<= 1,000` LOC (`<= 1,200` LOC hard CI ratchet), and `tools/verify_ha.py` enforces zero Tarjan SCC cycles across 8 strict downward layers (`L0a < L0b < L1a < L1b < L2a < L2b < L3 < L4`). Multi-layer subpackage `__init__.py` files (`areas`, `cameras`, `groups`, `http`, `media`, `presence`, `services`, `studio`, `wallpapers`) MUST remain 1-line docstrings with zero imports:
 
-### Root Integration Modules (30)
-- `__init__.py` — Integration lifecycle (`LatterConfigEntry = ConfigEntry[LatterSystemHub]`), HTTP view & Studio registration, and `latter_ping` handshake (`async_ping_bound_devices`).
-- `areas.py` — Area curation, exact normalized Area matching (`match_area_by_name_or_id`), roaming *Voice Follows Me* `area_id` sync (`sync_esphome_device_area`), Person Area distance, and `area_context` v3 payloads.
-- `backup.py` — Home Assistant `backup` hooks (`async_pre_backup` / `async_post_backup`) and System/Device JSON bundle export/restore.
-- `binary_sensor.py` — Per-Area `binary_sensor.<area>_occupancy` driven by `LatterBleFabric` plus display-gated per-Device `timer_active` and `alarm_ringing` binary sensors.
-- `button.py` — Curated Tier 2 action buttons (`find_my_device`, `dismiss_alert`) forwarding via `latter_device_command`.
-- `cameras.py` — `LatterCameraStreamHub` (shared 1-ingest-per-camera RTSP/MJPEG/Snapshot cascade, zero-copy primary + fast-downscale secondary fan-out, 16px-aligned uncropped `contain`/`fill` framing, server-side 2x2 grid compositor, warm snapshots, and dedicated 6-slot video semaphore).
-- `config_flow.py` — Single-instance hub `ConfigFlow`, options flow, and Device / BLE Tag `ConfigSubentryFlow`s.
-- `const.py` — Domain constants, config keys, 5 public `SERVICE_*` & 20 internal `RPC_*` constants, `INTEGRATION_VERSION = "3.0.0"`, and `MIN_FIRMWARE_SDK_REV = 2026112007`.
-- `coordinator.py` — Pure local-push `LatterCoordinator` (per-Device runtime, sleep-safe `device_prefs` two-way sync, session-key PIN provisioning, local 1 Hz timer tick, state listeners, Protocol v3 push dispatch, and target resolution).
-- `device_tracker.py` — BLE Tag and roaming Device Area `ScannerEntity` trackers.
-- `diagnostics.py` — Redacted System and Device diagnostics snapshots.
-- `doorbell.py` — Auto-detected doorbell ring reflexes (silent popup under Do Not Disturb), exact `device_id` sibling speaker resolution, noise-reduced RTSP audio URL minting, and PTT TTS replies.
-- `feeds.py` — Weather forecast, sun/sky elevation, moon phase, `calendar_agenda` (`calendars_meta` + `locations_catalog`), and `latter_set_calendar_view` window event builders.
-- `groups.py` — Sleep-safe subentry-backed Device Groups (4 built-in hardware presets plus custom groups with opt-in Display & Interface scope), Studio entity section classifier, and Device factory/option reset (`async_reset_device`).
-- `http.py` — Constant-time HMAC `UrlSigner` (`sign_payload_resource`, `sign_on_demand_resource`, `verify_resource`) and all local-only `HomeAssistantView` endpoints (`/api/latter/*`).
-- `hub.py` — `LatterSystemHub`, `iter_coordinators`, `AreaStateIndex` (incremental O(1) Area state index; never call `hass.states.async_all()`), and global config persistence.
-- `identity.py` — Bound ESPHome device/entity resolution (`esphome_device_id` + MAC + `via_device_id`), hardware capability manifest parser, and auto-hidden chunked `latter_rpc_outbox` receiver.
-- `light.py` — On-device `light.<slug>_screen` entity (`1..100%` brightness and radio-honest availability).
-- `media.py` — Active media player controller, volume routing, and exact `device_id`/MAC Music Assistant linking (`resolve_ma_counterpart_entity`) with container track expansion.
-- `media_browse.py` — Local-only paginated Music Assistant and Home Assistant media/lyrics browser builders.
-- `number.py` — Curated Tier 2 sleep-safe `alert_volume` slider entity backed by the Device subentry.
-- `presence.py` — `LatterBleFabric`, RSSI path-loss math, `6.0 dB` cross-floor vertical attenuation, fail-closed weighted Area sensor fusion, and dwell-gated Area follow.
-- `protocol.py` — Pure-stdlib Protocol v3 `\x1f` frame packer (`v3␟<epoch>␟<rev>` across 7 domains), `v1:` HMAC-SHA256 PIN session-key wrapping + `PinLockoutTracker`, and PBKDF2 security PIN hashing.
-- `remotes.py` — TV/AV remote slot discovery, canonical navigation command maps, `remote_config` v3 builder, and `async_execute_remote_action`.
-- `repairs.py` — Home Assistant Repairs issue helpers and System health checks.
-- `select.py` — Curated Tier 2 sleep-safe `device_group` and `wake_word_mode` select entities backed by the Device subentry.
-- `sensor.py` — BLE distance (`UnitOfLength.METERS`), Person Area/Floor, and display-gated `timer_remaining` sensors.
-- `services.py` — 5 public `latter.*` Home Assistant actions (`services.yaml`) and private 20-method `LatterRpcDispatcher`.
-- `switch.py` — Curated `screensaver` switch plus sleep-safe `bedtime_mode` and `do_not_disturb` switches backed by the Device subentry.
-- `wallpapers.py` — Built-in preset catalog and private `.storage/latter/wallpapers/` asset management.
-
-### Latter Studio Package (`studio/`, 4)
-- `studio/__init__.py` — Admin-only `panel_custom` registration and content-hashed versioned static mount (`/latter_ui_<version>`).
-- `studio/settings.py` — Pure-stdlib setting descriptors, scope classification (`SYSTEM_COMMANDS` vs `DEVICE_COMMANDS`), and `CatalogGate`.
-- `studio/payload.py` — Studio state snapshot and live delta builders.
-- `studio/commands.py` — Admin-gated `websocket_api` handlers (`latter/system/*`, `latter/device/*`).
+- **`L0a` (Pure Stdlib Leaves — Zero `homeassistant`/`voluptuous`/`aiohttp`/`PIL`)**:
+  - `const.py` (domain constants, 5 `PUBLIC_SERVICES`, 20 `ALL_RPC_METHODS`, `INTEGRATION_VERSION = "3.0.0"`, `MIN_FIRMWARE_SDK_REV = 2026112007`), `config_defaults.py`, `repairs_keys.py`, `protocol_specs.py` (loads `protocol_v3.json` once), plus 9 docstring-only subpackage `__init__.py` markers.
+- **`L0b` (Pure Stdlib Codecs, Math & Cleaners -> `L0a` Only)**:
+  - `protocol_codec.py` (`\x1f` Protocol v3 domain packers & UTF-8 truncation), `protocol_policy.py` (`v1:` HMAC-SHA256 PIN session-key wrapping, `PinLockoutTracker`, PBKDF2 hashing), `presence/ble_math.py` (RSSI path-loss, Kalman & multi-floor math), `studio/settings_cleaners.py` (typed Studio setting validators).
+- **`L1a` (Foundational Caches, Hub Registry, Signing & Gates)**:
+  - `media_cache.py` (`threading.Lock`-guarded LRU artwork/thumbnail/mask caches), `hub_registry.py` (`LatterSystemHub`, `AreaStateIndex`, `get_system_config_lock`, `iter_coordinators`), `http/signing.py` (`UrlSigner`), `studio/state_gates.py` (`CatalogGate`, `SectionHashGate`, command scope checks).
+- **`L1b` (Bound Identity, Feeds, Remotes, Area/BLE Registries, Linking & Wallpapers)**:
+  - `identity.py` (bound `esphome_device_id`/MAC/`via_device_id` & manifest traits), `feeds.py` (weather, sun/moon, calendar builders), `remotes.py`, `doorbell_targets.py`, `areas/{registry,state_index}.py`, `presence/{ble_registry,area_fusion,ble_discovery}.py`, `media/{linking,lyrics}.py`, `wallpapers/{models,store,media_import,pools}.py`.
+- **`L2a` (Doorbell, Camera Stream Hub, Device Groups, Media Playback & BLE Trackers)**:
+  - `doorbell.py`, `cameras/{transcode,stream_hub,capabilities}.py`, `groups/{esphome_inspector,device_groups,device_reset}.py`, `media/{browse,volume,announce,tts_queue,playback,state_payload}.py`, `presence/{ble_tracker_matcher,ble_tracker_calibration}.py`.
+- **`L2b` (Area Curation/Actions/Sync, BLE Spatial Fabric & Backup)**:
+  - `areas/{sync,telemetry,curation,actions,catalogs}.py` (`sync_esphome_device_area`), `presence/ble_fabric.py` (`LatterBleFabric`), `backup.py` (`async_pre_backup`/`async_post_backup` & JSON bundles). Zero cross-domain `areas <-> presence` imports at `L2b`.
+- **`L3` (Coordinator, Hub Sync, Services/RPC, HTTP Views, Repairs, Diagnostics & Studio WS)**:
+  - `coordinator/{runtime_store,device_traits,wallpaper_scheduler,area_follow_controller,ha_registry_sync,device_lifecycle,v3_transport,core,__init__}.py` (typed public runtime API — zero external `coord._*` accesses), `hub_sync.py`, `services/{rpc_security,rpc_slots,rpc_receiver,rpc_dispatcher,public_actions}.py` + `services.yaml` (5 public actions vs private 20-method `LatterRpcDispatcher`; `rpc_receiver.py` auto-hides `latter_rpc_outbox` via `RegistryEntryHider.INTEGRATION`), `http/{proxy_views,wallpaper_views,camera_views,views_register}.py`, `repairs.py`, `diagnostics.py`, `studio/{panel,payload_shared,payload_sections,payload,cmd_presence_devices,cmd_photos_media,cmd_groups_security,commands}.py`.
+- **`L4` (Integration Entry, Config Flows & 8 Entity Platforms)**:
+  - `__init__.py` (typed `LatterConfigEntry = ConfigEntry[LatterRuntimeData]` on `entry.runtime_data`), `config_flow.py`, and entity platforms `binary_sensor.py`, `button.py`, `device_tracker.py`, `light.py`, `number.py`, `select.py`, `sensor.py`, `switch.py` (each platform imports strictly `< L4`).
 
 ---
 
 ## 2. Non-Negotiable Engineering Invariants
 
-1. **Strict Bound Identity**: Every Latter display subentry stores `esphome_device_id` and MAC, declaring `identifiers={(DOMAIN, format_mac(mac))}` and `via_device_id`. Resolve ESPHome entities, `esphome.<node>_*` services, Music Assistant players, Areas, and camera sibling speakers strictly by exact ID/MAC—never by substring or first-device fallback. Never assign `self.device_entry` directly.
-2. **Foreign Registry & Security Boundaries**: Never mutate devices or entities owned by other integrations. *Sole exception*: `areas.py:sync_esphome_device_area` updates `area_id` on the Device's own bound `esphome_device_id` (and child `via_device` Latter Device) either for roaming Devices (`stationary == 0`) with **Voice Follows Me** enabled or when an administrator sets a Static **Assigned Area** (`not native_ble_tracking`, synced two-way with Home Assistant's Device Registry). Lock and alarm commands require explicit verbs (`lock`/`unlock`, `arm_*`/`disarm`—never `toggle`); `alarm_control_panel` codes pass straight through per `alarm_caps`, while opening locks, garage covers, and code-less alarms enforce `security_pin_policy` (`auto` / `allow` / `require_pin` / `block`, Device PIN with System PIN fallback).
-3. **Signed HTTP Views**: Every unauthenticated `/api/latter/*` view verifies a scoped HMAC `sig` binding all server-chosen parameters (`camera_audio:<entity_id>|<nr>|<fmt>`, `camera:<entity_id>|<w>|<h>|<shape>`, etc.). `POST /api/latter/wallpaper/upload` requires an authenticated Home Assistant admin user. Resolve LAN IPv4 asynchronously without blocking sockets on the event loop.
-4. **Latter Studio (`frontend_src/` -> `custom_components/latter/frontend/latter-studio.js`)**: Follow [`docs/studio-design.md`](docs/studio-design.md). Use HA CSS theme variables in `:host`, `websocket_api` (`hass.callWS`) for all state/commands (except multipart XHR to `/api/latter/wallpaper/upload`), and never touch `localStorage.hassTokens`, `hass-subpage`, or shadow-root internals.
-5. **Terminology & Translations**: Use Home Assistant terminology (`System`, `Sites`, `Areas`, `Devices`, `Roles`, `Policies`, `Bridges`). Keep `strings.json` and `translations/en.json` byte-identical.
+1. **Strict Bound Identity**: Every Latter display subentry stores `esphome_device_id` and MAC, declaring `identifiers={(DOMAIN, format_mac(mac))}` and `via_device_id`. Resolve ESPHome entities, `esphome.<node>_*` services (`esphome_service()`), Music Assistant players, Areas, and camera sibling speakers strictly by exact ID/MAC—never by substring or first-device fallback. Never assign `self.device_entry` directly.
+2. **Foreign Registry & Security Boundaries**: Never mutate devices or entities owned by other integrations. *Sole exceptions*: `services/rpc_receiver.py` auto-hiding the bound `latter_rpc_outbox` entity (`RegistryEntryHider.INTEGRATION`), and `areas/sync.py:sync_esphome_device_area` updating `area_id` on the Device's own bound `esphome_device_id` (and child `via_device` Latter Device) for roaming **Voice Follows Me** (`stationary == 0`) or administrator Static **Assigned Area** sync. Lock and alarm commands require explicit verbs (`lock`/`unlock`, `arm_*`/`disarm`—never `toggle`); `alarm_control_panel` codes pass straight through per `alarm_caps`, while opening locks, garage covers, and code-less alarms enforce `security_pin_policy` (`auto` / `allow` / `require_pin` / `block`).
+3. **Signed Zero-WAN HTTP Views**: Every unauthenticated `/api/latter/*` view verifies a scoped HMAC `sig` binding all server-chosen parameters (`camera_audio:<entity_id>|<nr>|<fmt>`, `camera:<entity_id>|<w>|<h>|<shape>`, etc.) with zero cloud/WAN requests. `POST /api/latter/wallpaper/upload` requires an authenticated Home Assistant admin user. Resolve LAN IPv4 asynchronously without blocking sockets on the event loop.
+4. **Latter Studio (`frontend_src/` -> `custom_components/latter/frontend/latter-studio.js`)**: Follow [`docs/studio-design.md`](docs/studio-design.md) and the `L0`–`L4` TypeScript DAG (`build/guardrails.mjs`). Use HA CSS theme variables in `:host`, `websocket_api` (`hass.callWS`) for all state/commands (except the single Bearer-authenticated multipart XHR in `src/api/ws-client.ts` to `/api/latter/wallpaper/upload`), and never touch `localStorage.hassTokens`, `hass-subpage`, or shadow-root internals.
+5. **Terminology & Translations**: Use Home Assistant terminology (`System`, `Sites`, `Areas`, `Devices`, `Roles`, `Policies`, `Bridges`—never `"household"`, `"fleet"`, or spatial `"room"`). Keep `strings.json` and `translations/en.json` byte-identical.
 
 ---
 
@@ -64,7 +43,9 @@ All changes land on `dev` (`validate.yml` fast-forwards `main` on green CI). Run
 
 ```bash
 python tools/verify_ha.py
-npm --prefix frontend_src run check
-ruff check custom_components/latter tests
+node --no-warnings frontend_src/build.mjs --check --typecheck
+npm --prefix frontend_src test
+ruff check custom_components/latter tests tools
+mypy custom_components/latter
 pytest tests --cov=custom_components.latter --cov-fail-under=75 -q
 ```

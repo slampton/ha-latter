@@ -9,7 +9,6 @@
 
 import {
   AREA_CATEGORIES_CATALOG,
-  CALENDAR_LOOKAHEAD_OPTIONS,
   CALENDAR_WEEK_START_OPTIONS,
   type CatalogItem,
   GAMES_ITEMS_CATALOG,
@@ -18,7 +17,10 @@ import {
   SHORTCUT_ROUTES_CATALOG,
   TOOLS_ITEMS_CATALOG,
 } from "../../constants.js";
-import type { StudioTranslationKey } from "../../i18n/index.js";
+import {
+  CALENDAR_LOOKAHEAD_OPTIONS,
+  type StudioTranslationKey,
+} from "../../i18n/index.js";
 import { html, nothing, type TemplateResult } from "../../lib/lit.js";
 import { ROUTE_PREVIEW_ICONS, shortcutActionLabel } from "../../mdi-catalog.js";
 import { isCatalogItemSupported, type StudioStore } from "../../state/store.js";
@@ -108,7 +110,7 @@ function resolvePrefStringValue(
       ? String(rawCandidate)
       : String(fallbackVal);
   if (options.length > 0 && !options.includes(raw)) {
-    return options[0];
+    return options[0] ?? raw;
   }
   return raw;
 }

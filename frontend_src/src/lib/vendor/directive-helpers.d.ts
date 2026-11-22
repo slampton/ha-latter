@@ -2,6 +2,7 @@
  * @license
  * Copyright 2020 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
+ * Upstream: lit-html@3.3.3 (directive-helpers.d.ts) — upstream SHA-256 (LF): 3ffdb1d9f183d75aa5b1fd3881f72cb5d50afd5852db13f8a1e5382cc0044f80
  */
 import { Part, DirectiveParent, CompiledTemplateResult, MaybeCompiledTemplateResult, UncompiledTemplateResult } from './lit-html.js';
 import { DirectiveResult, DirectiveClass, PartInfo } from './directive.js';

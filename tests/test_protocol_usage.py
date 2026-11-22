@@ -134,7 +134,7 @@ def _registered_schema_keys() -> dict[str, set[str]]:
     """
     consts = _const_string_map("SERVICE_")
     keys: dict[str, set[str]] = {}
-    tree = ast.parse((COMP / "services.py").read_text(encoding="utf-8"))
+    tree = ast.parse((COMP / "services" / "public_actions.py").read_text(encoding="utf-8"))
     assigned_schemas: dict[str, ast.Call] = {}
     for node in ast.walk(tree):
         if (
@@ -171,8 +171,12 @@ def _registered_schema_keys() -> dict[str, set[str]]:
 def _rpc_dispatcher_dispatched_methods_and_fields() -> tuple[set[str], set[str]]:
     """Return (dispatched_rpc_methods, string_keys_read) across LatterRpcDispatcher and its coordinator helpers."""
     rpc_consts = _const_string_map("RPC_")
-    services_tree = ast.parse((COMP / "services.py").read_text(encoding="utf-8"))
-    coord_tree = ast.parse((COMP / "coordinator.py").read_text(encoding="utf-8"))
+    services_tree = ast.parse((COMP / "services" / "rpc_dispatcher.py").read_text(encoding="utf-8"))
+    extra_trees = [
+        ast.parse(sub.read_text(encoding="utf-8"))
+        for pkg in ("services", "coordinator")
+        for sub in sorted((COMP / pkg).glob("*.py"))
+    ]
 
     dispatched: set[str] = set()
     for cls in services_tree.body:
@@ -192,7 +196,7 @@ def _rpc_dispatcher_dispatched_methods_and_fields() -> tuple[set[str], set[str]]
                                     dispatched.add(operand.value)
 
     read_strings: set[str] = set()
-    for tree in (services_tree, coord_tree):
+    for tree in [services_tree, *extra_trees]:
         for node in ast.walk(tree):
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 read_strings.add(node.value)
@@ -252,7 +256,7 @@ async def test_live_hub_registers_only_five_public_services_and_private_rpc_disp
     """Verify runtime `hass.services` exposes ONLY the 5 public actions while `hub.rpc_dispatcher` handles all 20 RPCs."""
     from custom_components.latter import async_unload_entry
     from custom_components.latter.const import ALL_RPC_METHODS, DOMAIN, PUBLIC_SERVICES
-    from custom_components.latter.services import LatterRpcDispatcher
+    from custom_components.latter.services.rpc_dispatcher import LatterRpcDispatcher
 
     entry, sys_obj, coord = await setup_latter_hub(hass)
     live_services = set(hass.services.async_services_for_domain(DOMAIN))

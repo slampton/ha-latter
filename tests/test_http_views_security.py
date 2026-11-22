@@ -12,31 +12,37 @@ from PIL import Image
 import pytest
 
 from custom_components.latter import async_unload_entry
-from custom_components.latter.cameras import DATA_CAMERA_HUB
+from custom_components.latter.cameras.transcode import DATA_CAMERA_HUB
 from custom_components.latter.const import (
     CONF_CAMERA_ENTITIES,
     DATA_GLOBAL_CONFIG,
+    DAY_NIGHT_SKY_PRESET_ID,
     DOMAIN,
 )
-from custom_components.latter.http import (
-    MAX_UPSTREAM_IMAGE_BYTES,
-    MAX_WALLPAPER_UPLOAD_BYTES,
-    ON_DEMAND_TTL_SECONDS,
-    PAYLOAD_TTL_DAYS,
-    LatterArtworkTranscoderView,
-    LatterBrandIconView,
+from custom_components.latter.http.camera_views import (
     LatterCameraGridView,
     LatterCameraSnapshotView,
     LatterCameraStreamView,
-    LatterWallpaperProxyView,
-    LatterWallpaperUploadView,
+)
+from custom_components.latter.http.proxy_views import (
+    LatterArtworkTranscoderView,
+    LatterBrandIconView,
+)
+from custom_components.latter.http.signing import (
+    ON_DEMAND_TTL_SECONDS,
+    PAYLOAD_TTL_DAYS,
     day_bucketed_expiry,
     exact_expiry,
     sign,
     verify,
 )
-from custom_components.latter.wallpapers import (
-    DAY_NIGHT_SKY_PRESET_ID,
+from custom_components.latter.http.wallpaper_views import (
+    LatterWallpaperProxyView,
+    LatterWallpaperUploadView,
+)
+from custom_components.latter.media_cache import MAX_UPSTREAM_IMAGE_BYTES
+from custom_components.latter.wallpapers.models import MAX_WALLPAPER_UPLOAD_BYTES
+from custom_components.latter.wallpapers.store import (
     async_refresh_wallpaper_cache,
     create_collection,
     delete_photo,

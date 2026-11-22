@@ -25,1901 +25,12 @@ function __latterReq(id) {
   factory(exp, __latterReq);
   return exp;
 }
-__latterDef("src/i18n/en-common.ts", (__exports, __req) => {
-/**
- * Shared shell, navigation, action, status, combobox, sync, & Repairs strings (`D-061` — HA Sentence case).
- */
-const EN_COMMON_STRINGS = {
-  // Shell & navigation
-  "shell.title": "Latter",
-  "shell.toggle_ha_sidebar": "Toggle the Home Assistant sidebar",
-  "shell.install_update": "Install update",
-  "shell.rev_updated_banner": "Latter Studio was updated — reload page",
-  "shell.reload_page": "Reload page",
-  "shell.loading": "Loading Latter…",
-  "shell.loading_device": "Loading Device…",
-  "shell.retry": "Retry",
-  "shell.saved_status": "Saved",
-  "shell.dismiss_toast": "Dismiss notification",
-  "nav.scope_label": "Scope",
-  "nav.devices": "Devices",
-  "nav.system": "System",
-  "nav.managed": "Managed",
-  "nav.discovered": "Discovered",
-  "nav.back_managed": "← Managed",
-  "nav.device_pages_label": "Device pages",
-  "nav.system_pages_label": "System pages",
-  "nav.devices_list_label": "Devices",
-  // View titles (HA Sentence case; proper/IT nouns preserved)
-  "view.system_overview": "Overview",
-  "view.shared_entities": "Shared entities",
-  "view.photos": "Photos",
-  "view.remotes": "Media & remotes",
-  "view.system_sync": "Device groups",
-  "view.area_tracking": "BLE & Area presence",
-  "view.system_tools": "Tools",
-  "view.select_device_prompt": "Managed devices",
-  "view.discovered_devices": "Discovered devices",
-  "view.dashboard": "Overview",
-  "view.display": "Display",
-  "view.interface": "Interface",
-  "view.audio_voice": "Audio",
-  "view.power": "Power",
-  "view.presence": "Presence",
-  "view.tools": "Tools",
-  // Common actions & labels
-  "action.cancel": "Cancel",
-  "action.confirm": "Confirm",
-  "action.done": "Done",
-  "action.close": "Close",
-  "action.save": "Save",
-  "action.apply": "Apply",
-  "action.reset": "Reset",
-  "action.edit": "Edit",
-  "action.delete": "Delete",
-  "action.remove": "Remove",
-  "action.add": "Add",
-  "action.adopt": "Adopt",
-  "action.ignore": "Ignore",
-  "action.unignore": "Restore",
-  "action.configure": "Configure",
-  "action.run": "Run",
-  "action.install": "Install",
-  "action.use": "Use",
-  "action.copy": "Copy",
-  "action.clear": "Clear",
-  "action.download": "Download",
-  "action.refresh": "Refresh",
-  "action.pause": "Pause",
-  "action.resume": "Resume",
-  "action.dismiss": "Dismiss",
-  "action.open_in_ha": "Open in Home Assistant",
-  "action.open_in_esphome": "Open in ESPHome",
-  "action.open_integration": "Open integration",
-  "action.open_repairs": "Open Repairs",
-  "action.open_ha_logs": "Open Home Assistant logs",
-  "action.open_shared_entities": "Open shared entities",
-  "action.download_backup": "Download backup",
-  "action.download_backup_first": "Download backup first",
-  "action.restore_backup": "Restore backup",
-  "action.download_diagnostics": "Download diagnostics",
-  "action.add_custom_shortcut": "Add custom shortcut",
-  "action.add_pinned_item": "Add pinned item",
-  "action.reset_default_dock": "Reset default dock",
-  "action.save_custom_group": "Save custom group",
-  "action.save_group": "Save group",
-  "action.save_shortcut": "Save shortcut",
-  "action.save_color": "Save color",
-  "action.add_custom_color": "Add custom color",
-  "action.add_ble_tag": "Add BLE tag",
-  "action.manage_groups": "Manage groups",
-  "action.check_updates": "Check for updates",
-  "action.default_icon": "Default icon",
-  "action.move_up": "Move {item} up",
-  "action.move_down": "Move {item} down",
-  "action.move_earlier": "Move {item} earlier",
-  "action.move_later": "Move {item} later",
-  "action.drag_reorder": "Drag to reorder {item}",
-  "action.remove_item": "Remove {item}",
-  "action.edit_item": "Edit {item}",
-  "action.configure_item": "Configure {item}",
-  "common.none": "None",
-  "common.none_option": "— None —",
-  "common.none_configured": "None configured",
-  "common.unassigned": "Unassigned",
-  "common.no_person": "No person",
-  "common.custom": "Custom",
-  "common.auto": "Auto",
-  "common.mixed": "Mixed",
-  "common.active": "Active",
-  "common.enabled": "Enabled",
-  "common.disabled": "Disabled",
-  "common.all_off": "All off",
-  "common.loading": "Loading…",
-  "common.unknown": "—",
-  "common.missing_suffix": "{id} (missing)",
-  "common.reordered_status": "Moved {item} to position {position} of {total}",
-  "common.keep_one_enabled": "Keep at least one {noun} enabled",
-  // Status & signal labels
-  "status.online": "Online",
-  "status.offline": "Offline",
-  "status.update": "Update available",
-  "status.up_to_date": "Up to date",
-  "status.not_reported": "Not reported",
-  "status.away": "Away",
-  "status.scanning": "Scanning",
-  "status.sleeping": "Sleeping",
-  "status.hibernating": "Hibernating",
-  "status.charging": "Charging",
-  "status.plugged_in": "Plugged in",
-  "status.on_battery": "On battery",
-  "status.always_on": "Always on",
-  "status.sleep_wake_active": "Sleep & wake active",
-  "status.stationary": "Stationary",
-  "status.roaming": "Roaming",
-  "status.phone": "Phone",
-  "status.ble_tag": "BLE tag",
-  "status.needs_attention": "Needs attention",
-  "status.pin_configured": "PIN configured",
-  "status.pin_not_set": "Not set",
-  "signal.no_reading": "No reading",
-  "signal.excellent": "Excellent",
-  "signal.good": "Good",
-  "signal.fair": "Fair",
-  "signal.weak": "Weak",
-  // WAI-ARIA entity combobox (D-062 / Q11)
-  "combobox.placeholder": "Search name, Area, or entity ID…",
-  "combobox.no_matches": "No matching entities",
-  "combobox.clear": "Clear selection",
-  "combobox.showing_top": "Showing top {shown} of {total} matches",
-  // Sync, timeouts & optimistic concurrency (D-064)
-  "sync.conflict_reloaded": "Settings changed in another session; refreshed latest state.",
-  "sync.restarting_device": "Restarting Device…",
-  "sync.hibernating_device": "Hibernating Device…",
-  "sync.triggered_action": "Triggered \"{label}\"",
-  "sync.device_not_found": "Requested Device was not found; showing Managed devices.",
-  "sync.save_device_failed": "Could not save Device settings",
-  "sync.save_device_named_failed": "Could not save settings for \"{title}\": {error}",
-  "sync.save_system_failed": "Could not save System settings",
-  "sync.timeout_error": "Request timed out — check your Home Assistant connection and try again.",
-  // Repairs fallback messages
-  "issue.link_ma_player": "Not linked to its Music Assistant player.",
-  "issue.missing_mapped_entity": "A chosen entity no longer exists.",
-  "issue.missing_mapped_entity_detail": "A chosen entity no longer exists: {detail}.",
-  "issue.ble_no_proxies":
-    "BLE Area tracking is on, but no Bluetooth proxy is assigned to an Area.",
-  "issue.slot_push_failing": "Latter cannot send Area and browse pages to this Device.",
-  "issue.device_crashed": "Restarted after a crash.",
-  "issue.device_crashed_detail": "Restarted after a crash ({detail}).",
-  "issue.device_crashed_stall":
-    "Restarted itself after its main loop stalled for 30 seconds.",
-  "issue.device_brownout": "Restarted after a power dip (brownout).",
-  "issue.firmware_rolled_back":
-    "A firmware update failed to start; the previous firmware is running.",
-  "issue.generic": "Repair: {label}.",
-};
-__latterExp(__exports, { EN_COMMON_STRINGS: () => EN_COMMON_STRINGS });
-//# sourceURL=latter-studio/src/i18n/en-common.ts
-});
-__latterDef("src/i18n/en-devices.ts", (__exports, __req) => {
-/**
- * Device-scope, Managed inventory, Wallpaper gallery, & Discovered onboarding UI strings
- * (`D-061` — Home Assistant Sentence case).
- */
-const EN_DEVICES_STRINGS = {
-  // Offline / sleeping & BLE transmitter banners (D-066)
-  "offline.device_banner_title": "Device is offline or hibernating",
-  "offline.device_sleeping_title": "Device is sleeping",
-  "offline.device_banner_body":
-    "Settings saved here are queued in Home Assistant and sync automatically when this Device wakes or reconnects. Live quick actions are unavailable while offline.",
-  "offline.ble_tx_off_title": "BLE transmitter not active ({state})",
-  "offline.ble_tx_off_body":
-    "Enable the BLE Transmitter sensor in the Home Assistant Companion App on this phone so Bluetooth proxies can detect its Area.",
-  // Device card titles & disambiguated display sections (D-066 / Q7 / Q8)
-  "card.status": "Status",
-  "card.quick_actions": "Quick actions",
-  "card.assignments": "Assignments",
-  "card.timers_alarms": "Timers & alarms",
-  "card.sensors_controls": "Sensors & controls",
-  "card.wallpapers": "Wallpapers",
-  "card.brightness": "Brightness",
-  "card.colors": "Colors",
-  "card.screensaver": "Screensaver",
-  "card.home_screen": "Home screen",
-  "card.app_dock": "App Dock",
-  "card.diagnostics": "Diagnostics",
-  "card.developer_telemetry": "Developer & telemetry",
-  "card.replace_hardware": "Replace hardware",
-  "card.replace_hardware_body":
-    "Replaced a physical board or reflashed under a new ESPHome node? Use Reconfigure on this Device entry in Home Assistant Integrations to rebind its hardware identity while keeping all shortcuts, Area rules, and settings.",
-  "card.danger_zone": "Danger zone",
-  // Device list & discovered devices (D-041 / D-066 / Q12)
-  "devices.inventory_heading": "Inventory",
-  "devices.col_device": "Device",
-  "devices.col_model": "Model",
-  "devices.col_area": "Area",
-  "devices.col_group": "Group",
-  "devices.col_status": "Status",
-  "devices.filter_aria": "Filter managed Devices by category",
-  "devices.open_row_aria": "Open {title}",
-  "devices.all": "All Devices",
-  "devices.online": "Online Devices",
-  "devices.roaming": "Roaming Devices",
-  "devices.stationary": "Stationary Devices",
-  "devices.latter_displays": "Latter displays",
-  "devices.ble_tracked": "BLE-tracked Devices",
-  "devices.phones": "Phones",
-  "devices.ble_tags": "BLE tags",
-  "devices.assigned_person": "Assigned to a person",
-  "devices.updates_available": "Updates available",
-  "devices.group_prefix": "Group: {name}",
-  "devices.empty_filtered": "No Devices match this category.",
-  "devices.empty_zero_title": "No managed Devices yet",
-  "devices.empty_zero_body":
-    "Adopt discovered Latter displays, add Bluetooth tags for Area presence, or configure System Area sensor fusion.",
-  "devices.open_discovered": "Open Discovered",
-  "devices.open_area_presence": "Configure Area presence",
-  "discovered.latter_devices": "Latter Devices",
-  "discovered.bluetooth_devices": "Bluetooth devices",
-  "discovered.empty_latter":
-    "No unconfigured Latter Devices found in Home Assistant. Newly added ESPHome Devices running Latter firmware appear here automatically.",
-  "discovered.web_installer": "Open Web Installer",
-  "discovered.getting_started": "Getting started guide",
-  "discovered.ignored_count": "Ignored ({count})",
-  "discovered.default_latter_title": "Latter Device",
-  "discovered.default_latter_model": "Latter ESPHome Device",
-  "discovered.default_ble_kind": "BLE device",
-  "discovered.meta_node": "Node: {node}",
-  "discovered.meta_area": "Area: {area}",
-  "discovered.meta_nearest_area": "Nearest Area: {area}",
-  "discovered.group_select_aria": "Device group for {title}",
-  "discovered.auto_group_option": "Auto ({group})",
-  "discovered.person_select_aria": "Assigned person for {title}",
-  "discovered.ignore_aria": "Ignore {title}",
-  "discovered.restore_aria": "Restore {title}",
-  "discovered.search_ble_aria": "Search discovered Bluetooth devices",
-  "discovered.search_ble_placeholder": "Search name, address, or Area…",
-  "discovered.filter_ble_aria": "Filter discovered Bluetooth devices",
-  "discovered.all_ble": "All Bluetooth devices",
-  "discovered.phones_trackers": "Phones & trackers",
-  "discovered.named_ble": "Named BLE advertisements",
-  "discovered.sort_ble_aria": "Sort discovered Bluetooth devices",
-  "discovered.sort_name": "Sort: Name (A–Z)",
-  "discovered.sort_rssi": "Sort: Signal strength",
-  "discovered.sort_area": "Sort: Nearest Area",
-  "discovered.pause_list": "Pause list",
-  "discovered.resume_list": "Resume list",
-  "discovered.paused_hint":
-    "List updates paused ({count} shown). Select Resume list to refresh.",
-  "discovered.empty_ble_filtered": "No Bluetooth devices match this filter.",
-  "discovered.empty_ble_none": "No unadopted Bluetooth devices nearby.",
-  "discovered.adopted_toast": "Adopted \"{title}\"",
-  "discovered.ignored_toast": "Ignored \"{title}\"",
-  "discovered.restored_toast": "Restored \"{title}\" to discovered list",
-  // Wallpaper gallery & multipart upload (D-25 / Q5)
-  "wp_gallery.empty": "No wallpapers available yet.",
-  "wp_gallery.use_aria": "Use wallpaper {name}",
-  "wp_gallery.star_add_aria": "Star {name} for rotation",
-  "wp_gallery.star_remove_aria": "Remove {name} from favorites",
-  "wp_gallery.star_active_title": "Starred for rotation",
-  "wp_gallery.star_inactive_title": "Star for rotation",
-  "wp_gallery.delete_aria": "Delete wallpaper {name}",
-  "wp_gallery.uploaded": "Uploaded",
-  "wp_gallery.builtin": "Built-in",
-  "wp_gallery.file_aria": "Wallpaper image (up to 15 MB)",
-  "wp_gallery.upload_photo": "Upload photo",
-  "wp_gallery.uploading": "Uploading…",
-  "wp_gallery.uploading_photo": "Uploading photo…",
-  "wp_gallery.upload_progress_aria": "Wallpaper upload progress",
-  // Device -> Overview (D-003 / D-066 / F-01)
-  "dev_overview.waiting_for_reading": "Waiting for reading",
-  "dev_overview.tile_area": "Area",
-  "dev_overview.tile_current_area": "Current Area",
-  "dev_overview.tile_closest_proxy": "Closest proxy",
-  "dev_overview.ble_presence_meta": "BLE presence",
-  "dev_overview.tile_battery": "Battery",
-  "dev_overview.tile_power": "Power",
-  "dev_overview.tile_ble_signal": "BLE signal",
-  "dev_overview.tile_wifi_signal": "Wi-Fi signal",
-  "dev_overview.tile_ble_target": "BLE target",
-  "dev_overview.ble_address_meta": "Bluetooth address",
-  "dev_overview.tile_firmware": "Firmware",
-  "dev_overview.qa_find_my": "Find my Device",
-  "dev_overview.qa_trigger_va": "Trigger voice assistant",
-  "dev_overview.qa_activate_screensaver": "Activate screensaver",
-  "dev_overview.qa_exit_screensaver": "Exit screensaver",
-  "dev_overview.qa_restart": "Restart Device",
-  "dev_overview.restart_device": "Restart Device",
-  "dev_overview.restart_device_desc":
-    "Reboots this Device; Wi-Fi and active sessions reconnect automatically.",
-  "dev_overview.restart_btn": "Restart",
-  "dev_overview.empty_quick_actions": "No live actions reported by this Device.",
-  "dev_overview.device_group_label": "Device group",
-  "dev_overview.device_group_custom_desc":
-    "Uses individual operational settings; save as a reusable group or pick an existing preset.",
-  "dev_overview.device_group_preset_desc":
-    "Applies shared operational settings (power, wake word, brightness, BLE).",
-  "dev_overview.device_category_label": "Device category",
-  "dev_overview.device_category_desc":
-    "Classifies this Bluetooth Device under Phones or BLE tags across Managed devices.",
-  "dev_overview.auto_category_option": "Auto ({category})",
-  "dev_overview.assigned_person_label": "Assigned person",
-  "dev_overview.assigned_person_desc":
-    "Links this Device's Area presence to a Home Assistant person entity.",
-  "dev_overview.unassigned_option": "— Unassigned —",
-  "dev_overview.remote_group_label": "Remote control scope",
-  "dev_overview.remote_group_desc":
-    "Controls which TV and AV remotes appear in the Remote app.",
-  "dev_overview.remote_follow_area": "Follow Area",
-  "dev_overview.remote_all_system": "All System remotes",
-  "dev_overview.ringing_alert_text": "An alarm or timer is ringing on this Device.",
-  "dev_overview.dismissed_ringing_toast": "Dismissed ringing alert",
-  "dev_overview.active_timer_label": "Active timer",
-  "dev_overview.no_active_timer": "No active timer",
-  "dev_overview.running": "Running",
-  "dev_overview.paused": "Paused",
-  "dev_overview.cancel_timer": "Cancel timer",
-  "dev_overview.cancelled_timer_toast": "Cancelled timer",
-  "dev_overview.stopwatch_label": "Stopwatch",
-  "dev_overview.not_running": "Not running",
-  "dev_overview.reset_stopwatch": "Reset stopwatch",
-  "dev_overview.reset_stopwatch_toast": "Reset stopwatch",
-  "dev_overview.alarms_label": "Alarms",
-  "dev_overview.alarms_enabled_summary": "{count} enabled • {nextTime}",
-  "dev_overview.alarms_desc":
-    "Syncs 2-way with on-device alarm edits (1-minute precision).",
-  "dev_overview.alarms_group_aria": "Device alarms",
-  "dev_overview.alarm_time_label": "Alarm {index} time",
-  "dev_overview.alarm_schedule_label": "Alarm {index} schedule",
-  "dev_overview.alarm_rec_daily": "Daily",
-  "dev_overview.alarm_rec_weekdays": "Weekdays",
-  "dev_overview.alarm_rec_weekends": "Weekends",
-  "dev_overview.alarm_rec_once": "Once",
-  // Device -> Display (D-034 / D-069 / D-070)
-  "dev_display.card_voice_assistant": "Voice assistant",
-  "dev_display.bedtime_brightness_override_note":
-    "Bedtime mode is currently active and overriding screen brightness.",
-  "dev_display.bright_brightness_label": "Bright brightness",
-  "dev_display.dark_brightness_label": "Dark brightness",
-  "dev_display.ambient_live_status": "{area} · {lux} lx ({level}% ambient)",
-  "dev_display.ambient_fallback_status":
-    "No ambient light sensor in {area} — using Sun synchronized fallback.",
-  "dev_display.ambient_unassigned_status":
-    "Locate or assign this Device to an Area to use ambient light.",
-  "dev_display.screensaver_preview_desc":
-    "Starts the screensaver on this Device immediately.",
-  "dev_display.screensaver_exit_desc":
-    "Wakes the display and exits the active screensaver immediately.",
-  "dev_display.preview_btn": "Preview",
-  "dev_display.exit_screensaver_btn": "Exit screensaver",
-  "dev_display.screensaver_photo_clock_desc":
-    "Draws a compact subtle clock in the corner while displaying photos.",
-  "dev_display.screensaver_pool_label": "Photo frame photos",
-  "dev_display.screensaver_pool_empty": "No photos selected — choose photos or a collection.",
-  "dev_display.screensaver_choose_photos": "Choose photos…",
-  "dev_display.screensaver_shuffle_desc":
-    "Randomizes photo order instead of advancing alphabetically.",
-  "dev_display.custom_color_label": "Custom color",
-  "dev_display.custom_color_desc": "Used when Color profile is set to Custom.",
-  "dev_display.current_color_option": "Current ({hex})",
-  "dev_display.add_color_btn": "Add color",
-  "dev_display.wallpapers_subtitle":
-    "Shared photo library and collections cropped automatically for this display.",
-  "dev_display.active_wallpaper_label": "Active wallpaper",
-  "dev_display.choose_wallpaper": "Choose wallpaper…",
-  "dev_display.manage_photo_library": "Manage photo library",
-  "dev_display.pool_single_meta": "Single photo • {name}",
-  "dev_display.pool_collection_meta": "Collection: {collection} ({count} photos)",
-  "dev_display.pool_collection_one_meta": "Collection: {collection} (1 photo)",
-  "dev_display.pool_custom_meta": "Custom selection ({count} photos)",
-  "dev_display.pool_custom_one_meta": "Custom selection (1 photo)",
-  "dev_display.pool_off_meta": "Off — no photos selected.",
-  "dev_display.wp_override_home_and_weather":
-    "Live weather background is active on Home and Sky & weather — wallpapers appear on other screens.",
-  "dev_display.wp_override_home_only":
-    "Weather background is enabled on Home — wallpapers appear across other screens.",
-  "dev_display.wp_override_weather_only":
-    "Live weather background is active in Sky & weather — wallpapers appear on Home and other screens.",
-  "dev_display.open_interface": "Open Interface",
-  "dev_display.wp_weather_bg_note":
-    "Weather background is enabled on Home — wallpapers appear across other screens.",
-  "dev_display.wp_rotating_named_starred_one":
-    "{name} • rotating 1 starred wallpaper.",
-  "dev_display.wp_rotating_named_starred_many":
-    "{name} • rotating {count} starred wallpapers.",
-  "dev_display.wp_rotating_named_all": "{name} • rotating all {count} wallpapers.",
-  "dev_display.wp_rotating_starred_one": "Rotating 1 starred wallpaper.",
-  "dev_display.wp_rotating_starred_many": "Rotating {count} starred wallpapers.",
-  "dev_display.wp_rotating_all": "Rotating all {count} wallpapers.",
-  "dev_display.wp_static_named": "{name} (static — not rotating).",
-  "dev_display.wp_off": "Off — select Use on a wallpaper below or enable rotation.",
-  "dev_display.wp_hint_none":
-    "No wallpapers starred — rotation cycles through all wallpapers.",
-  "dev_display.wp_hint_one":
-    "1 wallpaper starred — star at least 2 to cycle between favorites.",
-  "dev_display.wp_hint_many":
-    "{starred} of {total} wallpapers starred for rotation.",
-  "dev_display.stop_rotation": "Stop rotation",
-  "dev_display.enable_rotation": "Enable rotation",
-  "dev_display.turn_off_wallpaper": "Turn off wallpaper",
-  "dev_display.rotation_interval_label": "Rotation interval",
-  "dev_display.rotation_interval_aria": "Wallpaper rotation interval",
-  "dev_display.rot_0": "Do not rotate",
-  "dev_display.rot_5": "Every 5 minutes",
-  "dev_display.rot_15": "Every 15 minutes",
-  "dev_display.rot_30": "Every 30 minutes",
-  "dev_display.rot_60": "Every hour",
-  "dev_display.rot_360": "Every 6 hours",
-  "dev_display.rot_1440": "Once a day",
-  "dev_display.star_all": "Star all",
-  "dev_display.clear_stars": "Clear stars",
-  // Device -> Interface (D-053 / D-064 / D-069 / U4)
-  "dev_interface.enable_home_desc":
-    "Provides the Home screen and App Dock. Turn off to lock this Device to a single start screen app.",
-  "dev_interface.start_screen_multi_desc":
-    "Choose the screen shown on startup. Swipe up from the bottom to return to Home.",
-  "dev_interface.start_screen_single_desc":
-    "Single-app screen shown at all times while the Home screen is disabled.",
-  "dev_interface.time_format_desc":
-    "Applies 12-hour or 24-hour time across Home, alarms, calendar, and schedules.",
-  "dev_interface.home_clock_tap_desc":
-    "Choose whether tapping the clock readout on Home opens the Time app or the standalone clock face.",
-  "dev_interface.clock_face_desc":
-    "Visual style for the standalone clock face screen.",
-  "dev_interface.home_date_tap_desc":
-    "Choose whether tapping the date readout on Home opens Day view or Overview in the Calendar app.",
-  "dev_interface.return_timeout_desc":
-    "Resets idle screens back to Home unless media is playing or a live activity is active.",
-  "dev_interface.wake_greeting_desc":
-    "Shows a brief morning, afternoon, or evening greeting after waking from standby.",
-  "dev_interface.weather_bg_desc":
-    "Replaces the Home screen backdrop with a live sky matching current conditions.",
-  "dev_interface.sun_moon_label": "Sun & Moon",
-  "dev_interface.sun_moon_desc":
-    "Choose which sky bodies appear on the live weather background.",
-  "dev_interface.activity_card_desc":
-    "Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.",
-  "dev_interface.activity_sources_desc":
-    "Choose and reorder which live items appear in the Activity card.",
-  "dev_interface.activity_src_calendar": "Calendar",
-  "dev_interface.activity_src_music_queue": "Music queue",
-  "dev_interface.activity_src_stopwatch": "Stopwatch",
-  "dev_interface.activity_src_alarms": "Alarms",
-  "dev_interface.activity_src_timers": "Timers",
-  "dev_interface.app_dock_desc":
-    "Toggle, drag to reorder, and configure apps on the App Dock, or add custom subpage and Home Assistant entity shortcuts. Pinned hides automatically when empty.",
-  "dev_interface.active_dock_aria": "Active on App Dock",
-  "dev_interface.show_on_dock_aria": "Show {title} on App Dock",
-  "dev_interface.settings_title": "Settings",
-  "dev_interface.settings_locked_meta": "Always shown last on the App Dock",
-  "dev_interface.hidden_from_dock": "Hidden from dock",
-  "dev_interface.pinned_empty_meta": "Empty — auto-hidden on dock",
-  "dev_interface.pinned_count_meta": "{count} {shortcutWord} • {pages} {pageWord}",
-  "dev_interface.word_shortcut_one": "shortcut",
-  "dev_interface.word_shortcut_many": "shortcuts",
-  "dev_interface.word_page_one": "page",
-  "dev_interface.word_page_many": "pages",
-  "dev_interface.music_meta": "Art: {art} • Albums: {albums}",
-  "dev_interface.cameras_empty_meta": "No cameras configured",
-  "dev_interface.cameras_meta_one": "{view} • {framing} • 1 camera",
-  "dev_interface.cameras_meta_many": "{view} • {framing} • {count} cameras",
-  "dev_interface.categories_enabled_one": "1 category enabled",
-  "dev_interface.categories_enabled_many": "{count} categories enabled",
-  "dev_interface.remote_follow_area": "Follow the active Area",
-  "dev_interface.remote_all": "All System remotes",
-  "dev_interface.weather_meta": "Current, forecast, Sun & Moon",
-  "dev_interface.weather_meta_live_sky": "Live weather sky",
-  "dev_interface.weather_meta_wallpaper": "Uses device wallpaper",
-  "dev_interface.time_utc_world_one": "UTC + 1 world clock",
-  "dev_interface.time_utc_world_many": "UTC + {count} world clocks",
-  "dev_interface.time_world_one": "1 world clock",
-  "dev_interface.time_world_many": "{count} world clocks",
-  "dev_interface.time_local_utc": "Local time + UTC",
-  "dev_interface.time_local": "Local time",
-  "dev_interface.clock_24h": "24-hour",
-  "dev_interface.clock_12h": "12-hour",
-  "dev_interface.calendar_meta": "{days}-day lookahead • Starts {weekday}",
-  "dev_interface.tools_enabled_one": "1 tool enabled",
-  "dev_interface.tools_enabled_many": "{count} tools enabled",
-  "dev_interface.games_enabled_one": "1 game enabled",
-  "dev_interface.games_enabled_many": "{count} games enabled",
-  "dev_interface.custom_route_meta": "Custom • {target}",
-  "dev_interface.custom_entity_confirm_meta":
-    "Custom • {action} • Confirm • {target}",
-  "dev_interface.custom_entity_tap_meta": "Custom • {action} • 1-tap • {target}",
-  // Device -> Audio (D-008 / D-031 / D-066 / Q8)
-  "dev_audio.card_voice_wake": "Voice assistant & wake word",
-  "dev_audio.card_sound_playback": "Sound & playback",
-  "dev_audio.vfm_desc":
-    "Updates this roaming Device's Home Assistant Area when BLE presence settles in a new Area, so Area-less voice commands target where you are.",
-  "dev_audio.vfm_delay_label": "Voice Follows Me delay",
-  "dev_audio.vfm_delay_desc":
-    "How long a BLE-detected Area stays stable before moving the Device (3 to 60 seconds).",
-  "dev_audio.ww_sensitivity_summary": "Wake word sensitivity (per model)",
-  "dev_audio.default_speaker_label": "Default speaker",
-  "dev_audio.default_speaker_desc":
-    "Primary speaker controlled from Music and Home when this Device starts up.",
-  "dev_audio.default_speaker_auto": "— Automatic (built-in or Area) —",
-  "dev_audio.ma_player_label": "Music Assistant player",
-  "dev_audio.ma_player_unmatched_desc":
-    "Automatic match did not find {entity} in Music Assistant. Choose this Device's player for library playback, queues, and lyrics.",
-  "dev_audio.ma_player_manual_desc":
-    "Linked manually ({entity} was not used). Clear to return to automatic matching.",
-  "dev_audio.ma_player_fallback_target": "this Device's player",
-  "dev_audio.ma_player_auto": "— Automatic match —",
-  "dev_audio.area_handoff_desc":
-    "Transfers active Music Assistant playback when this Device moves to or selects another Area.",
-  // Device -> Power (D-027 / D-068)
-  "dev_power.card_sleep_wake": "Sleep & wake",
-  "dev_power.card_bedtime": "Bedtime mode",
-  "dev_power.card_bedtime_subtitle":
-    "Turns off or dims the display overnight and silences non-critical notification chimes.",
-  "dev_power.card_power_battery": "Power & battery",
-  "dev_power.empty": "No sleep or battery entities reported by this Device.",
-  // Device -> Presence (D-032 / D-066 / Q8)
-  "dev_presence.card_area_tracking": "Area tracking",
-  "dev_presence.card_ble_identity": "BLE identity",
-  "dev_presence.track_ble_label": "Track Area with BLE proxies",
-  "dev_presence.track_ble_desc":
-    "Uses Home Assistant Area-assigned Bluetooth proxies to locate this Device automatically. Turn off to pin it to one assigned Area.",
-  "dev_presence.auto_switch_desc":
-    "Switches the Device's active Area controls automatically when BLE detects a move.",
-  "dev_presence.fallback_area_label": "Fallback Area",
-  "dev_presence.fallback_area_desc":
-    "Default Home Assistant Area when no Bluetooth proxy is in range.",
-  "dev_presence.fallback_area_auto": "— Automatic (ESPHome Area) —",
-  "dev_presence.assigned_area_label": "Assigned Area",
-  "dev_presence.assigned_area_desc":
-    "Pins this Device's Area controls and Home Assistant Device Area to one location.",
-  "dev_presence.target_addr_label": "BLE target address or entity",
-  "dev_presence.target_addr_placeholder":
-    "AA:BB:CC:DD:EE:FF or device_tracker.phone_ble",
-  "dev_presence.target_addr_help":
-    "Leave blank on Latter displays to track their built-in BLE beacon MAC automatically.",
-  "dev_presence.ref_power_label": "Reference power (1 meter)",
-  "dev_presence.ref_power_placeholder_detected": "Auto ({dbm} dBm)",
-  "dev_presence.ref_power_help":
-    "Leave blank to use auto-detected beacon power in dBm, or enter -90 to -30 dBm to calibrate this Device.",
-  "dev_presence.companion_low_title": "Companion App low-power beacon detected",
-  "dev_presence.companion_low_body":
-    "This phone is advertising at {txPower} power{modeSuffix}.{refSuffix} Setting Transmit Power to Medium or High and Advertise Mode to Balanced in the Home Assistant Companion App improves multi-Area accuracy through walls.",
-  "dev_presence.companion_mode_suffix": " ({mode} mode)",
-  "dev_presence.companion_ref_suffix":
-    " Latter automatically compensates its 1 m reference power ({dbm} dBm).",
-  "dev_presence.companion_default_power": "default",
-  "dev_presence.ibeacon_uuid_label": "iBeacon UUID",
-  "dev_presence.ibeacon_uuid_placeholder": "Generated automatically per System",
-  // Device -> Tools (D-027 / D-064 / D-066 / Q8 / Q12)
-  "dev_tools.ble_signal": "BLE signal",
-  "dev_tools.ble_target": "BLE target",
-  "dev_tools.model": "Model",
-  "dev_tools.esphome_node": "ESPHome node",
-  "dev_tools.firmware_version": "Firmware version",
-  "dev_tools.latter_sdk": "Latter SDK",
-  "dev_tools.wifi_signal": "Wi-Fi signal",
-  "dev_tools.ip_address": "IP address",
-  "dev_tools.mac_address": "MAC address",
-  "dev_tools.diagnostics_file_label": "Diagnostics file",
-  "dev_tools.diagnostics_file_desc":
-    "Downloads redacted Home Assistant diagnostics for troubleshooting.",
-  "dev_tools.backup_row_label": "Device backup",
-  "dev_tools.backup_row_desc":
-    "Downloads this Device's Latter configuration and settings as JSON.",
-  "dev_tools.perimeter_subtitle":
-    "Governs unlocking doors, disarming alarms, and opening garage or gate covers from this Device.",
-  "dev_tools.pin_policy_desc_prefix":
-    "Auto requires a PIN on stationary wall panels when configured and allows roaming personal Devices. Effective policy:",
-  "dev_tools.security_pin_label": "Security PIN",
-  "dev_tools.security_pin_desc":
-    "Write-only 4 to 12 digit numeric PIN verified by Home Assistant when the on-device keypad prompts. Never shown again after saving.",
-  "dev_tools.pin_input_aria": "New security PIN (4 to 12 digits)",
-  "dev_tools.pin_placeholder_replace": "Enter new PIN to replace…",
-  "dev_tools.pin_placeholder_new": "4 to 12 digits",
-  "dev_tools.save_pin": "Save PIN",
-  "dev_tools.clear_pin": "Clear PIN",
-  "dev_tools.reconfigure_in_ha": "Reconfigure in Home Assistant",
-  "dev_tools.reset_defaults_label": "Reset to defaults",
-  "dev_tools.reset_defaults_desc":
-    "Resets on-device preferences and/or Latter settings while keeping Wi-Fi and Home Assistant pairing.",
-  "dev_tools.remove_device_label": "Remove Device",
-  "dev_tools.remove_device_desc":
-    "Removes this Device from Latter. Your ESPHome device stays in Home Assistant.",
-  "dev_tools.telem_uptime": "Session uptime",
-  "dev_tools.profiler_label": "Telemetry profiler",
-  "dev_tools.profiler_desc":
-    "Streams frame and subsystem timing logs over ESPHome logs for troubleshooting.",
-  "dev_tools.refresh_telemetry_label": "Runtime telemetry",
-  "dev_tools.refresh_telemetry_desc":
-    "Requests an immediate RAM, PSRAM, and Wi-Fi link snapshot from this Device.",
-  "dev_tools.refresh_telemetry_toast": "Requested telemetry snapshot",
-  "dev_tools.telem_int_ram": "Internal RAM (free / min / largest)",
-  "dev_tools.telem_psram_min": "PSRAM low-water mark",
-  "dev_tools.telem_ble_beacon": "BLE beacon radio",
-  "dev_tools.telem_last_reset": "Last reset",
-  "dev_tools.telem_wifi_disc": "Wi-Fi disconnects",
-  "dev_tools.telem_beacon_timeouts": " ({count} beacon timeouts)",
-  "dev_tools.telem_wifi_avg_min": "Wi-Fi avg / min",
-  "dev_tools.telem_ha_sessions": "Home Assistant sessions",
-  "dev_tools.telem_max_gap": " (max gap {duration})",
-  "dev_tools.telem_light_sleep": "Light sleep duty",
-  "dev_tools.telem_cycles": " ({count} cycles)",
-  "dev_tools.telem_nvs_writes": "NVS flash writes",
-  "dev_tools.telem_nvs_value":
-    "{writes} writes ({erases} erases, {maxMs} ms max)",
-  "dev_tools.telem_board": "Hardware board",
-  "dev_tools.telem_processor": "Processor & PSRAM",
-  "dev_tools.telem_psram_suffix": " • {mb} MB PSRAM",
-  "dev_tools.telem_display_panel": "Display panel",
-  "dev_tools.telem_headless": "Headless",
-  "dev_tools.telem_traits": "Hardware traits",
-  "dev_tools.trait_touch": "Touch",
-  "dev_tools.trait_mic": "Mic",
-  "dev_tools.trait_speaker": "Speaker",
-  "dev_tools.trait_audio": "Audio",
-  "dev_tools.trait_imu": "IMU",
-  "dev_tools.trait_battery": "Battery",
-  "dev_tools.trait_wearable": "Wearable",
-  "dev_tools.trait_stationary": "Stationary",
-};
-__latterExp(__exports, { EN_DEVICES_STRINGS: () => EN_DEVICES_STRINGS });
-//# sourceURL=latter-studio/src/i18n/en-devices.ts
-});
-__latterDef("src/i18n/en-system.ts", (__exports, __req) => {
-/**
- * System-scope & modal dialog UI strings (`D-061` — Home Assistant Sentence case).
- */
-const EN_SYSTEM_STRINGS = {
-  // System card titles
-  "card.perimeter_security": "Perimeter security",
-  "card.perimeter_security_signing": "Perimeter security & signing",
-  "card.notifications_announcements": "Notifications & announcements",
-  "card.doorbell_intercom_audio": "Doorbell & intercom audio",
-  "card.backup_restore": "Backup & restore",
-  "card.system_device_logs": "System & Device logs",
-  "card.support_diagnostics": "Support & diagnostics",
-  "card.support_subtitle":
-    "Version lockstep, redacted System diagnostics bundle, and issue reporting.",
-  "card.area_deployment": "Area deployment",
-  "card.home_hub_weather": "Home hub & weather",
-  "card.calendars": "Calendars",
-  "card.cameras_doorbell": "Cameras & doorbell audio",
-  "card.custom_colors": "Custom colors",
-  "card.photo_library": "Photo library",
-  "card.remote_controls": "Remote controls",
-  "card.volume_overrides": "Speaker volume overrides",
-  "card.remote_groups": "Remote control groups",
-  "card.area_presence_sensors": "Area presence & sensors",
-  "card.ble_calibration": "Walk-around BLE calibration",
-  "card.advanced_ble": "Advanced BLE settings",
-  // Support & diagnostics card (D-066)
-  "support.ha_version": "Home Assistant",
-  "support.integration_version": "Latter integration",
-  "support.sdk_rev": "Minimum firmware SDK",
-  "support.studio_rev": "Studio contract",
-  "support.managed_devices": "Managed Devices",
-  "support.managed_devices_value":
-    "{total} ({displays} displays, {trackers} BLE trackers)",
-  "support.copy_summary": "Copy version summary",
-  "support.copied_summary": "Copied version summary to clipboard",
-  "support.download_system_diagnostics": "Download System diagnostics",
-  "support.documentation": "Documentation",
-  "support.report_issue": "Report an issue",
-  // System -> Overview (D-051 / D-003 / D-004 / D-061 / D-076)
-  "sys_overview.no_devices": "No Devices",
-  "sys_overview.issues_one": "1 issue",
-  "sys_overview.issues_many": "{count} issues",
-  "sys_overview.updates_one": "1 update",
-  "sys_overview.updates_many": "{count} updates",
-  "sys_overview.all_online": "All online",
-  "sys_overview.healthy": "Healthy",
-  "sys_overview.sleeping_count": "{count} sleeping",
-  "sys_overview.away_count": "{count} away",
-  "sys_overview.scanning_count": "{count} scanning",
-  "sys_overview.offline_count": "{count} offline",
-  "sys_overview.low_battery_count": "{count} low battery",
-  "sys_overview.online_ratio": "{online} / {total} online",
-  "sys_overview.zero_devices": "0 Devices",
-  "sys_overview.ready_to_onboard": "Ready to onboard",
-  "sys_overview.displays_one": "1 display",
-  "sys_overview.displays_many": "{count} displays",
-  "sys_overview.phones_one": "1 phone",
-  "sys_overview.phones_many": "{count} phones",
-  "sys_overview.ble_tags_one": "1 BLE tag",
-  "sys_overview.ble_tags_many": "{count} BLE tags",
-  "sys_overview.audio_count": "{count} audio",
-  "sys_overview.open_device": "Open Device",
-  "sys_overview.discovered_banner_title": "Hardware ready to adopt",
-  "sys_overview.discovered_banner_one":
-    "1 unbound Latter Device detected on your network ({names}).",
-  "sys_overview.discovered_banner_many":
-    "{count} unbound Latter Devices detected on your network ({names}).",
-  "sys_overview.open_discovered": "Open discovered",
-  "sys_overview.tile_devices": "Managed Devices",
-  "sys_overview.tile_areas": "Area presence",
-  "sys_overview.occupied_count": "{count} occupied",
-  "sys_overview.areas_proxies_meta": "{areas} • {proxies}",
-  "sys_overview.areas_one": "1 Area",
-  "sys_overview.areas_many": "{count} Areas",
-  "sys_overview.proxies_one": "1 BLE proxy",
-  "sys_overview.proxies_many": "{count} BLE proxies",
-  "sys_overview.no_areas": "No Areas configured",
-  "sys_overview.tile_people_roaming": "People & roaming",
-  "sys_overview.people_assigned_one": "1 person assigned",
-  "sys_overview.people_assigned_many": "{count} people assigned",
-  "sys_overview.ble_tracked_meta": "{count} BLE-tracked",
-  "sys_overview.tile_release": "System release",
-  "sys_overview.fw_updates_one": "1 firmware update available",
-  "sys_overview.fw_updates_many": "{count} firmware updates available",
-  "sys_overview.check_fw_updates": "Check firmware updates",
-  "sys_overview.area_deployment_subtitle":
-    "Live occupancy, assigned Devices, and Bluetooth coverage across your Areas.",
-  "sys_overview.manage_presence": "Manage presence",
-  "sys_overview.roaming_devices": "Roaming Devices",
-  "sys_overview.roaming_active_ratio": "{online} / {total} active",
-  "sys_overview.plus_more": "+{count} more",
-  "sys_overview.here_prefix": "Here: {names}",
-  "sys_overview.remotes_one": "1 remote",
-  "sys_overview.remotes_many": "{count} remotes",
-  "sys_overview.active_sensors_one": "1 active sensor",
-  "sys_overview.active_sensors_many": "{count} active sensors",
-  "sys_overview.sensors_one": "1 sensor",
-  "sys_overview.sensors_many": "{count} sensors",
-  "sys_overview.occupied": "Occupied",
-  "sys_overview.no_devices_stationed": "No Devices stationed",
-  "sys_overview.signature_count": "Signature ({count})",
-  "sys_overview.ble_proxy": "BLE proxy",
-  "sys_overview.no_ble_proxy": "No BLE proxy",
-  "sys_overview.empty_deployment":
-    "No Home Assistant Areas or managed Devices configured yet.",
-  "sys_overview.unconfigured_areas_one":
-    "+1 additional Home Assistant Area without Latter Devices or BLE coverage.",
-  "sys_overview.unconfigured_areas_many":
-    "+{count} additional Home Assistant Areas without Latter Devices or BLE coverage.",
-  "sys_overview.photos_count_one": "1 photo",
-  "sys_overview.photos_count_many": "{count} photos",
-  // System -> Shared entities (D-022 / D-059 / D-065)
-  "shared.home_hub_subtitle":
-    "Shared climate zones, entry controls, vacuums, security, and weather across every Device.",
-  "shared.weather_label": "Weather",
-  "shared.security_alarm_label": "Security alarm",
-  "shared.thermostat_zones": "Thermostat zones",
-  "shared.add_zone": "Add zone",
-  "shared.choose_thermostat": "— Choose a thermostat —",
-  "shared.thermostat_aria": "Thermostat zone",
-  "shared.remove_thermostat": "Remove thermostat zone",
-  "shared.door_locks": "Door locks",
-  "shared.add_lock": "Add lock",
-  "shared.choose_lock": "— Choose a door lock —",
-  "shared.lock_aria": "Door lock",
-  "shared.remove_lock": "Remove door lock",
-  "shared.garage_doors": "Garage doors",
-  "shared.add_garage": "Add garage door",
-  "shared.choose_garage": "— Choose a garage door —",
-  "shared.garage_aria": "Garage door",
-  "shared.remove_garage": "Remove garage door",
-  "shared.robot_vacuums": "Robot vacuums",
-  "shared.add_vacuum": "Add vacuum",
-  "shared.choose_vacuum": "— Choose a robot vacuum —",
-  "shared.vacuum_aria": "Robot vacuum",
-  "shared.remove_vacuum": "Remove robot vacuum",
-  "shared.broadcast_speakers": "Broadcast speakers",
-  "shared.add_speaker": "Add speaker",
-  "shared.choose_speaker": "— Choose a speaker —",
-  "shared.speaker_aria": "Broadcast speaker",
-  "shared.remove_speaker": "Remove broadcast speaker",
-  "shared.broadcast_phrases": "Quick broadcast phrases",
-  "shared.add_phrase": "Add phrase",
-  "shared.phrase_placeholder": "Enter a quick broadcast phrase…",
-  "shared.phrase_aria": "Quick broadcast phrase",
-  "shared.remove_phrase": "Remove quick broadcast phrase",
-  "shared.calendars_subtitle":
-    "Upcoming events merged into the Activity card and agenda feed.",
-  "shared.add_calendar": "Add calendar",
-  "shared.choose_calendar": "— Choose a calendar —",
-  "shared.empty_calendars": "No calendars configured yet.",
-  "shared.calendar_aria": "Calendar",
-  "shared.remove_calendar": "Remove calendar",
-  "shared.wallpapers_subtitle":
-    "Shared System wallpapers and presets available to every Latter display.",
-  "shared.cameras_subtitle":
-    "Up to 10 cameras. Doorbell ring sensors wake displays automatically with listen audio and push-to-talk TTS replies.",
-  "shared.add_camera": "Add camera",
-  "shared.doorbell_filter_label": "Doorbell audio filter",
-  "shared.doorbell_filter_desc":
-    "Noise-reduction preset applied when listening to camera audio.",
-  "shared.filter_strong": "Strong",
-  "shared.filter_light": "Light",
-  "shared.filter_off": "Off",
-  "shared.choose_camera": "— Choose a camera —",
-  "shared.empty_cameras": "No cameras configured yet.",
-  "shared.camera_aria": "Camera",
-  "shared.remove_camera": "Remove camera",
-  "shared.camera_slot_primary": "Camera 1 (primary)",
-  "shared.camera_slot_n": "Camera {index}",
-  "shared.preview": "Preview",
-  "shared.preview_heading": "Preview: {entity}",
-  "shared.camera_preview_alt": "Camera preview",
-  "shared.cam_cap_rtsp": "RTSP",
-  "shared.cam_cap_mjpeg": "MJPEG",
-  "shared.cam_cap_snapshot": "Snapshot",
-  "shared.cam_cap_audio": "Audio",
-  "shared.cam_cap_doorbell": "Doorbell",
-  "shared.cam_cap_label": "Label: {label}",
-  "shared.cam_cap_listen": "Listen",
-  "shared.cam_cap_talk": "Talk",
-  "shared.cam_cap_reply": "Reply",
-  "shared.cam_cap_unlock": "Unlock: {entity}",
-  "shared.cam_cfg_title": "Camera options",
-  "shared.cam_cfg_label": "Display label",
-  "shared.cam_cfg_label_desc": "Short name shown on Latter displays (leave blank to use Home Assistant's name).",
-  "shared.cam_cfg_listen": "Show Listen button",
-  "shared.cam_cfg_listen_desc": "Allow monitoring camera audio from the camera view and doorbell popup.",
-  "shared.cam_cfg_talk": "Show Talk button",
-  "shared.cam_cfg_talk_desc": "Allow push-to-talk voice replies through this camera's speaker.",
-  "shared.cam_cfg_talk_no_speaker_desc": "No paired speaker was auto-detected for this camera, but you can still enable Talk manually.",
-  "shared.cam_cfg_reply": "Show Quick Reply button",
-  "shared.cam_cfg_reply_desc": "Show quick spoken reply presets on the camera view and doorbell popup.",
-  "shared.cam_cfg_unlock": "Unlock / Open button",
-  "shared.cam_cfg_unlock_desc": "Optionally link a specific door lock or garage door to show an Unlock/Open button on this camera.",
-  "shared.cam_cfg_unlock_none": "None (hide button)",
-  "shared.colors_subtitle":
-    "Shared 24-swatch accent library available across all Devices.",
-  "shared.add_color": "Add color",
-  "shared.delete_color_aria": "Delete color {name}",
-  "shared.empty_colors": "No custom colors saved yet.",
-  // System -> Media & remotes
-  "remotes.controls_subtitle":
-    "Up to 10 TV, streamer, or receiver entities controlled from the Remote screen.",
-  "remotes.add_remote": "Add remote",
-  "remotes.choose_remote": "— Choose a remote or media player —",
-  "remotes.empty_remotes": "No remote controls configured yet.",
-  "remotes.remote_aria": "Remote or media player",
-  "remotes.remove_remote": "Remove remote",
-  "remotes.slot_primary": "Slot 1 (primary power target)",
-  "remotes.slot_n": "Slot {index}",
-  "remotes.overrides_subtitle":
-    "Redirects volume buttons when audio plays through an external AVR or soundbar.",
-  "remotes.add_override": "Add override",
-  "remotes.when_playing_on": "When audio plays on",
-  "remotes.speaker_aria": "Speaker",
-  "remotes.choose_speaker": "— Choose a speaker —",
-  "remotes.change_volume_on": "Change the volume on",
-  "remotes.volume_target_aria": "Volume target",
-  "remotes.choose_volume_target": "— Choose a volume target —",
-  "remotes.remove_override_aria": "Remove volume override",
-  "remotes.empty_overrides": "No volume overrides configured.",
-  "remotes.groups_subtitle":
-    "Bind sets of remotes to Home Assistant Areas or specific Devices.",
-  "remotes.add_group": "Add group",
-  "remotes.group_name": "Group name",
-  "remotes.group_name_placeholder": "e.g. Living Area TV",
-  "remotes.loads_in_area": "Loads in Area",
-  "remotes.area_aria": "Area",
-  "remotes.no_area_option": "No Area (assign to Devices only)",
-  "remotes.delete_group_aria": "Delete remote group {name}",
-  "remotes.group_remotes_label": "Remote controls",
-  "remotes.primary_badge": "★ Primary: {name}",
-  "remotes.numbered_badge": "#{index}: {name}",
-  "remotes.add_badge": "+ {name}",
-  "remotes.add_remotes_first": "Add remote controls first.",
-  "remotes.empty_groups": "No remote groups yet.",
-  // Device groups & staged Batch controls (D-050 / D-064 / Q6 / R-8)
-  "groups.title": "Device groups",
-  "groups.card_title": "Group presets & custom groups",
-  "groups.card_subtitle":
-    "Built-in hardware presets and custom Device groups that keep assigned Devices aligned.",
-  "groups.create_group": "Create group",
-  "groups.group_name": "Group name",
-  "groups.group_name_placeholder": "e.g. Guest suites",
-  "groups.description_optional": "Description (optional)",
-  "groups.description_placeholder": "Optional description",
-  "groups.copy_from_aria": "Copy settings from Device",
-  "groups.start_from_defaults": "Start from default settings",
-  "groups.copy_from_prefix": "Copy from: {title}",
-  "groups.members_one": "1 Device",
-  "groups.members_many": "{count} Devices",
-  "groups.scope_display_chip": "Display",
-  "groups.scope_interface_chip": "Interface",
-  "groups.view_devices": "View Devices",
-  "groups.reset_preset": "Reset preset",
-  "groups.reset_preset_toast": "Reset \"{name}\" to preset defaults",
-  "groups.delete_group_aria": "Delete group {name}",
-  "groups.devices_list_meta": "Devices: {names}",
-  "groups.no_devices_assigned": "No Devices assigned",
-  "groups.empty_groups": "No Device groups configured.",
-  "groups.custom_summary_title": "Custom (individual settings)",
-  "groups.custom_summary_desc":
-    "Devices move to Custom automatically when individual settings diverge from a group baseline.",
-  "groups.detached_toast": "Detached \"{title}\" to Custom (individual settings)",
-  "groups.detached_many_toast": "Applied changes ({count} Devices switched to Custom)",
-  "groups.baseline_settings": "Baseline settings",
-  "groups.section_power_brightness": "Power & brightness",
-  "groups.section_audio_voice": "Audio & voice",
-  "groups.section_presence_security": "Presence & security",
-  "groups.section_display": "Display",
-  "groups.section_interface": "Interface & shortcuts",
-  "groups.for_group_aria": "{label} for {group}",
-  "groups.wallpaper_none": "None (weather / solid)",
-  "groups.remote_match_area": "Follow the active Area",
-  "groups.remote_group_prefix": "Group: {name}",
-  "groups.remote_all_system": "All System remotes",
-  "groups.dock_baseline_desc_one":
-    "Baseline holds 1 shortcut (captures from source Device below).",
-  "groups.dock_baseline_desc_many":
-    "Baseline holds {count} shortcuts (captures from source Device below).",
-  "groups.copy_dock": "Copy dock",
-  "groups.pinned_baseline_desc_one":
-    "Baseline holds 1 shortcut (captures from source Device below).",
-  "groups.pinned_baseline_desc_many":
-    "Baseline holds {count} shortcuts (captures from source Device below).",
-  "groups.copy_pinned": "Copy pinned",
-  "groups.clocks_baseline_desc_one":
-    "Baseline holds 1 zone (captures from source Device below).",
-  "groups.clocks_baseline_desc_many":
-    "Baseline holds {count} zones (captures from source Device below).",
-  "groups.copy_clocks": "Copy clocks",
-  "groups.copy_from_device": "Copy from Device",
-  "groups.source_device": "Source Device",
-  "groups.source_device_desc":
-    "Replaces this group's active baseline scope with an existing Device's settings.",
-  "groups.copy_into_aria": "Copy settings into {name}",
-  "groups.copy_settings": "Copy settings",
-  "groups.confirm_copy_title": "Copy settings into \"{group}\"?",
-  "groups.confirm_copy_body":
-    "Updates the \"{group}\" baseline from \"{device}\" and syncs all assigned Devices.",
-  "groups.confirm_copy_list_body":
-    "Copies {listLabel} from \"{device}\" into the \"{group}\" baseline and syncs assigned Devices.",
-  "groups.confirm_copy_confirm": "Copy into baseline",
-  "groups.include_display": "Include display settings",
-  "groups.include_display_desc":
-    "Sync wallpapers, clock face, color profile, and media appearance.",
-  "groups.include_interface": "Include interface & shortcuts",
-  "groups.include_interface_desc":
-    "Sync start screen, App Dock, pinned shortcuts, and hub categories.",
-  "batch.title": "Batch controls",
-  "batch.subtitle":
-    "Stage changes across a filtered set of Devices, then apply them together without altering saved group baselines.",
-  "batch.target_filter": "Target Devices",
-  "batch.target_filter_aria": "Target Devices for batch controls",
-  "batch.category_filter_aria": "Filter batch controls by category",
-  "batch.all_latter_devices": "All Latter Devices",
-  "batch.online_devices": "Online Devices",
-  "batch.roaming_devices": "Roaming Devices",
-  "batch.stationary_devices": "Stationary Devices",
-  "batch.all_categories": "All categories",
-  "batch.cat_display": "Display",
-  "batch.cat_interface": "Interface",
-  "batch.cat_audio": "Audio",
-  "batch.cat_power": "Power",
-  "batch.cat_presence": "Presence",
-  "batch.cat_security": "Security",
-  "batch.staged_count": "{count} staged",
-  "batch.staged_badge": "Staged",
-  "batch.mixed_badge": "Mixed",
-  "batch.mixed_pill_suffix": "{label} (mixed)",
-  "batch.mixed_hint":
-    "Target Devices currently have different values — choose a value to stage across all targets.",
-  "batch.row_meta_one": "{section} • 1 Device",
-  "batch.row_meta_many": "{section} • {count} Devices",
-  "batch.detachment_note_one":
-    "1 grouped Device will switch to Custom if staged settings diverge from its group baseline.",
-  "batch.detachment_note_many":
-    "{count} grouped Devices will switch to Custom if staged settings diverge from their group baselines.",
-  "batch.apply_to_n": "Apply to {count} Devices",
-  "batch.apply_to_one": "Apply to 1 Device",
-  "batch.applied_to_n": "Applied staged changes to {count} Devices",
-  "batch.applied_to_one": "Applied staged changes to 1 Device",
-  "batch.reset_staged": "Reset",
-  "batch.no_targets": "No Devices match the selected filter.",
-  "batch.empty_all": "No Latter Devices onboarded yet.",
-  "batch.empty_target": "No Latter Devices currently match {target}.",
-  "batch.empty_category": "No batch controls match this category.",
-  "batch.target_summary": "Target ({count}): {names}",
-  "batch.copy_lists_title": "Copy multi-item lists",
-  "batch.template_device": "Template Device",
-  "batch.template_device_aria": "Template Device for batch list copy",
-  "batch.template_device_desc":
-    "Copies App Dock, pinned shortcuts, or world clocks to {target}.",
-  "batch.push_dock": "Push App Dock",
-  "batch.push_pinned": "Push pinned shortcuts",
-  "batch.push_clocks": "Push world clocks",
-  "batch.confirm_push_list_title": "Push {listLabel} to {target}?",
-  "batch.confirm_push_list_body":
-    "Replaces {listLabel} on matching Devices using \"{device}\" as the template.",
-  "batch.confirm_push_list_confirm": "Push list",
-  // System -> BLE & Area presence (D-044 / D-045 / D-046 / D-058)
-  "presence_sys.area_card_subtitle":
-    "Configures how each Area combines Bluetooth tracking and occupancy sensors.",
-  "presence_sys.mode_weighted": "Weighted (BLE and sensors)",
-  "presence_sys.mode_any_or": "Either (BLE or a sensor)",
-  "presence_sys.mode_ble_only": "BLE only",
-  "presence_sys.mode_both": "Both (BLE and a sensor)",
-  "presence_sys.occupied_sensor": "Occupied (sensor)",
-  "presence_sys.empty": "Empty",
-  "presence_sys.ble_dbm": "BLE {rssi} dBm{distance}",
-  "presence_sys.signature_match": "signature match",
-  "presence_sys.active_sensors_one": "1 active sensor",
-  "presence_sys.active_sensors_many": "{count} active sensors",
-  "presence_sys.clear_sensors_one": "1 sensor clear",
-  "presence_sys.clear_sensors_many": "{count} sensors clear",
-  "presence_sys.unavailable_sensors_one": "1 sensor unavailable",
-  "presence_sys.unavailable_sensors_many": "{count} sensors unavailable",
-  "presence_sys.calibrated_meta": "calibrated {when} ({samples} samples)",
-  "presence_sys.calibrate_hint":
-    "calibrate with a carried Device to detect BLE presence here",
-  "presence_sys.clear_signature": "Clear signature",
-  "presence_sys.calibrate": "Calibrate",
-  "presence_sys.occupied_chip": "Occupied • {confidence}",
-  "presence_sys.clear_chip": "Clear",
-  "presence_sys.signature_proxies_one": "Signature (1 proxy)",
-  "presence_sys.signature_proxies_many": "Signature ({count} proxies)",
-  "presence_sys.presence_mode": "Presence mode",
-  "presence_sys.presence_mode_aria": "Presence mode for {area}",
-  "presence_sys.sensor_threshold_drawer": "Sensor & threshold settings",
-  "presence_sys.occupied_at": "Occupied at",
-  "presence_sys.occupied_at_weighted_desc":
-    "The Area counts as occupied when the combined BLE and sensor score reaches this level.",
-  "presence_sys.occupied_at_other_desc": "Used only in Weighted mode.",
-  "presence_sys.sensors_that_count": "Sensors that count",
-  "presence_sys.sensors_selected_desc": "{selected} of {total} selected.",
-  "presence_sys.sensors_all_desc": "None selected: every sensor in this Area counts.",
-  "presence_sys.sensors_group_aria": "Sensors that count in {area}",
-  "presence_sys.calibrate_all_lux": "Auto-calibrate lux",
-  "presence_sys.lux_chip": "{lux} lx ({level}%)",
-  "presence_sys.ambient_sensor": "Ambient light sensor",
-  "presence_sys.ambient_sensor_aria": "Ambient light sensor for {area}",
-  "presence_sys.ambient_sensor_auto": "Auto ({sensor})",
-  "presence_sys.ambient_sensor_auto_none": "Auto (none detected)",
-  "presence_sys.ambient_sensor_disabled": "None (use schedule fallback)",
-  "presence_sys.ambient_dark_lux": "Dark floor (lx)",
-  "presence_sys.ambient_bright_lux": "Bright ceiling (lx)",
-  "presence_sys.ambient_calibration_desc":
-    "Auto-calibrate from 7-day Home Assistant statistics or tune manually for this sensor.",
-  "presence_sys.calibrate_lux_btn": "Auto-calibrate",
-  "presence_sys.calibrating_lux": "Calibrating…",
-  "presence_sys.lux_bounds_error": "Dark floor must be lower than bright ceiling.",
-  "presence_sys.calibrate_lux_done": "Calibrated ambient light for {count} Areas.",
-  "presence_sys.calibrate_lux_one_done": "Calibrated {area}: {dark}–{bright} lx.",
-  "presence_sys.no_area_sensors":
-    "This Area has no occupancy, motion, or door sensors.",
-  "presence_sys.empty_areas":
-    "No Home Assistant Areas, Bluetooth proxies, or occupancy sensors found yet.",
-  "presence_sys.calibration_subtitle":
-    "Carry a tracked Device into an Area to check Bluetooth proxy signal levels or save an Area signature.",
-  "presence_sys.pause_stream": "Pause stream",
-  "presence_sys.resume_stream": "Resume stream",
-  "presence_sys.open_discovered": "Open discovered Devices",
-  "presence_sys.empty_ble_devices":
-    "No Devices currently have Bluetooth Area tracking enabled. Turn on BLE Area tracking on a portable Device, or adopt a phone or tag under Discovered devices.",
-  "presence_sys.handoff_ready":
-    "Ready to calibrate {area} — carry {device} into {area} and select Calibrate Area.",
-  "presence_sys.your_device": "your Device",
-  "presence_sys.this_device": "this Device",
-  "presence_sys.this_area": "this Area",
-  "presence_sys.carried_device": "Carried Device",
-  "presence_sys.carried_device_desc":
-    "Choose the actively tracked Device or BLE tag you are holding.",
-  "presence_sys.live_signal_active": "Live BLE signal active — currently detected in ",
-  "presence_sys.packets_observed": " ({count} packets observed).",
-  "presence_sys.no_recent_packets_prefix":
-    "No live BLE packets in the last 12 seconds — wake ",
-  "presence_sys.no_recent_packets_suffix":
-    " or hold it in hand so its Bluetooth beacon broadcasts before calibrating.",
-  "presence_sys.standing_in_area": "Standing in Area",
-  "presence_sys.cal_desc_no_areas":
-    "Create at least one Home Assistant Area before saving a Bluetooth signature.",
-  "presence_sys.cal_desc_replace":
-    "Updates the saved {count}-proxy Bluetooth signature for {area} using live signal readings.",
-  "presence_sys.cal_desc_proxyless":
-    "Saves readings from nearby Bluetooth proxies so {area} can detect presence even without its own proxy.",
-  "presence_sys.cal_desc_new":
-    "Saves Bluetooth signal strengths from nearby proxies while you stand in {area} for more accurate Area boundaries.",
-  "presence_sys.suffix_saved": " (signature saved)",
-  "presence_sys.suffix_no_proxy": " (no BLE proxy)",
-  "presence_sys.no_ha_areas_option": "No Home Assistant Areas configured",
-  "presence_sys.calibrate_area_btn": "Calibrate Area",
-  "presence_sys.nearby_proxies": "Nearby Bluetooth proxies",
-  "presence_sys.unassigned_proxy": "Unassigned proxy",
-  "presence_sys.assign_area_in_ha": "Assign Area in Home Assistant",
-  "presence_sys.active_winner": "Active winner",
-  "presence_sys.stale_suffix": " (stale)",
-  "presence_sys.trim_suffix": " • trim {offset}",
-  "presence_sys.antenna_trim": "Antenna trim",
-  "presence_sys.antenna_trim_help":
-    "Raw {raw} • Offset {offset} — adjust only if this proxy consistently reads stronger or weaker across every Area.",
-  "presence_sys.minus_one_db": "-1 dB",
-  "presence_sys.plus_one_db": "+1 dB",
-  "presence_sys.empty_survey": "No Bluetooth proxy readings yet for this Device.",
-  "presence_sys.advanced_subtitle":
-    "System-wide away timeout, maximum detection distance, movement smoothing, and wall signal drop-off.",
-  "presence_sys.away_timeout": "Away timeout",
-  "presence_sys.away_timeout_desc":
-    "Seconds without any Bluetooth packet before a tracked tag or offline Device is marked Away.",
-  "presence_sys.max_radius": "Maximum Area radius",
-  "presence_sys.max_radius_desc":
-    "Ignores Bluetooth proxies farther than this distance in meters so outdoor signals do not claim indoor Areas.",
-  "presence_sys.max_radius_ft": "Maximum Area radius (ft)",
-  "presence_sys.max_radius_ft_desc":
-    "Ignores Bluetooth proxies farther than this distance in feet so outdoor signals do not claim indoor Areas.",
-  "presence_sys.max_speed": "Maximum movement speed",
-  "presence_sys.max_speed_desc":
-    "Smooths sudden signal drops that would imply movement faster than this speed in meters per second.",
-  "presence_sys.max_speed_fps": "Maximum movement speed (ft/s)",
-  "presence_sys.max_speed_fps_desc":
-    "Smooths sudden signal drops that would imply movement faster than this speed in feet per second.",
-  "presence_sys.attenuation": "Wall signal drop-off",
-  "presence_sys.attenuation_desc":
-    "Controls how quickly Bluetooth signal strength fades with distance through walls (default 2.2).",
-  // System -> Tools (D-020 / D-040 / D-064 / D-066)
-  "tools_sys.announce_subtitle":
-    "Send screen popups or spoken intercom broadcasts to all Devices, occupied Areas, or one display.",
-  "tools_sys.announce_mode_aria": "Announcement mode",
-  "tools_sys.screen_notification": "Screen notification",
-  "tools_sys.voice_broadcast": "Voice broadcast",
-  "tools_sys.target_label": "Target",
-  "tools_sys.all_displays": "All Latter displays",
-  "tools_sys.occupied_areas_only": "Occupied Areas only",
-  "tools_sys.device_prefix": "Device: {title}",
-  "tools_sys.notification_title": "Notification title",
-  "tools_sys.notification_title_placeholder": "e.g. Front gate",
-  "tools_sys.priority": "Priority",
-  "tools_sys.priority_normal": "Normal",
-  "tools_sys.priority_warning": "Warning",
-  "tools_sys.priority_critical": "Critical",
-  "tools_sys.include_camera": "Include primary camera",
-  "tools_sys.message": "Message",
-  "tools_sys.message_placeholder": "Message to display or speak…",
-  "tools_sys.send_now": "Send now",
-  "tools_sys.doorbell_subtitle":
-    "Verify push-to-talk TTS reply playback through Camera 1's bound door speaker.",
-  "tools_sys.source_device": "Source Device",
-  "tools_sys.source_device_desc":
-    "Latter Device context used when routing the door speaker reply.",
-  "tools_sys.no_latter_devices": "— No Latter Devices —",
-  "tools_sys.test_door_reply": "Test door speaker reply",
-  "tools_sys.doorbell_desc_no_cam":
-    "Add a camera with a bound door speaker in Shared entities first to test TTS reply playback.",
-  "tools_sys.doorbell_desc_no_dev":
-    "Onboard at least one Latter Device first to route push-to-talk test replies.",
-  "tools_sys.doorbell_desc_ready":
-    "Plays a short TTS phrase on Camera 1's bound media player ({camera}).",
-  "tools_sys.doorbell_reply_placeholder": "Testing Latter doorbell audio.",
-  "tools_sys.play_door_speaker": "Play on door speaker",
-  "tools_sys.logs_filter_aria": "Filter diagnostic logs",
-  "tools_sys.logs_all": "All events",
-  "tools_sys.logs_studio": "Latter Studio",
-  "tools_sys.logs_errors": "Warnings & errors",
-  "tools_sys.refresh_logs": "Refresh logs",
-  "tools_sys.copy_logs": "Copy logs",
-  "tools_sys.clear_logs": "Clear logs",
-  "tools_sys.backup_subtitle":
-    "Export or restore non-secret System and Device settings as portable JSON bundles.",
-  "tools_sys.export_scope": "Export scope",
-  "tools_sys.entire_system": "Entire System + all Devices",
-  "tools_sys.restore_from_backup": "Restore from backup",
-  "tools_sys.target_device_restore": "Target Device (for single-Device backups)",
-  "tools_sys.auto_system_backup": "— Automatic (System backup) —",
-  "tools_sys.system_pin_label": "System security PIN",
-  "tools_sys.system_pin_desc":
-    "Default 4-to-12-digit PIN required before unlocking doors, opening garage covers, or disarming alarms when a Device requires a PIN.",
-  "tools_sys.system_pin_aria": "System security PIN (4 to 12 digits)",
-  "tools_sys.pin_replace_placeholder": "Enter new PIN to replace…",
-  "tools_sys.pin_digits_placeholder": "4 to 12 digits",
-  "tools_sys.save_pin": "Save PIN",
-  "tools_sys.clear_pin": "Clear PIN",
-  "tools_sys.signing_key_label": "Resource URL signing key",
-  "tools_sys.signing_key_desc":
-    "Refreshes the signing key for camera, wallpaper, and doorbell audio links and updates connected Devices.",
-  "tools_sys.rotate_signing_key": "Rotate signing key",
-  // Dialogs (`src/components/dialogs/*`, D-047 / D-053 / D-062 / D-064)
-  "dialogs.app_pinned": "Pinned app",
-  "dialogs.app_home_hub": "Home hub",
-  "dialogs.app_cameras": "Cameras",
-  "dialogs.app_area": "Area control",
-  "dialogs.app_music": "Music",
-  "dialogs.app_remote": "Remote control",
-  "dialogs.app_weather": "Sky & weather",
-  "dialogs.app_time": "Time",
-  "dialogs.weather_bg_label": "Live weather background",
-  "dialogs.weather_bg_desc":
-    "Show the live animated weather sky inside the Sky & weather app. Turn off to use this Device's wallpaper instead.",
-  "dialogs.app_calendar": "Calendar",
-  "dialogs.app_clock": "Clock face",
-  "dialogs.app_tools": "Tools",
-  "dialogs.app_games": "Games",
-  "dialogs.app_fallback": "Configure app",
-  "dialogs.pinned_label": "Pinned shortcuts",
-  "dialogs.pinned_desc":
-    "Assign Home Assistant entity quick actions or deep-link any Latter app or subpage (6 buttons per page, swipable vertically).",
-  "dialogs.pinned_aria": "Pinned app shortcuts",
-  "dialogs.pinned_page_slot": "Page {page}",
-  "dialogs.pinned_confirm_mode": "Confirm",
-  "dialogs.pinned_one_tap_mode": "1-tap",
-  "dialogs.pinned_empty":
-    "No pinned items configured yet. The Pinned icon stays hidden on the App Dock until you add at least one item.",
-  "dialogs.home_cats_label": "Home categories",
-  "dialogs.home_cats_desc":
-    "Toggle and reorder categories shown in the Home hub. The first available category opens by default; categories with no configured entity are not displayed.",
-  "dialogs.broadcast_speakers_label": "Broadcast speakers",
-  "dialogs.broadcast_speakers_desc":
-    "Choose which System broadcast speakers this Device announces to. The calling Device's own speaker and displays in Bedtime mode are skipped automatically.",
-  "dialogs.broadcast_speakers_empty_system":
-    "No broadcast speakers configured in System shared entities yet.",
-  "dialogs.camera_default_view_desc": "Layout shown when opening the Cameras app.",
-  "dialogs.camera_framing_desc": "Show the full frame uncropped or fill the display.",
-  "dialogs.camera_carousel_interval_desc": "How often Carousel advances to the next camera.",
-  "dialogs.camera_stream_mode_desc":
-    "Balances live video frame rate against network bandwidth and battery.",
-  "dialogs.camera_doorbell_popup_desc":
-    "Choose whether doorbell rings open a still snapshot or live video.",
-  "dialogs.camera_visible_label": "Visible cameras",
-  "dialogs.camera_visible_desc":
-    "Toggle and reorder cameras shown in the Cameras app on this Device. Leave all enabled to follow Shared entities automatically.",
-  "dialogs.camera_carousel_label": "Carousel cameras",
-  "dialogs.camera_carousel_desc":
-    "Choose and reorder which visible cameras rotate in Carousel view.",
-  "dialogs.cameras_empty_system": "No cameras configured in Shared entities yet.",
-  "dialogs.area_cats_label": "Area categories",
-  "dialogs.area_cats_desc":
-    "Toggle and reorder categories shown on the Area screen. The first available category opens by default; categories with no entities in the active Area are not displayed.",
-  "dialogs.remote_group_label": "Remote control scope",
-  "dialogs.remote_group_desc":
-    "Choose which remotes appear on this Device's Remote screen.",
-  "dialogs.remote_follow_area": "Follow the active Area",
-  "dialogs.remote_group_option": "Group: {name}",
-  "dialogs.remote_all_system": "All System remotes",
-  "dialogs.remote_missing_group": "Missing group ({id})",
-  "dialogs.manage_remote_groups": "Manage remote groups",
-  "dialogs.local_clock_label": "Local clock label",
-  "dialogs.local_clock_desc":
-    "Optional custom label shown above local time on the Clock tab.",
-  "dialogs.optional_label_placeholder": "Optional label…",
-  "dialogs.show_utc_label": "Show UTC clock",
-  "dialogs.show_utc_desc":
-    "Pin a live 24-hour UTC reference row to this Device's Clock tab.",
-  "dialogs.world_clocks_label": "World clocks",
-  "dialogs.world_clocks_desc":
-    "Configure up to 4 custom-labeled time zones (UTC-12:00 to UTC+14:00) shown on this Device's Clock tab.",
-  "dialogs.world_clocks_aria": "Configured world clocks",
-  "dialogs.world_clock_city_label": "World clock {index} city label",
-  "dialogs.world_clock_zone_label": "World clock {index} time zone",
-  "dialogs.city_label_placeholder": "Enter city or label…",
-  "dialogs.new_city_label": "New city label",
-  "dialogs.add_time_zone": "Add time zone",
-  "dialogs.max_world_clocks": "Maximum 4 world clocks added",
-  "dialogs.select_tz_placeholder": "Select a time zone (UTC-12 to UTC+14)…",
-  "dialogs.toast_enter_city": "Enter a city or label for this world clock",
-  "dialogs.toast_select_tz": "Select a time zone for this world clock",
-  "dialogs.toast_dup_world_clock": "That world clock is already added",
-  "dialogs.toast_city_empty": "City label cannot be empty",
-  "dialogs.calendar_lookahead_label": "Overview lookahead",
-  "dialogs.calendar_lookahead_desc":
-    "Number of upcoming days shown on the Overview tab (days with no events are omitted).",
-  "dialogs.calendar_week_start_label": "Start week on",
-  "dialogs.calendar_week_start_desc":
-    "First column shown in Week and Month views.",
-  "dialogs.tools_label": "Tools",
-  "dialogs.tools_desc": "Toggle and reorder utilities shown in the Tools launcher.",
-  "dialogs.games_label": "Games",
-  "dialogs.games_desc": "Toggle and reorder games shown in the Games launcher.",
-  "dialogs.sc_edit_dock": "Edit custom dock shortcut",
-  "dialogs.sc_edit_pinned": "Edit pinned shortcut",
-  "dialogs.sc_add_dock": "Add custom dock shortcut",
-  "dialogs.sc_add_pinned": "Add pinned shortcut",
-  "dialogs.sc_type_aria": "Shortcut type",
-  "dialogs.sc_tab_subpage": "Subpage",
-  "dialogs.sc_tab_app_page": "App or page",
-  "dialogs.sc_tab_entity": "Home Assistant entity",
-  "dialogs.sc_target_subpage": "Target subpage",
-  "dialogs.sc_target_app_page": "Target app or subpage",
-  "dialogs.sc_domain_filter": "Domain filter",
-  "dialogs.sc_all_domains": "All domains",
-  "dialogs.shortcut_entity_label": "Entity",
-  "dialogs.sc_action_label": "Action",
-  "dialogs.sc_confirm_label": "Confirm before running",
-  "dialogs.sc_confirm_dock_desc":
-    "Shows a confirmation prompt before running this action from the App Dock.",
-  "dialogs.sc_confirm_pinned_desc":
-    "Require a confirmation tap instead of running immediately on a single tap.",
-  "dialogs.sc_custom_label": "Custom label (optional)",
-  "dialogs.sc_default_shortcut": "Shortcut",
-  "dialogs.sc_default_entity_action": "Entity action",
-  "dialogs.sc_icon_label": "Icon (optional MDI override)",
-  "dialogs.sc_icon_search_placeholder":
-    "Search all {total} icons (e.g. teddy-bear, baby, lamp)…",
-  "dialogs.sc_icon_selected": "Selected: {icon}",
-  "dialogs.sc_icon_default": "Default: {icon}",
-  "dialogs.sc_icon_no_matches": "No matching icons — try another keyword",
-  "dialogs.sc_icon_showing_subset": "Showing {shown} of {total} matches",
-  "dialogs.sc_icon_matches_one": "1 matching icon",
-  "dialogs.sc_icon_matches_many": "{count} matching icons",
-  "dialogs.sc_icon_popular": "Showing popular icons ({total} searchable)",
-  "dialogs.sc_mdi_group_aria": "Material Design Icons",
-  "dialogs.cw_title": "Add a custom color",
-  "dialogs.cw_color_aria": "Color",
-  "dialogs.cw_hex_aria": "Hex color",
-  "dialogs.cw_name_label": "Name",
-  "dialogs.cw_name_placeholder": "e.g. Sunset coral",
-  "dialogs.ble_title": "Add a BLE tag",
-  "dialogs.ble_body":
-    "A phone, watch, or Bluetooth tag that Latter tracks by Area. Latter displays are adopted under Discovered devices.",
-  "dialogs.ble_discovered_label": "Discovered Bluetooth devices",
-  "dialogs.ble_enter_manually": "Enter manually…",
-  "dialogs.ble_name_label": "Name",
-  "dialogs.ble_name_placeholder": "e.g. phone, watch, keys",
-  "dialogs.ble_addr_label": "Target address or entity",
-  "dialogs.ble_addr_placeholder":
-    "AA:BB:CC:DD:EE:FF, iBeacon UUID, or tracker entity",
-  "dialogs.ble_addr_help":
-    "Enter a static BLE MAC address, iBeacon UUID (with optional major:minor), or Home Assistant Companion App or tracker entity.",
-  "dialogs.ble_person_label": "Assigned person (optional)",
-  "dialogs.save_group_title": "Save custom group",
-  "dialogs.save_group_body":
-    "Saves this Device's settings as a reusable Device group and assigns this Device to it.",
-  "dialogs.save_group_name_placeholder": "e.g. Nightstands, Guest suites",
-  "dialogs.save_group_desc_placeholder": "Optional summary of these settings",
-  // Confirmation dialogs (D-064 / Q5 — all destructive / System-wide actions)
-  "confirm.blast_radius_one": "Affects 1 Device",
-  "confirm.blast_radius_many": "Affects {count} Devices",
-  "confirm.remove_device.title": "Remove {title}?",
-  "confirm.remove_device.body":
-    "Removes \"{title}\" from Latter and deletes its stored Latter preferences and shortcuts. Your ESPHome device stays in Home Assistant.",
-  "confirm.remove_device.confirm": "Remove Device",
-  "confirm.reset_device.title": "Reset to defaults?",
-  "confirm.reset_device.body":
-    "Wi-Fi and pairing are kept, so the Device rejoins Home Assistant automatically. Its ESPHome binding and Music Assistant player link are kept too.",
-  "confirm.reset_device.device_settings": "Settings saved on the Device",
-  "confirm.reset_device.device_settings_desc":
-    "Erases everything saved on the Device and restarts it.",
-  "confirm.reset_device.latter_options": "Latter settings for this Device",
-  "confirm.reset_device.latter_options_desc":
-    "Resets shortcuts, group assignment, and Latter preferences for this Device to factory defaults.",
-  "confirm.reset_device.confirm": "Reset",
-  "confirm.restore_backup.title": "Restore from backup?",
-  "confirm.restore_backup.body":
-    "Overwrites current Latter settings with the selected JSON backup bundle.",
-  "confirm.restore_backup.confirm": "Restore backup",
-  "confirm.delete_group.title": "Delete group \"{name}\"?",
-  "confirm.delete_group.body":
-    "Devices currently assigned to this group keep their settings and switch to Custom.",
-  "confirm.delete_group.confirm": "Delete group",
-  "confirm.reset_group.title": "Reset \"{name}\" to preset defaults?",
-  "confirm.reset_group.body":
-    "Restores the built-in power, wake, and scope defaults for this group and applies them to assigned Devices.",
-  "confirm.reset_group.confirm": "Reset preset",
-  "confirm.rotate_signing_key.title": "Rotate URL signing key?",
-  "confirm.rotate_signing_key.body":
-    "Invalidates active signed wallpaper, camera snapshot, and doorbell audio URLs until Devices receive the next state push.",
-  "confirm.rotate_signing_key.confirm": "Rotate signing key",
-  "confirm.delete_photo.title": "Delete photo \"{name}\"?",
-  "confirm.delete_photo.body":
-    "Permanently deletes this photo from the System library and removes it from any Device wallpaper or Photo frame pools.",
-  "confirm.delete_photo.confirm": "Delete photo",
-  "confirm.delete_photos_bulk.title": "Delete {count} photos?",
-  "confirm.delete_photos_bulk.body":
-    "Permanently deletes the selected uploaded photos and prunes them from Device wallpaper and Photo frame pools.",
-  "confirm.delete_photos_bulk.confirm": "Delete photos",
-  "confirm.delete_collection.title": "Delete collection \"{name}\"?",
-  "confirm.delete_collection.body":
-    "Deletes this collection label. Photos inside stay in your Photo library.",
-  "confirm.delete_collection.confirm": "Delete collection",
-  // System -> Photos library, upload cropper, & HA Media import (D-072)
-  "photos.subtitle":
-    "Shared System photo library and collections used for Device wallpapers and Photo frame screensavers.",
-  "photos.upload_btn": "Upload photos",
-  "photos.import_media_btn": "Import from Media",
-  "photos.new_collection_btn": "New collection",
-  "photos.new_collection_placeholder": "Collection name (e.g. Family, Landscapes)…",
-  "photos.create_collection": "Create",
-  "photos.rename_collection_aria": "Rename collection {name}",
-  "photos.delete_collection_aria": "Delete collection {name}",
-  "photos.rename_collection_placeholder": "Collection name…",
-  "photos.filter_all": "All",
-  "photos.filter_defaults": "Defaults",
-  "photos.filter_my_photos": "My photos",
-  "photos.filter_uncategorized": "Uncategorized",
-  "photos.search_placeholder": "Search photos by name…",
-  "photos.search_aria": "Search photos",
-  "photos.select_mode_btn": "Select",
-  "photos.done_selecting_btn": "Done selecting",
-  "photos.selected_count_one": "1 selected",
-  "photos.selected_count_many": "{count} selected",
-  "photos.select_all_page": "Select page",
-  "photos.clear_selection": "Clear selection",
-  "photos.bulk_collection_aria": "Choose collection for selected photos",
-  "photos.bulk_choose_collection": "— Choose collection —",
-  "photos.bulk_add_to_collection": "Add to collection",
-  "photos.bulk_remove_from_collection": "Remove from collection",
-  "photos.bulk_delete_btn": "Delete selected",
-  "photos.badge_dynamic": "Dynamic",
-  "photos.badge_default": "Default",
-  "photos.badge_media": "Media",
-  "photos.edit_photo_aria": "Edit photo {name}",
-  "photos.select_photo_aria": "Select photo {name}",
-  "photos.empty_library":
-    "No photos match this filter. Upload photos or import from Home Assistant Media.",
-  "photos.page_status": "Showing {start}–{end} of {total}",
-  "photos.prev_page": "Previous",
-  "photos.next_page": "Next",
-  "photos.created_collection_toast": "Created collection \"{name}\"",
-  "photos.renamed_collection_toast": "Renamed collection to \"{name}\"",
-  "photos.deleted_collection_toast": "Deleted collection",
-  "photos.updated_photo_toast": "Saved photo changes",
-  "photos.deleted_photo_toast": "Deleted photo",
-  "photos.bulk_updated_toast": "Updated {count} photo(s)",
-  "photos.bulk_deleted_toast": "Deleted {count} photo(s)",
-  // Photo Editor & Crop modal
-  "photo_edit.title": "Edit photo",
-  "photo_edit.name_label": "Photo name",
-  "photo_edit.name_placeholder": "Enter a photo name…",
-  "photo_edit.crop_heading": "Framing & focal point",
-  "photo_edit.crop_hint":
-    "Drag to pan and use the slider to zoom. Originals are kept intact so every display shape stays sharp.",
-  "photo_edit.aspect_aria": "Preview display shape",
-  "photo_edit.aspect_square": "Square + circle",
-  "photo_edit.aspect_round": "Round",
-  "photo_edit.aspect_widescreen": "Widescreen",
-  "photo_edit.zoom_label": "Zoom",
-  "photo_edit.reset_crop": "Reset crop",
-  "photo_edit.collections_label": "Collections",
-  "photo_edit.collections_empty": "Create a collection in Photos to organize photos into albums.",
-  "photo_edit.dimensions_meta": "{width} × {height} px",
-  "photo_edit.source_media": "Imported from {path}",
-  // Multi-file Upload & Crop Staging modal
-  "photo_upload.title": "Upload photos",
-  "photo_upload.dropzone_title": "Drag & drop photos here, or browse",
-  "photo_upload.dropzone_hint": "JPEG, PNG, or WebP up to 15 MB each. Select multiple files at once.",
-  "photo_upload.choose_files": "Choose files",
-  "photo_upload.add_more": "Add more files",
-  "photo_upload.collection_label": "Add all to collection",
-  "photo_upload.no_collection": "— No collection —",
-  "photo_upload.upload_all_one": "Upload photo",
-  "photo_upload.upload_all_many": "Upload all ({count})",
-  "photo_upload.uploading_progress": "Uploading {current} of {total} — {percent}%",
-  "photo_upload.remove_staged_aria": "Remove {name} from upload queue",
-  "photo_upload.select_staged_aria": "Adjust crop for {name}",
-  "photo_upload.uploaded_one_toast": "Uploaded 1 photo",
-  "photo_upload.uploaded_many_toast": "Uploaded {count} photos",
-  "photo_upload.file_too_large": "Skipped \"{name}\" (exceeds 15 MB limit)",
-  // HA Media Folder Import modal
-  "media_import.title": "Import from Home Assistant Media",
-  "media_import.subtitle":
-    "Browse local Media folders and mounted NAS shares configured in Home Assistant.",
-  "media_import.root_label": "Media folder",
-  "media_import.up_folder": "Up",
-  "media_import.select_all_folder": "Select all in folder",
-  "media_import.clear_folder_selection": "Clear selection",
-  "media_import.already_imported": "Imported",
-  "media_import.too_large": "Over 15 MB",
-  "media_import.empty_folder": "No subfolders or supported images found in this folder.",
-  "media_import.empty_roots":
-    "No Home Assistant Media directories are configured.",
-  "media_import.collection_label": "Add to collection",
-  "media_import.new_from_folder": "New collection from folder name",
-  "media_import.new_collection_name": "New collection name",
-  "media_import.import_btn_one": "Import 1 photo",
-  "media_import.import_btn_many": "Import {count} photos",
-  "media_import.importing_btn": "Importing…",
-  "media_import.summary_toast":
-    "Imported {imported} photo(s){skippedSuffix}{failedSuffix}",
-  "media_import.skipped_suffix": " ({count} duplicate skipped)",
-  "media_import.failed_suffix": " ({count} failed)",
-  // Shared Photo Pool Picker modal
-  "photo_picker.title_wallpaper": "Choose wallpaper",
-  "photo_picker.title_screensaver": "Choose Photo frame photos",
-  "photo_picker.mode_aria": "Photo selection mode",
-  "photo_picker.mode_photos": "Photos",
-  "photo_picker.mode_collection": "Collection",
-  "photo_picker.collection_label": "Photo collection",
-  "photo_picker.custom_hint": "Pick one photo for a static image, or multiple photos to rotate through.",
-  "photo_picker.custom_selected_one": "1 photo selected",
-  "photo_picker.custom_selected_many": "{count} photos selected",
-  "photo_picker.apply_btn": "Apply selection",
-  "photo_picker.empty": "No photos available for this mode yet. Upload photos to get started.",
-  // Group baseline photo pool options
-  "groups.pool_off": "Off",
-  "groups.pool_all": "All photos",
-  "groups.pool_defaults": "Built-in defaults",
-  "groups.pool_uploads": "My uploaded photos",
-  "groups.pool_collection_prefix": "Collection: {name}",
-  "groups.pool_photo_prefix": "Photo: {name}",
-  "groups.screensaver_pool_label": "Photo frame source",
-  "groups.wallpaper_pool_label": "Wallpaper source",
-  "confirm.reset_dock.title": "Reset App Dock to default?",
-  "confirm.reset_dock.body":
-    "Restores the default native apps on the App Dock and removes custom dock shortcuts on this Device.",
-  "confirm.reset_dock.confirm": "Reset dock",
-  "confirm.clear_ble_signature.title": "Clear BLE signature for {area}?",
-  "confirm.clear_ble_signature.body":
-    "Removes captured RSSI calibration samples for {area} and reverts to path-loss estimation.",
-  "confirm.clear_ble_signature.confirm": "Clear signature",
-  "confirm.clear_pin.title": "Clear security PIN?",
-  "confirm.clear_pin.body":
-    "Removes the configured security PIN. Perimeter actions governed by Require PIN stay blocked until a new PIN is set.",
-  "confirm.clear_pin.confirm": "Clear PIN",
-  "confirm.apply_batch.title": "Apply staged changes to {count} Devices?",
-  "confirm.apply_batch.body":
-    "Pushes {settingCount} staged setting changes to {count} target Devices.",
-  "confirm.apply_batch.confirm": "Apply changes",
-};
-__latterExp(__exports, { EN_SYSTEM_STRINGS: () => EN_SYSTEM_STRINGS });
-//# sourceURL=latter-studio/src/i18n/en-system.ts
-});
-__latterDef("src/i18n/en.ts", (__exports, __req) => {
-const { EN_COMMON_STRINGS } = __req("src/i18n/en-common.ts");
-const { EN_DEVICES_STRINGS } = __req("src/i18n/en-devices.ts");
-const { EN_SYSTEM_STRINGS } = __req("src/i18n/en-system.ts");
-/**
- * Canonical English Studio UI string catalog (`D-061` — Home Assistant Sentence case).
- * Composed from disjoint slices (`en-common.ts`, `en-system.ts`, `en-devices.ts`) and mirrored
- * deterministically to `custom_components/latter/studio/locales/en.json` by `build.mjs`.
- */
-const EN_STRINGS = {
-  ...EN_COMMON_STRINGS,
-  ...EN_SYSTEM_STRINGS,
-  ...EN_DEVICES_STRINGS,
-};
-/**
- * Sentence-case labels for all 61 `DevicePrefSpec` keys + group/device setting keys.
- */
-const PREF_LABELS = {
-  wake_word_mode: "Wake word mode",
-  tap_to_wake: "Tap to wake",
-  pickup_to_wake: "Pickup to wake",
-  battery_screen_timeout: "Battery screen timeout",
-  docked_idle_timeout: "Docked idle timeout",
-  battery_hibernate_timeout: "Battery hibernate timeout",
-  screensaver_mode: "Screensaver mode",
-  screensaver_style: "Screensaver style",
-  screensaver_photo_clock: "Show subtle clock",
-  bedtime_active: "Bedtime mode",
-  do_not_disturb: "Do not disturb",
-  bedtime_display: "Idle display in bedtime",
-  bedtime_brightness: "Bedtime brightness",
-  bedtime_schedule: "Bedtime schedule",
-  bedtime_start_hour: "Bedtime starts",
-  bedtime_end_hour: "Bedtime ends",
-  auto_brightness_mode: "Auto brightness mode",
-  manual_brightness: "Manual brightness",
-  day_brightness: "Day brightness",
-  night_brightness: "Night brightness",
-  day_start_hour: "Day start hour",
-  night_start_hour: "Night start hour",
-  color_profile: "Color profile",
-  va_visual_profile: "Visual profile",
-  home_screen_enabled: "Enable Home screen",
-  start_screen: "Start screen",
-  return_to_home_timeout: "Return to Home timeout",
-  clock_face: "Clock face",
-  time_format: "Time format",
-  weather_background: "Live weather background on Home",
-  weather_app_background: "Live weather background",
-  home_sun: "Sun",
-  home_moon: "Moon",
-  wake_greeting: "Wake greeting",
-  album_art_style: "Album art style",
-  music_overlay_style: "Overlay style",
-  album_sort_order: "Album sort order",
-  artist_album_sort_order: "Artist album sort order",
-  podcast_sort_order: "Podcast sort order",
-  ww_sens_okay_nabu: "Okay Nabu sensitivity",
-  ww_sens_hey_luna: "Hey Luna sensitivity",
-  ww_sens_hey_jarvis: "Hey Jarvis sensitivity",
-  ww_sens_hey_mycroft: "Hey Mycroft sensitivity",
-  ww_sens_alexa: "Alexa sensitivity",
-  wake_screen_on_assist: "Wake screen on Assist",
-  alert_volume: "Alert volume",
-  volume_step_size: "Volume step size",
-  game_sound_effects: "Game sound effects",
-  ble_beacon_mode: "BLE beacon mode",
-  weather_sim_condition: "Weather simulation",
-  home_clock_tap_action: "Home time tap",
-  home_date_tap_action: "Home date tap",
-  local_clock_label: "Local clock label",
-  show_utc_clock: "Show UTC clock",
-  world_clocks: "World clocks",
-  alarms_summary: "Alarms",
-  calendar_lookahead_days: "Overview lookahead",
-  calendar_week_start: "Start week on",
-  camera_default_view: "Default view",
-  camera_carousel_interval: "Carousel interval",
-  camera_framing: "Video framing",
-  camera_stream_mode: "Stream mode",
-  camera_doorbell_popup: "Doorbell ring popup",
-  // Non-pref group & Device config keys
-  native_ble_tracking: "BLE Area tracking",
-  ble_auto_switch: "Auto-switch active Area",
-  sync_device_area: "Voice Follows Me",
-  area_follow_dwell_s: "Area follow dwell",
-  area_handoff: "Media Area handoff",
-  security_pin_policy: "Perimeter security policy",
-  wallpaper_mode: "Wallpaper mode",
-  wallpaper_source: "Wallpaper",
-  wallpaper_collection: "Wallpaper collection",
-  wallpaper_cycle_minutes: "Wallpaper rotation",
-  screensaver_photo_mode: "Photo frame pool",
-  screensaver_photo_source: "Photo frame photo",
-  screensaver_photo_collection: "Photo frame collection",
-  screensaver_cycle_minutes: "Photo frame rotation",
-  screensaver_shuffle: "Shuffle photos",
-  device_custom_color: "Custom color",
-  device_remote_group: "Remote control scope",
-  activity_card: "Show Activity card",
-  activity_sources: "Activity card sources",
-  area_categories: "Area categories",
-  home_categories: "Home categories",
-  tools_items: "Enabled tools",
-  games_items: "Enabled games",
-  broadcast_speaker_entities: "Broadcast speakers",
-  camera_visible_entities: "Visible cameras",
-  camera_carousel_entities: "Carousel cameras",
-};
-/**
- * Maps canonical wire option strings (`protocol_v3.json` / ESPHome select options) to
- * localized Sentence-case display labels without changing wire values.
- */
-const PREF_OPTION_LABELS = {
-  // Wake & power options
-  "Docked Only": "Docked only",
-  "Always On": "Always on",
-  Disabled: "Disabled",
-  "Single Tap": "Single tap",
-  "Double Tap": "Double tap",
-  Never: "Never",
-  "10s": "10 seconds",
-  "15s": "15 seconds",
-  "30s": "30 seconds",
-  "60s": "60 seconds",
-  "1 min": "1 minute",
-  "2 min": "2 minutes",
-  "5 min": "5 minutes",
-  "10 min": "10 minutes",
-  "15 min": "15 minutes",
-  "30 min": "30 minutes",
-  // Screensaver, brightness & colors
-  "Screen Off": "Screen off",
-  "Ambient Clock": "Ambient clock",
-  "Photo Frame": "Photo frame",
-  Aurora: "Aurora",
-  Starfield: "Starfield",
-  "Digital Rain": "Digital rain",
-  Fireworks: "Fireworks",
-  "Sun Synchronized": "Sun synchronized",
-  "Time Schedule": "Time schedule",
-  "Ambient Light": "Ambient light",
-  "Steel Blue": "Steel blue",
-  Pink: "Pink",
-  Blue: "Blue",
-  Green: "Green",
-  Custom: "Custom",
-  Nebula: "Nebula",
-  Solaris: "Solaris",
-  Rings: "Rings",
-  "Light Bar": "Light bar",
-  "Dot Wave": "Dot wave",
-  // Home, start screen, clock & calendar
-  Home: "Home",
-  Pinned: "Pinned",
-  "Time App": "Time app",
-  Calendar: "Calendar",
-  "Clock Face": "Clock face",
-  Media: "Media",
-  "Home Hub": "Home hub",
-  "Area Controls": "Area controls",
-  Remote: "Remote",
-  Weather: "Weather",
-  Cameras: "Cameras",
-  Games: "Games",
-  Tools: "Tools",
-  "Minimal Digital": "Minimal digital",
-  "Modern Analog": "Modern analog",
-  "Hybrid Digital": "Hybrid digital",
-  "12-Hour (AM/PM)": "12-hour (AM/PM)",
-  "24-Hour": "24-hour",
-  "Day View": "Day view",
-  Overview: "Overview",
-  Sunday: "Sunday",
-  Monday: "Monday",
-  // Music & media
-  "Full Screen": "Full screen",
-  Letterbox: "Letterbox",
-  Standard: "Standard",
-  None: "None",
-  "Art Only": "Art only",
-  "Art + Metadata": "Art + metadata",
-  "Always Visible": "Always visible",
-  Alphabetical: "Alphabetical",
-  "Newest on Top": "Newest on top",
-  "Oldest on Top": "Oldest on top",
-  // Wake word sensitivity & BLE beacon
-  "Slightly sensitive": "Slightly sensitive",
-  "Moderately sensitive": "Moderately sensitive",
-  "Very sensitive": "Very sensitive",
-  "Handheld Only": "Handheld only",
-  "Handheld + Screen Off": "Handheld + screen off",
-  Always: "Always",
-  // Weather simulation
-  "Live (Home Assistant)": "Live (Home Assistant)",
-  "Clear Night": "Clear night",
-  "Sunny / Clear Day": "Sunny / clear day",
-  "Partly Cloudy (Day)": "Partly cloudy (day)",
-  "Partly Cloudy (Night)": "Partly cloudy (night)",
-  "Cloudy / Overcast (Day)": "Cloudy / overcast (day)",
-  "Cloudy / Overcast (Night)": "Cloudy / overcast (night)",
-  "Fog / Mist (Day)": "Fog / mist (day)",
-  "Fog / Mist (Night)": "Fog / mist (night)",
-  "Rainy (Day)": "Rainy (day)",
-  "Rainy (Night)": "Rainy (night)",
-  "Pouring / Heavy Rain": "Pouring / heavy rain",
-  "Snow (Day)": "Snow (day)",
-  "Snow (Night)": "Snow (night)",
-  "Thunderstorm (Day)": "Thunderstorm (day)",
-  "Thunderstorm (Night)": "Thunderstorm (night)",
-  Windy: "Windy",
-  // Cameras & live video
-  Grid: "Grid",
-  Single: "Single",
-  Carousel: "Carousel",
-  Uncropped: "Uncropped",
-  Fill: "Fill",
-  Auto: "Auto",
-  "Low Bandwidth": "Low bandwidth",
-  Snapshots: "Snapshots",
-  Snapshot: "Snapshot",
-  "Live Video": "Live video",
-  // Security PIN policy wire tokens
-  auto: "Auto (recommended)",
-  allow: "Allow without PIN",
-  require_pin: "Require PIN",
-  block: "Block unlock & disarm",
-};
-/**
- * Builds the complete deterministic flat JSON catalog written to
- * `custom_components/latter/studio/locales/en.json`.
- */
-function buildStudioEnLocaleCatalog() {
-  const out = {};
-  for (const [k, v] of Object.entries(EN_STRINGS)) {
-    out[k] = v;
-  }
-  for (const [k, v] of Object.entries(PREF_LABELS)) {
-    out[`pref.${k}`] = v;
-  }
-  for (const [k, v] of Object.entries(PREF_OPTION_LABELS)) {
-    out[`pref_option.${k}`] = v;
-  }
-  return out;
-}
-__latterExp(__exports, { EN_COMMON_STRINGS: () => EN_COMMON_STRINGS, EN_DEVICES_STRINGS: () => EN_DEVICES_STRINGS, EN_SYSTEM_STRINGS: () => EN_SYSTEM_STRINGS, EN_STRINGS: () => EN_STRINGS, PREF_LABELS: () => PREF_LABELS, PREF_OPTION_LABELS: () => PREF_OPTION_LABELS, buildStudioEnLocaleCatalog: () => buildStudioEnLocaleCatalog });
-//# sourceURL=latter-studio/src/i18n/en.ts
-});
-__latterDef("src/i18n/index.ts", (__exports, __req) => {
-const { buildStudioEnLocaleCatalog, EN_STRINGS, PREF_LABELS, PREF_OPTION_LABELS } = __req("src/i18n/en.ts");
-/**
- * Hybrid typed Studio i18n runtime (`D-061`):
- * - Compile-time typed `t()` lookup against `EN_STRINGS` with runtime `<lang>.json` overlay support
- * - Preference label & canonical wire option localization (`tPrefLabel`, `tPrefOption`)
- * - Home Assistant Repairs `hass.localize` bridge (`localizeRepairIssue`)
- * - Home Assistant entity state formatter bridge (`formatHaEntityState`)
- */
-const PLACEHOLDER_RE = /\{([A-Za-z0-9_]+)\}/g;
-function interpolate(
-  template,
-  vars,
-) {
-  if (!vars) return template;
-  return template.replace(PLACEHOLDER_RE, (match, name) => {
-    const val = vars[name];
-    return val === undefined || val === null ? match : String(val);
-  });
-}
-function t(
-  key,
-  vars,
-  overlay,
-) {
-  const raw = (overlay && overlay[key]) || EN_STRINGS[key] || key;
-  return interpolate(raw, vars);
-}
-function tPrefLabel(
-  key,
-  fallback,
-  overlay,
-) {
-  const cleanKey = String(key || "").trim();
-  if (!cleanKey) return fallback || "—";
-  const overlayVal = overlay?.[`pref.${cleanKey}`];
-  if (overlayVal) return overlayVal;
-  const known = PREF_LABELS[cleanKey];
-  if (known) return known;
-  if (fallback && fallback.trim()) return fallback.trim();
-  const humanized = cleanKey.replace(/_/g, " ").trim();
-  return humanized ? humanized.charAt(0).toUpperCase() + humanized.slice(1) : "—";
-}
-function tPrefOption(
-  prefKey,
-  rawOption,
-  overlay,
-) {
-  const opt = String(rawOption ?? "");
-  if (!opt) return "";
-  if (overlay) {
-    const scoped = prefKey ? overlay[`pref_option.${prefKey}.${opt}`] : undefined;
-    if (scoped) return scoped;
-    const generic = overlay[`pref_option.${opt}`];
-    if (generic) return generic;
-  }
-  return PREF_OPTION_LABELS[opt] ?? opt;
-}
-function localizeRepairIssue(
-  hass,
-  issueKey,
-  placeholders,
-  fallback,
-) {
-  const cleanKey = String(issueKey || "").trim();
-  const h = hass;
-  if (cleanKey && typeof h?.localize === "function") {
-    const params = placeholders ? { ...placeholders } : undefined;
-    for (const suffix of [".description", ".title", ""]) {
-      const haKey = `component.latter.issues.${cleanKey}${suffix}`;
-      try {
-        const localized = h.localize(haKey, params);
-        if (localized && localized !== haKey && !localized.startsWith("component.latter.")) {
-          return localized;
-        }
-      } catch {
-        // Fall through to Studio catalog / fallback string.
-      }
-    }
-  }
-  if (fallback) return fallback;
-  if (!cleanKey) return t("issue.generic", { label: "issue" });
-  const detail = placeholders?.detail !== undefined ? String(placeholders.detail) : "";
-  if (cleanKey === "missing_mapped_entity") {
-    return detail
-      ? t("issue.missing_mapped_entity_detail", { detail })
-      : t("issue.missing_mapped_entity");
-  }
-  if (cleanKey === "device_crashed") {
-    if (detail === "stall") return t("issue.device_crashed_stall");
-    return detail
-      ? t("issue.device_crashed_detail", { detail })
-      : t("issue.device_crashed");
-  }
-  const catalogKey = `issue.${cleanKey}`;
-  if (catalogKey in EN_STRINGS) {
-    return t(catalogKey, placeholders);
-  }
-  return t("issue.generic", { label: cleanKey.replace(/_/g, " ") });
-}
-function formatHaEntityState(
-  hass,
-  entityId,
-  option,
-) {
-  const cleanId = String(entityId || "").trim();
-  const stateObj = cleanId ? hass?.states?.[cleanId] : undefined;
-  const h = hass;
-  if (stateObj && typeof h?.formatEntityState === "function") {
-    try {
-      const formatted = h.formatEntityState(stateObj, option);
-      if (formatted) return formatted;
-    } catch {
-      // Fall back to raw state string below.
-    }
-  }
-  const raw = option ?? stateObj?.state ?? "";
-  return raw || "—";
-}
-__latterExp(__exports, { buildStudioEnLocaleCatalog: () => buildStudioEnLocaleCatalog, EN_STRINGS: () => EN_STRINGS, PREF_LABELS: () => PREF_LABELS, PREF_OPTION_LABELS: () => PREF_OPTION_LABELS, t: () => t, tPrefLabel: () => tPrefLabel, tPrefOption: () => tPrefOption, localizeRepairIssue: () => localizeRepairIssue, formatHaEntityState: () => formatHaEntityState });
-//# sourceURL=latter-studio/src/i18n/index.ts
-});
 __latterDef("src/lib/vendor/directive.js", (__exports, __req) => {
 /**
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
+ * Upstream: lit-html@3.3.3 (directive.js) — upstream SHA-256 (LF): 3344c4f41c69cd0701d3937e8f9ef90bd845614bf6456d0b8314b7c51d415b9d
  */
 const t={ATTRIBUTE:1,CHILD:2,PROPERTY:3,BOOLEAN_ATTRIBUTE:4,EVENT:5,ELEMENT:6},e=t=>(...e)=>({_$litDirective$:t,values:e});class i{constructor(t){}get _$AU(){return this._$AM._$AU}_$AT(t,e,i){this._$Ct=t,this._$AM=e,this._$Ci=i}_$AS(t,e){return this.update(t,e)}update(t,e){return this.render(...e)}}
 __latterExp(__exports, { Directive: () => i, PartType: () => t, directive: () => e });
@@ -1930,6 +41,7 @@ __latterDef("src/lib/vendor/lit-html.js", (__exports, __req) => {
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
+ * Upstream: lit-html@3.3.3 (lit-html.js) — upstream SHA-256 (LF): b878e7f95dec8a9b6e9b217faca6b6a11bad82ebc44c0caa77419ed83edd81f2
  * Latter Studio adaptation: live DOM comparison on PropertyPart (`class I`) and post-children `<select .value>` sync (`class R.p`).
  */
 const t=globalThis,i=t=>t,s=t.trustedTypes,e=s?s.createPolicy("lit-html",{createHTML:t=>t}):void 0,h="$lit$",o=`lit$${Math.random().toFixed(9).slice(2)}$`,n="?"+o,r=`<${n}>`,l=document,c=()=>l.createComment(""),a=t=>null===t||"object"!=typeof t&&"function"!=typeof t,u=Array.isArray,d=t=>u(t)||"function"==typeof t?.[Symbol.iterator],f="[ \t\n\f\r]",v=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,_=/-->/g,m=/>/g,p=RegExp(`>|${f}(?:([^\\s"'>=/]+)(${f}*=${f}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`,"g"),g=/'/g,$=/"/g,y=/^(?:script|style|textarea|title)$/i,x=t=>(i,...s)=>({_$litType$:t,strings:i,values:s}),b=x(1),w=x(2),T=x(3),E=Symbol.for("lit-noChange"),A=Symbol.for("lit-nothing"),C=new WeakMap,P=l.createTreeWalker(l,129);function V(t,i){if(!u(t)||!t.hasOwnProperty("raw"))throw Error("invalid template strings array");return void 0!==e?e.createHTML(i):i}const N=(t,i)=>{const s=t.length-1,e=[];let n,l=2===i?"<svg>":3===i?"<math>":"",c=v;for(let i=0;i<s;i++){const s=t[i];let a,u,d=-1,f=0;for(;f<s.length&&(c.lastIndex=f,u=c.exec(s),null!==u);)f=c.lastIndex,c===v?"!--"===u[1]?c=_:void 0!==u[1]?c=m:void 0!==u[2]?(y.test(u[2])&&(n=RegExp("</"+u[2],"g")),c=p):void 0!==u[3]&&(c=p):c===p?">"===u[0]?(c=n??v,d=-1):void 0===u[1]?d=-2:(d=c.lastIndex-u[2].length,a=u[1],c=void 0===u[3]?p:'"'===u[3]?$:g):c===$||c===g?c=p:c===_||c===m?c=v:(c=p,n=void 0);const x=c===p&&t[i+1].startsWith("/>")?" ":"";l+=c===v?s+r:d>=0?(e.push(a),s.slice(0,d)+h+s.slice(d)+o+x):s+o+(-2===d?i:x)}return[V(t,l+(t[s]||"<?>")+(2===i?"</svg>":3===i?"</math>":"")),e]};class S{constructor({strings:t,_$litType$:i},e){let r;this.parts=[];let l=0,a=0;const u=t.length-1,d=this.parts,[f,v]=N(t,i);if(this.el=S.createElement(f,e),P.currentNode=this.el.content,2===i||3===i){const t=this.el.content.firstChild;t.replaceWith(...t.childNodes)}for(;null!==(r=P.nextNode())&&d.length<u;){if(1===r.nodeType){if(r.hasAttributes())for(const t of r.getAttributeNames())if(t.endsWith(h)){const i=v[a++],s=r.getAttribute(t).split(o),e=/([.?@])?(.*)/.exec(i);d.push({type:1,index:l,name:e[2],strings:s,ctor:"."===e[1]?I:"?"===e[1]?L:"@"===e[1]?z:H}),r.removeAttribute(t)}else t.startsWith(o)&&(d.push({type:6,index:l}),r.removeAttribute(t));if(y.test(r.tagName)){const t=r.textContent.split(o),i=t.length-1;if(i>0){r.textContent=s?s.emptyScript:"";for(let s=0;s<i;s++)r.append(t[s],c()),P.nextNode(),d.push({type:2,index:++l});r.append(t[i],c())}}}else if(8===r.nodeType)if(r.data===n)d.push({type:2,index:l});else{let t=-1;for(;-1!==(t=r.data.indexOf(o,t+1));)d.push({type:7,index:l}),t+=o.length-1}l++}}static createElement(t,i){const s=l.createElement("template");return s.innerHTML=t,s}}function M(t,i,s=t,e){if(i===E)return i;let h=void 0!==e?s._$Co?.[e]:s._$Cl;const o=a(i)?void 0:i._$litDirective$;return h?.constructor!==o&&(h?._$AO?.(!1),void 0===o?h=void 0:(h=new o(t),h._$AT(t,s,e)),void 0!==e?(s._$Co??=[])[e]=h:s._$Cl=h),void 0!==h&&(i=M(t,h._$AS(t,i.values),h,e)),i}class R{constructor(t,i){this._$AV=[],this._$AN=void 0,this._$AD=t,this._$AM=i}get parentNode(){return this._$AM.parentNode}get _$AU(){return this._$AM._$AU}u(t){const{el:{content:i},parts:s}=this._$AD,e=(t?.creationScope??l).importNode(i,!0);P.currentNode=e;let h=P.nextNode(),o=0,n=0,r=s[0];for(;void 0!==r;){if(o===r.index){let i;2===r.type?i=new k(h,h.nextSibling,this,t):1===r.type?i=new r.ctor(h,r.name,r.strings,this,t):6===r.type&&(i=new Z(h,this,t)),this._$AV.push(i),r=s[++n]}o!==r?.index&&(h=P.nextNode(),o++)}return P.currentNode=l,e}p(t){let i=0;for(const s of this._$AV)void 0!==s&&(void 0!==s.strings?(s._$AI(t,s,i),i+=s.strings.length-2):s._$AI(t[i])),i++;for(const s of this._$AV)3===s?.type&&"value"===s.name&&"SELECT"===s.element.tagName&&s._$AH!==E&&s._$AH!==A&&void 0!==s._$AH&&s.element.value!==s._$AH&&(s.element.value=s._$AH)}}class k{get _$AU(){return this._$AM?._$AU??this._$Cv}constructor(t,i,s,e){this.type=2,this._$AH=A,this._$AN=void 0,this._$AA=t,this._$AB=i,this._$AM=s,this.options=e,this._$Cv=e?.isConnected??!0}get parentNode(){let t=this._$AA.parentNode;const i=this._$AM;return void 0!==i&&11===t?.nodeType&&(t=i.parentNode),t}get startNode(){return this._$AA}get endNode(){return this._$AB}_$AI(t,i=this){t=M(this,t,i),a(t)?t===A||null==t||""===t?(this._$AH!==A&&this._$AR(),this._$AH=A):t!==this._$AH&&t!==E&&this._(t):void 0!==t._$litType$?this.$(t):void 0!==t.nodeType?this.T(t):d(t)?this.k(t):this._(t)}O(t){return this._$AA.parentNode.insertBefore(t,this._$AB)}T(t){this._$AH!==t&&(this._$AR(),this._$AH=this.O(t))}_(t){this._$AH!==A&&a(this._$AH)?this._$AA.nextSibling.data=t:this.T(l.createTextNode(t)),this._$AH=t}$(t){const{values:i,_$litType$:s}=t,e="number"==typeof s?this._$AC(t):(void 0===s.el&&(s.el=S.createElement(V(s.h,s.h[0]),this.options)),s);if(this._$AH?._$AD===e)this._$AH.p(i);else{const t=new R(e,this),s=t.u(this.options);t.p(i),this.T(s),this._$AH=t}}_$AC(t){let i=C.get(t.strings);return void 0===i&&C.set(t.strings,i=new S(t)),i}k(t){u(this._$AH)||(this._$AH=[],this._$AR());const i=this._$AH;let s,e=0;for(const h of t)e===i.length?i.push(s=new k(this.O(c()),this.O(c()),this,this.options)):s=i[e],s._$AI(h),e++;e<i.length&&(this._$AR(s&&s._$AB.nextSibling,e),i.length=e)}_$AR(t=this._$AA.nextSibling,s){for(this._$AP?.(!1,!0,s);t!==this._$AB;){const s=i(t).nextSibling;i(t).remove(),t=s}}setConnected(t){void 0===this._$AM&&(this._$Cv=t,this._$AP?.(t))}}class H{get tagName(){return this.element.tagName}get _$AU(){return this._$AM._$AU}constructor(t,i,s,e,h){this.type=1,this._$AH=A,this._$AN=void 0,this.element=t,this.name=i,this._$AM=e,this.options=h,s.length>2||""!==s[0]||""!==s[1]?(this._$AH=Array(s.length-1).fill(new String),this.strings=s):this._$AH=A}_$AI(t,i=this,s,e){const h=this.strings;let o=!1;if(void 0===h)t=M(this,t,i,0),o=!a(t)||t!==this._$AH&&t!==E,o&&(this._$AH=t);else{const e=t;let n,r;for(t=h[0],n=0;n<h.length-1;n++)r=M(this,e[s+n],i,n),r===E&&(r=this._$AH[n]),o||=!a(r)||r!==this._$AH[n],r===A?t=A:t!==A&&(t+=(r??"")+h[n+1]),this._$AH[n]=r}o&&!e&&this.j(t)}j(t){t===A?this.element.removeAttribute(this.name):this.element.setAttribute(this.name,t??"")}}class I extends H{constructor(){super(...arguments),this.type=3}_$AI(t,i=this,s,e){if(void 0!==this.strings){super._$AI(t,i,s,e);return}if((t=M(this,t,i,0))===E)return;const r=t===A?void 0:t;this._$AH=t,e||this.element[this.name]===r||(this.element[this.name]=r)}j(t){this.element[this.name]=t===A?void 0:t}}class L extends H{constructor(){super(...arguments),this.type=4}j(t){this.element.toggleAttribute(this.name,!!t&&t!==A)}}class z extends H{constructor(t,i,s,e,h){super(t,i,s,e,h),this.type=5}_$AI(t,i=this){if((t=M(this,t,i,0)??A)===E)return;const s=this._$AH,e=t===A&&s!==A||t.capture!==s.capture||t.once!==s.once||t.passive!==s.passive,h=t!==A&&(s===A||e);e&&this.element.removeEventListener(this.name,this,s),h&&this.element.addEventListener(this.name,this,t),this._$AH=t}handleEvent(t){"function"==typeof this._$AH?this._$AH.call(this.options?.host??this.element,t):this._$AH.handleEvent(t)}}class Z{constructor(t,i,s){this.element=t,this.type=6,this._$AN=void 0,this._$AM=i,this.options=s}get _$AU(){return this._$AM._$AU}_$AI(t){M(this,t)}}const j={M:h,P:o,A:n,C:1,L:N,R,D:d,V:M,I:k,H,N:L,U:z,B:I,F:Z},B=t.litHtmlPolyfillSupport;B?.(S,k),(t.litHtmlVersions??=[]).push("3.3.3");const D=(t,i,s)=>{const e=s?.renderBefore??i;let h=e._$litPart$;if(void 0===h){const t=s?.renderBefore??null;e._$litPart$=h=new k(i.insertBefore(c(),t),t,void 0,s??{})}return h._$AI(t),h};
@@ -1942,6 +54,7 @@ const { _$LH: o } = __req("src/lib/vendor/lit-html.js");
  * @license
  * Copyright 2020 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
+ * Upstream: lit-html@3.3.3 (directive-helpers.js) — upstream SHA-256 (LF): f7fb1154b8f72ed2cc08b05eaeed71c99270e9ad2d48620ed24688a1af4c2b62
  */const{I:t}=o,i=o=>o,n=o=>null===o||"object"!=typeof o&&"function"!=typeof o,e={HTML:1,SVG:2,MATHML:3},l=(o,t)=>void 0===t?void 0!==o?._$litType$:o?._$litType$===t,d=o=>null!=o?._$litType$?.h,c=o=>void 0!==o?._$litDirective$,f=o=>o?._$litDirective$,r=o=>void 0===o.strings,s=()=>document.createComment(""),v=(o,n,e)=>{const l=o._$AA.parentNode,d=void 0===n?o._$AB:n._$AA;if(void 0===e){const i=l.insertBefore(s(),d),n=l.insertBefore(s(),d);e=new t(i,n,o,o.options)}else{const t=e._$AB.nextSibling,n=e._$AM,c=n!==o;if(c){let t;e._$AQ?.(o),e._$AM=o,void 0!==e._$AP&&(t=o._$AU)!==n._$AU&&e._$AP(t)}if(t!==d||c){let o=e._$AA;for(;o!==t;){const t=i(o).nextSibling;i(l).insertBefore(o,d),o=t}}}return e},u=(o,t,i=o)=>(o._$AI(t,i),o),m={},p=(o,t=m)=>o._$AH=t,M=o=>o._$AH,h=o=>{o._$AR(),o._$AA.remove()},j=o=>{o._$AR()};
 __latterExp(__exports, { TemplateResultType: () => e, clearPart: () => j, getCommittedValue: () => M, getDirectiveClass: () => f, insertPart: () => v, isCompiledTemplateResult: () => d, isDirectiveResult: () => c, isPrimitive: () => n, isSingleExpression: () => r, isTemplateResult: () => l, removePart: () => h, setChildPartValue: () => u, setCommittedValue: () => p });
 //# sourceURL=latter-studio/src/lib/vendor/directive-helpers.js
@@ -1954,6 +67,7 @@ const { getCommittedValue: l, setChildPartValue: o, insertPart: i, removePart: n
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
+ * Upstream: lit-html@3.3.3 (directives/repeat.js) — upstream SHA-256 (LF): 083140026ecd8665fedd15b17769f9d516252a9f1502f1e91e6967686ee82626
  */
 const u=(e,s,t)=>{const r=new Map;for(let l=s;l<=t;l++)r.set(e[l],l);return r},c=s(class extends t{constructor(e){if(super(e),e.type!==r.CHILD)throw Error("repeat() can only be used in text expressions")}dt(e,s,t){let r;void 0===t?t=s:void 0!==s&&(r=s);const l=[],o=[];let i=0;for(const s of e)l[i]=r?r(s,i):i,o[i]=t(s,i),i++;return{values:o,keys:l}}render(e,s,t){return this.dt(e,s,t).values}update(s,[t,r,c]){const d=l(s),{values:p,keys:a}=this.dt(t,r,c);if(!Array.isArray(d))return this.ut=a,p;const h=this.ut??=[],v=[];let m,y,x=0,j=d.length-1,k=0,w=p.length-1;for(;x<=j&&k<=w;)if(null===d[x])x++;else if(null===d[j])j--;else if(h[x]===a[k])v[k]=o(d[x],p[k]),x++,k++;else if(h[j]===a[w])v[w]=o(d[j],p[w]),j--,w--;else if(h[x]===a[w])v[w]=o(d[x],p[w]),i(s,v[w+1],d[x]),x++,w--;else if(h[j]===a[k])v[k]=o(d[j],p[k]),i(s,d[x],d[j]),j--,k++;else if(void 0===m&&(m=u(a,k,w),y=u(h,x,j)),m.has(h[x]))if(m.has(h[j])){const e=y.get(a[k]),t=void 0!==e?d[e]:null;if(null===t){const e=i(s,d[x]);o(e,p[k]),v[k]=e}else v[k]=o(t,p[k]),i(s,d[x],t),d[e]=null;k++}else n(d[j]),j--;else n(d[x]),x++;for(;k<=w;){const e=i(s,v[w+1]);o(e,p[k]),v[k++]=e}for(;x<=j;){const e=d[x++];null!==e&&n(e)}return this.ut=a,f(s,v),e}});
 __latterExp(__exports, { repeat: () => c });
@@ -2606,57 +720,26 @@ const SYSTEM_VIEW_SLUGS = {
   area_tracking: "presence",
   system_tools: "tools",
 };
-const VIEW_TITLE_KEYS = {
-  system_overview: "view.system_overview",
-  shared_entities: "view.shared_entities",
-  photos: "view.photos",
-  remotes: "view.remotes",
-  system_sync: "view.system_sync",
-  area_tracking: "view.area_tracking",
-  system_tools: "view.system_tools",
-  select_device_prompt: "view.select_device_prompt",
-  discovered_devices: "view.discovered_devices",
-  dashboard: "view.dashboard",
-  display: "view.display",
-  interface: "view.interface",
-  audio_voice: "view.audio_voice",
-  power: "view.power",
-  presence: "view.presence",
-  tools: "view.tools",
-};
 const START_SCREEN_OPTIONS =
   DEVICE_PREF_SPECS_MAP.start_screen?.options ?? [];
 const HOME_CLOCK_TAP_OPTIONS =
   DEVICE_PREF_SPECS_MAP.home_clock_tap_action?.options ?? [];
 const HOME_DATE_TAP_OPTIONS =
   DEVICE_PREF_SPECS_MAP.home_date_tap_action?.options ?? [];
-const CALENDAR_LOOKAHEAD_OPTIONS = [
-  { value: 7, label: "7 days" },
-  { value: 14, label: "14 days" },
-  { value: 30, label: "30 days" },
-  { value: 60, label: "60 days" },
-];
+const CALENDAR_LOOKAHEAD_DAYS = [7, 14, 30, 60];
 const CALENDAR_WEEK_START_OPTIONS =
   DEVICE_PREF_SPECS_MAP.calendar_week_start?.options ?? [];
 const MAX_WORLD_CLOCKS = 4;
 const DEFAULT_ALARMS_SUMMARY = "07:00|0|1;08:30|0|2;09:00|0|2";
 const RETURN_TO_HOME_TIMEOUT_OPTIONS =
   DEVICE_PREF_SPECS_MAP.return_to_home_timeout?.options ?? [];
-const SECURITY_PIN_POLICY_OPTIONS = [
-  { value: "auto", label: "Auto (recommended)" },
-  { value: "allow", label: "Allow without PIN" },
-  { value: "require_pin", label: "Require PIN" },
-  { value: "block", label: "Block unlock & disarm" },
+const SECURITY_PIN_POLICIES = [
+  "auto",
+  "allow",
+  "require_pin",
+  "block",
 ];
-const WALLPAPER_ROTATION_OPTIONS = [
-  { value: 0, label: "Do not rotate" },
-  { value: 5, label: "Every 5 minutes" },
-  { value: 15, label: "Every 15 minutes" },
-  { value: 30, label: "Every 30 minutes" },
-  { value: 60, label: "Every hour" },
-  { value: 360, label: "Every 6 hours" },
-  { value: 1440, label: "Once a day" },
-];
+const WALLPAPER_ROTATION_MINUTES = [0, 5, 15, 30, 60, 360, 1440];
 const DEFAULT_DEVICE_GROUP_IDS = new Set([
   "pocket_carry",
   "handhelds",
@@ -2737,8 +820,1879 @@ const LABEL_ACRONYMS = {
   wifi: "Wi-Fi",
   "wi-fi": "Wi-Fi",
 };
-__latterExp(__exports, { ACTIVITY_SOURCES_CATALOG: () => ACTIVITY_SOURCES_CATALOG, ALLOWED_DEVICE_ACTIONS: () => ALLOWED_DEVICE_ACTIONS, AREA_CATEGORIES_CATALOG: () => AREA_CATEGORIES_CATALOG, DEFAULT_ACTIVITY_SOURCES: () => DEFAULT_ACTIVITY_SOURCES, DEFAULT_ACTIVITY_SOURCES_TOKENS: () => DEFAULT_ACTIVITY_SOURCES_TOKENS, DEFAULT_AREA_CATEGORIES: () => DEFAULT_AREA_CATEGORIES, DEFAULT_AREA_CATEGORIES_TOKENS: () => DEFAULT_AREA_CATEGORIES_TOKENS, DEFAULT_DOCK_ROUTES: () => DEFAULT_DOCK_ROUTES, DEFAULT_DOCK_ROUTES_TOKENS: () => DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS: () => DEFAULT_GAMES_ITEMS, DEFAULT_GAMES_ITEMS_TOKENS: () => DEFAULT_GAMES_ITEMS_TOKENS, DEFAULT_HOME_CATEGORIES: () => DEFAULT_HOME_CATEGORIES, DEFAULT_HOME_CATEGORIES_TOKENS: () => DEFAULT_HOME_CATEGORIES_TOKENS, DEFAULT_TOOLS_ITEMS: () => DEFAULT_TOOLS_ITEMS, DEFAULT_TOOLS_ITEMS_TOKENS: () => DEFAULT_TOOLS_ITEMS_TOKENS, DEVICE_PREF_SPECS_CATALOG: () => DEVICE_PREF_SPECS_CATALOG, DEVICE_PREF_SPECS_MAP: () => DEVICE_PREF_SPECS_MAP, DEVICE_WS_COMMANDS: () => DEVICE_WS_COMMANDS, GAMES_ITEMS_CATALOG: () => GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG: () => HOME_CATEGORIES_CATALOG, SHORTCUT_ROUTES_CATALOG: () => SHORTCUT_ROUTES_CATALOG, STUDIO_REV: () => STUDIO_REV, SYSTEM_WS_COMMANDS: () => SYSTEM_WS_COMMANDS, TOOLS_ITEMS_CATALOG: () => TOOLS_ITEMS_CATALOG, WORLD_CLOCK_ZONES_CATALOG: () => WORLD_CLOCK_ZONES_CATALOG, MAX_DOCK_ITEMS: () => MAX_DOCK_ITEMS, MAX_PINNED_ITEMS: () => MAX_PINNED_ITEMS, SHORTCUT_LABEL_MAX: () => SHORTCUT_LABEL_MAX, NATIVE_DOCK_APP_TOKENS: () => NATIVE_DOCK_APP_TOKENS, NATIVE_DOCK_CONFIG_APP_MAP: () => NATIVE_DOCK_CONFIG_APP_MAP, START_SCREEN_CONFIG_APP_MAP: () => START_SCREEN_CONFIG_APP_MAP, MAX_WALLPAPER_UPLOAD_BYTES: () => MAX_WALLPAPER_UPLOAD_BYTES, PHOTO_LIBRARY_PAGE_SIZE: () => PHOTO_LIBRARY_PAGE_SIZE, VIRTUAL_COLLECTION_ALL: () => VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS: () => VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UPLOADS: () => VIRTUAL_COLLECTION_UPLOADS, VIRTUAL_COLLECTION_UNCATEGORIZED: () => VIRTUAL_COLLECTION_UNCATEGORIZED, DEVICE_VIEW_SLUGS: () => DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS: () => SYSTEM_VIEW_SLUGS, VIEW_TITLE_KEYS: () => VIEW_TITLE_KEYS, START_SCREEN_OPTIONS: () => START_SCREEN_OPTIONS, HOME_CLOCK_TAP_OPTIONS: () => HOME_CLOCK_TAP_OPTIONS, HOME_DATE_TAP_OPTIONS: () => HOME_DATE_TAP_OPTIONS, CALENDAR_LOOKAHEAD_OPTIONS: () => CALENDAR_LOOKAHEAD_OPTIONS, CALENDAR_WEEK_START_OPTIONS: () => CALENDAR_WEEK_START_OPTIONS, MAX_WORLD_CLOCKS: () => MAX_WORLD_CLOCKS, DEFAULT_ALARMS_SUMMARY: () => DEFAULT_ALARMS_SUMMARY, RETURN_TO_HOME_TIMEOUT_OPTIONS: () => RETURN_TO_HOME_TIMEOUT_OPTIONS, SECURITY_PIN_POLICY_OPTIONS: () => SECURITY_PIN_POLICY_OPTIONS, WALLPAPER_ROTATION_OPTIONS: () => WALLPAPER_ROTATION_OPTIONS, DEFAULT_DEVICE_GROUP_IDS: () => DEFAULT_DEVICE_GROUP_IDS, GROUP_BEHAVIOR_NON_PREF_KEYS: () => GROUP_BEHAVIOR_NON_PREF_KEYS, GROUP_DISPLAY_NON_PREF_KEYS: () => GROUP_DISPLAY_NON_PREF_KEYS, GROUP_INTERFACE_NON_PREF_KEYS: () => GROUP_INTERFACE_NON_PREF_KEYS, LABEL_ACRONYMS: () => LABEL_ACRONYMS });
+__latterExp(__exports, { ACTIVITY_SOURCES_CATALOG: () => ACTIVITY_SOURCES_CATALOG, ALLOWED_DEVICE_ACTIONS: () => ALLOWED_DEVICE_ACTIONS, AREA_CATEGORIES_CATALOG: () => AREA_CATEGORIES_CATALOG, DEFAULT_ACTIVITY_SOURCES: () => DEFAULT_ACTIVITY_SOURCES, DEFAULT_ACTIVITY_SOURCES_TOKENS: () => DEFAULT_ACTIVITY_SOURCES_TOKENS, DEFAULT_AREA_CATEGORIES: () => DEFAULT_AREA_CATEGORIES, DEFAULT_AREA_CATEGORIES_TOKENS: () => DEFAULT_AREA_CATEGORIES_TOKENS, DEFAULT_DOCK_ROUTES: () => DEFAULT_DOCK_ROUTES, DEFAULT_DOCK_ROUTES_TOKENS: () => DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS: () => DEFAULT_GAMES_ITEMS, DEFAULT_GAMES_ITEMS_TOKENS: () => DEFAULT_GAMES_ITEMS_TOKENS, DEFAULT_HOME_CATEGORIES: () => DEFAULT_HOME_CATEGORIES, DEFAULT_HOME_CATEGORIES_TOKENS: () => DEFAULT_HOME_CATEGORIES_TOKENS, DEFAULT_TOOLS_ITEMS: () => DEFAULT_TOOLS_ITEMS, DEFAULT_TOOLS_ITEMS_TOKENS: () => DEFAULT_TOOLS_ITEMS_TOKENS, DEVICE_PREF_SPECS_CATALOG: () => DEVICE_PREF_SPECS_CATALOG, DEVICE_PREF_SPECS_MAP: () => DEVICE_PREF_SPECS_MAP, DEVICE_WS_COMMANDS: () => DEVICE_WS_COMMANDS, GAMES_ITEMS_CATALOG: () => GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG: () => HOME_CATEGORIES_CATALOG, SHORTCUT_ROUTES_CATALOG: () => SHORTCUT_ROUTES_CATALOG, STUDIO_REV: () => STUDIO_REV, SYSTEM_WS_COMMANDS: () => SYSTEM_WS_COMMANDS, TOOLS_ITEMS_CATALOG: () => TOOLS_ITEMS_CATALOG, WORLD_CLOCK_ZONES_CATALOG: () => WORLD_CLOCK_ZONES_CATALOG, MAX_DOCK_ITEMS: () => MAX_DOCK_ITEMS, MAX_PINNED_ITEMS: () => MAX_PINNED_ITEMS, SHORTCUT_LABEL_MAX: () => SHORTCUT_LABEL_MAX, NATIVE_DOCK_APP_TOKENS: () => NATIVE_DOCK_APP_TOKENS, NATIVE_DOCK_CONFIG_APP_MAP: () => NATIVE_DOCK_CONFIG_APP_MAP, START_SCREEN_CONFIG_APP_MAP: () => START_SCREEN_CONFIG_APP_MAP, MAX_WALLPAPER_UPLOAD_BYTES: () => MAX_WALLPAPER_UPLOAD_BYTES, PHOTO_LIBRARY_PAGE_SIZE: () => PHOTO_LIBRARY_PAGE_SIZE, VIRTUAL_COLLECTION_ALL: () => VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS: () => VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UPLOADS: () => VIRTUAL_COLLECTION_UPLOADS, VIRTUAL_COLLECTION_UNCATEGORIZED: () => VIRTUAL_COLLECTION_UNCATEGORIZED, DEVICE_VIEW_SLUGS: () => DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS: () => SYSTEM_VIEW_SLUGS, START_SCREEN_OPTIONS: () => START_SCREEN_OPTIONS, HOME_CLOCK_TAP_OPTIONS: () => HOME_CLOCK_TAP_OPTIONS, HOME_DATE_TAP_OPTIONS: () => HOME_DATE_TAP_OPTIONS, CALENDAR_LOOKAHEAD_DAYS: () => CALENDAR_LOOKAHEAD_DAYS, CALENDAR_WEEK_START_OPTIONS: () => CALENDAR_WEEK_START_OPTIONS, MAX_WORLD_CLOCKS: () => MAX_WORLD_CLOCKS, DEFAULT_ALARMS_SUMMARY: () => DEFAULT_ALARMS_SUMMARY, RETURN_TO_HOME_TIMEOUT_OPTIONS: () => RETURN_TO_HOME_TIMEOUT_OPTIONS, SECURITY_PIN_POLICIES: () => SECURITY_PIN_POLICIES, WALLPAPER_ROTATION_MINUTES: () => WALLPAPER_ROTATION_MINUTES, DEFAULT_DEVICE_GROUP_IDS: () => DEFAULT_DEVICE_GROUP_IDS, GROUP_BEHAVIOR_NON_PREF_KEYS: () => GROUP_BEHAVIOR_NON_PREF_KEYS, GROUP_DISPLAY_NON_PREF_KEYS: () => GROUP_DISPLAY_NON_PREF_KEYS, GROUP_INTERFACE_NON_PREF_KEYS: () => GROUP_INTERFACE_NON_PREF_KEYS, LABEL_ACRONYMS: () => LABEL_ACRONYMS });
 //# sourceURL=latter-studio/src/constants.ts
+});
+__latterDef("src/i18n/en-common.ts", (__exports, __req) => {
+/**
+ * Shared shell, navigation, action, status, combobox, sync, & Repairs strings (`D-061` — HA Sentence case).
+ */
+const EN_COMMON_STRINGS = {
+  // Shell & navigation
+  "shell.title": "Latter",
+  "shell.toggle_ha_sidebar": "Toggle the Home Assistant sidebar",
+  "shell.install_update": "Install update",
+  "shell.rev_updated_banner": "Latter Studio was updated — reload page",
+  "shell.reload_page": "Reload page",
+  "shell.loading": "Loading Latter…",
+  "shell.loading_device": "Loading Device…",
+  "shell.retry": "Retry",
+  "shell.saved_status": "Saved",
+  "shell.dismiss_toast": "Dismiss notification",
+  "nav.scope_label": "Scope",
+  "nav.devices": "Devices",
+  "nav.system": "System",
+  "nav.managed": "Managed",
+  "nav.discovered": "Discovered",
+  "nav.back_managed": "← Managed",
+  "nav.device_pages_label": "Device pages",
+  "nav.system_pages_label": "System pages",
+  "nav.devices_list_label": "Devices",
+  // View titles (HA Sentence case; proper/IT nouns preserved)
+  "view.system_overview": "Overview",
+  "view.shared_entities": "Shared entities",
+  "view.photos": "Photos",
+  "view.remotes": "Media & remotes",
+  "view.system_sync": "Device groups",
+  "view.area_tracking": "BLE & Area presence",
+  "view.system_tools": "Tools",
+  "view.select_device_prompt": "Managed devices",
+  "view.discovered_devices": "Discovered devices",
+  "view.dashboard": "Overview",
+  "view.display": "Display",
+  "view.interface": "Interface",
+  "view.audio_voice": "Audio",
+  "view.power": "Power",
+  "view.presence": "Presence",
+  "view.tools": "Tools",
+  // Common actions & labels
+  "action.cancel": "Cancel",
+  "action.confirm": "Confirm",
+  "action.done": "Done",
+  "action.close": "Close",
+  "action.save": "Save",
+  "action.reset": "Reset",
+  "action.edit": "Edit",
+  "action.delete": "Delete",
+  "action.add": "Add",
+  "action.adopt": "Adopt",
+  "action.ignore": "Ignore",
+  "action.unignore": "Restore",
+  "action.configure": "Configure",
+  "action.run": "Run",
+  "action.install": "Install",
+  "action.refresh": "Refresh",
+  "action.dismiss": "Dismiss",
+  "action.open_in_ha": "Open in Home Assistant",
+  "action.open_integration": "Open integration",
+  "action.open_repairs": "Open Repairs",
+  "action.open_ha_logs": "Open Home Assistant logs",
+  "action.open_shared_entities": "Open shared entities",
+  "action.download_backup": "Download backup",
+  "action.download_backup_first": "Download backup first",
+  "action.restore_backup": "Restore backup",
+  "action.download_diagnostics": "Download diagnostics",
+  "action.add_custom_shortcut": "Add custom shortcut",
+  "action.add_pinned_item": "Add pinned item",
+  "action.reset_default_dock": "Reset default dock",
+  "action.save_custom_group": "Save custom group",
+  "action.save_group": "Save group",
+  "action.save_shortcut": "Save shortcut",
+  "action.save_color": "Save color",
+  "action.add_ble_tag": "Add BLE tag",
+  "action.manage_groups": "Manage groups",
+  "action.default_icon": "Default icon",
+  "action.move_up": "Move {item} up",
+  "action.move_down": "Move {item} down",
+  "action.move_earlier": "Move {item} earlier",
+  "action.move_later": "Move {item} later",
+  "action.drag_reorder": "Drag to reorder {item}",
+  "action.remove_item": "Remove {item}",
+  "action.edit_item": "Edit {item}",
+  "action.configure_item": "Configure {item}",
+  "common.none_option": "— None —",
+  "common.none_configured": "None configured",
+  "common.unassigned": "Unassigned",
+  "common.no_person": "No person",
+  "common.custom": "Custom",
+  "common.auto": "Auto",
+  "common.active": "Active",
+  "common.enabled": "Enabled",
+  "common.disabled": "Disabled",
+  "common.all_off": "All off",
+  "common.loading": "Loading…",
+  "common.unknown": "—",
+  "common.missing_suffix": "{id} (missing)",
+  "common.reordered_status": "Moved {item} to position {position} of {total}",
+  "common.keep_one_enabled": "Keep at least one {noun} enabled",
+  // Status & signal labels
+  "status.online": "Online",
+  "status.offline": "Offline",
+  "status.update": "Update available",
+  "status.up_to_date": "Up to date",
+  "status.away": "Away",
+  "status.scanning": "Scanning",
+  "status.sleeping": "Sleeping",
+  "status.charging": "Charging",
+  "status.plugged_in": "Plugged in",
+  "status.on_battery": "On battery",
+  "status.always_on": "Always on",
+  "status.sleep_wake_active": "Sleep & wake active",
+  "status.stationary": "Stationary",
+  "status.roaming": "Roaming",
+  "status.phone": "Phone",
+  "status.ble_tag": "BLE tag",
+  "status.needs_attention": "Needs attention",
+  "status.pin_configured": "PIN configured",
+  "status.pin_not_set": "Not set",
+  "signal.no_reading": "No reading",
+  "signal.excellent": "Excellent",
+  "signal.good": "Good",
+  "signal.fair": "Fair",
+  "signal.weak": "Weak",
+  // WAI-ARIA entity combobox (D-062 / Q11)
+  "combobox.placeholder": "Search name, Area, or entity ID…",
+  "combobox.no_matches": "No matching entities",
+  "combobox.clear": "Clear selection",
+  "combobox.showing_top": "Showing top {shown} of {total} matches",
+  // Sync, timeouts & optimistic concurrency (D-064)
+  "sync.conflict_reloaded": "Settings changed in another session; refreshed latest state.",
+  "sync.restarting_device": "Restarting Device…",
+  "sync.hibernating_device": "Hibernating Device…",
+  "sync.triggered_action": "Triggered \"{label}\"",
+  "sync.device_not_found": "Requested Device was not found; showing Managed devices.",
+  "sync.save_device_failed": "Could not save Device settings",
+  "sync.save_device_named_failed": "Could not save settings for \"{title}\": {error}",
+  "sync.save_system_failed": "Could not save System settings",
+  // Repairs fallback messages
+  "issue.link_ma_player": "Not linked to its Music Assistant player.",
+  "issue.missing_mapped_entity": "A chosen entity no longer exists.",
+  "issue.missing_mapped_entity_detail": "A chosen entity no longer exists: {detail}.",
+  "issue.ble_no_proxies":
+    "BLE Area tracking is on, but no Bluetooth proxy is assigned to an Area.",
+  "issue.slot_push_failing": "Latter cannot send Area and browse pages to this Device.",
+  "issue.device_crashed": "Restarted after a crash.",
+  "issue.device_crashed_detail": "Restarted after a crash ({detail}).",
+  "issue.device_crashed_stall":
+    "Restarted itself after its main loop stalled for 30 seconds.",
+  "issue.device_brownout": "Restarted after a power dip (brownout).",
+  "issue.firmware_rolled_back":
+    "A firmware update failed to start; the previous firmware is running.",
+  "issue.generic": "Repair: {label}.",
+};
+__latterExp(__exports, { EN_COMMON_STRINGS: () => EN_COMMON_STRINGS });
+//# sourceURL=latter-studio/src/i18n/en-common.ts
+});
+__latterDef("src/i18n/en-devices.ts", (__exports, __req) => {
+/**
+ * Device-scope, Managed inventory, Wallpaper gallery, & Discovered onboarding UI strings
+ * (`D-061` — Home Assistant Sentence case).
+ */
+const EN_DEVICES_STRINGS = {
+  // Offline / sleeping & BLE transmitter banners (D-066)
+  "offline.device_banner_title": "Device is offline or hibernating",
+  "offline.device_sleeping_title": "Device is sleeping",
+  "offline.device_banner_body":
+    "Settings saved here are queued in Home Assistant and sync automatically when this Device wakes or reconnects. Live quick actions are unavailable while offline.",
+  "offline.ble_tx_off_title": "BLE transmitter not active ({state})",
+  "offline.ble_tx_off_body":
+    "Enable the BLE Transmitter sensor in the Home Assistant Companion App on this phone so Bluetooth proxies can detect its Area.",
+  // Device card titles & disambiguated display sections (D-066 / Q7 / Q8)
+  "card.status": "Status",
+  "card.quick_actions": "Quick actions",
+  "card.assignments": "Assignments",
+  "card.timers_alarms": "Timers & alarms",
+  "card.sensors_controls": "Sensors & controls",
+  "card.wallpapers": "Wallpapers",
+  "card.brightness": "Brightness",
+  "card.colors": "Colors",
+  "card.screensaver": "Screensaver",
+  "card.home_screen": "Home screen",
+  "card.app_dock": "App Dock",
+  "card.diagnostics": "Diagnostics",
+  "card.developer_telemetry": "Developer & telemetry",
+  "card.replace_hardware": "Replace hardware",
+  "card.replace_hardware_body":
+    "Replaced a physical board or reflashed under a new ESPHome node? Use Reconfigure on this Device entry in Home Assistant Integrations to rebind its hardware identity while keeping all shortcuts, Area rules, and settings.",
+  "card.danger_zone": "Danger zone",
+  // Device list & discovered devices (D-041 / D-066 / Q12)
+  "devices.inventory_heading": "Inventory",
+  "devices.col_device": "Device",
+  "devices.col_model": "Model",
+  "devices.col_area": "Area",
+  "devices.col_group": "Group",
+  "devices.col_status": "Status",
+  "devices.filter_aria": "Filter managed Devices by category",
+  "devices.all": "All Devices",
+  "devices.online": "Online Devices",
+  "devices.roaming": "Roaming Devices",
+  "devices.stationary": "Stationary Devices",
+  "devices.latter_displays": "Latter displays",
+  "devices.ble_tracked": "BLE-tracked Devices",
+  "devices.phones": "Phones",
+  "devices.ble_tags": "BLE tags",
+  "devices.assigned_person": "Assigned to a person",
+  "devices.updates_available": "Updates available",
+  "devices.group_prefix": "Group: {name}",
+  "devices.empty_filtered": "No Devices match this category.",
+  "devices.empty_zero_title": "No managed Devices yet",
+  "devices.empty_zero_body":
+    "Adopt discovered Latter displays, add Bluetooth tags for Area presence, or configure System Area sensor fusion.",
+  "devices.open_discovered": "Open Discovered",
+  "devices.open_area_presence": "Configure Area presence",
+  "discovered.latter_devices": "Latter Devices",
+  "discovered.bluetooth_devices": "Bluetooth devices",
+  "discovered.empty_latter":
+    "No unconfigured Latter Devices found in Home Assistant. Newly added ESPHome Devices running Latter firmware appear here automatically.",
+  "discovered.web_installer": "Open Web Installer",
+  "discovered.getting_started": "Getting started guide",
+  "discovered.ignored_count": "Ignored ({count})",
+  "discovered.default_latter_title": "Latter Device",
+  "discovered.default_latter_model": "Latter ESPHome Device",
+  "discovered.default_ble_kind": "BLE device",
+  "discovered.meta_node": "Node: {node}",
+  "discovered.meta_area": "Area: {area}",
+  "discovered.meta_nearest_area": "Nearest Area: {area}",
+  "discovered.group_select_aria": "Device group for {title}",
+  "discovered.auto_group_option": "Auto ({group})",
+  "discovered.person_select_aria": "Assigned person for {title}",
+  "discovered.ignore_aria": "Ignore {title}",
+  "discovered.restore_aria": "Restore {title}",
+  "discovered.search_ble_aria": "Search discovered Bluetooth devices",
+  "discovered.search_ble_placeholder": "Search name, address, or Area…",
+  "discovered.filter_ble_aria": "Filter discovered Bluetooth devices",
+  "discovered.all_ble": "All Bluetooth devices",
+  "discovered.phones_trackers": "Phones & trackers",
+  "discovered.named_ble": "Named BLE advertisements",
+  "discovered.sort_ble_aria": "Sort discovered Bluetooth devices",
+  "discovered.sort_name": "Sort: Name (A–Z)",
+  "discovered.sort_rssi": "Sort: Signal strength",
+  "discovered.sort_area": "Sort: Nearest Area",
+  "discovered.pause_list": "Pause list",
+  "discovered.resume_list": "Resume list",
+  "discovered.paused_hint":
+    "List updates paused ({count} shown). Select Resume list to refresh.",
+  "discovered.empty_ble_filtered": "No Bluetooth devices match this filter.",
+  "discovered.empty_ble_none": "No unadopted Bluetooth devices nearby.",
+  "discovered.adopted_toast": "Adopted \"{title}\"",
+  "discovered.ignored_toast": "Ignored \"{title}\"",
+  "discovered.restored_toast": "Restored \"{title}\" to discovered list",
+  // Wallpaper gallery & multipart upload (D-25 / Q5)
+  "wp_gallery.builtin": "Built-in",
+  "wp_gallery.uploading": "Uploading…",
+  "wp_gallery.upload_progress_aria": "Wallpaper upload progress",
+  // Device -> Overview (D-003 / D-066 / F-01)
+  "dev_overview.waiting_for_reading": "Waiting for reading",
+  "dev_overview.tile_area": "Area",
+  "dev_overview.tile_current_area": "Current Area",
+  "dev_overview.tile_closest_proxy": "Closest proxy",
+  "dev_overview.ble_presence_meta": "BLE presence",
+  "dev_overview.tile_battery": "Battery",
+  "dev_overview.tile_power": "Power",
+  "dev_overview.tile_ble_signal": "BLE signal",
+  "dev_overview.tile_wifi_signal": "Wi-Fi signal",
+  "dev_overview.tile_ble_target": "BLE target",
+  "dev_overview.ble_address_meta": "Bluetooth address",
+  "dev_overview.tile_firmware": "Firmware",
+  "dev_overview.qa_find_my": "Find my Device",
+  "dev_overview.qa_trigger_va": "Trigger voice assistant",
+  "dev_overview.qa_activate_screensaver": "Activate screensaver",
+  "dev_overview.qa_exit_screensaver": "Exit screensaver",
+  "dev_overview.qa_restart": "Restart Device",
+  "dev_overview.restart_device": "Restart Device",
+  "dev_overview.restart_device_desc":
+    "Reboots this Device; Wi-Fi and active sessions reconnect automatically.",
+  "dev_overview.restart_btn": "Restart",
+  "dev_overview.empty_quick_actions": "No live actions reported by this Device.",
+  "dev_overview.device_group_label": "Device group",
+  "dev_overview.device_group_custom_desc":
+    "Uses individual operational settings; save as a reusable group or pick an existing preset.",
+  "dev_overview.device_group_preset_desc":
+    "Applies shared operational settings (power, wake word, brightness, BLE).",
+  "dev_overview.device_category_label": "Device category",
+  "dev_overview.device_category_desc":
+    "Classifies this Bluetooth Device under Phones or BLE tags across Managed devices.",
+  "dev_overview.auto_category_option": "Auto ({category})",
+  "dev_overview.assigned_person_label": "Assigned person",
+  "dev_overview.assigned_person_desc":
+    "Links this Device's Area presence to a Home Assistant person entity.",
+  "dev_overview.unassigned_option": "— Unassigned —",
+  "dev_overview.remote_group_label": "Remote control scope",
+  "dev_overview.remote_group_desc":
+    "Controls which TV and AV remotes appear in the Remote app.",
+  "dev_overview.remote_follow_area": "Follow Area",
+  "dev_overview.remote_all_system": "All System remotes",
+  "dev_overview.ringing_alert_text": "An alarm or timer is ringing on this Device.",
+  "dev_overview.dismissed_ringing_toast": "Dismissed ringing alert",
+  "dev_overview.active_timer_label": "Active timer",
+  "dev_overview.no_active_timer": "No active timer",
+  "dev_overview.running": "Running",
+  "dev_overview.paused": "Paused",
+  "dev_overview.cancel_timer": "Cancel timer",
+  "dev_overview.cancelled_timer_toast": "Cancelled timer",
+  "dev_overview.stopwatch_label": "Stopwatch",
+  "dev_overview.not_running": "Not running",
+  "dev_overview.reset_stopwatch": "Reset stopwatch",
+  "dev_overview.reset_stopwatch_toast": "Reset stopwatch",
+  "dev_overview.alarms_label": "Alarms",
+  "dev_overview.alarms_enabled_summary": "{count} enabled • {nextTime}",
+  "dev_overview.alarms_desc":
+    "Syncs 2-way with on-device alarm edits (1-minute precision).",
+  "dev_overview.alarms_group_aria": "Device alarms",
+  "dev_overview.alarm_time_label": "Alarm {index} time",
+  "dev_overview.alarm_schedule_label": "Alarm {index} schedule",
+  "dev_overview.alarm_rec_daily": "Daily",
+  "dev_overview.alarm_rec_weekdays": "Weekdays",
+  "dev_overview.alarm_rec_weekends": "Weekends",
+  "dev_overview.alarm_rec_once": "Once",
+  // Device -> Display (D-034 / D-069 / D-070)
+  "dev_display.card_voice_assistant": "Voice assistant",
+  "dev_display.bedtime_brightness_override_note":
+    "Bedtime mode is currently active and overriding screen brightness.",
+  "dev_display.bright_brightness_label": "Bright brightness",
+  "dev_display.dark_brightness_label": "Dark brightness",
+  "dev_display.ambient_live_status": "{area} · {lux} lx ({level}% ambient)",
+  "dev_display.ambient_fallback_status":
+    "No ambient light sensor in {area} — using Sun synchronized fallback.",
+  "dev_display.ambient_unassigned_status":
+    "Locate or assign this Device to an Area to use ambient light.",
+  "dev_display.screensaver_preview_desc":
+    "Starts the screensaver on this Device immediately.",
+  "dev_display.screensaver_exit_desc":
+    "Wakes the display and exits the active screensaver immediately.",
+  "dev_display.preview_btn": "Preview",
+  "dev_display.exit_screensaver_btn": "Exit screensaver",
+  "dev_display.screensaver_photo_clock_desc":
+    "Draws a compact subtle clock in the corner while displaying photos.",
+  "dev_display.screensaver_pool_label": "Photo frame photos",
+  "dev_display.screensaver_pool_empty": "No photos selected — choose photos or a collection.",
+  "dev_display.screensaver_choose_photos": "Choose photos…",
+  "dev_display.screensaver_shuffle_desc":
+    "Randomizes photo order instead of advancing alphabetically.",
+  "dev_display.custom_color_label": "Custom color",
+  "dev_display.custom_color_desc": "Used when Color profile is set to Custom.",
+  "dev_display.current_color_option": "Current ({hex})",
+  "dev_display.add_color_btn": "Add color",
+  "dev_display.wallpapers_subtitle":
+    "Shared photo library and collections cropped automatically for this display.",
+  "dev_display.choose_wallpaper": "Choose wallpaper…",
+  "dev_display.manage_photo_library": "Manage photo library",
+  "dev_display.pool_single_meta": "Single photo • {name}",
+  "dev_display.pool_collection_meta": "Collection: {collection} ({count} photos)",
+  "dev_display.pool_collection_one_meta": "Collection: {collection} (1 photo)",
+  "dev_display.pool_custom_meta": "Custom selection ({count} photos)",
+  "dev_display.pool_custom_one_meta": "Custom selection (1 photo)",
+  "dev_display.pool_off_meta": "Off — no photos selected.",
+  "dev_display.wp_override_home_and_weather":
+    "Live weather background is active on Home and Sky & weather — wallpapers appear on other screens.",
+  "dev_display.wp_override_home_only":
+    "Weather background is enabled on Home — wallpapers appear across other screens.",
+  "dev_display.wp_override_weather_only":
+    "Live weather background is active in Sky & weather — wallpapers appear on Home and other screens.",
+  "dev_display.open_interface": "Open Interface",
+  "dev_display.turn_off_wallpaper": "Turn off wallpaper",
+  "dev_display.rotation_interval_label": "Rotation interval",
+  "dev_display.rotation_interval_aria": "Wallpaper rotation interval",
+  "dev_display.rot_0": "Do not rotate",
+  "dev_display.rot_5": "Every 5 minutes",
+  "dev_display.rot_15": "Every 15 minutes",
+  "dev_display.rot_30": "Every 30 minutes",
+  "dev_display.rot_60": "Every hour",
+  "dev_display.rot_360": "Every 6 hours",
+  "dev_display.rot_1440": "Once a day",
+  // Device -> Interface (D-053 / D-064 / D-069 / U4)
+  "dev_interface.enable_home_desc":
+    "Provides the Home screen and App Dock. Turn off to lock this Device to a single start screen app.",
+  "dev_interface.start_screen_multi_desc":
+    "Choose the screen shown on startup. Swipe up from the bottom to return to Home.",
+  "dev_interface.start_screen_single_desc":
+    "Single-app screen shown at all times while the Home screen is disabled.",
+  "dev_interface.time_format_desc":
+    "Applies 12-hour or 24-hour time across Home, alarms, calendar, and schedules.",
+  "dev_interface.home_clock_tap_desc":
+    "Choose whether tapping the clock readout on Home opens the Time app or the standalone clock face.",
+  "dev_interface.clock_face_desc":
+    "Visual style for the standalone clock face screen.",
+  "dev_interface.home_date_tap_desc":
+    "Choose whether tapping the date readout on Home opens Day view or Overview in the Calendar app.",
+  "dev_interface.return_timeout_desc":
+    "Resets idle screens back to Home unless media is playing or a live activity is active.",
+  "dev_interface.wake_greeting_desc":
+    "Shows a brief morning, afternoon, or evening greeting after waking from standby.",
+  "dev_interface.weather_bg_desc":
+    "Replaces the Home screen backdrop with a live sky matching current conditions.",
+  "dev_interface.sun_moon_label": "Sun & Moon",
+  "dev_interface.sun_moon_desc":
+    "Choose which sky bodies appear on the live weather background.",
+  "dev_interface.activity_card_desc":
+    "Shows live timers, alarms, media queue, stopwatch, and next calendar event on Home.",
+  "dev_interface.activity_sources_desc":
+    "Choose and reorder which live items appear in the Activity card.",
+  "dev_interface.activity_src_calendar": "Calendar",
+  "dev_interface.activity_src_music_queue": "Music queue",
+  "dev_interface.activity_src_stopwatch": "Stopwatch",
+  "dev_interface.activity_src_alarms": "Alarms",
+  "dev_interface.activity_src_timers": "Timers",
+  "dev_interface.app_dock_desc":
+    "Toggle, drag to reorder, and configure apps on the App Dock, or add custom subpage and Home Assistant entity shortcuts. Pinned hides automatically when empty.",
+  "dev_interface.active_dock_aria": "Active on App Dock",
+  "dev_interface.show_on_dock_aria": "Show {title} on App Dock",
+  "dev_interface.settings_title": "Settings",
+  "dev_interface.settings_locked_meta": "Always shown last on the App Dock",
+  "dev_interface.hidden_from_dock": "Hidden from dock",
+  "dev_interface.pinned_empty_meta": "Empty — auto-hidden on dock",
+  "dev_interface.pinned_count_meta": "{count} {shortcutWord} • {pages} {pageWord}",
+  "dev_interface.word_shortcut_one": "shortcut",
+  "dev_interface.word_shortcut_many": "shortcuts",
+  "dev_interface.word_page_one": "page",
+  "dev_interface.word_page_many": "pages",
+  "dev_interface.music_meta": "Art: {art} • Albums: {albums}",
+  "dev_interface.cameras_empty_meta": "No cameras configured",
+  "dev_interface.cameras_meta_one": "{view} • {framing} • 1 camera",
+  "dev_interface.cameras_meta_many": "{view} • {framing} • {count} cameras",
+  "dev_interface.categories_enabled_one": "1 category enabled",
+  "dev_interface.categories_enabled_many": "{count} categories enabled",
+  "dev_interface.remote_follow_area": "Follow the active Area",
+  "dev_interface.remote_all": "All System remotes",
+  "dev_interface.weather_meta_live_sky": "Live weather sky",
+  "dev_interface.weather_meta_wallpaper": "Uses device wallpaper",
+  "dev_interface.time_utc_world_one": "UTC + 1 world clock",
+  "dev_interface.time_utc_world_many": "UTC + {count} world clocks",
+  "dev_interface.time_world_one": "1 world clock",
+  "dev_interface.time_world_many": "{count} world clocks",
+  "dev_interface.time_local_utc": "Local time + UTC",
+  "dev_interface.time_local": "Local time",
+  "dev_interface.clock_24h": "24-hour",
+  "dev_interface.clock_12h": "12-hour",
+  "dev_interface.calendar_meta": "{days}-day lookahead • Starts {weekday}",
+  "dev_interface.tools_enabled_one": "1 tool enabled",
+  "dev_interface.tools_enabled_many": "{count} tools enabled",
+  "dev_interface.games_enabled_one": "1 game enabled",
+  "dev_interface.games_enabled_many": "{count} games enabled",
+  "dev_interface.custom_route_meta": "Custom • {target}",
+  "dev_interface.custom_entity_confirm_meta":
+    "Custom • {action} • Confirm • {target}",
+  "dev_interface.custom_entity_tap_meta": "Custom • {action} • 1-tap • {target}",
+  // Device -> Audio (D-008 / D-031 / D-066 / Q8)
+  "dev_audio.card_voice_wake": "Voice assistant & wake word",
+  "dev_audio.card_sound_playback": "Sound & playback",
+  "dev_audio.vfm_desc":
+    "Updates this roaming Device's Home Assistant Area when BLE presence settles in a new Area, so Area-less voice commands target where you are.",
+  "dev_audio.vfm_delay_label": "Voice Follows Me delay",
+  "dev_audio.vfm_delay_desc":
+    "How long a BLE-detected Area stays stable before moving the Device (3 to 60 seconds).",
+  "dev_audio.ww_sensitivity_summary": "Wake word sensitivity (per model)",
+  "dev_audio.default_speaker_label": "Default speaker",
+  "dev_audio.default_speaker_desc":
+    "Primary speaker controlled from Music and Home when this Device starts up.",
+  "dev_audio.default_speaker_auto": "— Automatic (built-in or Area) —",
+  "dev_audio.ma_player_label": "Music Assistant player",
+  "dev_audio.ma_player_unmatched_desc":
+    "Automatic match did not find {entity} in Music Assistant. Choose this Device's player for library playback, queues, and lyrics.",
+  "dev_audio.ma_player_manual_desc":
+    "Linked manually ({entity} was not used). Clear to return to automatic matching.",
+  "dev_audio.ma_player_fallback_target": "this Device's player",
+  "dev_audio.ma_player_auto": "— Automatic match —",
+  "dev_audio.area_handoff_desc":
+    "Transfers active Music Assistant playback when this Device moves to or selects another Area.",
+  // Device -> Power (D-027 / D-068)
+  "dev_power.card_sleep_wake": "Sleep & wake",
+  "dev_power.card_bedtime": "Bedtime mode",
+  "dev_power.card_bedtime_subtitle":
+    "Turns off or dims the display overnight and silences non-critical notification chimes.",
+  "dev_power.card_power_battery": "Power & battery",
+  "dev_power.empty": "No sleep or battery entities reported by this Device.",
+  // Device -> Presence (D-032 / D-066 / Q8)
+  "dev_presence.card_area_tracking": "Area tracking",
+  "dev_presence.card_ble_identity": "BLE identity",
+  "dev_presence.track_ble_label": "Track Area with BLE proxies",
+  "dev_presence.track_ble_desc":
+    "Uses Home Assistant Area-assigned Bluetooth proxies to locate this Device automatically. Turn off to pin it to one assigned Area.",
+  "dev_presence.auto_switch_desc":
+    "Switches the Device's active Area controls automatically when BLE detects a move.",
+  "dev_presence.fallback_area_label": "Fallback Area",
+  "dev_presence.fallback_area_desc":
+    "Default Home Assistant Area when no Bluetooth proxy is in range.",
+  "dev_presence.fallback_area_auto": "— Automatic (ESPHome Area) —",
+  "dev_presence.assigned_area_label": "Assigned Area",
+  "dev_presence.assigned_area_desc":
+    "Pins this Device's Area controls and Home Assistant Device Area to one location.",
+  "dev_presence.target_addr_label": "BLE target address or entity",
+  "dev_presence.target_addr_placeholder":
+    "AA:BB:CC:DD:EE:FF or device_tracker.phone_ble",
+  "dev_presence.target_addr_help":
+    "Leave blank on Latter displays to track their built-in BLE beacon MAC automatically.",
+  "dev_presence.ref_power_label": "Reference power (1 meter)",
+  "dev_presence.ref_power_placeholder_detected": "Auto ({dbm} dBm)",
+  "dev_presence.ref_power_help":
+    "Leave blank to use auto-detected beacon power in dBm, or enter -90 to -30 dBm to calibrate this Device.",
+  "dev_presence.companion_low_title": "Companion App low-power beacon detected",
+  "dev_presence.companion_low_body":
+    "This phone is advertising at {txPower} power{modeSuffix}.{refSuffix} Setting Transmit Power to Medium or High and Advertise Mode to Balanced in the Home Assistant Companion App improves multi-Area accuracy through walls.",
+  "dev_presence.companion_mode_suffix": " ({mode} mode)",
+  "dev_presence.companion_ref_suffix":
+    " Latter automatically compensates its 1 m reference power ({dbm} dBm).",
+  "dev_presence.companion_default_power": "default",
+  "dev_presence.ibeacon_uuid_label": "iBeacon UUID",
+  "dev_presence.ibeacon_uuid_placeholder": "Generated automatically per System",
+  // Device -> Tools (D-027 / D-064 / D-066 / Q8 / Q12)
+  "dev_tools.ble_signal": "BLE signal",
+  "dev_tools.ble_target": "BLE target",
+  "dev_tools.model": "Model",
+  "dev_tools.esphome_node": "ESPHome node",
+  "dev_tools.firmware_version": "Firmware version",
+  "dev_tools.latter_sdk": "Latter SDK",
+  "dev_tools.wifi_signal": "Wi-Fi signal",
+  "dev_tools.ip_address": "IP address",
+  "dev_tools.mac_address": "MAC address",
+  "dev_tools.diagnostics_file_label": "Diagnostics file",
+  "dev_tools.diagnostics_file_desc":
+    "Downloads redacted Home Assistant diagnostics for troubleshooting.",
+  "dev_tools.backup_row_label": "Device backup",
+  "dev_tools.backup_row_desc":
+    "Downloads this Device's Latter configuration and settings as JSON.",
+  "dev_tools.perimeter_subtitle":
+    "Governs unlocking doors, disarming alarms, and opening garage or gate covers from this Device.",
+  "dev_tools.pin_policy_desc_prefix":
+    "Auto requires a PIN on stationary wall panels when configured and allows roaming personal Devices. Effective policy:",
+  "dev_tools.security_pin_label": "Security PIN",
+  "dev_tools.security_pin_desc":
+    "Write-only 4 to 12 digit numeric PIN verified by Home Assistant when the on-device keypad prompts. Never shown again after saving.",
+  "dev_tools.pin_input_aria": "New security PIN (4 to 12 digits)",
+  "dev_tools.pin_placeholder_replace": "Enter new PIN to replace…",
+  "dev_tools.pin_placeholder_new": "4 to 12 digits",
+  "dev_tools.save_pin": "Save PIN",
+  "dev_tools.clear_pin": "Clear PIN",
+  "dev_tools.reconfigure_in_ha": "Reconfigure in Home Assistant",
+  "dev_tools.reset_defaults_label": "Reset to defaults",
+  "dev_tools.reset_defaults_desc":
+    "Resets on-device preferences and/or Latter settings while keeping Wi-Fi and Home Assistant pairing.",
+  "dev_tools.remove_device_label": "Remove Device",
+  "dev_tools.remove_device_desc":
+    "Removes this Device from Latter. Your ESPHome device stays in Home Assistant.",
+  "dev_tools.telem_uptime": "Session uptime",
+  "dev_tools.profiler_label": "Telemetry profiler",
+  "dev_tools.profiler_desc":
+    "Streams frame and subsystem timing logs over ESPHome logs for troubleshooting.",
+  "dev_tools.refresh_telemetry_label": "Runtime telemetry",
+  "dev_tools.refresh_telemetry_desc":
+    "Requests an immediate RAM, PSRAM, and Wi-Fi link snapshot from this Device.",
+  "dev_tools.refresh_telemetry_toast": "Requested telemetry snapshot",
+  "dev_tools.telem_int_ram": "Internal RAM (free / min / largest)",
+  "dev_tools.telem_psram_min": "PSRAM low-water mark",
+  "dev_tools.telem_ble_beacon": "BLE beacon radio",
+  "dev_tools.telem_last_reset": "Last reset",
+  "dev_tools.telem_wifi_disc": "Wi-Fi disconnects",
+  "dev_tools.telem_beacon_timeouts": " ({count} beacon timeouts)",
+  "dev_tools.telem_wifi_avg_min": "Wi-Fi avg / min",
+  "dev_tools.telem_ha_sessions": "Home Assistant sessions",
+  "dev_tools.telem_max_gap": " (max gap {duration})",
+  "dev_tools.telem_light_sleep": "Light sleep duty",
+  "dev_tools.telem_cycles": " ({count} cycles)",
+  "dev_tools.telem_nvs_writes": "NVS flash writes",
+  "dev_tools.telem_nvs_value":
+    "{writes} writes ({erases} erases, {maxMs} ms max)",
+  "dev_tools.telem_board": "Hardware board",
+  "dev_tools.telem_processor": "Processor & PSRAM",
+  "dev_tools.telem_psram_suffix": " • {mb} MB PSRAM",
+  "dev_tools.telem_display_panel": "Display panel",
+  "dev_tools.telem_headless": "Headless",
+  "dev_tools.telem_traits": "Hardware traits",
+  "dev_tools.trait_touch": "Touch",
+  "dev_tools.trait_mic": "Mic",
+  "dev_tools.trait_speaker": "Speaker",
+  "dev_tools.trait_audio": "Audio",
+  "dev_tools.trait_imu": "IMU",
+  "dev_tools.trait_battery": "Battery",
+  "dev_tools.trait_wearable": "Wearable",
+  "dev_tools.trait_stationary": "Stationary",
+};
+__latterExp(__exports, { EN_DEVICES_STRINGS: () => EN_DEVICES_STRINGS });
+//# sourceURL=latter-studio/src/i18n/en-devices.ts
+});
+__latterDef("src/i18n/en-system.ts", (__exports, __req) => {
+/**
+ * System-scope & modal dialog UI strings (`D-061` — Home Assistant Sentence case).
+ */
+const EN_SYSTEM_STRINGS = {
+  // System card titles
+  "card.perimeter_security": "Perimeter security",
+  "card.perimeter_security_signing": "Perimeter security & signing",
+  "card.notifications_announcements": "Notifications & announcements",
+  "card.doorbell_intercom_audio": "Doorbell & intercom audio",
+  "card.backup_restore": "Backup & restore",
+  "card.system_device_logs": "System & Device logs",
+  "card.support_diagnostics": "Support & diagnostics",
+  "card.support_subtitle":
+    "Version lockstep, redacted System diagnostics bundle, and issue reporting.",
+  "card.area_deployment": "Area deployment",
+  "card.home_hub_weather": "Home hub & weather",
+  "card.calendars": "Calendars",
+  "card.cameras_doorbell": "Cameras & doorbell audio",
+  "card.custom_colors": "Custom colors",
+  "card.photo_library": "Photo library",
+  "card.remote_controls": "Remote controls",
+  "card.volume_overrides": "Speaker volume overrides",
+  "card.remote_groups": "Remote control groups",
+  "card.area_presence_sensors": "Area presence & sensors",
+  "card.ble_calibration": "Walk-around BLE calibration",
+  "card.advanced_ble": "Advanced BLE settings",
+  // Support & diagnostics card (D-066)
+  "support.ha_version": "Home Assistant",
+  "support.integration_version": "Latter integration",
+  "support.sdk_rev": "Minimum firmware SDK",
+  "support.studio_rev": "Studio contract",
+  "support.managed_devices": "Managed Devices",
+  "support.managed_devices_value":
+    "{total} ({displays} displays, {trackers} BLE trackers)",
+  "support.copy_summary": "Copy version summary",
+  "support.copied_summary": "Copied version summary to clipboard",
+  "support.download_system_diagnostics": "Download System diagnostics",
+  "support.documentation": "Documentation",
+  "support.report_issue": "Report an issue",
+  // System -> Overview (D-051 / D-003 / D-004 / D-061 / D-076)
+  "sys_overview.no_devices": "No Devices",
+  "sys_overview.issues_one": "1 issue",
+  "sys_overview.issues_many": "{count} issues",
+  "sys_overview.updates_one": "1 update",
+  "sys_overview.updates_many": "{count} updates",
+  "sys_overview.all_online": "All online",
+  "sys_overview.healthy": "Healthy",
+  "sys_overview.sleeping_count": "{count} sleeping",
+  "sys_overview.away_count": "{count} away",
+  "sys_overview.scanning_count": "{count} scanning",
+  "sys_overview.offline_count": "{count} offline",
+  "sys_overview.low_battery_count": "{count} low battery",
+  "sys_overview.online_ratio": "{online} / {total} online",
+  "sys_overview.zero_devices": "0 Devices",
+  "sys_overview.ready_to_onboard": "Ready to onboard",
+  "sys_overview.displays_one": "1 display",
+  "sys_overview.displays_many": "{count} displays",
+  "sys_overview.phones_one": "1 phone",
+  "sys_overview.phones_many": "{count} phones",
+  "sys_overview.ble_tags_one": "1 BLE tag",
+  "sys_overview.ble_tags_many": "{count} BLE tags",
+  "sys_overview.audio_count": "{count} audio",
+  "sys_overview.open_device": "Open Device",
+  "sys_overview.discovered_banner_title": "Hardware ready to adopt",
+  "sys_overview.discovered_banner_one":
+    "1 unbound Latter Device detected on your network ({names}).",
+  "sys_overview.discovered_banner_many":
+    "{count} unbound Latter Devices detected on your network ({names}).",
+  "sys_overview.open_discovered": "Open discovered",
+  "sys_overview.tile_devices": "Managed Devices",
+  "sys_overview.tile_areas": "Area presence",
+  "sys_overview.occupied_count": "{count} occupied",
+  "sys_overview.areas_proxies_meta": "{areas} • {proxies}",
+  "sys_overview.areas_one": "1 Area",
+  "sys_overview.areas_many": "{count} Areas",
+  "sys_overview.proxies_one": "1 BLE proxy",
+  "sys_overview.proxies_many": "{count} BLE proxies",
+  "sys_overview.no_areas": "No Areas configured",
+  "sys_overview.tile_people_roaming": "People & roaming",
+  "sys_overview.people_assigned_one": "1 person assigned",
+  "sys_overview.people_assigned_many": "{count} people assigned",
+  "sys_overview.ble_tracked_meta": "{count} BLE-tracked",
+  "sys_overview.tile_release": "System release",
+  "sys_overview.fw_updates_one": "1 firmware update available",
+  "sys_overview.fw_updates_many": "{count} firmware updates available",
+  "sys_overview.check_fw_updates": "Check firmware updates",
+  "sys_overview.area_deployment_subtitle":
+    "Live occupancy, assigned Devices, and Bluetooth coverage across your Areas.",
+  "sys_overview.manage_presence": "Manage presence",
+  "sys_overview.roaming_devices": "Roaming Devices",
+  "sys_overview.roaming_active_ratio": "{online} / {total} active",
+  "sys_overview.plus_more": "+{count} more",
+  "sys_overview.here_prefix": "Here: {names}",
+  "sys_overview.remotes_one": "1 remote",
+  "sys_overview.remotes_many": "{count} remotes",
+  "sys_overview.active_sensors_one": "1 active sensor",
+  "sys_overview.active_sensors_many": "{count} active sensors",
+  "sys_overview.sensors_one": "1 sensor",
+  "sys_overview.sensors_many": "{count} sensors",
+  "sys_overview.occupied": "Occupied",
+  "sys_overview.no_devices_stationed": "No Devices stationed",
+  "sys_overview.signature_count": "Signature ({count})",
+  "sys_overview.ble_proxy": "BLE proxy",
+  "sys_overview.no_ble_proxy": "No BLE proxy",
+  "sys_overview.empty_deployment":
+    "No Home Assistant Areas or managed Devices configured yet.",
+  "sys_overview.unconfigured_areas_one":
+    "+1 additional Home Assistant Area without Latter Devices or BLE coverage.",
+  "sys_overview.unconfigured_areas_many":
+    "+{count} additional Home Assistant Areas without Latter Devices or BLE coverage.",
+  "sys_overview.photos_count_one": "1 photo",
+  "sys_overview.photos_count_many": "{count} photos",
+  // System -> Shared entities (D-022 / D-059 / D-065)
+  "shared.home_hub_subtitle":
+    "Shared climate zones, entry controls, vacuums, security, and weather across every Device.",
+  "shared.weather_label": "Weather",
+  "shared.security_alarm_label": "Security alarm",
+  "shared.thermostat_zones": "Thermostat zones",
+  "shared.add_zone": "Add zone",
+  "shared.choose_thermostat": "— Choose a thermostat —",
+  "shared.thermostat_aria": "Thermostat zone",
+  "shared.remove_thermostat": "Remove thermostat zone",
+  "shared.door_locks": "Door locks",
+  "shared.add_lock": "Add lock",
+  "shared.choose_lock": "— Choose a door lock —",
+  "shared.lock_aria": "Door lock",
+  "shared.remove_lock": "Remove door lock",
+  "shared.garage_doors": "Garage doors",
+  "shared.add_garage": "Add garage door",
+  "shared.choose_garage": "— Choose a garage door —",
+  "shared.garage_aria": "Garage door",
+  "shared.remove_garage": "Remove garage door",
+  "shared.robot_vacuums": "Robot vacuums",
+  "shared.add_vacuum": "Add vacuum",
+  "shared.choose_vacuum": "— Choose a robot vacuum —",
+  "shared.vacuum_aria": "Robot vacuum",
+  "shared.remove_vacuum": "Remove robot vacuum",
+  "shared.broadcast_speakers": "Broadcast speakers",
+  "shared.add_speaker": "Add speaker",
+  "shared.choose_speaker": "— Choose a speaker —",
+  "shared.speaker_aria": "Broadcast speaker",
+  "shared.remove_speaker": "Remove broadcast speaker",
+  "shared.broadcast_phrases": "Quick broadcast phrases",
+  "shared.add_phrase": "Add phrase",
+  "shared.phrase_placeholder": "Enter a quick broadcast phrase…",
+  "shared.phrase_aria": "Quick broadcast phrase",
+  "shared.remove_phrase": "Remove quick broadcast phrase",
+  "shared.calendars_subtitle":
+    "Upcoming events merged into the Activity card and agenda feed.",
+  "shared.add_calendar": "Add calendar",
+  "shared.choose_calendar": "— Choose a calendar —",
+  "shared.empty_calendars": "No calendars configured yet.",
+  "shared.calendar_aria": "Calendar",
+  "shared.remove_calendar": "Remove calendar",
+  "shared.cameras_subtitle":
+    "Up to 10 cameras. Doorbell ring sensors wake displays automatically with listen audio and push-to-talk TTS replies.",
+  "shared.add_camera": "Add camera",
+  "shared.doorbell_filter_label": "Doorbell audio filter",
+  "shared.doorbell_filter_desc":
+    "Noise-reduction preset applied when listening to camera audio.",
+  "shared.filter_strong": "Strong",
+  "shared.filter_light": "Light",
+  "shared.filter_off": "Off",
+  "shared.choose_camera": "— Choose a camera —",
+  "shared.empty_cameras": "No cameras configured yet.",
+  "shared.camera_aria": "Camera",
+  "shared.remove_camera": "Remove camera",
+  "shared.camera_slot_primary": "Camera 1 (primary)",
+  "shared.camera_slot_n": "Camera {index}",
+  "shared.preview": "Preview",
+  "shared.preview_heading": "Preview: {entity}",
+  "shared.camera_preview_alt": "Camera preview",
+  "shared.cam_cap_rtsp": "RTSP",
+  "shared.cam_cap_mjpeg": "MJPEG",
+  "shared.cam_cap_snapshot": "Snapshot",
+  "shared.cam_cap_doorbell": "Doorbell",
+  "shared.cam_cap_label": "Label: {label}",
+  "shared.cam_cap_listen": "Listen",
+  "shared.cam_cap_talk": "Talk",
+  "shared.cam_cap_reply": "Reply",
+  "shared.cam_cap_unlock": "Unlock: {entity}",
+  "shared.cam_cfg_title": "Camera options",
+  "shared.cam_cfg_label": "Display label",
+  "shared.cam_cfg_label_desc": "Short name shown on Latter displays (leave blank to use Home Assistant's name).",
+  "shared.cam_cfg_listen": "Show Listen button",
+  "shared.cam_cfg_listen_desc": "Allow monitoring camera audio from the camera view and doorbell popup.",
+  "shared.cam_cfg_talk": "Show Talk button",
+  "shared.cam_cfg_talk_desc": "Allow push-to-talk voice replies through this camera's speaker.",
+  "shared.cam_cfg_talk_no_speaker_desc": "No paired speaker was auto-detected for this camera, but you can still enable Talk manually.",
+  "shared.cam_cfg_reply": "Show Quick Reply button",
+  "shared.cam_cfg_reply_desc": "Show quick spoken reply presets on the camera view and doorbell popup.",
+  "shared.cam_cfg_unlock": "Unlock / Open button",
+  "shared.cam_cfg_unlock_desc": "Optionally link a specific door lock or garage door to show an Unlock/Open button on this camera.",
+  "shared.cam_cfg_unlock_none": "None (hide button)",
+  "shared.colors_subtitle":
+    "Shared 24-swatch accent library available across all Devices.",
+  "shared.add_color": "Add color",
+  "shared.delete_color_aria": "Delete color {name}",
+  "shared.empty_colors": "No custom colors saved yet.",
+  // System -> Media & remotes
+  "remotes.controls_subtitle":
+    "Up to 10 TV, streamer, or receiver entities controlled from the Remote screen.",
+  "remotes.add_remote": "Add remote",
+  "remotes.choose_remote": "— Choose a remote or media player —",
+  "remotes.empty_remotes": "No remote controls configured yet.",
+  "remotes.remote_aria": "Remote or media player",
+  "remotes.remove_remote": "Remove remote",
+  "remotes.slot_primary": "Slot 1 (primary power target)",
+  "remotes.slot_n": "Slot {index}",
+  "remotes.overrides_subtitle":
+    "Redirects volume buttons when audio plays through an external AVR or soundbar.",
+  "remotes.add_override": "Add override",
+  "remotes.when_playing_on": "When audio plays on",
+  "remotes.speaker_aria": "Speaker",
+  "remotes.choose_speaker": "— Choose a speaker —",
+  "remotes.change_volume_on": "Change the volume on",
+  "remotes.volume_target_aria": "Volume target",
+  "remotes.choose_volume_target": "— Choose a volume target —",
+  "remotes.remove_override_aria": "Remove volume override",
+  "remotes.empty_overrides": "No volume overrides configured.",
+  "remotes.groups_subtitle":
+    "Bind sets of remotes to Home Assistant Areas or specific Devices.",
+  "remotes.add_group": "Add group",
+  "remotes.group_name": "Group name",
+  "remotes.group_name_placeholder": "e.g. Living Area TV",
+  "remotes.loads_in_area": "Loads in Area",
+  "remotes.area_aria": "Area",
+  "remotes.no_area_option": "No Area (assign to Devices only)",
+  "remotes.delete_group_aria": "Delete remote group {name}",
+  "remotes.group_remotes_label": "Remote controls",
+  "remotes.primary_badge": "★ Primary: {name}",
+  "remotes.numbered_badge": "#{index}: {name}",
+  "remotes.add_badge": "+ {name}",
+  "remotes.add_remotes_first": "Add remote controls first.",
+  "remotes.empty_groups": "No remote groups yet.",
+  // Device groups & staged Batch controls (D-050 / D-064 / Q6 / R-8)
+  "groups.card_title": "Group presets & custom groups",
+  "groups.card_subtitle":
+    "Built-in hardware presets and custom Device groups that keep assigned Devices aligned.",
+  "groups.create_group": "Create group",
+  "groups.group_name": "Group name",
+  "groups.group_name_placeholder": "e.g. Guest suites",
+  "groups.description_optional": "Description (optional)",
+  "groups.description_placeholder": "Optional description",
+  "groups.copy_from_aria": "Copy settings from Device",
+  "groups.start_from_defaults": "Start from default settings",
+  "groups.copy_from_prefix": "Copy from: {title}",
+  "groups.members_one": "1 Device",
+  "groups.members_many": "{count} Devices",
+  "groups.scope_display_chip": "Display",
+  "groups.scope_interface_chip": "Interface",
+  "groups.view_devices": "View Devices",
+  "groups.reset_preset": "Reset preset",
+  "groups.reset_preset_toast": "Reset \"{name}\" to preset defaults",
+  "groups.delete_group_aria": "Delete group {name}",
+  "groups.devices_list_meta": "Devices: {names}",
+  "groups.no_devices_assigned": "No Devices assigned",
+  "groups.empty_groups": "No Device groups configured.",
+  "groups.custom_summary_title": "Custom (individual settings)",
+  "groups.custom_summary_desc":
+    "Devices move to Custom automatically when individual settings diverge from a group baseline.",
+  "groups.detached_toast": "Detached \"{title}\" to Custom (individual settings)",
+  "groups.detached_many_toast": "Applied changes ({count} Devices switched to Custom)",
+  "groups.baseline_settings": "Baseline settings",
+  "groups.section_power_brightness": "Power & brightness",
+  "groups.section_audio_voice": "Audio & voice",
+  "groups.section_presence_security": "Presence & security",
+  "groups.section_display": "Display",
+  "groups.section_interface": "Interface & shortcuts",
+  "groups.for_group_aria": "{label} for {group}",
+  "groups.remote_match_area": "Follow the active Area",
+  "groups.remote_group_prefix": "Group: {name}",
+  "groups.remote_all_system": "All System remotes",
+  "groups.dock_baseline_desc_one":
+    "Baseline holds 1 shortcut (captures from source Device below).",
+  "groups.dock_baseline_desc_many":
+    "Baseline holds {count} shortcuts (captures from source Device below).",
+  "groups.copy_dock": "Copy dock",
+  "groups.pinned_baseline_desc_one":
+    "Baseline holds 1 shortcut (captures from source Device below).",
+  "groups.pinned_baseline_desc_many":
+    "Baseline holds {count} shortcuts (captures from source Device below).",
+  "groups.copy_pinned": "Copy pinned",
+  "groups.clocks_baseline_desc_one":
+    "Baseline holds 1 zone (captures from source Device below).",
+  "groups.clocks_baseline_desc_many":
+    "Baseline holds {count} zones (captures from source Device below).",
+  "groups.copy_clocks": "Copy clocks",
+  "groups.copy_from_device": "Copy from Device",
+  "groups.source_device": "Source Device",
+  "groups.source_device_desc":
+    "Replaces this group's active baseline scope with an existing Device's settings.",
+  "groups.copy_into_aria": "Copy settings into {name}",
+  "groups.copy_settings": "Copy settings",
+  "groups.confirm_copy_title": "Copy settings into \"{group}\"?",
+  "groups.confirm_copy_body":
+    "Updates the \"{group}\" baseline from \"{device}\" and syncs all assigned Devices.",
+  "groups.confirm_copy_list_body":
+    "Copies {listLabel} from \"{device}\" into the \"{group}\" baseline and syncs assigned Devices.",
+  "groups.confirm_copy_confirm": "Copy into baseline",
+  "groups.include_display": "Include display settings",
+  "groups.include_display_desc":
+    "Sync wallpapers, clock face, color profile, and media appearance.",
+  "groups.include_interface": "Include interface & shortcuts",
+  "groups.include_interface_desc":
+    "Sync start screen, App Dock, pinned shortcuts, and hub categories.",
+  "batch.title": "Batch controls",
+  "batch.subtitle":
+    "Stage changes across a filtered set of Devices, then apply them together without altering saved group baselines.",
+  "batch.target_filter_aria": "Target Devices for batch controls",
+  "batch.category_filter_aria": "Filter batch controls by category",
+  "batch.all_latter_devices": "All Latter Devices",
+  "batch.online_devices": "Online Devices",
+  "batch.roaming_devices": "Roaming Devices",
+  "batch.stationary_devices": "Stationary Devices",
+  "batch.all_categories": "All categories",
+  "batch.cat_display": "Display",
+  "batch.cat_interface": "Interface",
+  "batch.cat_audio": "Audio",
+  "batch.cat_power": "Power",
+  "batch.cat_presence": "Presence",
+  "batch.cat_security": "Security",
+  "batch.staged_count": "{count} staged",
+  "batch.staged_badge": "Staged",
+  "batch.mixed_badge": "Mixed",
+  "batch.mixed_pill_suffix": "{label} (mixed)",
+  "batch.mixed_hint":
+    "Target Devices currently have different values — choose a value to stage across all targets.",
+  "batch.row_meta_one": "{section} • 1 Device",
+  "batch.row_meta_many": "{section} • {count} Devices",
+  "batch.detachment_note_one":
+    "1 grouped Device will switch to Custom if staged settings diverge from its group baseline.",
+  "batch.detachment_note_many":
+    "{count} grouped Devices will switch to Custom if staged settings diverge from their group baselines.",
+  "batch.apply_to_n": "Apply to {count} Devices",
+  "batch.apply_to_one": "Apply to 1 Device",
+  "batch.applied_to_n": "Applied staged changes to {count} Devices",
+  "batch.applied_to_one": "Applied staged changes to 1 Device",
+  "batch.reset_staged": "Reset",
+  "batch.no_targets": "No Devices match the selected filter.",
+  "batch.empty_all": "No Latter Devices onboarded yet.",
+  "batch.empty_target": "No Latter Devices currently match {target}.",
+  "batch.empty_category": "No batch controls match this category.",
+  "batch.target_summary": "Target ({count}): {names}",
+  "batch.copy_lists_title": "Copy multi-item lists",
+  "batch.template_device": "Template Device",
+  "batch.template_device_aria": "Template Device for batch list copy",
+  "batch.template_device_desc":
+    "Copies App Dock, pinned shortcuts, or world clocks to {target}.",
+  "batch.push_dock": "Push App Dock",
+  "batch.push_pinned": "Push pinned shortcuts",
+  "batch.push_clocks": "Push world clocks",
+  "batch.confirm_push_list_title": "Push {listLabel} to {target}?",
+  "batch.confirm_push_list_body":
+    "Replaces {listLabel} on matching Devices using \"{device}\" as the template.",
+  "batch.confirm_push_list_confirm": "Push list",
+  // System -> BLE & Area presence (D-044 / D-045 / D-046 / D-058)
+  "presence_sys.area_card_subtitle":
+    "Configures how each Area combines Bluetooth tracking and occupancy sensors.",
+  "presence_sys.mode_weighted": "Weighted (BLE and sensors)",
+  "presence_sys.mode_any_or": "Either (BLE or a sensor)",
+  "presence_sys.mode_ble_only": "BLE only",
+  "presence_sys.mode_both": "Both (BLE and a sensor)",
+  "presence_sys.occupied_sensor": "Occupied (sensor)",
+  "presence_sys.empty": "Empty",
+  "presence_sys.ble_dbm": "BLE {rssi} dBm{distance}",
+  "presence_sys.signature_match": "signature match",
+  "presence_sys.active_sensors_one": "1 active sensor",
+  "presence_sys.active_sensors_many": "{count} active sensors",
+  "presence_sys.clear_sensors_one": "1 sensor clear",
+  "presence_sys.clear_sensors_many": "{count} sensors clear",
+  "presence_sys.unavailable_sensors_one": "1 sensor unavailable",
+  "presence_sys.unavailable_sensors_many": "{count} sensors unavailable",
+  "presence_sys.calibrated_meta": "calibrated {when} ({samples} samples)",
+  "presence_sys.calibrate_hint":
+    "calibrate with a carried Device to detect BLE presence here",
+  "presence_sys.clear_signature": "Clear signature",
+  "presence_sys.calibrate": "Calibrate",
+  "presence_sys.occupied_chip": "Occupied • {confidence}",
+  "presence_sys.clear_chip": "Clear",
+  "presence_sys.signature_proxies_one": "Signature (1 proxy)",
+  "presence_sys.signature_proxies_many": "Signature ({count} proxies)",
+  "presence_sys.presence_mode": "Presence mode",
+  "presence_sys.presence_mode_aria": "Presence mode for {area}",
+  "presence_sys.sensor_threshold_drawer": "Sensor & threshold settings",
+  "presence_sys.occupied_at": "Occupied at",
+  "presence_sys.occupied_at_weighted_desc":
+    "The Area counts as occupied when the combined BLE and sensor score reaches this level.",
+  "presence_sys.occupied_at_other_desc": "Used only in Weighted mode.",
+  "presence_sys.sensors_that_count": "Sensors that count",
+  "presence_sys.sensors_selected_desc": "{selected} of {total} selected.",
+  "presence_sys.sensors_all_desc": "None selected: every sensor in this Area counts.",
+  "presence_sys.sensors_group_aria": "Sensors that count in {area}",
+  "presence_sys.calibrate_all_lux": "Auto-calibrate lux",
+  "presence_sys.lux_chip": "{lux} lx ({level}%)",
+  "presence_sys.ambient_sensor": "Ambient light sensor",
+  "presence_sys.ambient_sensor_aria": "Ambient light sensor for {area}",
+  "presence_sys.ambient_sensor_auto": "Auto ({sensor})",
+  "presence_sys.ambient_sensor_auto_none": "Auto (none detected)",
+  "presence_sys.ambient_sensor_disabled": "None (use schedule fallback)",
+  "presence_sys.ambient_dark_lux": "Dark floor (lx)",
+  "presence_sys.ambient_bright_lux": "Bright ceiling (lx)",
+  "presence_sys.ambient_calibration_desc":
+    "Auto-calibrate from 7-day Home Assistant statistics or tune manually for this sensor.",
+  "presence_sys.calibrate_lux_btn": "Auto-calibrate",
+  "presence_sys.calibrating_lux": "Calibrating…",
+  "presence_sys.lux_bounds_error": "Dark floor must be lower than bright ceiling.",
+  "presence_sys.calibrate_lux_done": "Calibrated ambient light for {count} Areas.",
+  "presence_sys.calibrate_lux_one_done": "Calibrated {area}: {dark}–{bright} lx.",
+  "presence_sys.no_area_sensors":
+    "This Area has no occupancy, motion, or door sensors.",
+  "presence_sys.empty_areas":
+    "No Home Assistant Areas, Bluetooth proxies, or occupancy sensors found yet.",
+  "presence_sys.calibration_subtitle":
+    "Carry a tracked Device into an Area to check Bluetooth proxy signal levels or save an Area signature.",
+  "presence_sys.pause_stream": "Pause stream",
+  "presence_sys.resume_stream": "Resume stream",
+  "presence_sys.open_discovered": "Open discovered Devices",
+  "presence_sys.empty_ble_devices":
+    "No Devices currently have Bluetooth Area tracking enabled. Turn on BLE Area tracking on a portable Device, or adopt a phone or tag under Discovered devices.",
+  "presence_sys.handoff_ready":
+    "Ready to calibrate {area} — carry {device} into {area} and select Calibrate Area.",
+  "presence_sys.your_device": "your Device",
+  "presence_sys.this_device": "this Device",
+  "presence_sys.this_area": "this Area",
+  "presence_sys.carried_device": "Carried Device",
+  "presence_sys.carried_device_desc":
+    "Choose the actively tracked Device or BLE tag you are holding.",
+  "presence_sys.live_signal_active": "Live BLE signal active — currently detected in ",
+  "presence_sys.packets_observed": " ({count} packets observed).",
+  "presence_sys.no_recent_packets_prefix":
+    "No live BLE packets in the last 12 seconds — wake ",
+  "presence_sys.no_recent_packets_suffix":
+    " or hold it in hand so its Bluetooth beacon broadcasts before calibrating.",
+  "presence_sys.standing_in_area": "Standing in Area",
+  "presence_sys.cal_desc_no_areas":
+    "Create at least one Home Assistant Area before saving a Bluetooth signature.",
+  "presence_sys.cal_desc_replace":
+    "Updates the saved {count}-proxy Bluetooth signature for {area} using live signal readings.",
+  "presence_sys.cal_desc_proxyless":
+    "Saves readings from nearby Bluetooth proxies so {area} can detect presence even without its own proxy.",
+  "presence_sys.cal_desc_new":
+    "Saves Bluetooth signal strengths from nearby proxies while you stand in {area} for more accurate Area boundaries.",
+  "presence_sys.suffix_saved": " (signature saved)",
+  "presence_sys.suffix_no_proxy": " (no BLE proxy)",
+  "presence_sys.no_ha_areas_option": "No Home Assistant Areas configured",
+  "presence_sys.calibrate_area_btn": "Calibrate Area",
+  "presence_sys.nearby_proxies": "Nearby Bluetooth proxies",
+  "presence_sys.unassigned_proxy": "Unassigned proxy",
+  "presence_sys.assign_area_in_ha": "Assign Area in Home Assistant",
+  "presence_sys.active_winner": "Active winner",
+  "presence_sys.stale_suffix": " (stale)",
+  "presence_sys.trim_suffix": " • trim {offset}",
+  "presence_sys.antenna_trim": "Antenna trim",
+  "presence_sys.antenna_trim_help":
+    "Raw {raw} • Offset {offset} — adjust only if this proxy consistently reads stronger or weaker across every Area.",
+  "presence_sys.minus_one_db": "-1 dB",
+  "presence_sys.plus_one_db": "+1 dB",
+  "presence_sys.empty_survey": "No Bluetooth proxy readings yet for this Device.",
+  "presence_sys.advanced_subtitle":
+    "System-wide away timeout, maximum detection distance, movement smoothing, and wall signal drop-off.",
+  "presence_sys.away_timeout": "Away timeout",
+  "presence_sys.away_timeout_desc":
+    "Seconds without any Bluetooth packet before a tracked tag or offline Device is marked Away.",
+  "presence_sys.max_radius": "Maximum Area radius",
+  "presence_sys.max_radius_desc":
+    "Ignores Bluetooth proxies farther than this distance in meters so outdoor signals do not claim indoor Areas.",
+  "presence_sys.max_radius_ft": "Maximum Area radius (ft)",
+  "presence_sys.max_radius_ft_desc":
+    "Ignores Bluetooth proxies farther than this distance in feet so outdoor signals do not claim indoor Areas.",
+  "presence_sys.max_speed": "Maximum movement speed",
+  "presence_sys.max_speed_desc":
+    "Smooths sudden signal drops that would imply movement faster than this speed in meters per second.",
+  "presence_sys.max_speed_fps": "Maximum movement speed (ft/s)",
+  "presence_sys.max_speed_fps_desc":
+    "Smooths sudden signal drops that would imply movement faster than this speed in feet per second.",
+  "presence_sys.attenuation": "Wall signal drop-off",
+  "presence_sys.attenuation_desc":
+    "Controls how quickly Bluetooth signal strength fades with distance through walls (default 2.2).",
+  // System -> Tools (D-020 / D-040 / D-064 / D-066)
+  "tools_sys.announce_subtitle":
+    "Send screen popups or spoken intercom broadcasts to all Devices, occupied Areas, or one display.",
+  "tools_sys.announce_mode_aria": "Announcement mode",
+  "tools_sys.screen_notification": "Screen notification",
+  "tools_sys.voice_broadcast": "Voice broadcast",
+  "tools_sys.target_label": "Target",
+  "tools_sys.all_displays": "All Latter displays",
+  "tools_sys.occupied_areas_only": "Occupied Areas only",
+  "tools_sys.device_prefix": "Device: {title}",
+  "tools_sys.notification_title": "Notification title",
+  "tools_sys.notification_title_placeholder": "e.g. Front gate",
+  "tools_sys.priority": "Priority",
+  "tools_sys.priority_normal": "Normal",
+  "tools_sys.priority_warning": "Warning",
+  "tools_sys.priority_critical": "Critical",
+  "tools_sys.include_camera": "Include primary camera",
+  "tools_sys.message": "Message",
+  "tools_sys.message_placeholder": "Message to display or speak…",
+  "tools_sys.send_now": "Send now",
+  "tools_sys.doorbell_subtitle":
+    "Verify push-to-talk TTS reply playback through Camera 1's bound door speaker.",
+  "tools_sys.source_device": "Source Device",
+  "tools_sys.source_device_desc":
+    "Latter Device context used when routing the door speaker reply.",
+  "tools_sys.no_latter_devices": "— No Latter Devices —",
+  "tools_sys.test_door_reply": "Test door speaker reply",
+  "tools_sys.doorbell_desc_no_cam":
+    "Add a camera with a bound door speaker in Shared entities first to test TTS reply playback.",
+  "tools_sys.doorbell_desc_no_dev":
+    "Onboard at least one Latter Device first to route push-to-talk test replies.",
+  "tools_sys.doorbell_desc_ready":
+    "Plays a short TTS phrase on Camera 1's bound media player ({camera}).",
+  "tools_sys.doorbell_reply_placeholder": "Testing Latter doorbell audio.",
+  "tools_sys.play_door_speaker": "Play on door speaker",
+  "tools_sys.logs_filter_aria": "Filter diagnostic logs",
+  "tools_sys.logs_all": "All events",
+  "tools_sys.logs_studio": "Latter Studio",
+  "tools_sys.logs_errors": "Warnings & errors",
+  "tools_sys.refresh_logs": "Refresh logs",
+  "tools_sys.copy_logs": "Copy logs",
+  "tools_sys.clear_logs": "Clear logs",
+  "tools_sys.backup_subtitle":
+    "Export or restore non-secret System and Device settings as portable JSON bundles.",
+  "tools_sys.export_scope": "Export scope",
+  "tools_sys.entire_system": "Entire System + all Devices",
+  "tools_sys.restore_from_backup": "Restore from backup",
+  "tools_sys.target_device_restore": "Target Device (for single-Device backups)",
+  "tools_sys.auto_system_backup": "— Automatic (System backup) —",
+  "tools_sys.system_pin_label": "System security PIN",
+  "tools_sys.system_pin_desc":
+    "Default 4-to-12-digit PIN required before unlocking doors, opening garage covers, or disarming alarms when a Device requires a PIN.",
+  "tools_sys.system_pin_aria": "System security PIN (4 to 12 digits)",
+  "tools_sys.pin_replace_placeholder": "Enter new PIN to replace…",
+  "tools_sys.pin_digits_placeholder": "4 to 12 digits",
+  "tools_sys.save_pin": "Save PIN",
+  "tools_sys.clear_pin": "Clear PIN",
+  "tools_sys.signing_key_label": "Resource URL signing key",
+  "tools_sys.signing_key_desc":
+    "Refreshes the signing key for camera, wallpaper, and doorbell audio links and updates connected Devices.",
+  "tools_sys.rotate_signing_key": "Rotate signing key",
+  // Dialogs (`src/components/dialogs/*`, D-047 / D-053 / D-062 / D-064)
+  "dialogs.app_pinned": "Pinned app",
+  "dialogs.app_home_hub": "Home hub",
+  "dialogs.app_cameras": "Cameras",
+  "dialogs.app_area": "Area control",
+  "dialogs.app_music": "Music",
+  "dialogs.app_remote": "Remote control",
+  "dialogs.app_weather": "Sky & weather",
+  "dialogs.app_time": "Time",
+  "dialogs.weather_bg_label": "Live weather background",
+  "dialogs.weather_bg_desc":
+    "Show the live animated weather sky inside the Sky & weather app. Turn off to use this Device's wallpaper instead.",
+  "dialogs.app_calendar": "Calendar",
+  "dialogs.app_clock": "Clock face",
+  "dialogs.app_tools": "Tools",
+  "dialogs.app_games": "Games",
+  "dialogs.app_fallback": "Configure app",
+  "dialogs.pinned_label": "Pinned shortcuts",
+  "dialogs.pinned_desc":
+    "Assign Home Assistant entity quick actions or deep-link any Latter app or subpage (6 buttons per page, swipable vertically).",
+  "dialogs.pinned_aria": "Pinned app shortcuts",
+  "dialogs.pinned_page_slot": "Page {page}",
+  "dialogs.pinned_confirm_mode": "Confirm",
+  "dialogs.pinned_one_tap_mode": "1-tap",
+  "dialogs.pinned_empty":
+    "No pinned items configured yet. The Pinned icon stays hidden on the App Dock until you add at least one item.",
+  "dialogs.home_cats_label": "Home categories",
+  "dialogs.home_cats_desc":
+    "Toggle and reorder categories shown in the Home hub. The first available category opens by default; categories with no configured entity are not displayed.",
+  "dialogs.broadcast_speakers_label": "Broadcast speakers",
+  "dialogs.broadcast_speakers_desc":
+    "Choose which System broadcast speakers this Device announces to. The calling Device's own speaker and displays in Bedtime mode are skipped automatically.",
+  "dialogs.broadcast_speakers_empty_system":
+    "No broadcast speakers configured in System shared entities yet.",
+  "dialogs.camera_default_view_desc": "Layout shown when opening the Cameras app.",
+  "dialogs.camera_framing_desc": "Show the full frame uncropped or fill the display.",
+  "dialogs.camera_carousel_interval_desc": "How often Carousel advances to the next camera.",
+  "dialogs.camera_stream_mode_desc":
+    "Balances live video frame rate against network bandwidth and battery.",
+  "dialogs.camera_doorbell_popup_desc":
+    "Choose whether doorbell rings open a still snapshot or live video.",
+  "dialogs.camera_visible_label": "Visible cameras",
+  "dialogs.camera_visible_desc":
+    "Toggle and reorder cameras shown in the Cameras app on this Device. Leave all enabled to follow Shared entities automatically.",
+  "dialogs.camera_carousel_label": "Carousel cameras",
+  "dialogs.camera_carousel_desc":
+    "Choose and reorder which visible cameras rotate in Carousel view.",
+  "dialogs.cameras_empty_system": "No cameras configured in Shared entities yet.",
+  "dialogs.area_cats_label": "Area categories",
+  "dialogs.area_cats_desc":
+    "Toggle and reorder categories shown on the Area screen. The first available category opens by default; categories with no entities in the active Area are not displayed.",
+  "dialogs.remote_group_label": "Remote control scope",
+  "dialogs.remote_group_desc":
+    "Choose which remotes appear on this Device's Remote screen.",
+  "dialogs.remote_follow_area": "Follow the active Area",
+  "dialogs.remote_group_option": "Group: {name}",
+  "dialogs.remote_all_system": "All System remotes",
+  "dialogs.remote_missing_group": "Missing group ({id})",
+  "dialogs.manage_remote_groups": "Manage remote groups",
+  "dialogs.local_clock_label": "Local clock label",
+  "dialogs.local_clock_desc":
+    "Optional custom label shown above local time on the Clock tab.",
+  "dialogs.optional_label_placeholder": "Optional label…",
+  "dialogs.show_utc_label": "Show UTC clock",
+  "dialogs.show_utc_desc":
+    "Pin a live 24-hour UTC reference row to this Device's Clock tab.",
+  "dialogs.world_clocks_label": "World clocks",
+  "dialogs.world_clocks_desc":
+    "Configure up to 4 custom-labeled time zones (UTC-12:00 to UTC+14:00) shown on this Device's Clock tab.",
+  "dialogs.world_clocks_aria": "Configured world clocks",
+  "dialogs.world_clock_city_label": "World clock {index} city label",
+  "dialogs.world_clock_zone_label": "World clock {index} time zone",
+  "dialogs.city_label_placeholder": "Enter city or label…",
+  "dialogs.new_city_label": "New city label",
+  "dialogs.add_time_zone": "Add time zone",
+  "dialogs.max_world_clocks": "Maximum 4 world clocks added",
+  "dialogs.select_tz_placeholder": "Select a time zone (UTC-12 to UTC+14)…",
+  "dialogs.toast_enter_city": "Enter a city or label for this world clock",
+  "dialogs.toast_select_tz": "Select a time zone for this world clock",
+  "dialogs.toast_dup_world_clock": "That world clock is already added",
+  "dialogs.toast_city_empty": "City label cannot be empty",
+  "dialogs.calendar_lookahead_label": "Overview lookahead",
+  "dialogs.calendar_lookahead_desc":
+    "Number of upcoming days shown on the Overview tab (days with no events are omitted).",
+  "dialogs.calendar_week_start_label": "Start week on",
+  "dialogs.calendar_week_start_desc":
+    "First column shown in Week and Month views.",
+  "dialogs.tools_label": "Tools",
+  "dialogs.tools_desc": "Toggle and reorder utilities shown in the Tools launcher.",
+  "dialogs.games_label": "Games",
+  "dialogs.games_desc": "Toggle and reorder games shown in the Games launcher.",
+  "dialogs.sc_edit_dock": "Edit custom dock shortcut",
+  "dialogs.sc_edit_pinned": "Edit pinned shortcut",
+  "dialogs.sc_add_dock": "Add custom dock shortcut",
+  "dialogs.sc_add_pinned": "Add pinned shortcut",
+  "dialogs.sc_type_aria": "Shortcut type",
+  "dialogs.sc_tab_subpage": "Subpage",
+  "dialogs.sc_tab_app_page": "App or page",
+  "dialogs.sc_tab_entity": "Home Assistant entity",
+  "dialogs.sc_target_subpage": "Target subpage",
+  "dialogs.sc_target_app_page": "Target app or subpage",
+  "dialogs.sc_domain_filter": "Domain filter",
+  "dialogs.sc_all_domains": "All domains",
+  "dialogs.shortcut_entity_label": "Entity",
+  "dialogs.sc_action_label": "Action",
+  "dialogs.sc_confirm_label": "Confirm before running",
+  "dialogs.sc_confirm_dock_desc":
+    "Shows a confirmation prompt before running this action from the App Dock.",
+  "dialogs.sc_confirm_pinned_desc":
+    "Require a confirmation tap instead of running immediately on a single tap.",
+  "dialogs.sc_custom_label": "Custom label (optional)",
+  "dialogs.sc_default_shortcut": "Shortcut",
+  "dialogs.sc_default_entity_action": "Entity action",
+  "dialogs.sc_icon_label": "Icon (optional MDI override)",
+  "dialogs.sc_icon_search_placeholder":
+    "Search all {total} icons (e.g. teddy-bear, baby, lamp)…",
+  "dialogs.sc_icon_selected": "Selected: {icon}",
+  "dialogs.sc_icon_default": "Default: {icon}",
+  "dialogs.sc_icon_no_matches": "No matching icons — try another keyword",
+  "dialogs.sc_icon_showing_subset": "Showing {shown} of {total} matches",
+  "dialogs.sc_icon_matches_one": "1 matching icon",
+  "dialogs.sc_icon_matches_many": "{count} matching icons",
+  "dialogs.sc_icon_popular": "Showing popular icons ({total} searchable)",
+  "dialogs.sc_mdi_group_aria": "Material Design Icons",
+  "dialogs.cw_title": "Add a custom color",
+  "dialogs.cw_color_aria": "Color",
+  "dialogs.cw_hex_aria": "Hex color",
+  "dialogs.cw_name_label": "Name",
+  "dialogs.cw_name_placeholder": "e.g. Sunset coral",
+  "dialogs.ble_title": "Add a BLE tag",
+  "dialogs.ble_body":
+    "A phone, watch, or Bluetooth tag that Latter tracks by Area. Latter displays are adopted under Discovered devices.",
+  "dialogs.ble_discovered_label": "Discovered Bluetooth devices",
+  "dialogs.ble_enter_manually": "Enter manually…",
+  "dialogs.ble_name_label": "Name",
+  "dialogs.ble_name_placeholder": "e.g. phone, watch, keys",
+  "dialogs.ble_addr_label": "Target address or entity",
+  "dialogs.ble_addr_placeholder":
+    "AA:BB:CC:DD:EE:FF, iBeacon UUID, or tracker entity",
+  "dialogs.ble_addr_help":
+    "Enter a static BLE MAC address, iBeacon UUID (with optional major:minor), or Home Assistant Companion App or tracker entity.",
+  "dialogs.ble_person_label": "Assigned person (optional)",
+  "dialogs.save_group_title": "Save custom group",
+  "dialogs.save_group_body":
+    "Saves this Device's settings as a reusable Device group and assigns this Device to it.",
+  "dialogs.save_group_name_placeholder": "e.g. Nightstands, Guest suites",
+  "dialogs.save_group_desc_placeholder": "Optional summary of these settings",
+  // Confirmation dialogs (D-064 / Q5 — all destructive / System-wide actions)
+  "confirm.blast_radius_one": "Affects 1 Device",
+  "confirm.blast_radius_many": "Affects {count} Devices",
+  "confirm.remove_device.title": "Remove {title}?",
+  "confirm.remove_device.body":
+    "Removes \"{title}\" from Latter and deletes its stored Latter preferences and shortcuts. Your ESPHome device stays in Home Assistant.",
+  "confirm.remove_device.confirm": "Remove Device",
+  "confirm.reset_device.title": "Reset to defaults?",
+  "confirm.reset_device.body":
+    "Wi-Fi and pairing are kept, so the Device rejoins Home Assistant automatically. Its ESPHome binding and Music Assistant player link are kept too.",
+  "confirm.reset_device.device_settings": "Settings saved on the Device",
+  "confirm.reset_device.device_settings_desc":
+    "Erases everything saved on the Device and restarts it.",
+  "confirm.reset_device.latter_options": "Latter settings for this Device",
+  "confirm.reset_device.latter_options_desc":
+    "Resets shortcuts, group assignment, and Latter preferences for this Device to factory defaults.",
+  "confirm.reset_device.confirm": "Reset",
+  "confirm.restore_backup.title": "Restore from backup?",
+  "confirm.restore_backup.body":
+    "Overwrites current Latter settings with the selected JSON backup bundle.",
+  "confirm.restore_backup.confirm": "Restore backup",
+  "confirm.delete_group.title": "Delete group \"{name}\"?",
+  "confirm.delete_group.body":
+    "Devices currently assigned to this group keep their settings and switch to Custom.",
+  "confirm.delete_group.confirm": "Delete group",
+  "confirm.reset_group.title": "Reset \"{name}\" to preset defaults?",
+  "confirm.reset_group.body":
+    "Restores the built-in power, wake, and scope defaults for this group and applies them to assigned Devices.",
+  "confirm.reset_group.confirm": "Reset preset",
+  "confirm.rotate_signing_key.title": "Rotate URL signing key?",
+  "confirm.rotate_signing_key.body":
+    "Invalidates active signed wallpaper, camera snapshot, and doorbell audio URLs until Devices receive the next state push.",
+  "confirm.rotate_signing_key.confirm": "Rotate signing key",
+  "confirm.delete_photo.title": "Delete photo \"{name}\"?",
+  "confirm.delete_photo.body":
+    "Permanently deletes this photo from the System library and removes it from any Device wallpaper or Photo frame pools.",
+  "confirm.delete_photo.confirm": "Delete photo",
+  "confirm.delete_photos_bulk.title": "Delete {count} photos?",
+  "confirm.delete_photos_bulk.body":
+    "Permanently deletes the selected uploaded photos and prunes them from Device wallpaper and Photo frame pools.",
+  "confirm.delete_photos_bulk.confirm": "Delete photos",
+  "confirm.delete_collection.title": "Delete collection \"{name}\"?",
+  "confirm.delete_collection.body":
+    "Deletes this collection label. Photos inside stay in your Photo library.",
+  "confirm.delete_collection.confirm": "Delete collection",
+  // System -> Photos library, upload cropper, & HA Media import (D-072)
+  "photos.subtitle":
+    "Shared System photo library and collections used for Device wallpapers and Photo frame screensavers.",
+  "photos.upload_btn": "Upload photos",
+  "photos.import_media_btn": "Import from Media",
+  "photos.new_collection_btn": "New collection",
+  "photos.new_collection_placeholder": "Collection name (e.g. Family, Landscapes)…",
+  "photos.create_collection": "Create",
+  "photos.rename_collection_aria": "Rename collection {name}",
+  "photos.delete_collection_aria": "Delete collection {name}",
+  "photos.rename_collection_placeholder": "Collection name…",
+  "photos.filter_all": "All",
+  "photos.filter_defaults": "Defaults",
+  "photos.filter_my_photos": "My photos",
+  "photos.filter_uncategorized": "Uncategorized",
+  "photos.search_placeholder": "Search photos by name…",
+  "photos.search_aria": "Search photos",
+  "photos.select_mode_btn": "Select",
+  "photos.done_selecting_btn": "Done selecting",
+  "photos.selected_count_one": "1 selected",
+  "photos.selected_count_many": "{count} selected",
+  "photos.select_all_page": "Select page",
+  "photos.clear_selection": "Clear selection",
+  "photos.bulk_collection_aria": "Choose collection for selected photos",
+  "photos.bulk_choose_collection": "— Choose collection —",
+  "photos.bulk_add_to_collection": "Add to collection",
+  "photos.bulk_remove_from_collection": "Remove from collection",
+  "photos.bulk_delete_btn": "Delete selected",
+  "photos.badge_dynamic": "Dynamic",
+  "photos.badge_default": "Default",
+  "photos.badge_media": "Media",
+  "photos.edit_photo_aria": "Edit photo {name}",
+  "photos.select_photo_aria": "Select photo {name}",
+  "photos.empty_library":
+    "No photos match this filter. Upload photos or import from Home Assistant Media.",
+  "photos.page_status": "Showing {start}–{end} of {total}",
+  "photos.prev_page": "Previous",
+  "photos.next_page": "Next",
+  "photos.created_collection_toast": "Created collection \"{name}\"",
+  "photos.renamed_collection_toast": "Renamed collection to \"{name}\"",
+  "photos.deleted_collection_toast": "Deleted collection",
+  "photos.updated_photo_toast": "Saved photo changes",
+  "photos.deleted_photo_toast": "Deleted photo",
+  "photos.bulk_updated_toast": "Updated {count} photo(s)",
+  "photos.bulk_deleted_toast": "Deleted {count} photo(s)",
+  // Photo Editor & Crop modal
+  "photo_edit.title": "Edit photo",
+  "photo_edit.name_label": "Photo name",
+  "photo_edit.name_placeholder": "Enter a photo name…",
+  "photo_edit.crop_hint":
+    "Drag to pan and use the slider to zoom. Originals are kept intact so every display shape stays sharp.",
+  "photo_edit.aspect_aria": "Preview display shape",
+  "photo_edit.aspect_square": "Square + circle",
+  "photo_edit.aspect_round": "Round",
+  "photo_edit.aspect_widescreen": "Widescreen",
+  "photo_edit.zoom_label": "Zoom",
+  "photo_edit.reset_crop": "Reset crop",
+  "photo_edit.collections_label": "Collections",
+  "photo_edit.collections_empty": "Create a collection in Photos to organize photos into albums.",
+  "photo_edit.dimensions_meta": "{width} × {height} px",
+  "photo_edit.source_media": "Imported from {path}",
+  // Multi-file Upload & Crop Staging modal
+  "photo_upload.title": "Upload photos",
+  "photo_upload.dropzone_title": "Drag & drop photos here, or browse",
+  "photo_upload.dropzone_hint": "JPEG, PNG, or WebP up to 15 MB each. Select multiple files at once.",
+  "photo_upload.choose_files": "Choose files",
+  "photo_upload.add_more": "Add more files",
+  "photo_upload.collection_label": "Add all to collection",
+  "photo_upload.no_collection": "— No collection —",
+  "photo_upload.upload_all_one": "Upload photo",
+  "photo_upload.upload_all_many": "Upload all ({count})",
+  "photo_upload.uploading_progress": "Uploading {current} of {total} — {percent}%",
+  "photo_upload.remove_staged_aria": "Remove {name} from upload queue",
+  "photo_upload.select_staged_aria": "Adjust crop for {name}",
+  "photo_upload.uploaded_one_toast": "Uploaded 1 photo",
+  "photo_upload.uploaded_many_toast": "Uploaded {count} photos",
+  "photo_upload.file_too_large": "Skipped \"{name}\" (exceeds 15 MB limit)",
+  // HA Media Folder Import modal
+  "media_import.title": "Import from Home Assistant Media",
+  "media_import.subtitle":
+    "Browse local Media folders and mounted NAS shares configured in Home Assistant.",
+  "media_import.root_label": "Media folder",
+  "media_import.up_folder": "Up",
+  "media_import.select_all_folder": "Select all in folder",
+  "media_import.clear_folder_selection": "Clear selection",
+  "media_import.already_imported": "Imported",
+  "media_import.too_large": "Over 15 MB",
+  "media_import.empty_folder": "No subfolders or supported images found in this folder.",
+  "media_import.empty_roots":
+    "No Home Assistant Media directories are configured.",
+  "media_import.collection_label": "Add to collection",
+  "media_import.new_from_folder": "New collection from folder name",
+  "media_import.new_collection_name": "New collection name",
+  "media_import.import_btn_one": "Import 1 photo",
+  "media_import.import_btn_many": "Import {count} photos",
+  "media_import.importing_btn": "Importing…",
+  "media_import.summary_toast":
+    "Imported {imported} photo(s){skippedSuffix}{failedSuffix}",
+  "media_import.skipped_suffix": " ({count} duplicate skipped)",
+  "media_import.failed_suffix": " ({count} failed)",
+  // Shared Photo Pool Picker modal
+  "photo_picker.title_wallpaper": "Choose wallpaper",
+  "photo_picker.title_screensaver": "Choose Photo frame photos",
+  "photo_picker.mode_aria": "Photo selection mode",
+  "photo_picker.mode_photos": "Photos",
+  "photo_picker.mode_collection": "Collection",
+  "photo_picker.collection_label": "Photo collection",
+  "photo_picker.custom_hint": "Pick one photo for a static image, or multiple photos to rotate through.",
+  "photo_picker.custom_selected_one": "1 photo selected",
+  "photo_picker.custom_selected_many": "{count} photos selected",
+  "photo_picker.apply_btn": "Apply selection",
+  "photo_picker.empty": "No photos available for this mode yet. Upload photos to get started.",
+  // Group baseline photo pool options
+  "groups.pool_off": "Off",
+  "groups.pool_all": "All photos",
+  "groups.pool_defaults": "Built-in defaults",
+  "groups.pool_uploads": "My uploaded photos",
+  "groups.pool_collection_prefix": "Collection: {name}",
+  "groups.pool_photo_prefix": "Photo: {name}",
+  "groups.screensaver_pool_label": "Photo frame source",
+  "groups.wallpaper_pool_label": "Wallpaper source",
+  "confirm.reset_dock.title": "Reset App Dock to default?",
+  "confirm.reset_dock.body":
+    "Restores the default native apps on the App Dock and removes custom dock shortcuts on this Device.",
+  "confirm.reset_dock.confirm": "Reset dock",
+  "confirm.clear_ble_signature.title": "Clear BLE signature for {area}?",
+  "confirm.clear_ble_signature.body":
+    "Removes captured RSSI calibration samples for {area} and reverts to path-loss estimation.",
+  "confirm.clear_ble_signature.confirm": "Clear signature",
+  "confirm.clear_pin.title": "Clear security PIN?",
+  "confirm.clear_pin.body":
+    "Removes the configured security PIN. Perimeter actions governed by Require PIN stay blocked until a new PIN is set.",
+  "confirm.clear_pin.confirm": "Clear PIN",
+  "confirm.apply_batch.title": "Apply staged changes to {count} Devices?",
+  "confirm.apply_batch.body":
+    "Pushes {settingCount} staged setting changes to {count} target Devices.",
+  "confirm.apply_batch.confirm": "Apply changes",
+};
+__latterExp(__exports, { EN_SYSTEM_STRINGS: () => EN_SYSTEM_STRINGS });
+//# sourceURL=latter-studio/src/i18n/en-system.ts
+});
+__latterDef("src/i18n/en.ts", (__exports, __req) => {
+const { EN_COMMON_STRINGS } = __req("src/i18n/en-common.ts");
+const { EN_DEVICES_STRINGS } = __req("src/i18n/en-devices.ts");
+const { EN_SYSTEM_STRINGS } = __req("src/i18n/en-system.ts");
+/**
+ * Canonical English Studio UI string catalog (`D-061` — Home Assistant Sentence case).
+ * Composed from disjoint slices (`en-common.ts`, `en-system.ts`, `en-devices.ts`) and mirrored
+ * deterministically to `custom_components/latter/studio/locales/en.json` by `build.mjs`.
+ */
+const EN_STRINGS = {
+  ...EN_COMMON_STRINGS,
+  ...EN_SYSTEM_STRINGS,
+  ...EN_DEVICES_STRINGS,
+};
+/**
+ * Sentence-case labels for all 61 `DevicePrefSpec` keys + group/device setting keys.
+ */
+const PREF_LABELS = {
+  wake_word_mode: "Wake word mode",
+  tap_to_wake: "Tap to wake",
+  pickup_to_wake: "Pickup to wake",
+  battery_screen_timeout: "Battery screen timeout",
+  docked_idle_timeout: "Docked idle timeout",
+  battery_hibernate_timeout: "Battery hibernate timeout",
+  screensaver_mode: "Screensaver mode",
+  screensaver_style: "Screensaver style",
+  screensaver_photo_clock: "Show subtle clock",
+  bedtime_active: "Bedtime mode",
+  do_not_disturb: "Do not disturb",
+  bedtime_display: "Idle display in bedtime",
+  bedtime_brightness: "Bedtime brightness",
+  bedtime_schedule: "Bedtime schedule",
+  bedtime_start_hour: "Bedtime starts",
+  bedtime_end_hour: "Bedtime ends",
+  auto_brightness_mode: "Auto brightness mode",
+  manual_brightness: "Manual brightness",
+  day_brightness: "Day brightness",
+  night_brightness: "Night brightness",
+  day_start_hour: "Day start hour",
+  night_start_hour: "Night start hour",
+  color_profile: "Color profile",
+  va_visual_profile: "Visual profile",
+  home_screen_enabled: "Enable Home screen",
+  start_screen: "Start screen",
+  return_to_home_timeout: "Return to Home timeout",
+  clock_face: "Clock face",
+  time_format: "Time format",
+  weather_background: "Live weather background on Home",
+  weather_app_background: "Live weather background",
+  home_sun: "Sun",
+  home_moon: "Moon",
+  wake_greeting: "Wake greeting",
+  album_art_style: "Album art style",
+  music_overlay_style: "Overlay style",
+  album_sort_order: "Album sort order",
+  artist_album_sort_order: "Artist album sort order",
+  podcast_sort_order: "Podcast sort order",
+  ww_sens_okay_nabu: "Okay Nabu sensitivity",
+  ww_sens_hey_luna: "Hey Luna sensitivity",
+  ww_sens_hey_jarvis: "Hey Jarvis sensitivity",
+  ww_sens_hey_mycroft: "Hey Mycroft sensitivity",
+  ww_sens_alexa: "Alexa sensitivity",
+  wake_screen_on_assist: "Wake screen on Assist",
+  alert_volume: "Alert volume",
+  volume_step_size: "Volume step size",
+  game_sound_effects: "Game sound effects",
+  ble_beacon_mode: "BLE beacon mode",
+  weather_sim_condition: "Weather simulation",
+  home_clock_tap_action: "Home time tap",
+  home_date_tap_action: "Home date tap",
+  local_clock_label: "Local clock label",
+  show_utc_clock: "Show UTC clock",
+  world_clocks: "World clocks",
+  alarms_summary: "Alarms",
+  calendar_lookahead_days: "Overview lookahead",
+  calendar_week_start: "Start week on",
+  camera_default_view: "Default view",
+  camera_carousel_interval: "Carousel interval",
+  camera_framing: "Video framing",
+  camera_stream_mode: "Stream mode",
+  camera_doorbell_popup: "Doorbell ring popup",
+  // Non-pref group & Device config keys
+  native_ble_tracking: "BLE Area tracking",
+  ble_auto_switch: "Auto-switch active Area",
+  sync_device_area: "Voice Follows Me",
+  area_follow_dwell_s: "Area follow dwell",
+  area_handoff: "Media Area handoff",
+  security_pin_policy: "Perimeter security policy",
+  wallpaper_mode: "Wallpaper mode",
+  wallpaper_source: "Wallpaper",
+  wallpaper_collection: "Wallpaper collection",
+  wallpaper_cycle_minutes: "Wallpaper rotation",
+  screensaver_photo_mode: "Photo frame pool",
+  screensaver_photo_source: "Photo frame photo",
+  screensaver_photo_collection: "Photo frame collection",
+  screensaver_cycle_minutes: "Photo frame rotation",
+  screensaver_shuffle: "Shuffle photos",
+  device_custom_color: "Custom color",
+  device_remote_group: "Remote control scope",
+  activity_card: "Show Activity card",
+  activity_sources: "Activity card sources",
+  area_categories: "Area categories",
+  home_categories: "Home categories",
+  tools_items: "Enabled tools",
+  games_items: "Enabled games",
+  broadcast_speaker_entities: "Broadcast speakers",
+  camera_visible_entities: "Visible cameras",
+  camera_carousel_entities: "Carousel cameras",
+};
+/**
+ * Maps canonical wire option strings (`protocol_v3.json` / ESPHome select options) to
+ * localized Sentence-case display labels without changing wire values.
+ */
+const PREF_OPTION_LABELS = {
+  // Wake & power options
+  "Docked Only": "Docked only",
+  "Always On": "Always on",
+  Disabled: "Disabled",
+  "Single Tap": "Single tap",
+  "Double Tap": "Double tap",
+  Never: "Never",
+  "10s": "10 seconds",
+  "15s": "15 seconds",
+  "30s": "30 seconds",
+  "60s": "60 seconds",
+  "1 min": "1 minute",
+  "2 min": "2 minutes",
+  "5 min": "5 minutes",
+  "10 min": "10 minutes",
+  "15 min": "15 minutes",
+  "30 min": "30 minutes",
+  // Screensaver, brightness & colors
+  "Screen Off": "Screen off",
+  "Ambient Clock": "Ambient clock",
+  "Photo Frame": "Photo frame",
+  Aurora: "Aurora",
+  Starfield: "Starfield",
+  "Digital Rain": "Digital rain",
+  Fireworks: "Fireworks",
+  "Sun Synchronized": "Sun synchronized",
+  "Time Schedule": "Time schedule",
+  "Ambient Light": "Ambient light",
+  "Steel Blue": "Steel blue",
+  Pink: "Pink",
+  Blue: "Blue",
+  Green: "Green",
+  Custom: "Custom",
+  Nebula: "Nebula",
+  Solaris: "Solaris",
+  Rings: "Rings",
+  "Light Bar": "Light bar",
+  "Dot Wave": "Dot wave",
+  // Home, start screen, clock & calendar
+  Home: "Home",
+  Pinned: "Pinned",
+  "Time App": "Time app",
+  Calendar: "Calendar",
+  "Clock Face": "Clock face",
+  Media: "Media",
+  "Home Hub": "Home hub",
+  "Area Controls": "Area controls",
+  Remote: "Remote",
+  Weather: "Weather",
+  Cameras: "Cameras",
+  Games: "Games",
+  Tools: "Tools",
+  "Minimal Digital": "Minimal digital",
+  "Modern Analog": "Modern analog",
+  "Hybrid Digital": "Hybrid digital",
+  "12-Hour (AM/PM)": "12-hour (AM/PM)",
+  "24-Hour": "24-hour",
+  "Day View": "Day view",
+  Overview: "Overview",
+  Sunday: "Sunday",
+  Monday: "Monday",
+  // Music & media
+  "Full Screen": "Full screen",
+  Letterbox: "Letterbox",
+  Standard: "Standard",
+  None: "None",
+  "Art Only": "Art only",
+  "Art + Metadata": "Art + metadata",
+  "Always Visible": "Always visible",
+  Alphabetical: "Alphabetical",
+  "Newest on Top": "Newest on top",
+  "Oldest on Top": "Oldest on top",
+  // Wake word sensitivity & BLE beacon
+  "Slightly sensitive": "Slightly sensitive",
+  "Moderately sensitive": "Moderately sensitive",
+  "Very sensitive": "Very sensitive",
+  "Handheld Only": "Handheld only",
+  "Handheld + Screen Off": "Handheld + screen off",
+  Always: "Always",
+  // Weather simulation
+  "Live (Home Assistant)": "Live (Home Assistant)",
+  "Clear Night": "Clear night",
+  "Sunny / Clear Day": "Sunny / clear day",
+  "Partly Cloudy (Day)": "Partly cloudy (day)",
+  "Partly Cloudy (Night)": "Partly cloudy (night)",
+  "Cloudy / Overcast (Day)": "Cloudy / overcast (day)",
+  "Cloudy / Overcast (Night)": "Cloudy / overcast (night)",
+  "Fog / Mist (Day)": "Fog / mist (day)",
+  "Fog / Mist (Night)": "Fog / mist (night)",
+  "Rainy (Day)": "Rainy (day)",
+  "Rainy (Night)": "Rainy (night)",
+  "Pouring / Heavy Rain": "Pouring / heavy rain",
+  "Snow (Day)": "Snow (day)",
+  "Snow (Night)": "Snow (night)",
+  "Thunderstorm (Day)": "Thunderstorm (day)",
+  "Thunderstorm (Night)": "Thunderstorm (night)",
+  Windy: "Windy",
+  // Cameras & live video
+  Grid: "Grid",
+  Single: "Single",
+  Carousel: "Carousel",
+  Uncropped: "Uncropped",
+  Fill: "Fill",
+  Auto: "Auto",
+  "Low Bandwidth": "Low bandwidth",
+  Snapshots: "Snapshots",
+  Snapshot: "Snapshot",
+  "Live Video": "Live video",
+  // Security PIN policy wire tokens
+  auto: "Auto (recommended)",
+  allow: "Allow without PIN",
+  require_pin: "Require PIN",
+  block: "Block unlock & disarm",
+};
+/**
+ * Builds the complete deterministic flat JSON catalog written to
+ * `custom_components/latter/studio/locales/en.json`.
+ */
+function buildStudioEnLocaleCatalog() {
+  const out = {};
+  for (const [k, v] of Object.entries(EN_STRINGS)) {
+    out[k] = v;
+  }
+  for (const [k, v] of Object.entries(PREF_LABELS)) {
+    out[`pref.${k}`] = v;
+  }
+  for (const [k, v] of Object.entries(PREF_OPTION_LABELS)) {
+    out[`pref_option.${k}`] = v;
+  }
+  return out;
+}
+__latterExp(__exports, { EN_COMMON_STRINGS: () => EN_COMMON_STRINGS, EN_DEVICES_STRINGS: () => EN_DEVICES_STRINGS, EN_SYSTEM_STRINGS: () => EN_SYSTEM_STRINGS, EN_STRINGS: () => EN_STRINGS, PREF_LABELS: () => PREF_LABELS, PREF_OPTION_LABELS: () => PREF_OPTION_LABELS, buildStudioEnLocaleCatalog: () => buildStudioEnLocaleCatalog });
+//# sourceURL=latter-studio/src/i18n/en.ts
+});
+__latterDef("src/i18n/index.ts", (__exports, __req) => {
+const { buildStudioEnLocaleCatalog, EN_STRINGS, PREF_LABELS, PREF_OPTION_LABELS } = __req("src/i18n/en.ts");
+/**
+ * Hybrid typed Studio i18n runtime (`D-061`):
+ * - Compile-time typed `t()` lookup against `EN_STRINGS` with runtime `<lang>.json` overlay support
+ * - Preference label & canonical wire option localization (`tPrefLabel`, `tPrefOption`)
+ * - Home Assistant Repairs `hass.localize` bridge (`localizeRepairIssue`)
+ * - Home Assistant entity state formatter bridge (`formatHaEntityState`)
+ */
+const VIEW_TITLE_KEYS = {
+  system_overview: "view.system_overview",
+  shared_entities: "view.shared_entities",
+  photos: "view.photos",
+  remotes: "view.remotes",
+  system_sync: "view.system_sync",
+  area_tracking: "view.area_tracking",
+  system_tools: "view.system_tools",
+  select_device_prompt: "view.select_device_prompt",
+  discovered_devices: "view.discovered_devices",
+  dashboard: "view.dashboard",
+  display: "view.display",
+  interface: "view.interface",
+  audio_voice: "view.audio_voice",
+  power: "view.power",
+  presence: "view.presence",
+  tools: "view.tools",
+};
+const CALENDAR_LOOKAHEAD_OPTIONS = [
+  { value: 7, label: "7 days" },
+  { value: 14, label: "14 days" },
+  { value: 30, label: "30 days" },
+  { value: 60, label: "60 days" },
+];
+const SECURITY_PIN_POLICY_OPTIONS
+   = [
+  { value: "auto", label: "Auto (recommended)" },
+  { value: "allow", label: "Allow without PIN" },
+  { value: "require_pin", label: "Require PIN" },
+  { value: "block", label: "Block unlock & disarm" },
+];
+const WALLPAPER_ROTATION_OPTIONS = [
+  { value: 0, label: "Do not rotate" },
+  { value: 5, label: "Every 5 minutes" },
+  { value: 15, label: "Every 15 minutes" },
+  { value: 30, label: "Every 30 minutes" },
+  { value: 60, label: "Every hour" },
+  { value: 360, label: "Every 6 hours" },
+  { value: 1440, label: "Once a day" },
+];
+const PLACEHOLDER_RE = /\{([A-Za-z0-9_]+)\}/g;
+function interpolate(
+  template,
+  vars,
+) {
+  if (!vars) return template;
+  return template.replace(PLACEHOLDER_RE, (match, name) => {
+    const val = vars[name];
+    return val === undefined || val === null ? match : String(val);
+  });
+}
+function t(
+  key,
+  vars,
+  overlay,
+) {
+  const raw = (overlay && overlay[key]) || EN_STRINGS[key] || key;
+  return interpolate(raw, vars);
+}
+function tPrefLabel(
+  key,
+  fallback,
+  overlay,
+) {
+  const cleanKey = String(key || "").trim();
+  if (!cleanKey) return fallback || "—";
+  const overlayVal = overlay?.[`pref.${cleanKey}`];
+  if (overlayVal) return overlayVal;
+  const known = PREF_LABELS[cleanKey];
+  if (known) return known;
+  if (fallback && fallback.trim()) return fallback.trim();
+  const humanized = cleanKey.replace(/_/g, " ").trim();
+  return humanized ? humanized.charAt(0).toUpperCase() + humanized.slice(1) : "—";
+}
+function tPrefOption(
+  prefKey,
+  rawOption,
+  overlay,
+) {
+  const opt = String(rawOption ?? "");
+  if (!opt) return "";
+  if (overlay) {
+    const scoped = prefKey ? overlay[`pref_option.${prefKey}.${opt}`] : undefined;
+    if (scoped) return scoped;
+    const generic = overlay[`pref_option.${opt}`];
+    if (generic) return generic;
+  }
+  return PREF_OPTION_LABELS[opt] ?? opt;
+}
+function localizeRepairIssue(
+  hass,
+  issueKey,
+  placeholders,
+  fallback,
+) {
+  const cleanKey = String(issueKey || "").trim();
+  const h = hass;
+  if (cleanKey && typeof h?.localize === "function") {
+    const params = placeholders ? { ...placeholders } : undefined;
+    for (const suffix of [".description", ".title", ""]) {
+      const haKey = `component.latter.issues.${cleanKey}${suffix}`;
+      try {
+        const localized = h.localize(haKey, params);
+        if (localized && localized !== haKey && !localized.startsWith("component.latter.")) {
+          return localized;
+        }
+      } catch {
+        // Fall through to Studio catalog / fallback string.
+      }
+    }
+  }
+  if (fallback) return fallback;
+  if (!cleanKey) return t("issue.generic", { label: "issue" });
+  const detail = placeholders?.detail !== undefined ? String(placeholders.detail) : "";
+  if (cleanKey === "missing_mapped_entity") {
+    return detail
+      ? t("issue.missing_mapped_entity_detail", { detail })
+      : t("issue.missing_mapped_entity");
+  }
+  if (cleanKey === "device_crashed") {
+    if (detail === "stall") return t("issue.device_crashed_stall");
+    return detail
+      ? t("issue.device_crashed_detail", { detail })
+      : t("issue.device_crashed");
+  }
+  const catalogKey = `issue.${cleanKey}`;
+  if (catalogKey in EN_STRINGS) {
+    return t(catalogKey, placeholders);
+  }
+  return t("issue.generic", { label: cleanKey.replace(/_/g, " ") });
+}
+function formatHaEntityState(
+  hass,
+  entityId,
+  option,
+) {
+  const cleanId = String(entityId || "").trim();
+  const stateObj = cleanId ? hass?.states?.[cleanId] : undefined;
+  const h = hass;
+  if (stateObj && typeof h?.formatEntityState === "function") {
+    try {
+      const formatted = h.formatEntityState(stateObj, option);
+      if (formatted) return formatted;
+    } catch {
+      // Fall back to raw state string below.
+    }
+  }
+  const raw = option ?? stateObj?.state ?? "";
+  return raw || "—";
+}
+__latterExp(__exports, { buildStudioEnLocaleCatalog: () => buildStudioEnLocaleCatalog, EN_STRINGS: () => EN_STRINGS, PREF_LABELS: () => PREF_LABELS, PREF_OPTION_LABELS: () => PREF_OPTION_LABELS, VIEW_TITLE_KEYS: () => VIEW_TITLE_KEYS, CALENDAR_LOOKAHEAD_OPTIONS: () => CALENDAR_LOOKAHEAD_OPTIONS, SECURITY_PIN_POLICY_OPTIONS: () => SECURITY_PIN_POLICY_OPTIONS, WALLPAPER_ROTATION_OPTIONS: () => WALLPAPER_ROTATION_OPTIONS, t: () => t, tPrefLabel: () => tPrefLabel, tPrefOption: () => tPrefOption, localizeRepairIssue: () => localizeRepairIssue, formatHaEntityState: () => formatHaEntityState });
+//# sourceURL=latter-studio/src/i18n/index.ts
 });
 __latterDef("src/utils/format.ts", (__exports, __req) => {
 const { LABEL_ACRONYMS } = __req("src/constants.ts");
@@ -3017,7 +2971,8 @@ function fmtDateTime(
 function formatSentenceSegment(seg, isFirstWord) {
   if (!seg) return seg;
   const low = seg.toLowerCase();
-  if (LABEL_ACRONYMS[low]) return LABEL_ACRONYMS[low];
+  const acronym = LABEL_ACRONYMS[low];
+  if (acronym) return acronym;
   if (/^[a-z]+[A-Z]/.test(seg) || /^[A-Z0-9]{2,}$/.test(seg)) return seg;
   if (isFirstWord) {
     return seg.charAt(0).toUpperCase() + seg.slice(1);
@@ -3036,9 +2991,9 @@ function entityLabel(rawName) {
   return words
     .map((word, idx) => {
       const m = /^([([{"']*)(.*?)([)\]}"':,.?]*)$/.exec(word);
-      const lead = m ? m[1] : "";
-      const core = m ? m[2] : word;
-      const trail = m ? m[3] : "";
+      const lead = m?.[1] ?? "";
+      const core = m?.[2] ?? word;
+      const trail = m?.[3] ?? "";
       if (!core) return word;
       if (
         lead === "(" &&
@@ -3048,8 +3003,9 @@ function entityLabel(rawName) {
         return word;
       }
       const low = core.toLowerCase();
-      if (LABEL_ACRONYMS[low]) {
-        return `${lead}${LABEL_ACRONYMS[low]}${trail}`;
+      const acronym = LABEL_ACRONYMS[low];
+      if (acronym) {
+        return `${lead}${acronym}${trail}`;
       }
       const hyph = core
         .split("-")
@@ -3184,20 +3140,32 @@ function navigateHaPath(path, replace = false) {
   }
   globalThis.dispatchEvent(new Event("location-changed", { bubbles: true, composed: true }));
 }
-__latterExp(__exports, { hassLanguage: () => hassLanguage, defaultLocaleTimeFormat: () => defaultLocaleTimeFormat, formatClockHhMm: () => formatClockHhMm, formatHourSlot: () => formatHourSlot, hassFirstWeekday: () => hassFirstWeekday, fmtNumber: () => fmtNumber, fmtPercent: () => fmtPercent, fmtDistance: () => fmtDistance, fmtAgo: () => fmtAgo, fmtDateTime: () => fmtDateTime, entityLabel: () => entityLabel, issueMessage: () => issueMessage, rssiToPercent: () => rssiToPercent, isValidHexColor: () => isValidHexColor, hsvToRgbJS: () => hsvToRgbJS, hsvToHex: () => hsvToHex, defaultThemeHex: () => defaultThemeHex, copyTextToClipboard: () => copyTextToClipboard, triggerJsonDownload: () => triggerJsonDownload, navigateHaPath: () => navigateHaPath });
+function truncateUtf8Bytes(raw, maxBytes) {
+  const str = String(raw ?? "");
+  if (maxBytes <= 0 || !str) return "";
+  if (typeof TextEncoder === "undefined") {
+    return str.slice(0, maxBytes);
+  }
+  const enc = new TextEncoder();
+  if (enc.encode(str).length <= maxBytes) {
+    return str;
+  }
+  let out = "";
+  for (const cp of str) {
+    if (enc.encode(out + cp).length > maxBytes) break;
+    out += cp;
+  }
+  return out;
+}
+__latterExp(__exports, { hassLanguage: () => hassLanguage, defaultLocaleTimeFormat: () => defaultLocaleTimeFormat, formatClockHhMm: () => formatClockHhMm, formatHourSlot: () => formatHourSlot, hassFirstWeekday: () => hassFirstWeekday, fmtNumber: () => fmtNumber, fmtPercent: () => fmtPercent, fmtDistance: () => fmtDistance, fmtAgo: () => fmtAgo, fmtDateTime: () => fmtDateTime, entityLabel: () => entityLabel, issueMessage: () => issueMessage, rssiToPercent: () => rssiToPercent, isValidHexColor: () => isValidHexColor, hsvToRgbJS: () => hsvToRgbJS, hsvToHex: () => hsvToHex, defaultThemeHex: () => defaultThemeHex, copyTextToClipboard: () => copyTextToClipboard, triggerJsonDownload: () => triggerJsonDownload, navigateHaPath: () => navigateHaPath, truncateUtf8Bytes: () => truncateUtf8Bytes });
 //# sourceURL=latter-studio/src/utils/format.ts
 });
-__latterDef("src/components/controls.ts", (__exports, __req) => {
-const { t, tPrefLabel, tPrefOption } = __req("src/i18n/index.ts");
-const { Directive, directive, focusSafe, html, noChange, nothing, PartType, repeat } = __req("src/lib/lit.ts");
-const { defaultLocaleTimeFormat, entityLabel, fmtNumber, formatHourSlot } = __req("src/utils/format.ts");
+__latterDef("src/components/controls/aria-helpers.ts", (__exports, __req) => {
+const { Directive, directive, html, noChange, nothing, PartType } = __req("src/lib/lit.ts");
+const { defaultLocaleTimeFormat } = __req("src/utils/format.ts");
 /**
- * Shared Lit UI controls for Latter Studio (`D-014`, `D-015`, `D-024`, `D-062`, `D-064`):
- * - Cards & auto-described settings/select/switch/range rows (`aria-describedby` + live `aria-valuetext`)
- * - Shared confirmation `<dialog>` builder (`renderConfirmDialog`, `Q5`)
- * - Reusable WAI-ARIA 1.2 searchable entity combobox (`renderEntityCombobox`, `Q11`)
- * - Pointer drag-handle (`≡`) + keyboard focus-preserving `renderSortableList` & `renderPillList` (`U4`)
- * Note: Event bindings (`@click`, `@change`, `@input`) always precede `class="..."` / `role="radio"`.
+ * Shared WAI-ARIA description wiring, SVG icon helpers, select option renderer,
+ * table sort header, & Device 12/24h time helper (`components/controls/aria-helpers.ts`).
  */
 function isDeviceTime24h(store) {
   if (store.currentScope !== "system") {
@@ -3222,7 +3190,6 @@ function slugifyToken(raw) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 28);
-  // Prefix with non-hex ` row-desc-` / `z` so ID selectors never resemble hex literals.
   return clean ? `${clean}-${hash.toString(36)}` : `z${hash.toString(36)}`;
 }
 function resolveDescriptionId(opts
@@ -3261,6 +3228,553 @@ class AutoDescribeDirective extends Directive {
   }
 }
 const autoWireDescribedBy = directive(AutoDescribeDirective);
+function renderSelectOptions(
+  choices,
+  selectedId,
+  emptyOptionLabel = "None",
+) {
+  const cur = String(selectedId || "");
+  const list = choices || [];
+  const hasSelected = !cur || list.some((c) => c.id === cur);
+  const out = [
+    html`<option value="" ?selected=${cur === ""}>${emptyOptionLabel}</option>`,
+  ];
+  if (cur && !hasSelected) {
+    out.push(html`<option value=${cur} selected>${cur} (missing)</option>`);
+  }
+  for (const item of list) {
+    out.push(
+      html`<option value=${item.id} ?selected=${item.id === cur}>${item.name || item.id}</option>`,
+    );
+  }
+  return out;
+}
+function renderSvgIcon(pathD) {
+  return html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d=${pathD}></path></svg>`;
+}
+function renderTrashIconButton(ariaLabel, onRemove) {
+  return html`<button
+    type="button"
+    aria-label=${ariaLabel}
+    @click=${onRemove}
+    class="btn-icon danger"
+  >
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 3v1H4v2h1v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6h1V4h-5V3H9m0 5h2v9H9V8m4 0h2v9h-2V8Z" />
+    </svg>
+  </button>`;
+}
+function renderSortHeader(
+  store,
+  field,
+  label,
+) {
+  const isActive = store.deviceSortField === field;
+  const ariaSort = isActive ? (store.deviceSortAsc ? "ascending" : "descending") : "none";
+  const indicator = isActive ? (store.deviceSortAsc ? " ▲" : " ▼") : "";
+  const onSort = () => {
+    if (store.deviceSortField === field) {
+      store.deviceSortAsc = !store.deviceSortAsc;
+    } else {
+      store.deviceSortField = field;
+      store.deviceSortAsc = true;
+    }
+    store.host.requestUpdate();
+  };
+  return html`<th aria-sort=${ariaSort}>
+    <button type="button" @click=${onSort} class="sort-btn">${label}<span aria-hidden="true">${indicator}</span></button>
+  </th>`;
+}
+__latterExp(__exports, { isDeviceTime24h: () => isDeviceTime24h, resolveDescriptionId: () => resolveDescriptionId, autoWireDescribedBy: () => autoWireDescribedBy, renderSelectOptions: () => renderSelectOptions, renderSvgIcon: () => renderSvgIcon, renderTrashIconButton: () => renderTrashIconButton, renderSortHeader: () => renderSortHeader });
+//# sourceURL=latter-studio/src/components/controls/aria-helpers.ts
+});
+__latterDef("src/components/controls/combobox.ts", (__exports, __req) => {
+const { t } = __req("src/i18n/index.ts");
+const { focusSafe, html, nothing, repeat } = __req("src/lib/lit.ts");
+/**
+ * Reusable WAI-ARIA 1.2 Searchable Entity Combobox (`components/controls/combobox.ts`, `Q11` / `D-062`).
+ */
+const COMBOBOX_STATE = new Map();
+function getComboboxState(id) {
+  let st = COMBOBOX_STATE.get(id);
+  if (!st) {
+    st = { open: false, query: "", activeIndex: 0 };
+    COMBOBOX_STATE.set(id, st);
+  }
+  return st;
+}
+function resetComboboxState(id) {
+  if (id) {
+    COMBOBOX_STATE.delete(id);
+  } else {
+    COMBOBOX_STATE.clear();
+  }
+}
+function isOrderedSubsequence(needle, haystack) {
+  if (!needle) return true;
+  if (needle.length > haystack.length) return false;
+  let ni = 0;
+  for (let hi = 0; hi < haystack.length && ni < needle.length; hi += 1) {
+    if (haystack.charCodeAt(hi) === needle.charCodeAt(ni)) {
+      ni += 1;
+    }
+  }
+  return ni === needle.length;
+}
+function matchComboboxOptions(
+  options,
+  rawQuery,
+  maxResults = 80,
+) {
+  const list = options || [];
+  const cap = Math.max(1, maxResults);
+  const query = String(rawQuery || "").trim().toLowerCase();
+  if (!query) {
+    return {
+      items: list.slice(0, cap),
+      totalMatches: list.length,
+    };
+  }
+  const tokens = query.split(/\s+/).filter(Boolean);
+  const scored = [];
+  for (const item of list) {
+    const idLow = String(item.id || "").toLowerCase();
+    const objIdLow = idLow.includes(".") ? (idLow.split(".", 2)[1] ?? idLow) : idLow;
+    const nameLow = String(item.name || item.id || "").toLowerCase();
+    const areaLow = String(item.area_name || "").toLowerCase();
+    const domLow = String(
+      item.domain || (idLow.includes(".") ? (idLow.split(".", 1)[0] ?? "") : ""),
+    ).toLowerCase();
+    const combined = `${nameLow} ${areaLow} ${idLow} ${domLow}`;
+    let matchedAll = true;
+    let usedFuzzy = false;
+    for (const tok of tokens) {
+      if (combined.includes(tok)) {
+        continue;
+      }
+      if (isOrderedSubsequence(tok, `${nameLow} ${idLow}`)) {
+        usedFuzzy = true;
+        continue;
+      }
+      matchedAll = false;
+      break;
+    }
+    if (!matchedAll) continue;
+    let rank = 4;
+    if (!usedFuzzy) {
+      if (nameLow === query || idLow === query || objIdLow === query) {
+        rank = 0;
+      } else if (
+        nameLow.startsWith(query) ||
+        objIdLow.startsWith(query) ||
+        idLow.startsWith(query)
+      ) {
+        rank = 1;
+      } else if (nameLow.includes(query) || areaLow.includes(query)) {
+        rank = 2;
+      } else {
+        rank = 3;
+      }
+    }
+    scored.push({ item, rank, labelLow: nameLow });
+  }
+  scored.sort(
+    (a, b) =>
+      a.rank - b.rank ||
+      a.labelLow.localeCompare(b.labelLow) ||
+      a.item.id.localeCompare(b.item.id),
+  );
+  return {
+    items: scored.slice(0, cap).map((s) => s.item),
+    totalMatches: scored.length,
+  };
+}
+function toneToChipClass(tone) {
+  if (tone === "primary") return "chip chip-primary";
+  if (tone === "success") return "chip chip-success";
+  if (tone === "warning") return "chip chip-warning";
+  if (tone === "error") return "chip chip-error";
+  return "chip";
+}
+function renderEntityCombobox(opts) {
+  const ui = getComboboxState(opts.id);
+  const curVal = String(opts.value ?? "").trim();
+  const allOptions = opts.options || [];
+  const maxResults = opts.maxResults ?? 80;
+  const selectedOpt = curVal ? allOptions.find((o) => o.id === curVal) : undefined;
+  const closedDisplayValue = curVal
+    ? selectedOpt
+      ? selectedOpt.name || selectedOpt.id
+      : t("common.missing_suffix", { id: curVal }, opts.overlay)
+    : "";
+  const { items: matchedItems, totalMatches } = matchComboboxOptions(
+    allOptions,
+    ui.open ? ui.query : "",
+    maxResults,
+  );
+  const clampedActiveIdx =
+    matchedItems.length > 0
+      ? Math.max(0, Math.min(matchedItems.length - 1, ui.activeIndex))
+      : -1;
+  const listboxId = `${opts.id}-listbox`;
+  const optionDomId = (idx) => `${opts.id}-opt-${idx}`;
+  const activeDescendantId =
+    ui.open && clampedActiveIdx >= 0 ? optionDomId(clampedActiveIdx) : "";
+  const notifyUi = (rootEl) => {
+    opts.onUiChange?.();
+    opts.host?.requestUpdate();
+    if (!opts.onUiChange && !opts.host && rootEl) {
+      const rootNode = typeof rootEl.getRootNode === "function" ? rootEl.getRootNode() : null;
+      const hostEl =
+        rootNode && "host" in rootNode
+          ? ((rootNode).host)
+          : null;
+      hostEl?.requestUpdate?.();
+    }
+  };
+  const scrollActiveIntoView = (inputEl, nextIdx) => {
+    if (!inputEl || nextIdx < 0) return;
+    requestAnimationFrame(() => {
+      const wrap = inputEl.closest(".combobox");
+      const li = wrap?.querySelector(`#${CSS.escape(optionDomId(nextIdx))}`);
+      li?.scrollIntoView?.({ block: "nearest" });
+    });
+  };
+  const commitSelection = (nextId, sourceEl) => {
+    ui.open = false;
+    ui.query = "";
+    ui.activeIndex = 0;
+    if (nextId !== curVal) {
+      opts.onChange(nextId);
+    }
+    notifyUi(sourceEl);
+  };
+  const openMenu = (sourceEl) => {
+    if (opts.disabled || ui.open) return;
+    ui.open = true;
+    ui.query = "";
+    const curIdx = curVal ? matchedItems.findIndex((o) => o.id === curVal) : -1;
+    ui.activeIndex = curIdx >= 0 ? curIdx : 0;
+    notifyUi(sourceEl);
+  };
+  const onInput = (ev) => {
+    const inp = ev.currentTarget;
+    ui.open = true;
+    ui.query = inp.value;
+    ui.activeIndex = 0;
+    notifyUi(inp);
+  };
+  const onKeyDown = (ev) => {
+    const inp = ev.currentTarget;
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      if (!ui.open) {
+        openMenu(inp);
+        return;
+      }
+      if (matchedItems.length > 0) {
+        const nextIdx = (clampedActiveIdx + 1) % matchedItems.length;
+        ui.activeIndex = nextIdx;
+        notifyUi(inp);
+        scrollActiveIntoView(inp, nextIdx);
+      }
+      return;
+    }
+    if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      if (!ui.open) {
+        ui.open = true;
+        ui.query = "";
+        ui.activeIndex = Math.max(0, matchedItems.length - 1);
+        notifyUi(inp);
+        return;
+      }
+      if (matchedItems.length > 0) {
+        const nextIdx = (clampedActiveIdx - 1 + matchedItems.length) % matchedItems.length;
+        ui.activeIndex = nextIdx;
+        notifyUi(inp);
+        scrollActiveIntoView(inp, nextIdx);
+      }
+      return;
+    }
+    if (ui.open && ev.key === "Home" && matchedItems.length > 0) {
+      ev.preventDefault();
+      ui.activeIndex = 0;
+      notifyUi(inp);
+      scrollActiveIntoView(inp, 0);
+      return;
+    }
+    if (ui.open && ev.key === "End" && matchedItems.length > 0) {
+      ev.preventDefault();
+      const last = matchedItems.length - 1;
+      ui.activeIndex = last;
+      notifyUi(inp);
+      scrollActiveIntoView(inp, last);
+      return;
+    }
+    if (ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229) {
+      if (ui.open) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const activeItem = clampedActiveIdx >= 0 ? matchedItems[clampedActiveIdx] : undefined;
+        if (activeItem) {
+          commitSelection(activeItem.id, inp);
+        }
+      }
+      return;
+    }
+    if (ev.key === "Escape") {
+      if (ui.open) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        ui.open = false;
+        ui.query = "";
+        inp.value = closedDisplayValue;
+        notifyUi(inp);
+      }
+    }
+  };
+  const onFocusOut = (ev) => {
+    const wrap = ev.currentTarget;
+    const rel = ev.relatedTarget;
+    if (rel && wrap.contains(rel)) {
+      return;
+    }
+    if (ui.open) {
+      ui.open = false;
+      ui.query = "";
+      const inp = wrap.querySelector("input[role='combobox']");
+      if (inp) {
+        inp.value = closedDisplayValue;
+      }
+      notifyUi(wrap);
+    }
+  };
+  const showClear = opts.allowClear !== false && Boolean(curVal) && !opts.disabled;
+  const placeholderText =
+    opts.placeholder ||
+    (curVal
+      ? closedDisplayValue
+      : opts.emptyOptionLabel || t("combobox.placeholder", undefined, opts.overlay));
+  return html`<div @focusout=${onFocusOut} class="combobox">
+    <div class="combobox-input-wrap">
+      <input
+        type="text"
+        id=${opts.id}
+        role="combobox"
+        autocomplete="off"
+        spellcheck="false"
+        aria-autocomplete="list"
+        aria-expanded=${ui.open ? "true" : "false"}
+        aria-controls=${listboxId}
+        aria-activedescendant=${activeDescendantId || nothing}
+        aria-label=${opts.ariaLabel || nothing}
+        aria-describedby=${opts.ariaDescribedBy || nothing}
+        placeholder=${placeholderText}
+        ?disabled=${Boolean(opts.disabled)}
+        .value=${ui.open ? focusSafe(ui.query) : closedDisplayValue}
+        @focus=${(ev) => openMenu(ev.currentTarget)}
+        @click=${(ev) => openMenu(ev.currentTarget)}
+        @input=${onInput}
+        @keydown=${onKeyDown}
+      />
+      ${showClear
+        ? html`<button
+            type="button"
+            aria-label=${t("combobox.clear", undefined, opts.overlay)}
+            @pointerdown=${(ev) => {
+              ev.preventDefault();
+              commitSelection("", ev.currentTarget);
+            }}
+            @click=${(ev) => commitSelection("", ev.currentTarget)}
+            class="combobox-clear"
+          >
+            ×
+          </button>`
+        : nothing}
+    </div>
+    <ul
+      id=${listboxId}
+      role="listbox"
+      aria-label=${opts.ariaLabel || t("combobox.placeholder", undefined, opts.overlay)}
+      class="combobox-listbox${ui.open ? "" : " hidden"}"
+    >
+      ${matchedItems.length === 0
+        ? html`<li role="presentation" class="combobox-empty">
+            ${t("combobox.no_matches", undefined, opts.overlay)}
+          </li>`
+        : repeat(
+            matchedItems,
+            (item) => item.id,
+            (item, idx) => {
+              const dom =
+                item.domain || (item.id.includes(".") ? (item.id.split(".", 1)[0] ?? "") : "");
+              const isSel = item.id === curVal;
+              const isAct = idx === clampedActiveIdx;
+              return html`<li
+                id=${optionDomId(idx)}
+                role="option"
+                aria-selected=${isSel ? "true" : "false"}
+                @pointerenter=${(ev) => {
+                  if (ui.activeIndex !== idx) {
+                    ui.activeIndex = idx;
+                    notifyUi(ev.currentTarget);
+                  }
+                }}
+                @pointerdown=${(ev) => {
+                  ev.preventDefault();
+                  commitSelection(item.id, ev.currentTarget);
+                }}
+                @click=${(ev) => commitSelection(item.id, ev.currentTarget)}
+                class="combobox-option${isAct ? " active" : ""}"
+              >
+                <div class="combobox-option-main">
+                  <span class="combobox-option-title">${item.name || item.id}</span>
+                  <span class="combobox-option-id">${item.id}</span>
+                </div>
+                <span class="combobox-option-chips">
+                  ${item.area_name ? html`<span class="chip">${item.area_name}</span>` : nothing}
+                  ${dom ? html`<span class="chip">${dom}</span>` : nothing}
+                  ${item.state_label
+                    ? html`<span class=${toneToChipClass(item.state_tone)}>${item.state_label}</span>`
+                    : nothing}
+                </span>
+              </li>`;
+            },
+          )}
+      ${totalMatches > matchedItems.length
+        ? html`<li role="presentation" class="combobox-footer">
+            ${t(
+              "combobox.showing_top",
+              { shown: matchedItems.length, total: totalMatches },
+              opts.overlay,
+            )}
+          </li>`
+        : nothing}
+    </ul>
+  </div>`;
+}
+__latterExp(__exports, { resetComboboxState: () => resetComboboxState, matchComboboxOptions: () => matchComboboxOptions, renderEntityCombobox: () => renderEntityCombobox });
+//# sourceURL=latter-studio/src/components/controls/combobox.ts
+});
+__latterDef("src/components/controls/confirm-dialog.ts", (__exports, __req) => {
+const { t } = __req("src/i18n/index.ts");
+const { html, nothing } = __req("src/lib/lit.ts");
+/**
+ * Shared Confirmation `<dialog>` Builder & Modal Lifecycle Sync (`components/controls/confirm-dialog.ts`, `Q5` / `D-064`).
+ */
+function syncDialogElement(
+  dlg,
+  wantOpen,
+) {
+  if (!dlg) return;
+  if (!wantOpen) {
+    if (dlg.open) {
+      try {
+        dlg.close();
+      } catch {
+        dlg.removeAttribute("open");
+      }
+    }
+    return;
+  }
+  if (!dlg.open) {
+    try {
+      dlg.showModal();
+    } catch {
+      dlg.setAttribute("open", "");
+    }
+  }
+}
+function renderConfirmDialog(opts) {
+  const titleId = `${opts.id}-title`;
+  const descId = `${opts.id}-desc`;
+  const isDanger = opts.danger !== false;
+  const count = opts.blastRadiusCount;
+  const blastText =
+    opts.blastRadiusLabel ||
+    (count !== undefined && count !== null && count > 0
+      ? count === 1
+        ? t("confirm.blast_radius_one", undefined, opts.overlay)
+        : t("confirm.blast_radius_many", { count }, opts.overlay)
+      : "");
+  const isBusy = Boolean(opts.busy);
+  const onBackdropClick = (ev) => {
+    if (ev.target === ev.currentTarget && !isBusy) {
+      opts.onCancel();
+    }
+  };
+  return html`<dialog
+    id=${opts.id}
+    aria-labelledby=${titleId}
+    aria-describedby=${descId}
+    @cancel=${(ev) => {
+      ev.preventDefault();
+      if (!isBusy) {
+        opts.onCancel();
+      }
+    }}
+    @click=${onBackdropClick}
+    class="studio-dialog confirm-dialog"
+  >
+    <div class="dialog-body">
+      <div class="dialog-header-row">
+        <h3 id=${titleId} class="dialog-title">${opts.title}</h3>
+        ${blastText
+          ? html`<span class="chip ${isDanger ? "chip-warning" : "chip-primary"} confirm-blast-badge">
+              ${blastText}
+            </span>`
+          : nothing}
+      </div>
+      ${opts.extraBody && opts.extraBody !== nothing ? opts.extraBody : nothing}
+      <p id=${descId} class="dialog-text">${opts.consequence}</p>
+      <div class="dialog-actions${opts.onDownloadBackupFirst ? " with-secondary" : ""}">
+        ${opts.onDownloadBackupFirst
+          ? html`<button
+              type="button"
+              ?disabled=${isBusy}
+              @click=${opts.onDownloadBackupFirst}
+              class="btn btn-text btn-compact"
+            >
+              ${opts.downloadBackupLabel ||
+              t("action.download_backup_first", undefined, opts.overlay)}
+            </button>`
+          : nothing}
+        <div class="dialog-actions-end">
+          <button
+            type="button"
+            ?disabled=${isBusy}
+            @click=${opts.onCancel}
+            class="btn btn-secondary"
+          >
+            ${opts.cancelLabel || t("action.cancel", undefined, opts.overlay)}
+          </button>
+          <button
+            type="button"
+            id=${opts.confirmButtonId || nothing}
+            ?disabled=${Boolean(opts.busy || opts.confirmDisabled)}
+            @click=${opts.onConfirm}
+            class="btn ${isDanger ? "btn-danger-filled" : "btn-primary"}"
+          >
+            ${opts.confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  </dialog>`;
+}
+__latterExp(__exports, { syncDialogElement: () => syncDialogElement, renderConfirmDialog: () => renderConfirmDialog });
+//# sourceURL=latter-studio/src/components/controls/confirm-dialog.ts
+});
+__latterDef("src/components/controls/rows.ts", (__exports, __req) => {
+const { t } = __req("src/i18n/index.ts");
+const { html, nothing } = __req("src/lib/lit.ts");
+const { defaultLocaleTimeFormat, fmtNumber, formatHourSlot } = __req("src/utils/format.ts");
+const { autoWireDescribedBy, renderSelectOptions, resolveDescriptionId } = __req("src/components/controls/aria-helpers.ts");
+/**
+ * Cards & Auto-Described Settings / Select / Switch / Range / Hour-Select Rows
+ * (`components/controls/rows.ts`, `D-014`, `D-015`, `D-062`, `D-070`).
+ */
 function renderCard(opts) {
   const headingEl = opts.heading ?? html`<h3 class="card-title">${opts.title || ""}</h3>`;
   const headerInner =
@@ -3368,17 +3882,11 @@ function renderSwitchRow(opts) {
 }
 function renderRangeControl(opts) {
   const step = opts.step ?? 1;
-  const maxFrac =
-    opts.maximumFractionDigits ?? (Number.isInteger(step) ? 0 : 1);
+  const maxFrac = opts.maximumFractionDigits ?? (Number.isInteger(step) ? 0 : 1);
   const isHourSlot = opts.unit === ":00";
-  const resolvedIs24h =
-    opts.is24h ?? defaultLocaleTimeFormat(opts.hass).startsWith("24");
+  const resolvedIs24h = opts.is24h ?? defaultLocaleTimeFormat(opts.hass).startsWith("24");
   const unitSuffix =
-    !isHourSlot && opts.unit
-      ? opts.unit === "%"
-        ? "%"
-        : ` ${opts.unit}`
-      : "";
+    !isHourSlot && opts.unit ? (opts.unit === "%" ? "%" : ` ${opts.unit}`) : "";
   const formatVal = (v) =>
     isHourSlot
       ? formatHourSlot(v, resolvedIs24h)
@@ -3439,11 +3947,8 @@ function renderRangeRow(opts) {
     }),
   });
 }
-function renderHourSelectControl(
-  opts,
-) {
-  const resolvedIs24h =
-    opts.is24h ?? defaultLocaleTimeFormat(opts.hass).startsWith("24");
+function renderHourSelectControl(opts) {
+  const resolvedIs24h = opts.is24h ?? defaultLocaleTimeFormat(opts.hass).startsWith("24");
   const normalizedHour = ((Math.round(opts.value) % 24) + 24) % 24;
   const selectValue = opts.mixed ? "__mixed__" : String(normalizedHour);
   return html`<select
@@ -3468,10 +3973,7 @@ function renderHourSelectControl(
       : nothing}
     ${Array.from({ length: 24 }, (_, h) => {
       const valStr = String(h);
-      return html`<option
-        value=${valStr}
-        ?selected=${!opts.mixed && h === normalizedHour}
-      >
+      return html`<option value=${valStr} ?selected=${!opts.mixed && h === normalizedHour}>
         ${formatHourSlot(h, resolvedIs24h)}
       </option>`;
     })}
@@ -3498,468 +4000,16 @@ function renderHourSelectRow(opts) {
     }),
   });
 }
-// ---------------------------------------------------------------------------
-// Shared Confirmation <dialog> Builder (Q5 / D-064)
-// ---------------------------------------------------------------------------
-function syncDialogElement(
-  dlg,
-  wantOpen,
-) {
-  if (!dlg) return;
-  if (!wantOpen) {
-    if (dlg.open) {
-      try {
-        dlg.close();
-      } catch {
-        dlg.removeAttribute("open");
-      }
-    }
-    return;
-  }
-  if (!dlg.open) {
-    try {
-      dlg.showModal();
-    } catch {
-      dlg.setAttribute("open", "");
-    }
-  }
-}
-function renderConfirmDialog(opts) {
-  const titleId = `${opts.id}-title`;
-  const descId = `${opts.id}-desc`;
-  const isDanger = opts.danger !== false;
-  const count = opts.blastRadiusCount;
-  const blastText =
-    opts.blastRadiusLabel ||
-    (count !== undefined && count !== null && count > 0
-      ? count === 1
-        ? t("confirm.blast_radius_one", undefined, opts.overlay)
-        : t("confirm.blast_radius_many", { count }, opts.overlay)
-      : "");
-  const isBusy = Boolean(opts.busy);
-  const onBackdropClick = (ev) => {
-    if (ev.target === ev.currentTarget && !isBusy) {
-      opts.onCancel();
-    }
-  };
-  return html`<dialog
-    id=${opts.id}
-    aria-labelledby=${titleId}
-    aria-describedby=${descId}
-    @cancel=${(ev) => {
-      ev.preventDefault();
-      if (!isBusy) {
-        opts.onCancel();
-      }
-    }}
-    @click=${onBackdropClick}
-    class="studio-dialog confirm-dialog"
-  >
-    <div class="dialog-body">
-      <div class="dialog-header-row">
-        <h3 id=${titleId} class="dialog-title">${opts.title}</h3>
-        ${blastText
-          ? html`<span class="chip ${isDanger ? "chip-warning" : "chip-primary"} confirm-blast-badge">
-              ${blastText}
-            </span>`
-          : nothing}
-      </div>
-      ${opts.extraBody && opts.extraBody !== nothing ? opts.extraBody : nothing}
-      <p id=${descId} class="dialog-text">${opts.consequence}</p>
-      <div class="dialog-actions${opts.onDownloadBackupFirst ? " with-secondary" : ""}">
-        ${opts.onDownloadBackupFirst
-          ? html`<button
-              type="button"
-              ?disabled=${isBusy}
-              @click=${opts.onDownloadBackupFirst}
-              class="btn btn-text btn-compact"
-            >
-              ${opts.downloadBackupLabel ||
-              t("action.download_backup_first", undefined, opts.overlay)}
-            </button>`
-          : nothing}
-        <div class="dialog-actions-end">
-          <button
-            type="button"
-            ?disabled=${isBusy}
-            @click=${opts.onCancel}
-            class="btn btn-secondary"
-          >
-            ${opts.cancelLabel || t("action.cancel", undefined, opts.overlay)}
-          </button>
-          <button
-            type="button"
-            id=${opts.confirmButtonId || nothing}
-            ?disabled=${Boolean(opts.busy || opts.confirmDisabled)}
-            @click=${opts.onConfirm}
-            class="btn ${isDanger ? "btn-danger-filled" : "btn-primary"}"
-          >
-            ${opts.confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  </dialog>`;
-}
-// ---------------------------------------------------------------------------
-// Reusable WAI-ARIA 1.2 Searchable Entity Combobox (Q11 / D-062)
-// ---------------------------------------------------------------------------
-const COMBOBOX_STATE = new Map();
-function getComboboxState(id) {
-  let st = COMBOBOX_STATE.get(id);
-  if (!st) {
-    st = { open: false, query: "", activeIndex: 0 };
-    COMBOBOX_STATE.set(id, st);
-  }
-  return st;
-}
-function resetComboboxState(id) {
-  if (id) {
-    COMBOBOX_STATE.delete(id);
-  } else {
-    COMBOBOX_STATE.clear();
-  }
-}
-function isOrderedSubsequence(needle, haystack) {
-  if (!needle) return true;
-  if (needle.length > haystack.length) return false;
-  let ni = 0;
-  for (let hi = 0; hi < haystack.length && ni < needle.length; hi += 1) {
-    if (haystack.charCodeAt(hi) === needle.charCodeAt(ni)) {
-      ni += 1;
-    }
-  }
-  return ni === needle.length;
-}
-function matchComboboxOptions(
-  options,
-  rawQuery,
-  maxResults = 80,
-) {
-  const list = options || [];
-  const cap = Math.max(1, maxResults);
-  const query = String(rawQuery || "").trim().toLowerCase();
-  if (!query) {
-    return {
-      items: list.slice(0, cap),
-      totalMatches: list.length,
-    };
-  }
-  const tokens = query.split(/\s+/).filter(Boolean);
-  const scored = [];
-  for (const item of list) {
-    const idLow = String(item.id || "").toLowerCase();
-    const objIdLow = idLow.includes(".") ? idLow.split(".", 2)[1] : idLow;
-    const nameLow = String(item.name || item.id || "").toLowerCase();
-    const areaLow = String(item.area_name || "").toLowerCase();
-    const domLow = String(item.domain || (idLow.includes(".") ? idLow.split(".", 1)[0] : "")).toLowerCase();
-    const combined = `${nameLow} ${areaLow} ${idLow} ${domLow}`;
-    let matchedAll = true;
-    let usedFuzzy = false;
-    for (const tok of tokens) {
-      if (combined.includes(tok)) {
-        continue;
-      }
-      if (isOrderedSubsequence(tok, `${nameLow} ${idLow}`)) {
-        usedFuzzy = true;
-        continue;
-      }
-      matchedAll = false;
-      break;
-    }
-    if (!matchedAll) continue;
-    let rank = 4;
-    if (!usedFuzzy) {
-      if (nameLow === query || idLow === query || objIdLow === query) {
-        rank = 0;
-      } else if (nameLow.startsWith(query) || objIdLow.startsWith(query) || idLow.startsWith(query)) {
-        rank = 1;
-      } else if (nameLow.includes(query) || areaLow.includes(query)) {
-        rank = 2;
-      } else {
-        rank = 3;
-      }
-    }
-    scored.push({ item, rank, labelLow: nameLow });
-  }
-  scored.sort(
-    (a, b) =>
-      a.rank - b.rank ||
-      a.labelLow.localeCompare(b.labelLow) ||
-      a.item.id.localeCompare(b.item.id),
-  );
-  return {
-    items: scored.slice(0, cap).map((s) => s.item),
-    totalMatches: scored.length,
-  };
-}
-function toneToChipClass(tone) {
-  if (tone === "primary") return "chip chip-primary";
-  if (tone === "success") return "chip chip-success";
-  if (tone === "warning") return "chip chip-warning";
-  if (tone === "error") return "chip chip-error";
-  return "chip";
-}
-function renderEntityCombobox(opts) {
-  const ui = getComboboxState(opts.id);
-  const curVal = String(opts.value ?? "").trim();
-  const allOptions = opts.options || [];
-  const maxResults = opts.maxResults ?? 80;
-  const selectedOpt = curVal ? allOptions.find((o) => o.id === curVal) : undefined;
-  const closedDisplayValue = curVal
-    ? selectedOpt
-      ? selectedOpt.name || selectedOpt.id
-      : t("common.missing_suffix", { id: curVal }, opts.overlay)
-    : "";
-  const { items: matchedItems, totalMatches } = matchComboboxOptions(
-    allOptions,
-    ui.open ? ui.query : "",
-    maxResults,
-  );
-  const clampedActiveIdx =
-    matchedItems.length > 0
-      ? Math.max(0, Math.min(matchedItems.length - 1, ui.activeIndex))
-      : -1;
-  const listboxId = `${opts.id}-listbox`;
-  const optionDomId = (idx) => `${opts.id}-opt-${idx}`;
-  const activeDescendantId =
-    ui.open && clampedActiveIdx >= 0 ? optionDomId(clampedActiveIdx) : "";
-  const notifyUi = (rootEl) => {
-    opts.onUiChange?.();
-    opts.host?.requestUpdate();
-    if (!opts.onUiChange && !opts.host && rootEl) {
-      const rootNode = typeof rootEl.getRootNode === "function" ? rootEl.getRootNode() : null;
-      const hostEl =
-        rootNode && "host" in rootNode
-          ? ((rootNode).host)
-          : null;
-      hostEl?.requestUpdate?.();
-    }
-  };
-  const scrollActiveIntoView = (inputEl, nextIdx) => {
-    if (!inputEl || nextIdx < 0) return;
-    requestAnimationFrame(() => {
-      const wrap = inputEl.closest(".combobox");
-      const li = wrap?.querySelector(`#${CSS.escape(optionDomId(nextIdx))}`);
-      li?.scrollIntoView?.({ block: "nearest" });
-    });
-  };
-  const commitSelection = (nextId, sourceEl) => {
-    ui.open = false;
-    ui.query = "";
-    ui.activeIndex = 0;
-    if (nextId !== curVal) {
-      opts.onChange(nextId);
-    }
-    notifyUi(sourceEl);
-  };
-  const openMenu = (sourceEl) => {
-    if (opts.disabled || ui.open) return;
-    ui.open = true;
-    ui.query = "";
-    const curIdx = curVal ? matchedItems.findIndex((o) => o.id === curVal) : -1;
-    ui.activeIndex = curIdx >= 0 ? curIdx : 0;
-    notifyUi(sourceEl);
-  };
-  const onInput = (ev) => {
-    const inp = ev.currentTarget;
-    // Typing ONLY filters options; NEVER mutates the bound entity selection!
-    ui.open = true;
-    ui.query = inp.value;
-    ui.activeIndex = 0;
-    notifyUi(inp);
-  };
-  const onKeyDown = (ev) => {
-    const inp = ev.currentTarget;
-    if (ev.key === "ArrowDown") {
-      ev.preventDefault();
-      if (!ui.open) {
-        openMenu(inp);
-        return;
-      }
-      if (matchedItems.length > 0) {
-        const nextIdx = (clampedActiveIdx + 1) % matchedItems.length;
-        ui.activeIndex = nextIdx;
-        notifyUi(inp);
-        scrollActiveIntoView(inp, nextIdx);
-      }
-      return;
-    }
-    if (ev.key === "ArrowUp") {
-      ev.preventDefault();
-      if (!ui.open) {
-        ui.open = true;
-        ui.query = "";
-        ui.activeIndex = Math.max(0, matchedItems.length - 1);
-        notifyUi(inp);
-        return;
-      }
-      if (matchedItems.length > 0) {
-        const nextIdx = (clampedActiveIdx - 1 + matchedItems.length) % matchedItems.length;
-        ui.activeIndex = nextIdx;
-        notifyUi(inp);
-        scrollActiveIntoView(inp, nextIdx);
-      }
-      return;
-    }
-    if (ui.open && ev.key === "Home" && matchedItems.length > 0) {
-      ev.preventDefault();
-      ui.activeIndex = 0;
-      notifyUi(inp);
-      scrollActiveIntoView(inp, 0);
-      return;
-    }
-    if (ui.open && ev.key === "End" && matchedItems.length > 0) {
-      ev.preventDefault();
-      const last = matchedItems.length - 1;
-      ui.activeIndex = last;
-      notifyUi(inp);
-      scrollActiveIntoView(inp, last);
-      return;
-    }
-    if (ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229) {
-      if (ui.open) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        if (clampedActiveIdx >= 0 && matchedItems[clampedActiveIdx]) {
-          commitSelection(matchedItems[clampedActiveIdx].id, inp);
-        }
-      }
-      return;
-    }
-    if (ev.key === "Escape") {
-      if (ui.open) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        ui.open = false;
-        ui.query = "";
-        inp.value = closedDisplayValue;
-        notifyUi(inp);
-      }
-    }
-  };
-  const onFocusOut = (ev) => {
-    const wrap = ev.currentTarget;
-    const rel = ev.relatedTarget;
-    if (rel && wrap.contains(rel)) {
-      return;
-    }
-    if (ui.open) {
-      ui.open = false;
-      ui.query = "";
-      const inp = wrap.querySelector("input[role='combobox']");
-      if (inp) {
-        inp.value = closedDisplayValue;
-      }
-      notifyUi(wrap);
-    }
-  };
-  const showClear = opts.allowClear !== false && Boolean(curVal) && !opts.disabled;
-  const placeholderText =
-    opts.placeholder ||
-    (curVal
-      ? closedDisplayValue
-      : opts.emptyOptionLabel || t("combobox.placeholder", undefined, opts.overlay));
-  return html`<div @focusout=${onFocusOut} class="combobox">
-    <div class="combobox-input-wrap">
-      <input
-        type="text"
-        id=${opts.id}
-        role="combobox"
-        autocomplete="off"
-        spellcheck="false"
-        aria-autocomplete="list"
-        aria-expanded=${ui.open ? "true" : "false"}
-        aria-controls=${listboxId}
-        aria-activedescendant=${activeDescendantId || nothing}
-        aria-label=${opts.ariaLabel || nothing}
-        aria-describedby=${opts.ariaDescribedBy || nothing}
-        placeholder=${placeholderText}
-        ?disabled=${Boolean(opts.disabled)}
-        .value=${ui.open ? focusSafe(ui.query) : closedDisplayValue}
-        @focus=${(ev) => openMenu(ev.currentTarget)}
-        @click=${(ev) => openMenu(ev.currentTarget)}
-        @input=${onInput}
-        @keydown=${onKeyDown}
-      />
-      ${showClear
-        ? html`<button
-            type="button"
-            aria-label=${t("combobox.clear", undefined, opts.overlay)}
-            @pointerdown=${(ev) => {
-              ev.preventDefault();
-              commitSelection("", ev.currentTarget);
-            }}
-            @click=${(ev) => commitSelection("", ev.currentTarget)}
-            class="combobox-clear"
-          >
-            ×
-          </button>`
-        : nothing}
-    </div>
-    <ul
-      id=${listboxId}
-      role="listbox"
-      aria-label=${opts.ariaLabel || t("combobox.placeholder", undefined, opts.overlay)}
-      class="combobox-listbox${ui.open ? "" : " hidden"}"
-    >
-      ${matchedItems.length === 0
-        ? html`<li role="presentation" class="combobox-empty">
-            ${t("combobox.no_matches", undefined, opts.overlay)}
-          </li>`
-        : repeat(
-            matchedItems,
-            (item) => item.id,
-            (item, idx) => {
-              const dom = item.domain || (item.id.includes(".") ? item.id.split(".", 1)[0] : "");
-              const isSel = item.id === curVal;
-              const isAct = idx === clampedActiveIdx;
-              return html`<li
-                id=${optionDomId(idx)}
-                role="option"
-                aria-selected=${isSel ? "true" : "false"}
-                @pointerenter=${(ev) => {
-                  if (ui.activeIndex !== idx) {
-                    ui.activeIndex = idx;
-                    notifyUi(ev.currentTarget);
-                  }
-                }}
-                @pointerdown=${(ev) => {
-                  ev.preventDefault();
-                  commitSelection(item.id, ev.currentTarget);
-                }}
-                @click=${(ev) => commitSelection(item.id, ev.currentTarget)}
-                class="combobox-option${isAct ? " active" : ""}"
-              >
-                <div class="combobox-option-main">
-                  <span class="combobox-option-title">${item.name || item.id}</span>
-                  <span class="combobox-option-id">${item.id}</span>
-                </div>
-                <span class="combobox-option-chips">
-                  ${item.area_name ? html`<span class="chip">${item.area_name}</span>` : nothing}
-                  ${dom ? html`<span class="chip">${dom}</span>` : nothing}
-                  ${item.state_label
-                    ? html`<span class=${toneToChipClass(item.state_tone)}>${item.state_label}</span>`
-                    : nothing}
-                </span>
-              </li>`;
-            },
-          )}
-      ${totalMatches > matchedItems.length
-        ? html`<li role="presentation" class="combobox-footer">
-            ${t(
-              "combobox.showing_top",
-              { shown: matchedItems.length, total: totalMatches },
-              opts.overlay,
-            )}
-          </li>`
-        : nothing}
-    </ul>
-  </div>`;
-}
-// ---------------------------------------------------------------------------
-// Pointer Drag-and-Drop (`≡`) + Focus-Preserving Keyboard Sortable Lists & Pills (U4 / D-064)
-// ---------------------------------------------------------------------------
+__latterExp(__exports, { renderCard: () => renderCard, renderSettingsRow: () => renderSettingsRow, renderSelectRow: () => renderSelectRow, renderSwitchRow: () => renderSwitchRow, renderRangeControl: () => renderRangeControl, renderRangeRow: () => renderRangeRow, renderHourSelectControl: () => renderHourSelectControl, renderHourSelectRow: () => renderHourSelectRow });
+//# sourceURL=latter-studio/src/components/controls/rows.ts
+});
+__latterDef("src/components/controls/sortable-lists.ts", (__exports, __req) => {
+const { t } = __req("src/i18n/index.ts");
+const { html, nothing, repeat } = __req("src/lib/lit.ts");
+/**
+ * Pointer Drag-and-Drop (`≡`) + Focus-Preserving Keyboard Sortable Lists & Pills
+ * (`components/controls/sortable-lists.ts`, `U4` / `D-064`).
+ */
 let activeDrag = null;
 const SORTABLE_LIVE_STATUS = new Map();
 function announceReorder(
@@ -4169,9 +4219,9 @@ function renderSortableList (opts) {
   >
     ${repeat(
       opts.items,
-      (_item, idx) => uniqueKeys[idx],
+      (_item, idx) => uniqueKeys[idx] ?? String(idx),
       (item, idx) => {
-        const key = uniqueKeys[idx];
+        const key = uniqueKeys[idx] ?? String(idx);
         const label = opts.getLabel(item, idx);
         const movable = opts.canMoveItem ? opts.canMoveItem(item, idx) : true;
         const extraCls =
@@ -4284,7 +4334,8 @@ function renderPillList(opts) {
   const enabledItems = opts.items.filter((it) => it.enabled);
   const disabledItems = opts.items.filter((it) => !it.enabled);
   const enabledCount = enabledItems.length;
-  const canReorder = Boolean(opts.onReorder && enabledCount > 1);
+  const reorderFn = opts.onReorder;
+  const canReorder = Boolean(reorderFn && enabledCount > 1);
   const liveMsg = SORTABLE_LIVE_STATUS.get(opts.id) || "";
   return html`<div
     id=${opts.id}
@@ -4297,7 +4348,7 @@ function renderPillList(opts) {
       enabledItems,
       (item) => item.token,
       (item, idx) => {
-        const drag = opts.onReorder
+        const drag = reorderFn
           ? attachDragHandleHandlers({
               listId: opts.id,
               orientation: "horizontal",
@@ -4305,7 +4356,7 @@ function renderPillList(opts) {
               total: enabledCount,
               itemLabel: item.label,
               overlay: opts.overlay,
-              onReorder: opts.onReorder,
+              onReorder: reorderFn,
             })
           : null;
         return html`<span
@@ -4328,7 +4379,7 @@ function renderPillList(opts) {
                 ≡
               </button>`
             : nothing}
-          ${canReorder && opts.onReorder
+          ${canReorder && reorderFn
             ? html`<button
                 type="button"
                 data-move-dir="prev"
@@ -4345,7 +4396,7 @@ function renderPillList(opts) {
                     toIndex: idx - 1,
                     total: enabledCount,
                     overlay: opts.overlay,
-                    onReorder: opts.onReorder,
+                    onReorder: reorderFn,
                   })}
                 class="pill-move"
               >
@@ -4361,7 +4412,7 @@ function renderPillList(opts) {
           >
             ${item.label}
           </button>
-          ${canReorder && opts.onReorder
+          ${canReorder && reorderFn
             ? html`<button
                 type="button"
                 data-move-dir="next"
@@ -4378,7 +4429,7 @@ function renderPillList(opts) {
                     toIndex: idx + 1,
                     total: enabledCount,
                     overlay: opts.overlay,
-                    onReorder: opts.onReorder,
+                    onReorder: reorderFn,
                   })}
                 class="pill-move"
               >
@@ -4406,9 +4457,20 @@ function renderPillList(opts) {
     <span data-sortable-live role="status" aria-live="polite" class="sr-only">${liveMsg}</span>
   </div>`;
 }
-// ---------------------------------------------------------------------------
-// Entity Slot Lists, Select Options, Icons, Table Sort Headers & Pref/Native Rows
-// ---------------------------------------------------------------------------
+__latterExp(__exports, { renderSortableList: () => renderSortableList, renderPillList: () => renderPillList });
+//# sourceURL=latter-studio/src/components/controls/sortable-lists.ts
+});
+__latterDef("src/components/controls/entity-adapters.ts", (__exports, __req) => {
+const { t, tPrefLabel, tPrefOption } = __req("src/i18n/index.ts");
+const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
+const { entityLabel, fmtNumber } = __req("src/utils/format.ts");
+const { isDeviceTime24h, renderSelectOptions, renderTrashIconButton } = __req("src/components/controls/aria-helpers.ts");
+const { renderHourSelectRow, renderRangeControl, renderSettingsRow } = __req("src/components/controls/rows.ts");
+const { renderSortableList } = __req("src/components/controls/sortable-lists.ts");
+/**
+ * Entity Slot Lists, Native/Pref Control Row Adapters, & Quick Action Button Grid
+ * (`components/controls/entity-adapters.ts`, `D-061`, `D-062`).
+ */
 function renderEntitySlotList(opts) {
   if (!opts.items.length) {
     return html`<div id=${opts.id} class="stack">
@@ -4462,63 +4524,6 @@ function renderEntitySlotList(opts) {
     )}
   </div>`;
 }
-function renderSelectOptions(
-  choices,
-  selectedId,
-  emptyOptionLabel = "None",
-) {
-  const cur = String(selectedId || "");
-  const list = choices || [];
-  const hasSelected = !cur || list.some((c) => c.id === cur);
-  const out = [
-    html`<option value="" ?selected=${cur === ""}>${emptyOptionLabel}</option>`,
-  ];
-  if (cur && !hasSelected) {
-    out.push(html`<option value=${cur} selected>${cur} (missing)</option>`);
-  }
-  for (const item of list) {
-    out.push(
-      html`<option value=${item.id} ?selected=${item.id === cur}>${item.name || item.id}</option>`,
-    );
-  }
-  return out;
-}
-function renderSvgIcon(pathD) {
-  return html`<svg viewBox="0 0 24 24" aria-hidden="true"><path d=${pathD}></path></svg>`;
-}
-function renderTrashIconButton(ariaLabel, onRemove) {
-  return html`<button
-    type="button"
-    aria-label=${ariaLabel}
-    @click=${onRemove}
-    class="btn-icon danger"
-  >
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M9 3v1H4v2h1v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6h1V4h-5V3H9m0 5h2v9H9V8m4 0h2v9h-2V8Z" />
-    </svg>
-  </button>`;
-}
-function renderSortHeader(
-  store,
-  field,
-  label,
-) {
-  const isActive = store.deviceSortField === field;
-  const ariaSort = isActive ? (store.deviceSortAsc ? "ascending" : "descending") : "none";
-  const indicator = isActive ? (store.deviceSortAsc ? " ▲" : " ▼") : "";
-  const onSort = () => {
-    if (store.deviceSortField === field) {
-      store.deviceSortAsc = !store.deviceSortAsc;
-    } else {
-      store.deviceSortField = field;
-      store.deviceSortAsc = true;
-    }
-    store.host.requestUpdate();
-  };
-  return html`<th aria-sort=${ariaSort}>
-    <button type="button" @click=${onSort} class="sort-btn">${label}<span aria-hidden="true">${indicator}</span></button>
-  </th>`;
-}
 function getLocaleOverlay(store) {
   const stateAny = store.state;
   const overlay = stateAny?.locale_strings;
@@ -4542,7 +4547,11 @@ function renderNativeControlRow(store, item) {
       if (prefKey) {
         store.entity.stageDeviceSetting(prefKey, checked);
       } else {
-        void store.entity.espAction(item.entity_id, checked ? "turn_on" : "turn_off", checked ? "on" : "off");
+        void store.entity.espAction(
+          item.entity_id,
+          checked ? "turn_on" : "turn_off",
+          checked ? "on" : "off",
+        );
       }
     };
     return renderSettingsRow({
@@ -4787,7 +4796,7 @@ const QUICK_ACTION_RANK = {
 function quickActionKind(item) {
   const nameLow = (item.name || "").toLowerCase();
   const idTail = item.entity_id.includes(".")
-    ? item.entity_id.split(".", 2)[1].toLowerCase()
+    ? (item.entity_id.split(".", 2)[1] ?? item.entity_id).toLowerCase()
     : item.entity_id.toLowerCase();
   if (
     item.device_class === "identify" ||
@@ -4916,10 +4925,126 @@ function renderQuickActionGrid(
     })}
   </div>`;
 }
-__latterExp(__exports, { isDeviceTime24h: () => isDeviceTime24h, resolveDescriptionId: () => resolveDescriptionId, renderCard: () => renderCard, renderSettingsRow: () => renderSettingsRow, renderSelectRow: () => renderSelectRow, renderSwitchRow: () => renderSwitchRow, renderRangeControl: () => renderRangeControl, renderRangeRow: () => renderRangeRow, renderHourSelectControl: () => renderHourSelectControl, renderHourSelectRow: () => renderHourSelectRow, syncDialogElement: () => syncDialogElement, renderConfirmDialog: () => renderConfirmDialog, resetComboboxState: () => resetComboboxState, matchComboboxOptions: () => matchComboboxOptions, renderEntityCombobox: () => renderEntityCombobox, renderSortableList: () => renderSortableList, renderPillList: () => renderPillList, renderEntitySlotList: () => renderEntitySlotList, renderSelectOptions: () => renderSelectOptions, renderSvgIcon: () => renderSvgIcon, renderTrashIconButton: () => renderTrashIconButton, renderSortHeader: () => renderSortHeader, renderNativeControlRow: () => renderNativeControlRow, renderPrefControlRow: () => renderPrefControlRow, sortQuickActionButtons: () => sortQuickActionButtons, renderQuickActionGrid: () => renderQuickActionGrid });
+__latterExp(__exports, { renderEntitySlotList: () => renderEntitySlotList, renderNativeControlRow: () => renderNativeControlRow, renderPrefControlRow: () => renderPrefControlRow, sortQuickActionButtons: () => sortQuickActionButtons, renderQuickActionGrid: () => renderQuickActionGrid });
+//# sourceURL=latter-studio/src/components/controls/entity-adapters.ts
+});
+__latterDef("src/components/controls/device-banners.ts", (__exports, __req) => {
+const { formatHaEntityState } = __req("src/i18n/index.ts");
+const { html, nothing } = __req("src/lib/lit.ts");
+const { entityLabel, fmtNumber } = __req("src/utils/format.ts");
+const { renderNativeControlRow } = __req("src/components/controls/entity-adapters.ts");
+const { renderSettingsRow } = __req("src/components/controls/rows.ts");
+/**
+ * Shared Device Offline Banner & Home Assistant Entity Row Renderer (`components/controls/device-banners.ts`, `M-P2-31`).
+ *
+ * Extracted from `views/device-overview-view.ts` so all `views/device-*-view.ts` modules
+ * import strictly downward from `components/controls/*` with zero horizontal view-to-view edges.
+ */
+/**
+ * Shared calm offline / sleeping banner rendered at the top of Device views (`Q8` / `E-04`).
+ */
+function renderDeviceOfflineBanner(store) {
+  const data = store.state;
+  const cfg = data?.config || {};
+  if (cfg.kind === "ble_tag") return nothing;
+  const curDevEntry =
+    (data?.system_devices || []).find((d) => d.subentry_id === store.activeSubentryId) ||
+    (data?.system_devices || []).find((d) => d.is_current);
+  if (curDevEntry?.is_online !== false) return nothing;
+  const sleepExpected = Boolean(data?.live?.is_ble_sleep_expected);
+  const titleKey = sleepExpected
+    ? "offline.device_sleeping_title"
+    : "offline.device_banner_title";
+  return html`<div
+    id="device-offline-banner"
+    role="region"
+    aria-label=${store.t(titleKey)}
+    class="alert offline-banner"
+  >
+    <div class="offline-banner-body">
+      <strong>${store.t(titleKey)}</strong>
+      <span>${store.t("offline.device_banner_body")}</span>
+    </div>
+    <span class="chip">
+      ${sleepExpected ? store.t("status.sleeping") : store.t("status.offline")}
+    </span>
+  </div>`;
+}
+/**
+ * Formats non-pref Home Assistant entity `select` options and sensor states via `formatHaEntityState` (`D-13`),
+ * while delegating preference-backed, switch, number, button, and update controls to `renderNativeControlRow`.
+ */
+function renderDeviceEntityRow(
+  store,
+  item,
+) {
+  if (
+    item.pref_key ||
+    item.domain === "switch" ||
+    item.domain === "number" ||
+    item.domain === "button" ||
+    item.domain === "update"
+  ) {
+    return renderNativeControlRow(store, item);
+  }
+  const label = entityLabel(item.name || item.entity_id);
+  const st = String(item.state ?? "");
+  const unavailable = st === "unavailable" || st === "unknown";
+  if (item.domain === "select") {
+    const opts = item.options || [];
+    const onChange = (ev) => {
+      void store.entity.espSelect(item.entity_id, (ev.currentTarget).value);
+    };
+    return renderSettingsRow({
+      label,
+      control: html`<select aria-label=${label} ?disabled=${unavailable} .value=${st} @change=${onChange}>
+        ${opts.map(
+          (opt) =>
+            html`<option value=${opt} ?selected=${opt === st}>
+              ${formatHaEntityState(store.hass, item.entity_id, opt)}
+            </option>`,
+        )}
+      </select>`,
+    });
+  }
+  const displayVal = unavailable
+    ? store.t("common.unknown")
+    : item.unit && Number.isFinite(Number(st))
+      ? `${fmtNumber(Number(st), store.hass)} ${item.unit}`
+      : formatHaEntityState(store.hass, item.entity_id, st);
+  return html`<div class="kv-row">
+    <span>${label}</span>
+    <strong>${displayVal}</strong>
+  </div>`;
+}
+__latterExp(__exports, { renderDeviceOfflineBanner: () => renderDeviceOfflineBanner, renderDeviceEntityRow: () => renderDeviceEntityRow });
+//# sourceURL=latter-studio/src/components/controls/device-banners.ts
+});
+__latterDef("src/components/controls.ts", (__exports, __req) => {
+__latterStar(__exports, __req("src/components/controls/aria-helpers.ts"));
+__latterStar(__exports, __req("src/components/controls/combobox.ts"));
+__latterStar(__exports, __req("src/components/controls/confirm-dialog.ts"));
+__latterStar(__exports, __req("src/components/controls/device-banners.ts"));
+__latterStar(__exports, __req("src/components/controls/entity-adapters.ts"));
+__latterStar(__exports, __req("src/components/controls/rows.ts"));
+__latterStar(__exports, __req("src/components/controls/sortable-lists.ts"));
+/**
+ * Thin `L3` barrel re-exporting decomposed Studio UI control primitives (`dag_split_map.md §4`).
+ */
 //# sourceURL=latter-studio/src/components/controls.ts
 });
+__latterDef("src/mdi-chunks.ts", (__exports, __req) => {
+/**
+ * Front-coded Pictogrammers @mdi/js v7.4.47 catalog chunks (L0 leaf).
+ * Exact 1:1 parity with firmware ui_mdi.cpp (7,447 Material Design Icons).
+ */
+const MDI_TOTAL_ICON_COUNT = 7447;
+const PACKED_MDI_CHUNKS = [];
+__latterExp(__exports, { MDI_TOTAL_ICON_COUNT: () => MDI_TOTAL_ICON_COUNT, PACKED_MDI_CHUNKS: () => PACKED_MDI_CHUNKS });
+//# sourceURL=latter-studio/src/mdi-chunks.ts
+});
 __latterDef("src/mdi-catalog.ts", (__exports, __req) => {
+const { MDI_TOTAL_ICON_COUNT, PACKED_MDI_CHUNKS } = __req("src/mdi-chunks.ts");
 /**
  * Universal Shortcut Engine catalogs: domain action maps, route icon previews,
  * and firmware-verified Material Design Icons (`ui_mdi.cpp` 7,447-icon parity).
@@ -5361,12 +5486,9 @@ const CURATED_MDI_ICONS = [
   "mdi:view-grid-outline",
   "mdi:form-select",
 ];
-const MDI_TOTAL_ICON_COUNT = 7447;
-// Front-coded Pictogrammers @mdi/js v7.4.47 catalog (exact 1:1 parity with firmware ui_mdi.cpp).
-const PACKED_MDI_CHUNKS = [];
 // Replaced at bundle build time with `./latter-studio-mdi.js?v=<sha256-16>` while PACKED_MDI_CHUNKS
 // stays intact in TypeScript source for cross-repo 7,447-icon firmware parity verification.
-const MDI_LAZY_CHUNK_URL = "./latter-studio-mdi.js?v=90a37292b019b68b";
+const MDI_LAZY_CHUNK_URL = "./latter-studio-mdi.js?v=9ef2dccabdc931c4";
 let activePackedMdiChunks = PACKED_MDI_CHUNKS;
 let cachedAllMdiIcons = null;
 let cachedAllMdiSet = null;
@@ -5378,7 +5500,9 @@ function unpackMdiChunks(chunks) {
   for (const chunk of chunks) {
     for (const token of chunk.split("|")) {
       if (!token) continue;
-      const shared = parseInt(token[0], 36);
+      const prefix = token[0];
+      if (!prefix) continue;
+      const shared = parseInt(prefix, 36);
       const slug = prev.slice(0, shared) + token.slice(1);
       prev = slug;
       out.push(`mdi:${slug}`);
@@ -5457,6 +5581,7 @@ function searchMdiIcons(
       totalMatches: MDI_TOTAL_ICON_COUNT,
     };
   }
+  const firstToken = tokens[0] ?? "";
   const exactNeedle = tokens.join("-");
   const ranked = [];
   for (const fullSlug of getAllMdiIcons()) {
@@ -5474,7 +5599,7 @@ function searchMdiIcons(
       rank = 0;
     } else if (name.startsWith(exactNeedle)) {
       rank = 1;
-    } else if (name.includes(`-${tokens[0]}`) || name.startsWith(tokens[0])) {
+    } else if (firstToken && (name.includes(`-${firstToken}`) || name.startsWith(firstToken))) {
       rank = 2;
     }
     ranked.push({ slug: fullSlug, rank });
@@ -5485,7 +5610,7 @@ function searchMdiIcons(
     totalMatches: ranked.length,
   };
 }
-__latterExp(__exports, { SHORTCUT_DOMAIN_ACTIONS: () => SHORTCUT_DOMAIN_ACTIONS, SHORTCUT_DOMAIN_LABELS: () => SHORTCUT_DOMAIN_LABELS, shortcutActionLabel: () => shortcutActionLabel, ROUTE_PREVIEW_ICONS: () => ROUTE_PREVIEW_ICONS, normalizeMdiIconSlug: () => normalizeMdiIconSlug, CURATED_MDI_ICONS: () => CURATED_MDI_ICONS, MDI_TOTAL_ICON_COUNT: () => MDI_TOTAL_ICON_COUNT, isMdiCatalogLoaded: () => isMdiCatalogLoaded, registerPackedMdiChunks: () => registerPackedMdiChunks, ensureMdiCatalogLoaded: () => ensureMdiCatalogLoaded, getAllMdiIcons: () => getAllMdiIcons, isKnownMdiIcon: () => isKnownMdiIcon, searchMdiIcons: () => searchMdiIcons });
+__latterExp(__exports, { MDI_TOTAL_ICON_COUNT: () => MDI_TOTAL_ICON_COUNT, SHORTCUT_DOMAIN_ACTIONS: () => SHORTCUT_DOMAIN_ACTIONS, SHORTCUT_DOMAIN_LABELS: () => SHORTCUT_DOMAIN_LABELS, shortcutActionLabel: () => shortcutActionLabel, ROUTE_PREVIEW_ICONS: () => ROUTE_PREVIEW_ICONS, normalizeMdiIconSlug: () => normalizeMdiIconSlug, CURATED_MDI_ICONS: () => CURATED_MDI_ICONS, isMdiCatalogLoaded: () => isMdiCatalogLoaded, registerPackedMdiChunks: () => registerPackedMdiChunks, ensureMdiCatalogLoaded: () => ensureMdiCatalogLoaded, getAllMdiIcons: () => getAllMdiIcons, isKnownMdiIcon: () => isKnownMdiIcon, searchMdiIcons: () => searchMdiIcons });
 //# sourceURL=latter-studio/src/mdi-catalog.ts
 });
 __latterDef("src/api/ws-client.ts", (__exports, __req) => {
@@ -6036,14 +6161,144 @@ function paintCropCanvas(
 __latterExp(__exports, { DEFAULT_PHOTO_CROP: () => DEFAULT_PHOTO_CROP, clampNum: () => clampNum, normalizePhotoCrop: () => normalizePhotoCrop, computeCropSourceRect: () => computeCropSourceRect, applyCanvasPanDelta: () => applyCanvasPanDelta, cropPreviewCanvasSize: () => cropPreviewCanvasSize, paintCropCanvas: () => paintCropCanvas });
 //# sourceURL=latter-studio/src/utils/crop-math.ts
 });
-__latterDef("src/state/photo-ops.ts", (__exports, __req) => {
-const { formatWsError } = __req("src/api/ws-client.ts");
-const { MAX_WALLPAPER_UPLOAD_BYTES, VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UNCATEGORIZED, VIRTUAL_COLLECTION_UPLOADS } = __req("src/constants.ts");
-const { DEFAULT_PHOTO_CROP, normalizePhotoCrop } = __req("src/utils/crop-math.ts");
+__latterDef("src/state/store-types.ts", (__exports, __req) => {
+const { VIRTUAL_COLLECTION_ALL } = __req("src/constants.ts");
+const { DEFAULT_PHOTO_CROP } = __req("src/utils/crop-math.ts");
 /**
- * Photo Library, Collections, Non-Destructive Crop, HA Media Import, & Device Photo Pool
- * operations (`D-072`, `STUDIO_REV = 39`).
+ * Shared `L1` Store Context & Modal/Pending Contracts (`StudioStoreContext`, `dag_split_map.md §4`).
+ *
+ * Breaks the 6-file `state/` strongly connected component by providing a pure `L1` contract
+ * that every `L2` state module imports instead of importing `state/store.ts` (`L3`).
  */
+/**
+ * Single canonical trait-driven capability gate (`A-14`).
+ * Never hides or rejects items when `caps` or an individual trait is `undefined` (unknown).
+ */
+function isCatalogItemSupported(
+  item,
+  caps,
+) {
+  const cap = item.capability;
+  if (!cap || !caps) return true;
+  switch (cap) {
+    case "round":
+      return caps.is_round !== false;
+    case "imu":
+      return caps.has_imu !== false;
+    case "display_imu":
+      return caps.has_display !== false && caps.has_imu !== false;
+    case "display":
+      return caps.has_display !== false;
+    case "battery":
+      return caps.has_battery !== false;
+    case "display_battery":
+      return caps.has_display !== false && caps.has_battery !== false;
+    case "beacon_battery":
+      return caps.has_ble_beacon !== false && caps.has_battery !== false;
+    case "mic":
+      return caps.has_voice !== false;
+    case "speaker":
+      return caps.has_audio !== false;
+    case "hw_jpeg":
+      return caps.hw_jpeg === true;
+    default:
+      return true;
+  }
+}
+const STRING_LIST_KEYS = [
+  "calendar_entities",
+  "camera_entities",
+  "remotes_list",
+  "thermostat_entities",
+  "lock_entities",
+  "garage_entities",
+  "vacuum_entities",
+  "broadcast_speakers",
+  "broadcast_phrases",
+];
+const STRING_LIST_MAX_ITEMS = {
+  camera_entities: 10,
+  remotes_list: 10,
+  calendar_entities: 50,
+  thermostat_entities: 8,
+  lock_entities: 8,
+  garage_entities: 6,
+  vacuum_entities: 6,
+  broadcast_speakers: 32,
+  broadcast_phrases: 12,
+};
+function isStringListKey(key) {
+  return (
+    key === "calendar_entities" ||
+    key === "camera_entities" ||
+    key === "remotes_list" ||
+    key === "thermostat_entities" ||
+    key === "lock_entities" ||
+    key === "garage_entities" ||
+    key === "vacuum_entities" ||
+    key === "broadcast_speakers" ||
+    key === "broadcast_phrases"
+  );
+}
+function cleanPersistedStringList(items, maxItems) {
+  const out = [];
+  for (const raw of items) {
+    const ent = String(raw || "").trim();
+    if (ent && !out.includes(ent)) {
+      out.push(ent);
+      if (out.length >= maxItems) break;
+    }
+  }
+  return out;
+}
+function mergePersistedWithBlankSlots(
+  persisted,
+  blankCount,
+  maxItems,
+  prevUiList,
+) {
+  const cleaned = cleanPersistedStringList(persisted, maxItems);
+  const clampedBlankCount = Math.max(0, Math.min(blankCount, maxItems - cleaned.length));
+  if (clampedBlankCount === 0) {
+    return { uiList: cleaned, clampedBlankCount: 0 };
+  }
+  if (prevUiList && prevUiList.some((v) => !String(v || "").trim())) {
+    const uiList = [];
+    let cleanIdx = 0;
+    let blanksPlaced = 0;
+    for (const slot of prevUiList) {
+      if (uiList.length >= maxItems) break;
+      if (!String(slot || "").trim()) {
+        if (blanksPlaced < clampedBlankCount) {
+          uiList.push("");
+          blanksPlaced += 1;
+        }
+      } else if (cleanIdx < cleaned.length) {
+        const cleanItem = cleaned[cleanIdx];
+        if (cleanItem !== undefined) {
+          uiList.push(cleanItem);
+        }
+        cleanIdx += 1;
+      }
+    }
+    while (cleanIdx < cleaned.length && uiList.length < maxItems) {
+      const cleanItem = cleaned[cleanIdx];
+      if (cleanItem !== undefined) {
+        uiList.push(cleanItem);
+      }
+      cleanIdx += 1;
+    }
+    while (blanksPlaced < clampedBlankCount && uiList.length < maxItems) {
+      uiList.push("");
+      blanksPlaced += 1;
+    }
+    return { uiList, clampedBlankCount: blanksPlaced };
+  }
+  return {
+    uiList: [...cleaned, ...Array (clampedBlankCount).fill("")],
+    clampedBlankCount,
+  };
+}
 function emptyPhotoUploadModalState() {
   return {
     open: false,
@@ -6103,6 +6358,758 @@ function emptyPhotoPickerModalState() {
     busy: false,
   };
 }
+function emptyConfirmModalState() {
+  return {
+    open: false,
+    kind: "",
+    title: "",
+    consequence: "",
+    confirmLabel: "",
+    cancelLabel: "",
+    danger: true,
+    blastRadiusCount: null,
+    blastRadiusLabel: "",
+    busy: false,
+    onConfirm: null,
+    onDownloadBackupFirst: null,
+  };
+}
+__latterExp(__exports, { isCatalogItemSupported: () => isCatalogItemSupported, STRING_LIST_KEYS: () => STRING_LIST_KEYS, STRING_LIST_MAX_ITEMS: () => STRING_LIST_MAX_ITEMS, isStringListKey: () => isStringListKey, cleanPersistedStringList: () => cleanPersistedStringList, mergePersistedWithBlankSlots: () => mergePersistedWithBlankSlots, emptyPhotoUploadModalState: () => emptyPhotoUploadModalState, emptyPhotoEditModalState: () => emptyPhotoEditModalState, emptyMediaImportModalState: () => emptyMediaImportModalState, emptyPhotoPickerModalState: () => emptyPhotoPickerModalState, emptyConfirmModalState: () => emptyConfirmModalState });
+//# sourceURL=latter-studio/src/state/store-types.ts
+});
+__latterDef("src/state/group-overlay.ts", (__exports, __req) => {
+const { GROUP_BEHAVIOR_NON_PREF_KEYS, GROUP_DISPLAY_NON_PREF_KEYS, GROUP_INTERFACE_NON_PREF_KEYS } = __req("src/constants.ts");
+const { cleanPersistedStringList, isCatalogItemSupported, isStringListKey, mergePersistedWithBlankSlots, STRING_LIST_KEYS, STRING_LIST_MAX_ITEMS } = __req("src/state/store-types.ts");
+/**
+ * Optimistic Device-Group Baseline & Pending-Entity Payload Overlays (`L2` leaf).
+ *
+ * Imports strictly `L0` (`constants.ts`, `types.ts`) and `L1` (`store-types.ts`).
+ */
+const BEHAVIOR_NON_PREF_KEY_SET = new Set (GROUP_BEHAVIOR_NON_PREF_KEYS);
+const DISPLAY_NON_PREF_KEY_SET = new Set (GROUP_DISPLAY_NON_PREF_KEYS);
+const INTERFACE_NON_PREF_KEY_SET = new Set (GROUP_INTERFACE_NON_PREF_KEYS);
+function activeGroupKeySet(
+  grp,
+  devicePrefs,
+) {
+  const keys = new Set (BEHAVIOR_NON_PREF_KEY_SET);
+  for (const p of devicePrefs) {
+    if (p.group_tier === "behavior") keys.add(p.key);
+    else if (p.group_tier === "display" && grp.include_display) keys.add(p.key);
+    else if (p.group_tier === "interface" && grp.include_interface) keys.add(p.key);
+  }
+  if (grp.include_display) {
+    for (const k of DISPLAY_NON_PREF_KEY_SET) keys.add(k);
+  }
+  if (grp.include_interface) {
+    for (const k of INTERFACE_NON_PREF_KEY_SET) keys.add(k);
+  }
+  return keys;
+}
+function sameGroupControlVal(a, b) {
+  if (a === b) return true;
+  if (
+    Array.isArray(a) ||
+    (a && typeof a === "object") ||
+    Array.isArray(b) ||
+    (b && typeof b === "object")
+  ) {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+  return String(a) === String(b);
+}
+function expandDevicePrefPatch(
+  currentCfg,
+  rawPatch,
+) {
+  const expanded = { ...rawPatch };
+  if (rawPatch.home_screen_enabled === false) {
+    const effStart = String(rawPatch.start_screen ?? currentCfg.start_screen ?? "Home");
+    if (effStart === "Home") {
+      expanded.start_screen = "Time App";
+    }
+  }
+  return expanded;
+}
+function overlayDevicePrefsOnSections(
+  payload,
+  rawPatch,
+) {
+  if (!rawPatch || Object.keys(rawPatch).length === 0) return;
+  const curCfg = (payload.config || {});
+  const expanded = expandDevicePrefPatch(curCfg, rawPatch);
+  const groups = payload.device_groups || [];
+  const devicePrefs = payload.device_prefs || [];
+  const supportedPrefKeys = new Set(devicePrefs.map((p) => p.key));
+  const isRoaming = curCfg.is_roaming !== false;
+  if ("device_group" in rawPatch) {
+    const targetGrpId = String(rawPatch.device_group || "custom").trim() || "custom";
+    expanded.device_group = targetGrpId;
+    if (targetGrpId !== "custom") {
+      const grp = groups.find((g) => g.id === targetGrpId);
+      if (grp?.device_config) {
+        const enforcedKeys = activeGroupKeySet(grp, devicePrefs);
+        for (const [gk, gv] of Object.entries(grp.device_config)) {
+          if (gk in rawPatch || gv === undefined || gv === null) continue;
+          if (!enforcedKeys.has(gk)) continue;
+          if ((gk === "sync_device_area" || gk === "area_follow_dwell_s") && !isRoaming) continue;
+          if (
+            BEHAVIOR_NON_PREF_KEY_SET.has(gk) ||
+            DISPLAY_NON_PREF_KEY_SET.has(gk) ||
+            INTERFACE_NON_PREF_KEY_SET.has(gk) ||
+            supportedPrefKeys.has(gk)
+          ) {
+            expanded[gk] = gv;
+          }
+        }
+      }
+    }
+  } else {
+    const curGrpId = String(curCfg.device_group || "custom").trim() || "custom";
+    if (curGrpId !== "custom") {
+      const grp = groups.find((g) => g.id === curGrpId);
+      if (grp?.device_config) {
+        const enforcedKeys = activeGroupKeySet(grp, devicePrefs);
+        for (const [ek, ev] of Object.entries(expanded)) {
+          if ((ek === "sync_device_area" || ek === "area_follow_dwell_s") && !isRoaming) continue;
+          if (
+            enforcedKeys.has(ek) &&
+            grp.device_config[ek] !== undefined &&
+            !sameGroupControlVal(grp.device_config[ek], ev)
+          ) {
+            expanded.device_group = "custom";
+            break;
+          }
+        }
+      }
+    }
+  }
+  payload.config = {
+    ...payload.config,
+    ...expanded,
+  };
+  if ("device_group" in expanded && Array.isArray(payload.system_devices) && payload.subentry_id) {
+    const nextGrp = String(expanded.device_group || "custom");
+    const nextGrpName =
+      nextGrp === "custom" ? "Custom" : groups.find((g) => g.id === nextGrp)?.name || nextGrp;
+    payload.system_devices = payload.system_devices.map((d) =>
+      d.subentry_id === payload.subentry_id
+        ? { ...d, device_group: nextGrp, device_group_name: nextGrpName }
+        : d,
+    );
+  }
+  if (payload.device_prefs) {
+    payload.device_prefs = payload.device_prefs.map((p) =>
+      p.key in expanded ? { ...p, value: expanded[p.key] } : p,
+    );
+  }
+  const sections = payload?.esphome?.sections;
+  if (!sections) return;
+  payload.esphome = {
+    ...payload.esphome,
+    sections: sections.map((sec) => ({
+      ...sec,
+      items: (sec.items || []).map((item) => {
+        if (item.pref_key && item.pref_key in expanded) {
+          const val = expanded[item.pref_key];
+          const nextState = item.domain === "switch" ? (val ? "on" : "off") : String(val ?? "");
+          return { ...item, state: nextState };
+        }
+        if (
+          "volume_step_size" in expanded &&
+          item.domain === "number" &&
+          item.entity_id.startsWith("media_player.")
+        ) {
+          const stepNum = Number(expanded.volume_step_size);
+          if (Number.isFinite(stepNum) && stepNum > 0) {
+            return { ...item, step: stepNum };
+          }
+        }
+        return item;
+      }),
+    })),
+  };
+}
+function overlayPendingEntityStates(
+  payload,
+  pendingMap,
+) {
+  const now = Date.now();
+  for (const [eid, entry] of pendingMap.entries()) {
+    if (entry.expires <= now) {
+      pendingMap.delete(eid);
+    }
+  }
+  const sections = payload?.esphome?.sections;
+  if (!sections || pendingMap.size === 0) return;
+  payload.esphome = {
+    ...payload.esphome,
+    sections: sections.map((sec) => ({
+      ...sec,
+      items: (sec.items || []).map((item) => {
+        const pending = pendingMap.get(item.entity_id);
+        if (!pending) return item;
+        const curState = String(item.state ?? "");
+        const sameNumeric =
+          curState !== "" &&
+          pending.state !== "" &&
+          Number.isFinite(Number(curState)) &&
+          Number.isFinite(Number(pending.state)) &&
+          Number(curState) === Number(pending.state);
+        if (curState === pending.state || sameNumeric) {
+          pendingMap.delete(item.entity_id);
+          return item;
+        }
+        return { ...item, state: pending.state };
+      }),
+    })),
+  };
+}
+function overlayPendingBlankListSlots(
+  store,
+  payload,
+  prevSysConfig,
+) {
+  if (!payload.system_config) return;
+  let mutated = false;
+  const nextSys = { ...payload.system_config };
+  for (const key of STRING_LIST_KEYS) {
+    const wantBlanks = store.pendingBlankListSlots[key] || 0;
+    if (wantBlanks <= 0) continue;
+    const maxItems = STRING_LIST_MAX_ITEMS[key];
+    const base = Array.isArray(nextSys[key]) ? nextSys[key] : [];
+    const { uiList, clampedBlankCount } = mergePersistedWithBlankSlots(
+      base,
+      wantBlanks,
+      maxItems,
+      prevSysConfig?.[key],
+    );
+    store.pendingBlankListSlots[key] = clampedBlankCount;
+    nextSys[key] = uiList;
+    mutated = true;
+  }
+  if (mutated) {
+    payload.system_config = nextSys;
+  }
+}
+__latterExp(__exports, { cleanPersistedStringList: () => cleanPersistedStringList, isCatalogItemSupported: () => isCatalogItemSupported, isStringListKey: () => isStringListKey, mergePersistedWithBlankSlots: () => mergePersistedWithBlankSlots, STRING_LIST_KEYS: () => STRING_LIST_KEYS, STRING_LIST_MAX_ITEMS: () => STRING_LIST_MAX_ITEMS, overlayDevicePrefsOnSections: () => overlayDevicePrefsOnSections, overlayPendingEntityStates: () => overlayPendingEntityStates, overlayPendingBlankListSlots: () => overlayPendingBlankListSlots });
+//# sourceURL=latter-studio/src/state/group-overlay.ts
+});
+__latterDef("src/state/lists-ops.ts", (__exports, __req) => {
+const { cleanPersistedStringList, mergePersistedWithBlankSlots, STRING_LIST_MAX_ITEMS } = __req("src/state/store-types.ts");
+/**
+ * System String-List Slots, Volume Overrides, Remote Control Groups, & Per-Device
+ * Broadcast/Camera List Operations (`L2` leaf).
+ */
+function updateStringListRowOp(
+  store,
+  key,
+  index,
+  value,
+) {
+  const maxItems = STRING_LIST_MAX_ITEMS[key];
+  const prevUiList = [...(store.state?.system_config?.[key] || [])];
+  if (index < 0 || index >= prevUiList.length) return;
+  const prevPersisted = cleanPersistedStringList(prevUiList, maxItems);
+  const nextRaw = [...prevUiList];
+  nextRaw[index] = String(value || "").trim();
+  const seen = new Set();
+  const nextUiList = [];
+  for (const item of nextRaw) {
+    const ent = String(item || "").trim();
+    if (!ent) {
+      nextUiList.push("");
+    } else if (!seen.has(ent)) {
+      seen.add(ent);
+      nextUiList.push(ent);
+    }
+    if (nextUiList.length >= maxItems) break;
+  }
+  const nextPersisted = nextUiList.filter(Boolean);
+  store.pendingBlankListSlots[key] = nextUiList.length - nextPersisted.length;
+  const persistedChanged =
+    prevPersisted.length !== nextPersisted.length ||
+    prevPersisted.some((v, i) => v !== nextPersisted[i]);
+  if (persistedChanged) {
+    store.entity.stageSystemSetting(key, nextPersisted);
+    if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: nextUiList,
+        },
+      };
+      store.host.requestUpdate();
+    }
+  } else if (store.state?.system_config) {
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: nextUiList,
+      },
+    };
+    store.host.requestUpdate();
+  }
+}
+function addStringListRowOp(
+  store,
+  key,
+  defaultEntity = "",
+  maxLen = STRING_LIST_MAX_ITEMS[key],
+) {
+  const cap = Math.min(maxLen, STRING_LIST_MAX_ITEMS[key]);
+  const list = [...(store.state?.system_config?.[key] || [])];
+  if (list.length >= cap) {
+    store.showToast(`Maximum of ${cap} entries reached`, true);
+    return;
+  }
+  const cleanDefault = String(defaultEntity || "").trim();
+  if (!cleanDefault) {
+    list.push("");
+    store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
+    if (store.state?.system_config) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: list,
+        },
+      };
+    }
+    store.host.requestUpdate();
+    return;
+  }
+  const nextPersisted = cleanPersistedStringList([...list, cleanDefault], cap);
+  const wantBlanks = Math.max(
+    0,
+    Math.min(store.pendingBlankListSlots[key] || 0, cap - nextPersisted.length),
+  );
+  store.pendingBlankListSlots[key] = wantBlanks;
+  store.entity.stageSystemSetting(key, nextPersisted);
+  if (store.state?.system_config && wantBlanks > 0) {
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: [...nextPersisted, ...Array (wantBlanks).fill("")],
+      },
+    };
+    store.host.requestUpdate();
+  }
+}
+function removeStringListRowOp(
+  store,
+  key,
+  index,
+) {
+  const maxItems = STRING_LIST_MAX_ITEMS[key];
+  const list = [...(store.state?.system_config?.[key] || [])];
+  if (index < 0 || index >= list.length) return;
+  const [removed] = list.splice(index, 1);
+  const wasBlank = !String(removed || "").trim();
+  store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
+  if (wasBlank) {
+    if (store.state?.system_config) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: list,
+        },
+      };
+    }
+    store.host.requestUpdate();
+    return;
+  }
+  const nextPersisted = cleanPersistedStringList(list, maxItems);
+  store.entity.stageSystemSetting(key, nextPersisted);
+  if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
+    const { uiList, clampedBlankCount } = mergePersistedWithBlankSlots(
+      nextPersisted,
+      store.pendingBlankListSlots[key],
+      maxItems,
+      list,
+    );
+    store.pendingBlankListSlots[key] = clampedBlankCount;
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: uiList,
+      },
+    };
+    store.host.requestUpdate();
+  }
+}
+function reorderStringListRowsOp(
+  store,
+  key,
+  fromIndex,
+  toIndex,
+) {
+  const maxItems = STRING_LIST_MAX_ITEMS[key];
+  const list = [...(store.state?.system_config?.[key] || [])];
+  if (
+    fromIndex < 0 ||
+    fromIndex >= list.length ||
+    toIndex < 0 ||
+    toIndex >= list.length ||
+    fromIndex === toIndex
+  ) {
+    return;
+  }
+  const prevPersisted = cleanPersistedStringList(list, maxItems);
+  const [moved] = list.splice(fromIndex, 1);
+  if (moved === undefined) return;
+  list.splice(toIndex, 0, moved);
+  const nextPersisted = cleanPersistedStringList(list, maxItems);
+  store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
+  const persistedChanged =
+    prevPersisted.length !== nextPersisted.length ||
+    prevPersisted.some((v, i) => v !== nextPersisted[i]);
+  if (persistedChanged) {
+    store.entity.stageSystemSetting(key, nextPersisted);
+    if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
+      store.state = {
+        ...store.state,
+        system_config: {
+          ...store.state.system_config,
+          [key]: list,
+        },
+      };
+      store.host.requestUpdate();
+    }
+  } else if (store.state?.system_config) {
+    store.state = {
+      ...store.state,
+      system_config: {
+        ...store.state.system_config,
+        [key]: list,
+      },
+    };
+    store.host.requestUpdate();
+  }
+}
+function addVolumeOverrideRowOp(store) {
+  const list = [...(store.state?.system_config?.volume_overrides || [])];
+  if (list.length >= 10) {
+    store.showToast("Maximum of 10 volume overrides reached", true);
+    return;
+  }
+  const speakers = store.state?.catalog?.ma_speakers || [];
+  const targets = store.state?.catalog?.volume_targets || store.state?.catalog?.remotes || [];
+  list.push({
+    speaker: speakers[0]?.id || "",
+    target: targets[0]?.id || speakers[0]?.id || "",
+  });
+  store.entity.stageSystemSetting("volume_overrides", list);
+}
+function updateVolumeOverrideRowOp(
+  store,
+  index,
+  field,
+  value,
+) {
+  const list = (store.state?.system_config?.volume_overrides || []).map((v) => ({
+    ...v,
+  }));
+  const row = list[index];
+  if (!row) return;
+  row[field] = value;
+  store.entity.stageSystemSetting("volume_overrides", list);
+}
+function removeVolumeOverrideRowOp(store, index) {
+  const list = [...(store.state?.system_config?.volume_overrides || [])];
+  list.splice(index, 1);
+  store.entity.stageSystemSetting("volume_overrides", list);
+}
+function addRemoteGroupRowOp(store) {
+  const groups = (store.state?.system_config?.remote_groups || []).map((g) => ({
+    ...g,
+    remotes: [...(g.remotes || [])],
+  }));
+  const id = `group_${Date.now().toString(36)}`;
+  groups.push({ id, name: "New remote group", area_id: "", remotes: [] });
+  store.entity.stageSystemSetting("remote_groups", groups);
+}
+function updateRemoteGroupFieldOp(
+  store,
+  groupId,
+  field,
+  value,
+) {
+  const groups = (store.state?.system_config?.remote_groups || []).map((g) =>
+    g.id === groupId ? { ...g, [field]: value } : { ...g, remotes: [...(g.remotes || [])] },
+  );
+  store.entity.stageSystemSetting("remote_groups", groups);
+}
+function toggleRemoteInGroupOp(
+  store,
+  groupId,
+  remoteEntity,
+) {
+  const groups = (store.state?.system_config?.remote_groups || []).map((g) => {
+    if (g.id !== groupId) return { ...g, remotes: [...(g.remotes || [])] };
+    const remotes = [...(g.remotes || [])];
+    const idx = remotes.indexOf(remoteEntity);
+    if (idx >= 0) remotes.splice(idx, 1);
+    else remotes.push(remoteEntity);
+    return { ...g, remotes };
+  });
+  store.entity.stageSystemSetting("remote_groups", groups);
+}
+function removeRemoteGroupRowOp(store, groupId) {
+  const groups = (store.state?.system_config?.remote_groups || []).filter((g) => g.id !== groupId);
+  store.entity.stageSystemSetting("remote_groups", groups);
+}
+// ---------- Per-Device Broadcast Speakers & Visible/Carousel Camera Lists ----------
+function getSystemBroadcastSpeakersOp(store) {
+  const out = [];
+  for (const raw of store.state?.system_config?.broadcast_speakers || []) {
+    const id = String(raw || "").trim();
+    if (id && !out.includes(id)) {
+      out.push(id);
+    }
+  }
+  return out;
+}
+function getBroadcastSpeakersOp(store) {
+  const sys = getSystemBroadcastSpeakersOp(store);
+  if (sys.length === 0) return [];
+  const raw = store.state?.config?.broadcast_speaker_entities;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return [...sys];
+  }
+  const filtered = [];
+  for (const item of raw) {
+    const id = String(item || "").trim();
+    if (id && sys.includes(id) && !filtered.includes(id)) {
+      filtered.push(id);
+    }
+  }
+  return filtered.length > 0 ? filtered : [...sys];
+}
+function toggleBroadcastSpeakerOp(
+  store,
+  entityId,
+  forceEnabled,
+) {
+  const cleanId = String(entityId || "").trim();
+  const sys = getSystemBroadcastSpeakersOp(store);
+  if (!cleanId || !sys.includes(cleanId)) return;
+  const current = getBroadcastSpeakersOp(store);
+  const idx = current.indexOf(cleanId);
+  const currentlyOn = idx >= 0;
+  const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
+  if (wantOn === currentlyOn) return;
+  let next;
+  if (!wantOn) {
+    if (current.length <= 1) {
+      store.showToast(store.t("common.keep_one_enabled", { noun: "speaker" }), true);
+      return;
+    }
+    next = current.filter((id) => id !== cleanId);
+  } else {
+    next = [...current, cleanId];
+  }
+  const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+  store.entity.stageDeviceSetting("broadcast_speaker_entities", sameAsSys ? [] : next);
+}
+function reorderBroadcastSpeakersOp(
+  store,
+  fromIndex,
+  toIndex,
+) {
+  const sys = getSystemBroadcastSpeakersOp(store);
+  const current = getBroadcastSpeakersOp(store);
+  if (
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= current.length ||
+    toIndex >= current.length ||
+    fromIndex === toIndex
+  ) {
+    return;
+  }
+  const next = [...current];
+  const [moved] = next.splice(fromIndex, 1);
+  if (moved === undefined) return;
+  next.splice(toIndex, 0, moved);
+  const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+  store.entity.stageDeviceSetting("broadcast_speaker_entities", sameAsSys ? [] : next);
+}
+function getSystemCameraEntitiesOp(store) {
+  const out = [];
+  for (const raw of store.state?.system_config?.camera_entities || []) {
+    const id = String(raw || "").trim();
+    if (id && !out.includes(id)) {
+      out.push(id);
+    }
+  }
+  return out;
+}
+function getVisibleCamerasOp(store) {
+  const sys = getSystemCameraEntitiesOp(store);
+  if (sys.length === 0) return [];
+  const raw = store.state?.config?.camera_visible_entities;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return [...sys];
+  }
+  const filtered = [];
+  for (const item of raw) {
+    const id = String(item || "").trim();
+    if (id && sys.includes(id) && !filtered.includes(id)) {
+      filtered.push(id);
+    }
+  }
+  return filtered.length > 0 ? filtered : [...sys];
+}
+function toggleVisibleCameraOp(
+  store,
+  entityId,
+  forceEnabled,
+) {
+  const cleanId = String(entityId || "").trim();
+  const sys = getSystemCameraEntitiesOp(store);
+  if (!cleanId || !sys.includes(cleanId)) return;
+  const current = getVisibleCamerasOp(store);
+  const idx = current.indexOf(cleanId);
+  const currentlyOn = idx >= 0;
+  const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
+  if (wantOn === currentlyOn) return;
+  let next;
+  if (!wantOn) {
+    if (current.length <= 1) {
+      store.showToast(store.t("common.keep_one_enabled", { noun: "camera" }), true);
+      return;
+    }
+    next = current.filter((id) => id !== cleanId);
+  } else {
+    next = [...current, cleanId];
+  }
+  const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+  store.entity.stageDeviceSetting("camera_visible_entities", sameAsSys ? [] : next);
+  if (!wantOn) {
+    const rawCarousel = Array.isArray(store.state?.config?.camera_carousel_entities)
+      ? store.state.config.camera_carousel_entities
+          .map((c) => String(c || "").trim())
+          .filter(Boolean)
+      : [];
+    if (rawCarousel.length > 0 && rawCarousel.includes(cleanId)) {
+      const pruned = rawCarousel.filter((id) => next.includes(id));
+      const sameAsVisible =
+        pruned.length === next.length && pruned.every((id, i) => id === next[i]);
+      store.entity.stageDeviceSetting(
+        "camera_carousel_entities",
+        pruned.length === 0 || sameAsVisible ? [] : pruned,
+      );
+    }
+  }
+}
+function reorderVisibleCamerasOp(
+  store,
+  fromIndex,
+  toIndex,
+) {
+  const sys = getSystemCameraEntitiesOp(store);
+  const current = getVisibleCamerasOp(store);
+  if (
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= current.length ||
+    toIndex >= current.length ||
+    fromIndex === toIndex
+  ) {
+    return;
+  }
+  const next = [...current];
+  const [moved] = next.splice(fromIndex, 1);
+  if (moved === undefined) return;
+  next.splice(toIndex, 0, moved);
+  const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
+  store.entity.stageDeviceSetting("camera_visible_entities", sameAsSys ? [] : next);
+}
+function getCarouselCamerasOp(store) {
+  const visible = getVisibleCamerasOp(store);
+  if (visible.length === 0) return [];
+  const raw = store.state?.config?.camera_carousel_entities;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return [...visible];
+  }
+  const filtered = [];
+  for (const item of raw) {
+    const id = String(item || "").trim();
+    if (id && visible.includes(id) && !filtered.includes(id)) {
+      filtered.push(id);
+    }
+  }
+  return filtered.length > 0 ? filtered : [...visible];
+}
+function toggleCarouselCameraOp(
+  store,
+  entityId,
+  forceEnabled,
+) {
+  const cleanId = String(entityId || "").trim();
+  const visible = getVisibleCamerasOp(store);
+  if (!cleanId || !visible.includes(cleanId)) return;
+  const current = getCarouselCamerasOp(store);
+  const idx = current.indexOf(cleanId);
+  const currentlyOn = idx >= 0;
+  const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
+  if (wantOn === currentlyOn) return;
+  let next;
+  if (!wantOn) {
+    if (current.length <= 1) {
+      store.showToast(store.t("common.keep_one_enabled", { noun: "camera" }), true);
+      return;
+    }
+    next = current.filter((id) => id !== cleanId);
+  } else {
+    next = [...current, cleanId];
+  }
+  const sameAsVisible =
+    next.length === visible.length && next.every((id, i) => id === visible[i]);
+  store.entity.stageDeviceSetting("camera_carousel_entities", sameAsVisible ? [] : next);
+}
+function reorderCarouselCamerasOp(
+  store,
+  fromIndex,
+  toIndex,
+) {
+  const visible = getVisibleCamerasOp(store);
+  const current = getCarouselCamerasOp(store);
+  if (
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= current.length ||
+    toIndex >= current.length ||
+    fromIndex === toIndex
+  ) {
+    return;
+  }
+  const next = [...current];
+  const [moved] = next.splice(fromIndex, 1);
+  if (moved === undefined) return;
+  next.splice(toIndex, 0, moved);
+  const sameAsVisible =
+    next.length === visible.length && next.every((id, i) => id === visible[i]);
+  store.entity.stageDeviceSetting("camera_carousel_entities", sameAsVisible ? [] : next);
+}
+__latterExp(__exports, { updateStringListRowOp: () => updateStringListRowOp, addStringListRowOp: () => addStringListRowOp, removeStringListRowOp: () => removeStringListRowOp, reorderStringListRowsOp: () => reorderStringListRowsOp, addVolumeOverrideRowOp: () => addVolumeOverrideRowOp, updateVolumeOverrideRowOp: () => updateVolumeOverrideRowOp, removeVolumeOverrideRowOp: () => removeVolumeOverrideRowOp, addRemoteGroupRowOp: () => addRemoteGroupRowOp, updateRemoteGroupFieldOp: () => updateRemoteGroupFieldOp, toggleRemoteInGroupOp: () => toggleRemoteInGroupOp, removeRemoteGroupRowOp: () => removeRemoteGroupRowOp, getSystemBroadcastSpeakersOp: () => getSystemBroadcastSpeakersOp, getBroadcastSpeakersOp: () => getBroadcastSpeakersOp, toggleBroadcastSpeakerOp: () => toggleBroadcastSpeakerOp, reorderBroadcastSpeakersOp: () => reorderBroadcastSpeakersOp, getSystemCameraEntitiesOp: () => getSystemCameraEntitiesOp, getVisibleCamerasOp: () => getVisibleCamerasOp, toggleVisibleCameraOp: () => toggleVisibleCameraOp, reorderVisibleCamerasOp: () => reorderVisibleCamerasOp, getCarouselCamerasOp: () => getCarouselCamerasOp, toggleCarouselCameraOp: () => toggleCarouselCameraOp, reorderCarouselCamerasOp: () => reorderCarouselCamerasOp });
+//# sourceURL=latter-studio/src/state/lists-ops.ts
+});
+__latterDef("src/state/photo-ops.ts", (__exports, __req) => {
+const { formatWsError } = __req("src/api/ws-client.ts");
+const { MAX_WALLPAPER_UPLOAD_BYTES, VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UNCATEGORIZED, VIRTUAL_COLLECTION_UPLOADS } = __req("src/constants.ts");
+const { DEFAULT_PHOTO_CROP, normalizePhotoCrop } = __req("src/utils/crop-math.ts");
+const { emptyMediaImportModalState, emptyPhotoEditModalState, emptyPhotoPickerModalState, emptyPhotoUploadModalState } = __req("src/state/store-types.ts");
+/**
+ * Photo Library, Collections, Non-Destructive Crop, HA Media Import, & Device Photo Pool
+ * operations (`D-072`, `STUDIO_REV = 39`).
+ */
 function isPhotoUploaded(photo) {
   return (
     photo.kind === "uploaded" ||
@@ -6323,6 +7330,7 @@ async function uploadAllStagedPhotosOp(store) {
   try {
     for (let i = 0; i < total; i += 1) {
       const item = modal.files[i];
+      if (!item) continue;
       store.photoUploadModal = {
         ...store.photoUploadModal,
         currentIndex: i + 1,
@@ -6848,51 +7856,452 @@ async function applyPhotoPickerModalOp(store) {
   }
   store.host.requestUpdate();
 }
-__latterExp(__exports, { emptyPhotoUploadModalState: () => emptyPhotoUploadModalState, emptyPhotoEditModalState: () => emptyPhotoEditModalState, emptyMediaImportModalState: () => emptyMediaImportModalState, emptyPhotoPickerModalState: () => emptyPhotoPickerModalState, isPhotoUploaded: () => isPhotoUploaded, isPhotoDynamic: () => isPhotoDynamic, filterEligiblePhotoIds: () => filterEligiblePhotoIds, derivePhotoBaseName: () => derivePhotoBaseName, filterLibraryPhotos: () => filterLibraryPhotos, resolveCollectionDisplayName: () => resolveCollectionDisplayName, resolvePoolPhotos: () => resolvePoolPhotos, openPhotoUploadModalOp: () => openPhotoUploadModalOp, closePhotoUploadModalOp: () => closePhotoUploadModalOp, stageUploadFilesOp: () => stageUploadFilesOp, removeStagedUploadOp: () => removeStagedUploadOp, uploadAllStagedPhotosOp: () => uploadAllStagedPhotosOp, openPhotoEditModalOp: () => openPhotoEditModalOp, closePhotoEditModalOp: () => closePhotoEditModalOp, savePhotoEditModalOp: () => savePhotoEditModalOp, createPhotoCollectionOp: () => createPhotoCollectionOp, createUploadCollectionOp: () => createUploadCollectionOp, renamePhotoCollectionOp: () => renamePhotoCollectionOp, requestDeletePhotoCollectionOp: () => requestDeletePhotoCollectionOp, deletePhotoOp: () => deletePhotoOp, requestDeletePhotoOp: () => requestDeletePhotoOp, bulkUpdatePhotosOp: () => bulkUpdatePhotosOp, requestBulkDeletePhotosOp: () => requestBulkDeletePhotosOp, browseMediaFolderOp: () => browseMediaFolderOp, openMediaImportModalOp: () => openMediaImportModalOp, closeMediaImportModalOp: () => closeMediaImportModalOp, importSelectedMediaOp: () => importSelectedMediaOp, setDevicePhotoPoolOp: () => setDevicePhotoPoolOp, openPhotoPickerModalOp: () => openPhotoPickerModalOp, closePhotoPickerModalOp: () => closePhotoPickerModalOp, applyPhotoPickerModalOp: () => applyPhotoPickerModalOp });
+__latterExp(__exports, { emptyMediaImportModalState: () => emptyMediaImportModalState, emptyPhotoEditModalState: () => emptyPhotoEditModalState, emptyPhotoPickerModalState: () => emptyPhotoPickerModalState, emptyPhotoUploadModalState: () => emptyPhotoUploadModalState, isPhotoUploaded: () => isPhotoUploaded, isPhotoDynamic: () => isPhotoDynamic, filterEligiblePhotoIds: () => filterEligiblePhotoIds, derivePhotoBaseName: () => derivePhotoBaseName, filterLibraryPhotos: () => filterLibraryPhotos, resolveCollectionDisplayName: () => resolveCollectionDisplayName, resolvePoolPhotos: () => resolvePoolPhotos, openPhotoUploadModalOp: () => openPhotoUploadModalOp, closePhotoUploadModalOp: () => closePhotoUploadModalOp, stageUploadFilesOp: () => stageUploadFilesOp, removeStagedUploadOp: () => removeStagedUploadOp, uploadAllStagedPhotosOp: () => uploadAllStagedPhotosOp, openPhotoEditModalOp: () => openPhotoEditModalOp, closePhotoEditModalOp: () => closePhotoEditModalOp, savePhotoEditModalOp: () => savePhotoEditModalOp, createPhotoCollectionOp: () => createPhotoCollectionOp, createUploadCollectionOp: () => createUploadCollectionOp, renamePhotoCollectionOp: () => renamePhotoCollectionOp, requestDeletePhotoCollectionOp: () => requestDeletePhotoCollectionOp, deletePhotoOp: () => deletePhotoOp, requestDeletePhotoOp: () => requestDeletePhotoOp, bulkUpdatePhotosOp: () => bulkUpdatePhotosOp, requestBulkDeletePhotosOp: () => requestBulkDeletePhotosOp, browseMediaFolderOp: () => browseMediaFolderOp, openMediaImportModalOp: () => openMediaImportModalOp, closeMediaImportModalOp: () => closeMediaImportModalOp, importSelectedMediaOp: () => importSelectedMediaOp, setDevicePhotoPoolOp: () => setDevicePhotoPoolOp, openPhotoPickerModalOp: () => openPhotoPickerModalOp, closePhotoPickerModalOp: () => closePhotoPickerModalOp, applyPhotoPickerModalOp: () => applyPhotoPickerModalOp });
 //# sourceURL=latter-studio/src/state/photo-ops.ts
 });
-__latterDef("src/state/shortcuts-lists-ops.ts", (__exports, __req) => {
-const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, DEFAULT_ACTIVITY_SOURCES_TOKENS, DEFAULT_AREA_CATEGORIES_TOKENS, DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS_TOKENS, DEFAULT_HOME_CATEGORIES_TOKENS, DEFAULT_TOOLS_ITEMS_TOKENS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, MAX_DOCK_ITEMS, MAX_PINNED_ITEMS, NATIVE_DOCK_APP_TOKENS, SHORTCUT_LABEL_MAX, SHORTCUT_ROUTES_CATALOG, TOOLS_ITEMS_CATALOG } = __req("src/constants.ts");
-const { ensureMdiCatalogLoaded, isKnownMdiIcon, normalizeMdiIconSlug, SHORTCUT_DOMAIN_ACTIONS } = __req("src/mdi-catalog.ts");
+__latterDef("src/state/settings-save-controller.ts", (__exports, __req) => {
+const { formatWsError, isConflictError } = __req("src/api/ws-client.ts");
+const { cleanPersistedStringList, isStringListKey, overlayDevicePrefsOnSections, overlayPendingBlankListSlots, STRING_LIST_MAX_ITEMS } = __req("src/state/group-overlay.ts");
 /**
- * Unified trait-driven catalog gate, shared `createTokenListOps` CSV pill factory (`A-14`),
- * shortcut normalization & modal helpers, and System string-list / remote / volume list editors.
+ * Serialized System & Per-Device Settings Save Controller (`SettingsSaveController`, `D-062`, `D-064`).
+ *
+ * - Serialized `systemSaveChain` & per-Device `deviceSaveChains` with `inFlight` patch overlays (`B-08`).
+ * - Monotonic per-key edit ownership so failed saves never clobber newer pending/in-flight edits (`B-09`).
+ * - `expected_config_rev` optimistic concurrency with automatic `"conflict"` state resync (`M-P1-49`).
  */
-/**
- * Single canonical trait-driven capability gate (`A-14`).
- * Never hides or rejects items when `caps` or an individual trait is `undefined` (unknown).
- */
-function isCatalogItemSupported(
-  item,
-  caps,
-) {
-  const cap = item.capability;
-  if (!cap || !caps) return true;
-  switch (cap) {
-    case "round":
-      return caps.is_round !== false;
-    case "imu":
-      return caps.has_imu !== false;
-    case "display_imu":
-      return caps.has_display !== false && caps.has_imu !== false;
-    case "display":
-      return caps.has_display !== false;
-    case "battery":
-      return caps.has_battery !== false;
-    case "display_battery":
-      return caps.has_display !== false && caps.has_battery !== false;
-    case "beacon_battery":
-      return caps.has_ble_beacon !== false && caps.has_battery !== false;
-    case "mic":
-      return caps.has_voice !== false;
-    case "speaker":
-      return caps.has_audio !== false;
-    case "hw_jpeg":
-      return caps.hw_jpeg === true;
-    default:
-      return true;
+const SAVE_DEBOUNCE_MS = 220;
+class SettingsSaveController {
+                   store;
+          editSeqCounter = 0;
+          systemSaveChain = Promise.resolve();
+                   inFlightSystemPatch = {};
+                   systemKeySeqs = new Map();
+          pendingSystemKeySeqs = {};
+                   deviceSaveChains = new Map();
+                   inFlightDevicePatches = new Map();
+                   deviceKeySeqs = new Map();
+  constructor(store) {
+    this.store = store;
+  }
+  getEffectiveSystemPatch() {
+    return {
+      ...this.inFlightSystemPatch,
+      ...this.store.pendingSystemPatch,
+    };
+  }
+  getEffectiveDevicePatch(subentryId) {
+    const inFlight = this.inFlightDevicePatches.get(subentryId) || {};
+    const pending = this.store.pendingDeviceBuckets.get(subentryId)?.patch || {};
+    return { ...inFlight, ...pending };
+  }
+  discardDeviceBucket(subentryId) {
+    const bucket = this.store.pendingDeviceBuckets.get(subentryId);
+    if (bucket?.timer) {
+      clearTimeout(bucket.timer);
+      bucket.timer = null;
+    }
+    this.store.pendingDeviceBuckets.delete(subentryId);
+    this.inFlightDevicePatches.delete(subentryId);
+  }
+          getDeviceKeySeqMap(subentryId) {
+    let map = this.deviceKeySeqs.get(subentryId);
+    if (!map) {
+      map = new Map();
+      this.deviceKeySeqs.set(subentryId, map);
+    }
+    return map;
+  }
+  stageDeviceSetting(
+    key,
+    value,
+    controlDomId,
+    debounceMs = SAVE_DEBOUNCE_MS,
+  ) {
+    const targetSubentryId = this.store.activeSubentryId;
+    if (!targetSubentryId || this.store.deviceLoading) return;
+    let bucket = this.store.pendingDeviceBuckets.get(targetSubentryId);
+    const activeDevEntry = this.store.state?.system_devices?.find(
+      (d) => d.subentry_id === targetSubentryId,
+    );
+    const targetTitle =
+      (this.store.state?.subentry_id === targetSubentryId ? this.store.state.title : "") ||
+      activeDevEntry?.title ||
+      targetSubentryId;
+    if (!bucket) {
+      bucket = {
+        targetSubentryId,
+        targetTitle,
+        patch: {},
+        previousValues: {},
+        keySeqs: {},
+        timer: null,
+      };
+      this.store.pendingDeviceBuckets.set(targetSubentryId, bucket);
+    }
+    const curCfg =
+      this.store.state && this.store.state.subentry_id === targetSubentryId
+        ? ((this.store.state.config || {}))
+        : {};
+    const targetBucket = bucket;
+    const snapshotKey = (k) => {
+      if (!(k in targetBucket.previousValues)) {
+        targetBucket.previousValues[k] = curCfg[k];
+      }
+    };
+    snapshotKey(key);
+    snapshotKey("device_group");
+    if (key === "home_screen_enabled") {
+      snapshotKey("start_screen");
+    }
+    if (controlDomId && !(`__dom:${controlDomId}` in targetBucket.previousValues)) {
+      targetBucket.previousValues[`__dom:${controlDomId}`] = targetBucket.previousValues[key];
+    }
+    const seq = ++this.editSeqCounter;
+    const seqMap = this.getDeviceKeySeqMap(targetSubentryId);
+    seqMap.set(key, seq);
+    targetBucket.keySeqs[key] = seq;
+    if (controlDomId) {
+      seqMap.set(`__dom:${controlDomId}`, seq);
+      targetBucket.keySeqs[`__dom:${controlDomId}`] = seq;
+    }
+    targetBucket.patch[key] = value;
+    if (this.store.state) {
+      const nextSystemDevices =
+        key === "device_remote_group" && Array.isArray(this.store.state.system_devices)
+          ? this.store.state.system_devices.map((d) =>
+              d.subentry_id === targetSubentryId
+                ? { ...d, device_remote_group: String(value || "area_auto") }
+                : d,
+            )
+          : this.store.state.system_devices;
+      if (this.store.state.subentry_id === targetSubentryId) {
+        const nextPayload = {
+          ...this.store.state,
+          system_devices: nextSystemDevices,
+          config: { ...this.store.state.config },
+        };
+        overlayDevicePrefsOnSections(nextPayload, { [key]: value });
+        this.store.state = nextPayload;
+      } else if (nextSystemDevices !== this.store.state.system_devices) {
+        this.store.state = {
+          ...this.store.state,
+          system_devices: nextSystemDevices,
+        };
+      }
+    }
+    if (targetBucket.timer) clearTimeout(targetBucket.timer);
+    targetBucket.timer = setTimeout(() => {
+      void this.flushDeviceBucket(targetSubentryId);
+    }, Math.max(0, debounceMs));
+    this.store.host.requestUpdate();
+  }
+  flushDeviceBucket(targetSubentryId) {
+    const bucket = this.store.pendingDeviceBuckets.get(targetSubentryId);
+    const prevChain = this.deviceSaveChains.get(targetSubentryId) ?? Promise.resolve();
+    if (!bucket) return prevChain;
+    if (bucket.timer) {
+      clearTimeout(bucket.timer);
+      bucket.timer = null;
+    }
+    const patch = { ...bucket.patch };
+    const previousValues = { ...bucket.previousValues };
+    const batchKeySeqs = { ...bucket.keySeqs };
+    const targetTitle = bucket.targetTitle;
+    this.store.pendingDeviceBuckets.delete(targetSubentryId);
+    if (Object.keys(patch).length === 0) return prevChain;
+    const inFlight = this.inFlightDevicePatches.get(targetSubentryId) || {};
+    Object.assign(inFlight, patch);
+    this.inFlightDevicePatches.set(targetSubentryId, inFlight);
+    const nextChain = prevChain.then(async() => {
+      const seqMap = this.getDeviceKeySeqMap(targetSubentryId);
+      const clearOwnedInFlight = () => {
+        const curInFlight = this.inFlightDevicePatches.get(targetSubentryId);
+        if (!curInFlight) return;
+        for (const k of Object.keys(patch)) {
+          if (seqMap.get(k) === batchKeySeqs[k]) {
+            delete curInFlight[k];
+          }
+        }
+        if (Object.keys(curInFlight).length === 0) {
+          this.inFlightDevicePatches.delete(targetSubentryId);
+        }
+      };
+      const expectedRev = this.store.getKnownDeviceConfigRev(targetSubentryId);
+      const reqPayload = { config: patch };
+      if (expectedRev > 0) {
+        reqPayload.expected_config_rev = expectedRev;
+      }
+      try {
+        const res = await this.store.ws.runDeviceCommand(
+          targetSubentryId,
+          "save_device_config",
+          reqPayload,
+        );
+        clearOwnedInFlight();
+        if (res) {
+          if (res.subentry_id === targetSubentryId && res.device_config_rev > 0) {
+            this.store.recordKnownDeviceConfigRev(targetSubentryId, res.device_config_rev);
+          }
+          if (this.store.activeSubentryId === targetSubentryId) {
+            this.store.ingestPayload(res, false);
+          } else if (this.store.state && Array.isArray(res.system_devices)) {
+            this.store.state = {
+              ...this.store.state,
+              system_devices: res.system_devices,
+              issues: res.issues ?? this.store.state.issues,
+            };
+            this.store.host.requestUpdate();
+          }
+        }
+        this.store.announcePolite(this.store.t("shell.saved_status"));
+      } catch (err) {
+        clearOwnedInFlight();
+        if (isConflictError(err)) {
+          await this.store.refreshState();
+          this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
+          return;
+        }
+        const controlRevert = {};
+        for (const [k, v] of Object.entries(previousValues)) {
+          if (k.startsWith("__dom:")) {
+            if (seqMap.get(k) !== batchKeySeqs[k]) continue;
+            const domId = k.slice(6);
+            if (typeof v === "boolean") controlRevert[domId] = v;
+            else if (v !== undefined && v !== null) controlRevert[domId] = String(v);
+            else controlRevert[domId] = "";
+          }
+        }
+        const remoteGroupOwned =
+          "device_remote_group" in previousValues &&
+          seqMap.get("device_remote_group") === batchKeySeqs.device_remote_group;
+        if (this.store.state) {
+          const nextSystemDevices =
+            remoteGroupOwned && Array.isArray(this.store.state.system_devices)
+              ? this.store.state.system_devices.map((d) =>
+                  d.subentry_id === targetSubentryId
+                    ? {
+                        ...d,
+                        device_remote_group: String(
+                          previousValues.device_remote_group || "area_auto",
+                        ),
+                      }
+                    : d,
+                )
+              : this.store.state.system_devices;
+          if (this.store.state.subentry_id === targetSubentryId) {
+            const restoredConfig = {
+              ...(this.store.state.config),
+            };
+            const restoredPrefs = {};
+            for (const [k, v] of Object.entries(previousValues)) {
+              if (k.startsWith("__dom:")) continue;
+              if (k in batchKeySeqs && seqMap.get(k) !== batchKeySeqs[k]) continue;
+              if (v === undefined) {
+                delete restoredConfig[k];
+              } else {
+                restoredConfig[k] = v;
+                restoredPrefs[k] = v;
+              }
+            }
+            const nextPayload = {
+              ...this.store.state,
+              system_devices: nextSystemDevices,
+              config: restoredConfig,
+            };
+            if (Object.keys(restoredPrefs).length > 0) {
+              overlayDevicePrefsOnSections(nextPayload, restoredPrefs);
+            }
+            const newerPatch = this.getEffectiveDevicePatch(targetSubentryId);
+            if (Object.keys(newerPatch).length > 0) {
+              overlayDevicePrefsOnSections(nextPayload, newerPatch);
+            }
+            this.store.state = nextPayload;
+          } else if (nextSystemDevices !== this.store.state.system_devices) {
+            this.store.state = {
+              ...this.store.state,
+              system_devices: nextSystemDevices,
+            };
+          }
+        }
+        if (
+          this.store.activeSubentryId === targetSubentryId &&
+          Object.keys(controlRevert).length > 0
+        ) {
+          this.store.mergeDomRevert(controlRevert);
+        }
+        const rawReason = formatWsError(err, this.store.t("sync.save_device_failed"));
+        const msg =
+          this.store.activeSubentryId !== targetSubentryId && targetTitle
+            ? this.store.t("sync.save_device_named_failed", {
+                title: targetTitle,
+                error: rawReason,
+              })
+            : rawReason;
+        this.store.showToast(msg, true);
+        this.store.host.requestUpdate();
+      }
+    });
+    this.deviceSaveChains.set(targetSubentryId, nextChain);
+    return nextChain;
+  }
+  stageSystemSetting (
+    key,
+    value,
+    controlDomId,
+    debounceMs = SAVE_DEBOUNCE_MS,
+  ) {
+    const keyStr = String(key);
+    if (!(keyStr in this.store.pendingSystemPrevious)) {
+      const prev = (this.store.state?.system_config)?.[
+        keyStr
+      ];
+      if (isStringListKey(keyStr) && Array.isArray(prev)) {
+        this.store.pendingSystemPrevious[keyStr] = cleanPersistedStringList(
+          prev,
+          STRING_LIST_MAX_ITEMS[keyStr],
+        );
+      } else {
+        this.store.pendingSystemPrevious[keyStr] =
+          prev !== undefined ? structuredClone(prev) : undefined;
+      }
+    }
+    if (controlDomId && !(`__dom:${controlDomId}` in this.store.pendingSystemPrevious)) {
+      const prevScalar = this.store.pendingSystemPrevious[keyStr];
+      if (
+        typeof prevScalar === "string" ||
+        typeof prevScalar === "number" ||
+        typeof prevScalar === "boolean"
+      ) {
+        this.store.pendingSystemPrevious[`__dom:${controlDomId}`] = prevScalar;
+      }
+    }
+    const seq = ++this.editSeqCounter;
+    this.systemKeySeqs.set(keyStr, seq);
+    this.pendingSystemKeySeqs[keyStr] = seq;
+    if (controlDomId) {
+      this.systemKeySeqs.set(`__dom:${controlDomId}`, seq);
+      this.pendingSystemKeySeqs[`__dom:${controlDomId}`] = seq;
+    }
+    this.store.pendingSystemPatch[keyStr] = value;
+    if (this.store.state?.system_config) {
+      this.store.state = {
+        ...this.store.state,
+        system_config: {
+          ...this.store.state.system_config,
+          [keyStr]: value,
+        },
+      };
+    }
+    if (this.store.systemSaveTimer) clearTimeout(this.store.systemSaveTimer);
+    this.store.systemSaveTimer = setTimeout(() => {
+      void this.flushSystemSettings();
+    }, Math.max(0, debounceMs));
+    this.store.host.requestUpdate();
+  }
+  flushSystemSettings() {
+    if (this.store.systemSaveTimer) {
+      clearTimeout(this.store.systemSaveTimer);
+      this.store.systemSaveTimer = null;
+    }
+    const patch = { ...this.store.pendingSystemPatch };
+    const previousValues = { ...this.store.pendingSystemPrevious };
+    const batchKeySeqs = { ...this.pendingSystemKeySeqs };
+    this.store.pendingSystemPatch = {};
+    this.store.pendingSystemPrevious = {};
+    this.pendingSystemKeySeqs = {};
+    if (Object.keys(patch).length === 0) return this.systemSaveChain;
+    Object.assign(this.inFlightSystemPatch, patch);
+    this.systemSaveChain = this.systemSaveChain.then(async() => {
+      const clearOwnedInFlight = () => {
+        for (const k of Object.keys(patch)) {
+          if (this.systemKeySeqs.get(k) === batchKeySeqs[k]) {
+            delete this.inFlightSystemPatch[k];
+          }
+        }
+      };
+      const expectedRev = this.store.state?.system_config_rev ?? 0;
+      const reqPayload = { config: patch };
+      if (expectedRev > 0) {
+        reqPayload.expected_config_rev = expectedRev;
+      }
+      try {
+        const res = await this.store.ws.runSystemCommand(
+          "save_system_config",
+          reqPayload,
+          this.store.activeSubentryId || null,
+        );
+        clearOwnedInFlight();
+        if (res) {
+          this.store.ingestPayload(res, false);
+        }
+        this.store.announcePolite(this.store.t("shell.saved_status"));
+      } catch (err) {
+        clearOwnedInFlight();
+        if (isConflictError(err)) {
+          await this.store.refreshState();
+          this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
+          return;
+        }
+        const controlRevert = {};
+        if (this.store.state?.system_config) {
+          const prevUiSys = this.store.state.system_config;
+          const restored = {
+            ...(prevUiSys),
+          };
+          for (const [k, v] of Object.entries(previousValues)) {
+            if (k in batchKeySeqs && this.systemKeySeqs.get(k) !== batchKeySeqs[k]) continue;
+            if (k.startsWith("__dom:")) {
+              const domId = k.slice(6);
+              controlRevert[domId] = typeof v === "boolean" ? v : String(v ?? "");
+            } else if (v === undefined) {
+              delete restored[k];
+            } else {
+              restored[k] = v;
+            }
+          }
+          const newerSys = this.getEffectiveSystemPatch();
+          Object.assign(restored, newerSys);
+          const nextPayload = {
+            ...this.store.state,
+            system_config: restored,
+          };
+          overlayPendingBlankListSlots(this.store, nextPayload, prevUiSys);
+          this.store.state = nextPayload;
+        }
+        if (Object.keys(controlRevert).length > 0) {
+          this.store.mergeDomRevert(controlRevert);
+        }
+        this.store.showToast(
+          formatWsError(err, this.store.t("sync.save_system_failed")),
+          true,
+        );
+        this.store.host.requestUpdate();
+      }
+    });
+    return this.systemSaveChain;
+  }
+  async flushAllPendingSettings() {
+    const tasks = [];
+    if (Object.keys(this.store.pendingSystemPatch).length > 0) {
+      tasks.push(this.flushSystemSettings());
+    }
+    for (const subId of Array.from(this.store.pendingDeviceBuckets.keys())) {
+      tasks.push(this.flushDeviceBucket(subId));
+    }
+    await Promise.allSettled(tasks);
   }
 }
+__latterExp(__exports, { SAVE_DEBOUNCE_MS: () => SAVE_DEBOUNCE_MS, SettingsSaveController: () => SettingsSaveController });
+//# sourceURL=latter-studio/src/state/settings-save-controller.ts
+});
+__latterDef("src/state/shortcuts-ops.ts", (__exports, __req) => {
+const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, DEFAULT_ACTIVITY_SOURCES_TOKENS, DEFAULT_AREA_CATEGORIES_TOKENS, DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS_TOKENS, DEFAULT_HOME_CATEGORIES_TOKENS, DEFAULT_TOOLS_ITEMS_TOKENS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, MAX_DOCK_ITEMS, MAX_PINNED_ITEMS, NATIVE_DOCK_APP_TOKENS, SHORTCUT_LABEL_MAX, SHORTCUT_ROUTES_CATALOG, TOOLS_ITEMS_CATALOG } = __req("src/constants.ts");
+const { ensureMdiCatalogLoaded, isKnownMdiIcon, normalizeMdiIconSlug, SHORTCUT_DOMAIN_ACTIONS } = __req("src/mdi-catalog.ts");
+const { isCatalogItemSupported } = __req("src/state/store-types.ts");
+/**
+ * Unified `createTokenListOps` CSV pill factory (`A-14`) & Shortcut (`dock_items` / `pinned_items`)
+ * normalization and modal operations (`L2` leaf).
+ */
 const TOKEN_LIST_SPECS = {
   area_categories: {
     key: "area_categories",
@@ -6997,24 +8406,27 @@ function createTokenListOps(store, spec) {
     const idx = current.indexOf(token);
     if (idx < 0) return;
     let swapIdx = idx + delta;
-    while (
-      swapIdx >= 0 &&
-      swapIdx < current.length &&
-      !isTokenSupportedOnActive(current[swapIdx])
-    ) {
+    while (swapIdx >= 0 && swapIdx < current.length) {
+      const candidate = current[swapIdx];
+      if (candidate !== undefined && isTokenSupportedOnActive(candidate)) {
+        break;
+      }
       swapIdx += delta;
     }
     if (swapIdx < 0 || swapIdx >= current.length) return;
-    const tmp = current[idx];
-    current[idx] = current[swapIdx];
-    current[swapIdx] = tmp;
+    const curVal = current[idx];
+    const swapVal = current[swapIdx];
+    if (curVal === undefined || swapVal === undefined) return;
+    current[idx] = swapVal;
+    current[swapIdx] = curVal;
     store.entity.stageDeviceSetting(spec.key, current.join(","));
   };
   const reorder = (fromEnabledIndex, toEnabledIndex) => {
     const current = getEnabled();
     const supportedIndices = [];
     for (let i = 0; i < current.length; i += 1) {
-      if (isTokenSupportedOnActive(current[i])) {
+      const tok = current[i];
+      if (tok !== undefined && isTokenSupportedOnActive(tok)) {
         supportedIndices.push(i);
       }
     }
@@ -7027,19 +8439,23 @@ function createTokenListOps(store, spec) {
     ) {
       return;
     }
-    const visibleTokens = supportedIndices.map((idx) => current[idx]);
+    const visibleTokens = supportedIndices
+      .map((idx) => current[idx])
+      .filter((tok) => tok !== undefined);
     const [moved] = visibleTokens.splice(fromEnabledIndex, 1);
+    if (moved === undefined) return;
     visibleTokens.splice(toEnabledIndex, 0, moved);
     for (let j = 0; j < supportedIndices.length; j += 1) {
-      current[supportedIndices[j]] = visibleTokens[j];
+      const targetIdx = supportedIndices[j];
+      const nextTok = visibleTokens[j];
+      if (targetIdx !== undefined && nextTok !== undefined) {
+        current[targetIdx] = nextTok;
+      }
     }
     store.entity.stageDeviceSetting(spec.key, current.join(","));
   };
   return { getEnabled, toggle, move, reorder };
 }
-// ---------------------------------------------------------------------------
-// Shortcuts (`dock_items` & `pinned_items`)
-// ---------------------------------------------------------------------------
 function sanitizeShortcutLabel(raw) {
   const str = String(raw ?? "");
   let collapsed = "";
@@ -7126,11 +8542,12 @@ function normalizeShortcutArray(raw, isDock) {
       if (dotIdx <= 0) continue;
       const domain = target.slice(0, dotIdx);
       const validActions = SHORTCUT_DOMAIN_ACTIONS[domain];
-      if (!validActions || validActions.length === 0) continue;
+      const defaultAct = validActions?.[0];
+      if (!validActions || !defaultAct) continue;
       const rawAct = String(rec.action || "").trim().toLowerCase();
       const action = validActions.some((a) => a.action === rawAct)
         ? rawAct
-        : validActions[0].action;
+        : defaultAct.action;
       const dedupKey = `entity|${target}|${action}`;
       if (seen.has(dedupKey)) continue;
       seen.add(dedupKey);
@@ -7177,8 +8594,11 @@ function openShortcutModalOp(
   const firstEnt = entities[0];
   const firstDomain = firstEnt ? firstEnt.domain : "light";
   const firstAction = SHORTCUT_DOMAIN_ACTIONS[firstDomain]?.[0]?.action || "toggle";
-  if (editIndex !== null && editIndex >= 0 && editIndex < current.length) {
-    const existing = current[editIndex];
+  const existing =
+    editIndex !== null && editIndex >= 0 && editIndex < current.length
+      ? current[editIndex]
+      : undefined;
+  if (existing && editIndex !== null) {
     if (existing.kind === "entity") {
       const dom = existing.target.split(".", 1)[0] || firstDomain;
       store.shortcutModal = {
@@ -7345,598 +8765,33 @@ function saveShortcutModalOp(store) {
   }
   store.entity.stageDeviceSetting(modal.listKey, current);
 }
-// ---------------------------------------------------------------------------
-// System String-List Slots, Volume Overrides, & Remote Control Groups
-// ---------------------------------------------------------------------------
-const STRING_LIST_KEYS = [
-  "calendar_entities",
-  "camera_entities",
-  "remotes_list",
-  "thermostat_entities",
-  "lock_entities",
-  "garage_entities",
-  "vacuum_entities",
-  "broadcast_speakers",
-  "broadcast_phrases",
-];
-const STRING_LIST_MAX_ITEMS = {
-  camera_entities: 10,
-  remotes_list: 10,
-  calendar_entities: 50,
-  thermostat_entities: 8,
-  lock_entities: 8,
-  garage_entities: 6,
-  vacuum_entities: 6,
-  broadcast_speakers: 32,
-  broadcast_phrases: 12,
-};
-function isStringListKey(key) {
-  return (
-    key === "calendar_entities" ||
-    key === "camera_entities" ||
-    key === "remotes_list" ||
-    key === "thermostat_entities" ||
-    key === "lock_entities" ||
-    key === "garage_entities" ||
-    key === "vacuum_entities" ||
-    key === "broadcast_speakers" ||
-    key === "broadcast_phrases"
-  );
-}
-function cleanPersistedStringList(items, maxItems) {
-  const out = [];
-  for (const raw of items) {
-    const ent = String(raw || "").trim();
-    if (ent && !out.includes(ent)) {
-      out.push(ent);
-      if (out.length >= maxItems) break;
-    }
-  }
-  return out;
-}
-function mergePersistedWithBlankSlots(
-  persisted,
-  blankCount,
-  maxItems,
-  prevUiList,
-) {
-  const cleaned = cleanPersistedStringList(persisted, maxItems);
-  const clampedBlankCount = Math.max(0, Math.min(blankCount, maxItems - cleaned.length));
-  if (clampedBlankCount === 0) {
-    return { uiList: cleaned, clampedBlankCount: 0 };
-  }
-  if (prevUiList && prevUiList.some((v) => !String(v || "").trim())) {
-    const uiList = [];
-    let cleanIdx = 0;
-    let blanksPlaced = 0;
-    for (const slot of prevUiList) {
-      if (uiList.length >= maxItems) break;
-      if (!String(slot || "").trim()) {
-        if (blanksPlaced < clampedBlankCount) {
-          uiList.push("");
-          blanksPlaced += 1;
-        }
-      } else if (cleanIdx < cleaned.length) {
-        uiList.push(cleaned[cleanIdx]);
-        cleanIdx += 1;
-      }
-    }
-    while (cleanIdx < cleaned.length && uiList.length < maxItems) {
-      uiList.push(cleaned[cleanIdx]);
-      cleanIdx += 1;
-    }
-    while (blanksPlaced < clampedBlankCount && uiList.length < maxItems) {
-      uiList.push("");
-      blanksPlaced += 1;
-    }
-    return { uiList, clampedBlankCount: blanksPlaced };
-  }
-  return {
-    uiList: [...cleaned, ...Array (clampedBlankCount).fill("")],
-    clampedBlankCount,
-  };
-}
-function overlayPendingBlankListSlots(
-  store,
-  payload,
-  prevSysConfig,
-) {
-  if (!payload.system_config) return;
-  let mutated = false;
-  const nextSys = { ...payload.system_config };
-  for (const key of STRING_LIST_KEYS) {
-    const wantBlanks = store.pendingBlankListSlots[key] || 0;
-    if (wantBlanks <= 0) continue;
-    const maxItems = STRING_LIST_MAX_ITEMS[key];
-    const base = Array.isArray(nextSys[key]) ? nextSys[key] : [];
-    const { uiList, clampedBlankCount } = mergePersistedWithBlankSlots(
-      base,
-      wantBlanks,
-      maxItems,
-      prevSysConfig?.[key],
-    );
-    store.pendingBlankListSlots[key] = clampedBlankCount;
-    nextSys[key] = uiList;
-    mutated = true;
-  }
-  if (mutated) {
-    payload.system_config = nextSys;
-  }
-}
-function updateStringListRowOp(
-  store,
-  key,
-  index,
-  value,
-) {
-  const maxItems = STRING_LIST_MAX_ITEMS[key];
-  const prevUiList = [...(store.state?.system_config?.[key] || [])];
-  if (index < 0 || index >= prevUiList.length) return;
-  const prevPersisted = cleanPersistedStringList(prevUiList, maxItems);
-  const nextRaw = [...prevUiList];
-  nextRaw[index] = String(value || "").trim();
-  const seen = new Set();
-  const nextUiList = [];
-  for (const item of nextRaw) {
-    const ent = String(item || "").trim();
-    if (!ent) {
-      nextUiList.push("");
-    } else if (!seen.has(ent)) {
-      seen.add(ent);
-      nextUiList.push(ent);
-    }
-    if (nextUiList.length >= maxItems) break;
-  }
-  const nextPersisted = nextUiList.filter(Boolean);
-  store.pendingBlankListSlots[key] = nextUiList.length - nextPersisted.length;
-  const persistedChanged =
-    prevPersisted.length !== nextPersisted.length ||
-    prevPersisted.some((v, i) => v !== nextPersisted[i]);
-  if (persistedChanged) {
-    store.entity.stageSystemSetting(key, nextPersisted);
-    if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
-      store.state = {
-        ...store.state,
-        system_config: {
-          ...store.state.system_config,
-          [key]: nextUiList,
-        },
-      };
-      store.host.requestUpdate();
-    }
-  } else if (store.state?.system_config) {
-    store.state = {
-      ...store.state,
-      system_config: {
-        ...store.state.system_config,
-        [key]: nextUiList,
-      },
-    };
-    store.host.requestUpdate();
-  }
-}
-function addStringListRowOp(
-  store,
-  key,
-  defaultEntity = "",
-  maxLen = STRING_LIST_MAX_ITEMS[key],
-) {
-  const cap = Math.min(maxLen, STRING_LIST_MAX_ITEMS[key]);
-  const list = [...(store.state?.system_config?.[key] || [])];
-  if (list.length >= cap) {
-    store.showToast(`Maximum of ${cap} entries reached`, true);
-    return;
-  }
-  const cleanDefault = String(defaultEntity || "").trim();
-  if (!cleanDefault) {
-    list.push("");
-    store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
-    if (store.state?.system_config) {
-      store.state = {
-        ...store.state,
-        system_config: {
-          ...store.state.system_config,
-          [key]: list,
-        },
-      };
-    }
-    store.host.requestUpdate();
-    return;
-  }
-  const nextPersisted = cleanPersistedStringList([...list, cleanDefault], cap);
-  const wantBlanks = Math.max(
-    0,
-    Math.min(store.pendingBlankListSlots[key] || 0, cap - nextPersisted.length),
-  );
-  store.pendingBlankListSlots[key] = wantBlanks;
-  store.entity.stageSystemSetting(key, nextPersisted);
-  if (store.state?.system_config && wantBlanks > 0) {
-    store.state = {
-      ...store.state,
-      system_config: {
-        ...store.state.system_config,
-        [key]: [...nextPersisted, ...Array (wantBlanks).fill("")],
-      },
-    };
-    store.host.requestUpdate();
-  }
-}
-function removeStringListRowOp(
-  store,
-  key,
-  index,
-) {
-  const maxItems = STRING_LIST_MAX_ITEMS[key];
-  const list = [...(store.state?.system_config?.[key] || [])];
-  if (index < 0 || index >= list.length) return;
-  const [removed] = list.splice(index, 1);
-  const wasBlank = !String(removed || "").trim();
-  store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
-  if (wasBlank) {
-    if (store.state?.system_config) {
-      store.state = {
-        ...store.state,
-        system_config: {
-          ...store.state.system_config,
-          [key]: list,
-        },
-      };
-    }
-    store.host.requestUpdate();
-    return;
-  }
-  const nextPersisted = cleanPersistedStringList(list, maxItems);
-  store.entity.stageSystemSetting(key, nextPersisted);
-  if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
-    const { uiList, clampedBlankCount } = mergePersistedWithBlankSlots(
-      nextPersisted,
-      store.pendingBlankListSlots[key],
-      maxItems,
-      list,
-    );
-    store.pendingBlankListSlots[key] = clampedBlankCount;
-    store.state = {
-      ...store.state,
-      system_config: {
-        ...store.state.system_config,
-        [key]: uiList,
-      },
-    };
-    store.host.requestUpdate();
-  }
-}
-function reorderStringListRowsOp(
-  store,
-  key,
-  fromIndex,
-  toIndex,
-) {
-  const maxItems = STRING_LIST_MAX_ITEMS[key];
-  const list = [...(store.state?.system_config?.[key] || [])];
-  if (
-    fromIndex < 0 ||
-    fromIndex >= list.length ||
-    toIndex < 0 ||
-    toIndex >= list.length ||
-    fromIndex === toIndex
-  ) {
-    return;
-  }
-  const prevPersisted = cleanPersistedStringList(list, maxItems);
-  const [moved] = list.splice(fromIndex, 1);
-  list.splice(toIndex, 0, moved);
-  const nextPersisted = cleanPersistedStringList(list, maxItems);
-  store.pendingBlankListSlots[key] = list.filter((s) => !String(s || "").trim()).length;
-  const persistedChanged =
-    prevPersisted.length !== nextPersisted.length ||
-    prevPersisted.some((v, i) => v !== nextPersisted[i]);
-  if (persistedChanged) {
-    store.entity.stageSystemSetting(key, nextPersisted);
-    if (store.state?.system_config && store.pendingBlankListSlots[key] > 0) {
-      store.state = {
-        ...store.state,
-        system_config: {
-          ...store.state.system_config,
-          [key]: list,
-        },
-      };
-      store.host.requestUpdate();
-    }
-  } else if (store.state?.system_config) {
-    store.state = {
-      ...store.state,
-      system_config: {
-        ...store.state.system_config,
-        [key]: list,
-      },
-    };
-    store.host.requestUpdate();
-  }
-}
-function addVolumeOverrideRowOp(store) {
-  const list = [...(store.state?.system_config?.volume_overrides || [])];
-  if (list.length >= 10) {
-    store.showToast("Maximum of 10 volume overrides reached", true);
-    return;
-  }
-  const speakers = store.state?.catalog?.ma_speakers || [];
-  const targets = store.state?.catalog?.volume_targets || store.state?.catalog?.remotes || [];
-  list.push({
-    speaker: speakers[0]?.id || "",
-    target: targets[0]?.id || speakers[0]?.id || "",
-  });
-  store.entity.stageSystemSetting("volume_overrides", list);
-}
-function updateVolumeOverrideRowOp(
-  store,
-  index,
-  field,
-  value,
-) {
-  const list = (store.state?.system_config?.volume_overrides || []).map((v) => ({
-    ...v,
-  }));
-  if (!list[index]) return;
-  list[index][field] = value;
-  store.entity.stageSystemSetting("volume_overrides", list);
-}
-function removeVolumeOverrideRowOp(store, index) {
-  const list = [...(store.state?.system_config?.volume_overrides || [])];
-  list.splice(index, 1);
-  store.entity.stageSystemSetting("volume_overrides", list);
-}
-function addRemoteGroupRowOp(store) {
-  const groups = (store.state?.system_config?.remote_groups || []).map((g) => ({
-    ...g,
-    remotes: [...(g.remotes || [])],
-  }));
-  const id = `group_${Date.now().toString(36)}`;
-  groups.push({ id, name: "New remote group", area_id: "", remotes: [] });
-  store.entity.stageSystemSetting("remote_groups", groups);
-}
-function updateRemoteGroupFieldOp(
-  store,
-  groupId,
-  field,
-  value,
-) {
-  const groups = (store.state?.system_config?.remote_groups || []).map((g) =>
-    g.id === groupId ? { ...g, [field]: value } : { ...g, remotes: [...(g.remotes || [])] },
-  );
-  store.entity.stageSystemSetting("remote_groups", groups);
-}
-function toggleRemoteInGroupOp(
-  store,
-  groupId,
-  remoteEntity,
-) {
-  const groups = (store.state?.system_config?.remote_groups || []).map((g) => {
-    if (g.id !== groupId) return { ...g, remotes: [...(g.remotes || [])] };
-    const remotes = [...(g.remotes || [])];
-    const idx = remotes.indexOf(remoteEntity);
-    if (idx >= 0) remotes.splice(idx, 1);
-    else remotes.push(remoteEntity);
-    return { ...g, remotes };
-  });
-  store.entity.stageSystemSetting("remote_groups", groups);
-}
-function removeRemoteGroupRowOp(store, groupId) {
-  const groups = (store.state?.system_config?.remote_groups || []).filter((g) => g.id !== groupId);
-  store.entity.stageSystemSetting("remote_groups", groups);
-}
-__latterExp(__exports, { isCatalogItemSupported: () => isCatalogItemSupported, TOKEN_LIST_SPECS: () => TOKEN_LIST_SPECS, createTokenListOps: () => createTokenListOps, sanitizeShortcutLabel: () => sanitizeShortcutLabel, isProtectedNativeDockItem: () => isProtectedNativeDockItem, defaultDockShortcutItems: () => defaultDockShortcutItems, normalizeShortcutArray: () => normalizeShortcutArray, openShortcutModalOp: () => openShortcutModalOp, saveShortcutModalOp: () => saveShortcutModalOp, STRING_LIST_KEYS: () => STRING_LIST_KEYS, STRING_LIST_MAX_ITEMS: () => STRING_LIST_MAX_ITEMS, isStringListKey: () => isStringListKey, cleanPersistedStringList: () => cleanPersistedStringList, mergePersistedWithBlankSlots: () => mergePersistedWithBlankSlots, overlayPendingBlankListSlots: () => overlayPendingBlankListSlots, updateStringListRowOp: () => updateStringListRowOp, addStringListRowOp: () => addStringListRowOp, removeStringListRowOp: () => removeStringListRowOp, reorderStringListRowsOp: () => reorderStringListRowsOp, addVolumeOverrideRowOp: () => addVolumeOverrideRowOp, updateVolumeOverrideRowOp: () => updateVolumeOverrideRowOp, removeVolumeOverrideRowOp: () => removeVolumeOverrideRowOp, addRemoteGroupRowOp: () => addRemoteGroupRowOp, updateRemoteGroupFieldOp: () => updateRemoteGroupFieldOp, toggleRemoteInGroupOp: () => toggleRemoteInGroupOp, removeRemoteGroupRowOp: () => removeRemoteGroupRowOp });
-//# sourceURL=latter-studio/src/state/shortcuts-lists-ops.ts
+__latterExp(__exports, { TOKEN_LIST_SPECS: () => TOKEN_LIST_SPECS, createTokenListOps: () => createTokenListOps, sanitizeShortcutLabel: () => sanitizeShortcutLabel, isProtectedNativeDockItem: () => isProtectedNativeDockItem, defaultDockShortcutItems: () => defaultDockShortcutItems, normalizeShortcutArray: () => normalizeShortcutArray, openShortcutModalOp: () => openShortcutModalOp, saveShortcutModalOp: () => saveShortcutModalOp });
+//# sourceURL=latter-studio/src/state/shortcuts-ops.ts
 });
-__latterDef("src/state/entity-controller.ts", (__exports, __req) => {
-const { formatWsError, isConflictError } = __req("src/api/ws-client.ts");
-const { ALLOWED_DEVICE_ACTIONS, DEVICE_PREF_SPECS_MAP, GROUP_BEHAVIOR_NON_PREF_KEYS, GROUP_DISPLAY_NON_PREF_KEYS, GROUP_INTERFACE_NON_PREF_KEYS, MAX_DOCK_ITEMS, NATIVE_DOCK_APP_TOKENS } = __req("src/constants.ts");
+__latterDef("src/state/entity-actions-controller.ts", (__exports, __req) => {
+const { formatWsError } = __req("src/api/ws-client.ts");
+const { ALLOWED_DEVICE_ACTIONS, DEVICE_PREF_SPECS_MAP, MAX_DOCK_ITEMS, NATIVE_DOCK_APP_TOKENS } = __req("src/constants.ts");
 const { isValidHexColor } = __req("src/utils/format.ts");
+const { isCatalogItemSupported, overlayPendingEntityStates } = __req("src/state/group-overlay.ts");
+const { addRemoteGroupRowOp, addStringListRowOp, addVolumeOverrideRowOp, getBroadcastSpeakersOp, getCarouselCamerasOp, getSystemBroadcastSpeakersOp, getSystemCameraEntitiesOp, getVisibleCamerasOp, removeRemoteGroupRowOp, removeStringListRowOp, removeVolumeOverrideRowOp, reorderBroadcastSpeakersOp, reorderCarouselCamerasOp, reorderStringListRowsOp, reorderVisibleCamerasOp, toggleBroadcastSpeakerOp, toggleCarouselCameraOp, toggleRemoteInGroupOp, toggleVisibleCameraOp, updateRemoteGroupFieldOp, updateStringListRowOp, updateVolumeOverrideRowOp } = __req("src/state/lists-ops.ts");
 const { applyPhotoPickerModalOp, browseMediaFolderOp, bulkUpdatePhotosOp, closeMediaImportModalOp, closePhotoEditModalOp, closePhotoPickerModalOp, closePhotoUploadModalOp, createPhotoCollectionOp, createUploadCollectionOp, deletePhotoOp, importSelectedMediaOp, openMediaImportModalOp, openPhotoEditModalOp, openPhotoPickerModalOp, openPhotoUploadModalOp, removeStagedUploadOp, renamePhotoCollectionOp, requestBulkDeletePhotosOp, requestDeletePhotoCollectionOp, requestDeletePhotoOp, savePhotoEditModalOp, setDevicePhotoPoolOp, stageUploadFilesOp, uploadAllStagedPhotosOp } = __req("src/state/photo-ops.ts");
-const { addRemoteGroupRowOp, addStringListRowOp, addVolumeOverrideRowOp, cleanPersistedStringList, createTokenListOps, defaultDockShortcutItems, isCatalogItemSupported, isProtectedNativeDockItem, isStringListKey, normalizeShortcutArray, openShortcutModalOp, overlayPendingBlankListSlots, removeRemoteGroupRowOp, removeStringListRowOp, removeVolumeOverrideRowOp, reorderStringListRowsOp, saveShortcutModalOp, STRING_LIST_MAX_ITEMS, TOKEN_LIST_SPECS, toggleRemoteInGroupOp, updateRemoteGroupFieldOp, updateStringListRowOp, updateVolumeOverrideRowOp } = __req("src/state/shortcuts-lists-ops.ts");
+const { SettingsSaveController } = __req("src/state/settings-save-controller.ts");
+const { createTokenListOps, defaultDockShortcutItems, normalizeShortcutArray, openShortcutModalOp, saveShortcutModalOp, TOKEN_LIST_SPECS } = __req("src/state/shortcuts-ops.ts");
 /**
  * `store.entity` Controller (`EntityController`, `D-062`, `D-064`, `D-065`):
- * - Serialized System & per-Device `saveChain` queues with `inFlight` patch overlays (`B-08`)
- * - Monotonic per-key edit ownership so failed saves never clobber newer pending/in-flight edits (`B-09`)
- * - `expected_config_rev` optimistic concurrency with automatic `"conflict"` state resync (`D-064`)
- * - Optimistic ESPHome entity actions, unified `tokenListOps`, shortcuts, wallpapers, & 600 s camera signing (`D-065`)
+ * - Delegates serialized System & per-Device settings persistence to `SettingsSaveController`
+ * - Optimistic ESPHome entity actions, unified `tokenListOps`, shortcuts, photos, & 600 s camera signing
  */
-const SAVE_DEBOUNCE_MS = 220;
 const ENTITY_OPTIMISTIC_TTL_MS = 8000;
-const BEHAVIOR_NON_PREF_KEY_SET = new Set (GROUP_BEHAVIOR_NON_PREF_KEYS);
-const DISPLAY_NON_PREF_KEY_SET = new Set (GROUP_DISPLAY_NON_PREF_KEYS);
-const INTERFACE_NON_PREF_KEY_SET = new Set (GROUP_INTERFACE_NON_PREF_KEYS);
 const ALLOWED_DEVICE_ACTION_SET = new Set (ALLOWED_DEVICE_ACTIONS);
-function activeGroupKeySet(
-  grp,
-  devicePrefs,
-) {
-  const keys = new Set (BEHAVIOR_NON_PREF_KEY_SET);
-  for (const p of devicePrefs) {
-    if (p.group_tier === "behavior") keys.add(p.key);
-    else if (p.group_tier === "display" && grp.include_display) keys.add(p.key);
-    else if (p.group_tier === "interface" && grp.include_interface) keys.add(p.key);
-  }
-  if (grp.include_display) {
-    for (const k of DISPLAY_NON_PREF_KEY_SET) keys.add(k);
-  }
-  if (grp.include_interface) {
-    for (const k of INTERFACE_NON_PREF_KEY_SET) keys.add(k);
-  }
-  return keys;
-}
-function sameGroupControlVal(a, b) {
-  if (a === b) return true;
-  if (
-    Array.isArray(a) ||
-    (a && typeof a === "object") ||
-    Array.isArray(b) ||
-    (b && typeof b === "object")
-  ) {
-    return JSON.stringify(a) === JSON.stringify(b);
-  }
-  return String(a) === String(b);
-}
-function expandDevicePrefPatch(
-  currentCfg,
-  rawPatch,
-) {
-  const expanded = { ...rawPatch };
-  if (rawPatch.home_screen_enabled === false) {
-    const effStart = String(rawPatch.start_screen ?? currentCfg.start_screen ?? "Home");
-    if (effStart === "Home") {
-      expanded.start_screen = "Time App";
-    }
-  }
-  return expanded;
-}
-function overlayDevicePrefsOnSections(
-  payload,
-  rawPatch,
-) {
-  if (!rawPatch || Object.keys(rawPatch).length === 0) return;
-  const curCfg = (payload.config || {});
-  const expanded = expandDevicePrefPatch(curCfg, rawPatch);
-  const groups = payload.device_groups || [];
-  const devicePrefs = payload.device_prefs || [];
-  const supportedPrefKeys = new Set(devicePrefs.map((p) => p.key));
-  const isRoaming = curCfg.is_roaming !== false;
-  if ("device_group" in rawPatch) {
-    const targetGrpId = String(rawPatch.device_group || "custom").trim() || "custom";
-    expanded.device_group = targetGrpId;
-    if (targetGrpId !== "custom") {
-      const grp = groups.find((g) => g.id === targetGrpId);
-      if (grp?.device_config) {
-        const enforcedKeys = activeGroupKeySet(grp, devicePrefs);
-        for (const [gk, gv] of Object.entries(grp.device_config)) {
-          if (gk in rawPatch || gv === undefined || gv === null) continue;
-          if (!enforcedKeys.has(gk)) continue;
-          if ((gk === "sync_device_area" || gk === "area_follow_dwell_s") && !isRoaming) continue;
-          if (
-            BEHAVIOR_NON_PREF_KEY_SET.has(gk) ||
-            DISPLAY_NON_PREF_KEY_SET.has(gk) ||
-            INTERFACE_NON_PREF_KEY_SET.has(gk) ||
-            supportedPrefKeys.has(gk)
-          ) {
-            expanded[gk] = gv;
-          }
-        }
-      }
-    }
-  } else {
-    const curGrpId = String(curCfg.device_group || "custom").trim() || "custom";
-    if (curGrpId !== "custom") {
-      const grp = groups.find((g) => g.id === curGrpId);
-      if (grp?.device_config) {
-        const enforcedKeys = activeGroupKeySet(grp, devicePrefs);
-        for (const [ek, ev] of Object.entries(expanded)) {
-          if ((ek === "sync_device_area" || ek === "area_follow_dwell_s") && !isRoaming) continue;
-          if (
-            enforcedKeys.has(ek) &&
-            grp.device_config[ek] !== undefined &&
-            !sameGroupControlVal(grp.device_config[ek], ev)
-          ) {
-            expanded.device_group = "custom";
-            break;
-          }
-        }
-      }
-    }
-  }
-  payload.config = {
-    ...payload.config,
-    ...expanded,
-  };
-  if ("device_group" in expanded && Array.isArray(payload.system_devices) && payload.subentry_id) {
-    const nextGrp = String(expanded.device_group || "custom");
-    const nextGrpName =
-      nextGrp === "custom" ? "Custom" : groups.find((g) => g.id === nextGrp)?.name || nextGrp;
-    payload.system_devices = payload.system_devices.map((d) =>
-      d.subentry_id === payload.subentry_id
-        ? { ...d, device_group: nextGrp, device_group_name: nextGrpName }
-        : d,
-    );
-  }
-  if (payload.device_prefs) {
-    payload.device_prefs = payload.device_prefs.map((p) =>
-      p.key in expanded ? { ...p, value: expanded[p.key] } : p,
-    );
-  }
-  const sections = payload?.esphome?.sections;
-  if (!sections) return;
-  payload.esphome = {
-    ...payload.esphome,
-    sections: sections.map((sec) => ({
-      ...sec,
-      items: (sec.items || []).map((item) => {
-        if (item.pref_key && item.pref_key in expanded) {
-          const val = expanded[item.pref_key];
-          const nextState = item.domain === "switch" ? (val ? "on" : "off") : String(val ?? "");
-          return { ...item, state: nextState };
-        }
-        if (
-          "volume_step_size" in expanded &&
-          item.domain === "number" &&
-          item.entity_id.startsWith("media_player.")
-        ) {
-          const stepNum = Number(expanded.volume_step_size);
-          if (Number.isFinite(stepNum) && stepNum > 0) {
-            return { ...item, step: stepNum };
-          }
-        }
-        return item;
-      }),
-    })),
-  };
-}
-function overlayPendingEntityStates(
-  payload,
-  pendingMap,
-) {
-  const now = Date.now();
-  for (const [eid, entry] of pendingMap.entries()) {
-    if (entry.expires <= now) {
-      pendingMap.delete(eid);
-    }
-  }
-  const sections = payload?.esphome?.sections;
-  if (!sections || pendingMap.size === 0) return;
-  payload.esphome = {
-    ...payload.esphome,
-    sections: sections.map((sec) => ({
-      ...sec,
-      items: (sec.items || []).map((item) => {
-        const pending = pendingMap.get(item.entity_id);
-        if (!pending) return item;
-        const curState = String(item.state ?? "");
-        const sameNumeric =
-          curState !== "" &&
-          pending.state !== "" &&
-          Number.isFinite(Number(curState)) &&
-          Number.isFinite(Number(pending.state)) &&
-          Number(curState) === Number(pending.state);
-        if (curState === pending.state || sameNumeric) {
-          pendingMap.delete(item.entity_id);
-          return item;
-        }
-        return { ...item, state: pending.state };
-      }),
-    })),
-  };
-}
 class EntityController {
                    store;
-          editSeqCounter = 0;
-          systemSaveChain = Promise.resolve();
-                   inFlightSystemPatch = {};
-                   systemKeySeqs = new Map();
-          pendingSystemKeySeqs = {};
-                   deviceSaveChains = new Map();
-                   inFlightDevicePatches = new Map();
-                   deviceKeySeqs = new Map();
+                   saves;
                    cameraPreviewCache = new Map();
            tokenLists;
   constructor(store) {
     this.store = store;
+    this.saves = new SettingsSaveController(store);
     this.tokenLists = {
       area_categories: createTokenListOps(store, TOKEN_LIST_SPECS.area_categories),
       home_categories: createTokenListOps(store, TOKEN_LIST_SPECS.home_categories),
@@ -7948,407 +8803,40 @@ class EntityController {
   isCatalogItemSupported(item, caps) {
     return isCatalogItemSupported(item, caps ?? this.store.state?.capabilities);
   }
+  // ---------- Settings Staging & Flushing Delegation ----------
   getEffectiveSystemPatch() {
-    return {
-      ...this.inFlightSystemPatch,
-      ...this.store.pendingSystemPatch,
-    };
+    return this.saves.getEffectiveSystemPatch();
   }
   getEffectiveDevicePatch(subentryId) {
-    const inFlight = this.inFlightDevicePatches.get(subentryId) || {};
-    const pending = this.store.pendingDeviceBuckets.get(subentryId)?.patch || {};
-    return { ...inFlight, ...pending };
+    return this.saves.getEffectiveDevicePatch(subentryId);
   }
   discardDeviceBucket(subentryId) {
-    const bucket = this.store.pendingDeviceBuckets.get(subentryId);
-    if (bucket?.timer) {
-      clearTimeout(bucket.timer);
-      bucket.timer = null;
-    }
-    this.store.pendingDeviceBuckets.delete(subentryId);
-    this.inFlightDevicePatches.delete(subentryId);
+    this.saves.discardDeviceBucket(subentryId);
   }
-          getDeviceKeySeqMap(subentryId) {
-    let map = this.deviceKeySeqs.get(subentryId);
-    if (!map) {
-      map = new Map();
-      this.deviceKeySeqs.set(subentryId, map);
-    }
-    return map;
-  }
-  // ---------- Device & System Settings Staging + Serialized Flushing ----------
   stageDeviceSetting(
     key,
     value,
     controlDomId,
-    debounceMs = SAVE_DEBOUNCE_MS,
+    debounceMs,
   ) {
-    const targetSubentryId = this.store.activeSubentryId;
-    if (!targetSubentryId || this.store.deviceLoading) return;
-    let bucket = this.store.pendingDeviceBuckets.get(targetSubentryId);
-    const activeDevEntry = this.store.state?.system_devices?.find(
-      (d) => d.subentry_id === targetSubentryId,
-    );
-    const targetTitle =
-      (this.store.state?.subentry_id === targetSubentryId ? this.store.state.title : "") ||
-      activeDevEntry?.title ||
-      targetSubentryId;
-    if (!bucket) {
-      bucket = {
-        targetSubentryId,
-        targetTitle,
-        patch: {},
-        previousValues: {},
-        keySeqs: {},
-        timer: null,
-      };
-      this.store.pendingDeviceBuckets.set(targetSubentryId, bucket);
-    }
-    const curCfg =
-      this.store.state && this.store.state.subentry_id === targetSubentryId
-        ? ((this.store.state.config || {}))
-        : {};
-    const snapshotKey = (k) => {
-      if (!(k in bucket.previousValues)) {
-        bucket.previousValues[k] = curCfg[k];
-      }
-    };
-    snapshotKey(key);
-    snapshotKey("device_group");
-    if (key === "home_screen_enabled") {
-      snapshotKey("start_screen");
-    }
-    if (controlDomId && !(`__dom:${controlDomId}` in bucket.previousValues)) {
-      bucket.previousValues[`__dom:${controlDomId}`] = bucket.previousValues[key];
-    }
-    const seq = ++this.editSeqCounter;
-    const seqMap = this.getDeviceKeySeqMap(targetSubentryId);
-    seqMap.set(key, seq);
-    bucket.keySeqs[key] = seq;
-    if (controlDomId) {
-      seqMap.set(`__dom:${controlDomId}`, seq);
-      bucket.keySeqs[`__dom:${controlDomId}`] = seq;
-    }
-    bucket.patch[key] = value;
-    if (this.store.state) {
-      const nextSystemDevices =
-        key === "device_remote_group" && Array.isArray(this.store.state.system_devices)
-          ? this.store.state.system_devices.map((d) =>
-              d.subentry_id === targetSubentryId
-                ? { ...d, device_remote_group: String(value || "area_auto") }
-                : d,
-            )
-          : this.store.state.system_devices;
-      if (this.store.state.subentry_id === targetSubentryId) {
-        const nextPayload = {
-          ...this.store.state,
-          system_devices: nextSystemDevices,
-          config: { ...this.store.state.config },
-        };
-        overlayDevicePrefsOnSections(nextPayload, { [key]: value });
-        this.store.state = nextPayload;
-      } else if (nextSystemDevices !== this.store.state.system_devices) {
-        this.store.state = {
-          ...this.store.state,
-          system_devices: nextSystemDevices,
-        };
-      }
-    }
-    if (bucket.timer) clearTimeout(bucket.timer);
-    bucket.timer = setTimeout(() => {
-      void this.flushDeviceBucket(targetSubentryId);
-    }, Math.max(0, debounceMs));
-    this.store.host.requestUpdate();
+    this.saves.stageDeviceSetting(key, value, controlDomId, debounceMs);
   }
   flushDeviceBucket(targetSubentryId) {
-    const bucket = this.store.pendingDeviceBuckets.get(targetSubentryId);
-    const prevChain = this.deviceSaveChains.get(targetSubentryId) ?? Promise.resolve();
-    if (!bucket) return prevChain;
-    if (bucket.timer) {
-      clearTimeout(bucket.timer);
-      bucket.timer = null;
-    }
-    const patch = { ...bucket.patch };
-    const previousValues = { ...bucket.previousValues };
-    const batchKeySeqs = { ...bucket.keySeqs };
-    const targetTitle = bucket.targetTitle;
-    this.store.pendingDeviceBuckets.delete(targetSubentryId);
-    if (Object.keys(patch).length === 0) return prevChain;
-    const inFlight = this.inFlightDevicePatches.get(targetSubentryId) || {};
-    Object.assign(inFlight, patch);
-    this.inFlightDevicePatches.set(targetSubentryId, inFlight);
-    const nextChain = prevChain.then(async() => {
-      const seqMap = this.getDeviceKeySeqMap(targetSubentryId);
-      const clearOwnedInFlight = () => {
-        const curInFlight = this.inFlightDevicePatches.get(targetSubentryId);
-        if (!curInFlight) return;
-        for (const k of Object.keys(patch)) {
-          if (seqMap.get(k) === batchKeySeqs[k]) {
-            delete curInFlight[k];
-          }
-        }
-        if (Object.keys(curInFlight).length === 0) {
-          this.inFlightDevicePatches.delete(targetSubentryId);
-        }
-      };
-      const expectedRev = this.store.getKnownDeviceConfigRev(targetSubentryId);
-      const reqPayload = { config: patch };
-      if (expectedRev > 0) {
-        reqPayload.expected_config_rev = expectedRev;
-      }
-      try {
-        const res = await this.store.ws.runDeviceCommand(
-          targetSubentryId,
-          "save_device_config",
-          reqPayload,
-        );
-        clearOwnedInFlight();
-        if (res) {
-          if (res.subentry_id === targetSubentryId && res.device_config_rev > 0) {
-            this.store.recordKnownDeviceConfigRev(targetSubentryId, res.device_config_rev);
-          }
-          if (this.store.activeSubentryId === targetSubentryId) {
-            this.store.ingestPayload(res, false);
-          } else if (this.store.state && Array.isArray(res.system_devices)) {
-            this.store.state = {
-              ...this.store.state,
-              system_devices: res.system_devices,
-              issues: res.issues ?? this.store.state.issues,
-            };
-            this.store.host.requestUpdate();
-          }
-        }
-        this.store.announcePolite(this.store.t("shell.saved_status"));
-      } catch (err) {
-        clearOwnedInFlight();
-        if (isConflictError(err)) {
-          await this.store.refreshState();
-          this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
-          return;
-        }
-        const controlRevert = {};
-        for (const [k, v] of Object.entries(previousValues)) {
-          if (k.startsWith("__dom:")) {
-            if (seqMap.get(k) !== batchKeySeqs[k]) continue;
-            const domId = k.slice(6);
-            if (typeof v === "boolean") controlRevert[domId] = v;
-            else if (v !== undefined && v !== null) controlRevert[domId] = String(v);
-            else controlRevert[domId] = "";
-          }
-        }
-        const remoteGroupOwned =
-          "device_remote_group" in previousValues &&
-          seqMap.get("device_remote_group") === batchKeySeqs.device_remote_group;
-        if (this.store.state) {
-          const nextSystemDevices =
-            remoteGroupOwned && Array.isArray(this.store.state.system_devices)
-              ? this.store.state.system_devices.map((d) =>
-                  d.subentry_id === targetSubentryId
-                    ? {
-                        ...d,
-                        device_remote_group: String(
-                          previousValues.device_remote_group || "area_auto",
-                        ),
-                      }
-                    : d,
-                )
-              : this.store.state.system_devices;
-          if (this.store.state.subentry_id === targetSubentryId) {
-            const restoredConfig = {
-              ...(this.store.state.config),
-            };
-            const restoredPrefs = {};
-            for (const [k, v] of Object.entries(previousValues)) {
-              if (k.startsWith("__dom:")) continue;
-              if (k in batchKeySeqs && seqMap.get(k) !== batchKeySeqs[k]) continue;
-              if (v === undefined) {
-                delete restoredConfig[k];
-              } else {
-                restoredConfig[k] = v;
-                restoredPrefs[k] = v;
-              }
-            }
-            const nextPayload = {
-              ...this.store.state,
-              system_devices: nextSystemDevices,
-              config: restoredConfig,
-            };
-            if (Object.keys(restoredPrefs).length > 0) {
-              overlayDevicePrefsOnSections(nextPayload, restoredPrefs);
-            }
-            const newerPatch = this.getEffectiveDevicePatch(targetSubentryId);
-            if (Object.keys(newerPatch).length > 0) {
-              overlayDevicePrefsOnSections(nextPayload, newerPatch);
-            }
-            this.store.state = nextPayload;
-          } else if (nextSystemDevices !== this.store.state.system_devices) {
-            this.store.state = {
-              ...this.store.state,
-              system_devices: nextSystemDevices,
-            };
-          }
-        }
-        if (this.store.activeSubentryId === targetSubentryId && Object.keys(controlRevert).length > 0) {
-          this.store.mergeDomRevert(controlRevert);
-        }
-        const rawReason = formatWsError(err, this.store.t("sync.save_device_failed"));
-        const msg =
-          this.store.activeSubentryId !== targetSubentryId && targetTitle
-            ? this.store.t("sync.save_device_named_failed", {
-                title: targetTitle,
-                error: rawReason,
-              })
-            : rawReason;
-        this.store.showToast(msg, true);
-        this.store.host.requestUpdate();
-      }
-    });
-    this.deviceSaveChains.set(targetSubentryId, nextChain);
-    return nextChain;
+    return this.saves.flushDeviceBucket(targetSubentryId);
   }
   stageSystemSetting (
     key,
     value,
     controlDomId,
-    debounceMs = SAVE_DEBOUNCE_MS,
+    debounceMs,
   ) {
-    const keyStr = String(key);
-    if (!(keyStr in this.store.pendingSystemPrevious)) {
-      const prev = (this.store.state?.system_config)?.[keyStr];
-      if (isStringListKey(keyStr) && Array.isArray(prev)) {
-        this.store.pendingSystemPrevious[keyStr] = cleanPersistedStringList(
-          prev,
-          STRING_LIST_MAX_ITEMS[keyStr],
-        );
-      } else {
-        this.store.pendingSystemPrevious[keyStr] =
-          prev !== undefined ? structuredClone(prev) : undefined;
-      }
-    }
-    if (controlDomId && !(`__dom:${controlDomId}` in this.store.pendingSystemPrevious)) {
-      const prevScalar = this.store.pendingSystemPrevious[keyStr];
-      if (
-        typeof prevScalar === "string" ||
-        typeof prevScalar === "number" ||
-        typeof prevScalar === "boolean"
-      ) {
-        this.store.pendingSystemPrevious[`__dom:${controlDomId}`] = prevScalar;
-      }
-    }
-    const seq = ++this.editSeqCounter;
-    this.systemKeySeqs.set(keyStr, seq);
-    this.pendingSystemKeySeqs[keyStr] = seq;
-    if (controlDomId) {
-      this.systemKeySeqs.set(`__dom:${controlDomId}`, seq);
-      this.pendingSystemKeySeqs[`__dom:${controlDomId}`] = seq;
-    }
-    this.store.pendingSystemPatch[keyStr] = value;
-    if (this.store.state?.system_config) {
-      this.store.state = {
-        ...this.store.state,
-        system_config: {
-          ...this.store.state.system_config,
-          [keyStr]: value,
-        },
-      };
-    }
-    if (this.store.systemSaveTimer) clearTimeout(this.store.systemSaveTimer);
-    this.store.systemSaveTimer = setTimeout(() => {
-      void this.flushSystemSettings();
-    }, Math.max(0, debounceMs));
-    this.store.host.requestUpdate();
+    this.saves.stageSystemSetting(key, value, controlDomId, debounceMs);
   }
   flushSystemSettings() {
-    if (this.store.systemSaveTimer) {
-      clearTimeout(this.store.systemSaveTimer);
-      this.store.systemSaveTimer = null;
-    }
-    const patch = { ...this.store.pendingSystemPatch };
-    const previousValues = { ...this.store.pendingSystemPrevious };
-    const batchKeySeqs = { ...this.pendingSystemKeySeqs };
-    this.store.pendingSystemPatch = {};
-    this.store.pendingSystemPrevious = {};
-    this.pendingSystemKeySeqs = {};
-    if (Object.keys(patch).length === 0) return this.systemSaveChain;
-    Object.assign(this.inFlightSystemPatch, patch);
-    this.systemSaveChain = this.systemSaveChain.then(async() => {
-      const clearOwnedInFlight = () => {
-        for (const k of Object.keys(patch)) {
-          if (this.systemKeySeqs.get(k) === batchKeySeqs[k]) {
-            delete this.inFlightSystemPatch[k];
-          }
-        }
-      };
-      const expectedRev = this.store.state?.system_config_rev ?? 0;
-      const reqPayload = { config: patch };
-      if (expectedRev > 0) {
-        reqPayload.expected_config_rev = expectedRev;
-      }
-      try {
-        const res = await this.store.ws.runSystemCommand(
-          "save_system_config",
-          reqPayload,
-          this.store.activeSubentryId || null,
-        );
-        clearOwnedInFlight();
-        if (res) {
-          this.store.ingestPayload(res, false);
-        }
-        this.store.announcePolite(this.store.t("shell.saved_status"));
-      } catch (err) {
-        clearOwnedInFlight();
-        if (isConflictError(err)) {
-          await this.store.refreshState();
-          this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
-          return;
-        }
-        const controlRevert = {};
-        if (this.store.state?.system_config) {
-          const prevUiSys = this.store.state.system_config;
-          const restored = {
-            ...(prevUiSys),
-          };
-          for (const [k, v] of Object.entries(previousValues)) {
-            if (k in batchKeySeqs && this.systemKeySeqs.get(k) !== batchKeySeqs[k]) continue;
-            if (k.startsWith("__dom:")) {
-              const domId = k.slice(6);
-              controlRevert[domId] = typeof v === "boolean" ? v : String(v ?? "");
-            } else if (v === undefined) {
-              delete restored[k];
-            } else {
-              restored[k] = v;
-            }
-          }
-          const newerSys = this.getEffectiveSystemPatch();
-          Object.assign(restored, newerSys);
-          const nextPayload = {
-            ...this.store.state,
-            system_config: restored,
-          };
-          overlayPendingBlankListSlots(this.store, nextPayload, prevUiSys);
-          this.store.state = nextPayload;
-        }
-        if (Object.keys(controlRevert).length > 0) {
-          this.store.mergeDomRevert(controlRevert);
-        }
-        this.store.showToast(
-          formatWsError(err, this.store.t("sync.save_system_failed")),
-          true,
-        );
-        this.store.host.requestUpdate();
-      }
-    });
-    return this.systemSaveChain;
+    return this.saves.flushSystemSettings();
   }
-  async flushAllPendingSettings() {
-    const tasks = [];
-    if (Object.keys(this.store.pendingSystemPatch).length > 0) {
-      tasks.push(this.flushSystemSettings());
-    }
-    for (const subId of Array.from(this.store.pendingDeviceBuckets.keys())) {
-      tasks.push(this.flushDeviceBucket(subId));
-    }
-    await Promise.allSettled(tasks);
+  flushAllPendingSettings() {
+    return this.saves.flushAllPendingSettings();
   }
   // ---------- Device Preferences & ESPHome Entity Actions ----------
   getPref(key) {
@@ -8494,7 +8982,7 @@ class EntityController {
       this.store.showToast("Firmware update started");
     }
   }
-  // ---------- Token Lists (Area, Home, Tools, Games, Activity Sources) ----------
+  // ---------- Token Lists ----------
   getEnabledAreaCategories() {
     return this.tokenLists.area_categories.getEnabled();
   }
@@ -8552,227 +9040,50 @@ class EntityController {
   reorderActivitySources(fromIndex, toIndex) {
     this.tokenLists.activity_sources.reorder(fromIndex, toIndex);
   }
-  // ---------- Per-Device Cameras Visibility & Carousel Lists ----------
+  // ---------- Per-Device Broadcast Speakers & Cameras ----------
   getSystemBroadcastSpeakers() {
-    const out = [];
-    for (const raw of this.store.state?.system_config?.broadcast_speakers || []) {
-      const id = String(raw || "").trim();
-      if (id && !out.includes(id)) {
-        out.push(id);
-      }
-    }
-    return out;
+    return getSystemBroadcastSpeakersOp(this.store);
   }
   getBroadcastSpeakers() {
-    const sys = this.getSystemBroadcastSpeakers();
-    if (sys.length === 0) return [];
-    const raw = this.store.state?.config?.broadcast_speaker_entities;
-    if (!Array.isArray(raw) || raw.length === 0) {
-      return [...sys];
-    }
-    const filtered = [];
-    for (const item of raw) {
-      const id = String(item || "").trim();
-      if (id && sys.includes(id) && !filtered.includes(id)) {
-        filtered.push(id);
-      }
-    }
-    return filtered.length > 0 ? filtered : [...sys];
+    return getBroadcastSpeakersOp(this.store);
   }
   toggleBroadcastSpeaker(entityId, forceEnabled) {
-    const cleanId = String(entityId || "").trim();
-    const sys = this.getSystemBroadcastSpeakers();
-    if (!cleanId || !sys.includes(cleanId)) return;
-    const current = this.getBroadcastSpeakers();
-    const idx = current.indexOf(cleanId);
-    const currentlyOn = idx >= 0;
-    const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
-    if (wantOn === currentlyOn) return;
-    let next;
-    if (!wantOn) {
-      if (current.length <= 1) {
-        this.store.showToast(this.store.t("common.keep_one_enabled", { noun: "speaker" }), true);
-        return;
-      }
-      next = current.filter((id) => id !== cleanId);
-    } else {
-      next = [...current, cleanId];
-    }
-    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
-    this.stageDeviceSetting("broadcast_speaker_entities", sameAsSys ? [] : next);
+    toggleBroadcastSpeakerOp(this.store, entityId, forceEnabled);
   }
   reorderBroadcastSpeakers(fromIndex, toIndex) {
-    const sys = this.getSystemBroadcastSpeakers();
-    const current = this.getBroadcastSpeakers();
-    if (
-      fromIndex < 0 ||
-      toIndex < 0 ||
-      fromIndex >= current.length ||
-      toIndex >= current.length ||
-      fromIndex === toIndex
-    ) {
-      return;
-    }
-    const next = [...current];
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
-    this.stageDeviceSetting("broadcast_speaker_entities", sameAsSys ? [] : next);
+    reorderBroadcastSpeakersOp(this.store, fromIndex, toIndex);
   }
   getSystemCameraEntities() {
-    const out = [];
-    for (const raw of this.store.state?.system_config?.camera_entities || []) {
-      const id = String(raw || "").trim();
-      if (id && !out.includes(id)) {
-        out.push(id);
-      }
-    }
-    return out;
+    return getSystemCameraEntitiesOp(this.store);
   }
   getVisibleCameras() {
-    const sys = this.getSystemCameraEntities();
-    if (sys.length === 0) return [];
-    const raw = this.store.state?.config?.camera_visible_entities;
-    if (!Array.isArray(raw) || raw.length === 0) {
-      return [...sys];
-    }
-    const filtered = [];
-    for (const item of raw) {
-      const id = String(item || "").trim();
-      if (id && sys.includes(id) && !filtered.includes(id)) {
-        filtered.push(id);
-      }
-    }
-    return filtered.length > 0 ? filtered : [...sys];
+    return getVisibleCamerasOp(this.store);
   }
   toggleVisibleCamera(entityId, forceEnabled) {
-    const cleanId = String(entityId || "").trim();
-    const sys = this.getSystemCameraEntities();
-    if (!cleanId || !sys.includes(cleanId)) return;
-    const current = this.getVisibleCameras();
-    const idx = current.indexOf(cleanId);
-    const currentlyOn = idx >= 0;
-    const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
-    if (wantOn === currentlyOn) return;
-    let next;
-    if (!wantOn) {
-      if (current.length <= 1) {
-        this.store.showToast(this.store.t("common.keep_one_enabled", { noun: "camera" }), true);
-        return;
-      }
-      next = current.filter((id) => id !== cleanId);
-    } else {
-      next = [...current, cleanId];
-    }
-    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
-    this.stageDeviceSetting("camera_visible_entities", sameAsSys ? [] : next);
-    if (!wantOn) {
-      const rawCarousel = Array.isArray(this.store.state?.config?.camera_carousel_entities)
-        ? this.store.state.config.camera_carousel_entities
-            .map((c) => String(c || "").trim())
-            .filter(Boolean)
-        : [];
-      if (rawCarousel.length > 0 && rawCarousel.includes(cleanId)) {
-        const pruned = rawCarousel.filter((id) => next.includes(id));
-        const sameAsVisible =
-          pruned.length === next.length && pruned.every((id, i) => id === next[i]);
-        this.stageDeviceSetting(
-          "camera_carousel_entities",
-          pruned.length === 0 || sameAsVisible ? [] : pruned,
-        );
-      }
-    }
+    toggleVisibleCameraOp(this.store, entityId, forceEnabled);
   }
   reorderVisibleCameras(fromIndex, toIndex) {
-    const sys = this.getSystemCameraEntities();
-    const current = this.getVisibleCameras();
-    if (
-      fromIndex < 0 ||
-      toIndex < 0 ||
-      fromIndex >= current.length ||
-      toIndex >= current.length ||
-      fromIndex === toIndex
-    ) {
-      return;
-    }
-    const next = [...current];
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    const sameAsSys = next.length === sys.length && next.every((id, i) => id === sys[i]);
-    this.stageDeviceSetting("camera_visible_entities", sameAsSys ? [] : next);
+    reorderVisibleCamerasOp(this.store, fromIndex, toIndex);
   }
   getCarouselCameras() {
-    const visible = this.getVisibleCameras();
-    if (visible.length === 0) return [];
-    const raw = this.store.state?.config?.camera_carousel_entities;
-    if (!Array.isArray(raw) || raw.length === 0) {
-      return [...visible];
-    }
-    const filtered = [];
-    for (const item of raw) {
-      const id = String(item || "").trim();
-      if (id && visible.includes(id) && !filtered.includes(id)) {
-        filtered.push(id);
-      }
-    }
-    return filtered.length > 0 ? filtered : [...visible];
+    return getCarouselCamerasOp(this.store);
   }
   toggleCarouselCamera(entityId, forceEnabled) {
-    const cleanId = String(entityId || "").trim();
-    const visible = this.getVisibleCameras();
-    if (!cleanId || !visible.includes(cleanId)) return;
-    const current = this.getCarouselCameras();
-    const idx = current.indexOf(cleanId);
-    const currentlyOn = idx >= 0;
-    const wantOn = forceEnabled !== undefined ? Boolean(forceEnabled) : !currentlyOn;
-    if (wantOn === currentlyOn) return;
-    let next;
-    if (!wantOn) {
-      if (current.length <= 1) {
-        this.store.showToast(this.store.t("common.keep_one_enabled", { noun: "camera" }), true);
-        return;
-      }
-      next = current.filter((id) => id !== cleanId);
-    } else {
-      next = [...current, cleanId];
-    }
-    const sameAsVisible =
-      next.length === visible.length && next.every((id, i) => id === visible[i]);
-    this.stageDeviceSetting("camera_carousel_entities", sameAsVisible ? [] : next);
+    toggleCarouselCameraOp(this.store, entityId, forceEnabled);
   }
   reorderCarouselCameras(fromIndex, toIndex) {
-    const visible = this.getVisibleCameras();
-    const current = this.getCarouselCameras();
-    if (
-      fromIndex < 0 ||
-      toIndex < 0 ||
-      fromIndex >= current.length ||
-      toIndex >= current.length ||
-      fromIndex === toIndex
-    ) {
-      return;
-    }
-    const next = [...current];
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    const sameAsVisible =
-      next.length === visible.length && next.every((id, i) => id === visible[i]);
-    this.stageDeviceSetting("camera_carousel_entities", sameAsVisible ? [] : next);
+    reorderCarouselCamerasOp(this.store, fromIndex, toIndex);
   }
-  // ---------- Shortcuts (`dock_items` & `pinned_items`) + App Config Modal ----------
+  // ---------- Shortcuts & App Config Modal ----------
   getDockItems() {
     const raw = this.store.state?.config?.dock_items;
-    if (raw === undefined || raw === null) {
-      return defaultDockShortcutItems();
-    }
-    return normalizeShortcutArray(raw, true);
+    return raw === undefined || raw === null
+      ? defaultDockShortcutItems()
+      : normalizeShortcutArray(raw, true);
   }
   getPinnedItems() {
     const raw = this.store.state?.config?.pinned_items;
-    if (raw === undefined || raw === null) {
-      return [];
-    }
-    return normalizeShortcutArray(raw, false);
+    return raw === undefined || raw === null ? [] : normalizeShortcutArray(raw, false);
   }
   moveShortcutItem(listKey, idx, delta) {
     this.reorderShortcutItems(listKey, idx, idx + delta);
@@ -8794,6 +9105,7 @@ class EntityController {
     }
     const next = current.map((it) => ({ ...it }));
     const [moved] = next.splice(fromIndex, 1);
+    if (!moved) return;
     next.splice(toIndex, 0, moved);
     this.stageDeviceSetting(listKey, next);
   }
@@ -9076,7 +9388,8 @@ class EntityController {
     const cams = (this.store.state?.system_config?.camera_entities || [])
       .map((c) => String(c || "").trim())
       .filter(Boolean);
-    if (!cams[0]) {
+    const firstCam = cams[0];
+    if (!firstCam) {
       this.store.showToast("Add a camera in Shared entities first", true);
       return;
     }
@@ -9091,7 +9404,7 @@ class EntityController {
         "test_doorbell_speaker",
         {
           subentry_id: this.store.doorbellTestSubentryId,
-          camera_entity: cams[0],
+          camera_entity: firstCam,
           message,
         },
         this.store.activeSubentryId || null,
@@ -9103,45 +9416,32 @@ class EntityController {
     }
   }
 }
-__latterExp(__exports, { isCatalogItemSupported: () => isCatalogItemSupported, isProtectedNativeDockItem: () => isProtectedNativeDockItem, overlayPendingBlankListSlots: () => overlayPendingBlankListSlots, overlayDevicePrefsOnSections: () => overlayDevicePrefsOnSections, overlayPendingEntityStates: () => overlayPendingEntityStates, EntityController: () => EntityController });
-//# sourceURL=latter-studio/src/state/entity-controller.ts
+__latterExp(__exports, { EntityController: () => EntityController });
+//# sourceURL=latter-studio/src/state/entity-actions-controller.ts
 });
-__latterDef("src/state/groups-controller.ts", (__exports, __req) => {
+__latterDef("src/state/batch-controller.ts", (__exports, __req) => {
 const { formatWsError, isConflictError } = __req("src/api/ws-client.ts");
 const { isValidHexColor } = __req("src/utils/format.ts");
 /**
- * `store.groups` Controller (`GroupsController`, `D-050`, `D-064` / `Q6`):
- * - Device Groups CRUD, scope toggles (`include_display`, `include_interface`), & baseline updates
- * - Staged `Batch controls` draft state (`batchDraft` + per-Device `Mixed`-safe `batchPillDrafts`)
- *   with **Apply to N Devices** / **Reset** and automatic `Custom` detachment toast
- * - Walk-Around BLE calibration, scanner antenna trim, & Area sensor fusion
+ * Staged `Batch controls` Draft Controller (`BatchController`, `Q6` / `D-064`, `M-P1-48`).
+ *
+ * - Preserves untouched per-Device tokens during `Mixed` pill toggling (`batchPillDrafts`).
+ * - Applies `expected_config_rev` per Device, clears committed drafts incrementally, and
+ *   resyncs via `refreshState()` on partial/conflict failures.
  */
-function slugifyGroupName(raw) {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
 function parseCsvTokens(raw) {
   return String(raw || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 }
-class GroupsController {
+class BatchController {
                    store;
   /** Per-`pref_key` token delta map (`{ [token]: true | false }`) preserving untouched per-Device tokens (`Q6`). */
            batchPillDrafts = new Map();
   batchBusy = false;
-  calibratingAllIlluminance = false;
-           calibratingIlluminanceAreas = new Set();
   constructor(store) {
     this.store = store;
-  }
-  isCalibratingIlluminance(areaId) {
-    if (this.calibratingAllIlluminance) return true;
-    return Boolean(areaId && this.calibratingIlluminanceAreas.has(String(areaId)));
   }
   get batchDraft() {
     return this.store.batchDraft;
@@ -9157,6 +9457,727 @@ class GroupsController {
   }
   get hasBatchDraft() {
     return this.batchDraftCount > 0;
+  }
+  resolvedBatchTargetId() {
+    const filter = this.store.batchTargetFilter || "all";
+    if (filter.startsWith("group:")) return filter.slice(6);
+    return filter;
+  }
+  setBatchTargetFilter(nextFilter) {
+    const cleaned = String(nextFilter || "all").trim() || "all";
+    if (this.store.batchTargetFilter === cleaned) return;
+    this.store.batchTargetFilter = cleaned;
+    this.resetBatchDraft();
+  }
+  matchingBatchDevices() {
+    const filter = this.store.batchTargetFilter || "all";
+    const devs = (this.store.state?.system_devices || []).filter((d) => d.kind !== "ble_tag");
+    return devs.filter((d) => {
+      if (filter === "all") return true;
+      if (filter === "online") return Boolean(d.is_online);
+      if (filter === "roaming") return Boolean(d.is_roaming);
+      if (filter === "stationary") return !d.is_roaming;
+      const grpId = filter.startsWith("group:") ? filter.slice(6) : filter;
+      return (d.device_group || "custom") === grpId;
+    });
+  }
+  filteredControlTargets(ctrl) {
+    const filter = this.store.batchTargetFilter || "all";
+    return (ctrl.targets || []).filter((t) => {
+      if (filter === "all") return true;
+      if (filter === "online") return Boolean(t.is_online);
+      if (filter === "roaming") return Boolean(t.is_roaming);
+      if (filter === "stationary") return !t.is_roaming;
+      const grpId = filter.startsWith("group:") ? filter.slice(6) : filter;
+      return (t.device_group || "custom") === grpId;
+    });
+  }
+  getEffectiveBatchValue(ctrl)
+    {
+    const prefKey = ctrl.pref_key || "";
+    if (prefKey && this.store.batchDraft.has(prefKey)) {
+      const raw = this.store.batchDraft.get(prefKey);
+      const valStr = ctrl.domain === "switch" ? (raw ? "on" : "off") : String(raw ?? "");
+      return { value: valStr, mixed: false, staged: true };
+    }
+    const targets = this.filteredControlTargets(ctrl);
+    const firstTarget = targets[0];
+    if (!firstTarget) {
+      return { value: String(ctrl.state ?? ""), mixed: false, staged: false };
+    }
+    const unique = new Set(targets.map((t) => String(t.state ?? "")));
+    if (unique.size > 1) {
+      return { value: String(firstTarget.state ?? ""), mixed: true, staged: false };
+    }
+    return { value: String(firstTarget.state ?? ""), mixed: false, staged: false };
+  }
+          applyTokenDeltasToCsv(
+    baseCsv,
+    deltas,
+    canonicalOrder,
+  ) {
+    const current = parseCsvTokens(baseCsv);
+    const active = new Set(current);
+    for (const [tok, wantOn] of Object.entries(deltas)) {
+      if (wantOn) active.add(tok);
+      else active.delete(tok);
+    }
+    const preserved = current.filter((tok) => active.has(tok));
+    const preservedSet = new Set(preserved);
+    const appended = canonicalOrder.filter((tok) => active.has(tok) && !preservedSet.has(tok));
+    const extras = Array.from(active).filter(
+      (tok) => !preservedSet.has(tok) && !appended.includes(tok),
+    );
+    return [...preserved, ...appended, ...extras].join(",");
+  }
+  getEffectiveBatchPillStates(ctrl) {
+    const prefKey = ctrl.pref_key || "";
+    const options = ctrl.options || [];
+    const labels = ctrl.option_labels || {};
+    const targets = this.filteredControlTargets(ctrl);
+    const deltas = (prefKey && this.batchPillDrafts.get(prefKey)) || {};
+    const explicitCsv =
+      prefKey && this.store.batchDraft.has(prefKey)
+        ? String(this.store.batchDraft.get(prefKey) ?? "")
+        : null;
+    return options.map((token) => {
+      const label = labels[token] || token;
+      if (explicitCsv !== null) {
+        const set = new Set(parseCsvTokens(explicitCsv));
+        return {
+          token,
+          label,
+          state: set.has(token) ? "on" : "off",
+          staged: true,
+        };
+      }
+      if (token in deltas) {
+        return {
+          token,
+          label,
+          state: deltas[token] ? "on" : "off",
+          staged: true,
+        };
+      }
+      if (targets.length === 0) {
+        return { token, label, state: "off", staged: false };
+      }
+      let onCount = 0;
+      for (const t of targets) {
+        if (parseCsvTokens(t.state).includes(token)) {
+          onCount += 1;
+        }
+      }
+      const state =
+        onCount === 0 ? "off" : onCount === targets.length ? "on" : "mixed";
+      return { token, label, state, staged: false };
+    });
+  }
+  stageBatchSetting(key, value) {
+    const cleanKey = String(key || "").trim();
+    if (!cleanKey) return;
+    this.batchPillDrafts.delete(cleanKey);
+    this.store.batchDraft.set(cleanKey, value);
+    this.store.host.requestUpdate();
+  }
+  stageBatchColor(ctrl, hex) {
+    const cleaned = String(hex || "").trim().toUpperCase();
+    if (!ctrl.pref_key || !isValidHexColor(cleaned)) return;
+    this.store.batchDraft.set(ctrl.pref_key, cleaned);
+    this.store.batchDraft.set("color_profile", "Custom");
+    this.store.host.requestUpdate();
+  }
+  stageBatchPillToggle(
+    ctrl,
+    rawToken,
+    forceEnabled,
+  ) {
+    const prefKey = ctrl.pref_key || "";
+    const token = String(rawToken || "").trim();
+    if (!prefKey || !token) return;
+    const pillStates = this.getEffectiveBatchPillStates(ctrl);
+    const currentPill = pillStates.find((p) => p.token === token);
+    const wantOn =
+      forceEnabled !== undefined ? Boolean(forceEnabled) : currentPill?.state !== "on";
+    const targets = this.filteredControlTargets(ctrl);
+    const order = ctrl.options || [];
+    const existingDeltas = { ...(this.batchPillDrafts.get(prefKey) || {}) };
+    if (this.store.batchDraft.has(prefKey)) {
+      const fullSet = new Set(parseCsvTokens(String(this.store.batchDraft.get(prefKey) ?? "")));
+      for (const opt of order) {
+        existingDeltas[opt] = fullSet.has(opt);
+      }
+      this.store.batchDraft.delete(prefKey);
+    }
+    const candidateDeltas = {
+      ...existingDeltas,
+      [token]: wantOn,
+    };
+    const minRequired = ctrl.min ?? 0;
+    if (!wantOn && minRequired > 0 && targets.length > 0) {
+      const violatesMin = targets.some((t) => {
+        const nextCsv = this.applyTokenDeltasToCsv(t.state, candidateDeltas, order);
+        return parseCsvTokens(nextCsv).length < minRequired;
+      });
+      if (violatesMin) {
+        const noun =
+          prefKey === "tools_items"
+            ? "tool"
+            : prefKey === "games_items"
+              ? "game"
+              : "category";
+        this.store.showToast(this.store.t("common.keep_one_enabled", { noun }), true);
+        return;
+      }
+    }
+    if (
+      targets.length > 0 &&
+      targets.every((t) => parseCsvTokens(t.state).includes(token) === wantOn)
+    ) {
+      delete candidateDeltas[token];
+    }
+    if (Object.keys(candidateDeltas).length === 0) {
+      this.batchPillDrafts.delete(prefKey);
+    } else {
+      this.batchPillDrafts.set(prefKey, candidateDeltas);
+    }
+    this.store.host.requestUpdate();
+  }
+  resetBatchDraft() {
+    this.store.batchDraft.clear();
+    this.batchPillDrafts.clear();
+    this.store.host.requestUpdate();
+  }
+  previewBatchDetachmentCount() {
+    if (!this.hasBatchDraft) return 0;
+    const hasDetachingKey =
+      this.batchPillDrafts.size > 0 ||
+      Array.from(this.store.batchDraft.keys()).some((key) => {
+        const spec = this.store.entity.getPrefSpec(key);
+        return !spec || spec.group_tier !== null;
+      });
+    if (!hasDetachingKey) return 0;
+    return this.matchingBatchDevices().filter(
+      (d) => Boolean(d.device_group && d.device_group !== "custom"),
+    ).length;
+  }
+  requestApplyBatchDraft() {
+    if (!this.hasBatchDraft || this.batchBusy) return;
+    const targets = this.matchingBatchDevices();
+    if (targets.length === 0) {
+      this.store.showToast(this.store.t("batch.no_targets"), true);
+      return;
+    }
+    if (targets.length === 1) {
+      void this.applyBatchDraft();
+      return;
+    }
+    const count = targets.length;
+    const settingCount = this.batchDraftCount;
+    this.store.openConfirm({
+      kind: "apply_batch",
+      title: this.store.t("confirm.apply_batch.title", { count }),
+      consequence: this.store.t("confirm.apply_batch.body", {
+        settingCount,
+        count,
+      }),
+      confirmLabel: this.store.t("confirm.apply_batch.confirm"),
+      danger: false,
+      blastRadiusCount: count,
+      onConfirm: async() => {
+        await this.applyBatchDraft();
+      },
+    });
+  }
+  async applyBatchDraft() {
+    if (!this.hasBatchDraft || this.batchBusy) return;
+    const matchedDevices = this.matchingBatchDevices();
+    if (matchedDevices.length === 0) {
+      this.store.showToast(this.store.t("batch.no_targets"), true);
+      return;
+    }
+    const beforeGroups = new Map();
+    const subentryBySlug = new Map();
+    for (const d of matchedDevices) {
+      subentryBySlug.set(d.device_slug, d.subentry_id);
+      if (d.device_group && d.device_group !== "custom") {
+        beforeGroups.set(d.subentry_id, { title: d.title, group: d.device_group });
+      }
+    }
+    const uniformPatch = Object.fromEntries(
+      this.store.batchDraft.entries(),
+    );
+    const foldedPillKeys = new Set();
+    const perDevicePatches = new Map();
+    const controls = this.store.state?.system_controls || [];
+    for (const [prefKey, deltas] of this.batchPillDrafts.entries()) {
+      if (Object.keys(deltas).length === 0) continue;
+      const ctrl = controls.find((c) => c.pref_key === prefKey);
+      const order = ctrl?.options || [];
+      const targets = ctrl ? this.filteredControlTargets(ctrl) : [];
+      if (targets.length === 0) continue;
+      const resolvedPerTarget = [];
+      for (const t of targets) {
+        const subId =
+          t.subentry_id || (t.device_slug ? subentryBySlug.get(t.device_slug) : "") || "";
+        const csv = this.applyTokenDeltasToCsv(t.state, deltas, order);
+        if (subId) {
+          resolvedPerTarget.push({ subentryId: subId, csv });
+        }
+      }
+      const firstResolved = resolvedPerTarget[0];
+      if (!firstResolved) continue;
+      const distinctCsvs = new Set(resolvedPerTarget.map((r) => r.csv));
+      if (distinctCsvs.size === 1) {
+        uniformPatch[prefKey] = firstResolved.csv;
+        foldedPillKeys.add(prefKey);
+      } else {
+        for (const item of resolvedPerTarget) {
+          const cur = perDevicePatches.get(item.subentryId) || {};
+          cur[prefKey] = item.csv;
+          perDevicePatches.set(item.subentryId, cur);
+        }
+      }
+    }
+    this.batchBusy = true;
+    this.store.host.requestUpdate();
+    let anyApplied = false;
+    try {
+      let lastRes = null;
+      if (Object.keys(uniformPatch).length > 0) {
+        lastRes = await this.store.ws.runSystemCommand(
+          "apply_batch_device_setting",
+          {
+            target: this.store.batchTargetFilter || "all",
+            config: uniformPatch,
+          },
+          this.store.activeSubentryId || null,
+        );
+        anyApplied = true;
+        for (const k of Object.keys(uniformPatch)) {
+          this.store.batchDraft.delete(k);
+        }
+        for (const pk of foldedPillKeys) {
+          this.batchPillDrafts.delete(pk);
+        }
+      }
+      const remainingPerDevice = new Set (perDevicePatches.keys());
+      for (const [subentryId, devPatch] of perDevicePatches.entries()) {
+        const expectedRev = this.store.getKnownDeviceConfigRev(subentryId);
+        const reqPayload = { config: devPatch };
+        if (expectedRev > 0) {
+          reqPayload.expected_config_rev = expectedRev;
+        }
+        const devRes = await this.store.ws.runDeviceCommand(
+          subentryId,
+          "save_device_config",
+          reqPayload,
+        );
+        anyApplied = true;
+        remainingPerDevice.delete(subentryId);
+        if (devRes) {
+          if (devRes.subentry_id === subentryId && devRes.device_config_rev > 0) {
+            this.store.recordKnownDeviceConfigRev(subentryId, devRes.device_config_rev);
+          }
+          lastRes = devRes;
+        }
+      }
+      this.store.batchDraft.clear();
+      if (remainingPerDevice.size === 0) {
+        this.batchPillDrafts.clear();
+      }
+      if (lastRes) {
+        this.store.ingestPayload(lastRes, false);
+      }
+      const afterDevs = this.store.state?.system_devices || [];
+      const detachedTitles = [];
+      for (const [subId, prev] of beforeGroups.entries()) {
+        const cur = afterDevs.find((d) => d.subentry_id === subId);
+        if (cur && cur.device_group === "custom" && prev.group !== "custom") {
+          detachedTitles.push(prev.title);
+        }
+      }
+      const singleDetached = detachedTitles[0];
+      if (detachedTitles.length === 1 && singleDetached !== undefined) {
+        this.store.showToast(
+          this.store.t("groups.detached_toast", { title: singleDetached }),
+        );
+      } else if (detachedTitles.length > 1) {
+        this.store.showToast(
+          this.store.t("groups.detached_many_toast", { count: detachedTitles.length }),
+        );
+      } else {
+        const count = matchedDevices.length;
+        this.store.showToast(
+          count === 1
+            ? this.store.t("batch.applied_to_one")
+            : this.store.t("batch.applied_to_n", { count }),
+        );
+      }
+    } catch (err) {
+      if (anyApplied || isConflictError(err)) {
+        await this.store.refreshState();
+      }
+      if (isConflictError(err)) {
+        this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
+      } else {
+        this.store.showToast(formatWsError(err, "Could not apply staged batch settings"), true);
+      }
+    } finally {
+      this.batchBusy = false;
+      this.store.host.requestUpdate();
+    }
+  }
+  async applyBatchCopyFromDevice(sourceSubentryId, copyKeys) {
+    if (!sourceSubentryId || !copyKeys.length) {
+      this.store.showToast("Choose a template Device first", true);
+      return;
+    }
+    try {
+      const res = await this.store.ws.runSystemCommand(
+        "apply_batch_device_setting",
+        {
+          target: this.store.batchTargetFilter || "all",
+          source_subentry_id: sourceSubentryId,
+          copy_keys: copyKeys,
+        },
+        this.store.activeSubentryId || null,
+      );
+      if (res) this.store.ingestPayload(res, false);
+      this.store.showToast("Pushed list from template Device");
+    } catch (err) {
+      this.store.showToast(formatWsError(err, "Could not copy list across target Devices"), true);
+    }
+  }
+}
+__latterExp(__exports, { BatchController: () => BatchController });
+//# sourceURL=latter-studio/src/state/batch-controller.ts
+});
+__latterDef("src/state/ble-calibration-ops.ts", (__exports, __req) => {
+const { formatWsError } = __req("src/api/ws-client.ts");
+/**
+ * Walk-Around BLE Calibration, Scanner Antenna Trim, Area Sensor Fusion,
+ * & Area Illuminance Calibration Operations (`L2` leaf, `D-064`, `D-075`).
+ */
+function isCalibratingIlluminanceOp(
+  calState,
+  areaId,
+) {
+  if (calState.calibratingAllIlluminance) return true;
+  return Boolean(areaId && calState.calibratingIlluminanceAreas.has(String(areaId)));
+}
+function selectBleSurveyDeviceOp(store, subentryId) {
+  store.bleSurveySubentryId = subentryId;
+  store.host.requestUpdate();
+  void store.ensureSubscription(false);
+}
+function selectBleCalibrateAreaOp(
+  store,
+  areaId,
+  fromAreaCard = false,
+) {
+  store.bleCalibrateAreaId = String(areaId || "");
+  if (fromAreaCard) {
+    store.handoffTargetIds.clear();
+    store.bleCalibrateHandoffActive = true;
+  }
+  store.host.requestUpdate();
+  if (fromAreaCard && typeof globalThis.requestAnimationFrame === "function") {
+    globalThis.requestAnimationFrame(() => {
+      const root =
+        (store.host).renderRoot ||
+        store.host.shadowRoot;
+      const cardEl =
+        root?.getElementById("card-ble-calibration") ||
+        root?.getElementById("ble-calibrate-target-box");
+      if (cardEl && typeof cardEl.scrollIntoView === "function") {
+        cardEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      const selectEl = root?.getElementById(
+        "ble-calibrate-area-select",
+      );
+      if (selectEl && typeof selectEl.focus === "function") {
+        try {
+          selectEl.focus({ preventScroll: true });
+        } catch {
+          selectEl.focus();
+        }
+      }
+    });
+  }
+}
+function toggleBleLiveStreamOp(store, enabled) {
+  if (!enabled) {
+    store.bleSurveyFrozen.clear();
+    for (const dev of store.state?.system_devices || []) {
+      if (!dev.subentry_id) continue;
+      store.bleSurveyFrozen.set(dev.subentry_id, {
+        rows: (dev.ble_survey_rows || []).map((r) => ({ ...r })),
+        packetsSeen: dev.ble_packets_seen ?? 0,
+        activeAreaName: dev.active_area_name || "",
+      });
+    }
+    store.bleLiveStreamActive = false;
+    store.host.requestUpdate();
+    void store.ensureSubscription(false);
+    return;
+  }
+  store.bleSurveyFrozen.clear();
+  store.bleLiveStreamActive = true;
+  store.host.requestUpdate();
+  void store.ensureSubscription(false);
+}
+function getActiveSurveyDeviceOp(store) {
+  const devs = store.state?.system_devices || [];
+  const bleDevs = devs.filter((d) => d.ble_tracked || d.kind === "ble_tag");
+  return bleDevs.find((d) => d.subentry_id === store.bleSurveySubentryId);
+}
+async function setBleScannerOffsetOp(
+  store,
+  scannerSource,
+  offsetDb,
+) {
+  const source = String(scannerSource || "").trim();
+  if (!source) {
+    store.showToast("Missing BLE scanner source", true);
+    return;
+  }
+  try {
+    const res = await store.ws.runSystemCommand(
+      "set_ble_scanner_offset",
+      { scanner_source: source, offset_db: offsetDb },
+      store.activeSubentryId || null,
+    );
+    if (res) {
+      if (!store.bleLiveStreamActive && Array.isArray(res.system_devices)) {
+        const sourceNorm = source.toLowerCase();
+        for (const incomingDev of res.system_devices) {
+          if (!incomingDev.subentry_id) continue;
+          const frozen = store.bleSurveyFrozen.get(incomingDev.subentry_id);
+          if (!frozen) continue;
+          const incomingRow = (incomingDev.ble_survey_rows || []).find(
+            (r) => String(r.scanner_source || "").trim().toLowerCase() === sourceNorm,
+          );
+          if (!incomingRow) continue;
+          frozen.rows = frozen.rows.map((r) => {
+            if (String(r.scanner_source || "").trim().toLowerCase() !== sourceNorm) {
+              return r;
+            }
+            return {
+              ...r,
+              offset_db: incomingRow.offset_db,
+              effective_rssi: incomingRow.effective_rssi,
+            };
+          });
+        }
+      }
+      store.ingestPayload(res, false);
+    }
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not update BLE scanner offset"), true);
+  }
+}
+async function captureBleAreaSignatureOp(
+  store,
+  areaId,
+) {
+  const sysDevs = store.state?.system_devices;
+  const activeDev = Array.isArray(sysDevs)
+    ? getActiveSurveyDeviceOp(store) || sysDevs.find((d) => d.ble_tracked || d.kind === "ble_tag")
+    : undefined;
+  const surveySubentryId = Array.isArray(sysDevs)
+    ? activeDev?.subentry_id || ""
+    : store.bleSurveySubentryId;
+  if (!surveySubentryId) {
+    store.showToast("Select a calibration Device first", true);
+    return;
+  }
+  try {
+    const res = await store.ws.runSystemCommand(
+      "capture_ble_area_signature",
+      { area_id: areaId, survey_subentry_id: surveySubentryId },
+      store.activeSubentryId || null,
+    );
+    store.bleCalibrateHandoffActive = false;
+    if (res) store.ingestPayload(res, false);
+    else store.host?.requestUpdate?.();
+    store.showToast("Captured Area signature");
+  } catch (err) {
+    store.showToast(formatWsError(err, "Signature capture failed"), true);
+  }
+}
+async function clearBleAreaSignatureOp(
+  store,
+  areaId,
+) {
+  const cleanId = String(areaId || "").trim();
+  if (!cleanId) return;
+  try {
+    const res = await store.ws.runSystemCommand(
+      "clear_ble_area_signature",
+      { area_id: cleanId },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    store.showToast("Cleared Area signature");
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not clear Area signature"), true);
+  }
+}
+function requestClearBleAreaSignatureOp(
+  store,
+  areaId,
+  areaName,
+) {
+  const cleanId = String(areaId || "").trim();
+  if (!cleanId) return;
+  const area = areaName || cleanId;
+  store.openConfirm({
+    kind: "clear_ble_signature",
+    title: store.t("confirm.clear_ble_signature.title", { area }),
+    consequence: store.t("confirm.clear_ble_signature.body", { area }),
+    confirmLabel: store.t("confirm.clear_ble_signature.confirm"),
+    danger: true,
+    onConfirm: async() => {
+      await clearBleAreaSignatureOp(store, cleanId);
+    },
+  });
+}
+async function setAreaFusionOp(
+  store,
+  areaId,
+  update,
+) {
+  try {
+    const res = await store.ws.runSystemCommand(
+      "set_area_fusion",
+      { area_id: areaId, ...update },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    store.announcePolite(store.t("shell.saved_status"));
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not update Area fusion"), true);
+  }
+}
+async function setAreaIlluminanceOp(
+  store,
+  areaId,
+  update,
+) {
+  try {
+    const res = await store.ws.runSystemCommand(
+      "set_area_illuminance",
+      { area_id: areaId, ...update },
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    store.announcePolite(store.t("shell.saved_status"));
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not update Area ambient light"), true);
+  }
+}
+async function calibrateAreaIlluminanceOp(
+  store,
+  calState,
+  areaId,
+) {
+  if (isCalibratingIlluminanceOp(calState, areaId)) return;
+  if (areaId) {
+    calState.calibratingIlluminanceAreas.add(areaId);
+  } else {
+    calState.calibratingAllIlluminance = true;
+  }
+  store.host.requestUpdate();
+  try {
+    const payload = {};
+    if (areaId) payload.area_id = areaId;
+    const res = await store.ws.runSystemCommand(
+      "calibrate_area_illuminance",
+      payload,
+      store.activeSubentryId || null,
+    );
+    if (res) store.ingestPayload(res, false);
+    const rawCal = (
+      res
+    )?.calibrated;
+    const list = Array.isArray(rawCal) ? rawCal : [];
+    const singleItem = list[0];
+    if (list.length === 1 && singleItem) {
+      store.showToast(
+        store.t("presence_sys.calibrate_lux_one_done", {
+          area: String(singleItem.area_name || ""),
+          dark: String(singleItem.dark_lux ?? 0),
+          bright: String(singleItem.bright_lux ?? 40),
+        }),
+        false,
+      );
+    } else if (list.length > 1) {
+      store.showToast(
+        store.t("presence_sys.calibrate_lux_done", { count: list.length }),
+        false,
+      );
+    }
+  } catch (err) {
+    store.showToast(formatWsError(err, "Could not calibrate Area ambient light"), true);
+  } finally {
+    if (areaId) {
+      calState.calibratingIlluminanceAreas.delete(areaId);
+    } else {
+      calState.calibratingAllIlluminance = false;
+    }
+    store.host.requestUpdate();
+  }
+}
+__latterExp(__exports, { isCalibratingIlluminanceOp: () => isCalibratingIlluminanceOp, selectBleSurveyDeviceOp: () => selectBleSurveyDeviceOp, selectBleCalibrateAreaOp: () => selectBleCalibrateAreaOp, toggleBleLiveStreamOp: () => toggleBleLiveStreamOp, getActiveSurveyDeviceOp: () => getActiveSurveyDeviceOp, setBleScannerOffsetOp: () => setBleScannerOffsetOp, captureBleAreaSignatureOp: () => captureBleAreaSignatureOp, clearBleAreaSignatureOp: () => clearBleAreaSignatureOp, requestClearBleAreaSignatureOp: () => requestClearBleAreaSignatureOp, setAreaFusionOp: () => setAreaFusionOp, setAreaIlluminanceOp: () => setAreaIlluminanceOp, calibrateAreaIlluminanceOp: () => calibrateAreaIlluminanceOp });
+//# sourceURL=latter-studio/src/state/ble-calibration-ops.ts
+});
+__latterDef("src/state/groups-controller.ts", (__exports, __req) => {
+const { formatWsError } = __req("src/api/ws-client.ts");
+const { BatchController } = __req("src/state/batch-controller.ts");
+const { calibrateAreaIlluminanceOp, captureBleAreaSignatureOp, clearBleAreaSignatureOp, getActiveSurveyDeviceOp, isCalibratingIlluminanceOp, requestClearBleAreaSignatureOp, selectBleCalibrateAreaOp, selectBleSurveyDeviceOp, setAreaFusionOp, setAreaIlluminanceOp, setBleScannerOffsetOp, toggleBleLiveStreamOp } = __req("src/state/ble-calibration-ops.ts");
+/**
+ * `store.groups` Controller (`GroupsController`, `D-050`, `D-064` / `Q6`, `D-075`):
+ * - Device Groups CRUD, scope toggles (`include_display`, `include_interface`), & baseline updates
+ * - Delegates staged `Batch controls` operations to `BatchController`
+ * - Delegates Walk-Around BLE calibration & Area sensor/illuminance fusion to `ble-calibration-ops`
+ */
+function slugifyGroupName(raw) {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+class GroupsController {
+                   store;
+                   batch;
+  calibratingAllIlluminance = false;
+           calibratingIlluminanceAreas = new Set();
+  constructor(store) {
+    this.store = store;
+    this.batch = new BatchController(store);
+  }
+  get batchPillDrafts() {
+    return this.batch.batchPillDrafts;
+  }
+  get batchBusy() {
+    return this.batch.batchBusy;
+  }
+  set batchBusy(val) {
+    this.batch.batchBusy = val;
+  }
+  get batchDraft() {
+    return this.batch.batchDraft;
+  }
+  get batchDraftCount() {
+    return this.batch.batchDraftCount;
+  }
+  get hasBatchDraft() {
+    return this.batch.hasBatchDraft;
+  }
+  isCalibratingIlluminance(areaId) {
+    return isCalibratingIlluminanceOp(this, areaId);
   }
   // ---------- Device Groups CRUD & Baseline Updates ----------
   toggleNewGroupForm(open) {
@@ -9440,655 +10461,1156 @@ class GroupsController {
       this.store.showToast(formatWsError(err, "Could not copy Device settings"), true);
     }
   }
-  // ---------- Staged Batch Controls (`Q6` / `D-064`) ----------
+  // ---------- Staged Batch Controls Delegation ----------
   resolvedBatchTargetId() {
-    const filter = this.store.batchTargetFilter || "all";
-    if (filter.startsWith("group:")) return filter.slice(6);
-    return filter;
+    return this.batch.resolvedBatchTargetId();
   }
   setBatchTargetFilter(nextFilter) {
-    const cleaned = String(nextFilter || "all").trim() || "all";
-    if (this.store.batchTargetFilter === cleaned) return;
-    this.store.batchTargetFilter = cleaned;
-    this.resetBatchDraft();
+    this.batch.setBatchTargetFilter(nextFilter);
   }
   matchingBatchDevices() {
-    const filter = this.store.batchTargetFilter || "all";
-    const devs = (this.store.state?.system_devices || []).filter((d) => d.kind !== "ble_tag");
-    return devs.filter((d) => {
-      if (filter === "all") return true;
-      if (filter === "online") return Boolean(d.is_online);
-      if (filter === "roaming") return Boolean(d.is_roaming);
-      if (filter === "stationary") return !d.is_roaming;
-      const grpId = filter.startsWith("group:") ? filter.slice(6) : filter;
-      return (d.device_group || "custom") === grpId;
-    });
+    return this.batch.matchingBatchDevices();
   }
   filteredControlTargets(ctrl) {
-    const filter = this.store.batchTargetFilter || "all";
-    return (ctrl.targets || []).filter((t) => {
-      if (filter === "all") return true;
-      if (filter === "online") return Boolean(t.is_online);
-      if (filter === "roaming") return Boolean(t.is_roaming);
-      if (filter === "stationary") return !t.is_roaming;
-      const grpId = filter.startsWith("group:") ? filter.slice(6) : filter;
-      return (t.device_group || "custom") === grpId;
-    });
+    return this.batch.filteredControlTargets(ctrl);
   }
   getEffectiveBatchValue(ctrl)
     {
-    const prefKey = ctrl.pref_key || "";
-    if (prefKey && this.store.batchDraft.has(prefKey)) {
-      const raw = this.store.batchDraft.get(prefKey);
-      const valStr =
-        ctrl.domain === "switch" ? (raw ? "on" : "off") : String(raw ?? "");
-      return { value: valStr, mixed: false, staged: true };
-    }
-    const targets = this.filteredControlTargets(ctrl);
-    if (targets.length === 0) {
-      return { value: String(ctrl.state ?? ""), mixed: false, staged: false };
-    }
-    const unique = new Set(targets.map((t) => String(t.state ?? "")));
-    if (unique.size > 1) {
-      return { value: String(targets[0].state ?? ""), mixed: true, staged: false };
-    }
-    return { value: String(targets[0].state ?? ""), mixed: false, staged: false };
-  }
-          applyTokenDeltasToCsv(
-    baseCsv,
-    deltas,
-    canonicalOrder,
-  ) {
-    const current = parseCsvTokens(baseCsv);
-    const active = new Set(current);
-    for (const [tok, wantOn] of Object.entries(deltas)) {
-      if (wantOn) active.add(tok);
-      else active.delete(tok);
-    }
-    // Preserve each target Device's existing relative token order first, appending newly enabled tokens in canonical order.
-    const preserved = current.filter((tok) => active.has(tok));
-    const preservedSet = new Set(preserved);
-    const appended = canonicalOrder.filter((tok) => active.has(tok) && !preservedSet.has(tok));
-    const extras = Array.from(active).filter(
-      (tok) => !preservedSet.has(tok) && !appended.includes(tok),
-    );
-    return [...preserved, ...appended, ...extras].join(",");
+    return this.batch.getEffectiveBatchValue(ctrl);
   }
   getEffectiveBatchPillStates(ctrl) {
-    const prefKey = ctrl.pref_key || "";
-    const options = ctrl.options || [];
-    const labels = ctrl.option_labels || {};
-    const targets = this.filteredControlTargets(ctrl);
-    const deltas = (prefKey && this.batchPillDrafts.get(prefKey)) || {};
-    const explicitCsv =
-      prefKey && this.store.batchDraft.has(prefKey)
-        ? String(this.store.batchDraft.get(prefKey) ?? "")
-        : null;
-    return options.map((token) => {
-      const label = labels[token] || token;
-      if (explicitCsv !== null) {
-        const set = new Set(parseCsvTokens(explicitCsv));
-        return {
-          token,
-          label,
-          state: set.has(token) ? "on" : "off",
-          staged: true,
-        };
-      }
-      if (token in deltas) {
-        return {
-          token,
-          label,
-          state: deltas[token] ? "on" : "off",
-          staged: true,
-        };
-      }
-      if (targets.length === 0) {
-        return { token, label, state: "off", staged: false };
-      }
-      let onCount = 0;
-      for (const t of targets) {
-        if (parseCsvTokens(t.state).includes(token)) {
-          onCount += 1;
-        }
-      }
-      const state =
-        onCount === 0 ? "off" : onCount === targets.length ? "on" : "mixed";
-      return { token, label, state, staged: false };
-    });
+    return this.batch.getEffectiveBatchPillStates(ctrl);
   }
   stageBatchSetting(key, value) {
-    const cleanKey = String(key || "").trim();
-    if (!cleanKey) return;
-    this.batchPillDrafts.delete(cleanKey);
-    this.store.batchDraft.set(cleanKey, value);
-    this.store.host.requestUpdate();
+    this.batch.stageBatchSetting(key, value);
   }
   stageBatchColor(ctrl, hex) {
-    const cleaned = String(hex || "").trim().toUpperCase();
-    if (!ctrl.pref_key || !isValidHexColor(cleaned)) return;
-    this.store.batchDraft.set(ctrl.pref_key, cleaned);
-    this.store.batchDraft.set("color_profile", "Custom");
-    this.store.host.requestUpdate();
+    this.batch.stageBatchColor(ctrl, hex);
   }
-  /**
-   * Stages a per-token pill toggle across matching target Devices (`Q6`).
-   * Never copies `states[0]` over `Mixed` target Devices: untouched tokens stay intact per Device.
-   */
   stageBatchPillToggle(
     ctrl,
     rawToken,
     forceEnabled,
   ) {
-    const prefKey = ctrl.pref_key || "";
-    const token = String(rawToken || "").trim();
-    if (!prefKey || !token) return;
-    const pillStates = this.getEffectiveBatchPillStates(ctrl);
-    const currentPill = pillStates.find((p) => p.token === token);
-    const wantOn =
-      forceEnabled !== undefined
-        ? Boolean(forceEnabled)
-        : currentPill?.state !== "on";
-    const targets = this.filteredControlTargets(ctrl);
-    const order = ctrl.options || [];
-    const existingDeltas = { ...(this.batchPillDrafts.get(prefKey) || {}) };
-    // If a full CSV override was previously staged on `batchDraft`, fold it into per-token deltas first.
-    if (this.store.batchDraft.has(prefKey)) {
-      const fullSet = new Set(parseCsvTokens(String(this.store.batchDraft.get(prefKey) ?? "")));
-      for (const opt of order) {
-        existingDeltas[opt] = fullSet.has(opt);
-      }
-      this.store.batchDraft.delete(prefKey);
-    }
-    const candidateDeltas = {
-      ...existingDeltas,
-      [token]: wantOn,
-    };
-    const minRequired = ctrl.min ?? 0;
-    if (!wantOn && minRequired > 0 && targets.length > 0) {
-      const violatesMin = targets.some((t) => {
-        const nextCsv = this.applyTokenDeltasToCsv(t.state, candidateDeltas, order);
-        return parseCsvTokens(nextCsv).length < minRequired;
-      });
-      if (violatesMin) {
-        const noun =
-          prefKey === "tools_items"
-            ? "tool"
-            : prefKey === "games_items"
-              ? "game"
-              : "category";
-        this.store.showToast(this.store.t("common.keep_one_enabled", { noun }), true);
-        return;
-      }
-    }
-    // Prune delta if it matches the server's unmodified state on every matching target Device.
-    if (
-      targets.length > 0 &&
-      targets.every((t) => parseCsvTokens(t.state).includes(token) === wantOn)
-    ) {
-      delete candidateDeltas[token];
-    }
-    if (Object.keys(candidateDeltas).length === 0) {
-      this.batchPillDrafts.delete(prefKey);
-    } else {
-      this.batchPillDrafts.set(prefKey, candidateDeltas);
-    }
-    this.store.host.requestUpdate();
+    this.batch.stageBatchPillToggle(ctrl, rawToken, forceEnabled);
   }
   resetBatchDraft() {
-    this.store.batchDraft.clear();
-    this.batchPillDrafts.clear();
-    this.store.host.requestUpdate();
+    this.batch.resetBatchDraft();
   }
   previewBatchDetachmentCount() {
-    if (!this.hasBatchDraft) return 0;
-    const hasDetachingKey =
-      this.batchPillDrafts.size > 0 ||
-      Array.from(this.store.batchDraft.keys()).some((key) => {
-        const spec = this.store.entity.getPrefSpec(key);
-        return !spec || spec.group_tier !== null;
-      });
-    if (!hasDetachingKey) return 0;
-    return this.matchingBatchDevices().filter(
-      (d) => Boolean(d.device_group && d.device_group !== "custom"),
-    ).length;
+    return this.batch.previewBatchDetachmentCount();
   }
   requestApplyBatchDraft() {
-    if (!this.hasBatchDraft || this.batchBusy) return;
-    const targets = this.matchingBatchDevices();
-    if (targets.length === 0) {
-      this.store.showToast(this.store.t("batch.no_targets"), true);
-      return;
-    }
-    if (targets.length === 1) {
-      void this.applyBatchDraft();
-      return;
-    }
-    const count = targets.length;
-    const settingCount = this.batchDraftCount;
-    this.store.openConfirm({
-      kind: "apply_batch",
-      title: this.store.t("confirm.apply_batch.title", { count }),
-      consequence: this.store.t("confirm.apply_batch.body", {
-        settingCount,
-        count,
-      }),
-      confirmLabel: this.store.t("confirm.apply_batch.confirm"),
-      danger: false,
-      blastRadiusCount: count,
-      onConfirm: async() => {
-        await this.applyBatchDraft();
-      },
-    });
+    this.batch.requestApplyBatchDraft();
   }
   async applyBatchDraft() {
-    if (!this.hasBatchDraft || this.batchBusy) return;
-    const matchedDevices = this.matchingBatchDevices();
-    if (matchedDevices.length === 0) {
-      this.store.showToast(this.store.t("batch.no_targets"), true);
-      return;
-    }
-    const beforeGroups = new Map();
-    const subentryBySlug = new Map();
-    for (const d of matchedDevices) {
-      subentryBySlug.set(d.device_slug, d.subentry_id);
-      if (d.device_group && d.device_group !== "custom") {
-        beforeGroups.set(d.subentry_id, { title: d.title, group: d.device_group });
-      }
-    }
-    const uniformPatch = Object.fromEntries(
-      this.store.batchDraft.entries(),
-    );
-    const foldedPillKeys = new Set();
-    const perDevicePatches = new Map();
-    const controls = this.store.state?.system_controls || [];
-    for (const [prefKey, deltas] of this.batchPillDrafts.entries()) {
-      if (Object.keys(deltas).length === 0) continue;
-      const ctrl = controls.find((c) => c.pref_key === prefKey);
-      const order = ctrl?.options || [];
-      const targets = ctrl ? this.filteredControlTargets(ctrl) : [];
-      if (targets.length === 0) continue;
-      const resolvedPerTarget = [];
-      for (const t of targets) {
-        const subId = t.subentry_id || (t.device_slug ? subentryBySlug.get(t.device_slug) : "") || "";
-        const csv = this.applyTokenDeltasToCsv(t.state, deltas, order);
-        if (subId) {
-          resolvedPerTarget.push({ subentryId: subId, csv });
-        }
-      }
-      if (resolvedPerTarget.length === 0) continue;
-      const distinctCsvs = new Set(resolvedPerTarget.map((r) => r.csv));
-      if (distinctCsvs.size === 1) {
-        uniformPatch[prefKey] = resolvedPerTarget[0].csv;
-        foldedPillKeys.add(prefKey);
-      } else {
-        for (const item of resolvedPerTarget) {
-          const cur = perDevicePatches.get(item.subentryId) || {};
-          cur[prefKey] = item.csv;
-          perDevicePatches.set(item.subentryId, cur);
-        }
-      }
-    }
-    this.batchBusy = true;
-    this.store.host.requestUpdate();
-    let anyApplied = false;
-    try {
-      let lastRes = null;
-      if (Object.keys(uniformPatch).length > 0) {
-        lastRes = await this.store.ws.runSystemCommand(
-          "apply_batch_device_setting",
-          {
-            target: this.store.batchTargetFilter || "all",
-            config: uniformPatch,
-          },
-          this.store.activeSubentryId || null,
-        );
-        anyApplied = true;
-        for (const k of Object.keys(uniformPatch)) {
-          this.store.batchDraft.delete(k);
-        }
-        for (const pk of foldedPillKeys) {
-          this.batchPillDrafts.delete(pk);
-        }
-      }
-      const remainingPerDevice = new Set (perDevicePatches.keys());
-      for (const [subentryId, devPatch] of perDevicePatches.entries()) {
-        const expectedRev = this.store.getKnownDeviceConfigRev(subentryId);
-        const reqPayload = { config: devPatch };
-        if (expectedRev > 0) {
-          reqPayload.expected_config_rev = expectedRev;
-        }
-        const devRes = await this.store.ws.runDeviceCommand(
-          subentryId,
-          "save_device_config",
-          reqPayload,
-        );
-        anyApplied = true;
-        remainingPerDevice.delete(subentryId);
-        if (devRes) {
-          if (devRes.subentry_id === subentryId && devRes.device_config_rev > 0) {
-            this.store.recordKnownDeviceConfigRev(subentryId, devRes.device_config_rev);
-          }
-          lastRes = devRes;
-        }
-      }
-      this.store.batchDraft.clear();
-      if (remainingPerDevice.size === 0) {
-        this.batchPillDrafts.clear();
-      }
-      if (lastRes) {
-        this.store.ingestPayload(lastRes, false);
-      }
-      const afterDevs = this.store.state?.system_devices || [];
-      const detachedTitles = [];
-      for (const [subId, prev] of beforeGroups.entries()) {
-        const cur = afterDevs.find((d) => d.subentry_id === subId);
-        if (cur && cur.device_group === "custom" && prev.group !== "custom") {
-          detachedTitles.push(prev.title);
-        }
-      }
-      if (detachedTitles.length === 1) {
-        this.store.showToast(
-          this.store.t("groups.detached_toast", { title: detachedTitles[0] }),
-        );
-      } else if (detachedTitles.length > 1) {
-        this.store.showToast(
-          this.store.t("groups.detached_many_toast", { count: detachedTitles.length }),
-        );
-      } else {
-        const count = matchedDevices.length;
-        this.store.showToast(
-          count === 1
-            ? this.store.t("batch.applied_to_one")
-            : this.store.t("batch.applied_to_n", { count }),
-        );
-      }
-    } catch (err) {
-      if (anyApplied || isConflictError(err)) {
-        await this.store.refreshState();
-      }
-      if (isConflictError(err)) {
-        this.store.showToast(this.store.t("sync.conflict_reloaded"), true);
-      } else {
-        this.store.showToast(formatWsError(err, "Could not apply staged batch settings"), true);
-      }
-    } finally {
-      this.batchBusy = false;
-      this.store.host.requestUpdate();
-    }
+    await this.batch.applyBatchDraft();
   }
   async applyBatchCopyFromDevice(sourceSubentryId, copyKeys) {
-    if (!sourceSubentryId || !copyKeys.length) {
-      this.store.showToast("Choose a template Device first", true);
-      return;
-    }
-    try {
-      const res = await this.store.ws.runSystemCommand(
-        "apply_batch_device_setting",
-        {
-          target: this.store.batchTargetFilter || "all",
-          source_subentry_id: sourceSubentryId,
-          copy_keys: copyKeys,
-        },
-        this.store.activeSubentryId || null,
-      );
-      if (res) this.store.ingestPayload(res, false);
-      this.store.showToast("Pushed list from template Device");
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not copy list across target Devices"), true);
-    }
+    await this.batch.applyBatchCopyFromDevice(sourceSubentryId, copyKeys);
   }
-  // ---------- Walk-Around BLE Calibration & Area Sensor Fusion ----------
+  // ---------- Walk-Around BLE Calibration & Area Fusion Delegation ----------
   selectBleSurveyDevice(subentryId) {
-    this.store.bleSurveySubentryId = subentryId;
-    this.store.host.requestUpdate();
-    void this.store.ensureSubscription(false);
+    selectBleSurveyDeviceOp(this.store, subentryId);
   }
   selectBleCalibrateArea(areaId, fromAreaCard = false) {
-    this.store.bleCalibrateAreaId = String(areaId || "");
-    if (fromAreaCard) {
-      this.store.handoffTargetIds.clear();
-      this.store.bleCalibrateHandoffActive = true;
-    }
-    this.store.host.requestUpdate();
-    if (fromAreaCard && typeof globalThis.requestAnimationFrame === "function") {
-      globalThis.requestAnimationFrame(() => {
-        const root =
-          (this.store.host).renderRoot ||
-          this.store.host.shadowRoot;
-        const cardEl =
-          root?.getElementById("card-ble-calibration") ||
-          root?.getElementById("ble-calibrate-target-box");
-        if (cardEl && typeof cardEl.scrollIntoView === "function") {
-          cardEl.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-        const selectEl = root?.getElementById(
-          "ble-calibrate-area-select",
-        );
-        if (selectEl && typeof selectEl.focus === "function") {
-          try {
-            selectEl.focus({ preventScroll: true });
-          } catch {
-            selectEl.focus();
-          }
-        }
-      });
-    }
+    selectBleCalibrateAreaOp(this.store, areaId, fromAreaCard);
   }
   toggleBleLiveStream(enabled) {
-    if (!enabled) {
-      this.store.bleSurveyFrozen.clear();
-      for (const dev of this.store.state?.system_devices || []) {
-        if (!dev.subentry_id) continue;
-        this.store.bleSurveyFrozen.set(dev.subentry_id, {
-          rows: (dev.ble_survey_rows || []).map((r) => ({ ...r })),
-          packetsSeen: dev.ble_packets_seen ?? 0,
-          activeAreaName: dev.active_area_name || "",
-        });
-      }
-      this.store.bleLiveStreamActive = false;
-      this.store.host.requestUpdate();
-      void this.store.ensureSubscription(false);
-      return;
-    }
-    this.store.bleSurveyFrozen.clear();
-    this.store.bleLiveStreamActive = true;
-    this.store.host.requestUpdate();
-    void this.store.ensureSubscription(false);
+    toggleBleLiveStreamOp(this.store, enabled);
   }
   getActiveSurveyDevice() {
-    const devs = this.store.state?.system_devices || [];
-    const bleDevs = devs.filter((d) => d.ble_tracked || d.kind === "ble_tag");
-    return bleDevs.find((d) => d.subentry_id === this.store.bleSurveySubentryId);
+    return getActiveSurveyDeviceOp(this.store);
   }
   async setBleScannerOffset(scannerSource, offsetDb) {
-    const source = String(scannerSource || "").trim();
-    if (!source) {
-      this.store.showToast("Missing BLE scanner source", true);
-      return;
-    }
-    try {
-      const res = await this.store.ws.runSystemCommand(
-        "set_ble_scanner_offset",
-        { scanner_source: source, offset_db: offsetDb },
-        this.store.activeSubentryId || null,
-      );
-      if (res) {
-        if (!this.store.bleLiveStreamActive && Array.isArray(res.system_devices)) {
-          const sourceNorm = source.toLowerCase();
-          for (const incomingDev of res.system_devices) {
-            if (!incomingDev.subentry_id) continue;
-            const frozen = this.store.bleSurveyFrozen.get(incomingDev.subentry_id);
-            if (!frozen) continue;
-            const incomingRow = (incomingDev.ble_survey_rows || []).find(
-              (r) => String(r.scanner_source || "").trim().toLowerCase() === sourceNorm,
-            );
-            if (!incomingRow) continue;
-            frozen.rows = frozen.rows.map((r) => {
-              if (String(r.scanner_source || "").trim().toLowerCase() !== sourceNorm) {
-                return r;
-              }
-              return {
-                ...r,
-                offset_db: incomingRow.offset_db,
-                effective_rssi: incomingRow.effective_rssi,
-              };
-            });
-          }
-        }
-        this.store.ingestPayload(res, false);
-      }
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not update BLE scanner offset"), true);
-    }
+    await setBleScannerOffsetOp(this.store, scannerSource, offsetDb);
   }
   async captureBleAreaSignature(areaId) {
-    const sysDevs = this.store.state?.system_devices;
-    const activeDev = Array.isArray(sysDevs)
-      ? this.getActiveSurveyDevice() ||
-        sysDevs.find((d) => d.ble_tracked || d.kind === "ble_tag")
-      : undefined;
-    const surveySubentryId = Array.isArray(sysDevs)
-      ? activeDev?.subentry_id || ""
-      : this.store.bleSurveySubentryId;
-    if (!surveySubentryId) {
-      this.store.showToast("Select a calibration Device first", true);
-      return;
-    }
-    try {
-      const res = await this.store.ws.runSystemCommand(
-        "capture_ble_area_signature",
-        { area_id: areaId, survey_subentry_id: surveySubentryId },
-        this.store.activeSubentryId || null,
-      );
-      this.store.bleCalibrateHandoffActive = false;
-      if (res) this.store.ingestPayload(res, false);
-      else this.store.host?.requestUpdate?.();
-      this.store.showToast("Captured Area signature");
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Signature capture failed"), true);
-    }
+    await captureBleAreaSignatureOp(this.store, areaId);
   }
   async clearBleAreaSignature(areaId) {
-    const cleanId = String(areaId || "").trim();
-    if (!cleanId) return;
-    try {
-      const res = await this.store.ws.runSystemCommand(
-        "clear_ble_area_signature",
-        { area_id: cleanId },
-        this.store.activeSubentryId || null,
-      );
-      if (res) this.store.ingestPayload(res, false);
-      this.store.showToast("Cleared Area signature");
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not clear Area signature"), true);
-    }
+    await clearBleAreaSignatureOp(this.store, areaId);
   }
   requestClearBleAreaSignature(areaId, areaName) {
-    const cleanId = String(areaId || "").trim();
-    if (!cleanId) return;
-    const area = areaName || cleanId;
-    this.store.openConfirm({
-      kind: "clear_ble_signature",
-      title: this.store.t("confirm.clear_ble_signature.title", { area }),
-      consequence: this.store.t("confirm.clear_ble_signature.body", { area }),
-      confirmLabel: this.store.t("confirm.clear_ble_signature.confirm"),
-      danger: true,
-      onConfirm: async() => {
-        await this.clearBleAreaSignature(cleanId);
-      },
-    });
+    requestClearBleAreaSignatureOp(this.store, areaId, areaName);
   }
   async setAreaFusion(
     areaId,
     update,
   ) {
-    try {
-      const res = await this.store.ws.runSystemCommand(
-        "set_area_fusion",
-        { area_id: areaId, ...update },
-        this.store.activeSubentryId || null,
-      );
-      if (res) this.store.ingestPayload(res, false);
-      this.store.announcePolite(this.store.t("shell.saved_status"));
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not update Area fusion"), true);
-    }
+    await setAreaFusionOp(this.store, areaId, update);
   }
   async setAreaIlluminance(
     areaId,
     update,
   ) {
-    try {
-      const res = await this.store.ws.runSystemCommand(
-        "set_area_illuminance",
-        { area_id: areaId, ...update },
-        this.store.activeSubentryId || null,
-      );
-      if (res) this.store.ingestPayload(res, false);
-      this.store.announcePolite(this.store.t("shell.saved_status"));
-    } catch (err) {
-      this.store.showToast(formatWsError(err, "Could not update Area ambient light"), true);
-    }
+    await setAreaIlluminanceOp(this.store, areaId, update);
   }
   async calibrateAreaIlluminance(areaId) {
-    if (this.isCalibratingIlluminance(areaId)) return;
-    if (areaId) {
-      this.calibratingIlluminanceAreas.add(areaId);
-    } else {
-      this.calibratingAllIlluminance = true;
-    }
-    this.store.host.requestUpdate();
-    try {
-      const payload = {};
-      if (areaId) payload.area_id = areaId;
-      const res = await this.store.ws.runSystemCommand(
-        "calibrate_area_illuminance",
-        payload,
-        this.store.activeSubentryId || null,
-      );
-      if (res) this.store.ingestPayload(res, false);
-      const rawCal = (res
-              )?.calibrated;
-      const list = Array.isArray(rawCal) ? rawCal : [];
-      if (list.length === 1) {
-        const item = list[0];
-        this.store.showToast(
-          this.store.t("presence_sys.calibrate_lux_one_done", {
-            area: String(item.area_name || ""),
-            dark: String(item.dark_lux ?? 0),
-            bright: String(item.bright_lux ?? 40),
-          }),
-          false,
-        );
-      } else if (list.length > 1) {
-        this.store.showToast(
-          this.store.t("presence_sys.calibrate_lux_done", { count: list.length }),
-          false,
-        );
-      }
-    } catch (err) {
-      this.store.showToast(
-        formatWsError(err, "Could not calibrate Area ambient light"),
-        true,
-      );
-    } finally {
-      if (areaId) {
-        this.calibratingIlluminanceAreas.delete(areaId);
-      } else {
-        this.calibratingAllIlluminance = false;
-      }
-      this.store.host.requestUpdate();
-    }
+    await calibrateAreaIlluminanceOp(this.store, this, areaId);
   }
 }
 __latterExp(__exports, { GroupsController: () => GroupsController });
 //# sourceURL=latter-studio/src/state/groups-controller.ts
 });
+__latterDef("src/state/routing.ts", (__exports, __req) => {
+const { DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS } = __req("src/constants.ts");
+const { navigateHaPath } = __req("src/utils/format.ts");
+const { emptyPhotoPickerModalState } = __req("src/state/store-types.ts");
+/**
+ * URL Routing, Active-Device Lifecycle Transitions, & Section Handoff Scrolling (`L2` leaf).
+ *
+ * Imports strictly `L0` (`constants.ts`, `types.ts`) and `L1` (`utils/format.ts`, `store-types.ts`).
+ */
+function slugToView (map, slug) {
+  const cleaned = String(slug || "").trim().toLowerCase();
+  for (const [viewId, s] of Object.entries(map)) {
+    if (s === cleaned) return viewId;
+  }
+  return null;
+}
+/**
+ * Shared capability predicate used by BOTH sidebar navigation and payload capability redirect (`B-06`, `E-14`).
+ * Never redirects or hides a tab when capability flags are `undefined` (not yet loaded).
+ */
+function deviceHasView(
+  viewId,
+  caps,
+  kind,
+) {
+  if (
+    viewId === "select_device_prompt" ||
+    viewId === "discovered_devices" ||
+    viewId === "dashboard" ||
+    viewId === "presence" ||
+    viewId === "tools"
+  ) {
+    return true;
+  }
+  if (kind === "ble_tag") return false;
+  if (!caps) return true;
+  if (viewId === "display" || viewId === "interface") {
+    return caps.has_display !== false;
+  }
+  if (viewId === "audio_voice") {
+    return !(caps.has_audio === false && caps.has_voice === false);
+  }
+  if (viewId === "power") {
+    return caps.has_power !== false;
+  }
+  return true;
+}
+function storeDeviceHasView(store, viewId) {
+  if (store.state?.subentry_id !== store.activeSubentryId) {
+    const entry = store.state?.system_devices?.find(
+      (d) => d.subentry_id === store.activeSubentryId,
+    );
+    if (entry?.kind === "ble_tag") {
+      return deviceHasView(viewId, undefined, "ble_tag");
+    }
+    return deviceHasView(viewId, undefined, undefined);
+  }
+  return deviceHasView(viewId, store.state?.capabilities, store.state?.config?.kind);
+}
+function scrollIntoViewAsync(
+  element,
+  options,
+) {
+  const result = element.scrollIntoView(options);
+  if (result instanceof Promise) {
+    return result;
+  }
+  const scroller = globalThis.window;
+  if (!scroller || typeof scroller.addEventListener !== "function") {
+    return Promise.resolve();
+  }
+  return new Promise ((resolve) => {
+    let timeoutId;
+    const finish = () => {
+      clearTimeout(timeoutId);
+      scroller.removeEventListener("scrollend", finish);
+      scroller.removeEventListener("scroll", onScroll);
+      resolve();
+    };
+    const onScroll = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(finish, 100);
+    };
+    scroller.addEventListener("scrollend", finish, { once: true });
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    timeoutId = setTimeout(finish, 100);
+  });
+}
+function hostUpdatedDomOp(store, rt) {
+  if (store.pendingDomRevert) {
+    const rev = store.pendingDomRevert;
+    store.pendingDomRevert = null;
+    const root = (store.host).renderRoot;
+    if (root) {
+      for (const [id, val] of Object.entries(rev.controlIds)) {
+        const el = root.getElementById(id);
+        if (!el) continue;
+        if (typeof val === "boolean" && "checked" in el) {
+          (el).checked = val;
+        } else {
+          el.value = String(val);
+        }
+      }
+    }
+  }
+  if (store.pendingScrollCardId) {
+    const cardId = store.pendingScrollCardId;
+    store.pendingScrollCardId = "";
+    const root =
+      (store.host).renderRoot ||
+      store.host.shadowRoot;
+    const target = root?.getElementById(cardId);
+    if (target && typeof target.scrollIntoView === "function") {
+      const myGen = ++rt.scrollGen;
+      const reducedMotion = Boolean(
+        typeof globalThis.matchMedia === "function" &&
+          globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      );
+      void scrollIntoViewAsync(target, {
+        behavior: reducedMotion ? "auto" : "smooth",
+        block: "start",
+      }).then(() => {
+        if (myGen !== rt.scrollGen || !store.handoffTargetIds.has(cardId)) return;
+        if (typeof target.focus === "function") {
+          if (typeof target.hasAttribute === "function" && !target.hasAttribute("tabindex")) {
+            target.setAttribute?.("tabindex", "-1");
+          }
+          try {
+            target.focus({ preventScroll: true });
+          } catch {
+            target.focus();
+          }
+        }
+      });
+    }
+  }
+  rt.handoffArming = false;
+}
+function applySectionHandoffOp(
+  store,
+  rt,
+  scrollId = "",
+  highlightIds,
+) {
+  const cleanScroll = String(scrollId || "").trim();
+  store.pendingScrollCardId = cleanScroll;
+  const ids =
+    highlightIds && highlightIds.length > 0
+      ? highlightIds
+      : cleanScroll
+        ? [cleanScroll]
+        : [];
+  for (const rawId of ids) {
+    const id = String(rawId || "").trim();
+    if (id) store.handoffTargetIds.add(id);
+  }
+  if (store.handoffTargetIds.size > 0) {
+    rt.handoffArming = true;
+    store.host.requestUpdate();
+  }
+}
+function onMainFocusInOp(
+  store,
+  rt,
+  ev,
+) {
+  if (rt.handoffArming || store.handoffTargetIds.size === 0) return;
+  const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+  const target = (path[0] ?? ev.target);
+  if (!target || typeof target.tagName !== "string") return;
+  const tag = target.tagName.toUpperCase();
+  if (
+    tag !== "BUTTON" &&
+    tag !== "INPUT" &&
+    tag !== "SELECT" &&
+    tag !== "TEXTAREA" &&
+    tag !== "SUMMARY" &&
+    tag !== "A"
+  ) {
+    return;
+  }
+  let cur = target;
+  while (cur) {
+    if (cur.id && store.handoffTargetIds.has(cur.id)) {
+      return;
+    }
+    cur = cur.parentElement;
+  }
+  store.handoffTargetIds.clear();
+  store.host.requestUpdate();
+}
+function onActiveDeviceChangedOp(
+  store,
+  prevId,
+  nextId,
+  options,
+) {
+  const cleanPrev = String(prevId || "").trim();
+  const cleanNext = String(nextId || "").trim();
+  if (cleanPrev && cleanPrev !== cleanNext) {
+    if (options?.discardPrevPending) {
+      store.entity.discardDeviceBucket(cleanPrev);
+    } else {
+      void store.entity.flushDeviceBucket(cleanPrev);
+    }
+  }
+  if (cleanPrev !== cleanNext) {
+    store.devicePinDraft = "";
+    store.worldClockNewLabel = "";
+    store.worldClockNewZone = "";
+    store.worldClockRowKeys = [];
+    store.overviewAlarmsOpen = false;
+    store.appConfigModal = { open: false, app: null };
+    store.cameraConfigModal = { ...store.cameraConfigModal, open: false };
+    store.photoPickerModal = emptyPhotoPickerModalState();
+    store.shortcutModal = { ...store.shortcutModal, open: false };
+    store.saveGroupModal = { ...store.saveGroupModal, open: false, busy: false };
+    store.resetModal = { ...store.resetModal, open: false, busy: false };
+    store.removeModal = { ...store.removeModal, open: false, busy: false };
+    store.returnToPinnedModal = false;
+    store.clearHandoffTargets();
+  }
+  store.activeSubentryId = cleanNext;
+  store.deviceSelected = Boolean(cleanNext);
+  store.deviceLoading = Boolean(cleanNext && store.state?.subentry_id !== cleanNext);
+  store.syncLiveClockTimer();
+}
+function applyRouteOp(
+  store,
+  rt,
+  route,
+) {
+  let rawPath = String(route?.path ?? "");
+  if (!rawPath && !route && typeof globalThis.location?.pathname === "string") {
+    const locPath = globalThis.location.pathname;
+    if (locPath.startsWith("/latter/")) {
+      rawPath = locPath.slice("/latter/".length);
+    }
+  }
+  const parts = rawPath
+    .split("/")
+    .filter(Boolean)
+    .map((seg) => {
+      try {
+        return decodeURIComponent(seg);
+      } catch {
+        return seg;
+      }
+    });
+  const prevScope = store.currentScope;
+  const prevViewId = store.currentViewId;
+  const prevSubId = store.activeSubentryId;
+  const seg0 = parts[0];
+  const seg1 = parts[1];
+  const seg2 = parts[2];
+  rt.routeApplying = true;
+  try {
+    if (seg0 === "devices" && seg1?.toLowerCase() === "discovered") {
+      if (prevScope === "system") {
+        void store.entity.flushSystemSettings();
+      }
+      store.onActiveDeviceChanged(prevSubId, "");
+      if (prevScope !== "device" || prevViewId !== "discovered_devices") {
+        store.clearHandoffTargets();
+      }
+      store.currentScope = "device";
+      store.currentViewId = "discovered_devices";
+    } else if (seg0 === "devices" && seg1) {
+      const nextSubId = seg1;
+      if (
+        store.state &&
+        Array.isArray(store.state.system_devices) &&
+        !store.state.system_devices.some((d) => d.subentry_id === nextSubId)
+      ) {
+        if (prevScope === "system") {
+          void store.entity.flushSystemSettings();
+        }
+        store.redirectInvalidDeviceRoute(nextSubId);
+        return;
+      }
+      if (prevScope === "system") {
+        void store.entity.flushSystemSettings();
+      }
+      const requestedView = slugToView(DEVICE_VIEW_SLUGS, seg2 || "overview") || "dashboard";
+      store.onActiveDeviceChanged(prevSubId, nextSubId);
+      const validView = store.deviceHasView(requestedView) ? requestedView : "dashboard";
+      if (prevScope !== "device" || prevViewId !== validView || prevSubId !== nextSubId) {
+        store.clearHandoffTargets();
+      }
+      store.currentScope = "device";
+      store.currentViewId = validView;
+      if (validView !== requestedView) {
+        navigateHaPath(
+          `/latter/devices/${encodeURIComponent(nextSubId)}/${DEVICE_VIEW_SLUGS[validView]}`,
+          true,
+        );
+      }
+    } else if (seg0 === "system") {
+      store.onActiveDeviceChanged(prevSubId, "");
+      const viewId = slugToView(SYSTEM_VIEW_SLUGS, seg1 || "overview") || "system_overview";
+      if (prevScope !== "system" || prevViewId !== viewId) {
+        store.clearHandoffTargets();
+      } else if (viewId !== "area_tracking") {
+        store.bleCalibrateHandoffActive = false;
+      }
+      store.currentScope = "system";
+      store.currentViewId = viewId;
+      if (viewId === "area_tracking") {
+        store.ensureDefaultSurveyDevice();
+      }
+    } else {
+      if (prevScope === "system") {
+        void store.entity.flushSystemSettings();
+      }
+      store.onActiveDeviceChanged(prevSubId, "");
+      if (prevScope !== "device" || prevViewId !== "select_device_prompt") {
+        store.clearHandoffTargets();
+      }
+      store.currentScope = "device";
+      store.currentViewId = "select_device_prompt";
+    }
+    store.syncLiveClockTimer();
+    store.host.requestUpdate();
+  } finally {
+    rt.routeApplying = false;
+  }
+  if (store.host.isConnected && store.ws.hass && !store.studioRevMismatch) {
+    void store.ensureSubscription(false);
+  }
+}
+function redirectInvalidDeviceRouteOp(
+  store,
+  invalidId,
+) {
+  const dropId = invalidId ?? store.activeSubentryId;
+  store.onActiveDeviceChanged(dropId, "", { discardPrevPending: true });
+  store.currentScope = "device";
+  store.currentViewId = "select_device_prompt";
+  navigateHaPath("/latter/devices", true);
+  if (dropId) {
+    store.showToast(store.t("sync.device_not_found"), false);
+  }
+  store.host.requestUpdate();
+  if (store.host.isConnected && store.ws.hass && !store.studioRevMismatch) {
+    void store.ensureSubscription(false);
+  }
+}
+function syncUrlOp(
+  store,
+  rt,
+  replace = false,
+) {
+  if (rt.routeApplying) return;
+  let targetPath = "/latter/devices";
+  if (store.currentScope === "system") {
+    const slug = SYSTEM_VIEW_SLUGS[store.currentViewId ] || "overview";
+    targetPath = `/latter/system/${slug}`;
+  } else if (store.currentViewId === "discovered_devices") {
+    targetPath = "/latter/devices/discovered";
+  } else if (
+    store.deviceSelected &&
+    store.activeSubentryId &&
+    store.currentViewId !== "select_device_prompt"
+  ) {
+    const slug =
+      DEVICE_VIEW_SLUGS[
+        store.currentViewId
+      ] || "overview";
+    targetPath = `/latter/devices/${encodeURIComponent(store.activeSubentryId)}/${slug}`;
+  }
+  if (globalThis.location?.pathname !== targetPath) {
+    navigateHaPath(targetPath, replace);
+  }
+}
+function openDevicesLandingOp(store) {
+  if (store.currentScope === "system") {
+    void store.entity.flushSystemSettings();
+  }
+  store.onActiveDeviceChanged(store.activeSubentryId, "");
+  store.clearHandoffTargets();
+  store.currentScope = "device";
+  store.currentViewId = "select_device_prompt";
+  store.syncLiveClockTimer();
+  store.syncUrl();
+  store.host.requestUpdate();
+  void store.ensureSubscription(false);
+}
+function openDiscoveredDevicesOp(store, cardId = "") {
+  if (store.currentScope === "system") {
+    void store.entity.flushSystemSettings();
+  }
+  store.onActiveDeviceChanged(store.activeSubentryId, "");
+  store.clearHandoffTargets();
+  store.currentScope = "device";
+  store.currentViewId = "discovered_devices";
+  store.syncLiveClockTimer();
+  store.syncUrl();
+  store.host.requestUpdate();
+  store.applySectionHandoff(cardId);
+  void store.ensureSubscription(false);
+}
+function setScopeOp(
+  store,
+  scope,
+  explicitViewId,
+) {
+  if (scope === "device" && store.currentScope !== "device") {
+    void store.entity.flushSystemSettings();
+  } else if (scope === "system") {
+    store.onActiveDeviceChanged(store.activeSubentryId, "");
+  }
+  store.clearHandoffTargets();
+  store.currentScope = scope;
+  if (explicitViewId) {
+    store.currentViewId = explicitViewId;
+  } else if (scope === "system") {
+    store.currentViewId = "system_overview";
+  } else {
+    store.currentViewId =
+      store.deviceSelected && store.activeSubentryId ? "dashboard" : "select_device_prompt";
+  }
+  if (store.currentViewId === "area_tracking") {
+    store.ensureDefaultSurveyDevice();
+  }
+  store.syncLiveClockTimer();
+  store.syncUrl();
+  store.host.requestUpdate();
+  void store.ensureSubscription(false);
+}
+function switchViewOp(store, viewId) {
+  if (viewId === "select_device_prompt") {
+    store.openDevicesLanding();
+    return;
+  }
+  if (viewId === "discovered_devices") {
+    store.openDiscoveredDevices();
+    return;
+  }
+  store.clearHandoffTargets();
+  const isSys = Object.prototype.hasOwnProperty.call(SYSTEM_VIEW_SLUGS, viewId);
+  if (isSys) {
+    store.onActiveDeviceChanged(store.activeSubentryId, "");
+  } else if (store.currentScope === "system") {
+    void store.entity.flushSystemSettings();
+  }
+  store.currentScope = isSys ? "system" : "device";
+  store.currentViewId = viewId;
+  if (viewId === "area_tracking") {
+    store.ensureDefaultSurveyDevice();
+  }
+  store.syncLiveClockTimer();
+  store.syncUrl();
+  store.host.requestUpdate();
+  void store.ensureSubscription(false);
+}
+async function switchSystemDeviceOp(
+  store,
+  nextSubentryId,
+  targetView = "dashboard",
+) {
+  const cleanNext = String(nextSubentryId || "").trim();
+  if (!cleanNext) return;
+  if (store.currentScope === "system") {
+    void store.entity.flushSystemSettings();
+  }
+  store.onActiveDeviceChanged(store.activeSubentryId, cleanNext);
+  store.currentScope = "device";
+  const desired =
+    targetView === "select_device_prompt" || targetView === "discovered_devices"
+      ? "dashboard"
+      : targetView;
+  store.currentViewId = store.deviceHasView(desired) ? desired : "dashboard";
+  store.syncLiveClockTimer();
+  store.syncUrl();
+  store.host.requestUpdate();
+  await store.ensureSubscription(false);
+}
+function openDeviceInHaOp(store, preferLatterEntry = false) {
+  const links = store.state?.links;
+  const devId = preferLatterEntry
+    ? links?.latter_device_id || links?.esphome_device_id || ""
+    : links?.esphome_device_id || links?.latter_device_id || "";
+  if (devId) {
+    navigateHaPath(`/config/devices/device/${encodeURIComponent(devId)}`, false);
+  } else {
+    navigateHaPath("/config/integrations/integration/latter", false);
+  }
+}
+__latterExp(__exports, { deviceHasView: () => deviceHasView, storeDeviceHasView: () => storeDeviceHasView, hostUpdatedDomOp: () => hostUpdatedDomOp, applySectionHandoffOp: () => applySectionHandoffOp, onMainFocusInOp: () => onMainFocusInOp, onActiveDeviceChangedOp: () => onActiveDeviceChangedOp, applyRouteOp: () => applyRouteOp, redirectInvalidDeviceRouteOp: () => redirectInvalidDeviceRouteOp, syncUrlOp: () => syncUrlOp, openDevicesLandingOp: () => openDevicesLandingOp, openDiscoveredDevicesOp: () => openDiscoveredDevicesOp, setScopeOp: () => setScopeOp, switchViewOp: () => switchViewOp, switchSystemDeviceOp: () => switchSystemDeviceOp, openDeviceInHaOp: () => openDeviceInHaOp });
+//# sourceURL=latter-studio/src/state/routing.ts
+});
+__latterDef("src/state/subscription.ts", (__exports, __req) => {
+const { formatWsError, isStudioRevMismatchError } = __req("src/api/ws-client.ts");
+const { overlayDevicePrefsOnSections, overlayPendingBlankListSlots, overlayPendingEntityStates } = __req("src/state/group-overlay.ts");
+const { deviceHasView } = __req("src/state/routing.ts");
+/**
+ * Event-First `latter/system/subscribe` Manager, Reconnect Backoff, BLE Delta Stream,
+ * & Cross-Device Payload Isolation (`SubscriptionController`, `D-064`, `D-065`, `M-P1-49`).
+ */
+const RECONNECT_BACKOFF_MS = [2_000, 5_000, 15_000, 60_000];
+class SubscriptionController {
+                   store;
+          subGen = 0;
+          stateReqSeq = 0;
+          lastAppliedReqSeq = 0;
+          wsUnsub = null;
+          subscribedKey = "";
+          reconnectTimer = null;
+          reconnectAttempt = 0;
+          boundConnection = null;
+                   onConnectionReady = () => {
+    if (this.store.studioRevMismatch || !this.store.host.isConnected) return;
+    this.reconnectAttempt = 0;
+    this.clearReconnectTimer();
+    void this.store.ensureSubscription(true);
+  };
+  constructor(store) {
+    this.store = store;
+  }
+  clearReconnectTimer() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+  syncConnectionListener() {
+    const nextConn = this.store.host.isConnected
+      ? (this.store.ws.hass?.connection ?? null)
+      : null;
+    if (this.boundConnection === nextConn) return;
+    this.detachConnectionListener();
+    if (nextConn && typeof nextConn.addEventListener === "function") {
+      nextConn.addEventListener("ready", this.onConnectionReady);
+      this.boundConnection = nextConn;
+    }
+  }
+  detachConnectionListener() {
+    if (this.boundConnection && typeof this.boundConnection.removeEventListener === "function") {
+      try {
+        this.boundConnection.removeEventListener("ready", this.onConnectionReady);
+      } catch {
+        // Ignore teardown errors on closed sockets.
+      }
+    }
+    this.boundConnection = null;
+  }
+  teardownSubscription() {
+    this.subGen += 1;
+    if (typeof this.wsUnsub === "function") {
+      try {
+        this.wsUnsub();
+      } catch {
+        // Ignore stale unsubscribe errors on disconnect.
+      }
+    }
+    this.wsUnsub = null;
+    this.subscribedKey = "";
+  }
+  desiredSubscriptionKey() {
+    const sub = this.store.deviceSelected ? this.store.activeSubentryId || "" : "";
+    const survey =
+      this.store.currentScope === "system" &&
+      this.store.currentViewId === "area_tracking" &&
+      this.store.bleLiveStreamActive
+        ? this.store.bleSurveySubentryId || ""
+        : "";
+    const logs = this.store.shouldIncludeLogs() ? "1" : "0";
+    return `${sub}|${survey}|${logs}`;
+  }
+  async ensureSubscription(forceResubscribe = false) {
+    if (this.store.studioRevMismatch || !this.store.ws.hass?.connection) return;
+    const nextKey = this.store.desiredSubscriptionKey();
+    if (!forceResubscribe && this.wsUnsub && this.subscribedKey === nextKey) {
+      return;
+    }
+    this.clearReconnectTimer();
+    this.store.teardownSubscription();
+    const myGen = ++this.subGen;
+    const targetSubId = this.store.deviceSelected ? this.store.activeSubentryId || null : null;
+    const surveyId =
+      this.store.currentScope === "system" &&
+      this.store.currentViewId === "area_tracking" &&
+      this.store.bleLiveStreamActive
+        ? this.store.bleSurveySubentryId || null
+        : null;
+    const includeLogs = this.store.shouldIncludeLogs();
+    try {
+      const unsub = await this.store.ws.subscribe(
+        {
+          subentryId: targetSubId,
+          surveySubentryId: surveyId,
+          includeLogs,
+        },
+        (eventPayload) => {
+          if (myGen !== this.subGen || !eventPayload) return;
+          this.handleSubscriptionEvent(eventPayload, includeLogs);
+        },
+      );
+      if (myGen !== this.subGen) {
+        try {
+          unsub();
+        } catch {
+          // Ignore stale teardown.
+        }
+        return;
+      }
+      this.wsUnsub = unsub;
+      this.subscribedKey = nextKey;
+      this.reconnectAttempt = 0;
+    } catch (err) {
+      if (isStudioRevMismatchError(err) || this.store.studioRevMismatch) {
+        this.store.handleStudioRevMismatch();
+        return;
+      }
+      if (!this.store.state) {
+        this.store.loading = false;
+        this.store.deviceLoading = false;
+        this.store.loadError = formatWsError(err, "Latter Studio could not connect.");
+        this.store.host.requestUpdate();
+      } else if (this.store.deviceLoading) {
+        this.store.deviceLoading = false;
+        this.store.loadError = formatWsError(err, "Latter Studio could not connect.");
+        this.store.host.requestUpdate();
+      }
+      const delay =
+        RECONNECT_BACKOFF_MS[
+          Math.min(this.reconnectAttempt, RECONNECT_BACKOFF_MS.length - 1)
+        ] ?? 60_000;
+      this.reconnectAttempt += 1;
+      this.clearReconnectTimer();
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        if (this.store.host.isConnected && !this.store.studioRevMismatch) {
+          void this.store.ensureSubscription(true);
+        }
+      }, delay);
+    }
+  }
+  async refreshState(options) {
+    if (this.store.studioRevMismatch || !this.store.ws.hass) return;
+    const reqSeq = ++this.stateReqSeq;
+    const targetSubId = this.store.deviceSelected ? this.store.activeSubentryId || null : null;
+    const includeLogs = options?.includeLogs ?? this.store.shouldIncludeLogs();
+    try {
+      const payload = await this.store.ws.getState({
+        subentryId: targetSubId,
+        includeLogs,
+      });
+      if (reqSeq < this.lastAppliedReqSeq) return;
+      this.lastAppliedReqSeq = reqSeq;
+      this.store.loadError = "";
+      this.store.loading = false;
+      this.store.ingestPayload(payload, includeLogs);
+      if (!this.wsUnsub && this.store.host.isConnected && !this.store.studioRevMismatch) {
+        void this.store.ensureSubscription(false);
+      }
+    } catch (err) {
+      if (isStudioRevMismatchError(err) || this.store.studioRevMismatch) {
+        this.store.handleStudioRevMismatch();
+        return;
+      }
+      if (reqSeq < this.lastAppliedReqSeq) return;
+      this.store.loading = false;
+      this.store.deviceLoading = false;
+      this.store.loadError = formatWsError(err, "Latter Studio could not load.");
+      this.store.host.requestUpdate();
+    }
+  }
+          handleSubscriptionEvent(raw, subscribedWithLogs) {
+    if (!raw || typeof raw !== "object") return;
+    const rec = raw;
+    if (rec.type === "ble_survey_delta") {
+      this.store.applyBleSurveyDelta(rec);
+      return;
+    }
+    const payload = raw;
+    this.store.loading = false;
+    this.store.loadError = "";
+    this.store.ingestPayload(payload, subscribedWithLogs);
+  }
+  applyBleSurveyDelta(delta) {
+    if (!this.store.state) return;
+    if (!this.store.bleLiveStreamActive) {
+      let updated = false;
+      if (Array.isArray(delta.ble_area_signatures)) {
+        this.store.state = {
+          ...this.store.state,
+          ble_area_signatures: delta.ble_area_signatures,
+        };
+        updated = true;
+      }
+      if (Array.isArray(delta.area_presence_grid) && this.store.state.live) {
+        this.store.state = {
+          ...this.store.state,
+          live: {
+            ...this.store.state.live,
+            area_presence_grid: delta.area_presence_grid,
+          },
+        };
+        updated = true;
+      }
+      if (updated) {
+        this.store.host.requestUpdate();
+      }
+      return;
+    }
+    const targetId = String(
+      delta.subentry_id || this.store.bleSurveySubentryId || this.store.state.subentry_id || "",
+    );
+    let nextDevices = this.store.state.system_devices;
+    let nextLive = this.store.state.live;
+    if (Array.isArray(delta.ble_survey_rows)) {
+      const nextRows = delta.ble_survey_rows;
+      const winRow = nextRows.find((r) => r.is_winner);
+      if (Array.isArray(nextDevices) && targetId) {
+        nextDevices = nextDevices.map((dev) => {
+          if (dev.subentry_id !== targetId) return dev;
+          return {
+            ...dev,
+            ble_survey_rows: nextRows,
+            ble_packets_seen:
+              typeof delta.ble_packets_seen === "number"
+                ? delta.ble_packets_seen
+                : dev.ble_packets_seen,
+            active_area_name: winRow?.area_name || dev.active_area_name,
+          };
+        });
+      }
+      if (
+        this.store.state.subentry_id === targetId &&
+        nextLive &&
+        typeof delta.ble_closest_proxy === "string"
+      ) {
+        nextLive = {
+          ...nextLive,
+          ble_closest_proxy: delta.ble_closest_proxy,
+        };
+      }
+    }
+    if (Array.isArray(delta.area_presence_grid) && nextLive) {
+      nextLive = {
+        ...nextLive,
+        area_presence_grid: delta.area_presence_grid,
+      };
+    }
+    this.store.state = {
+      ...this.store.state,
+      system_devices: nextDevices,
+      ble_area_signatures: Array.isArray(delta.ble_area_signatures)
+        ? (delta.ble_area_signatures)
+        : this.store.state.ble_area_signatures,
+      live: nextLive,
+    };
+    this.store.host.requestUpdate();
+  }
+          mergeFrozenBleRows(
+    devices,
+  ) {
+    if (this.store.bleLiveStreamActive || !Array.isArray(devices)) return devices;
+    return devices.map((dev) => {
+      if (!dev.subentry_id) return dev;
+      const frozen = this.store.bleSurveyFrozen.get(dev.subentry_id);
+      if (frozen) {
+        return {
+          ...dev,
+          ble_survey_rows: frozen.rows.map((r) => ({ ...r })),
+          ble_packets_seen: frozen.packetsSeen,
+          active_area_name: frozen.activeAreaName,
+        };
+      }
+      this.store.bleSurveyFrozen.set(dev.subentry_id, {
+        rows: (dev.ble_survey_rows || []).map((r) => ({ ...r })),
+        packetsSeen: dev.ble_packets_seen ?? 0,
+        activeAreaName: dev.active_area_name || "",
+      });
+      return dev;
+    });
+  }
+  ingestPayload(incoming, logsWereRequested) {
+    const prev = this.store.state;
+    const prevSysConfig = prev?.system_config;
+    const mergedCatalog = incoming.catalog ?? prev?.catalog;
+    const mergedPrefSpecs = incoming.pref_specs ?? prev?.pref_specs;
+    const mergedWorldClockZones = incoming.world_clock_zones ?? prev?.world_clock_zones;
+    const mergedSystemWallpapers =
+      incoming.system_wallpapers ?? prev?.system_wallpapers ?? [];
+    const mergedPhotoCollections =
+      incoming.photo_collections ?? prev?.photo_collections ?? [];
+    const mergedBleSignatures =
+      incoming.ble_area_signatures ?? prev?.ble_area_signatures;
+    const mergedDiscoveredBle =
+      incoming.discovered_ble_devices !== undefined
+        ? this.stabilizeDiscoveredBle(incoming.discovered_ble_devices, incoming.system_devices)
+        : prev?.discovered_ble_devices ?? [];
+    const mergedLogs =
+      logsWereRequested ||
+      (Array.isArray(incoming.internal_logs) && incoming.internal_logs.length > 0)
+        ? incoming.internal_logs || []
+        : prev?.internal_logs || [];
+    const mergedSystemDevices = this.mergeFrozenBleRows(incoming.system_devices);
+    if (incoming.subentry_id && incoming.device_config_rev > 0) {
+      this.store.recordKnownDeviceConfigRev(incoming.subentry_id, incoming.device_config_rev);
+    }
+    if (
+      this.store.deviceSelected &&
+      this.store.activeSubentryId &&
+      Array.isArray(mergedSystemDevices) &&
+      !mergedSystemDevices.some((d) => d.subentry_id === this.store.activeSubentryId)
+    ) {
+      const sysOnly = {
+        ...incoming,
+        system_devices: mergedSystemDevices,
+        discovered_ble_devices: mergedDiscoveredBle,
+        photo_collections: mergedPhotoCollections,
+        system_wallpapers: mergedSystemWallpapers,
+        ble_area_signatures: mergedBleSignatures,
+        catalog: mergedCatalog,
+        pref_specs: mergedPrefSpecs,
+        world_clock_zones: mergedWorldClockZones,
+        internal_logs: mergedLogs,
+        device_prefs: incoming.device_prefs || [],
+      };
+      const effSysPatch = this.store.entity.getEffectiveSystemPatch();
+      if (Object.keys(effSysPatch).length > 0 && sysOnly.system_config) {
+        sysOnly.system_config = {
+          ...sysOnly.system_config,
+          ...(effSysPatch),
+        };
+      }
+      overlayPendingBlankListSlots(this.store, sysOnly, prevSysConfig);
+      this.store.state = sysOnly;
+      this.store.redirectInvalidDeviceRoute(this.store.activeSubentryId);
+      return;
+    }
+    if (
+      this.store.deviceSelected &&
+      this.store.activeSubentryId &&
+      incoming.subentry_id !== this.store.activeSubentryId
+    ) {
+      const keepPrevDevice = prev && prev.subentry_id === this.store.activeSubentryId;
+      const sysMerged = {
+        ...(keepPrevDevice ? prev : incoming),
+        version: incoming.version,
+        studio_rev: incoming.studio_rev ?? prev?.studio_rev,
+        system_config_rev: incoming.system_config_rev,
+        system_info: incoming.system_info ?? prev?.system_info,
+        locale_strings: incoming.locale_strings ?? prev?.locale_strings,
+        internal_logs: mergedLogs,
+        system_devices: mergedSystemDevices,
+        issues: incoming.issues,
+        ble_proxy_count: incoming.ble_proxy_count,
+        ble_area_signatures: mergedBleSignatures,
+        discovered_latter_devices: incoming.discovered_latter_devices,
+        ignored_latter_devices:
+          incoming.ignored_latter_devices ?? prev?.ignored_latter_devices,
+        discovered_ble_devices: mergedDiscoveredBle,
+        system_controls: incoming.system_controls,
+        device_groups: incoming.device_groups,
+        system_config: incoming.system_config,
+        has_security_pin: incoming.has_security_pin,
+        photo_collections: mergedPhotoCollections,
+        system_wallpapers: mergedSystemWallpapers,
+        catalog: mergedCatalog,
+        pref_specs: mergedPrefSpecs,
+        world_clock_zones: mergedWorldClockZones,
+        subentry_id: keepPrevDevice ? prev.subentry_id : "",
+        title: keepPrevDevice ? prev.title : "",
+        device_config_rev: keepPrevDevice ? prev.device_config_rev : 0,
+        capabilities: keepPrevDevice ? prev.capabilities : {},
+        config: keepPrevDevice ? prev.config : {},
+        device_prefs: keepPrevDevice ? prev.device_prefs : [],
+        quick_actions: keepPrevDevice ? prev.quick_actions : [],
+        speaker_volume: keepPrevDevice ? prev.speaker_volume : null,
+        esphome: keepPrevDevice ? prev.esphome : { device: {}, sections: [] },
+        wallpapers: keepPrevDevice ? prev.wallpapers : [],
+        links: keepPrevDevice ? prev.links : undefined,
+        live: keepPrevDevice
+          ? {
+              ...prev.live,
+              area_presence_grid:
+                incoming.live?.area_presence_grid ?? prev.live.area_presence_grid,
+            }
+          : { area_presence_grid: incoming.live?.area_presence_grid },
+      };
+      const effSysPatch = this.store.entity.getEffectiveSystemPatch();
+      if (Object.keys(effSysPatch).length > 0 && sysMerged.system_config) {
+        sysMerged.system_config = {
+          ...sysMerged.system_config,
+          ...(effSysPatch),
+        };
+      }
+      overlayPendingBlankListSlots(this.store, sysMerged, prevSysConfig);
+      this.store.deviceLoading = !keepPrevDevice;
+      this.store.state = sysMerged;
+      this.store.ensureDefaultSurveyDevice();
+      this.store.ensureDefaultDoorbellTester();
+      this.store.ensureValidBatchTargetFilter();
+      this.store.syncLiveClockTimer();
+      this.store.host.requestUpdate();
+      if (
+        !keepPrevDevice &&
+        this.store.host.isConnected &&
+        this.store.ws.hass &&
+        !this.store.studioRevMismatch
+      ) {
+        void this.store.ensureSubscription(false);
+      }
+      return;
+    }
+    this.store.deviceLoading = false;
+    const merged = {
+      ...incoming,
+      system_devices: mergedSystemDevices,
+      discovered_ble_devices: mergedDiscoveredBle,
+      photo_collections: mergedPhotoCollections,
+      system_wallpapers: mergedSystemWallpapers,
+      ble_area_signatures: mergedBleSignatures,
+      catalog: mergedCatalog,
+      pref_specs: mergedPrefSpecs,
+      world_clock_zones: mergedWorldClockZones,
+      internal_logs: mergedLogs,
+      device_prefs: incoming.device_prefs || [],
+    };
+    const effSysPatch = this.store.entity.getEffectiveSystemPatch();
+    if (Object.keys(effSysPatch).length > 0 && merged.system_config) {
+      merged.system_config = {
+        ...merged.system_config,
+        ...(effSysPatch),
+      };
+    }
+    overlayPendingBlankListSlots(this.store, merged, prevSysConfig);
+    if (merged.subentry_id) {
+      const effDevPatch = this.store.entity.getEffectiveDevicePatch(merged.subentry_id);
+      if (Object.keys(effDevPatch).length > 0 && merged.config) {
+        overlayDevicePrefsOnSections(merged, effDevPatch);
+      }
+    }
+    overlayPendingEntityStates(merged, this.store.pendingEntityStates);
+    if (
+      this.store.currentScope === "device" &&
+      this.store.deviceSelected &&
+      merged.subentry_id === this.store.activeSubentryId &&
+      !deviceHasView(
+        this.store.currentViewId,
+        merged.capabilities,
+        merged.config?.kind,
+      )
+    ) {
+      this.store.currentViewId = "dashboard";
+      this.store.syncUrl(true);
+    }
+    this.store.state = merged;
+    this.store.ensureDefaultSurveyDevice();
+    this.store.ensureDefaultDoorbellTester();
+    this.store.ensureValidBatchTargetFilter();
+    this.store.syncLiveClockTimer();
+    this.store.host.requestUpdate();
+  }
+          stabilizeDiscoveredBle(
+    candidates,
+    systemDevices,
+  ) {
+    const RETENTION_MS = 90_000;
+    const now = Date.now();
+    const onboardedSlugs = new Set(
+      (systemDevices || [])
+        .map((d) => String(d.device_slug || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+    for (const [addrKey, entry] of this.store.discoveredBleSeenCache.entries()) {
+      const candSlug = String((entry.candidate).slug || "")
+        .trim()
+        .toLowerCase();
+      if (
+        now - entry.lastSeenMs > RETENTION_MS ||
+        (candSlug && onboardedSlugs.has(candSlug))
+      ) {
+        this.store.discoveredBleSeenCache.delete(addrKey);
+      }
+    }
+    const extraNoKey = [];
+    for (const c of candidates) {
+      const addrKey = String(c.target_address || "").trim().toLowerCase();
+      if (addrKey) {
+        this.store.discoveredBleSeenCache.set(addrKey, { candidate: c, lastSeenMs: now });
+      } else {
+        extraNoKey.push(c);
+      }
+    }
+    return [
+      ...Array.from(this.store.discoveredBleSeenCache.values(), (entry) => entry.candidate),
+      ...extraNoKey,
+    ];
+  }
+  toggleDiscoveredBlePause(paused) {
+    const next = paused ?? !this.store.discoveredBlePaused;
+    this.store.discoveredBlePaused = next;
+    if (next) {
+      this.store.discoveredBleFrozenSnapshot = [
+        ...(this.store.state?.discovered_ble_devices || []),
+      ];
+    } else {
+      this.store.discoveredBleFrozenSnapshot = null;
+    }
+    this.store.host.requestUpdate();
+  }
+  evictAdoptedBleCandidate(targetAddress) {
+    const addrKey = String(targetAddress || "").trim().toLowerCase();
+    if (!addrKey) return;
+    this.store.discoveredBleSeenCache.delete(addrKey);
+    this.store.discoveredBlePersonDrafts.delete(addrKey);
+    if (this.store.discoveredBleFrozenSnapshot) {
+      this.store.discoveredBleFrozenSnapshot = this.store.discoveredBleFrozenSnapshot.filter(
+        (c) => String(c.target_address || "").trim().toLowerCase() !== addrKey,
+      );
+    }
+  }
+  ensureDefaultSurveyDevice() {
+    const devs = this.store.state?.system_devices || [];
+    const bleDevs = devs.filter((d) => d.ble_tracked || d.kind === "ble_tag");
+    if (
+      this.store.bleSurveySubentryId &&
+      bleDevs.some((d) => d.subentry_id === this.store.bleSurveySubentryId)
+    ) {
+      return;
+    }
+    const current = bleDevs.find((d) => d.subentry_id === this.store.activeSubentryId);
+    this.store.bleSurveySubentryId = current?.subentry_id || bleDevs[0]?.subentry_id || "";
+  }
+  ensureDefaultDoorbellTester() {
+    const devs = (this.store.state?.system_devices || []).filter((d) => d.kind !== "ble_tag");
+    if (
+      this.store.doorbellTestSubentryId &&
+      devs.some((d) => d.subentry_id === this.store.doorbellTestSubentryId)
+    ) {
+      return;
+    }
+    this.store.doorbellTestSubentryId = devs[0]?.subentry_id || "";
+  }
+  ensureValidBatchTargetFilter() {
+    if (!this.store.batchTargetFilter.startsWith("group:")) return;
+    const gid = this.store.batchTargetFilter.slice(6);
+    if (gid === "custom") return;
+    const groups = this.store.state?.device_groups || [];
+    if (!groups.some((g) => g.id === gid)) {
+      this.store.batchTargetFilter = "all";
+      this.store.groups.resetBatchDraft();
+    }
+  }
+}
+__latterExp(__exports, { SubscriptionController: () => SubscriptionController });
+//# sourceURL=latter-studio/src/state/subscription.ts
+});
 __latterDef("src/state/tools-controller.ts", (__exports, __req) => {
 const { formatWsError } = __req("src/api/ws-client.ts");
 const { STUDIO_REV } = __req("src/constants.ts");
 const { copyTextToClipboard, defaultThemeHex, fmtDateTime, isValidHexColor, triggerJsonDownload } = __req("src/utils/format.ts");
+const { emptyConfirmModalState } = __req("src/state/store-types.ts");
 /**
  * `store.tools` Controller (`ToolsController`, `D-064` / `Q5`, `D-066`):
  * - Shared confirmation dialog orchestration (`confirmModal`, `openConfirm`, `closeConfirm`, `runConfirmedAction`)
@@ -10097,22 +11619,6 @@ const { copyTextToClipboard, defaultThemeHex, fmtDateTime, isValidHexColor, trig
  * - Discovered `adopt` (with post-adopt jump to `adopted_subentry_id` `E-10`) + `ignore` / `unignore`
  * - Announcements, strict v3 backup/restore, & timezone-formatted System/Device logs
  */
-function emptyConfirmModalState() {
-  return {
-    open: false,
-    kind: "",
-    title: "",
-    consequence: "",
-    confirmLabel: "",
-    cancelLabel: "",
-    danger: true,
-    blastRadiusCount: null,
-    blastRadiusLabel: "",
-    busy: false,
-    onConfirm: null,
-    onDownloadBackupFirst: null,
-  };
-}
 class ToolsController {
                    store;
   constructor(store) {
@@ -10892,73 +12398,37 @@ __latterExp(__exports, { emptyConfirmModalState: () => emptyConfirmModalState, T
 //# sourceURL=latter-studio/src/state/tools-controller.ts
 });
 __latterDef("src/state/store.ts", (__exports, __req) => {
-const { formatWsError, isStudioRevMismatchError, StudioWsClient } = __req("src/api/ws-client.ts");
-const { DEVICE_VIEW_SLUGS, SYSTEM_VIEW_SLUGS, VIEW_TITLE_KEYS, VIRTUAL_COLLECTION_ALL } = __req("src/constants.ts");
-const { t, tPrefLabel, tPrefOption } = __req("src/i18n/index.ts");
+const { StudioWsClient } = __req("src/api/ws-client.ts");
+const { VIRTUAL_COLLECTION_ALL } = __req("src/constants.ts");
+const { t, tPrefLabel, tPrefOption, VIEW_TITLE_KEYS } = __req("src/i18n/index.ts");
 const { navigateHaPath } = __req("src/utils/format.ts");
-const { EntityController, isCatalogItemSupported, isProtectedNativeDockItem, overlayDevicePrefsOnSections, overlayPendingBlankListSlots, overlayPendingEntityStates } = __req("src/state/entity-controller.ts");
+const { EntityController } = __req("src/state/entity-actions-controller.ts");
+const { isCatalogItemSupported, overlayDevicePrefsOnSections, overlayPendingEntityStates } = __req("src/state/group-overlay.ts");
 const { GroupsController } = __req("src/state/groups-controller.ts");
-const { emptyMediaImportModalState, emptyPhotoEditModalState, emptyPhotoPickerModalState, emptyPhotoUploadModalState } = __req("src/state/photo-ops.ts");
-const { emptyConfirmModalState, ToolsController } = __req("src/state/tools-controller.ts");
+const { applyRouteOp, applySectionHandoffOp, deviceHasView, hostUpdatedDomOp, onActiveDeviceChangedOp, onMainFocusInOp, openDeviceInHaOp, openDevicesLandingOp, openDiscoveredDevicesOp, redirectInvalidDeviceRouteOp, setScopeOp, storeDeviceHasView, switchSystemDeviceOp, switchViewOp, syncUrlOp } = __req("src/state/routing.ts");
+const { isProtectedNativeDockItem } = __req("src/state/shortcuts-ops.ts");
+const { emptyConfirmModalState, emptyMediaImportModalState, emptyPhotoEditModalState, emptyPhotoPickerModalState, emptyPhotoUploadModalState } = __req("src/state/store-types.ts");
+const { SubscriptionController } = __req("src/state/subscription.ts");
+const { ToolsController } = __req("src/state/tools-controller.ts");
 /**
- * Encapsulated Reactive Store for Latter Studio (`StudioStore`, `D-023`, `D-062`, `D-064`, `D-065`).
+ * Encapsulated Reactive Store Facade for Latter Studio (`StudioStore`, `L3`, `D-023`, `D-062`, `D-064`).
  *
- * Architecture:
- * - Zero `window.*` globals and zero 1-line pass-through wrappers (`A-15` / `Q10`).
- * - Namespaced domain controllers: `store.entity`, `store.groups`, `store.tools`.
- * - Event-first `latter/system/subscribe` bootstrap (`STUDIO_REV = 34`), section-hash preservation,
- *   `"ready"` reconnect resync, exponential backoff (`2s -> 5s -> 15s -> 60s`), and `subentry_id`
- *   payload isolation (`deviceLoading` guard).
- * - Isolated local 1 Hz `liveClockNowMs` interval active strictly on `Device -> Overview` when a
- *   timer or stopwatch is running (`F-01`, `B-17`).
+ * Composes `L2` controllers (`EntityController`, `GroupsController`, `ToolsController`,
+ * `SubscriptionController`, & `routing.ts`) over the `L1` `StudioStoreContext` contract.
  */
-const RECONNECT_BACKOFF_MS = [2_000, 5_000, 15_000, 60_000];
 const INFO_TOAST_DURATION_MS = 3_500;
-function slugToView (map, slug) {
-  const cleaned = String(slug || "").trim().toLowerCase();
-  for (const [viewId, s] of Object.entries(map)) {
-    if (s === cleaned) return viewId;
-  }
-  return null;
-}
-/**
- * Shared capability predicate used by BOTH sidebar navigation and payload capability redirect (`B-06`, `E-14`).
- * Never redirects or hides a tab when capability flags are `undefined` (not yet loaded).
- */
-function deviceHasView(
-  viewId,
-  caps,
-  kind,
-) {
-  if (
-    viewId === "select_device_prompt" ||
-    viewId === "discovered_devices" ||
-    viewId === "dashboard" ||
-    viewId === "presence" ||
-    viewId === "tools"
-  ) {
-    return true;
-  }
-  if (kind === "ble_tag") return false;
-  if (!caps) return true;
-  if (viewId === "display" || viewId === "interface") {
-    return caps.has_display !== false;
-  }
-  if (viewId === "audio_voice") {
-    return !(caps.has_audio === false && caps.has_voice === false);
-  }
-  if (viewId === "power") {
-    return caps.has_power !== false;
-  }
-  return true;
-}
 class StudioStore {
            host;
            ws;
-  // Namespaced domain controllers (`Q10`)
            entity;
            groups;
            tools;
+                   sub;
+                   routingRt = {
+    routeApplying: false,
+    scrollGen: 0,
+    handoffArming: false,
+  };
   // Core navigation & lifecycle state (`D-001`: starts on Devices landing list)
   currentScope = "device";
   currentViewId = "select_device_prompt";
@@ -10969,7 +12439,7 @@ class StudioStore {
   loading = true;
   loadError = "";
   studioRevMismatch = false;
-  // Live regions & toast feedback (`D-01`, `D-02`)
+  // Live regions & toast feedback
   toastMessage = "";
   toastIsError = false;
   politeAnnouncement = "";
@@ -10977,10 +12447,9 @@ class StudioStore {
           politeSeq = 0;
           assertiveSeq = 0;
           toastTimer = null;
-  // Local 1 Hz clock tick strictly for active Device Overview timer/stopwatch (`F-01`, `B-17`)
+  // Local 1 Hz clock tick strictly for active Device Overview timer/stopwatch
   liveClockNowMs = Date.now();
           liveClockTimer = null;
-  // Selected backup file state
   selectedBackupFile = null;
   // Devices table & Discovered UI state
   deviceSortField = "title";
@@ -10995,7 +12464,7 @@ class StudioStore {
            discoveredBlePersonDrafts = new Map();
            discoveredLatterGroupDrafts = new Map();
            discoveredLatterPersonDrafts = new Map();
-                   discoveredBleSeenCache = new Map
+           discoveredBleSeenCache = new Map
    ();
   // Device Security & Time UI draft state
   devicePinDraft = "";
@@ -11019,7 +12488,7 @@ class StudioStore {
   photosRenamingCollectionId = "";
   photosRenamingCollectionName = "";
   photosBulkTargetCollectionId = "";
-  // System Device Groups & Staged Batch Controls UI state (`Q6`)
+  // System Device Groups & Staged Batch Controls UI state
   newGroupFormOpen = false;
   newGroupName = "";
   newGroupDesc = "";
@@ -11101,10 +12570,7 @@ class StudioStore {
     iconSearch: "",
     confirm: false,
   };
-  appConfigModal = {
-    open: false,
-    app: null,
-  };
+  appConfigModal = { open: false, app: null };
   cameraConfigModal = {
     open: false,
     cameraId: "",
@@ -11122,8 +12588,6 @@ class StudioStore {
   pendingScrollCardId = "";
            handoffTargetIds = new Set();
   pendingDomRevert = null;
-          scrollGen = 0;
-          handoffArming = false;
   // Snapshot-isolated pending settings queues & per-Device config_rev tracker
   pendingSystemPatch = {};
   pendingSystemPrevious = {};
@@ -11142,25 +12606,6 @@ class StudioStore {
            pendingDeviceBuckets = new Map();
            pendingEntityStates = new Map();
                    deviceConfigRevs = new Map();
-  // Subscription & reconnect state
-          subGen = 0;
-          stateReqSeq = 0;
-          lastAppliedReqSeq = 0;
-          wsUnsub = null;
-          subscribedKey = "";
-          reconnectTimer = null;
-          reconnectAttempt = 0;
-          boundConnection = null;
-          routeApplying = false;
-                   onConnectionReady = () => {
-    if (this.studioRevMismatch || !this.host.isConnected) return;
-    this.reconnectAttempt = 0;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    void this.ensureSubscription(true);
-  };
   constructor(host) {
     this.host = host;
     this.ws = new StudioWsClient(() => {
@@ -11169,8 +12614,8 @@ class StudioStore {
     this.entity = new EntityController(this);
     this.groups = new GroupsController(this);
     this.tools = new ToolsController(this);
+    this.sub = new SubscriptionController(this);
   }
-  // ---------- Convenience i18n & Confirm Shortcuts ----------
   get localeOverlay() {
     const raw = this.state?.locale_strings;
     return raw && typeof raw === "object" ? raw : null;
@@ -11193,7 +12638,6 @@ class StudioStore {
   async runConfirmedAction() {
     await this.tools.runConfirmedAction();
   }
-  // ---------- Config Revision & Live Clock Helpers ----------
   getKnownDeviceConfigRev(subentryId) {
     if (this.state?.subentry_id === subentryId && this.state.device_config_rev > 0) {
       return this.state.device_config_rev;
@@ -11227,7 +12671,7 @@ class StudioStore {
     }
     return Math.max(0, Math.round(Number(live.stopwatch_elapsed_sec || 0)));
   }
-          syncLiveClockTimer() {
+  syncLiveClockTimer() {
     const live = this.state?.live;
     const shouldTick =
       this.host.isConnected &&
@@ -11252,9 +12696,8 @@ class StudioStore {
       this.liveClockTimer = null;
     }
   }
-  // ---------- Controller Lifecycle ----------
   hostConnected() {
-    this.syncConnectionListener();
+    this.sub.syncConnectionListener();
     this.syncLiveClockTimer();
     if (this.ws.hass && !this.studioRevMismatch) {
       void this.ensureSubscription(false);
@@ -11265,196 +12708,49 @@ class StudioStore {
       clearTimeout(this.toastTimer);
       this.toastTimer = null;
     }
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    this.sub.clearReconnectTimer();
     if (this.liveClockTimer !== null) {
       clearInterval(this.liveClockTimer);
       this.liveClockTimer = null;
     }
-    this.detachConnectionListener();
+    this.sub.detachConnectionListener();
     void this.entity.flushAllPendingSettings();
     this.teardownSubscription();
   }
   hostUpdated() {
-    if (this.pendingDomRevert) {
-      const rev = this.pendingDomRevert;
-      this.pendingDomRevert = null;
-      const root = (this.host).renderRoot;
-      if (root) {
-        for (const [id, val] of Object.entries(rev.controlIds)) {
-          const el = root.getElementById(id);
-          if (!el) continue;
-          if (typeof val === "boolean" && "checked" in el) {
-            (el).checked = val;
-          } else {
-            el.value = String(val);
-          }
-        }
-      }
-    }
-    if (this.pendingScrollCardId) {
-      const cardId = this.pendingScrollCardId;
-      this.pendingScrollCardId = "";
-      const root =
-        (this.host).renderRoot ||
-        this.host.shadowRoot;
-      const target = root?.getElementById(cardId);
-      if (target && typeof target.scrollIntoView === "function") {
-        const myGen = ++this.scrollGen;
-        const reducedMotion = Boolean(
-          typeof globalThis.matchMedia === "function" &&
-            globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches,
-        );
-        void this.scrollIntoViewAsync(target, {
-          behavior: reducedMotion ? "auto" : "smooth",
-          block: "start",
-        }).then(() => {
-          if (myGen !== this.scrollGen || !this.handoffTargetIds.has(cardId)) return;
-          if (typeof target.focus === "function") {
-            if (
-              typeof target.hasAttribute === "function" &&
-              !target.hasAttribute("tabindex")
-            ) {
-              target.setAttribute?.("tabindex", "-1");
-            }
-            try {
-              target.focus({ preventScroll: true });
-            } catch {
-              target.focus();
-            }
-          }
-        });
-      }
-    }
-    this.handoffArming = false;
+    hostUpdatedDomOp(this, this.routingRt);
   }
   mergeDomRevert(controlIds) {
     this.pendingDomRevert = {
-      controlIds: {
-        ...(this.pendingDomRevert?.controlIds || {}),
-        ...controlIds,
-      },
+      controlIds: { ...(this.pendingDomRevert?.controlIds || {}), ...controlIds },
     };
   }
-          scrollIntoViewAsync(
-    element,
-    options,
-  ) {
-    const result = element.scrollIntoView(options);
-    if (result instanceof Promise) {
-      return result;
-    }
-    const scroller = globalThis.window;
-    if (!scroller || typeof scroller.addEventListener !== "function") {
-      return Promise.resolve();
-    }
-    return new Promise ((resolve) => {
-      let timeoutId;
-      const finish = () => {
-        clearTimeout(timeoutId);
-        scroller.removeEventListener("scrollend", finish);
-        scroller.removeEventListener("scroll", onScroll);
-        resolve();
-      };
-      const onScroll = () => {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(finish, 100);
-      };
-      scroller.addEventListener("scrollend", finish, { once: true });
-      scroller.addEventListener("scroll", onScroll, { passive: true });
-      timeoutId = setTimeout(finish, 100);
-    });
-  }
-  // ---------- Handoff Highlighting & Focus ----------
   isHandoffTarget(targetId) {
     return Boolean(targetId) && this.handoffTargetIds.has(targetId);
   }
   clearHandoffTargets() {
     this.bleCalibrateHandoffActive = false;
     this.handoffTargetIds.clear();
-    this.handoffArming = false;
+    this.routingRt.handoffArming = false;
   }
-          applySectionHandoff(scrollId = "", highlightIds) {
-    const cleanScroll = String(scrollId || "").trim();
-    this.pendingScrollCardId = cleanScroll;
-    const ids =
-      highlightIds && highlightIds.length > 0
-        ? highlightIds
-        : cleanScroll
-          ? [cleanScroll]
-          : [];
-    for (const rawId of ids) {
-      const id = String(rawId || "").trim();
-      if (id) this.handoffTargetIds.add(id);
-    }
-    if (this.handoffTargetIds.size > 0) {
-      this.handoffArming = true;
-      this.host.requestUpdate();
-    }
+  applySectionHandoff(scrollId = "", highlightIds) {
+    applySectionHandoffOp(this, this.routingRt, scrollId, highlightIds);
   }
   onMainFocusIn(ev) {
-    if (this.handoffArming || this.handoffTargetIds.size === 0) return;
-    const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
-    const target = (path[0] ?? ev.target);
-    if (!target || typeof target.tagName !== "string") return;
-    const tag = target.tagName.toUpperCase();
-    if (
-      tag !== "BUTTON" &&
-      tag !== "INPUT" &&
-      tag !== "SELECT" &&
-      tag !== "TEXTAREA" &&
-      tag !== "SUMMARY" &&
-      tag !== "A"
-    ) {
-      return;
-    }
-    let cur = target;
-    while (cur) {
-      if (cur.id && this.handoffTargetIds.has(cur.id)) {
-        return;
-      }
-      cur = cur.parentElement;
-    }
-    this.handoffTargetIds.clear();
-    this.host.requestUpdate();
+    onMainFocusInOp(this, this.routingRt, ev);
   }
-  // ---------- Home Assistant Connection & Live Announcements ----------
-          syncConnectionListener() {
-    const nextConn = this.host.isConnected ? (this.ws.hass?.connection ?? null) : null;
-    if (this.boundConnection === nextConn) return;
-    this.detachConnectionListener();
-    if (nextConn && typeof nextConn.addEventListener === "function") {
-      nextConn.addEventListener("ready", this.onConnectionReady);
-      this.boundConnection = nextConn;
-    }
-  }
-          detachConnectionListener() {
-    if (this.boundConnection && typeof this.boundConnection.removeEventListener === "function") {
-      try {
-        this.boundConnection.removeEventListener("ready", this.onConnectionReady);
-      } catch {
-        // Ignore teardown errors on closed sockets.
-      }
-    }
-    this.boundConnection = null;
-  }
-          handleStudioRevMismatch() {
+  handleStudioRevMismatch() {
     this.studioRevMismatch = true;
     this.loading = false;
     this.deviceLoading = false;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    this.sub.clearReconnectTimer();
     this.teardownSubscription();
     this.host.requestUpdate();
   }
   setHass(hass) {
     const prevConn = this.ws.hass?.connection ?? null;
     this.ws.setHass(hass);
-    this.syncConnectionListener();
+    this.sub.syncConnectionListener();
     const connChanged = Boolean(hass?.connection && hass.connection !== prevConn);
     if (connChanged && this.host.isConnected && !this.studioRevMismatch) {
       void this.ensureSubscription(false);
@@ -11544,270 +12840,39 @@ class StudioStore {
     );
   }
   deviceHasView(viewId) {
-    if (this.state?.subentry_id !== this.activeSubentryId) {
-      const entry = this.state?.system_devices?.find(
-        (d) => d.subentry_id === this.activeSubentryId,
-      );
-      if (entry?.kind === "ble_tag") {
-        return deviceHasView(viewId, undefined, "ble_tag");
-      }
-      return deviceHasView(viewId, undefined, undefined);
-    }
-    return deviceHasView(viewId, this.state?.capabilities, this.state?.config?.kind);
+    return storeDeviceHasView(this, viewId);
   }
-  // ---------- Unified Active Device Transition & Routing ----------
-  /**
-   * Single transition helper clearing Device-scoped drafts/modals and flushing (or discarding)
-   * pending edits across `applyRoute`, `switchSystemDevice`, and removal/invalid redirects (`B-07`, `B-24`).
-   */
   onActiveDeviceChanged(
     prevId,
     nextId,
     options,
   ) {
-    const cleanPrev = String(prevId || "").trim();
-    const cleanNext = String(nextId || "").trim();
-    if (cleanPrev && cleanPrev !== cleanNext) {
-      if (options?.discardPrevPending) {
-        this.entity.discardDeviceBucket(cleanPrev);
-      } else {
-        void this.entity.flushDeviceBucket(cleanPrev);
-      }
-    }
-    if (cleanPrev !== cleanNext) {
-      this.devicePinDraft = "";
-      this.worldClockNewLabel = "";
-      this.worldClockNewZone = "";
-      this.worldClockRowKeys = [];
-      this.overviewAlarmsOpen = false;
-      this.appConfigModal = { open: false, app: null };
-      this.cameraConfigModal = { ...this.cameraConfigModal, open: false };
-      this.photoPickerModal = emptyPhotoPickerModalState();
-      this.shortcutModal = { ...this.shortcutModal, open: false };
-      this.saveGroupModal = { ...this.saveGroupModal, open: false, busy: false };
-      this.resetModal = { ...this.resetModal, open: false, busy: false };
-      this.removeModal = { ...this.removeModal, open: false, busy: false };
-      this.returnToPinnedModal = false;
-      this.clearHandoffTargets();
-    }
-    this.activeSubentryId = cleanNext;
-    this.deviceSelected = Boolean(cleanNext);
-    this.deviceLoading = Boolean(cleanNext && this.state?.subentry_id !== cleanNext);
-    this.syncLiveClockTimer();
+    onActiveDeviceChangedOp(this, prevId, nextId, options);
   }
   applyRoute(route) {
-    let rawPath = String(route?.path ?? "");
-    if (!rawPath && !route && typeof globalThis.location?.pathname === "string") {
-      const locPath = globalThis.location.pathname;
-      if (locPath.startsWith("/latter/")) {
-        rawPath = locPath.slice("/latter/".length);
-      }
-    }
-    const parts = rawPath
-      .split("/")
-      .filter(Boolean)
-      .map((seg) => {
-        try {
-          return decodeURIComponent(seg);
-        } catch {
-          return seg;
-        }
-      });
-    const prevScope = this.currentScope;
-    const prevViewId = this.currentViewId;
-    const prevSubId = this.activeSubentryId;
-    this.routeApplying = true;
-    try {
-      if (parts[0] === "devices" && parts[1]?.toLowerCase() === "discovered") {
-        if (prevScope === "system") {
-          void this.entity.flushSystemSettings();
-        }
-        this.onActiveDeviceChanged(prevSubId, "");
-        if (prevScope !== "device" || prevViewId !== "discovered_devices") {
-          this.clearHandoffTargets();
-        }
-        this.currentScope = "device";
-        this.currentViewId = "discovered_devices";
-      } else if (parts[0] === "devices" && parts[1]) {
-        const nextSubId = parts[1];
-        if (
-          this.state &&
-          Array.isArray(this.state.system_devices) &&
-          !this.state.system_devices.some((d) => d.subentry_id === nextSubId)
-        ) {
-          if (prevScope === "system") {
-            void this.entity.flushSystemSettings();
-          }
-          this.redirectInvalidDeviceRoute(nextSubId);
-          return;
-        }
-        if (prevScope === "system") {
-          void this.entity.flushSystemSettings();
-        }
-        const requestedView = slugToView(DEVICE_VIEW_SLUGS, parts[2] || "overview") || "dashboard";
-        this.onActiveDeviceChanged(prevSubId, nextSubId);
-        const validView = this.deviceHasView(requestedView) ? requestedView : "dashboard";
-        if (prevScope !== "device" || prevViewId !== validView || prevSubId !== nextSubId) {
-          this.clearHandoffTargets();
-        }
-        this.currentScope = "device";
-        this.currentViewId = validView;
-        if (validView !== requestedView) {
-          navigateHaPath(
-            `/latter/devices/${encodeURIComponent(nextSubId)}/${DEVICE_VIEW_SLUGS[validView]}`,
-            true,
-          );
-        }
-      } else if (parts[0] === "system") {
-        this.onActiveDeviceChanged(prevSubId, "");
-        const viewId = slugToView(SYSTEM_VIEW_SLUGS, parts[1] || "overview") || "system_overview";
-        if (prevScope !== "system" || prevViewId !== viewId) {
-          this.clearHandoffTargets();
-        } else if (viewId !== "area_tracking") {
-          this.bleCalibrateHandoffActive = false;
-        }
-        this.currentScope = "system";
-        this.currentViewId = viewId;
-        if (viewId === "area_tracking") {
-          this.ensureDefaultSurveyDevice();
-        }
-      } else {
-        if (prevScope === "system") {
-          void this.entity.flushSystemSettings();
-        }
-        this.onActiveDeviceChanged(prevSubId, "");
-        if (prevScope !== "device" || prevViewId !== "select_device_prompt") {
-          this.clearHandoffTargets();
-        }
-        this.currentScope = "device";
-        this.currentViewId = "select_device_prompt";
-      }
-      this.syncLiveClockTimer();
-      this.host.requestUpdate();
-    } finally {
-      this.routeApplying = false;
-    }
-    if (this.host.isConnected && this.ws.hass && !this.studioRevMismatch) {
-      void this.ensureSubscription(false);
-    }
+    applyRouteOp(this, this.routingRt, route);
   }
   redirectInvalidDeviceRoute(invalidId) {
-    const dropId = invalidId ?? this.activeSubentryId;
-    this.onActiveDeviceChanged(dropId, "", { discardPrevPending: true });
-    this.currentScope = "device";
-    this.currentViewId = "select_device_prompt";
-    navigateHaPath("/latter/devices", true);
-    if (dropId) {
-      this.showToast(this.t("sync.device_not_found"), false);
-    }
-    this.host.requestUpdate();
-    if (this.host.isConnected && this.ws.hass && !this.studioRevMismatch) {
-      void this.ensureSubscription(false);
-    }
+    redirectInvalidDeviceRouteOp(this, invalidId);
   }
   syncUrl(replace = false) {
-    if (this.routeApplying) return;
-    let targetPath = "/latter/devices";
-    if (this.currentScope === "system") {
-      const slug = SYSTEM_VIEW_SLUGS[this.currentViewId ] || "overview";
-      targetPath = `/latter/system/${slug}`;
-    } else if (this.currentViewId === "discovered_devices") {
-      targetPath = "/latter/devices/discovered";
-    } else if (
-      this.deviceSelected &&
-      this.activeSubentryId &&
-      this.currentViewId !== "select_device_prompt"
-    ) {
-      const slug =
-        DEVICE_VIEW_SLUGS[
-          this.currentViewId
-        ] || "overview";
-      targetPath = `/latter/devices/${encodeURIComponent(this.activeSubentryId)}/${slug}`;
-    }
-    if (globalThis.location?.pathname !== targetPath) {
-      navigateHaPath(targetPath, replace);
-    }
+    syncUrlOp(this, this.routingRt, replace);
   }
   openDevicesLanding() {
-    if (this.currentScope === "system") {
-      void this.entity.flushSystemSettings();
-    }
-    this.onActiveDeviceChanged(this.activeSubentryId, "");
-    this.clearHandoffTargets();
-    this.currentScope = "device";
-    this.currentViewId = "select_device_prompt";
-    this.syncLiveClockTimer();
-    this.syncUrl();
-    this.host.requestUpdate();
-    void this.ensureSubscription(false);
+    openDevicesLandingOp(this);
   }
   openDiscoveredDevices(cardId = "") {
-    if (this.currentScope === "system") {
-      void this.entity.flushSystemSettings();
-    }
-    this.onActiveDeviceChanged(this.activeSubentryId, "");
-    this.clearHandoffTargets();
-    this.currentScope = "device";
-    this.currentViewId = "discovered_devices";
-    this.syncLiveClockTimer();
-    this.syncUrl();
-    this.host.requestUpdate();
-    this.applySectionHandoff(cardId);
-    void this.ensureSubscription(false);
+    openDiscoveredDevicesOp(this, cardId);
   }
   openDevicesWithCategory(category) {
     this.deviceCategoryFilter = category;
     this.openDevicesLanding();
   }
   setScope(scope, explicitViewId) {
-    if (scope === "device" && this.currentScope !== "device") {
-      void this.entity.flushSystemSettings();
-    } else if (scope === "system") {
-      this.onActiveDeviceChanged(this.activeSubentryId, "");
-    }
-    this.clearHandoffTargets();
-    this.currentScope = scope;
-    if (explicitViewId) {
-      this.currentViewId = explicitViewId;
-    } else if (scope === "system") {
-      this.currentViewId = "system_overview";
-    } else {
-      this.currentViewId =
-        this.deviceSelected && this.activeSubentryId ? "dashboard" : "select_device_prompt";
-    }
-    if (this.currentViewId === "area_tracking") {
-      this.ensureDefaultSurveyDevice();
-    }
-    this.syncLiveClockTimer();
-    this.syncUrl();
-    this.host.requestUpdate();
-    void this.ensureSubscription(false);
+    setScopeOp(this, scope, explicitViewId);
   }
   switchView(viewId) {
-    if (viewId === "select_device_prompt") {
-      this.openDevicesLanding();
-      return;
-    }
-    if (viewId === "discovered_devices") {
-      this.openDiscoveredDevices();
-      return;
-    }
-    this.clearHandoffTargets();
-    const isSys = Object.prototype.hasOwnProperty.call(SYSTEM_VIEW_SLUGS, viewId);
-    if (isSys) {
-      this.onActiveDeviceChanged(this.activeSubentryId, "");
-    } else if (this.currentScope === "system") {
-      void this.entity.flushSystemSettings();
-    }
-    this.currentScope = isSys ? "system" : "device";
-    this.currentViewId = viewId;
-    if (viewId === "area_tracking") {
-      this.ensureDefaultSurveyDevice();
-    }
-    this.syncLiveClockTimer();
-    this.syncUrl();
-    this.host.requestUpdate();
-    void this.ensureSubscription(false);
+    switchViewOp(this, viewId);
   }
   openSystemSection(
     viewId,
@@ -11838,566 +12903,62 @@ class StudioStore {
     nextSubentryId,
     targetView = "dashboard",
   ) {
-    const cleanNext = String(nextSubentryId || "").trim();
-    if (!cleanNext) return;
-    if (this.currentScope === "system") {
-      void this.entity.flushSystemSettings();
-    }
-    this.onActiveDeviceChanged(this.activeSubentryId, cleanNext);
-    this.currentScope = "device";
-    const desired =
-      targetView === "select_device_prompt" || targetView === "discovered_devices"
-        ? "dashboard"
-        : targetView;
-    this.currentViewId = this.deviceHasView(desired) ? desired : "dashboard";
-    this.syncLiveClockTimer();
-    this.syncUrl();
-    this.host.requestUpdate();
-    await this.ensureSubscription(false);
+    await switchSystemDeviceOp(this, nextSubentryId, targetView);
   }
   openHaPage(path) {
     navigateHaPath(path, false);
   }
   openDeviceInHa(preferLatterEntry = false) {
-    const links = this.state?.links;
-    const devId = preferLatterEntry
-      ? links?.latter_device_id || links?.esphome_device_id || ""
-      : links?.esphome_device_id || links?.latter_device_id || "";
-    if (devId) {
-      this.openHaPage(`/config/devices/device/${encodeURIComponent(devId)}`);
-    } else {
-      this.openHaPage("/config/integrations/integration/latter");
-    }
+    openDeviceInHaOp(this, preferLatterEntry);
   }
   toggleParentHaSidebar() {
     this.host.dispatchEvent(
       new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }),
     );
   }
-  // ---------- Subscription, Backoff & State Ingestion ----------
   teardownSubscription() {
-    this.subGen += 1;
-    if (typeof this.wsUnsub === "function") {
-      try {
-        this.wsUnsub();
-      } catch {
-        // Ignore stale unsubscribe errors on disconnect.
-      }
-    }
-    this.wsUnsub = null;
-    this.subscribedKey = "";
+    this.sub.teardownSubscription();
   }
   desiredSubscriptionKey() {
-    const sub = this.deviceSelected ? this.activeSubentryId || "" : "";
-    const survey =
-      this.currentScope === "system" &&
-      this.currentViewId === "area_tracking" &&
-      this.bleLiveStreamActive
-        ? this.bleSurveySubentryId || ""
-        : "";
-    const logs = this.shouldIncludeLogs() ? "1" : "0";
-    return `${sub}|${survey}|${logs}`;
+    return this.sub.desiredSubscriptionKey();
   }
   async ensureSubscription(forceResubscribe = false) {
-    if (this.studioRevMismatch || !this.ws.hass?.connection) return;
-    const nextKey = this.desiredSubscriptionKey();
-    if (!forceResubscribe && this.wsUnsub && this.subscribedKey === nextKey) {
-      return;
-    }
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    this.teardownSubscription();
-    const myGen = ++this.subGen;
-    const targetSubId = this.deviceSelected ? this.activeSubentryId || null : null;
-    const surveyId =
-      this.currentScope === "system" &&
-      this.currentViewId === "area_tracking" &&
-      this.bleLiveStreamActive
-        ? this.bleSurveySubentryId || null
-        : null;
-    const includeLogs = this.shouldIncludeLogs();
-    try {
-      const unsub = await this.ws.subscribe(
-        {
-          subentryId: targetSubId,
-          surveySubentryId: surveyId,
-          includeLogs,
-        },
-        (eventPayload) => {
-          if (myGen !== this.subGen || !eventPayload) return;
-          this.handleSubscriptionEvent(eventPayload, includeLogs);
-        },
-      );
-      if (myGen !== this.subGen) {
-        try {
-          unsub();
-        } catch {
-          // Ignore stale teardown.
-        }
-        return;
-      }
-      this.wsUnsub = unsub;
-      this.subscribedKey = nextKey;
-      this.reconnectAttempt = 0;
-    } catch (err) {
-      if (isStudioRevMismatchError(err) || this.studioRevMismatch) {
-        this.handleStudioRevMismatch();
-        return;
-      }
-      if (!this.state) {
-        this.loading = false;
-        this.deviceLoading = false;
-        this.loadError = formatWsError(err, "Latter Studio could not connect.");
-        this.host.requestUpdate();
-      } else if (this.deviceLoading) {
-        this.deviceLoading = false;
-        this.loadError = formatWsError(err, "Latter Studio could not connect.");
-        this.host.requestUpdate();
-      }
-      const delay =
-        RECONNECT_BACKOFF_MS[
-          Math.min(this.reconnectAttempt, RECONNECT_BACKOFF_MS.length - 1)
-        ];
-      this.reconnectAttempt += 1;
-      if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = setTimeout(() => {
-        this.reconnectTimer = null;
-        if (this.host.isConnected && !this.studioRevMismatch) {
-          void this.ensureSubscription(true);
-        }
-      }, delay);
-    }
+    await this.sub.ensureSubscription(forceResubscribe);
   }
   async refreshState(options) {
-    if (this.studioRevMismatch || !this.ws.hass) return;
-    const reqSeq = ++this.stateReqSeq;
-    const targetSubId = this.deviceSelected ? this.activeSubentryId || null : null;
-    const includeLogs = options?.includeLogs ?? this.shouldIncludeLogs();
-    try {
-      const payload = await this.ws.getState({
-        subentryId: targetSubId,
-        includeLogs,
-      });
-      if (reqSeq < this.lastAppliedReqSeq) return;
-      this.lastAppliedReqSeq = reqSeq;
-      this.loadError = "";
-      this.loading = false;
-      this.ingestPayload(payload, includeLogs);
-      if (!this.wsUnsub && this.host.isConnected && !this.studioRevMismatch) {
-        void this.ensureSubscription(false);
-      }
-    } catch (err) {
-      if (isStudioRevMismatchError(err) || this.studioRevMismatch) {
-        this.handleStudioRevMismatch();
-        return;
-      }
-      if (reqSeq < this.lastAppliedReqSeq) return;
-      this.loading = false;
-      this.deviceLoading = false;
-      this.loadError = formatWsError(err, "Latter Studio could not load.");
-      this.host.requestUpdate();
-    }
-  }
-          handleSubscriptionEvent(raw, subscribedWithLogs) {
-    if (!raw || typeof raw !== "object") return;
-    const rec = raw;
-    if (rec.type === "ble_survey_delta") {
-      this.applyBleSurveyDelta(rec);
-      return;
-    }
-    const payload = raw;
-    this.loading = false;
-    this.loadError = "";
-    this.ingestPayload(payload, subscribedWithLogs);
+    await this.sub.refreshState(options);
   }
   applyBleSurveyDelta(delta) {
-    if (!this.state) return;
-    if (!this.bleLiveStreamActive) {
-      let updated = false;
-      if (Array.isArray(delta.ble_area_signatures)) {
-        this.state = {
-          ...this.state,
-          ble_area_signatures: delta.ble_area_signatures,
-        };
-        updated = true;
-      }
-      if (Array.isArray(delta.area_presence_grid) && this.state.live) {
-        this.state = {
-          ...this.state,
-          live: {
-            ...this.state.live,
-            area_presence_grid: delta.area_presence_grid,
-          },
-        };
-        updated = true;
-      }
-      if (updated) {
-        this.host.requestUpdate();
-      }
-      return;
-    }
-    const targetId = String(
-      delta.subentry_id || this.bleSurveySubentryId || this.state.subentry_id || "",
-    );
-    let nextDevices = this.state.system_devices;
-    let nextLive = this.state.live;
-    if (Array.isArray(delta.ble_survey_rows)) {
-      const nextRows = delta.ble_survey_rows;
-      const winRow = nextRows.find((r) => r.is_winner);
-      if (Array.isArray(nextDevices) && targetId) {
-        nextDevices = nextDevices.map((dev) => {
-          if (dev.subentry_id !== targetId) return dev;
-          return {
-            ...dev,
-            ble_survey_rows: nextRows,
-            ble_packets_seen:
-              typeof delta.ble_packets_seen === "number"
-                ? delta.ble_packets_seen
-                : dev.ble_packets_seen,
-            active_area_name: winRow?.area_name || dev.active_area_name,
-          };
-        });
-      }
-      if (
-        this.state.subentry_id === targetId &&
-        nextLive &&
-        typeof delta.ble_closest_proxy === "string"
-      ) {
-        nextLive = {
-          ...nextLive,
-          ble_closest_proxy: delta.ble_closest_proxy,
-        };
-      }
-    }
-    if (Array.isArray(delta.area_presence_grid) && nextLive) {
-      nextLive = {
-        ...nextLive,
-        area_presence_grid: delta.area_presence_grid,
-      };
-    }
-    this.state = {
-      ...this.state,
-      system_devices: nextDevices,
-      ble_area_signatures: Array.isArray(delta.ble_area_signatures)
-        ? (delta.ble_area_signatures)
-        : this.state.ble_area_signatures,
-      live: nextLive,
-    };
-    this.host.requestUpdate();
-  }
-          mergeFrozenBleRows(
-    devices,
-  ) {
-    if (this.bleLiveStreamActive || !Array.isArray(devices)) return devices;
-    return devices.map((dev) => {
-      if (!dev.subentry_id) return dev;
-      const frozen = this.bleSurveyFrozen.get(dev.subentry_id);
-      if (frozen) {
-        return {
-          ...dev,
-          ble_survey_rows: frozen.rows.map((r) => ({ ...r })),
-          ble_packets_seen: frozen.packetsSeen,
-          active_area_name: frozen.activeAreaName,
-        };
-      }
-      this.bleSurveyFrozen.set(dev.subentry_id, {
-        rows: (dev.ble_survey_rows || []).map((r) => ({ ...r })),
-        packetsSeen: dev.ble_packets_seen ?? 0,
-        activeAreaName: dev.active_area_name || "",
-      });
-      return dev;
-    });
+    this.sub.applyBleSurveyDelta(delta);
   }
   ingestPayload(incoming, logsWereRequested) {
-    const prev = this.state;
-    const prevSysConfig = prev?.system_config;
-    // Resolve section-hash omitted fields (`#10`)
-    const mergedCatalog = incoming.catalog ?? prev?.catalog;
-    const mergedPrefSpecs = incoming.pref_specs ?? prev?.pref_specs;
-    const mergedWorldClockZones = incoming.world_clock_zones ?? prev?.world_clock_zones;
-    const mergedSystemWallpapers =
-      incoming.system_wallpapers ?? prev?.system_wallpapers ?? [];
-    const mergedPhotoCollections =
-      incoming.photo_collections ?? prev?.photo_collections ?? [];
-    const mergedBleSignatures =
-      incoming.ble_area_signatures ?? prev?.ble_area_signatures;
-    const mergedDiscoveredBle =
-      incoming.discovered_ble_devices !== undefined
-        ? this.stabilizeDiscoveredBle(
-            incoming.discovered_ble_devices,
-            incoming.system_devices,
-          )
-        : prev?.discovered_ble_devices ?? [];
-    const mergedLogs =
-      logsWereRequested ||
-      (Array.isArray(incoming.internal_logs) && incoming.internal_logs.length > 0)
-        ? incoming.internal_logs || []
-        : prev?.internal_logs || [];
-    const mergedSystemDevices = this.mergeFrozenBleRows(incoming.system_devices);
-    if (incoming.subentry_id && incoming.device_config_rev > 0) {
-      this.recordKnownDeviceConfigRev(incoming.subentry_id, incoming.device_config_rev);
-    }
-    // Active Device missing from `system_devices` -> discard pending edits & redirect to `/latter/devices` (`B-19`, `B-24`)
-    if (
-      this.deviceSelected &&
-      this.activeSubentryId &&
-      Array.isArray(mergedSystemDevices) &&
-      !mergedSystemDevices.some((d) => d.subentry_id === this.activeSubentryId)
-    ) {
-      const sysOnly = {
-        ...incoming,
-        system_devices: mergedSystemDevices,
-        discovered_ble_devices: mergedDiscoveredBle,
-        photo_collections: mergedPhotoCollections,
-        system_wallpapers: mergedSystemWallpapers,
-        ble_area_signatures: mergedBleSignatures,
-        catalog: mergedCatalog,
-        pref_specs: mergedPrefSpecs,
-        world_clock_zones: mergedWorldClockZones,
-        internal_logs: mergedLogs,
-        device_prefs: incoming.device_prefs || [],
-      };
-      const effSysPatch = this.entity.getEffectiveSystemPatch();
-      if (Object.keys(effSysPatch).length > 0 && sysOnly.system_config) {
-        sysOnly.system_config = {
-          ...sysOnly.system_config,
-          ...(effSysPatch),
-        };
-      }
-      overlayPendingBlankListSlots(this, sysOnly, prevSysConfig);
-      this.state = sysOnly;
-      this.redirectInvalidDeviceRoute(this.activeSubentryId);
-      return;
-    }
-    // Cross-Device payload guard (`B-01`, `B-02`, `R-2`):
-    // When a Device is selected, never clobber Device-specific sections with a mismatched `subentry_id` payload.
-    if (
-      this.deviceSelected &&
-      this.activeSubentryId &&
-      incoming.subentry_id !== this.activeSubentryId
-    ) {
-      const keepPrevDevice = prev && prev.subentry_id === this.activeSubentryId;
-      const sysMerged = {
-        ...(keepPrevDevice ? prev : incoming),
-        version: incoming.version,
-        studio_rev: incoming.studio_rev ?? prev?.studio_rev,
-        system_config_rev: incoming.system_config_rev,
-        system_info: incoming.system_info ?? prev?.system_info,
-        locale_strings: incoming.locale_strings ?? prev?.locale_strings,
-        internal_logs: mergedLogs,
-        system_devices: mergedSystemDevices,
-        issues: incoming.issues,
-        ble_proxy_count: incoming.ble_proxy_count,
-        ble_area_signatures: mergedBleSignatures,
-        discovered_latter_devices: incoming.discovered_latter_devices,
-        ignored_latter_devices:
-          incoming.ignored_latter_devices ?? prev?.ignored_latter_devices,
-        discovered_ble_devices: mergedDiscoveredBle,
-        system_controls: incoming.system_controls,
-        device_groups: incoming.device_groups,
-        system_config: incoming.system_config,
-        has_security_pin: incoming.has_security_pin,
-        photo_collections: mergedPhotoCollections,
-        system_wallpapers: mergedSystemWallpapers,
-        catalog: mergedCatalog,
-        pref_specs: mergedPrefSpecs,
-        world_clock_zones: mergedWorldClockZones,
-        // Preserve active Device fields if already loaded, else clean empty placeholders while `deviceLoading` stays true
-        subentry_id: keepPrevDevice ? prev.subentry_id : "",
-        title: keepPrevDevice ? prev.title : "",
-        device_config_rev: keepPrevDevice ? prev.device_config_rev : 0,
-        capabilities: keepPrevDevice ? prev.capabilities : {},
-        config: keepPrevDevice ? prev.config : {},
-        device_prefs: keepPrevDevice ? prev.device_prefs : [],
-        quick_actions: keepPrevDevice ? prev.quick_actions : [],
-        speaker_volume: keepPrevDevice ? prev.speaker_volume : null,
-        esphome: keepPrevDevice ? prev.esphome : { device: {}, sections: [] },
-        wallpapers: keepPrevDevice ? prev.wallpapers : [],
-        links: keepPrevDevice ? prev.links : undefined,
-        live: keepPrevDevice
-          ? {
-              ...prev.live,
-              area_presence_grid:
-                incoming.live?.area_presence_grid ?? prev.live.area_presence_grid,
-            }
-          : { area_presence_grid: incoming.live?.area_presence_grid },
-      };
-      const effSysPatch = this.entity.getEffectiveSystemPatch();
-      if (Object.keys(effSysPatch).length > 0 && sysMerged.system_config) {
-        sysMerged.system_config = {
-          ...sysMerged.system_config,
-          ...(effSysPatch),
-        };
-      }
-      overlayPendingBlankListSlots(this, sysMerged, prevSysConfig);
-      this.deviceLoading = !keepPrevDevice;
-      this.state = sysMerged;
-      this.ensureDefaultSurveyDevice();
-      this.ensureDefaultDoorbellTester();
-      this.ensureValidBatchTargetFilter();
-      this.syncLiveClockTimer();
-      this.host.requestUpdate();
-      if (!keepPrevDevice && this.host.isConnected && this.ws.hass && !this.studioRevMismatch) {
-        void this.ensureSubscription(false);
-      }
-      return;
-    }
-    // Matching payload (either System/list view or matching `activeSubentryId`)
-    this.deviceLoading = false;
-    const merged = {
-      ...incoming,
-      system_devices: mergedSystemDevices,
-      discovered_ble_devices: mergedDiscoveredBle,
-      photo_collections: mergedPhotoCollections,
-      system_wallpapers: mergedSystemWallpapers,
-      ble_area_signatures: mergedBleSignatures,
-      catalog: mergedCatalog,
-      pref_specs: mergedPrefSpecs,
-      world_clock_zones: mergedWorldClockZones,
-      internal_logs: mergedLogs,
-      device_prefs: incoming.device_prefs || [],
-    };
-    const effSysPatch = this.entity.getEffectiveSystemPatch();
-    if (Object.keys(effSysPatch).length > 0 && merged.system_config) {
-      merged.system_config = {
-        ...merged.system_config,
-        ...(effSysPatch),
-      };
-    }
-    overlayPendingBlankListSlots(this, merged, prevSysConfig);
-    if (merged.subentry_id) {
-      const effDevPatch = this.entity.getEffectiveDevicePatch(merged.subentry_id);
-      if (Object.keys(effDevPatch).length > 0 && merged.config) {
-        overlayDevicePrefsOnSections(merged, effDevPatch);
-      }
-    }
-    overlayPendingEntityStates(merged, this.pendingEntityStates);
-    if (
-      this.currentScope === "device" &&
-      this.deviceSelected &&
-      merged.subentry_id === this.activeSubentryId &&
-      !deviceHasView(
-        this.currentViewId,
-        merged.capabilities,
-        merged.config?.kind,
-      )
-    ) {
-      this.currentViewId = "dashboard";
-      this.syncUrl(true);
-    }
-    this.state = merged;
-    this.ensureDefaultSurveyDevice();
-    this.ensureDefaultDoorbellTester();
-    this.ensureValidBatchTargetFilter();
-    this.syncLiveClockTimer();
-    this.host.requestUpdate();
-  }
-          stabilizeDiscoveredBle(
-    candidates,
-    systemDevices,
-  ) {
-    const RETENTION_MS = 90_000;
-    const now = Date.now();
-    const onboardedSlugs = new Set(
-      (systemDevices || [])
-        .map((d) => String(d.device_slug || "").trim().toLowerCase())
-        .filter(Boolean),
-    );
-    for (const [addrKey, entry] of this.discoveredBleSeenCache.entries()) {
-      const candSlug = String(
-        (entry.candidate).slug || "",
-      )
-        .trim()
-        .toLowerCase();
-      if (
-        now - entry.lastSeenMs > RETENTION_MS ||
-        (candSlug && onboardedSlugs.has(candSlug))
-      ) {
-        this.discoveredBleSeenCache.delete(addrKey);
-      }
-    }
-    const extraNoKey = [];
-    for (const c of candidates) {
-      const addrKey = String(c.target_address || "").trim().toLowerCase();
-      if (addrKey) {
-        this.discoveredBleSeenCache.set(addrKey, { candidate: c, lastSeenMs: now });
-      } else {
-        extraNoKey.push(c);
-      }
-    }
-    return [
-      ...Array.from(this.discoveredBleSeenCache.values(), (entry) => entry.candidate),
-      ...extraNoKey,
-    ];
+    this.sub.ingestPayload(incoming, logsWereRequested);
   }
   toggleDiscoveredBlePause(paused) {
-    const next = paused ?? !this.discoveredBlePaused;
-    this.discoveredBlePaused = next;
-    if (next) {
-      this.discoveredBleFrozenSnapshot = [...(this.state?.discovered_ble_devices || [])];
-    } else {
-      this.discoveredBleFrozenSnapshot = null;
-    }
-    this.host.requestUpdate();
+    this.sub.toggleDiscoveredBlePause(paused);
   }
   evictAdoptedBleCandidate(targetAddress) {
-    const addrKey = String(targetAddress || "").trim().toLowerCase();
-    if (!addrKey) return;
-    this.discoveredBleSeenCache.delete(addrKey);
-    this.discoveredBlePersonDrafts.delete(addrKey);
-    if (this.discoveredBleFrozenSnapshot) {
-      this.discoveredBleFrozenSnapshot = this.discoveredBleFrozenSnapshot.filter(
-        (c) => String(c.target_address || "").trim().toLowerCase() !== addrKey,
-      );
-    }
+    this.sub.evictAdoptedBleCandidate(targetAddress);
   }
-          ensureDefaultSurveyDevice() {
-    const devs = this.state?.system_devices || [];
-    const bleDevs = devs.filter((d) => d.ble_tracked || d.kind === "ble_tag");
-    if (
-      this.bleSurveySubentryId &&
-      bleDevs.some((d) => d.subentry_id === this.bleSurveySubentryId)
-    ) {
-      return;
-    }
-    const current = bleDevs.find((d) => d.subentry_id === this.activeSubentryId);
-    this.bleSurveySubentryId = current?.subentry_id || bleDevs[0]?.subentry_id || "";
+  ensureDefaultSurveyDevice() {
+    this.sub.ensureDefaultSurveyDevice();
   }
-          ensureDefaultDoorbellTester() {
-    const devs = (this.state?.system_devices || []).filter((d) => d.kind !== "ble_tag");
-    if (
-      this.doorbellTestSubentryId &&
-      devs.some((d) => d.subentry_id === this.doorbellTestSubentryId)
-    ) {
-      return;
-    }
-    this.doorbellTestSubentryId = devs[0]?.subentry_id || "";
+  ensureDefaultDoorbellTester() {
+    this.sub.ensureDefaultDoorbellTester();
   }
-          ensureValidBatchTargetFilter() {
-    if (!this.batchTargetFilter.startsWith("group:")) return;
-    const gid = this.batchTargetFilter.slice(6);
-    if (gid === "custom") return;
-    const groups = this.state?.device_groups || [];
-    if (!groups.some((g) => g.id === gid)) {
-      this.batchTargetFilter = "all";
-      this.groups.resetBatchDraft();
-    }
+  ensureValidBatchTargetFilter() {
+    this.sub.ensureValidBatchTargetFilter();
   }
 }
-__latterExp(__exports, { EntityController: () => EntityController, GroupsController: () => GroupsController, isCatalogItemSupported: () => isCatalogItemSupported, isProtectedNativeDockItem: () => isProtectedNativeDockItem, overlayDevicePrefsOnSections: () => overlayDevicePrefsOnSections, overlayPendingEntityStates: () => overlayPendingEntityStates, ToolsController: () => ToolsController, deviceHasView: () => deviceHasView, StudioStore: () => StudioStore });
+__latterExp(__exports, { deviceHasView: () => deviceHasView, EntityController: () => EntityController, GroupsController: () => GroupsController, isCatalogItemSupported: () => isCatalogItemSupported, isProtectedNativeDockItem: () => isProtectedNativeDockItem, overlayDevicePrefsOnSections: () => overlayDevicePrefsOnSections, overlayPendingEntityStates: () => overlayPendingEntityStates, ToolsController: () => ToolsController, StudioStore: () => StudioStore });
 //# sourceURL=latter-studio/src/state/store.ts
 });
-__latterDef("src/components/dialogs/world-clocks.ts", (__exports, __req) => {
-const { MAX_WORLD_CLOCKS, WORLD_CLOCK_ZONES_CATALOG } = __req("src/constants.ts");
-const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
-const { defaultLocaleTimeFormat } = __req("src/utils/format.ts");
-const { renderSelectRow, renderSettingsRow, renderSortableList, renderSwitchRow, renderTrashIconButton } = __req("src/components/controls.ts");
+__latterDef("src/domain/world-clocks.ts", (__exports, __req) => {
+const { MAX_WORLD_CLOCKS } = __req("src/constants.ts");
+const { truncateUtf8Bytes } = __req("src/utils/format.ts");
 /**
- * World Clocks & Time App Configuration Helpers (`#latter-app-config-modal` `time`, `D-038`, `D-039`, `D-064`).
- * - Sortable World Clocks list via `renderSortableList` (`≡` drag handle + focus-preserving `↑`/`↓`)
- * - `focusSafe` text bindings so live WS pushes never clobber typing
+ * Pure World Clocks wire parser, serializer, and UTF-8 byte-bounded label sanitizer (`L1` domain leaf, `D-038`).
+ * Wire format: `<label>|<iana>;<label>|<iana>;...` (up to `MAX_WORLD_CLOCKS` zones, excluding pinned UTC).
  */
 const PINNED_UTC_ZONES = new Set([
   "UTC",
@@ -12409,9 +12970,9 @@ const PINNED_UTC_ZONES = new Set([
   "Etc/GMT0",
 ]);
 const IANA_ZONE_PATTERN = /^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)+$/;
-const TEXT_INPUT_DEBOUNCE_MS = 600;
-function isImeSafeEnter(ev) {
-  return ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229;
+function isValidWorldClockZone(iana) {
+  const clean = String(iana || "").trim();
+  return Boolean(clean && !PINNED_UTC_ZONES.has(clean) && IANA_ZONE_PATTERN.test(clean));
 }
 function sanitizeClockLabel(
   raw,
@@ -12445,20 +13006,8 @@ function sanitizeClockLabel(
     prevSpace = false;
   }
   const normalized = trimEdges ? collapsed.trim() : collapsed;
-  if (typeof TextEncoder === "undefined") {
-    const sliced = normalized.slice(0, maxBytes);
-    return trimEdges ? sliced.trimEnd() : sliced;
-  }
-  const enc = new TextEncoder();
-  if (enc.encode(normalized).length <= maxBytes) {
-    return normalized;
-  }
-  let out = "";
-  for (const cp of normalized) {
-    if (enc.encode(out + cp).length > maxBytes) break;
-    out += cp;
-  }
-  return trimEdges ? out.trimEnd() : out;
+  const truncated = truncateUtf8Bytes(normalized, maxBytes);
+  return trimEdges ? truncated.trimEnd() : truncated;
 }
 function fallbackLabelForIana(iana) {
   const tail = iana.split("/").pop() || iana;
@@ -12474,7 +13023,7 @@ function parseWorldClocksSpec(raw) {
     if (pipeIdx < 0) continue;
     const rawLbl = rec.slice(0, pipeIdx);
     const iana = rec.slice(pipeIdx + 1).trim();
-    if (!iana || PINNED_UTC_ZONES.has(iana) || !IANA_ZONE_PATTERN.test(iana)) {
+    if (!isValidWorldClockZone(iana)) {
       continue;
     }
     const label = sanitizeClockLabel(rawLbl) || fallbackLabelForIana(iana);
@@ -12495,6 +13044,24 @@ function serializeWorldClocksSpec(items) {
     })
     .filter(Boolean)
     .join(";");
+}
+__latterExp(__exports, { PINNED_UTC_ZONES: () => PINNED_UTC_ZONES, IANA_ZONE_PATTERN: () => IANA_ZONE_PATTERN, isValidWorldClockZone: () => isValidWorldClockZone, sanitizeClockLabel: () => sanitizeClockLabel, fallbackLabelForIana: () => fallbackLabelForIana, parseWorldClocksSpec: () => parseWorldClocksSpec, serializeWorldClocksSpec: () => serializeWorldClocksSpec });
+//# sourceURL=latter-studio/src/domain/world-clocks.ts
+});
+__latterDef("src/components/dialogs/world-clocks.ts", (__exports, __req) => {
+const { MAX_WORLD_CLOCKS, WORLD_CLOCK_ZONES_CATALOG } = __req("src/constants.ts");
+const { isValidWorldClockZone, parseWorldClocksSpec, sanitizeClockLabel, serializeWorldClocksSpec } = __req("src/domain/world-clocks.ts");
+const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
+const { defaultLocaleTimeFormat } = __req("src/utils/format.ts");
+const { renderSelectRow, renderSettingsRow, renderSortableList, renderSwitchRow, renderTrashIconButton } = __req("src/components/controls.ts");
+/**
+ * World Clocks & Time App Configuration Helpers (`#latter-app-config-modal` `time`, `D-038`, `D-039`, `D-064`).
+ * - Sortable World Clocks list via `renderSortableList` (`≡` drag handle + focus-preserving `↑`/`↓`)
+ * - `focusSafe` text bindings so live WS pushes never clobber typing
+ */
+const TEXT_INPUT_DEBOUNCE_MS = 600;
+function isImeSafeEnter(ev) {
+  return ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229;
 }
 function renderTimeAppConfigBody(store) {
   const data = store.state;
@@ -12554,8 +13121,9 @@ function renderTimeAppConfigBody(store) {
   ) => {
     if (idx < 0 || idx >= enabledWorldClocks.length) return;
     const prev = enabledWorldClocks[idx];
+    if (!prev) return;
     const nextIana = (patch.iana ?? prev.iana).trim();
-    if (!nextIana || PINNED_UTC_ZONES.has(nextIana) || !IANA_ZONE_PATTERN.test(nextIana)) {
+    if (!isValidWorldClockZone(nextIana)) {
       return;
     }
     const nextLabel =
@@ -12587,10 +13155,13 @@ function renderTimeAppConfigBody(store) {
     }
     const next = [...enabledWorldClocks];
     const [picked] = next.splice(fromIdx, 1);
+    if (!picked) return;
     next.splice(toIdx, 0, picked);
     if (store.worldClockRowKeys.length === enabledWorldClocks.length) {
       const [pickedKey] = store.worldClockRowKeys.splice(fromIdx, 1);
-      store.worldClockRowKeys.splice(toIdx, 0, pickedKey);
+      if (pickedKey !== undefined) {
+        store.worldClockRowKeys.splice(toIdx, 0, pickedKey);
+      }
     }
     updateWorldClocks(next);
   };
@@ -12618,7 +13189,7 @@ function renderTimeAppConfigBody(store) {
       newLabelEl?.focus();
       return;
     }
-    if (!picked || PINNED_UTC_ZONES.has(picked) || !IANA_ZONE_PATTERN.test(picked)) {
+    if (!isValidWorldClockZone(picked)) {
       store.showToast(store.t("dialogs.toast_select_tz"), true);
       zoneSelEl?.focus();
       return;
@@ -12885,11 +13456,12 @@ function renderTimeAppConfigBody(store) {
     })}
   </div>`;
 }
-__latterExp(__exports, { sanitizeClockLabel: () => sanitizeClockLabel, parseWorldClocksSpec: () => parseWorldClocksSpec, serializeWorldClocksSpec: () => serializeWorldClocksSpec, renderTimeAppConfigBody: () => renderTimeAppConfigBody });
+__latterExp(__exports, { parseWorldClocksSpec: () => parseWorldClocksSpec, sanitizeClockLabel: () => sanitizeClockLabel, serializeWorldClocksSpec: () => serializeWorldClocksSpec, renderTimeAppConfigBody: () => renderTimeAppConfigBody });
 //# sourceURL=latter-studio/src/components/dialogs/world-clocks.ts
 });
 __latterDef("src/components/dialogs/app-config.ts", (__exports, __req) => {
-const { AREA_CATEGORIES_CATALOG, CALENDAR_LOOKAHEAD_OPTIONS, CALENDAR_WEEK_START_OPTIONS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, MAX_PINNED_ITEMS, SHORTCUT_ROUTES_CATALOG, TOOLS_ITEMS_CATALOG } = __req("src/constants.ts");
+const { AREA_CATEGORIES_CATALOG, CALENDAR_WEEK_START_OPTIONS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, MAX_PINNED_ITEMS, SHORTCUT_ROUTES_CATALOG, TOOLS_ITEMS_CATALOG } = __req("src/constants.ts");
+const { CALENDAR_LOOKAHEAD_OPTIONS } = __req("src/i18n/index.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
 const { ROUTE_PREVIEW_ICONS, shortcutActionLabel } = __req("src/mdi-catalog.ts");
 const { isCatalogItemSupported } = __req("src/state/store.ts");
@@ -12973,7 +13545,7 @@ function resolvePrefStringValue(
       ? String(rawCandidate)
       : String(fallbackVal);
   if (options.length > 0 && !options.includes(raw)) {
-    return options[0];
+    return options[0] ?? raw;
   }
   return raw;
 }
@@ -14395,7 +14967,7 @@ function renderMediaImportDialog(store) {
   const allFolderSelected =
     selectableImages.length > 0 && selectableImages.every((img) => selectedSet.has(img.relpath));
   const crumbs = modal.subpath ? modal.subpath.split("/").filter(Boolean) : [];
-  const currentFolderName = crumbs.length > 0 ? crumbs[crumbs.length - 1] : modal.root || "Media";
+  const currentFolderName = (crumbs.length > 0 ? crumbs[crumbs.length - 1] : undefined) ?? (modal.root || "Media");
   const toggleImagePath = (relpath) => {
     const next = selectedSet.has(relpath)
       ? modal.selectedPaths.filter((p) => p !== relpath)
@@ -15058,6 +15630,7 @@ function syncPhotoCropCanvases(renderRoot, store) {
     }
     for (let i = 0; i < modal.files.length; i += 1) {
       const staged = modal.files[i];
+      if (!staged) continue;
       const thumbCanvas = renderRoot.getElementById(
         `latter-upload-thumb-${staged.id}`,
       );
@@ -15399,7 +15972,7 @@ function renderPhotoUploadDialog(store) {
                         };
                         store.host.requestUpdate();
                       }}
-                      class="wp-thumb-btn"
+                      class="crop-filmstrip-btn"
                     >
                       <canvas
                         id=${`latter-upload-thumb-${item.id}`}
@@ -15533,7 +16106,7 @@ function renderPhotoUploadDialog(store) {
 
           ${modal.uploading
             ? html`<div class="stack">
-                <div class="wp-upload-status">
+                <div class="photo-upload-status">
                   <span>
                     ${store.t("photo_upload.uploading_progress", {
                       current: fmtNumber(modal.currentIndex, store.hass, 0),
@@ -16366,7 +16939,7 @@ const { css } = __req("src/lib/lit.ts");
  * (`docs/studio-design.md` §3, `D-061`, `D-066`).
  * Literal font sizes, pixel spacing, and colors appear ONLY inside `:host` / `:host([dark])`.
  */
-const BASE_STYLES = css`:host{--studio-font-family:var(--ha-font-family-body,inherit);--studio-font-code:var(--ha-font-family-code,monospace);--studio-font-title:var(--ha-font-size-xl,20px);--studio-font-section:var(--ha-font-size-l,16px);--studio-font-body:var(--ha-font-size-m,14px);--studio-font-secondary:var(--ha-font-size-s,12px);--studio-font-caption:var(--ha-font-size-s,12px);--studio-weight-regular:var(--ha-font-weight-normal,400);--studio-weight-medium:var(--ha-font-weight-medium,500);--studio-line-height:var(--ha-line-height-normal,1.6);--studio-line-height-condensed:var(--ha-line-height-condensed,1.2);--studio-font-card-title:var(--ha-card-header-font-size,var(--ha-font-size-2xl,24px));--studio-card-title-tracking:-0.012em;--studio-space-1:var(--ha-space-1,4px);--studio-space-2:var(--ha-space-2,8px);--studio-space-3:var(--ha-space-3,12px);--studio-space-4:var(--ha-space-4,16px);--studio-space-card-top:var(--ha-space-5,20px);--studio-space-5:var(--ha-space-6,24px);--studio-radius-card:var(--ha-card-border-radius,var(--ha-border-radius-lg,12px));--studio-radius-control:var(--ha-border-radius-md,8px);--studio-radius-field:var(--ha-border-radius-sm,4px);--studio-radius-button:var(--ha-button-border-radius,var(--ha-border-radius-pill,9999px));--studio-radius-dialog:var(--ha-dialog-border-radius,var(--ha-border-radius-3xl,24px));--studio-radius-pill:var(--ha-border-radius-pill,9999px);--studio-card-border-width:var(--ha-card-border-width,1px);--studio-control-height:var(--ha-button-height,40px);--studio-control-height-compact:32px;--studio-row-min-height:56px;--studio-header-height:var(--header-height,56px);--studio-sidebar-width:244px;--studio-bg:var(--primary-background-color,#fafafa);--studio-surface:var(--ha-card-background,var(--card-background-color,#ffffff));--studio-surface-alt:var(--secondary-background-color,#f0f0f0);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#ffffff));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#212121));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#616161));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(0,0,0,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#ffffff));--studio-input-bg:var(--input-fill-color,rgba(0,0,0,0.04));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#f5f5f5));--studio-field-bg-hover:var(--ha-color-form-background-hover,var(--studio-field-bg));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(0,0,0,0.42)));--studio-popup-bg:var(--card-background-color,#ffffff);--studio-divider:var(--divider-color,rgba(0,0,0,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(0,0,0,0.12)));--studio-text:var(--primary-text-color,#212121);--studio-text-secondary:var(--secondary-text-color,#5f6368);--studio-text-disabled:var(--disabled-text-color,#9e9e9e);--studio-primary:var(--primary-color,#007299);--studio-primary-tint:rgba(var(--rgb-primary-color,0,154,199),0.12);--studio-primary-tint-strong:rgba(var(--rgb-primary-color,0,154,199),0.24);--studio-hover:rgba(var(--rgb-primary-text-color,33,33,33),0.06);--studio-btn-accent-bg:var(--ha-color-fill-primary-loud-resting,var(--primary-color,#007da3));--studio-btn-accent-bg-hover:var(--ha-color-fill-primary-loud-hover,var(--studio-btn-accent-bg));--studio-btn-accent-text:var(--ha-color-on-primary-loud,var(--text-primary-color,#ffffff));--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#c2e6f2);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#005b78);--studio-btn-plain-hover:var(--ha-color-fill-primary-quiet-resting,var(--studio-primary-tint));--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-nav-active-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#dcf2df);--studio-chip-success-text:var(--ha-color-on-success-normal,#1b5e20);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#fff0d1);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#7a4900);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#c62828));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#e0e0e0));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#616161));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#d8eff7));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#005b78));--studio-switch-thumb-shadow:var(--ha-switch-thumb-box-shadow,var(--ha-box-shadow-s,0 1px 2px rgba(0,0,0,0.3)));--studio-toast-bg:var(--primary-text-color,#212121);--studio-toast-text:var(--card-background-color,#ffffff);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(140,140,140));--studio-success:var(--success-color,#2e7d32);--studio-warning:var(--warning-color,#ef6c00);--studio-error:var(--error-color,#c62828);--studio-info:var(--info-color,#0277bd);--studio-success-tint:color-mix(in srgb,var(--studio-success) 14%,transparent);--studio-warning-tint:color-mix(in srgb,var(--studio-warning) 14%,transparent);--studio-error-tint:color-mix(in srgb,var(--studio-error) 14%,transparent);--studio-info-tint:color-mix(in srgb,var(--studio-info) 14%,transparent);--studio-card-shadow:var(--ha-card-box-shadow,none);--studio-handoff-surface:color-mix(in srgb,var(--studio-primary) 8%,var(--studio-surface));--studio-handoff-ring:inset 0 0 0 1px var(--studio-primary);--studio-card-handoff-shadow:inset 0 0 0 1px var(--studio-primary),var(--studio-card-shadow);--studio-overlay-shadow:0 8px 24px rgba(0,0,0,0.35);--studio-scrim:rgba(0,0,0,0.5);--studio-media-bg:var(--secondary-background-color,#000000);--studio-photo-badge-bg:rgba(0,0,0,0.68);--studio-photo-badge-text:#ffffff;--studio-photo-ring-selected:0 0 0 2px var(--studio-primary);--studio-dropzone-bg:color-mix(in srgb,var(--studio-primary) 6%,var(--studio-input-bg));--studio-nav-scroll-mask:linear-gradient( to right,transparent 0,#000000 12px,#000000 calc(100% - 16px),transparent 100% );display:block;min-height:100vh;min-height:100dvh;background:var(--studio-bg);color:var(--studio-text);font-family:var(--studio-font-family);font-size:var(--studio-font-body);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height);-webkit-tap-highlight-color:transparent;color-scheme:light;scrollbar-color:var(--studio-scrollbar-thumb) transparent;scrollbar-width:thin;}:host([dark]){--studio-bg:var(--primary-background-color,#111111);--studio-surface:var(--ha-card-background,var(--card-background-color,#1c1c1c));--studio-surface-alt:var(--secondary-background-color,#282828);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#1c1c1c));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#e1e1e1));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#9b9b9b));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(225,225,225,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#1c1c1c));--studio-input-bg:var(--input-fill-color,rgba(255,255,255,0.05));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#363636));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(255,255,255,0.42)));--studio-popup-bg:var(--card-background-color,#1c1c1c);--studio-divider:var(--divider-color,rgba(225,225,225,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(225,225,225,0.12)));--studio-text:var(--primary-text-color,#e1e1e1);--studio-text-secondary:var(--secondary-text-color,#a8a8a8);--studio-text-disabled:var(--disabled-text-color,#6f6f6f);--studio-primary:var(--primary-color,#38bdf8);--studio-hover:rgba(var(--rgb-primary-text-color,225,225,225),0.06);--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#104559);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-nav-active-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#143619);--studio-chip-success-text:var(--ha-color-on-success-normal,#81e287);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#3b2a07);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#ffd166);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#db4437));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#202020));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#989898));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#0b3545));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#7bd6f5));--studio-toast-bg:var(--primary-text-color,#e1e1e1);--studio-toast-text:var(--card-background-color,#1c1c1c);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(110,110,110));--studio-success:var(--success-color,#43a047);--studio-warning:var(--warning-color,#ffa600);--studio-error:var(--error-color,#db4437);--studio-info:var(--info-color,#039be5);color-scheme:dark;}*{box-sizing:border-box;}.hidden{display:none !important;}.studio-root{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--studio-bg);}h2,h3,h4,p{margin:0;}code,.mono{font-family:var(--studio-font-code);font-size:var(--studio-font-secondary);}a{color:var(--studio-primary);}.studio-rev-banner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-2) var(--studio-space-4);background:var(--studio-chip-warning-bg);border-block-end:1px solid var(--studio-warning);color:var(--studio-chip-warning-text);z-index:40;}.offline-banner{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-3) var(--studio-space-4);border:1px solid var(--studio-divider);border-inline-start:4px solid var(--studio-warning);border-radius:var(--studio-radius-control);background:var(--studio-surface);color:var(--studio-text);}.offline-banner-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 260px;}.offline-banner-body>span{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;scroll-behavior:auto !important;}}`;
+const BASE_STYLES = css`:host{--studio-font-family:var(--ha-font-family-body,inherit);--studio-font-code:var(--ha-font-family-code,monospace);--studio-font-title:var(--ha-font-size-xl,20px);--studio-font-section:var(--ha-font-size-l,16px);--studio-font-body:var(--ha-font-size-m,14px);--studio-font-secondary:var(--ha-font-size-s,12px);--studio-font-caption:var(--ha-font-size-s,12px);--studio-weight-regular:var(--ha-font-weight-normal,400);--studio-weight-medium:var(--ha-font-weight-medium,500);--studio-line-height:var(--ha-line-height-normal,1.6);--studio-line-height-condensed:var(--ha-line-height-condensed,1.2);--studio-font-card-title:var(--ha-card-header-font-size,var(--ha-font-size-2xl,24px));--studio-card-title-tracking:-0.012em;--studio-space-1:var(--ha-space-1,4px);--studio-space-2:var(--ha-space-2,8px);--studio-space-3:var(--ha-space-3,12px);--studio-space-4:var(--ha-space-4,16px);--studio-space-card-top:var(--ha-space-5,20px);--studio-space-5:var(--ha-space-6,24px);--studio-radius-card:var(--ha-card-border-radius,var(--ha-border-radius-lg,12px));--studio-radius-control:var(--ha-border-radius-md,8px);--studio-radius-field:var(--ha-border-radius-sm,4px);--studio-radius-button:var(--ha-button-border-radius,var(--ha-border-radius-pill,9999px));--studio-radius-dialog:var(--ha-dialog-border-radius,var(--ha-border-radius-3xl,24px));--studio-radius-pill:var(--ha-border-radius-pill,9999px);--studio-card-border-width:var(--ha-card-border-width,1px);--studio-control-height:var(--ha-button-height,40px);--studio-control-height-compact:32px;--studio-row-min-height:56px;--studio-header-height:var(--header-height,56px);--studio-sidebar-width:244px;--studio-bg:var(--primary-background-color,#fafafa);--studio-surface:var(--ha-card-background,var(--card-background-color,#ffffff));--studio-surface-alt:var(--secondary-background-color,#f0f0f0);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#ffffff));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#212121));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#616161));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(0,0,0,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#ffffff));--studio-input-bg:var(--input-fill-color,rgba(0,0,0,0.04));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#f5f5f5));--studio-field-bg-hover:var(--ha-color-form-background-hover,var(--studio-field-bg));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(0,0,0,0.42)));--studio-popup-bg:var(--card-background-color,#ffffff);--studio-divider:var(--divider-color,rgba(0,0,0,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(0,0,0,0.12)));--studio-text:var(--primary-text-color,#212121);--studio-text-secondary:var(--secondary-text-color,#5f6368);--studio-text-disabled:var(--disabled-text-color,#9e9e9e);--studio-primary:var(--primary-color,#007299);--studio-primary-tint:rgba(var(--rgb-primary-color,0,154,199),0.12);--studio-hover:rgba(var(--rgb-primary-text-color,33,33,33),0.06);--studio-btn-accent-bg:var(--ha-color-fill-primary-loud-resting,var(--primary-color,#007da3));--studio-btn-accent-bg-hover:var(--ha-color-fill-primary-loud-hover,var(--studio-btn-accent-bg));--studio-btn-accent-text:var(--ha-color-on-primary-loud,var(--text-primary-color,#ffffff));--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#c2e6f2);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#005b78);--studio-btn-plain-hover:var(--ha-color-fill-primary-quiet-resting,var(--studio-primary-tint));--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-nav-active-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#d8eff7);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#005b78);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#dcf2df);--studio-chip-success-text:var(--ha-color-on-success-normal,#1b5e20);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#fff0d1);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#7a4900);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#fbe4e2);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#9e1c13);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#c62828));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#e0e0e0));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#616161));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#d8eff7));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#005b78));--studio-switch-thumb-shadow:var(--ha-switch-thumb-box-shadow,var(--ha-box-shadow-s,0 1px 2px rgba(0,0,0,0.3)));--studio-toast-bg:var(--primary-text-color,#212121);--studio-toast-text:var(--card-background-color,#ffffff);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(140,140,140));--studio-success:var(--success-color,#2e7d32);--studio-warning:var(--warning-color,#ef6c00);--studio-error:var(--error-color,#c62828);--studio-info:var(--info-color,#0277bd);--studio-warning-tint:color-mix(in srgb,var(--studio-warning) 14%,transparent);--studio-error-tint:color-mix(in srgb,var(--studio-error) 14%,transparent);--studio-info-tint:color-mix(in srgb,var(--studio-info) 14%,transparent);--studio-card-shadow:var(--ha-card-box-shadow,none);--studio-handoff-surface:color-mix(in srgb,var(--studio-primary) 8%,var(--studio-surface));--studio-handoff-ring:inset 0 0 0 1px var(--studio-primary);--studio-card-handoff-shadow:inset 0 0 0 1px var(--studio-primary),var(--studio-card-shadow);--studio-overlay-shadow:0 8px 24px rgba(0,0,0,0.35);--studio-scrim:rgba(0,0,0,0.5);--studio-media-bg:var(--secondary-background-color,#000000);--studio-photo-badge-bg:rgba(0,0,0,0.68);--studio-photo-badge-text:#ffffff;--studio-photo-ring-selected:0 0 0 2px var(--studio-primary);--studio-dropzone-bg:color-mix(in srgb,var(--studio-primary) 6%,var(--studio-input-bg));--studio-nav-scroll-mask:linear-gradient( to right,transparent 0,#000000 12px,#000000 calc(100% - 16px),transparent 100% );display:block;min-height:100vh;min-height:100dvh;background:var(--studio-bg);color:var(--studio-text);font-family:var(--studio-font-family);font-size:var(--studio-font-body);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height);-webkit-tap-highlight-color:transparent;color-scheme:light;scrollbar-color:var(--studio-scrollbar-thumb) transparent;scrollbar-width:thin;}:host([dark]){--studio-bg:var(--primary-background-color,#111111);--studio-surface:var(--ha-card-background,var(--card-background-color,#1c1c1c));--studio-surface-alt:var(--secondary-background-color,#282828);--studio-header-bg:var(--app-header-background-color,var(--sidebar-background-color,#1c1c1c));--studio-header-text:var(--app-header-text-color,var(--primary-text-color,#e1e1e1));--studio-header-icon:var(--sidebar-icon-color,var(--secondary-text-color,#9b9b9b));--studio-header-border:var(--app-header-border-bottom,1px solid var(--divider-color,rgba(225,225,225,0.12)));--studio-sidebar-bg:var(--sidebar-background-color,var(--card-background-color,#1c1c1c));--studio-input-bg:var(--input-fill-color,rgba(255,255,255,0.05));--studio-field-bg:var(--ha-color-form-background,var(--input-fill-color,#363636));--studio-field-line:var(--ha-color-border-neutral-loud,var(--input-idle-line-color,rgba(255,255,255,0.42)));--studio-popup-bg:var(--card-background-color,#1c1c1c);--studio-divider:var(--divider-color,rgba(225,225,225,0.12));--studio-card-border:var(--ha-card-border-color,var(--divider-color,rgba(225,225,225,0.12)));--studio-text:var(--primary-text-color,#e1e1e1);--studio-text-secondary:var(--secondary-text-color,#a8a8a8);--studio-text-disabled:var(--disabled-text-color,#6f6f6f);--studio-primary:var(--primary-color,#38bdf8);--studio-hover:rgba(var(--rgb-primary-text-color,225,225,225),0.06);--studio-btn-tonal-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-btn-tonal-bg-hover:var(--ha-color-fill-primary-normal-hover,#104559);--studio-btn-tonal-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-nav-active-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-nav-active-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-primary-bg:var(--ha-color-fill-primary-normal-resting,#0b3545);--studio-chip-primary-text:var(--ha-color-on-primary-normal,#7bd6f5);--studio-chip-success-bg:var(--ha-color-fill-success-normal-resting,#143619);--studio-chip-success-text:var(--ha-color-on-success-normal,#81e287);--studio-chip-warning-bg:var(--ha-color-fill-warning-normal-resting,#3b2a07);--studio-chip-warning-text:var(--ha-color-on-warning-normal,#ffd166);--studio-chip-danger-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-chip-danger-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-tonal-bg:var(--ha-color-fill-danger-normal-resting,#3d1614);--studio-danger-tonal-text:var(--ha-color-on-danger-normal,#ff9b93);--studio-danger-loud-bg:var(--ha-color-fill-danger-loud-resting,var(--error-color,#db4437));--studio-danger-loud-text:var(--ha-color-on-danger-loud,#ffffff);--studio-switch-track:var(--ha-switch-background-color,var(--ha-color-fill-disabled-quiet-resting,#202020));--studio-switch-border:var(--ha-switch-border-color,var(--ha-color-border-neutral-normal,#7a7a7a));--studio-switch-thumb:var(--ha-switch-thumb-background-color,var(--ha-color-on-neutral-normal,#989898));--studio-switch-on-track:var(--ha-switch-checked-background-color,var(--ha-color-fill-primary-normal-resting,#0b3545));--studio-switch-on-border:var(--ha-switch-checked-border-color,var(--ha-color-border-primary-loud,var(--primary-color,#009ac7)));--studio-switch-on-thumb:var(--ha-switch-checked-thumb-background-color,var(--ha-color-on-primary-normal,#7bd6f5));--studio-toast-bg:var(--primary-text-color,#e1e1e1);--studio-toast-text:var(--card-background-color,#1c1c1c);--studio-scrollbar-thumb:var(--scrollbar-thumb-color,rgb(110,110,110));--studio-success:var(--success-color,#43a047);--studio-warning:var(--warning-color,#ffa600);--studio-error:var(--error-color,#db4437);--studio-info:var(--info-color,#039be5);color-scheme:dark;}*{box-sizing:border-box;}.hidden{display:none !important;}.studio-root{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--studio-bg);}h2,h3,h4,p{margin:0;}code,.mono{font-family:var(--studio-font-code);font-size:var(--studio-font-secondary);}a{color:var(--studio-primary);}.studio-rev-banner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-2) var(--studio-space-4);background:var(--studio-chip-warning-bg);border-block-end:1px solid var(--studio-warning);color:var(--studio-chip-warning-text);z-index:40;}.offline-banner{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding:var(--studio-space-3) var(--studio-space-4);border:1px solid var(--studio-divider);border-inline-start:4px solid var(--studio-warning);border-radius:var(--studio-radius-control);background:var(--studio-surface);color:var(--studio-text);}.offline-banner-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 260px;}.offline-banner-body>span{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;scroll-behavior:auto !important;}}`;
 __latterExp(__exports, { BASE_STYLES: () => BASE_STYLES });
 //# sourceURL=latter-studio/src/styles/base.ts
 });
@@ -16393,9 +16966,9 @@ __latterDef("src/styles/data.ts", (__exports, __req) => {
 const { css } = __req("src/lib/lit.ts");
 /**
  * Key-value lists, data tables, WCAG 2.2 AA chips, >= 32px pills, BLE signal bars,
- * wallpaper gallery, camera previews, logs, & alerts (`D-061`, `D-064`).
+ * photo library, camera previews, logs, & alerts (`D-061`, `D-064`, `D-072`).
  */
-const DATA_STYLES = css`.kv-list{display:flex;flex-direction:column;gap:0;}.kv-row{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:0;}.kv-row>span:first-child{color:var(--studio-text-secondary);}.kv-row>strong,.kv-value{font-weight:var(--studio-weight-medium);font-variant-numeric:tabular-nums;text-align:end;}button.kv-row{inline-size:100%;border:none;border-radius:var(--studio-radius-control);background:transparent;color:inherit;font:inherit;text-align:start;cursor:pointer;}button.kv-row:hover{background:var(--studio-hover);}button.kv-row>strong::after{content:" ›";color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}:host(:dir(rtl)) button.kv-row>strong::after{content:" ‹";}.table-wrap{inline-size:100%;overflow-x:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}table.data-table{inline-size:100%;border-collapse:collapse;text-align:start;}table.data-table th{padding:0;border-block-end:1px solid var(--studio-divider);white-space:nowrap;}.sort-btn{inline-size:100%;padding:var(--studio-space-3);border:none;background:transparent;color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:start;cursor:pointer;}.sort-btn:hover{color:var(--studio-text);}th[aria-sort="ascending"] .sort-btn,th[aria-sort="descending"] .sort-btn{color:var(--studio-primary);}table.data-table td{padding:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);white-space:nowrap;}table.data-table tbody tr:last-child td{border-block-end:none;}table.data-table tbody tr{cursor:pointer;}table.data-table tbody tr:hover,table.data-table tbody tr:focus-visible{background:var(--studio-hover);}td.col-name{font-weight:var(--studio-weight-medium);}table.data-table a{color:inherit;text-decoration:none;}table.data-table a:hover{text-decoration:underline;}td.col-open{color:var(--studio-text-secondary);text-align:end;}.chip{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:22px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);white-space:nowrap;font-variant-numeric:tabular-nums;}.chip-primary{background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.chip-success{background:var(--studio-chip-success-bg);color:var(--studio-chip-success-text);}.chip-warning{background:var(--studio-chip-warning-bg);color:var(--studio-chip-warning-text);}.chip-error{background:var(--studio-chip-danger-bg);color:var(--studio-chip-danger-text);}.status-dot{display:inline-block;inline-size:8px;block-size:8px;margin-inline-end:var(--studio-space-2);border-radius:50%;background:var(--studio-text-disabled);}.chip>.status-dot{margin-inline-end:var(--studio-space-1);}.status-dot.online{background:var(--studio-success);}.status-dot.update{background:var(--studio-warning);}.status-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);}@container (max-width:260px){.status-tiles{grid-template-columns:minmax(0,1fr);}}.status-tile{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-1);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.status-tile{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.status-tile:hover{background:var(--studio-hover);border-color:var(--studio-primary);}button.status-tile:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.status-tile-head{display:flex;align-items:center;gap:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.status-tile-head svg{inline-size:16px;block-size:16px;fill:currentColor;flex-shrink:0;}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}.status-tile-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.status-tile>.signal-track{margin-block-start:var(--studio-space-1);}@container (max-width:420px){.status-tile{gap:0;padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);}.status-tile-head{gap:var(--studio-space-1);}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-body);}.status-tile-meta{margin-block-start:var(--studio-space-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}.overview-box{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-2);inline-size:100%;padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.overview-box{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.overview-box:hover{background:var(--studio-hover);border-color:var(--studio-primary);}.overview-box-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-title{display:inline-flex;align-items:center;gap:var(--studio-space-2);font-size:var(--studio-font-body);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.overview-box-title svg{inline-size:18px;block-size:18px;fill:currentColor;color:var(--studio-text-secondary);flex-shrink:0;}.overview-box-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-chevron{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.overview-box-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.pill-list{display:flex;flex-wrap:wrap;gap:var(--studio-space-2);}.pill{display:inline-flex;align-items:center;gap:2px;min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);}.pill.enabled{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.pill-move{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-move:hover:not(:disabled){background:var(--studio-hover);color:var(--studio-primary);}.pill-move:disabled{opacity:0.4;cursor:not-allowed;}.pill-toggle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-toggle:disabled{opacity:0.5;cursor:not-allowed;}.pill .drag-handle{border-radius:var(--studio-radius-pill);color:inherit;}.swatch{display:inline-block;inline-size:20px;block-size:20px;border-radius:50%;border:1px solid var(--studio-divider);background:var(--swatch-color,var(--studio-primary));flex-shrink:0;}#card-ble-calibration{scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));}.calibrate-target-box{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.calibrate-target-box.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);background:var(--studio-primary-tint);}.calibrate-handoff-banner{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-weight:var(--studio-weight-medium);}.signal-row{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.signal-row.winner{border-color:var(--studio-primary);}.proxy-trim-details{padding-block-start:var(--studio-space-2);}.proxy-trim-details>summary{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.proxy-trim-details[open]>summary,.proxy-trim-details>summary:hover{color:var(--studio-text);}.proxy-trim-body{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);}.signal-row-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-row-title{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.signal-track,.upload-progress{block-size:6px;border-radius:var(--studio-radius-pill);background:var(--studio-surface-alt);overflow:hidden;}.signal-fill{inline-size:var(--signal-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.25s ease,width 0.25s ease;}.signal-fill.low{background:var(--studio-error);}.upload-progress-fill{inline-size:var(--upload-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.15s ease,width 0.15s ease;}.wp-upload-trigger{display:inline-flex;align-items:center;}.wp-upload-status{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);}.wp-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--studio-space-3);}.wp-card{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;}.wp-gallery>.empty-state{grid-column:1 / -1;}.wp-card.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.wp-thumb-btn{padding:0;border:none;background:transparent;border-radius:var(--studio-radius-control);cursor:pointer;line-height:0;}.wp-thumb-btn.circle{border-radius:50%;}.wp-thumb-btn:hover .wp-thumb{border-color:var(--studio-primary);}.wp-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.wp-thumb{inline-size:104px;block-size:104px;object-fit:cover;background:var(--studio-media-bg);border:1px solid var(--studio-divider);}.wp-thumb.circle{border-radius:50%;}.wp-thumb.square{border-radius:var(--studio-radius-control);}.wp-title{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow-wrap:anywhere;}.wp-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:var(--studio-space-1);margin-block-start:auto;inline-size:100%;}.btn-icon.wp-star-btn{inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);}.btn-icon.wp-star-btn:hover{color:var(--studio-warning);background:var(--studio-warning-tint);}.btn-icon.wp-star-btn.starred{color:var(--studio-warning);}.photo-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-toolbar-start,.photo-toolbar-end{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-search-input{min-inline-size:200px;flex:1 1 220px;}.collection-strip{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.collection-chip-wrap{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);}.collection-chip-wrap.active{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.collection-chip-btn{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);cursor:pointer;}.collection-chip-action{display:inline-flex;align-items:center;justify-content:center;min-inline-size:28px;min-block-size:28px;padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;cursor:pointer;}.collection-chip-action:hover{background:var(--studio-hover);}.collection-chip-action svg{inline-size:14px;block-size:14px;fill:currentColor;}.photo-bulk-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-primary);border-radius:var(--studio-radius-control);background:var(--studio-primary-tint);}.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:var(--studio-space-3);}.photo-grid>.empty-state{grid-column:1 / -1;}.photo-tile{position:relative;display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);content-visibility:auto;contain-intrinsic-size:180px 220px;transition:border-color 0.15s ease,background-color 0.15s ease,box-shadow 0.15s ease;}.photo-tile:hover{border-color:var(--studio-primary);}.photo-tile.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-tile-thumb-btn{position:relative;display:block;inline-size:100%;padding:0;border:none;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);overflow:hidden;cursor:pointer;aspect-ratio:1 / 1;line-height:0;}.photo-tile-thumb-btn.circle{border-radius:50%;}.photo-tile-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.photo-tile-img{inline-size:100%;block-size:100%;object-fit:cover;display:block;}.photo-tile-check{position:absolute;inset-block-start:var(--studio-space-2);inset-inline-start:var(--studio-space-2);z-index:2;inline-size:20px;block-size:20px;accent-color:var(--studio-primary);cursor:pointer;}.photo-tile-badge{position:absolute;inset-block-end:var(--studio-space-1);inset-inline-end:var(--studio-space-1);padding-block:2px;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-photo-badge-bg);color:var(--studio-photo-badge-text);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.photo-tile-meta{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.photo-tile-name{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.photo-tile-sub{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);}.photo-pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);border-block-start:1px solid var(--studio-divider);}.photo-pool-preview{display:flex;flex-wrap:wrap;align-items:center;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.photo-pool-thumbs{display:flex;align-items:center;gap:var(--studio-space-1);flex-shrink:0;}.photo-pool-thumb{inline-size:48px;block-size:48px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-pool-thumb.circle{border-radius:50%;}.photo-pool-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 160px;}.photo-pool-title{font-weight:var(--studio-weight-medium);overflow-wrap:break-word;}.photo-pool-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);overflow-wrap:break-word;}.photo-pool-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);flex-shrink:0;}.cam-preview{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.cam-preview img{inline-size:100%;max-inline-size:360px;aspect-ratio:16 / 9;object-fit:cover;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);}.log-output{max-block-size:380px;margin:0;padding:var(--studio-space-3);overflow:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);white-space:pre-wrap;}.empty-state{padding-block:var(--studio-space-3);padding-inline:0;color:var(--studio-text-secondary);}.loading-state{display:flex;align-items:center;gap:var(--studio-space-3);padding-block:var(--studio-space-5);padding-inline:0;color:var(--studio-text-secondary);}.loading-state::before{content:"";inline-size:20px;block-size:20px;border:2px solid var(--studio-divider);border-block-start-color:var(--studio-primary);border-radius:50%;animation:studio-spin 0.8s linear infinite;}.studio-root:not(.is-loading) #studio-loading{display:none;}@keyframes studio-spin{to{transform:rotate(360deg);}}.alert{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-info-tint);}.alert-error{background:var(--studio-error-tint);}.alert-warning{background:var(--studio-warning-tint);}.alert-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.alert-list{margin:0;padding-inline-start:var(--studio-space-5);}.toast{position:fixed;inset-inline:0;inset-block-end:var(--studio-space-5);margin-inline:auto;inline-size:fit-content;z-index:50;max-inline-size:min(560px,calc(100vw - 32px));padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-toast-bg);color:var(--studio-toast-text);box-shadow:var(--studio-overlay-shadow);}.toast.error{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.offscreen,.sr-only{position:fixed;inset-block-start:0;inset-inline-start:0;inline-size:1px;block-size:1px;padding:0;margin:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:none;opacity:0;pointer-events:none;}`;
+const DATA_STYLES = css`.kv-list{display:flex;flex-direction:column;gap:0;}.kv-row{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-3);min-height:var(--studio-control-height);padding-block:var(--studio-space-1);padding-inline:0;}.kv-row>span:first-child{color:var(--studio-text-secondary);}.kv-row>strong,.kv-value{font-weight:var(--studio-weight-medium);font-variant-numeric:tabular-nums;text-align:end;}button.kv-row{inline-size:100%;border:none;border-radius:var(--studio-radius-control);background:transparent;color:inherit;font:inherit;text-align:start;cursor:pointer;}button.kv-row:hover{background:var(--studio-hover);}button.kv-row>strong::after{content:" ›";color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}:host(:dir(rtl)) button.kv-row>strong::after{content:" ‹";}.table-wrap{inline-size:100%;overflow-x:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);}table.data-table{inline-size:100%;border-collapse:collapse;text-align:start;}table.data-table th{padding:0;border-block-end:1px solid var(--studio-divider);white-space:nowrap;}.sort-btn{inline-size:100%;padding:var(--studio-space-3);border:none;background:transparent;color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);text-align:start;cursor:pointer;}.sort-btn:hover{color:var(--studio-text);}th[aria-sort="ascending"] .sort-btn,th[aria-sort="descending"] .sort-btn{color:var(--studio-primary);}table.data-table td{padding:var(--studio-space-3);border-block-end:1px solid var(--studio-divider);white-space:nowrap;}table.data-table tbody tr:last-child td{border-block-end:none;}table.data-table tbody tr{cursor:pointer;}table.data-table tbody tr:hover,table.data-table tbody tr:focus-within,table.data-table tbody tr:focus-visible{background:var(--studio-hover);}td.col-name{font-weight:var(--studio-weight-medium);}table.data-table a{color:inherit;text-decoration:none;border-radius:var(--studio-radius-field);}table.data-table a:hover{text-decoration:underline;}table.data-table a:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;text-decoration:underline;}td.col-open{color:var(--studio-text-secondary);text-align:end;}.chip{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:22px;padding-block:0;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);white-space:nowrap;font-variant-numeric:tabular-nums;}.chip-primary{background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.chip-success{background:var(--studio-chip-success-bg);color:var(--studio-chip-success-text);}.chip-warning{background:var(--studio-chip-warning-bg);color:var(--studio-chip-warning-text);}.chip-error{background:var(--studio-chip-danger-bg);color:var(--studio-chip-danger-text);}.status-dot{display:inline-block;inline-size:8px;block-size:8px;margin-inline-end:var(--studio-space-2);border-radius:50%;background:var(--studio-text-disabled);}.chip>.status-dot{margin-inline-end:var(--studio-space-1);}.status-dot.online{background:var(--studio-success);}.status-dot.update{background:var(--studio-warning);}.status-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--studio-space-2);}@container (max-width:260px){.status-tiles{grid-template-columns:minmax(0,1fr);}}.status-tile{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-1);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.status-tile{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.status-tile:hover{background:var(--studio-hover);border-color:var(--studio-primary);}button.status-tile:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.status-tile-head{display:flex;align-items:center;gap:var(--studio-space-2);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.status-tile-head svg{inline-size:16px;block-size:16px;fill:currentColor;flex-shrink:0;}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-section);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}.status-tile-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.status-tile>.signal-track{margin-block-start:var(--studio-space-1);}@container (max-width:420px){.status-tile{gap:0;padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);}.status-tile-head{gap:var(--studio-space-1);}.status-tile-value{margin-block-start:var(--studio-space-1);font-size:var(--studio-font-body);}.status-tile-meta{margin-block-start:var(--studio-space-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}.overview-box{display:flex;flex-direction:column;align-items:stretch;gap:var(--studio-space-2);inline-size:100%;padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;text-align:start;}button.overview-box{cursor:pointer;transition:background-color 0.15s ease-out,border-color 0.15s ease-out;}button.overview-box:hover{background:var(--studio-hover);border-color:var(--studio-primary);}.overview-box-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-title{display:inline-flex;align-items:center;gap:var(--studio-space-2);font-size:var(--studio-font-body);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.overview-box-title svg{inline-size:18px;block-size:18px;fill:currentColor;color:var(--studio-text-secondary);flex-shrink:0;}.overview-box-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.overview-box-chevron{color:var(--studio-text-secondary);font-weight:var(--studio-weight-regular);}.overview-box-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);line-height:var(--studio-line-height-condensed);}.pill-list{display:flex;flex-wrap:wrap;gap:var(--studio-space-2);}.pill{display:inline-flex;align-items:center;gap:2px;min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);}.pill.enabled{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.pill-move{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-move:hover:not(:disabled){background:var(--studio-hover);color:var(--studio-primary);}.pill-move:disabled{opacity:0.4;cursor:not-allowed;}.pill-toggle{display:inline-flex;align-items:center;justify-content:center;min-inline-size:var(--studio-control-height-compact);min-block-size:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;cursor:pointer;}.pill-toggle:disabled{opacity:0.5;cursor:not-allowed;}.pill .drag-handle{border-radius:var(--studio-radius-pill);color:inherit;}.swatch{display:inline-block;inline-size:20px;block-size:20px;border-radius:50%;border:1px solid var(--studio-divider);background:var(--swatch-color,var(--studio-primary));flex-shrink:0;}#card-ble-calibration{scroll-margin-top:calc(var(--studio-header-height) + var(--studio-space-4));}.calibrate-target-box{display:flex;flex-direction:column;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);transition:border-color 0.2s ease,background-color 0.2s ease,box-shadow 0.2s ease;}.calibrate-target-box.handoff-active{border-color:var(--studio-primary);box-shadow:var(--studio-handoff-ring);background:var(--studio-primary-tint);}.calibrate-handoff-banner{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-weight:var(--studio-weight-medium);}.signal-row{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.signal-row.winner{border-color:var(--studio-primary);}.proxy-trim-details{padding-block-start:var(--studio-space-2);}.proxy-trim-details>summary{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.proxy-trim-details[open]>summary,.proxy-trim-details>summary:hover{color:var(--studio-text);}.proxy-trim-body{display:flex;flex-direction:column;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);}.signal-row-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-row-title{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.signal-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);}.signal-track,.upload-progress{block-size:6px;border-radius:var(--studio-radius-pill);background:var(--studio-surface-alt);overflow:hidden;}.signal-fill{inline-size:var(--signal-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.25s ease,width 0.25s ease;}.signal-fill.low{background:var(--studio-error);}.upload-progress-fill{inline-size:var(--upload-pct,0%);block-size:100%;background:var(--studio-primary);transition:inline-size 0.15s ease,width 0.15s ease;}.photo-upload-status{display:flex;align-items:center;justify-content:space-between;gap:var(--studio-space-2);font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);}.photo-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-toolbar-start,.photo-toolbar-end{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.photo-search-input{min-inline-size:200px;flex:1 1 220px;}.collection-strip{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.collection-chip-wrap{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-1);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-pill);background:var(--studio-input-bg);color:var(--studio-text-secondary);}.collection-chip-wrap.active{border-color:var(--studio-primary);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);}.collection-chip-btn{display:inline-flex;align-items:center;gap:var(--studio-space-1);min-height:var(--studio-control-height-compact);padding-block:0;padding-inline:var(--studio-space-2);border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;font:inherit;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);cursor:pointer;}.collection-chip-action{display:inline-flex;align-items:center;justify-content:center;min-inline-size:28px;min-block-size:28px;padding:0;border:none;border-radius:var(--studio-radius-pill);background:transparent;color:inherit;cursor:pointer;}.collection-chip-action:hover{background:var(--studio-hover);}.collection-chip-action svg{inline-size:14px;block-size:14px;fill:currentColor;}.photo-bulk-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-primary);border-radius:var(--studio-radius-control);background:var(--studio-primary-tint);}.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:var(--studio-space-3);}.photo-grid>.empty-state{grid-column:1 / -1;}.photo-tile{position:relative;display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);content-visibility:auto;contain-intrinsic-size:180px 220px;transition:border-color 0.15s ease,background-color 0.15s ease,box-shadow 0.15s ease;}.photo-tile:hover{border-color:var(--studio-primary);}.photo-tile.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-tile-thumb-btn{position:relative;display:block;inline-size:100%;padding:0;border:none;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);overflow:hidden;cursor:pointer;aspect-ratio:1 / 1;line-height:0;}.photo-tile-thumb-btn.circle{border-radius:50%;}.photo-tile-thumb-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.photo-tile-img{inline-size:100%;block-size:100%;object-fit:cover;display:block;}.photo-tile-check{position:absolute;inset-block-start:var(--studio-space-2);inset-inline-start:var(--studio-space-2);z-index:2;inline-size:20px;block-size:20px;accent-color:var(--studio-primary);cursor:pointer;}.photo-tile-badge{position:absolute;inset-block-end:var(--studio-space-1);inset-inline-end:var(--studio-space-1);padding-block:2px;padding-inline:var(--studio-space-2);border-radius:var(--studio-radius-pill);background:var(--studio-photo-badge-bg);color:var(--studio-photo-badge-text);font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);line-height:var(--studio-line-height-condensed);}.photo-tile-meta{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.photo-tile-name{font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.photo-tile-sub{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);color:var(--studio-text-secondary);font-size:var(--studio-font-caption);}.photo-pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);padding-block-start:var(--studio-space-2);border-block-start:1px solid var(--studio-divider);}.photo-pool-preview{display:flex;flex-wrap:wrap;align-items:center;gap:var(--studio-space-3);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.photo-pool-thumbs{display:flex;align-items:center;gap:var(--studio-space-1);flex-shrink:0;}.photo-pool-thumb{inline-size:48px;block-size:48px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-pool-thumb.circle{border-radius:50%;}.photo-pool-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1 1 160px;}.photo-pool-title{font-weight:var(--studio-weight-medium);overflow-wrap:break-word;}.photo-pool-meta{color:var(--studio-text-secondary);font-size:var(--studio-font-secondary);overflow-wrap:break-word;}.photo-pool-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);flex-shrink:0;}.cam-preview{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.cam-preview img{inline-size:100%;max-inline-size:360px;aspect-ratio:16 / 9;object-fit:cover;border-radius:var(--studio-radius-control);background:var(--studio-media-bg);}.log-output{max-block-size:380px;margin:0;padding:var(--studio-space-3);overflow:auto;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);white-space:pre-wrap;}.empty-state{padding-block:var(--studio-space-3);padding-inline:0;color:var(--studio-text-secondary);}.loading-state{display:flex;align-items:center;gap:var(--studio-space-3);padding-block:var(--studio-space-5);padding-inline:0;color:var(--studio-text-secondary);}.loading-state::before{content:"";inline-size:20px;block-size:20px;border:2px solid var(--studio-divider);border-block-start-color:var(--studio-primary);border-radius:50%;animation:studio-spin 0.8s linear infinite;}.studio-root:not(.is-loading) #studio-loading{display:none;}@keyframes studio-spin{to{transform:rotate(360deg);}}.alert{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-3);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-info-tint);}.alert-error{background:var(--studio-error-tint);}.alert-warning{background:var(--studio-warning-tint);}.alert-body{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;}.alert-list{margin:0;padding-inline-start:var(--studio-space-5);}.toast{position:fixed;inset-inline:0;inset-block-end:var(--studio-space-5);margin-inline:auto;inline-size:fit-content;z-index:50;max-inline-size:min(560px,calc(100vw - 32px));padding-block:var(--studio-space-3);padding-inline:var(--studio-space-4);border-radius:var(--studio-radius-field);background:var(--studio-toast-bg);color:var(--studio-toast-text);box-shadow:var(--studio-overlay-shadow);}.toast.error{background:var(--studio-danger-loud-bg);color:var(--studio-danger-loud-text);}.offscreen,.sr-only{position:fixed;inset-block-start:0;inset-inline-start:0;inline-size:1px;block-size:1px;padding:0;margin:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:none;opacity:0;pointer-events:none;}`;
 __latterExp(__exports, { DATA_STYLES: () => DATA_STYLES });
 //# sourceURL=latter-studio/src/styles/data.ts
 });
@@ -16405,7 +16978,7 @@ const { css } = __req("src/lib/lit.ts");
  * Native `<dialog>` modals, confirmation modal (`Q5`), non-truncating `.dock-row`,
  * shortcut/MDI picker grids, and HSV color wheel (`D-053`, `D-064`).
  */
-const DIALOG_STYLES = css`dialog.studio-dialog{inline-size:min(460px,calc(100vw - 32px));max-block-size:calc(100vh - 32px);max-block-size:calc(100dvh - 32px);padding:var(--studio-space-5);border:none;border-radius:var(--studio-radius-dialog);background:var(--studio-surface);color:var(--studio-text);box-shadow:var(--studio-overlay-shadow);overflow-y:auto;overscroll-behavior:contain;}dialog.studio-dialog::backdrop{background:var(--studio-scrim);}dialog.studio-dialog.confirm-dialog{inline-size:min(480px,calc(100vw - 32px));}.dialog-body{display:flex;flex-direction:column;gap:var(--studio-space-3);}.dialog-header-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.dialog-title{font-size:var(--studio-font-card-title);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height-condensed);}.dialog-text{color:var(--studio-text-secondary);}.dialog-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);margin-block-start:var(--studio-space-2);}.dialog-actions.with-secondary{justify-content:space-between;}.dialog-actions-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);margin-inline-start:auto;}dialog.studio-dialog.shortcut-dialog{inline-size:min(560px,calc(100vw - 32px));}dialog.studio-dialog.photo-dialog{inline-size:min(680px,calc(100vw - 32px));}.crop-dropzone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--studio-space-2);padding:var(--studio-space-5);border:2px dashed var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;cursor:pointer;transition:border-color 0.15s ease,background-color 0.15s ease;}.crop-dropzone.dragging,.crop-dropzone:hover{border-color:var(--studio-primary);background:var(--studio-dropzone-bg);}.crop-stage-wrap{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-surface-alt);}.crop-canvas{max-inline-size:100%;block-size:auto;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);cursor:grab;touch-action:none;display:block;}.crop-canvas.dragging{cursor:grabbing;}.crop-canvas.round{border-radius:50%;}.crop-controls-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-3);inline-size:100%;}.crop-zoom-control{display:flex;align-items:center;gap:var(--studio-space-2);flex:1 1 200px;}.crop-zoom-control input[type="range"]{flex:1;min-inline-size:120px;}.crop-filmstrip{display:flex;align-items:center;gap:var(--studio-space-2);overflow-x:auto;overscroll-behavior-inline:contain;padding-block:var(--studio-space-1);inline-size:100%;}.crop-filmstrip-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-1);padding:var(--studio-space-1);border:2px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);cursor:pointer;flex-shrink:0;}.crop-filmstrip-item.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.crop-filmstrip-thumb{inline-size:56px;block-size:56px;object-fit:cover;border-radius:var(--studio-radius-field);background:var(--studio-media-bg);display:block;}.crop-filmstrip-remove{position:absolute;inset-block-start:-6px;inset-inline-end:-6px;inline-size:24px;block-size:24px;border-radius:var(--studio-radius-pill);border:1px solid var(--studio-divider);background:var(--studio-surface);color:var(--studio-text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:var(--studio-font-caption);}.crop-filmstrip-remove:hover{background:var(--studio-danger-tonal-bg);color:var(--studio-danger-tonal-text);border-color:var(--studio-error);}.media-breadcrumbs{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);padding-block:var(--studio-space-1);}.media-folder-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--studio-space-2);}.media-folder-btn{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:var(--studio-text);font:inherit;text-align:start;cursor:pointer;min-inline-size:0;}.media-folder-btn:hover{border-color:var(--studio-primary);background:var(--studio-hover);}.media-folder-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.media-scroll-area{max-block-size:360px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-1);display:flex;flex-direction:column;gap:var(--studio-space-3);}.photo-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:var(--studio-space-2);max-block-size:320px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-1);}.photo-picker-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-1);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;cursor:pointer;text-align:center;}.photo-picker-item:hover{border-color:var(--studio-primary);}.photo-picker-item.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-picker-thumb{inline-size:88px;block-size:88px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-picker-thumb.circle{border-radius:50%;}.photo-picker-name{font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);inline-size:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-item-row,.dock-row{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.dock-row{flex-wrap:wrap;}.dock-row .shortcut-item-info{flex:1 1 180px;}.dock-row .shortcut-item-title,.dock-row .shortcut-item-meta{white-space:normal;overflow-wrap:anywhere;}.shortcut-item-row.shortcut-item-locked,.dock-row.shortcut-item-locked{border-style:dashed;background:transparent;}.shortcut-item-row.shortcut-item-locked .shortcut-icon-badge,.shortcut-item-row.shortcut-item-hidden .shortcut-icon-badge,.dock-row.shortcut-item-locked .shortcut-icon-badge,.dock-row.shortcut-item-hidden .shortcut-icon-badge{background:var(--studio-surface-alt);color:var(--studio-text-secondary);}.shortcut-icon-badge{display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);border-radius:var(--studio-radius-pill);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);flex-shrink:0;}.shortcut-item-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1;}.shortcut-item-title{font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-item-meta{font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-page-group{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-surface-alt);}.shortcut-page-header{display:flex;align-items:center;justify-content:space-between;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);color:var(--studio-text-secondary);}.shortcut-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.shortcut-icon-row{display:flex;align-items:center;gap:var(--studio-space-2);}.shortcut-icon-row input[type="text"]{flex:1;min-inline-size:0;}.mdi-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:var(--studio-space-1);max-block-size:168px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.mdi-picker-btn{display:inline-flex;align-items:center;justify-content:center;block-size:var(--studio-control-height);border:1px solid transparent;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text);cursor:pointer;}.mdi-picker-btn:hover{background:var(--studio-hover);}.mdi-picker-btn.selected{background:var(--studio-chip-primary-bg);border-color:var(--studio-primary);color:var(--studio-chip-primary-text);}.color-wheel{display:flex;justify-content:center;}.color-wheel canvas{border-radius:50%;cursor:crosshair;touch-action:none;}.color-hex-row{display:flex;align-items:center;justify-content:center;gap:var(--studio-space-2);}.color-hex-row input[type="text"]{inline-size:120px;font-family:var(--studio-font-code);text-align:center;}.color-hex-row input[type="color"]{inline-size:var(--studio-control-height);block-size:var(--studio-control-height);padding:0;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:none;cursor:pointer;}`;
+const DIALOG_STYLES = css`dialog.studio-dialog{inline-size:min(460px,calc(100vw - 32px));max-block-size:calc(100vh - 32px);max-block-size:calc(100dvh - 32px);padding:var(--studio-space-5);border:none;border-radius:var(--studio-radius-dialog);background:var(--studio-surface);color:var(--studio-text);box-shadow:var(--studio-overlay-shadow);overflow-y:auto;overscroll-behavior:contain;}dialog.studio-dialog::backdrop{background:var(--studio-scrim);}dialog.studio-dialog.confirm-dialog{inline-size:min(480px,calc(100vw - 32px));}.dialog-body{display:flex;flex-direction:column;gap:var(--studio-space-3);}.dialog-header-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--studio-space-2);}.dialog-title{font-size:var(--studio-font-card-title);font-weight:var(--studio-weight-regular);line-height:var(--studio-line-height-condensed);}.dialog-text{color:var(--studio-text-secondary);}.dialog-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:var(--studio-space-2);margin-block-start:var(--studio-space-2);}.dialog-actions.with-secondary{justify-content:space-between;}.dialog-actions-end{display:inline-flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);margin-inline-start:auto;}dialog.studio-dialog.shortcut-dialog{inline-size:min(560px,calc(100vw - 32px));}dialog.studio-dialog.photo-dialog{inline-size:min(680px,calc(100vw - 32px));}.crop-dropzone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--studio-space-2);padding:var(--studio-space-5);border:2px dashed var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);text-align:center;cursor:pointer;transition:border-color 0.15s ease,background-color 0.15s ease;}.crop-dropzone.dragging,.crop-dropzone:hover{border-color:var(--studio-primary);background:var(--studio-dropzone-bg);}.crop-stage-wrap{display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-surface-alt);}.crop-canvas{max-inline-size:100%;block-size:auto;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);cursor:grab;touch-action:none;display:block;}.crop-canvas.dragging{cursor:grabbing;}.crop-canvas.round{border-radius:50%;}.crop-controls-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-3);inline-size:100%;}.crop-zoom-control{display:flex;align-items:center;gap:var(--studio-space-2);flex:1 1 200px;}.crop-zoom-control input[type="range"]{flex:1;min-inline-size:120px;}.crop-filmstrip{display:flex;align-items:center;gap:var(--studio-space-2);overflow-x:auto;overscroll-behavior-inline:contain;padding-block:var(--studio-space-1);inline-size:100%;}.crop-filmstrip-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-1);padding:var(--studio-space-1);border:2px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);cursor:pointer;flex-shrink:0;}.crop-filmstrip-item.active{border-color:var(--studio-primary);background:var(--studio-primary-tint);}.crop-filmstrip-btn{padding:0;border:none;background:transparent;border-radius:var(--studio-radius-control);cursor:pointer;line-height:0;}.crop-filmstrip-btn:focus-visible{outline:2px solid var(--studio-primary);outline-offset:2px;}.crop-filmstrip-thumb{inline-size:56px;block-size:56px;object-fit:cover;border-radius:var(--studio-radius-field);background:var(--studio-media-bg);display:block;}.crop-filmstrip-remove{position:absolute;inset-block-start:-6px;inset-inline-end:-6px;inline-size:24px;block-size:24px;border-radius:var(--studio-radius-pill);border:1px solid var(--studio-divider);background:var(--studio-surface);color:var(--studio-text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:var(--studio-font-caption);}.crop-filmstrip-remove:hover{background:var(--studio-danger-tonal-bg);color:var(--studio-danger-tonal-text);border-color:var(--studio-error);}.media-breadcrumbs{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-1);padding-block:var(--studio-space-1);}.media-folder-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--studio-space-2);}.media-folder-btn{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:var(--studio-text);font:inherit;text-align:start;cursor:pointer;min-inline-size:0;}.media-folder-btn:hover{border-color:var(--studio-primary);background:var(--studio-hover);}.media-folder-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.media-scroll-area{max-block-size:360px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-1);display:flex;flex-direction:column;gap:var(--studio-space-3);}.photo-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:var(--studio-space-2);max-block-size:320px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-1);}.photo-picker-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:var(--studio-space-1);padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);color:inherit;font:inherit;cursor:pointer;text-align:center;}.photo-picker-item:hover{border-color:var(--studio-primary);}.photo-picker-item.selected{border-color:var(--studio-primary);background:var(--studio-primary-tint);box-shadow:var(--studio-photo-ring-selected);}.photo-picker-thumb{inline-size:88px;block-size:88px;object-fit:cover;border-radius:var(--studio-radius-control);border:1px solid var(--studio-divider);background:var(--studio-media-bg);}.photo-picker-thumb.circle{border-radius:50%;}.photo-picker-name{font-size:var(--studio-font-caption);font-weight:var(--studio-weight-medium);inline-size:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-item-row,.dock-row{display:flex;align-items:center;gap:var(--studio-space-2);padding-block:var(--studio-space-2);padding-inline:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.dock-row{flex-wrap:wrap;}.dock-row .shortcut-item-info{flex:1 1 180px;}.dock-row .shortcut-item-title,.dock-row .shortcut-item-meta{white-space:normal;overflow-wrap:anywhere;}.shortcut-item-row.shortcut-item-locked,.dock-row.shortcut-item-locked{border-style:dashed;background:transparent;}.shortcut-item-row.shortcut-item-locked .shortcut-icon-badge,.shortcut-item-row.shortcut-item-hidden .shortcut-icon-badge,.dock-row.shortcut-item-locked .shortcut-icon-badge,.dock-row.shortcut-item-hidden .shortcut-icon-badge{background:var(--studio-surface-alt);color:var(--studio-text-secondary);}.shortcut-icon-badge{display:inline-flex;align-items:center;justify-content:center;inline-size:var(--studio-control-height-compact);block-size:var(--studio-control-height-compact);border-radius:var(--studio-radius-pill);background:var(--studio-chip-primary-bg);color:var(--studio-chip-primary-text);flex-shrink:0;}.shortcut-item-info{display:flex;flex-direction:column;gap:var(--studio-space-1);min-inline-size:0;flex:1;}.shortcut-item-title{font-weight:var(--studio-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-item-meta{font-size:var(--studio-font-secondary);color:var(--studio-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.shortcut-page-group{display:flex;flex-direction:column;gap:var(--studio-space-2);padding:var(--studio-space-3);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-surface-alt);}.shortcut-page-header{display:flex;align-items:center;justify-content:space-between;font-size:var(--studio-font-secondary);font-weight:var(--studio-weight-medium);color:var(--studio-text-secondary);}.shortcut-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:var(--studio-space-2);}.shortcut-icon-row{display:flex;align-items:center;gap:var(--studio-space-2);}.shortcut-icon-row input[type="text"]{flex:1;min-inline-size:0;}.mdi-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:var(--studio-space-1);max-block-size:168px;overflow-y:auto;overscroll-behavior:contain;padding:var(--studio-space-2);border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:var(--studio-input-bg);}.mdi-picker-btn{display:inline-flex;align-items:center;justify-content:center;block-size:var(--studio-control-height);border:1px solid transparent;border-radius:var(--studio-radius-control);background:transparent;color:var(--studio-text);cursor:pointer;}.mdi-picker-btn:hover{background:var(--studio-hover);}.mdi-picker-btn.selected{background:var(--studio-chip-primary-bg);border-color:var(--studio-primary);color:var(--studio-chip-primary-text);}.color-wheel{display:flex;justify-content:center;}.color-wheel canvas{border-radius:50%;cursor:crosshair;touch-action:none;}.color-hex-row{display:flex;align-items:center;justify-content:center;gap:var(--studio-space-2);}.color-hex-row input[type="text"]{inline-size:120px;font-family:var(--studio-font-code);text-align:center;}.color-hex-row input[type="color"]{inline-size:var(--studio-control-height);block-size:var(--studio-control-height);padding:0;border:1px solid var(--studio-divider);border-radius:var(--studio-radius-control);background:none;cursor:pointer;}`;
 __latterExp(__exports, { DIALOG_STYLES: () => DIALOG_STYLES });
 //# sourceURL=latter-studio/src/styles/dialogs.ts
 });
@@ -16444,1042 +17017,9 @@ const STUDIO_STYLES = css`${BASE_STYLES}${LAYOUT_STYLES}${CARD_STYLES}${CONTROL_
 __latterExp(__exports, { BASE_STYLES: () => BASE_STYLES, CARD_STYLES: () => CARD_STYLES, CONTROL_STYLES: () => CONTROL_STYLES, DATA_STYLES: () => DATA_STYLES, DIALOG_STYLES: () => DIALOG_STYLES, LAYOUT_STYLES: () => LAYOUT_STYLES, NARROW_STYLES: () => NARROW_STYLES, STUDIO_STYLES: () => STUDIO_STYLES });
 //# sourceURL=latter-studio/src/styles/tokens.ts
 });
-__latterDef("src/views/device-overview-view.ts", (__exports, __req) => {
-const { isDeviceTime24h, renderCard, renderNativeControlRow, renderPrefControlRow, renderQuickActionGrid, renderSelectRow, renderSettingsRow, renderSvgIcon } = __req("src/components/controls.ts");
-const { DEFAULT_ALARMS_SUMMARY } = __req("src/constants.ts");
-const { formatHaEntityState } = __req("src/i18n/index.ts");
-const { html, nothing } = __req("src/lib/lit.ts");
-const { defaultLocaleTimeFormat, entityLabel, fmtDistance, fmtNumber, fmtPercent, formatClockHhMm, issueMessage, rssiToPercent } = __req("src/utils/format.ts");
-/**
- * Device Overview View (`dashboard`, `D-003`, `D-029`, `D-030`, `D-048`, `D-066`, `F-01`):
- * - Shared `renderDeviceOfflineBanner`, `renderDeviceEntityRow` (`formatHaEntityState`), and `defaultLocaleTimeFormat`
- * - Column 1: High-level Status card (`caps.has_battery` true unknowns & real `update.*` Firmware gating)
- *   + Quick actions (`forceDisabled` offline gating, separated `.btn-danger` Restart row, `#btn-open-in-ha`)
- * - Column 2: Assignments, Timers & alarms (1 Hz client countdown from `timer_ends_at` / `stopwatch_started_at`),
- *   and spillover Sensors & controls.
- */
-const DEV_ICON_AREA =
-  "M12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5M12,2A7,7 0 0,1 19,9C19,14.25 12,22 12,22C12,22 5,14.25 5,9A7,7 0 0,1 12,2M12,4A5,5 0 0,0 7,9C7,10 7,12 12,18.71C17,12 17,10 17,9A5,5 0 0,0 12,4Z";
-const DEV_ICON_BATTERY =
-  "M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z";
-const DEV_ICON_PLUG =
-  "M16,7V3H14V7H10V3H8V7H8C7,7 6,8 6,9V14.5L9.5,18V21H14.5V18L18,14.5V9C18,8 17,7 16,7M16,13.67L12.5,17.17V19H11.5V17.17L8,13.67V9H16V13.67Z";
-const DEV_ICON_RADAR =
-  "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,10.84 21.79,9.69 21.39,8.61L19.79,10.21C19.93,10.8 20,11.4 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4C12.6,4 13.2,4.07 13.79,4.21L15.4,2.6C14.31,2.21 13.16,2 12,2M19,2A2,2 0 0,0 17,4A2,2 0 0,0 19,6A2,2 0 0,0 21,4A2,2 0 0,0 19,2M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12H16A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8V6M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z";
-const DEV_ICON_WIFI =
-  "M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z";
-const DEV_ICON_BLUETOOTH =
-  "M14.88,16.29L13,18.17V14.41M13,5.83L14.88,7.71L13,9.58M17.71,7.71L12,2H11V9.58L6.41,5L5,6.41L10.59,12L5,17.58L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71Z";
-const DEV_ICON_CHIP =
-  "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
-const DEV_ICON_TAG =
-  "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
-/**
- * Shared calm offline / sleeping banner rendered at the top of Device views (`Q8` / `E-04`).
- */
-function renderDeviceOfflineBanner(store) {
-  const data = store.state;
-  const cfg = data?.config || {};
-  if (cfg.kind === "ble_tag") return nothing;
-  const curDevEntry =
-    (data?.system_devices || []).find((d) => d.subentry_id === store.activeSubentryId) ||
-    (data?.system_devices || []).find((d) => d.is_current);
-  if (curDevEntry?.is_online !== false) return nothing;
-  const sleepExpected = Boolean(data?.live?.is_ble_sleep_expected);
-  const titleKey = sleepExpected
-    ? "offline.device_sleeping_title"
-    : "offline.device_banner_title";
-  return html`<div
-    id="device-offline-banner"
-    role="region"
-    aria-label=${store.t(titleKey)}
-    class="alert offline-banner"
-  >
-    <div class="offline-banner-body">
-      <strong>${store.t(titleKey)}</strong>
-      <span>${store.t("offline.device_banner_body")}</span>
-    </div>
-    <span class="chip">
-      ${sleepExpected ? store.t("status.sleeping") : store.t("status.offline")}
-    </span>
-  </div>`;
-}
-/**
- * Formats non-pref Home Assistant entity `select` options and sensor states via `formatHaEntityState` (`D-13`),
- * while delegating preference-backed, switch, number, button, and update controls to `renderNativeControlRow`.
- */
-function renderDeviceEntityRow(
-  store,
-  item,
-) {
-  if (
-    item.pref_key ||
-    item.domain === "switch" ||
-    item.domain === "number" ||
-    item.domain === "button" ||
-    item.domain === "update"
-  ) {
-    return renderNativeControlRow(store, item);
-  }
-  const label = entityLabel(item.name || item.entity_id);
-  const st = String(item.state ?? "");
-  const unavailable = st === "unavailable" || st === "unknown";
-  if (item.domain === "select") {
-    const opts = item.options || [];
-    const onChange = (ev) => {
-      void store.entity.espSelect(item.entity_id, (ev.currentTarget).value);
-    };
-    return renderSettingsRow({
-      label,
-      control: html`<select aria-label=${label} ?disabled=${unavailable} .value=${st} @change=${onChange}>
-        ${opts.map(
-          (opt) =>
-            html`<option value=${opt} ?selected=${opt === st}>
-              ${formatHaEntityState(store.hass, item.entity_id, opt)}
-            </option>`,
-        )}
-      </select>`,
-    });
-  }
-  const displayVal = unavailable
-    ? store.t("common.unknown")
-    : item.unit && Number.isFinite(Number(st))
-      ? `${fmtNumber(Number(st), store.hass)} ${item.unit}`
-      : formatHaEntityState(store.hass, item.entity_id, st);
-  return html`<div class="kv-row">
-    <span>${label}</span>
-    <strong>${displayVal}</strong>
-  </div>`;
-}
-function rssiQualityLabel(store, rssi) {
-  if (rssi === null || !Number.isFinite(rssi)) return store.t("signal.no_reading");
-  if (rssi >= -60) return store.t("signal.excellent");
-  if (rssi >= -70) return store.t("signal.good");
-  if (rssi >= -80) return store.t("signal.fair");
-  return store.t("signal.weak");
-}
-function canonicalActionCommand(item) {
-  if (item.device_command) return item.device_command;
-  if (item.device_class === "identify") return "find_my";
-  if (item.device_class === "restart") return "restart";
-  const tail = (item.key || item.entity_id.split(".", 2)[1] || "").toLowerCase();
-  if (tail === "find_my" || tail.endsWith("_find_my_device") || tail.endsWith("_find_my")) {
-    return "find_my";
-  }
-  if (
-    tail === "trigger_va" ||
-    tail.endsWith("_trigger_voice_assistant") ||
-    tail.endsWith("_trigger_va")
-  ) {
-    return "trigger_va";
-  }
-  if (tail === "activate_screensaver" || tail.endsWith("_activate_screensaver")) {
-    return "activate_screensaver";
-  }
-  if (tail === "deactivate_screensaver" || tail.endsWith("_deactivate_screensaver")) {
-    return "deactivate_screensaver";
-  }
-  if (tail === "hibernate" || tail.endsWith("_hibernate_device") || tail.endsWith("_hibernate")) {
-    return "hibernate";
-  }
-  if (tail === "restart" || tail.endsWith("_restart_device") || tail.endsWith("_restart")) {
-    return "restart";
-  }
-  return "";
-}
-function localizedQuickActionLabel(
-  store,
-  cmd,
-  fallback,
-) {
-  switch (cmd) {
-    case "find_my":
-      return store.t("dev_overview.qa_find_my");
-    case "trigger_va":
-      return store.t("dev_overview.qa_trigger_va");
-    case "activate_screensaver":
-      return store.t("dev_overview.qa_activate_screensaver");
-    case "deactivate_screensaver":
-      return store.t("dev_overview.qa_exit_screensaver");
-    case "restart":
-      return store.t("dev_overview.qa_restart");
-    default:
-      return entityLabel(fallback);
-  }
-}
-const DEFAULT_ALARM_SLOTS = [
-  { time: "07:00", enabled: false, recurrence: 1 },
-  { time: "08:30", enabled: false, recurrence: 2 },
-  { time: "09:00", enabled: false, recurrence: 2 },
-];
-function parseAlarmsSummary(raw) {
-  const text = String(raw || DEFAULT_ALARMS_SUMMARY).trim();
-  const parts = text.split(";");
-  const slots = [];
-  for (let i = 0; i < 3; i++) {
-    const fallback = DEFAULT_ALARM_SLOTS[i];
-    const seg = (parts[i] || "").trim();
-    const m = /^(\d{1,2}):(\d{2})\|([01])\|([0-3])$/.exec(seg);
-    if (!m) {
-      slots.push({ ...fallback });
-      continue;
-    }
-    const hh = Number(m[1]);
-    const mm = Number(m[2]);
-    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) {
-      slots.push({ ...fallback });
-      continue;
-    }
-    slots.push({
-      time: `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`,
-      enabled: m[3] === "1",
-      recurrence: Number(m[4]),
-    });
-  }
-  return [slots[0], slots[1], slots[2]];
-}
-function serializeAlarmsSummary(slots) {
-  return slots
-    .slice(0, 3)
-    .map((s) => `${s.time}|${s.enabled ? 1 : 0}|${s.recurrence}`)
-    .join(";");
-}
-function formatClockDuration(rawSec) {
-  const sec = Math.max(0, Math.floor(Number(rawSec) || 0));
-  const hh = Math.floor(sec / 3600);
-  const mm = Math.floor((sec % 3600) / 60);
-  const ss = sec % 60;
-  if (hh > 0) {
-    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
-  }
-  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
-}
-function renderDeviceOverviewView(store) {
-  const data = store.state;
-  const cfg = data?.config || {};
-  const live = data?.live || {};
-  const caps = data?.capabilities || {};
-  const links = data?.links || {};
-  const esp = data?.esphome;
-  const isBleOnly = cfg.kind === "ble_tag";
-  const curDevEntry =
-    (data?.system_devices || []).find((d) => d.subentry_id === store.activeSubentryId) ||
-    (data?.system_devices || []).find((d) => d.is_current);
-  const isOffline = !isBleOnly && curDevEntry?.is_online === false;
-  const deviceIssues = (data?.issues || []).filter(
-    (i) => i.subentry_id && i.subentry_id === store.activeSubentryId,
-  );
-  const hasErrorIssue = deviceIssues.some(
-    (i) => i.severity === "error" || i.severity === "critical",
-  );
-  // Live Status calculations (strict `D-003` unknowns)
-  const winRow = (curDevEntry?.ble_survey_rows || []).find((r) => r.is_winner);
-  const hasBattery = Boolean(caps.has_battery || curDevEntry?.has_battery);
-  const hasBatteryReading =
-    !isBleOnly &&
-    hasBattery &&
-    curDevEntry?.battery_level !== null &&
-    curDevEntry?.battery_level !== undefined &&
-    Number.isFinite(Number(curDevEntry.battery_level));
-  const batPct = hasBatteryReading
-    ? Math.max(0, Math.min(100, Math.round(Number(curDevEntry?.battery_level))))
-    : 0;
-  const batSignalStyle = `--signal-pct:${batPct}%`;
-  const batMeta = curDevEntry?.is_charging
-    ? store.t("status.charging")
-    : curDevEntry?.is_usb_connected
-      ? store.t("status.plugged_in")
-      : hasBatteryReading
-        ? store.t("status.on_battery")
-        : store.t("dev_overview.waiting_for_reading");
-  let rssiVal = null;
-  if (!isBleOnly && curDevEntry?.wifi_rssi !== null && curDevEntry?.wifi_rssi !== undefined) {
-    rssiVal = Number(curDevEntry.wifi_rssi);
-  } else if (
-    isBleOnly &&
-    winRow &&
-    winRow.effective_rssi !== null &&
-    winRow.effective_rssi !== undefined
-  ) {
-    rssiVal = Number(winRow.effective_rssi);
-  }
-  const hasRssi = rssiVal !== null && Number.isFinite(rssiVal);
-  const rssiText = hasRssi
-    ? `${fmtNumber(rssiVal, store.hass, 0)} dBm`
-    : store.t("common.unknown");
-  const rssiPct = hasRssi ? rssiToPercent(rssiVal) : 0;
-  const wifiSignalStyle = `--signal-pct:${rssiPct}%`;
-  const hasAssignedArea = Boolean(curDevEntry?.has_assigned_area);
-  const areaText = hasAssignedArea
-    ? curDevEntry?.area_label || live.active_area_name || store.t("common.unknown")
-    : live.active_area_name || store.t("common.unknown");
-  const effBleCat = String(cfg.effective_ble_category || curDevEntry?.ble_category || "ble_tag");
-  const rawBleCat = String(cfg.ble_category || "auto").trim().toLowerCase();
-  const curBleCat = rawBleCat === "phone" || rawBleCat === "ble_tag" ? rawBleCat : "auto";
-  const txStatus = isBleOnly ? live.ble_transmitter_status : null;
-  const txStateText = String(txStatus?.state || "").trim();
-  const showTxOffBanner =
-    Boolean(txStatus) && Boolean(txStateText) && txStateText.toLowerCase() !== "transmitting";
-  const distSuffix =
-    live.ble_closest_proxy &&
-    winRow &&
-    winRow.distance_m !== null &&
-    winRow.distance_m !== undefined
-      ? ` (~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)})`
-      : "";
-  const showProxyMeta = Boolean(
-    (isBleOnly || (caps.has_ble_beacon && cfg.native_ble_tracking)) && live.ble_closest_proxy,
-  );
-  const areaMetaBase = isBleOnly
-    ? effBleCat === "phone"
-      ? store.t("status.phone")
-      : store.t("status.ble_tag")
-    : hasAssignedArea
-      ? store.t("status.stationary")
-      : store.t("status.roaming");
-  const areaMeta = showProxyMeta
-    ? `${areaMetaBase} • ${live.ble_closest_proxy}${distSuffix}`
-    : areaMetaBase;
-  const rawSw = String(live.device_sw_version || esp?.device?.sw_version || "").replace(
-    /^v/i,
-    "",
-  );
-  const fwValue = rawSw ? `v${rawSw}` : store.t("common.unknown");
-  const allUpdateEntities = (esp?.sections || []).flatMap((s) =>
-    (s.items || []).filter((it) => it.domain === "update"),
-  );
-  const fwEntityId = String(
-    live.fw_update_entity || allUpdateEntities[0]?.entity_id || "",
-  ).trim();
-  const fwEntityItem = fwEntityId
-    ? allUpdateEntities.find((it) => it.entity_id === fwEntityId)
-    : allUpdateEntities[0];
-  const fwEntityState = String(
-    fwEntityItem?.state ?? (fwEntityId ? store.hass?.states?.[fwEntityId]?.state : "") ?? "",
-  ).trim();
-  const hasAvailableUpdateEntity = Boolean(
-    fwEntityId && fwEntityState && fwEntityState !== "unavailable" && fwEntityState !== "unknown",
-  );
-  const fwMeta = live.fw_update_available
-    ? store.t("status.update")
-    : hasAvailableUpdateEntity
-      ? store.t("status.up_to_date")
-      : store.t("common.unknown");
-  let statusChipClass = "chip";
-  let statusDotClass = "status-dot";
-  let statusLabel = store.t("common.unknown");
-  if (isBleOnly) {
-    if (curDevEntry?.status_code === "online" || Boolean(curDevEntry?.is_online) || Boolean(winRow)) {
-      statusChipClass = "chip chip-success";
-      statusDotClass = "status-dot online";
-      statusLabel = store.t("status.online");
-    } else if (curDevEntry?.status_code === "scanning") {
-      statusLabel = store.t("status.scanning");
-    } else if (curDevEntry?.status_code === "away") {
-      statusLabel = store.t("status.away");
-    } else if (curDevEntry?.status_label) {
-      statusLabel = curDevEntry.status_label;
-    }
-  } else if (curDevEntry?.is_online && live.fw_update_available) {
-    statusChipClass = "chip chip-warning";
-    statusDotClass = "status-dot update";
-    statusLabel = store.t("status.update");
-  } else if (curDevEntry?.is_online) {
-    statusChipClass = "chip chip-success";
-    statusDotClass = "status-dot online";
-    statusLabel = store.t("status.online");
-  } else if (curDevEntry?.is_online === false) {
-    statusLabel = live.is_ble_sleep_expected
-      ? store.t("status.sleeping")
-      : store.t("status.offline");
-  }
-  // Canonical `data?.quick_actions` + deduplicated ESPHome action buttons (`C-19`, `R-8`)
-  const sectionActionItems = store.entity
-    .getSectionItems("actions")
-    .concat(store.entity.getSectionItems("overview"));
-  const sectionButtons = sectionActionItems.filter((it) => it.domain === "button");
-  const synthesizedButtons = (data?.quick_actions || []).map((qa) => {
-    const cmd = qa.device_command || qa.key;
-    return {
-      entity_id: `cmd:${qa.key}`,
-      domain: "button",
-      name: localizedQuickActionLabel(store, cmd, qa.label),
-      state: qa.state,
-      key: qa.key,
-      device_command: qa.device_command,
-      device_class:
-        qa.device_class ||
-        (cmd === "find_my" ? "identify" : cmd === "restart" ? "restart" : undefined),
-    };
-  });
-  const synthesizedCmdSet = new Set(
-    synthesizedButtons.map((sb) => canonicalActionCommand(sb)).filter(Boolean),
-  );
-  const extraSectionButtons = sectionButtons.filter((b) => {
-    const cmd = canonicalActionCommand(b);
-    return !cmd || !synthesizedCmdSet.has(cmd);
-  });
-  const allQuickActionButtons = synthesizedButtons.concat(extraSectionButtons);
-  const harmlessQuickButtons = allQuickActionButtons.filter(
-    (b) => canonicalActionCommand(b) !== "restart",
-  );
-  const restartButton =
-    allQuickActionButtons.find((b) => canonicalActionCommand(b) === "restart") || null;
-  const otherQuickItemsRaw = sectionActionItems.filter((it) => it.domain !== "button");
-  if (
-    data?.speaker_volume &&
-    !otherQuickItemsRaw.some((it) => it.entity_id === data.speaker_volume?.entity_id)
-  ) {
-    otherQuickItemsRaw.push(data.speaker_volume);
-  }
-  const dndPref = !isBleOnly ? store.entity.getPref("do_not_disturb") : undefined;
-  const otherQuickItems = isOffline
-    ? otherQuickItemsRaw.map((it) => ({ ...it, state: "unavailable" }))
-    : otherQuickItemsRaw;
-  const hasQuickControls =
-    harmlessQuickButtons.length > 0 ||
-    Boolean(dndPref) ||
-    otherQuickItems.length > 0 ||
-    Boolean(restartButton);
-  const showQuickActionsCard = !isBleOnly;
-  const otherSensorItems = store.entity.getSectionItems("other");
-  const groups = data?.device_groups || [];
-  const rawGroupId = String(cfg.device_group || "custom").trim() || "custom";
-  const curGroupId =
-    rawGroupId === "custom" || groups.some((g) => g.id === rawGroupId) ? rawGroupId : "custom";
-  const remoteGroups = data?.system_config?.remote_groups || [];
-  const curRemoteMode =
-    String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
-    "area_auto";
-  let remoteSummary = store.t("dev_overview.remote_follow_area");
-  if (curRemoteMode === "all") {
-    remoteSummary = store.t("dev_overview.remote_all_system");
-  } else if (curRemoteMode.startsWith("group:")) {
-    const gid = curRemoteMode.slice(6);
-    remoteSummary = remoteGroups.find((g) => g.id === gid)?.name || gid;
-  }
-  const alarmsSummaryPref = store.entity.getPref("alarms_summary");
-  const alarmSlots = parseAlarmsSummary(
-    alarmsSummaryPref?.value ?? cfg.alarms_summary ?? DEFAULT_ALARMS_SUMMARY,
-  );
-  const updateAlarmSlot = (
-    idx,
-    patch,
-    focusId,
-  ) => {
-    const next = [
-      { ...alarmSlots[0] },
-      { ...alarmSlots[1] },
-      { ...alarmSlots[2] },
-    ];
-    const merged = { ...next[idx], ...patch };
-    if (!/^\d{2}:\d{2}$/.test(merged.time)) {
-      return;
-    }
-    next[idx] = merged;
-    store.entity.stageDeviceSetting("alarms_summary", serializeAlarmsSummary(next), focusId);
-  };
-  // Live 1 Hz client countdown / stopwatch elapsed from `timer_ends_at` / `stopwatch_started_at` (`F-01`, `B-17`)
-  const nowMs = Number.isFinite(store.liveClockNowMs) ? store.liveClockNowMs : Date.now();
-  const timerEndsMs = live.timer_ends_at ? Date.parse(live.timer_ends_at) : Number.NaN;
-  const liveTimerRemainingSec =
-    live.timer_running && Number.isFinite(timerEndsMs)
-      ? Math.max(0, Math.ceil((timerEndsMs - nowMs) / 1000))
-      : Math.max(0, Math.round(Number(live.timer_remaining_sec || 0)));
-  const stopwatchStartedMs = live.stopwatch_started_at
-    ? Date.parse(live.stopwatch_started_at)
-    : Number.NaN;
-  const liveStopwatchElapsedSec =
-    live.stopwatch_running && Number.isFinite(stopwatchStartedMs)
-      ? Math.max(0, Math.floor((nowMs - stopwatchStartedMs) / 1000))
-      : Math.max(0, Math.round(Number(live.stopwatch_elapsed_sec || 0)));
-  const timerActive = Boolean(live.timer_running || live.timer_paused);
-  const stopwatchActive = Boolean(live.stopwatch_running || live.stopwatch_paused);
-  const alarmRinging = Boolean(live.alarm_ringing);
-  const enabledAlarmSlots = alarmSlots
-    .filter((s) => s.enabled)
-    .sort((a, b) => a.time.localeCompare(b.time));
-  const is24h = isDeviceTime24h(store);
-  const alarmsSummaryLabel =
-    enabledAlarmSlots.length > 0
-      ? store.t("dev_overview.alarms_enabled_summary", {
-          count: fmtNumber(enabledAlarmSlots.length, store.hass, 0),
-          nextTime: formatClockHhMm(enabledAlarmSlots[0].time, is24h),
-        })
-      : store.t("common.all_off");
-  const alarmsSummaryChipClass = enabledAlarmSlots.length > 0 ? "chip chip-primary" : "chip";
-  const alarmRecurrenceChoices = [
-    { value: 0, label: store.t("dev_overview.alarm_rec_daily") },
-    { value: 1, label: store.t("dev_overview.alarm_rec_weekdays") },
-    { value: 2, label: store.t("dev_overview.alarm_rec_weekends") },
-    { value: 3, label: store.t("dev_overview.alarm_rec_once") },
-  ];
-  const powerTileBody = hasBattery
-    ? html`<div class="status-tile-head">
-          ${renderSvgIcon(DEV_ICON_BATTERY)}
-          <span>${store.t("dev_overview.tile_battery")}</span>
-        </div>
-        <strong class="status-tile-value">
-          ${hasBatteryReading
-            ? fmtPercent(curDevEntry?.battery_level, store.hass)
-            : store.t("common.unknown")}
-        </strong>
-        <span class="status-tile-meta">${batMeta}</span>
-        ${hasBatteryReading
-          ? html`<div class="signal-track" aria-hidden="true">
-              <div
-                class="signal-fill${batPct <= 20 && !curDevEntry?.is_charging ? " low" : ""}"
-                style=${batSignalStyle}
-              ></div>
-            </div>`
-          : nothing}`
-    : html`<div class="status-tile-head">
-          ${renderSvgIcon(DEV_ICON_PLUG)}
-          <span>${store.t("dev_overview.tile_power")}</span>
-        </div>
-        <strong class="status-tile-value">${store.t("status.plugged_in")}</strong>
-        <span class="status-tile-meta">
-          ${caps.has_power
-            ? store.t("status.sleep_wake_active")
-            : store.t("status.always_on")}
-        </span>`;
-  const hasOpenInHa = Boolean(links.esphome_device_id || links.latter_device_id);
-  const onTriggerRestart = () => {
-    if (!restartButton) return;
-    const toastMsg = store.t("sync.restarting_device");
-    if (restartButton.device_command) {
-      void store.entity.runDeviceAction(restartButton.device_command, toastMsg);
-    } else {
-      void store.entity.espAction(restartButton.entity_id, "press", undefined, toastMsg);
-    }
-  };
-  return html`<section id="view-dashboard" class="stack">
-    ${renderDeviceOfflineBanner(store)}
-
-    ${deviceIssues.length
-      ? html`<div
-          role="region"
-          aria-label=${store.t("status.needs_attention")}
-          class="alert ${hasErrorIssue ? "alert-error" : "alert-warning"}"
-        >
-          <div class="alert-body">
-            <strong>${store.t("status.needs_attention")}</strong>
-            <ul class="alert-list">
-              ${deviceIssues.map((iss) => html`<li>${issueMessage(iss, store.hass)}</li>`)}
-            </ul>
-          </div>
-          <button
-            type="button"
-            @click=${() => store.openHaPage("/config/repairs")}
-            class="btn btn-secondary btn-compact"
-          >
-            ${store.t("action.open_repairs")}
-          </button>
-        </div>`
-      : nothing}
-
-    ${showTxOffBanner
-      ? html`<div
-          id="ble-transmitter-off-banner"
-          role="region"
-          aria-label=${store.t("offline.ble_tx_off_title", { state: txStateText })}
-          class="alert alert-warning"
-        >
-          <div class="alert-body">
-            <strong>${store.t("offline.ble_tx_off_title", { state: txStateText })}</strong>
-            <span>${store.t("offline.ble_tx_off_body")}</span>
-          </div>
-        </div>`
-      : nothing}
-
-    <div class="columns">
-      <div class="column">
-        ${renderCard({
-          id: "card-device-status",
-          heading: html`<h3 class="card-title">${store.t("card.status")}</h3>`,
-          headerActions: html`<span id="st-status-chip" class=${statusChipClass}>
-            <span class=${statusDotClass} aria-hidden="true"></span>${statusLabel}
-          </span>`,
-          contentClass: "stack",
-          body: html`<div class="status-tiles">
-            <button
-              type="button"
-              @click=${() => store.switchView("presence")}
-              class="status-tile"
-            >
-              <div class="status-tile-head">
-                ${renderSvgIcon(DEV_ICON_AREA)}
-                <span id="st-area-label">
-                  ${hasAssignedArea
-                    ? store.t("dev_overview.tile_area")
-                    : store.t("dev_overview.tile_current_area")}
-                </span>
-              </div>
-              <strong class="status-tile-value">${areaText}</strong>
-              <span class="status-tile-meta">${areaMeta}</span>
-            </button>
-
-            ${isBleOnly
-              ? html`<button
-                  type="button"
-                  @click=${() => store.switchView("presence")}
-                  class="status-tile"
-                >
-                  <div class="status-tile-head">
-                    ${renderSvgIcon(DEV_ICON_RADAR)}
-                    <span>${store.t("dev_overview.tile_closest_proxy")}</span>
-                  </div>
-                  <strong class="status-tile-value">
-                    ${live.ble_closest_proxy || store.t("common.unknown")}
-                  </strong>
-                  <span class="status-tile-meta">
-                    ${winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
-                      ? `~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)}`
-                      : store.t("dev_overview.ble_presence_meta")}
-                  </span>
-                </button>`
-              : store.deviceHasView("power")
-                ? html`<button
-                    type="button"
-                    @click=${() => store.switchView("power")}
-                    class="status-tile"
-                  >
-                    ${powerTileBody}
-                  </button>`
-                : html`<div class="status-tile">${powerTileBody}</div>`}
-
-            <button
-              type="button"
-              @click=${() =>
-                isBleOnly
-                  ? store.switchView("presence")
-                  : store.openDeviceSection("tools", "card-device-diagnostics")}
-              class="status-tile"
-            >
-              <div class="status-tile-head">
-                ${renderSvgIcon(isBleOnly ? DEV_ICON_BLUETOOTH : DEV_ICON_WIFI)}
-                <span id="st-wifi-label">
-                  ${isBleOnly
-                    ? store.t("dev_overview.tile_ble_signal")
-                    : store.t("dev_overview.tile_wifi_signal")}
-                </span>
-              </div>
-              <strong class="status-tile-value">${rssiText}</strong>
-              <span class="status-tile-meta">${rssiQualityLabel(store, rssiVal)}</span>
-              ${hasRssi
-                ? html`<div class="signal-track" aria-hidden="true">
-                    <div
-                      class="signal-fill${rssiVal !== null && rssiVal < -80 ? " low" : ""}"
-                      style=${wifiSignalStyle}
-                    ></div>
-                  </div>`
-                : nothing}
-            </button>
-
-            ${isBleOnly
-              ? html`<button
-                  type="button"
-                  @click=${() => store.openDeviceSection("presence", "card-ble-identity")}
-                  class="status-tile"
-                >
-                  <div class="status-tile-head">
-                    ${renderSvgIcon(DEV_ICON_TAG)}
-                    <span>${store.t("dev_overview.tile_ble_target")}</span>
-                  </div>
-                  <strong class="status-tile-value">
-                    <code>${cfg.ble_target_address || store.t("common.unknown")}</code>
-                  </strong>
-                  <span class="status-tile-meta">
-                    ${store.t("dev_overview.ble_address_meta")}
-                  </span>
-                </button>`
-              : html`<button
-                  type="button"
-                  @click=${() => store.openDeviceSection("tools", "card-device-diagnostics")}
-                  class="status-tile"
-                >
-                  <div class="status-tile-head">
-                    ${renderSvgIcon(DEV_ICON_CHIP)}
-                    <span>${store.t("dev_overview.tile_firmware")}</span>
-                  </div>
-                  <strong class="status-tile-value">${fwValue}</strong>
-                  <span class="status-tile-meta">${fwMeta}</span>
-                </button>`}
-          </div>`,
-          footerActions:
-            isBleOnly && hasOpenInHa
-              ? html`<button
-                  type="button"
-                  id="btn-open-in-ha"
-                  @click=${() => store.openDeviceInHa(true)}
-                  class="btn btn-text"
-                >
-                  ${store.t("action.open_in_ha")}
-                </button>`
-              : nothing,
-        })}
-
-        ${showQuickActionsCard
-          ? renderCard({
-              id: "card-device-quick-actions",
-              title: store.t("card.quick_actions"),
-              contentClass: "settings-list",
-              body: hasQuickControls
-                ? html`${renderQuickActionGrid(store, harmlessQuickButtons, isOffline)}
-                    ${dndPref ? renderPrefControlRow(store, dndPref) : nothing}
-                    ${otherQuickItems.map((it) => renderDeviceEntityRow(store, it))}
-                    ${restartButton
-                      ? renderSettingsRow({
-                          id: "row-restart-device",
-                          label: store.t("dev_overview.restart_device"),
-                          description: store.t("dev_overview.restart_device_desc"),
-                          control: html`<button
-                            type="button"
-                            id="btn-restart-device"
-                            data-entity-id=${restartButton.entity_id}
-                            ?disabled=${isOffline ||
-                            String(restartButton.state ?? "") === "unavailable"}
-                            @click=${onTriggerRestart}
-                            class="btn btn-danger btn-compact"
-                          >
-                            ${store.t("dev_overview.restart_btn")}
-                          </button>`,
-                        })
-                      : nothing}`
-                : html`<p class="empty-state">${store.t("dev_overview.empty_quick_actions")}</p>`,
-              footerActions: hasOpenInHa
-                ? html`<button
-                    type="button"
-                    id="btn-open-in-ha"
-                    @click=${() => store.openDeviceInHa()}
-                    class="btn btn-text"
-                  >
-                    ${store.t("action.open_in_ha")}
-                  </button>`
-                : nothing,
-            })
-          : nothing}
-      </div>
-
-      <div class="column">
-        ${renderCard({
-          id: "card-device-assignments",
-          title: store.t("card.assignments"),
-          contentClass: "settings-list",
-          body: html`${!isBleOnly
-              ? renderSettingsRow({
-                  label: store.t("dev_overview.device_group_label"),
-                  forId: "cfg-device_group",
-                  description:
-                    curGroupId === "custom"
-                      ? store.t("dev_overview.device_group_custom_desc")
-                      : store.t("dev_overview.device_group_preset_desc"),
-                  control: html`<select
-                      id="cfg-device_group"
-                      .value=${curGroupId}
-                      @change=${(ev) =>
-                        store.entity.stageDeviceSetting(
-                          "device_group",
-                          (ev.currentTarget).value,
-                          "cfg-device_group",
-                        )}
-                    >
-                      <option value="custom" ?selected=${curGroupId === "custom"}>
-                        ${store.t("common.custom")}
-                      </option>
-                      ${groups.map(
-                        (g) =>
-                          html`<option value=${g.id} ?selected=${g.id === curGroupId}>
-                            ${g.name}
-                          </option>`,
-                      )}
-                    </select>
-                    ${curGroupId === "custom"
-                      ? html`<button
-                          type="button"
-                          id="btn-save-custom-group"
-                          @click=${() => store.groups.openSaveGroupModal()}
-                          class="btn btn-secondary btn-compact"
-                        >
-                          ${store.t("action.save_custom_group")}
-                        </button>`
-                      : nothing}
-                    <button
-                      type="button"
-                      id="btn-manage-groups"
-                      @click=${() => store.openManageGroups(curGroupId)}
-                      class="btn btn-text btn-compact"
-                    >
-                      ${store.t("action.manage_groups")}
-                    </button>`,
-                })
-              : renderSettingsRow({
-                  label: store.t("dev_overview.device_category_label"),
-                  forId: "cfg-ble_category",
-                  description: store.t("dev_overview.device_category_desc"),
-                  control: html`<select
-                    id="cfg-ble_category"
-                    .value=${curBleCat}
-                    @change=${(ev) =>
-                      store.entity.stageDeviceSetting(
-                        "ble_category",
-                        (ev.currentTarget).value,
-                        "cfg-ble_category",
-                      )}
-                  >
-                    <option value="auto" ?selected=${curBleCat === "auto"}>
-                      ${store.t("dev_overview.auto_category_option", {
-                        category:
-                          effBleCat === "phone"
-                            ? store.t("status.phone")
-                            : store.t("status.ble_tag"),
-                      })}
-                    </option>
-                    <option value="phone" ?selected=${curBleCat === "phone"}>
-                      ${store.t("status.phone")}
-                    </option>
-                    <option value="ble_tag" ?selected=${curBleCat === "ble_tag"}>
-                      ${store.t("status.ble_tag")}
-                    </option>
-                  </select>`,
-                })}
-            ${renderSelectRow({
-              id: "cfg-assigned_person",
-              label: store.t("dev_overview.assigned_person_label"),
-              description: store.t("dev_overview.assigned_person_desc"),
-              value: cfg.assigned_person,
-              choices: data?.catalog?.persons,
-              emptyOptionLabel: store.t("dev_overview.unassigned_option"),
-              onChange: (val) =>
-                store.entity.stageDeviceSetting(
-                  "assigned_person",
-                  val,
-                  "cfg-assigned_person",
-                ),
-            })}
-            ${!isBleOnly && caps.has_display
-              ? renderSettingsRow({
-                  label: store.t("dev_overview.remote_group_label"),
-                  description: store.t("dev_overview.remote_group_desc"),
-                  control: html`<span class="chip">${remoteSummary}</span>
-                    <button
-                      type="button"
-                      id="btn-configure-remote-group"
-                      @click=${() => store.entity.openAppConfigModal("remote")}
-                      class="btn btn-text btn-compact"
-                    >
-                      ${store.t("action.configure")}
-                    </button>`,
-                })
-              : nothing}`,
-        })}
-
-        ${!isBleOnly && caps.has_display
-          ? renderCard({
-              id: "card-device-timers-alarms",
-              title: store.t("card.timers_alarms"),
-              body: html`${alarmRinging
-                  ? html`<div id="overview-ringing-alert" role="alert" class="alert alert-warning">
-                      <span>${store.t("dev_overview.ringing_alert_text")}</span>
-                      <button
-                        type="button"
-                        id="btn-dismiss-ringing"
-                        ?disabled=${isOffline}
-                        @click=${() =>
-                          void store.entity.runDeviceAction(
-                            "dismiss_ringing",
-                            store.t("dev_overview.dismissed_ringing_toast"),
-                          )}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        ${store.t("action.dismiss")}
-                      </button>
-                    </div>`
-                  : nothing}
-                <div class="settings-list">
-                  ${renderSettingsRow({
-                    id: "overview-active-timer",
-                    label: store.t("dev_overview.active_timer_label"),
-                    description: timerActive
-                      ? undefined
-                      : store.t("dev_overview.no_active_timer"),
-                    control: timerActive
-                      ? html`<span class="chip ${live.timer_running ? "chip-primary" : ""}">
-                            ${live.timer_running
-                              ? store.t("dev_overview.running")
-                              : store.t("dev_overview.paused")}
-                          </span>
-                          <strong class="kv-value">
-                            ${formatClockDuration(liveTimerRemainingSec)}
-                          </strong>
-                          <button
-                            type="button"
-                            id="btn-cancel-timer"
-                            ?disabled=${isOffline}
-                            @click=${() =>
-                              void store.entity.runDeviceAction(
-                                "cancel_timer",
-                                store.t("dev_overview.cancelled_timer_toast"),
-                              )}
-                            class="btn btn-secondary btn-compact"
-                          >
-                            ${store.t("dev_overview.cancel_timer")}
-                          </button>`
-                      : html`<span class="kv-value">${store.t("common.unknown")}</span>`,
-                  })}
-                  ${renderSettingsRow({
-                    id: "overview-stopwatch",
-                    label: store.t("dev_overview.stopwatch_label"),
-                    description: stopwatchActive
-                      ? undefined
-                      : store.t("dev_overview.not_running"),
-                    control: stopwatchActive
-                      ? html`<span class="chip ${live.stopwatch_running ? "chip-primary" : ""}">
-                            ${live.stopwatch_running
-                              ? store.t("dev_overview.running")
-                              : store.t("dev_overview.paused")}
-                          </span>
-                          <strong class="kv-value">
-                            ${formatClockDuration(liveStopwatchElapsedSec)}
-                          </strong>
-                          <button
-                            type="button"
-                            id="btn-reset-stopwatch"
-                            ?disabled=${isOffline}
-                            @click=${() =>
-                              void store.entity.runDeviceAction(
-                                "reset_stopwatch",
-                                store.t("dev_overview.reset_stopwatch_toast"),
-                              )}
-                            class="btn btn-secondary btn-compact"
-                          >
-                            ${store.t("dev_overview.reset_stopwatch")}
-                          </button>`
-                      : html`<span class="kv-value">${store.t("common.unknown")}</span>`,
-                  })}
-                  <details
-                    id="overview-alarms-drawer"
-                    class="sub-collapsible summary-row"
-                    ?open=${store.overviewAlarmsOpen}
-                    @toggle=${(ev) => {
-                      store.overviewAlarmsOpen = (ev.currentTarget).open;
-                    }}
-                  >
-                    <summary>
-                      <span class="row-label">${store.t("dev_overview.alarms_label")}</span>
-                      <span class="summary-row-end">
-                        <span id="overview-alarms-chip" class=${alarmsSummaryChipClass}>
-                          ${alarmsSummaryLabel}
-                        </span>
-                        <span class="summary-chevron" aria-hidden="true">▾</span>
-                      </span>
-                    </summary>
-                    <div id="overview-alarms" class="card-content stack">
-                      <p class="row-description">${store.t("dev_overview.alarms_desc")}</p>
-                      <div
-                        class="stack"
-                        role="group"
-                        aria-label=${store.t("dev_overview.alarms_group_aria")}
-                      >
-                        ${([0, 1, 2]).map((idx) => {
-                          const slot = alarmSlots[idx];
-                          const timeId = `cfg-alarm_${idx + 1}_time`;
-                          const recId = `cfg-alarm_${idx + 1}_recurrence`;
-                          const enId = `cfg-alarm_${idx + 1}_enabled`;
-                          return html`<div class="list-row">
-                            <div class="list-row-main">
-                              <div class="stacked-field">
-                                <label for=${timeId}>
-                                  ${store.t("dev_overview.alarm_time_label", { index: idx + 1 })}
-                                </label>
-                                <input
-                                  type="time"
-                                  id=${timeId}
-                                  step="60"
-                                  .value=${slot.time}
-                                  @change=${(ev) => {
-                                    const val = (ev.currentTarget).value;
-                                    if (val) {
-                                      updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
-                                    }
-                                  }}
-                                />
-                              </div>
-                              <div class="stacked-field">
-                                <label for=${recId}>
-                                  ${store.t("dev_overview.alarm_schedule_label", {
-                                    index: idx + 1,
-                                  })}
-                                </label>
-                                <select
-                                  id=${recId}
-                                  .value=${String(slot.recurrence)}
-                                  @change=${(ev) =>
-                                    updateAlarmSlot(
-                                      idx,
-                                      {
-                                        recurrence: Number(
-                                          (ev.currentTarget).value,
-                                        ),
-                                      },
-                                      recId,
-                                    )}
-                                >
-                                  ${alarmRecurrenceChoices.map(
-                                    (opt) =>
-                                      html`<option
-                                        value=${String(opt.value)}
-                                        ?selected=${opt.value === slot.recurrence}
-                                      >
-                                        ${opt.label}
-                                      </option>`,
-                                  )}
-                                </select>
-                              </div>
-                            </div>
-                            <label for=${enId} class="inline-switch">
-                              <span>${store.t("common.enabled")}</span>
-                              <input
-                                type="checkbox"
-                                id=${enId}
-                                .checked=${slot.enabled}
-                                @change=${(ev) =>
-                                  updateAlarmSlot(
-                                    idx,
-                                    { enabled: (ev.currentTarget).checked },
-                                    enId,
-                                  )}
-                                role="switch"
-                                class="switch"
-                              />
-                            </label>
-                          </div>`;
-                        })}
-                      </div>
-                    </div>
-                  </details>
-                </div>`,
-            })
-          : nothing}
-
-        ${otherSensorItems.length
-          ? renderCard({
-              title: store.t("card.sensors_controls"),
-              contentClass: "settings-list",
-              body: otherSensorItems.map((it) => renderDeviceEntityRow(store, it)),
-            })
-          : nothing}
-      </div>
-    </div>
-  </section>`;
-}
-__latterExp(__exports, { defaultLocaleTimeFormat: () => defaultLocaleTimeFormat, renderDeviceOfflineBanner: () => renderDeviceOfflineBanner, renderDeviceEntityRow: () => renderDeviceEntityRow, renderDeviceOverviewView: () => renderDeviceOverviewView });
-//# sourceURL=latter-studio/src/views/device-overview-view.ts
-});
 __latterDef("src/views/device-audio-view.ts", (__exports, __req) => {
-const { renderCard, renderPrefControlRow, renderRangeRow, renderSelectRow, renderSwitchRow } = __req("src/components/controls.ts");
+const { renderCard, renderDeviceEntityRow, renderDeviceOfflineBanner, renderPrefControlRow, renderRangeRow, renderSelectRow, renderSwitchRow } = __req("src/components/controls.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
-const { renderDeviceEntityRow, renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
 /**
  * Device Audio View (`audio_voice`, `D-008`, `D-031`, `D-036`, `D-066`, `Q7`, `Q8`):
  * - Column 1: Voice assistant & wake word (hides `Voice Follows Me` & delay when `native_ble_tracking` is Off).
@@ -17652,12 +17192,11 @@ __latterExp(__exports, { renderDeviceAudioView: () => renderDeviceAudioView });
 //# sourceURL=latter-studio/src/views/device-audio-view.ts
 });
 __latterDef("src/views/device-display-view.ts", (__exports, __req) => {
-const { renderCard, renderPrefControlRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
-const { WALLPAPER_ROTATION_OPTIONS } = __req("src/constants.ts");
+const { renderCard, renderDeviceOfflineBanner, renderPrefControlRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
+const { WALLPAPER_ROTATION_OPTIONS } = __req("src/i18n/index.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
 const { resolveCollectionDisplayName, resolvePoolPhotos } = __req("src/state/photo-ops.ts");
 const { defaultThemeHex, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
-const { renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
 /**
  * Device Display View (`display`, `D-027`, `D-029`, `D-034`, `D-036`, `D-069`, `D-072`):
  * Hardware & OS surface aesthetics across screens:
@@ -18250,13 +17789,12 @@ __latterExp(__exports, { renderDeviceDisplayView: () => renderDeviceDisplayView 
 //# sourceURL=latter-studio/src/views/device-display-view.ts
 });
 __latterDef("src/views/device-interface-view.ts", (__exports, __req) => {
-const { renderCard, renderPillList, renderSelectRow, renderSettingsRow, renderSortableList, renderSwitchRow, renderTrashIconButton } = __req("src/components/controls.ts");
+const { renderCard, renderDeviceOfflineBanner, renderPillList, renderSelectRow, renderSettingsRow, renderSortableList, renderSwitchRow, renderTrashIconButton } = __req("src/components/controls.ts");
 const { ACTIVITY_SOURCES_CATALOG, HOME_CLOCK_TAP_OPTIONS, HOME_DATE_TAP_OPTIONS, MAX_DOCK_ITEMS, NATIVE_DOCK_APP_TOKENS, NATIVE_DOCK_CONFIG_APP_MAP, RETURN_TO_HOME_TIMEOUT_OPTIONS, SHORTCUT_ROUTES_CATALOG, START_SCREEN_CONFIG_APP_MAP, START_SCREEN_OPTIONS, TOOLS_ITEMS_CATALOG } = __req("src/constants.ts");
 const { html, nothing, repeat } = __req("src/lib/lit.ts");
 const { ROUTE_PREVIEW_ICONS, shortcutActionLabel } = __req("src/mdi-catalog.ts");
 const { isCatalogItemSupported } = __req("src/state/store.ts");
-const { fmtNumber, hassFirstWeekday } = __req("src/utils/format.ts");
-const { defaultLocaleTimeFormat, renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
+const { defaultLocaleTimeFormat, fmtNumber, hassFirstWeekday } = __req("src/utils/format.ts");
 /**
  * Device Interface View (`interface`, `D-026`, `D-035`, `D-047`, `D-053`, `D-064`, `D-069`, `U4`):
  * - Column 1: Home screen (`home_screen_enabled`, `start_screen` + inline `Configure`, `time_format`,
@@ -18438,9 +17976,9 @@ function renderDeviceInterfaceView(store) {
       : rawClockFaceOpts;
   const clockFaceRaw = String(clockFacePref?.value ?? cfg.clock_face ?? "Minimal Digital");
   const resolvedClockFaceValue =
-    filteredClockFaceOpts.length > 0 && !filteredClockFaceOpts.includes(clockFaceRaw)
+    (filteredClockFaceOpts.length > 0 && !filteredClockFaceOpts.includes(clockFaceRaw)
       ? filteredClockFaceOpts[0]
-      : clockFaceRaw;
+      : undefined) ?? clockFaceRaw;
   const clockFaceOptions = filteredClockFaceOpts.map((opt) => ({
     value: opt,
     label: store.tPrefOption("clock_face", opt),
@@ -18461,9 +17999,9 @@ function renderDeviceInterfaceView(store) {
       ? String(rawTimeFormatVal)
       : defaultLocaleTimeFormat(store.hass);
   const resolvedTimeFormatValue =
-    rawTimeFormatOpts.length > 0 && !rawTimeFormatOpts.includes(effectiveTimeFormat)
+    (rawTimeFormatOpts.length > 0 && !rawTimeFormatOpts.includes(effectiveTimeFormat)
       ? rawTimeFormatOpts[0]
-      : effectiveTimeFormat;
+      : undefined) ?? effectiveTimeFormat;
   const timeFormatOptions = rawTimeFormatOpts.map((opt) => ({
     value: opt,
     label: store.tPrefOption("time_format", opt),
@@ -18923,7 +18461,7 @@ function renderDeviceInterfaceView(store) {
                     ariaLabel: store.t("dev_interface.active_dock_aria"),
                     items: dockItems,
                     rowClass: "dock-row",
-                    getKey: (_item, idx) => dockItemKeys[idx],
+                    getKey: (_item, idx) => dockItemKeys[idx] ?? String(idx),
                     getLabel: (item) => resolveDockItemPresentation(item).title,
                     onReorder: (fromIdx, toIdx) => {
                       store.entity.reorderShortcutItems("dock_items", fromIdx, toIdx);
@@ -19086,10 +18624,1053 @@ function renderDeviceInterfaceView(store) {
 __latterExp(__exports, { renderDeviceInterfaceView: () => renderDeviceInterfaceView });
 //# sourceURL=latter-studio/src/views/device-interface-view.ts
 });
-__latterDef("src/views/device-power-view.ts", (__exports, __req) => {
-const { renderCard, renderPrefControlRow } = __req("src/components/controls.ts");
+__latterDef("src/views/overview/assignments-card.ts", (__exports, __req) => {
+const { renderCard, renderSelectRow, renderSettingsRow } = __req("src/components/controls.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
-const { renderDeviceEntityRow, renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
+/**
+ * Device Overview — Assignments Card (`views/overview/assignments-card.ts`, `D-050`, `D-064`).
+ */
+function renderOverviewAssignmentsCard(
+  store,
+  opts
+   ,
+) {
+  const { curDevEntry, isBleOnly } = opts;
+  const data = store.state;
+  const cfg = data?.config || {};
+  const caps = data?.capabilities || {};
+  const effBleCat = String(cfg.effective_ble_category || curDevEntry?.ble_category || "ble_tag");
+  const rawBleCat = String(cfg.ble_category || "auto").trim().toLowerCase();
+  const curBleCat = rawBleCat === "phone" || rawBleCat === "ble_tag" ? rawBleCat : "auto";
+  const groups = data?.device_groups || [];
+  const rawGroupId = String(cfg.device_group || "custom").trim() || "custom";
+  const curGroupId =
+    rawGroupId === "custom" || groups.some((g) => g.id === rawGroupId) ? rawGroupId : "custom";
+  const remoteGroups = data?.system_config?.remote_groups || [];
+  const curRemoteMode =
+    String(cfg.device_remote_group || curDevEntry?.device_remote_group || "area_auto").trim() ||
+    "area_auto";
+  let remoteSummary = store.t("dev_overview.remote_follow_area");
+  if (curRemoteMode === "all") {
+    remoteSummary = store.t("dev_overview.remote_all_system");
+  } else if (curRemoteMode.startsWith("group:")) {
+    const gid = curRemoteMode.slice(6);
+    remoteSummary = remoteGroups.find((g) => g.id === gid)?.name || gid;
+  }
+  return renderCard({
+    id: "card-device-assignments",
+    title: store.t("card.assignments"),
+    contentClass: "settings-list",
+    body: html`${!isBleOnly
+        ? renderSettingsRow({
+            label: store.t("dev_overview.device_group_label"),
+            forId: "cfg-device_group",
+            description:
+              curGroupId === "custom"
+                ? store.t("dev_overview.device_group_custom_desc")
+                : store.t("dev_overview.device_group_preset_desc"),
+            control: html`<select
+                id="cfg-device_group"
+                .value=${curGroupId}
+                @change=${(ev) =>
+                  store.entity.stageDeviceSetting(
+                    "device_group",
+                    (ev.currentTarget).value,
+                    "cfg-device_group",
+                  )}
+              >
+                <option value="custom" ?selected=${curGroupId === "custom"}>
+                  ${store.t("common.custom")}
+                </option>
+                ${groups.map(
+                  (g) =>
+                    html`<option value=${g.id} ?selected=${g.id === curGroupId}>
+                      ${g.name}
+                    </option>`,
+                )}
+              </select>
+              ${curGroupId === "custom"
+                ? html`<button
+                    type="button"
+                    id="btn-save-custom-group"
+                    @click=${() => store.groups.openSaveGroupModal()}
+                    class="btn btn-secondary btn-compact"
+                  >
+                    ${store.t("action.save_custom_group")}
+                  </button>`
+                : nothing}
+              <button
+                type="button"
+                id="btn-manage-groups"
+                @click=${() => store.openManageGroups(curGroupId)}
+                class="btn btn-text btn-compact"
+              >
+                ${store.t("action.manage_groups")}
+              </button>`,
+          })
+        : renderSettingsRow({
+            label: store.t("dev_overview.device_category_label"),
+            forId: "cfg-ble_category",
+            description: store.t("dev_overview.device_category_desc"),
+            control: html`<select
+              id="cfg-ble_category"
+              .value=${curBleCat}
+              @change=${(ev) =>
+                store.entity.stageDeviceSetting(
+                  "ble_category",
+                  (ev.currentTarget).value,
+                  "cfg-ble_category",
+                )}
+            >
+              <option value="auto" ?selected=${curBleCat === "auto"}>
+                ${store.t("dev_overview.auto_category_option", {
+                  category:
+                    effBleCat === "phone"
+                      ? store.t("status.phone")
+                      : store.t("status.ble_tag"),
+                })}
+              </option>
+              <option value="phone" ?selected=${curBleCat === "phone"}>
+                ${store.t("status.phone")}
+              </option>
+              <option value="ble_tag" ?selected=${curBleCat === "ble_tag"}>
+                ${store.t("status.ble_tag")}
+              </option>
+            </select>`,
+          })}
+      ${renderSelectRow({
+        id: "cfg-assigned_person",
+        label: store.t("dev_overview.assigned_person_label"),
+        description: store.t("dev_overview.assigned_person_desc"),
+        value: cfg.assigned_person,
+        choices: data?.catalog?.persons,
+        emptyOptionLabel: store.t("dev_overview.unassigned_option"),
+        onChange: (val) =>
+          store.entity.stageDeviceSetting("assigned_person", val, "cfg-assigned_person"),
+      })}
+      ${!isBleOnly && caps.has_display
+        ? renderSettingsRow({
+            label: store.t("dev_overview.remote_group_label"),
+            description: store.t("dev_overview.remote_group_desc"),
+            control: html`<span class="chip">${remoteSummary}</span>
+              <button
+                type="button"
+                id="btn-configure-remote-group"
+                @click=${() => store.entity.openAppConfigModal("remote")}
+                class="btn btn-text btn-compact"
+              >
+                ${store.t("action.configure")}
+              </button>`,
+          })
+        : nothing}`,
+  });
+}
+__latterExp(__exports, { renderOverviewAssignmentsCard: () => renderOverviewAssignmentsCard });
+//# sourceURL=latter-studio/src/views/overview/assignments-card.ts
+});
+__latterDef("src/views/overview/quick-actions-card.ts", (__exports, __req) => {
+const { renderCard, renderDeviceEntityRow, renderPrefControlRow, renderQuickActionGrid, renderSettingsRow } = __req("src/components/controls.ts");
+const { html, nothing } = __req("src/lib/lit.ts");
+const { entityLabel } = __req("src/utils/format.ts");
+/**
+ * Device Overview — Quick Actions Card (`views/overview/quick-actions-card.ts`, `D-066`, `M-P1-22`).
+ */
+function canonicalActionCommand(item) {
+  if (item.device_command) return item.device_command;
+  if (item.device_class === "identify") return "find_my";
+  if (item.device_class === "restart") return "restart";
+  const tail = (item.key || item.entity_id.split(".", 2)[1] || "").toLowerCase();
+  if (tail === "find_my" || tail.endsWith("_find_my_device") || tail.endsWith("_find_my")) {
+    return "find_my";
+  }
+  if (
+    tail === "trigger_va" ||
+    tail.endsWith("_trigger_voice_assistant") ||
+    tail.endsWith("_trigger_va")
+  ) {
+    return "trigger_va";
+  }
+  if (tail === "activate_screensaver" || tail.endsWith("_activate_screensaver")) {
+    return "activate_screensaver";
+  }
+  if (tail === "deactivate_screensaver" || tail.endsWith("_deactivate_screensaver")) {
+    return "deactivate_screensaver";
+  }
+  if (tail === "hibernate" || tail.endsWith("_hibernate_device") || tail.endsWith("_hibernate")) {
+    return "hibernate";
+  }
+  if (tail === "restart" || tail.endsWith("_restart_device") || tail.endsWith("_restart")) {
+    return "restart";
+  }
+  return "";
+}
+function localizedQuickActionLabel(store, cmd, fallback) {
+  switch (cmd) {
+    case "find_my":
+      return store.t("dev_overview.qa_find_my");
+    case "trigger_va":
+      return store.t("dev_overview.qa_trigger_va");
+    case "activate_screensaver":
+      return store.t("dev_overview.qa_activate_screensaver");
+    case "deactivate_screensaver":
+      return store.t("dev_overview.qa_exit_screensaver");
+    case "restart":
+      return store.t("dev_overview.qa_restart");
+    default:
+      return entityLabel(fallback);
+  }
+}
+function renderOverviewQuickActionsCard(
+  store,
+  opts
+   ,
+) {
+  const { isBleOnly, isOffline, hasOpenInHa } = opts;
+  if (isBleOnly) return nothing;
+  const data = store.state;
+  const sectionActionItems = store.entity
+    .getSectionItems("actions")
+    .concat(store.entity.getSectionItems("overview"));
+  const sectionButtons = sectionActionItems.filter((it) => it.domain === "button");
+  const synthesizedButtons = (data?.quick_actions || []).map((qa) => {
+    const cmd = qa.device_command || qa.key;
+    return {
+      entity_id: `cmd:${qa.key}`,
+      domain: "button",
+      name: localizedQuickActionLabel(store, cmd, qa.label),
+      state: qa.state,
+      key: qa.key,
+      device_command: qa.device_command,
+      device_class:
+        qa.device_class ||
+        (cmd === "find_my" ? "identify" : cmd === "restart" ? "restart" : undefined),
+    };
+  });
+  const synthesizedCmdSet = new Set(
+    synthesizedButtons.map((sb) => canonicalActionCommand(sb)).filter(Boolean),
+  );
+  const extraSectionButtons = sectionButtons.filter((b) => {
+    const cmd = canonicalActionCommand(b);
+    return !cmd || !synthesizedCmdSet.has(cmd);
+  });
+  const allQuickActionButtons = synthesizedButtons.concat(extraSectionButtons);
+  const harmlessQuickButtons = allQuickActionButtons.filter(
+    (b) => canonicalActionCommand(b) !== "restart",
+  );
+  const restartButton =
+    allQuickActionButtons.find((b) => canonicalActionCommand(b) === "restart") || null;
+  const otherQuickItemsRaw = sectionActionItems.filter((it) => it.domain !== "button");
+  if (
+    data?.speaker_volume &&
+    !otherQuickItemsRaw.some((it) => it.entity_id === data.speaker_volume?.entity_id)
+  ) {
+    otherQuickItemsRaw.push(data.speaker_volume);
+  }
+  const dndPref = store.entity.getPref("do_not_disturb");
+  const otherQuickItems = isOffline
+    ? otherQuickItemsRaw.map((it) => ({ ...it, state: "unavailable" }))
+    : otherQuickItemsRaw;
+  const hasQuickControls =
+    harmlessQuickButtons.length > 0 ||
+    Boolean(dndPref) ||
+    otherQuickItems.length > 0 ||
+    Boolean(restartButton);
+  const onTriggerRestart = () => {
+    if (!restartButton) return;
+    const toastMsg = store.t("sync.restarting_device");
+    if (restartButton.device_command) {
+      void store.entity.runDeviceAction(restartButton.device_command, toastMsg);
+    } else {
+      void store.entity.espAction(restartButton.entity_id, "press", undefined, toastMsg);
+    }
+  };
+  return renderCard({
+    id: "card-device-quick-actions",
+    title: store.t("card.quick_actions"),
+    contentClass: "settings-list",
+    body: hasQuickControls
+      ? html`${renderQuickActionGrid(store, harmlessQuickButtons, isOffline)}
+          ${dndPref ? renderPrefControlRow(store, dndPref) : nothing}
+          ${otherQuickItems.map((it) => renderDeviceEntityRow(store, it))}
+          ${restartButton
+            ? renderSettingsRow({
+                id: "row-restart-device",
+                label: store.t("dev_overview.restart_device"),
+                description: store.t("dev_overview.restart_device_desc"),
+                control: html`<button
+                  type="button"
+                  id="btn-restart-device"
+                  data-entity-id=${restartButton.entity_id}
+                  ?disabled=${isOffline || String(restartButton.state ?? "") === "unavailable"}
+                  @click=${onTriggerRestart}
+                  class="btn btn-danger btn-compact"
+                >
+                  ${store.t("dev_overview.restart_btn")}
+                </button>`,
+              })
+            : nothing}`
+      : html`<p class="empty-state">${store.t("dev_overview.empty_quick_actions")}</p>`,
+    footerActions: hasOpenInHa
+      ? html`<button
+          type="button"
+          id="btn-open-in-ha"
+          @click=${() => store.openDeviceInHa()}
+          class="btn btn-text"
+        >
+          ${store.t("action.open_in_ha")}
+        </button>`
+      : nothing,
+  });
+}
+__latterExp(__exports, { renderOverviewQuickActionsCard: () => renderOverviewQuickActionsCard });
+//# sourceURL=latter-studio/src/views/overview/quick-actions-card.ts
+});
+__latterDef("src/views/overview/status-card.ts", (__exports, __req) => {
+const { renderCard, renderSvgIcon } = __req("src/components/controls.ts");
+const { html, nothing } = __req("src/lib/lit.ts");
+const { fmtDistance, fmtNumber, fmtPercent, rssiToPercent } = __req("src/utils/format.ts");
+/**
+ * Device Overview — Status Card (`views/overview/status-card.ts`, `D-003`, `D-029`, `D-030`, `D-048`).
+ *
+ * Strict `D-003` unknowns for battery, Wi-Fi/BLE RSSI, Area, and `update.*` Firmware gating.
+ */
+const DEV_ICON_AREA =
+  "M12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5M12,2A7,7 0 0,1 19,9C19,14.25 12,22 12,22C12,22 5,14.25 5,9A7,7 0 0,1 12,2M12,4A5,5 0 0,0 7,9C7,10 7,12 12,18.71C17,12 17,10 17,9A5,5 0 0,0 12,4Z";
+const DEV_ICON_BATTERY =
+  "M16,20H8V6H16M16.67,4H15V2H9V4H7.33A1.33,1.33 0 0,0 6,5.33V20.67C6,21.4 6.6,22 7.33,22H16.67A1.33,1.33 0 0,0 18,20.67V5.33C18,4.6 17.4,4 16.67,4Z";
+const DEV_ICON_PLUG =
+  "M16,7V3H14V7H10V3H8V7H8C7,7 6,8 6,9V14.5L9.5,18V21H14.5V18L18,14.5V9C18,8 17,7 16,7M16,13.67L12.5,17.17V19H11.5V17.17L8,13.67V9H16V13.67Z";
+const DEV_ICON_RADAR =
+  "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,10.84 21.79,9.69 21.39,8.61L19.79,10.21C19.93,10.8 20,11.4 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4C12.6,4 13.2,4.07 13.79,4.21L15.4,2.6C14.31,2.21 13.16,2 12,2M19,2A2,2 0 0,0 17,4A2,2 0 0,0 19,6A2,2 0 0,0 21,4A2,2 0 0,0 19,2M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12H16A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8V6M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z";
+const DEV_ICON_WIFI =
+  "M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z";
+const DEV_ICON_BLUETOOTH =
+  "M14.88,16.29L13,18.17V14.41M13,5.83L14.88,7.71L13,9.58M17.71,7.71L12,2H11V9.58L6.41,5L5,6.41L10.59,12L5,17.58L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71Z";
+const DEV_ICON_CHIP =
+  "M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M15,15H9V9H15V15Z";
+const DEV_ICON_TAG =
+  "M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.9,2 2,2.9 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.59,21.42C11.95,21.78 12.45,22 13,22C13.55,22 14.05,21.78 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20.01L4,11V4H11V3.99L20,12.99L13,20.01M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z";
+function rssiQualityLabel(store, rssi) {
+  if (rssi === null || !Number.isFinite(rssi)) return store.t("signal.no_reading");
+  if (rssi >= -60) return store.t("signal.excellent");
+  if (rssi >= -70) return store.t("signal.good");
+  if (rssi >= -80) return store.t("signal.fair");
+  return store.t("signal.weak");
+}
+function renderOverviewStatusCard(
+  store,
+  opts
+   ,
+) {
+  const { curDevEntry, winRow, isBleOnly, hasOpenInHa } = opts;
+  const data = store.state;
+  const cfg = data?.config || {};
+  const live = data?.live || {};
+  const caps = data?.capabilities || {};
+  const esp = data?.esphome;
+  const hasBattery = Boolean(caps.has_battery || curDevEntry?.has_battery);
+  const hasBatteryReading =
+    !isBleOnly &&
+    hasBattery &&
+    curDevEntry?.battery_level !== null &&
+    curDevEntry?.battery_level !== undefined &&
+    Number.isFinite(Number(curDevEntry.battery_level));
+  const batPct = hasBatteryReading
+    ? Math.max(0, Math.min(100, Math.round(Number(curDevEntry?.battery_level))))
+    : 0;
+  const batSignalStyle = `--signal-pct:${batPct}%`;
+  const batMeta = curDevEntry?.is_charging
+    ? store.t("status.charging")
+    : curDevEntry?.is_usb_connected
+      ? store.t("status.plugged_in")
+      : hasBatteryReading
+        ? store.t("status.on_battery")
+        : store.t("dev_overview.waiting_for_reading");
+  let rssiVal = null;
+  if (!isBleOnly && curDevEntry?.wifi_rssi !== null && curDevEntry?.wifi_rssi !== undefined) {
+    rssiVal = Number(curDevEntry.wifi_rssi);
+  } else if (
+    isBleOnly &&
+    winRow &&
+    winRow.effective_rssi !== null &&
+    winRow.effective_rssi !== undefined
+  ) {
+    rssiVal = Number(winRow.effective_rssi);
+  }
+  const hasRssi = rssiVal !== null && Number.isFinite(rssiVal);
+  const rssiText = hasRssi
+    ? `${fmtNumber(rssiVal, store.hass, 0)} dBm`
+    : store.t("common.unknown");
+  const rssiPct = hasRssi ? rssiToPercent(rssiVal) : 0;
+  const wifiSignalStyle = `--signal-pct:${rssiPct}%`;
+  const hasAssignedArea = Boolean(curDevEntry?.has_assigned_area);
+  const areaText = hasAssignedArea
+    ? curDevEntry?.area_label || live.active_area_name || store.t("common.unknown")
+    : live.active_area_name || store.t("common.unknown");
+  const effBleCat = String(cfg.effective_ble_category || curDevEntry?.ble_category || "ble_tag");
+  const distSuffix =
+    live.ble_closest_proxy &&
+    winRow &&
+    winRow.distance_m !== null &&
+    winRow.distance_m !== undefined
+      ? ` (~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)})`
+      : "";
+  const showProxyMeta = Boolean(
+    (isBleOnly || (caps.has_ble_beacon && cfg.native_ble_tracking)) && live.ble_closest_proxy,
+  );
+  const areaMetaBase = isBleOnly
+    ? effBleCat === "phone"
+      ? store.t("status.phone")
+      : store.t("status.ble_tag")
+    : hasAssignedArea
+      ? store.t("status.stationary")
+      : store.t("status.roaming");
+  const areaMeta = showProxyMeta
+    ? `${areaMetaBase} • ${live.ble_closest_proxy}${distSuffix}`
+    : areaMetaBase;
+  const rawSw = String(live.device_sw_version || esp?.device?.sw_version || "").replace(
+    /^v/i,
+    "",
+  );
+  const fwValue = rawSw ? `v${rawSw}` : store.t("common.unknown");
+  const allUpdateEntities = (esp?.sections || []).flatMap((s) =>
+    (s.items || []).filter((it) => it.domain === "update"),
+  );
+  const fwEntityId = String(
+    live.fw_update_entity || allUpdateEntities[0]?.entity_id || "",
+  ).trim();
+  const fwEntityItem = fwEntityId
+    ? allUpdateEntities.find((it) => it.entity_id === fwEntityId)
+    : allUpdateEntities[0];
+  const fwEntityState = String(
+    fwEntityItem?.state ?? (fwEntityId ? store.hass?.states?.[fwEntityId]?.state : "") ?? "",
+  ).trim();
+  const hasAvailableUpdateEntity = Boolean(
+    fwEntityId && fwEntityState && fwEntityState !== "unavailable" && fwEntityState !== "unknown",
+  );
+  const fwMeta = live.fw_update_available
+    ? store.t("status.update")
+    : hasAvailableUpdateEntity
+      ? store.t("status.up_to_date")
+      : store.t("common.unknown");
+  let statusChipClass = "chip";
+  let statusDotClass = "status-dot";
+  let statusLabel = store.t("common.unknown");
+  if (isBleOnly) {
+    if (
+      curDevEntry?.status_code === "online" ||
+      Boolean(curDevEntry?.is_online) ||
+      Boolean(winRow)
+    ) {
+      statusChipClass = "chip chip-success";
+      statusDotClass = "status-dot online";
+      statusLabel = store.t("status.online");
+    } else if (curDevEntry?.status_code === "scanning") {
+      statusLabel = store.t("status.scanning");
+    } else if (curDevEntry?.status_code === "away") {
+      statusLabel = store.t("status.away");
+    } else if (curDevEntry?.status_label) {
+      statusLabel = curDevEntry.status_label;
+    }
+  } else if (curDevEntry?.is_online && live.fw_update_available) {
+    statusChipClass = "chip chip-warning";
+    statusDotClass = "status-dot update";
+    statusLabel = store.t("status.update");
+  } else if (curDevEntry?.is_online) {
+    statusChipClass = "chip chip-success";
+    statusDotClass = "status-dot online";
+    statusLabel = store.t("status.online");
+  } else if (curDevEntry?.is_online === false) {
+    statusLabel = live.is_ble_sleep_expected
+      ? store.t("status.sleeping")
+      : store.t("status.offline");
+  }
+  const powerTileBody = hasBattery
+    ? html`<div class="status-tile-head">
+          ${renderSvgIcon(DEV_ICON_BATTERY)}
+          <span>${store.t("dev_overview.tile_battery")}</span>
+        </div>
+        <strong class="status-tile-value">
+          ${hasBatteryReading
+            ? fmtPercent(curDevEntry?.battery_level, store.hass)
+            : store.t("common.unknown")}
+        </strong>
+        <span class="status-tile-meta">${batMeta}</span>
+        ${hasBatteryReading
+          ? html`<div class="signal-track" aria-hidden="true">
+              <div
+                class="signal-fill${batPct <= 20 && !curDevEntry?.is_charging ? " low" : ""}"
+                style=${batSignalStyle}
+              ></div>
+            </div>`
+          : nothing}`
+    : html`<div class="status-tile-head">
+          ${renderSvgIcon(DEV_ICON_PLUG)}
+          <span>${store.t("dev_overview.tile_power")}</span>
+        </div>
+        <strong class="status-tile-value">${store.t("status.plugged_in")}</strong>
+        <span class="status-tile-meta">
+          ${caps.has_power ? store.t("status.sleep_wake_active") : store.t("status.always_on")}
+        </span>`;
+  return renderCard({
+    id: "card-device-status",
+    heading: html`<h3 class="card-title">${store.t("card.status")}</h3>`,
+    headerActions: html`<span id="st-status-chip" class=${statusChipClass}>
+      <span class=${statusDotClass} aria-hidden="true"></span>${statusLabel}
+    </span>`,
+    contentClass: "stack",
+    body: html`<div class="status-tiles">
+      <button
+        type="button"
+        @click=${() => store.switchView("presence")}
+        class="status-tile"
+      >
+        <div class="status-tile-head">
+          ${renderSvgIcon(DEV_ICON_AREA)}
+          <span id="st-area-label">
+            ${hasAssignedArea
+              ? store.t("dev_overview.tile_area")
+              : store.t("dev_overview.tile_current_area")}
+          </span>
+        </div>
+        <strong class="status-tile-value">${areaText}</strong>
+        <span class="status-tile-meta">${areaMeta}</span>
+      </button>
+
+      ${isBleOnly
+        ? html`<button
+            type="button"
+            @click=${() => store.switchView("presence")}
+            class="status-tile"
+          >
+            <div class="status-tile-head">
+              ${renderSvgIcon(DEV_ICON_RADAR)}
+              <span>${store.t("dev_overview.tile_closest_proxy")}</span>
+            </div>
+            <strong class="status-tile-value">
+              ${live.ble_closest_proxy || store.t("common.unknown")}
+            </strong>
+            <span class="status-tile-meta">
+              ${winRow && winRow.distance_m !== null && winRow.distance_m !== undefined
+                ? `~${fmtDistance(winRow.distance_m, store.hass, winRow.distance_ft)}`
+                : store.t("dev_overview.ble_presence_meta")}
+            </span>
+          </button>`
+        : store.deviceHasView("power")
+          ? html`<button
+              type="button"
+              @click=${() => store.switchView("power")}
+              class="status-tile"
+            >
+              ${powerTileBody}
+            </button>`
+          : html`<div class="status-tile">${powerTileBody}</div>`}
+
+      <button
+        type="button"
+        @click=${() =>
+          isBleOnly
+            ? store.switchView("presence")
+            : store.openDeviceSection("tools", "card-device-diagnostics")}
+        class="status-tile"
+      >
+        <div class="status-tile-head">
+          ${renderSvgIcon(isBleOnly ? DEV_ICON_BLUETOOTH : DEV_ICON_WIFI)}
+          <span id="st-wifi-label">
+            ${isBleOnly
+              ? store.t("dev_overview.tile_ble_signal")
+              : store.t("dev_overview.tile_wifi_signal")}
+          </span>
+        </div>
+        <strong class="status-tile-value">${rssiText}</strong>
+        <span class="status-tile-meta">${rssiQualityLabel(store, rssiVal)}</span>
+        ${hasRssi
+          ? html`<div class="signal-track" aria-hidden="true">
+              <div
+                class="signal-fill${rssiVal !== null && rssiVal < -80 ? " low" : ""}"
+                style=${wifiSignalStyle}
+              ></div>
+            </div>`
+          : nothing}
+      </button>
+
+      ${isBleOnly
+        ? html`<button
+            type="button"
+            @click=${() => store.openDeviceSection("presence", "card-ble-identity")}
+            class="status-tile"
+          >
+            <div class="status-tile-head">
+              ${renderSvgIcon(DEV_ICON_TAG)}
+              <span>${store.t("dev_overview.tile_ble_target")}</span>
+            </div>
+            <strong class="status-tile-value">
+              <code>${cfg.ble_target_address || store.t("common.unknown")}</code>
+            </strong>
+            <span class="status-tile-meta">
+              ${store.t("dev_overview.ble_address_meta")}
+            </span>
+          </button>`
+        : html`<button
+            type="button"
+            @click=${() => store.openDeviceSection("tools", "card-device-diagnostics")}
+            class="status-tile"
+          >
+            <div class="status-tile-head">
+              ${renderSvgIcon(DEV_ICON_CHIP)}
+              <span>${store.t("dev_overview.tile_firmware")}</span>
+            </div>
+            <strong class="status-tile-value">${fwValue}</strong>
+            <span class="status-tile-meta">${fwMeta}</span>
+          </button>`}
+    </div>`,
+    footerActions:
+      isBleOnly && hasOpenInHa
+        ? html`<button
+            type="button"
+            id="btn-open-in-ha"
+            @click=${() => store.openDeviceInHa(true)}
+            class="btn btn-text"
+          >
+            ${store.t("action.open_in_ha")}
+          </button>`
+        : nothing,
+  });
+}
+__latterExp(__exports, { renderOverviewStatusCard: () => renderOverviewStatusCard });
+//# sourceURL=latter-studio/src/views/overview/status-card.ts
+});
+__latterDef("src/domain/alarms.ts", (__exports, __req) => {
+const { DEFAULT_ALARMS_SUMMARY } = __req("src/constants.ts");
+/**
+ * Pure alarm-slot wire parser, serializer, and duration formatter (`L1` domain leaf).
+ * Wire format: `HH:MM|<enabled 0|1>|<recurrence 0..3>;...` (3 fixed alarm slots).
+ */
+const DEFAULT_ALARM_SLOTS = [
+  { time: "07:00", enabled: false, recurrence: 1 },
+  { time: "08:30", enabled: false, recurrence: 2 },
+  { time: "09:00", enabled: false, recurrence: 2 },
+];
+function parseSingleAlarmSlot(segRaw, fallback) {
+  const seg = (segRaw || "").trim();
+  const m = /^(\d{1,2}):(\d{2})\|([01])\|([0-3])$/.exec(seg);
+  if (!m) {
+    return { ...fallback };
+  }
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+    return { ...fallback };
+  }
+  return {
+    time: `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`,
+    enabled: m[3] === "1",
+    recurrence: Number(m[4]),
+  };
+}
+function parseAlarmsSummary(raw) {
+  const text = String(raw || DEFAULT_ALARMS_SUMMARY).trim();
+  const parts = text.split(";");
+  return [
+    parseSingleAlarmSlot(parts[0], DEFAULT_ALARM_SLOTS[0]),
+    parseSingleAlarmSlot(parts[1], DEFAULT_ALARM_SLOTS[1]),
+    parseSingleAlarmSlot(parts[2], DEFAULT_ALARM_SLOTS[2]),
+  ];
+}
+function serializeAlarmsSummary(slots) {
+  return slots
+    .slice(0, 3)
+    .map((s) => `${s.time}|${s.enabled ? 1 : 0}|${s.recurrence}`)
+    .join(";");
+}
+function formatClockDuration(rawSec) {
+  const sec = Math.max(0, Math.floor(Number(rawSec) || 0));
+  const hh = Math.floor(sec / 3600);
+  const mm = Math.floor((sec % 3600) / 60);
+  const ss = sec % 60;
+  if (hh > 0) {
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  }
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+__latterExp(__exports, { DEFAULT_ALARM_SLOTS: () => DEFAULT_ALARM_SLOTS, parseAlarmsSummary: () => parseAlarmsSummary, serializeAlarmsSummary: () => serializeAlarmsSummary, formatClockDuration: () => formatClockDuration });
+//# sourceURL=latter-studio/src/domain/alarms.ts
+});
+__latterDef("src/views/overview/timers-alarms-card.ts", (__exports, __req) => {
+const { isDeviceTime24h, renderCard, renderSettingsRow } = __req("src/components/controls.ts");
+const { DEFAULT_ALARMS_SUMMARY } = __req("src/constants.ts");
+const { formatClockDuration, parseAlarmsSummary, serializeAlarmsSummary } = __req("src/domain/alarms.ts");
+const { html, nothing } = __req("src/lib/lit.ts");
+const { fmtNumber, formatClockHhMm } = __req("src/utils/format.ts");
+/**
+ * Device Overview — Timers & Alarms Card (`views/overview/timers-alarms-card.ts`, `F-01`, `B-17`, `M-P1-50`).
+ */
+function renderOverviewTimersAlarmsCard(
+  store,
+  opts
+   ,
+) {
+  const { isBleOnly, isOffline } = opts;
+  const data = store.state;
+  const cfg = data?.config || {};
+  const live = data?.live || {};
+  const caps = data?.capabilities || {};
+  if (isBleOnly || !caps.has_display) return nothing;
+  const alarmsSummaryPref = store.entity.getPref("alarms_summary");
+  const alarmSlots = parseAlarmsSummary(
+    alarmsSummaryPref?.value ?? cfg.alarms_summary ?? DEFAULT_ALARMS_SUMMARY,
+  );
+  const updateAlarmSlot = (
+    idx,
+    patch,
+    focusId,
+  ) => {
+    const next = [
+      { ...alarmSlots[0] },
+      { ...alarmSlots[1] },
+      { ...alarmSlots[2] },
+    ];
+    const merged = { ...next[idx], ...patch };
+    if (!/^\d{2}:\d{2}$/.test(merged.time)) {
+      return;
+    }
+    next[idx] = merged;
+    store.entity.stageDeviceSetting("alarms_summary", serializeAlarmsSummary(next), focusId);
+  };
+  const nowMs = Number.isFinite(store.liveClockNowMs) ? store.liveClockNowMs : Date.now();
+  const timerEndsMs = live.timer_ends_at ? Date.parse(live.timer_ends_at) : Number.NaN;
+  const liveTimerRemainingSec =
+    live.timer_running && Number.isFinite(timerEndsMs)
+      ? Math.max(0, Math.ceil((timerEndsMs - nowMs) / 1000))
+      : Math.max(0, Math.round(Number(live.timer_remaining_sec || 0)));
+  const stopwatchStartedMs = live.stopwatch_started_at
+    ? Date.parse(live.stopwatch_started_at)
+    : Number.NaN;
+  const liveStopwatchElapsedSec =
+    live.stopwatch_running && Number.isFinite(stopwatchStartedMs)
+      ? Math.max(0, Math.floor((nowMs - stopwatchStartedMs) / 1000))
+      : Math.max(0, Math.round(Number(live.stopwatch_elapsed_sec || 0)));
+  const timerActive = Boolean(live.timer_running || live.timer_paused);
+  const stopwatchActive = Boolean(live.stopwatch_running || live.stopwatch_paused);
+  const alarmRinging = Boolean(live.alarm_ringing);
+  const enabledAlarmSlots = alarmSlots
+    .filter((s) => s.enabled)
+    .sort((a, b) => a.time.localeCompare(b.time));
+  const is24h = isDeviceTime24h(store);
+  const nextEnabledSlot = enabledAlarmSlots[0];
+  const alarmsSummaryLabel = nextEnabledSlot
+    ? store.t("dev_overview.alarms_enabled_summary", {
+        count: fmtNumber(enabledAlarmSlots.length, store.hass, 0),
+        nextTime: formatClockHhMm(nextEnabledSlot.time, is24h),
+      })
+    : store.t("common.all_off");
+  const alarmsSummaryChipClass = nextEnabledSlot ? "chip chip-primary" : "chip";
+  const alarmRecurrenceChoices = [
+    { value: 0, label: store.t("dev_overview.alarm_rec_daily") },
+    { value: 1, label: store.t("dev_overview.alarm_rec_weekdays") },
+    { value: 2, label: store.t("dev_overview.alarm_rec_weekends") },
+    { value: 3, label: store.t("dev_overview.alarm_rec_once") },
+  ];
+  return renderCard({
+    id: "card-device-timers-alarms",
+    title: store.t("card.timers_alarms"),
+    body: html`${alarmRinging
+        ? html`<div id="overview-ringing-alert" role="alert" class="alert alert-warning">
+            <span>${store.t("dev_overview.ringing_alert_text")}</span>
+            <button
+              type="button"
+              id="btn-dismiss-ringing"
+              ?disabled=${isOffline}
+              @click=${() =>
+                void store.entity.runDeviceAction(
+                  "dismiss_ringing",
+                  store.t("dev_overview.dismissed_ringing_toast"),
+                )}
+              class="btn btn-secondary btn-compact"
+            >
+              ${store.t("action.dismiss")}
+            </button>
+          </div>`
+        : nothing}
+      <div class="settings-list">
+        ${renderSettingsRow({
+          id: "overview-active-timer",
+          label: store.t("dev_overview.active_timer_label"),
+          description: timerActive ? undefined : store.t("dev_overview.no_active_timer"),
+          control: timerActive
+            ? html`<span class="chip ${live.timer_running ? "chip-primary" : ""}">
+                  ${live.timer_running
+                    ? store.t("dev_overview.running")
+                    : store.t("dev_overview.paused")}
+                </span>
+                <strong class="kv-value">
+                  ${formatClockDuration(liveTimerRemainingSec)}
+                </strong>
+                <button
+                  type="button"
+                  id="btn-cancel-timer"
+                  ?disabled=${isOffline}
+                  @click=${() =>
+                    void store.entity.runDeviceAction(
+                      "cancel_timer",
+                      store.t("dev_overview.cancelled_timer_toast"),
+                    )}
+                  class="btn btn-secondary btn-compact"
+                >
+                  ${store.t("dev_overview.cancel_timer")}
+                </button>`
+            : html`<span class="kv-value">${store.t("common.unknown")}</span>`,
+        })}
+        ${renderSettingsRow({
+          id: "overview-stopwatch",
+          label: store.t("dev_overview.stopwatch_label"),
+          description: stopwatchActive ? undefined : store.t("dev_overview.not_running"),
+          control: stopwatchActive
+            ? html`<span class="chip ${live.stopwatch_running ? "chip-primary" : ""}">
+                  ${live.stopwatch_running
+                    ? store.t("dev_overview.running")
+                    : store.t("dev_overview.paused")}
+                </span>
+                <strong class="kv-value">
+                  ${formatClockDuration(liveStopwatchElapsedSec)}
+                </strong>
+                <button
+                  type="button"
+                  id="btn-reset-stopwatch"
+                  ?disabled=${isOffline}
+                  @click=${() =>
+                    void store.entity.runDeviceAction(
+                      "reset_stopwatch",
+                      store.t("dev_overview.reset_stopwatch_toast"),
+                    )}
+                  class="btn btn-secondary btn-compact"
+                >
+                  ${store.t("dev_overview.reset_stopwatch")}
+                </button>`
+            : html`<span class="kv-value">${store.t("common.unknown")}</span>`,
+        })}
+        <details
+          id="overview-alarms-drawer"
+          class="sub-collapsible summary-row"
+          ?open=${store.overviewAlarmsOpen}
+          @toggle=${(ev) => {
+            store.overviewAlarmsOpen = (ev.currentTarget).open;
+          }}
+        >
+          <summary>
+            <span class="row-label">${store.t("dev_overview.alarms_label")}</span>
+            <span class="summary-row-end">
+              <span id="overview-alarms-chip" class=${alarmsSummaryChipClass}>
+                ${alarmsSummaryLabel}
+              </span>
+              <span class="summary-chevron" aria-hidden="true">▾</span>
+            </span>
+          </summary>
+          <div id="overview-alarms" class="card-content stack">
+            <p class="row-description">${store.t("dev_overview.alarms_desc")}</p>
+            <div
+              class="stack"
+              role="group"
+              aria-label=${store.t("dev_overview.alarms_group_aria")}
+            >
+              ${([0, 1, 2]).map((idx) => {
+                const slot = alarmSlots[idx];
+                const timeId = `cfg-alarm_${idx + 1}_time`;
+                const recId = `cfg-alarm_${idx + 1}_recurrence`;
+                const enId = `cfg-alarm_${idx + 1}_enabled`;
+                return html`<div class="list-row">
+                  <div class="list-row-main">
+                    <div class="stacked-field">
+                      <label for=${timeId}>
+                        ${store.t("dev_overview.alarm_time_label", { index: idx + 1 })}
+                      </label>
+                      <input
+                        type="time"
+                        id=${timeId}
+                        step="60"
+                        .value=${slot.time}
+                        @change=${(ev) => {
+                          const val = (ev.currentTarget).value;
+                          if (val) {
+                            updateAlarmSlot(idx, { time: val.slice(0, 5) }, timeId);
+                          }
+                        }}
+                      />
+                    </div>
+                    <div class="stacked-field">
+                      <label for=${recId}>
+                        ${store.t("dev_overview.alarm_schedule_label", { index: idx + 1 })}
+                      </label>
+                      <select
+                        id=${recId}
+                        .value=${String(slot.recurrence)}
+                        @change=${(ev) =>
+                          updateAlarmSlot(
+                            idx,
+                            {
+                              recurrence: Number(
+                                (ev.currentTarget).value,
+                              ),
+                            },
+                            recId,
+                          )}
+                      >
+                        ${alarmRecurrenceChoices.map(
+                          (opt) =>
+                            html`<option
+                              value=${String(opt.value)}
+                              ?selected=${opt.value === slot.recurrence}
+                            >
+                              ${opt.label}
+                            </option>`,
+                        )}
+                      </select>
+                    </div>
+                  </div>
+                  <label for=${enId} class="inline-switch">
+                    <span>${store.t("common.enabled")}</span>
+                    <input
+                      type="checkbox"
+                      id=${enId}
+                      .checked=${slot.enabled}
+                      @change=${(ev) =>
+                        updateAlarmSlot(
+                          idx,
+                          { enabled: (ev.currentTarget).checked },
+                          enId,
+                        )}
+                      role="switch"
+                      class="switch"
+                    />
+                  </label>
+                </div>`;
+              })}
+            </div>
+          </div>
+        </details>
+      </div>`,
+  });
+}
+__latterExp(__exports, { renderOverviewTimersAlarmsCard: () => renderOverviewTimersAlarmsCard });
+//# sourceURL=latter-studio/src/views/overview/timers-alarms-card.ts
+});
+__latterDef("src/views/device-overview-view.ts", (__exports, __req) => {
+const { renderCard, renderDeviceEntityRow, renderDeviceOfflineBanner } = __req("src/components/controls.ts");
+const { html, nothing } = __req("src/lib/lit.ts");
+const { issueMessage } = __req("src/utils/format.ts");
+const { renderOverviewAssignmentsCard } = __req("src/views/overview/assignments-card.ts");
+const { renderOverviewQuickActionsCard } = __req("src/views/overview/quick-actions-card.ts");
+const { renderOverviewStatusCard } = __req("src/views/overview/status-card.ts");
+const { renderOverviewTimersAlarmsCard } = __req("src/views/overview/timers-alarms-card.ts");
+/**
+ * Device Overview View (`dashboard`, `D-003`, `D-014`, `D-029`, `D-030`, `D-048`, `D-066`).
+ *
+ * Composes `views/overview/{status-card,quick-actions-card,assignments-card,timers-alarms-card}.ts`
+ * inside the canonical two-column `.columns > .column` layout (`D-014`).
+ */
+function renderDeviceOverviewView(store) {
+  const data = store.state;
+  const cfg = data?.config || {};
+  const live = data?.live || {};
+  const links = data?.links || {};
+  const isBleOnly = cfg.kind === "ble_tag";
+  const curDevEntry =
+    (data?.system_devices || []).find((d) => d.subentry_id === store.activeSubentryId) ||
+    (data?.system_devices || []).find((d) => d.is_current);
+  const isOffline = !isBleOnly && curDevEntry?.is_online === false;
+  const winRow = (curDevEntry?.ble_survey_rows || []).find((r) => r.is_winner);
+  const deviceIssues = (data?.issues || []).filter(
+    (i) => i.subentry_id && i.subentry_id === store.activeSubentryId,
+  );
+  const hasErrorIssue = deviceIssues.some(
+    (i) => i.severity === "error" || i.severity === "critical",
+  );
+  const txStatus = isBleOnly ? live.ble_transmitter_status : null;
+  const txStateText = String(txStatus?.state || "").trim();
+  const showTxOffBanner =
+    Boolean(txStatus) && Boolean(txStateText) && txStateText.toLowerCase() !== "transmitting";
+  const hasOpenInHa = Boolean(links.esphome_device_id || links.latter_device_id);
+  const otherSensorItems = store.entity.getSectionItems("other");
+  return html`<section id="view-dashboard" class="stack">
+    ${renderDeviceOfflineBanner(store)}
+
+    ${deviceIssues.length
+      ? html`<div
+          role="region"
+          aria-label=${store.t("status.needs_attention")}
+          class="alert ${hasErrorIssue ? "alert-error" : "alert-warning"}"
+        >
+          <div class="alert-body">
+            <strong>${store.t("status.needs_attention")}</strong>
+            <ul class="alert-list">
+              ${deviceIssues.map((iss) => html`<li>${issueMessage(iss, store.hass)}</li>`)}
+            </ul>
+          </div>
+          <button
+            type="button"
+            @click=${() => store.openHaPage("/config/repairs")}
+            class="btn btn-secondary btn-compact"
+          >
+            ${store.t("action.open_repairs")}
+          </button>
+        </div>`
+      : nothing}
+
+    ${showTxOffBanner
+      ? html`<div
+          id="ble-transmitter-off-banner"
+          role="region"
+          aria-label=${store.t("offline.ble_tx_off_title", { state: txStateText })}
+          class="alert alert-warning"
+        >
+          <div class="alert-body">
+            <strong>${store.t("offline.ble_tx_off_title", { state: txStateText })}</strong>
+            <span>${store.t("offline.ble_tx_off_body")}</span>
+          </div>
+        </div>`
+      : nothing}
+
+    <div class="columns">
+      <div class="column">
+        ${renderOverviewStatusCard(store, {
+          curDevEntry,
+          winRow,
+          isBleOnly,
+          hasOpenInHa,
+        })}
+        ${renderOverviewQuickActionsCard(store, {
+          isBleOnly,
+          isOffline,
+          hasOpenInHa,
+        })}
+      </div>
+
+      <div class="column">
+        ${renderOverviewAssignmentsCard(store, {
+          curDevEntry,
+          isBleOnly,
+        })}
+        ${renderOverviewTimersAlarmsCard(store, {
+          isBleOnly,
+          isOffline,
+        })}
+        ${otherSensorItems.length
+          ? renderCard({
+              title: store.t("card.sensors_controls"),
+              contentClass: "settings-list",
+              body: otherSensorItems.map((it) => renderDeviceEntityRow(store, it)),
+            })
+          : nothing}
+      </div>
+    </div>
+  </section>`;
+}
+__latterExp(__exports, { renderDeviceOverviewView: () => renderDeviceOverviewView });
+//# sourceURL=latter-studio/src/views/device-overview-view.ts
+});
+__latterDef("src/views/device-power-view.ts", (__exports, __req) => {
+const { renderCard, renderDeviceEntityRow, renderDeviceOfflineBanner, renderPrefControlRow } = __req("src/components/controls.ts");
+const { html, nothing } = __req("src/lib/lit.ts");
 /**
  * Device Power View (`power`, `D-014`, `D-027`, `D-036`, `D-066`, `D-068`):
  * Sleep & wake controls, Bedtime mode, and Power & battery telemetry.
@@ -19204,10 +19785,9 @@ __latterExp(__exports, { renderDevicePowerView: () => renderDevicePowerView });
 //# sourceURL=latter-studio/src/views/device-power-view.ts
 });
 __latterDef("src/views/device-presence-view.ts", (__exports, __req) => {
-const { renderCard, renderPrefControlRow, renderSelectRow, renderSwitchRow } = __req("src/components/controls.ts");
+const { renderCard, renderDeviceEntityRow, renderDeviceOfflineBanner, renderPrefControlRow, renderSelectRow, renderSwitchRow } = __req("src/components/controls.ts");
 const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
 const { fmtNumber } = __req("src/utils/format.ts");
-const { renderDeviceEntityRow, renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
 /**
  * Device BLE & Area Presence View (`presence`, `D-003`, `D-032`, `D-036`, `D-066`, `Q8`):
  * Static Assigned Area vs. BLE Roaming, Fallback Area, and BLE identity (hidden when Static).
@@ -19421,12 +20001,10 @@ __latterExp(__exports, { renderDevicePresenceView: () => renderDevicePresenceVie
 //# sourceURL=latter-studio/src/views/device-presence-view.ts
 });
 __latterDef("src/views/device-tools-view.ts", (__exports, __req) => {
-const { renderCard, renderPrefControlRow, renderSelectRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
-const { SECURITY_PIN_POLICY_OPTIONS } = __req("src/constants.ts");
-const { t } = __req("src/i18n/index.ts");
+const { renderCard, renderDeviceEntityRow, renderDeviceOfflineBanner, renderPrefControlRow, renderSelectRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
+const { SECURITY_PIN_POLICY_OPTIONS, t } = __req("src/i18n/index.ts");
 const { focusSafe, html, nothing } = __req("src/lib/lit.ts");
 const { fmtNumber } = __req("src/utils/format.ts");
-const { renderDeviceEntityRow, renderDeviceOfflineBanner } = __req("src/views/device-overview-view.ts");
 /**
  * Device Tools View (`tools`, `D-027`, `D-064`, `D-066`, `Q5`, `Q8`, `Q12`):
  * - Column 1: Diagnostics + collapsed Developer & telemetry drawer + `Open in Home Assistant`.
@@ -20666,8 +21244,9 @@ function renderDevicesListView(store) {
   const hasCustomGroup = allDevices.some(
     (d) => d.kind !== "ble_tag" && (!d.device_group || d.device_group === "custom"),
   );
+  const defaultCategory = { id: "all", label: store.t("devices.all") };
   const baseCategories = [
-    { id: "all", label: store.t("devices.all") },
+    defaultCategory,
     { id: "online", label: store.t("devices.online") },
     { id: "roaming", label: store.t("devices.roaming") },
     { id: "stationary", label: store.t("devices.stationary") },
@@ -20707,7 +21286,7 @@ function renderDevicesListView(store) {
       label: store.t("devices.group_prefix", { name: store.t("common.custom") }),
     });
   }
-  const activeCategory = baseCategories.find((o) => o.id === rawCat) || baseCategories[0];
+  const activeCategory = baseCategories.find((o) => o.id === rawCat) ?? defaultCategory;
   const cat = activeCategory.id;
   const cardHeadingTitle =
     cat === "all" ? store.t("devices.inventory_heading") : activeCategory.label;
@@ -20831,14 +21410,39 @@ function renderDevicesListView(store) {
                       ev.stopPropagation();
                       void store.switchSystemDevice(d.subentry_id);
                     };
+                    const onLinkKeydown = (ev) => {
+                      if (
+                        ev.key === " " &&
+                        !ev.metaKey &&
+                        !ev.ctrlKey &&
+                        !ev.shiftKey &&
+                        !ev.altKey
+                      ) {
+                        ev.preventDefault();
+                        void store.switchSystemDevice(d.subentry_id);
+                      }
+                    };
                     const onRowClick = (ev) => {
+                      if (ev.defaultPrevented || ev.button !== 0 || ev.shiftKey || ev.altKey) {
+                        return;
+                      }
                       const target = ev.target;
                       if (target?.closest?.("a, button, input, select")) return;
+                      if (
+                        typeof globalThis.getSelection === "function" &&
+                        String(globalThis.getSelection()?.toString() || "").trim() !== ""
+                      ) {
+                        return;
+                      }
+                      if (ev.metaKey || ev.ctrlKey) {
+                        globalThis.open?.(href, "_blank", "noopener,noreferrer");
+                        return;
+                      }
                       void store.switchSystemDevice(d.subentry_id);
                     };
                     return html`<tr @click=${onRowClick}>
                       <td class="col-name">
-                        <a href=${href} @click=${onLinkClick}>${d.title}</a>
+                        <a href=${href} @click=${onLinkClick} @keydown=${onLinkKeydown}>${d.title}</a>
                       </td>
                       <td>${d.model_label || store.t("common.unknown")}</td>
                       <td>${d.area_label || store.t("common.unknown")}</td>
@@ -21352,19 +21956,572 @@ function renderBatchControlsCard(
 __latterExp(__exports, { renderBatchControlsCard: () => renderBatchControlsCard });
 //# sourceURL=latter-studio/src/views/groups/batch-controls.ts
 });
-__latterDef("src/views/groups/group-baseline-drawer.ts", (__exports, __req) => {
-const { renderHourSelectRow, renderRangeRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
-const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, CALENDAR_LOOKAHEAD_OPTIONS, DEFAULT_ACTIVITY_SOURCES, DEFAULT_AREA_CATEGORIES, DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS, DEFAULT_HOME_CATEGORIES, DEFAULT_TOOLS_ITEMS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, SECURITY_PIN_POLICY_OPTIONS, TOOLS_ITEMS_CATALOG, VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UPLOADS, WALLPAPER_ROTATION_OPTIONS } = __req("src/constants.ts");
+__latterDef("src/views/groups/baseline-behavior-section.ts", (__exports, __req) => {
+const { renderSwitchRow } = __req("src/components/controls.ts");
+const { SECURITY_PIN_POLICY_OPTIONS } = __req("src/i18n/index.ts");
+const { html, nothing } = __req("src/lib/lit.ts");
+/**
+ * Group Baseline Drawer — Behavior Sections (`views/groups/baseline-behavior-section.ts`):
+ * - Power & brightness
+ * - Audio & voice
+ * - BLE & Area presence + Security PIN policy
+ */
+function renderBaselineBehaviorSection(
+  store,
+  group,
+  h,
+) {
+  const gid = group.id;
+  const cfg = group.device_config || {};
+  const { caps } = h;
+  const autoBrt = String(cfg.auto_brightness_mode || "Sun Synchronized");
+  const wwMode = String(cfg.wake_word_mode || "Docked Only");
+  const bleOn = Boolean(cfg.native_ble_tracking);
+  const autoSw = cfg.ble_auto_switch !== undefined ? Boolean(cfg.ble_auto_switch) : bleOn;
+  const vfm = Boolean(cfg.sync_device_area);
+  const handoff = Boolean(cfg.area_handoff);
+  const pinPolicy = String(cfg.security_pin_policy || "auto");
+  const groupSsMode = String(cfg.screensaver_mode ?? "Docked Only");
+  return html`<details class="sub-collapsible" open>
+      <summary>${store.t("groups.section_power_brightness")}</summary>
+      <div class="card-content settings-list">
+        ${h.renderSpecSelect("tap_to_wake", cfg.tap_to_wake)}
+        ${h.renderSpecSelect("pickup_to_wake", cfg.pickup_to_wake)}
+        ${h.renderSpecSelect("battery_screen_timeout", cfg.battery_screen_timeout)}
+        ${h.renderSpecSelect("battery_hibernate_timeout", cfg.battery_hibernate_timeout)}
+        ${h.renderSpecSelect("screensaver_mode", cfg.screensaver_mode)}
+        ${caps.has_battery !== false || groupSsMode !== "Never"
+          ? h.renderSpecSelect("docked_idle_timeout", cfg.docked_idle_timeout)
+          : nothing}
+        ${h.renderSpecSelect("auto_brightness_mode", cfg.auto_brightness_mode)}
+        ${autoBrt === "Disabled"
+          ? h.renderSpecRange("manual_brightness", cfg.manual_brightness)
+          : html`${h.renderSpecRange("day_brightness", cfg.day_brightness)}
+              ${h.renderSpecRange("night_brightness", cfg.night_brightness)}`}
+        ${autoBrt === "Time Schedule"
+          ? html`${h.renderSpecHourSelect("day_start_hour", cfg.day_start_hour)}
+              ${h.renderSpecHourSelect("night_start_hour", cfg.night_start_hour)}`
+          : nothing}
+        ${h.renderSpecSelect("bedtime_display", cfg.bedtime_display)}
+        ${h.renderSpecRange("bedtime_brightness", cfg.bedtime_brightness)}
+        ${h.renderSpecSwitch("bedtime_schedule", cfg.bedtime_schedule)}
+        ${Boolean(cfg.bedtime_schedule)
+          ? html`${h.renderSpecHourSelect("bedtime_start_hour", cfg.bedtime_start_hour)}
+              ${h.renderSpecHourSelect("bedtime_end_hour", cfg.bedtime_end_hour)}`
+          : nothing}
+      </div>
+    </details>
+
+    <details class="sub-collapsible">
+      <summary>${store.t("groups.section_audio_voice")}</summary>
+      <div class="card-content settings-list">
+        ${h.renderSpecSelect("wake_word_mode", cfg.wake_word_mode)}
+        ${wwMode !== "Disabled"
+          ? html`${h.renderSpecSelect("ww_sens_okay_nabu", cfg.ww_sens_okay_nabu)}
+              ${h.renderSpecSelect("ww_sens_hey_luna", cfg.ww_sens_hey_luna)}
+              ${h.renderSpecSelect("ww_sens_hey_jarvis", cfg.ww_sens_hey_jarvis)}
+              ${h.renderSpecSelect("ww_sens_hey_mycroft", cfg.ww_sens_hey_mycroft)}
+              ${h.renderSpecSelect("ww_sens_alexa", cfg.ww_sens_alexa)}`
+          : nothing}
+        ${h.renderSpecSwitch("wake_screen_on_assist", cfg.wake_screen_on_assist)}
+        ${h.renderSpecRange("alert_volume", cfg.alert_volume)}
+        ${h.renderSpecRange("volume_step_size", cfg.volume_step_size)}
+        ${h.renderSpecSwitch("game_sound_effects", cfg.game_sound_effects)}
+        ${bleOn && caps.is_roaming_device !== false
+          ? html`${renderSwitchRow({
+                label: store.tPrefLabel("sync_device_area"),
+                ariaLabel: store.t("groups.for_group_aria", {
+                  label: store.tPrefLabel("sync_device_area"),
+                  group: group.name,
+                }),
+                checked: vfm,
+                onChange: (checked) =>
+                  void store.groups.updateGroupBaseline(gid, { sync_device_area: checked }),
+              })}
+              ${vfm
+                ? h.renderSpecRange("area_follow_dwell_s", cfg.area_follow_dwell_s, {
+                    min: 3,
+                    max: 60,
+                    step: 1,
+                    unit: "s",
+                    defaultVal: 10,
+                  })
+                : nothing}`
+          : nothing}
+        ${renderSwitchRow({
+          label: store.tPrefLabel("area_handoff"),
+          ariaLabel: store.t("groups.for_group_aria", {
+            label: store.tPrefLabel("area_handoff"),
+            group: group.name,
+          }),
+          checked: handoff,
+          onChange: (checked) =>
+            void store.groups.updateGroupBaseline(gid, { area_handoff: checked }),
+        })}
+      </div>
+    </details>
+
+    <details class="sub-collapsible">
+      <summary>${store.t("groups.section_presence_security")}</summary>
+      <div class="card-content settings-list">
+        ${renderSwitchRow({
+          label: store.tPrefLabel("native_ble_tracking"),
+          ariaLabel: store.t("groups.for_group_aria", {
+            label: store.tPrefLabel("native_ble_tracking"),
+            group: group.name,
+          }),
+          checked: bleOn,
+          onChange: (checked) =>
+            void store.groups.updateGroupBaseline(gid, { native_ble_tracking: checked }),
+        })}
+        ${bleOn
+          ? html`${renderSwitchRow({
+                label: store.tPrefLabel("ble_auto_switch"),
+                ariaLabel: store.t("groups.for_group_aria", {
+                  label: store.tPrefLabel("ble_auto_switch"),
+                  group: group.name,
+                }),
+                checked: autoSw,
+                onChange: (checked) =>
+                  void store.groups.updateGroupBaseline(gid, { ble_auto_switch: checked }),
+              })}
+              ${h.renderSpecSelect("ble_beacon_mode", cfg.ble_beacon_mode)}`
+          : nothing}
+        ${h.renderLabeledSelect(
+          "security_pin_policy",
+          pinPolicy,
+          SECURITY_PIN_POLICY_OPTIONS.map((opt) => ({
+            value: opt.value,
+            label: store.tPrefOption("security_pin_policy", opt.value),
+          })),
+          "auto",
+        )}
+      </div>
+    </details>`;
+}
+__latterExp(__exports, { renderBaselineBehaviorSection: () => renderBaselineBehaviorSection });
+//# sourceURL=latter-studio/src/views/groups/baseline-behavior-section.ts
+});
+__latterDef("src/views/groups/baseline-display-section.ts", (__exports, __req) => {
+const { renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
+const { VIRTUAL_COLLECTION_ALL, VIRTUAL_COLLECTION_DEFAULTS, VIRTUAL_COLLECTION_UPLOADS } = __req("src/constants.ts");
+const { WALLPAPER_ROTATION_OPTIONS } = __req("src/i18n/index.ts");
 const { html, nothing } = __req("src/lib/lit.ts");
 const { isPhotoDynamic } = __req("src/state/photo-ops.ts");
+const { isValidHexColor } = __req("src/utils/format.ts");
+/**
+ * Group Baseline Drawer — Display Section (`views/groups/baseline-display-section.ts`, `D-072`):
+ * - Wallpaper & Photo Frame Screensaver pool selectors, rotation, shuffle, clock overlay
+ * - Color profile, custom accent hex, & voice visual profile
+ */
+function encodePoolSelectValue(modeVal, sourceVal, colVal) {
+  const mode = String(modeVal || "");
+  const src = String(sourceVal || "");
+  const col = String(colVal || "");
+  if (mode === "collection" && col) return `collection:${col}`;
+  if (mode === "single" && src) return `single:${src}`;
+  if (!mode && src) return `single:${src}`;
+  return "off";
+}
+function renderBaselineDisplaySection(
+  store,
+  group,
+  h,
+) {
+  if (!group.include_display || h.caps.has_display === false) {
+    return nothing;
+  }
+  const gid = group.id;
+  const cfg = group.device_config || {};
+  const colorProfile = String(cfg.color_profile || "Steel Blue");
+  const rawCustomHex =
+    typeof cfg.device_custom_color === "string" ? cfg.device_custom_color : null;
+  const customHex = isValidHexColor(rawCustomHex)
+    ? String(rawCustomHex).toUpperCase()
+    : "#3898FF";
+  const groupSsStyle = String(cfg.screensaver_style ?? "Ambient Clock");
+  const sysWallpapers = store.state?.system_wallpapers || [];
+  const photoCollections = store.state?.photo_collections || [];
+  const buildCompactPoolOptions = (
+    excludeDynamic,
+  ) => {
+    const photos = excludeDynamic
+      ? sysWallpapers.filter((wp) => !isPhotoDynamic(wp))
+      : sysWallpapers;
+    return [
+      { value: "off", label: store.t("groups.pool_off") },
+      { value: `collection:${VIRTUAL_COLLECTION_ALL}`, label: store.t("groups.pool_all") },
+      {
+        value: `collection:${VIRTUAL_COLLECTION_DEFAULTS}`,
+        label: store.t("groups.pool_defaults"),
+      },
+      {
+        value: `collection:${VIRTUAL_COLLECTION_UPLOADS}`,
+        label: store.t("groups.pool_uploads"),
+      },
+      ...photoCollections.map((c) => ({
+        value: `collection:${c.id}`,
+        label: store.t("groups.pool_collection_prefix", { name: c.name }),
+      })),
+      ...photos.map((wp) => ({
+        value: `single:${wp.id}`,
+        label: store.t("groups.pool_photo_prefix", { name: wp.name || wp.id }),
+      })),
+    ];
+  };
+  const wpPoolOptions = buildCompactPoolOptions(false);
+  const wpPoolCurrent = encodePoolSelectValue(
+    cfg.wallpaper_mode,
+    cfg.wallpaper_source,
+    cfg.wallpaper_collection,
+  );
+  const ssPoolOptions = buildCompactPoolOptions(true);
+  const ssPoolCurrent = encodePoolSelectValue(
+    cfg.screensaver_photo_mode,
+    cfg.screensaver_photo_source,
+    cfg.screensaver_photo_collection,
+  );
+  const rotationOptions = WALLPAPER_ROTATION_OPTIONS.map(
+    (o) => ({ value: String(o.value), label: o.label }),
+  );
+  return html`<details class="sub-collapsible" open>
+    <summary>${store.t("groups.section_display")}</summary>
+    <div class="card-content settings-list">
+      ${renderSettingsRow({
+        label: store.t("groups.wallpaper_pool_label"),
+        control: html`<select
+          aria-label=${store.t("groups.for_group_aria", {
+            label: store.t("groups.wallpaper_pool_label"),
+            group: group.name,
+          })}
+          .value=${wpPoolCurrent}
+          @change=${(ev) => {
+            const raw = (ev.currentTarget).value;
+            if (raw.startsWith("collection:")) {
+              void store.groups.updateGroupBaseline(gid, {
+                wallpaper_mode: "collection",
+                wallpaper_collection: raw.slice(11),
+                wallpaper_source: "",
+              });
+            } else if (raw.startsWith("single:")) {
+              void store.groups.updateGroupBaseline(gid, {
+                wallpaper_mode: "single",
+                wallpaper_source: raw.slice(7),
+                wallpaper_collection: "",
+              });
+            } else {
+              void store.groups.updateGroupBaseline(gid, {
+                wallpaper_mode: "off",
+                wallpaper_source: "",
+                wallpaper_collection: "",
+              });
+            }
+          }}
+        >
+          ${wpPoolOptions.map(
+            (opt) => html`<option value=${opt.value} ?selected=${opt.value === wpPoolCurrent}>
+              ${opt.label}
+            </option>`,
+          )}
+        </select>`,
+      })}
+      ${h.renderLabeledSelect(
+        "wallpaper_cycle_minutes",
+        cfg.wallpaper_cycle_minutes,
+        rotationOptions,
+        "0",
+        true,
+      )}
+      ${h.renderSpecSelect("screensaver_style", cfg.screensaver_style)}
+      ${groupSsStyle === "Photo Frame"
+        ? html`${renderSettingsRow({
+              label: store.t("groups.screensaver_pool_label"),
+              control: html`<select
+                aria-label=${store.t("groups.for_group_aria", {
+                  label: store.t("groups.screensaver_pool_label"),
+                  group: group.name,
+                })}
+                .value=${ssPoolCurrent}
+                @change=${(ev) => {
+                  const raw = (ev.currentTarget).value;
+                  if (raw.startsWith("collection:")) {
+                    void store.groups.updateGroupBaseline(gid, {
+                      screensaver_photo_mode: "collection",
+                      screensaver_photo_collection: raw.slice(11),
+                      screensaver_photo_source: "",
+                    });
+                  } else if (raw.startsWith("single:")) {
+                    void store.groups.updateGroupBaseline(gid, {
+                      screensaver_photo_mode: "single",
+                      screensaver_photo_source: raw.slice(7),
+                      screensaver_photo_collection: "",
+                    });
+                  } else {
+                    void store.groups.updateGroupBaseline(gid, {
+                      screensaver_photo_mode: "off",
+                      screensaver_photo_source: "",
+                      screensaver_photo_collection: "",
+                    });
+                  }
+                }}
+              >
+                ${ssPoolOptions.map(
+                  (opt) => html`<option
+                    value=${opt.value}
+                    ?selected=${opt.value === ssPoolCurrent}
+                  >
+                    ${opt.label}
+                  </option>`,
+                )}
+              </select>`,
+            })}
+            ${h.renderLabeledSelect(
+              "screensaver_cycle_minutes",
+              cfg.screensaver_cycle_minutes,
+              rotationOptions,
+              "15",
+              true,
+            )}
+            ${renderSwitchRow({
+              label: store.tPrefLabel("screensaver_shuffle"),
+              ariaLabel: store.t("groups.for_group_aria", {
+                label: store.tPrefLabel("screensaver_shuffle"),
+                group: group.name,
+              }),
+              checked: Boolean(cfg.screensaver_shuffle),
+              onChange: (checked) =>
+                void store.groups.updateGroupBaseline(gid, {
+                  screensaver_shuffle: checked,
+                }),
+            })}
+            ${h.renderSpecSwitch("screensaver_photo_clock", cfg.screensaver_photo_clock)}`
+        : nothing}
+      ${h.renderSpecSelect("color_profile", cfg.color_profile)}
+      ${colorProfile === "Custom"
+        ? renderSettingsRow({
+            label: store.tPrefLabel("device_custom_color"),
+            control: html`<input
+                type="color"
+                aria-label=${store.t("groups.for_group_aria", {
+                  label: store.tPrefLabel("device_custom_color"),
+                  group: group.name,
+                })}
+                .value=${customHex}
+                @change=${(ev) => {
+                  const raw = (ev.currentTarget).value.toUpperCase();
+                  if (isValidHexColor(raw)) {
+                    void store.groups.updateGroupBaseline(gid, {
+                      device_custom_color: raw,
+                    });
+                  }
+                }}
+              />
+              <span class="chip">${customHex}</span>`,
+          })
+        : nothing}
+      ${h.renderSpecSelect("va_visual_profile", cfg.va_visual_profile)}
+    </div>
+  </details>`;
+}
+__latterExp(__exports, { renderBaselineDisplaySection: () => renderBaselineDisplaySection });
+//# sourceURL=latter-studio/src/views/groups/baseline-display-section.ts
+});
+__latterDef("src/views/groups/baseline-interface-section.ts", (__exports, __req) => {
+const { renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
+const { ACTIVITY_SOURCES_CATALOG, AREA_CATEGORIES_CATALOG, DEFAULT_ACTIVITY_SOURCES, DEFAULT_AREA_CATEGORIES, DEFAULT_DOCK_ROUTES_TOKENS, DEFAULT_GAMES_ITEMS, DEFAULT_HOME_CATEGORIES, DEFAULT_TOOLS_ITEMS, GAMES_ITEMS_CATALOG, HOME_CATEGORIES_CATALOG, TOOLS_ITEMS_CATALOG } = __req("src/constants.ts");
+const { CALENDAR_LOOKAHEAD_OPTIONS } = __req("src/i18n/index.ts");
+const { html, nothing } = __req("src/lib/lit.ts");
+const { fmtNumber } = __req("src/utils/format.ts");
+/**
+ * Group Baseline Drawer — Interface Section (`views/groups/baseline-interface-section.ts`, `D-069`, `D-071`):
+ * - Home screen, Clock/Date actions, Sky & weather, Activity card & sources
+ * - Home Hub, Area Controls, Tools, Games category pills, Remote scope, Calendar, Music, & Cameras
+ * - App Dock, Pinned shortcuts, & World clocks copy-from-Device rows
+ */
+function renderBaselineInterfaceSection(
+  store,
+  group,
+  h,
+) {
+  if (!group.include_interface || h.caps.has_display === false) {
+    return nothing;
+  }
+  const gid = group.id;
+  const cfg = group.device_config || {};
+  const lookaheadOptions = CALENDAR_LOOKAHEAD_OPTIONS.map(
+    (o) => ({ value: String(o.value), label: o.label }),
+  );
+  const remoteGroups = store.state?.system_config?.remote_groups || [];
+  const remoteScopeOptions = [
+    { value: "area_auto", label: store.t("groups.remote_match_area") },
+    ...remoteGroups.map((rg) => ({
+      value: `group:${rg.id}`,
+      label: store.t("groups.remote_group_prefix", { name: rg.name }),
+    })),
+    { value: "all", label: store.t("groups.remote_all_system") },
+  ];
+  const dockCount = Array.isArray(cfg.dock_items)
+    ? cfg.dock_items.length
+    : DEFAULT_DOCK_ROUTES_TOKENS.length;
+  const pinnedCount = Array.isArray(cfg.pinned_items) ? cfg.pinned_items.length : 0;
+  const worldClocksStr = typeof cfg.world_clocks === "string" ? cfg.world_clocks.trim() : "";
+  const clockCount = worldClocksStr ? worldClocksStr.split(";").filter(Boolean).length : 0;
+  return html`<details class="sub-collapsible" open>
+    <summary>${store.t("groups.section_interface")}</summary>
+    <div class="card-content settings-list">
+      ${h.renderSpecSwitch("home_screen_enabled", cfg.home_screen_enabled)}
+      ${h.renderSpecSelect("start_screen", cfg.start_screen)}
+      ${h.renderSpecSelect("time_format", cfg.time_format)}
+      ${h.renderSpecSelect("home_clock_tap_action", cfg.home_clock_tap_action)}
+      ${h.renderSpecSelect("clock_face", cfg.clock_face)}
+      ${h.renderSpecSelect("home_date_tap_action", cfg.home_date_tap_action)}
+      ${h.renderSpecSelect("return_to_home_timeout", cfg.return_to_home_timeout)}
+      ${h.renderSpecSwitch("wake_greeting", cfg.wake_greeting)}
+      ${h.renderSpecSwitch("weather_background", cfg.weather_background)}
+      ${h.renderSpecSwitch("weather_app_background", cfg.weather_app_background)}
+      ${h.renderSpecSwitch("home_sun", cfg.home_sun)}
+      ${h.renderSpecSwitch("home_moon", cfg.home_moon)}
+      ${renderSwitchRow({
+        label: store.tPrefLabel("activity_card"),
+        ariaLabel: store.t("groups.for_group_aria", {
+          label: store.tPrefLabel("activity_card"),
+          group: group.name,
+        }),
+        checked: cfg.activity_card !== false,
+        onChange: (checked) =>
+          void store.groups.updateGroupBaseline(gid, { activity_card: checked }),
+      })}
+      ${h.renderPills(
+        "activity_sources",
+        cfg.activity_sources,
+        ACTIVITY_SOURCES_CATALOG,
+        DEFAULT_ACTIVITY_SOURCES,
+        0,
+      )}
+      ${h.renderPills(
+        "home_categories",
+        cfg.home_categories,
+        HOME_CATEGORIES_CATALOG,
+        DEFAULT_HOME_CATEGORIES,
+        1,
+      )}
+      ${h.renderPills(
+        "area_categories",
+        cfg.area_categories,
+        AREA_CATEGORIES_CATALOG,
+        DEFAULT_AREA_CATEGORIES,
+        1,
+      )}
+      ${h.renderPills(
+        "tools_items",
+        cfg.tools_items,
+        TOOLS_ITEMS_CATALOG,
+        DEFAULT_TOOLS_ITEMS,
+        1,
+      )}
+      ${h.renderPills(
+        "games_items",
+        cfg.games_items,
+        GAMES_ITEMS_CATALOG,
+        DEFAULT_GAMES_ITEMS,
+        1,
+      )}
+      ${h.renderLabeledSelect(
+        "device_remote_group",
+        cfg.device_remote_group,
+        remoteScopeOptions,
+        "area_auto",
+      )}
+      ${h.renderSpecSwitch("show_utc_clock", cfg.show_utc_clock)}
+      ${h.renderLabeledSelect(
+        "calendar_lookahead_days",
+        cfg.calendar_lookahead_days ?? 30,
+        lookaheadOptions,
+        "30",
+        true,
+      )}
+      ${h.renderSpecSelect("calendar_week_start", cfg.calendar_week_start)}
+      ${h.renderSpecSelect("album_art_style", cfg.album_art_style)}
+      ${h.renderSpecSelect("music_overlay_style", cfg.music_overlay_style)}
+      ${h.renderSpecSelect("album_sort_order", cfg.album_sort_order)}
+      ${h.renderSpecSelect("artist_album_sort_order", cfg.artist_album_sort_order)}
+      ${h.renderSpecSelect("podcast_sort_order", cfg.podcast_sort_order)}
+      ${h.renderSpecSelect("camera_default_view", cfg.camera_default_view)}
+      ${h.renderSpecSelect("camera_framing", cfg.camera_framing)}
+      ${h.renderSpecSelect("camera_carousel_interval", cfg.camera_carousel_interval)}
+      ${h.renderSpecSelect("camera_stream_mode", cfg.camera_stream_mode)}
+      ${h.renderSpecSelect("camera_doorbell_popup", cfg.camera_doorbell_popup)}
+      ${h.hasLatterDevices
+        ? html`${renderSettingsRow({
+              label: store.t("card.app_dock"),
+              description:
+                dockCount === 1
+                  ? store.t("groups.dock_baseline_desc_one")
+                  : store.t("groups.dock_baseline_desc_many", {
+                      count: fmtNumber(dockCount, store.hass, 0),
+                    }),
+              control: html`<button
+                type="button"
+                @click=${() => h.requestCopyKeys(["dock_items"], store.t("card.app_dock"))}
+                class="btn btn-secondary btn-compact"
+              >
+                ${store.t("groups.copy_dock")}
+              </button>`,
+            })}
+            ${renderSettingsRow({
+              label: store.t("dialogs.pinned_label"),
+              description:
+                pinnedCount === 1
+                  ? store.t("groups.pinned_baseline_desc_one")
+                  : store.t("groups.pinned_baseline_desc_many", {
+                      count: fmtNumber(pinnedCount, store.hass, 0),
+                    }),
+              control: html`<button
+                type="button"
+                @click=${() =>
+                  h.requestCopyKeys(["pinned_items"], store.t("dialogs.pinned_label"))}
+                class="btn btn-secondary btn-compact"
+              >
+                ${store.t("groups.copy_pinned")}
+              </button>`,
+            })}
+            ${renderSettingsRow({
+              label: store.t("dialogs.world_clocks_label"),
+              description:
+                clockCount === 1
+                  ? store.t("groups.clocks_baseline_desc_one")
+                  : store.t("groups.clocks_baseline_desc_many", {
+                      count: fmtNumber(clockCount, store.hass, 0),
+                    }),
+              control: html`<button
+                type="button"
+                @click=${() =>
+                  h.requestCopyKeys(["world_clocks"], store.t("dialogs.world_clocks_label"))}
+                class="btn btn-secondary btn-compact"
+              >
+                ${store.t("groups.copy_clocks")}
+              </button>`,
+            })}`
+        : nothing}
+    </div>
+  </details>`;
+}
+__latterExp(__exports, { renderBaselineInterfaceSection: () => renderBaselineInterfaceSection });
+//# sourceURL=latter-studio/src/views/groups/baseline-interface-section.ts
+});
+__latterDef("src/views/groups/group-baseline-drawer.ts", (__exports, __req) => {
+const { renderHourSelectRow, renderRangeRow, renderSettingsRow, renderSwitchRow } = __req("src/components/controls.ts");
+const { html, nothing } = __req("src/lib/lit.ts");
 const { isCatalogItemSupported } = __req("src/state/store.ts");
-const { defaultLocaleTimeFormat, fmtNumber, isValidHexColor } = __req("src/utils/format.ts");
+const { defaultLocaleTimeFormat } = __req("src/utils/format.ts");
+const { renderBaselineBehaviorSection } = __req("src/views/groups/baseline-behavior-section.ts");
+const { renderBaselineDisplaySection } = __req("src/views/groups/baseline-display-section.ts");
+const { renderBaselineInterfaceSection } = __req("src/views/groups/baseline-interface-section.ts");
 /**
  * Group Baseline Drawer (`system_sync` Column 1, `D-048`, `D-050`, `D-063`, `D-064`).
- * - Zero hardcoded option arrays (`A-12`): reads options/bounds/defaults from `store.entity.getPrefSpec(key)`
- * - Localizes labels/options via `store.tPrefLabel` & `store.tPrefOption`
- * - Trait-gates group baseline rows (`E-14`) via single `isCatalogItemSupported` (`A-14`)
- * - Confirms `copyDeviceToGroupBaseline` (`Q5`)
+ *
+ * Composes `baseline-{behavior,display,interface}-section.ts` with trait-gated
+ * spec adapters (`isCatalogItemSupported`) and confirmation-guarded copy-from-Device actions.
  */
 function deriveGroupCapabilities(
   group,
@@ -21448,9 +22605,7 @@ function renderSpecSelect(
   if (options.length === 0) return nothing;
   const fallbackVal = String(spec.default ?? options[0]);
   const cur =
-    typeof currentVal === "string" && options.includes(currentVal)
-      ? currentVal
-      : fallbackVal;
+    typeof currentVal === "string" && options.includes(currentVal) ? currentVal : fallbackVal;
   const label = store.tPrefLabel(key, spec.label);
   return renderSettingsRow({
     label,
@@ -21491,8 +22646,7 @@ function renderSpecSwitch(
     label,
     ariaLabel: store.t("groups.for_group_aria", { label, group: group.name }),
     checked,
-    onChange: (next) =>
-      void store.groups.updateGroupBaseline(group.id, { [key]: next }),
+    onChange: (next) => void store.groups.updateGroupBaseline(group.id, { [key]: next }),
   });
 }
 function renderSpecRange(
@@ -21687,103 +22841,54 @@ function renderGroupBaselineDrawer(
   latterDevices,
 ) {
   const gid = group.id;
-  const cfg = group.device_config || {};
   const caps = deriveGroupCapabilities(group, members);
   const includeDisplay = Boolean(group.include_display);
   const includeInterface = Boolean(group.include_interface);
-  const autoBrt = String(cfg.auto_brightness_mode || "Sun Synchronized");
-  const wwMode = String(cfg.wake_word_mode || "Docked Only");
-  const bleOn = Boolean(cfg.native_ble_tracking);
-  const autoSw = cfg.ble_auto_switch !== undefined ? Boolean(cfg.ble_auto_switch) : bleOn;
-  const vfm = Boolean(cfg.sync_device_area);
-  const handoff = Boolean(cfg.area_handoff);
-  const pinPolicy = String(cfg.security_pin_policy || "auto");
-  const colorProfile = String(cfg.color_profile || "Steel Blue");
-  const rawCustomHex =
-    typeof cfg.device_custom_color === "string" ? cfg.device_custom_color : null;
-  const customHex = isValidHexColor(rawCustomHex)
-    ? String(rawCustomHex).toUpperCase()
-    : "#3898FF";
   const copySrc =
     store.groupCopySourceDrafts.get(gid) ||
     store.activeSubentryId ||
     latterDevices[0]?.subentry_id ||
     "";
-  const sysWallpapers = store.state?.system_wallpapers || [];
-  const photoCollections = store.state?.photo_collections || [];
-  const buildCompactPoolOptions = (excludeDynamic) => {
-    const photos = excludeDynamic
-      ? sysWallpapers.filter((wp) => !isPhotoDynamic(wp))
-      : sysWallpapers;
-    return [
-      { value: "off", label: store.t("groups.pool_off") },
-      { value: `collection:${VIRTUAL_COLLECTION_ALL}`, label: store.t("groups.pool_all") },
-      {
-        value: `collection:${VIRTUAL_COLLECTION_DEFAULTS}`,
-        label: store.t("groups.pool_defaults"),
-      },
-      {
-        value: `collection:${VIRTUAL_COLLECTION_UPLOADS}`,
-        label: store.t("groups.pool_uploads"),
-      },
-      ...photoCollections.map((c) => ({
-        value: `collection:${c.id}`,
-        label: store.t("groups.pool_collection_prefix", { name: c.name }),
-      })),
-      ...photos.map((wp) => ({
-        value: `single:${wp.id}`,
-        label: store.t("groups.pool_photo_prefix", { name: wp.name || wp.id }),
-      })),
-    ];
+  const helpers = {
+    caps,
+    hasLatterDevices: latterDevices.length > 0,
+    renderSpecSelect: (key, currentVal) =>
+      renderSpecSelect(store, group, key, currentVal, caps),
+    renderSpecSwitch: (key, currentVal, extraGate = true) =>
+      renderSpecSwitch(store, group, key, currentVal, caps, extraGate),
+    renderSpecRange: (
+      key,
+      currentVal,
+      fallbackBounds,
+    ) => renderSpecRange(store, group, key, currentVal, caps, fallbackBounds),
+    renderSpecHourSelect: (key, currentVal) =>
+      renderSpecHourSelect(store, group, key, currentVal, caps),
+    renderLabeledSelect: (
+      key,
+      currentVal,
+      options,
+      defaultVal,
+      asNumber = false,
+    ) =>
+      renderBaselineLabeledSelect(store, group, key, currentVal, options, defaultVal, asNumber),
+    renderPills: (
+      key,
+      currentVal,
+      catalog,
+      defaultCsv,
+      minRequired,
+    ) => renderBaselinePills(store, group, key, currentVal, catalog, defaultCsv, minRequired, caps),
+    requestCopyKeys: (copyKeys, listLabel) =>
+      requestCopyDeviceIntoGroup(
+        store,
+        group,
+        members.length,
+        copySrc,
+        latterDevices,
+        copyKeys,
+        listLabel,
+      ),
   };
-  const encodePoolSelectValue = (
-    modeVal,
-    sourceVal,
-    colVal,
-  ) => {
-    const mode = String(modeVal || "");
-    const src = String(sourceVal || "");
-    const col = String(colVal || "");
-    if (mode === "collection" && col) return `collection:${col}`;
-    if (mode === "single" && src) return `single:${src}`;
-    if (!mode && src) return `single:${src}`;
-    return "off";
-  };
-  const wpPoolOptions = buildCompactPoolOptions(false);
-  const wpPoolCurrent = encodePoolSelectValue(
-    cfg.wallpaper_mode,
-    cfg.wallpaper_source,
-    cfg.wallpaper_collection,
-  );
-  const ssPoolOptions = buildCompactPoolOptions(true);
-  const ssPoolCurrent = encodePoolSelectValue(
-    cfg.screensaver_photo_mode,
-    cfg.screensaver_photo_source,
-    cfg.screensaver_photo_collection,
-  );
-  const groupSsMode = String(cfg.screensaver_mode ?? "Docked Only");
-  const groupSsStyle = String(cfg.screensaver_style ?? "Ambient Clock");
-  const rotationOptions = WALLPAPER_ROTATION_OPTIONS.map(
-    (o) => ({ value: String(o.value), label: o.label }),
-  );
-  const lookaheadOptions = CALENDAR_LOOKAHEAD_OPTIONS.map(
-    (o) => ({ value: String(o.value), label: o.label }),
-  );
-  const remoteGroups = store.state?.system_config?.remote_groups || [];
-  const remoteScopeOptions = [
-    { value: "area_auto", label: store.t("groups.remote_match_area") },
-    ...remoteGroups.map((rg) => ({
-      value: `group:${rg.id}`,
-      label: store.t("groups.remote_group_prefix", { name: rg.name }),
-    })),
-    { value: "all", label: store.t("groups.remote_all_system") },
-  ];
-  const dockCount = Array.isArray(cfg.dock_items)
-    ? cfg.dock_items.length
-    : DEFAULT_DOCK_ROUTES_TOKENS.length;
-  const pinnedCount = Array.isArray(cfg.pinned_items) ? cfg.pinned_items.length : 0;
-  const worldClocksStr = typeof cfg.world_clocks === "string" ? cfg.world_clocks.trim() : "";
-  const clockCount = worldClocksStr ? worldClocksStr.split(";").filter(Boolean).length : 0;
   return html`<details
     ?open=${store.openGroupIds.has(gid)}
     @toggle=${(ev) => {
@@ -21821,612 +22926,9 @@ function renderGroupBaselineDrawer(
         })}
       </div>
 
-      <details class="sub-collapsible" open>
-        <summary>${store.t("groups.section_power_brightness")}</summary>
-        <div class="card-content settings-list">
-          ${renderSpecSelect(store, group, "tap_to_wake", cfg.tap_to_wake, caps)}
-          ${renderSpecSelect(store, group, "pickup_to_wake", cfg.pickup_to_wake, caps)}
-          ${renderSpecSelect(
-            store,
-            group,
-            "battery_screen_timeout",
-            cfg.battery_screen_timeout,
-            caps,
-          )}
-          ${renderSpecSelect(
-            store,
-            group,
-            "battery_hibernate_timeout",
-            cfg.battery_hibernate_timeout,
-            caps,
-          )}
-          ${renderSpecSelect(store, group, "screensaver_mode", cfg.screensaver_mode, caps)}
-          ${caps.has_battery !== false || groupSsMode !== "Never"
-            ? renderSpecSelect(store, group, "docked_idle_timeout", cfg.docked_idle_timeout, caps)
-            : nothing}
-          ${renderSpecSelect(
-            store,
-            group,
-            "auto_brightness_mode",
-            cfg.auto_brightness_mode,
-            caps,
-          )}
-          ${autoBrt === "Disabled"
-            ? renderSpecRange(store, group, "manual_brightness", cfg.manual_brightness, caps)
-            : html`${renderSpecRange(store, group, "day_brightness", cfg.day_brightness, caps)}
-                ${renderSpecRange(
-                  store,
-                  group,
-                  "night_brightness",
-                  cfg.night_brightness,
-                  caps,
-                )}`}
-          ${autoBrt === "Time Schedule"
-            ? html`${renderSpecHourSelect(store, group, "day_start_hour", cfg.day_start_hour, caps)}
-                ${renderSpecHourSelect(store, group, "night_start_hour", cfg.night_start_hour, caps)}`
-            : nothing}
-          ${renderSpecSelect(store, group, "bedtime_display", cfg.bedtime_display, caps)}
-          ${renderSpecRange(store, group, "bedtime_brightness", cfg.bedtime_brightness, caps)}
-          ${renderSpecSwitch(store, group, "bedtime_schedule", cfg.bedtime_schedule, caps)}
-          ${Boolean(cfg.bedtime_schedule)
-            ? html`${renderSpecHourSelect(
-                  store,
-                  group,
-                  "bedtime_start_hour",
-                  cfg.bedtime_start_hour,
-                  caps,
-                )}
-                ${renderSpecHourSelect(
-                  store,
-                  group,
-                  "bedtime_end_hour",
-                  cfg.bedtime_end_hour,
-                  caps,
-                )}`
-            : nothing}
-        </div>
-      </details>
-
-      <details class="sub-collapsible">
-        <summary>${store.t("groups.section_audio_voice")}</summary>
-        <div class="card-content settings-list">
-          ${renderSpecSelect(store, group, "wake_word_mode", cfg.wake_word_mode, caps)}
-          ${wwMode !== "Disabled"
-            ? html`${renderSpecSelect(
-                  store,
-                  group,
-                  "ww_sens_okay_nabu",
-                  cfg.ww_sens_okay_nabu,
-                  caps,
-                )}
-                ${renderSpecSelect(
-                  store,
-                  group,
-                  "ww_sens_hey_luna",
-                  cfg.ww_sens_hey_luna,
-                  caps,
-                )}
-                ${renderSpecSelect(
-                  store,
-                  group,
-                  "ww_sens_hey_jarvis",
-                  cfg.ww_sens_hey_jarvis,
-                  caps,
-                )}
-                ${renderSpecSelect(
-                  store,
-                  group,
-                  "ww_sens_hey_mycroft",
-                  cfg.ww_sens_hey_mycroft,
-                  caps,
-                )}
-                ${renderSpecSelect(store, group, "ww_sens_alexa", cfg.ww_sens_alexa, caps)}`
-            : nothing}
-          ${renderSpecSwitch(
-            store,
-            group,
-            "wake_screen_on_assist",
-            cfg.wake_screen_on_assist,
-            caps,
-          )}
-          ${renderSpecRange(store, group, "alert_volume", cfg.alert_volume, caps)}
-          ${renderSpecRange(store, group, "volume_step_size", cfg.volume_step_size, caps)}
-          ${renderSpecSwitch(store, group, "game_sound_effects", cfg.game_sound_effects, caps)}
-          ${bleOn && caps.is_roaming_device !== false
-            ? html`${renderSwitchRow({
-                  label: store.tPrefLabel("sync_device_area"),
-                  ariaLabel: store.t("groups.for_group_aria", {
-                    label: store.tPrefLabel("sync_device_area"),
-                    group: group.name,
-                  }),
-                  checked: vfm,
-                  onChange: (checked) =>
-                    void store.groups.updateGroupBaseline(gid, { sync_device_area: checked }),
-                })}
-                ${vfm
-                  ? renderSpecRange(
-                      store,
-                      group,
-                      "area_follow_dwell_s",
-                      cfg.area_follow_dwell_s,
-                      caps,
-                      { min: 3, max: 60, step: 1, unit: "s", defaultVal: 10 },
-                    )
-                  : nothing}`
-            : nothing}
-          ${renderSwitchRow({
-            label: store.tPrefLabel("area_handoff"),
-            ariaLabel: store.t("groups.for_group_aria", {
-              label: store.tPrefLabel("area_handoff"),
-              group: group.name,
-            }),
-            checked: handoff,
-            onChange: (checked) =>
-              void store.groups.updateGroupBaseline(gid, { area_handoff: checked }),
-          })}
-        </div>
-      </details>
-
-      <details class="sub-collapsible">
-        <summary>${store.t("groups.section_presence_security")}</summary>
-        <div class="card-content settings-list">
-          ${renderSwitchRow({
-            label: store.tPrefLabel("native_ble_tracking"),
-            ariaLabel: store.t("groups.for_group_aria", {
-              label: store.tPrefLabel("native_ble_tracking"),
-              group: group.name,
-            }),
-            checked: bleOn,
-            onChange: (checked) =>
-              void store.groups.updateGroupBaseline(gid, { native_ble_tracking: checked }),
-          })}
-          ${bleOn
-            ? html`${renderSwitchRow({
-                  label: store.tPrefLabel("ble_auto_switch"),
-                  ariaLabel: store.t("groups.for_group_aria", {
-                    label: store.tPrefLabel("ble_auto_switch"),
-                    group: group.name,
-                  }),
-                  checked: autoSw,
-                  onChange: (checked) =>
-                    void store.groups.updateGroupBaseline(gid, { ble_auto_switch: checked }),
-                })}
-                ${renderSpecSelect(store, group, "ble_beacon_mode", cfg.ble_beacon_mode, caps)}`
-            : nothing}
-          ${renderBaselineLabeledSelect(
-            store,
-            group,
-            "security_pin_policy",
-            pinPolicy,
-            SECURITY_PIN_POLICY_OPTIONS.map((opt) => ({
-              value: opt.value,
-              label: store.tPrefOption("security_pin_policy", opt.value),
-            })),
-            "auto",
-          )}
-        </div>
-      </details>
-
-      ${includeDisplay && caps.has_display !== false
-        ? html`<details class="sub-collapsible" open>
-            <summary>${store.t("groups.section_display")}</summary>
-            <div class="card-content settings-list">
-              ${renderSettingsRow({
-                label: store.t("groups.wallpaper_pool_label"),
-                control: html`<select
-                  aria-label=${store.t("groups.for_group_aria", {
-                    label: store.t("groups.wallpaper_pool_label"),
-                    group: group.name,
-                  })}
-                  .value=${wpPoolCurrent}
-                  @change=${(ev) => {
-                    const raw = (ev.currentTarget).value;
-                    if (raw.startsWith("collection:")) {
-                      void store.groups.updateGroupBaseline(gid, {
-                        wallpaper_mode: "collection",
-                        wallpaper_collection: raw.slice(11),
-                        wallpaper_source: "",
-                      });
-                    } else if (raw.startsWith("single:")) {
-                      void store.groups.updateGroupBaseline(gid, {
-                        wallpaper_mode: "single",
-                        wallpaper_source: raw.slice(7),
-                        wallpaper_collection: "",
-                      });
-                    } else {
-                      void store.groups.updateGroupBaseline(gid, {
-                        wallpaper_mode: "off",
-                        wallpaper_source: "",
-                        wallpaper_collection: "",
-                      });
-                    }
-                  }}
-                >
-                  ${wpPoolOptions.map(
-                    (opt) => html`<option value=${opt.value} ?selected=${opt.value === wpPoolCurrent}>
-                      ${opt.label}
-                    </option>`,
-                  )}
-                </select>`,
-              })}
-              ${renderBaselineLabeledSelect(
-                store,
-                group,
-                "wallpaper_cycle_minutes",
-                cfg.wallpaper_cycle_minutes,
-                rotationOptions,
-                "0",
-                true,
-              )}
-              ${renderSpecSelect(store, group, "screensaver_style", cfg.screensaver_style, caps)}
-              ${groupSsStyle === "Photo Frame"
-                ? html`${renderSettingsRow({
-                      label: store.t("groups.screensaver_pool_label"),
-                      control: html`<select
-                        aria-label=${store.t("groups.for_group_aria", {
-                          label: store.t("groups.screensaver_pool_label"),
-                          group: group.name,
-                        })}
-                        .value=${ssPoolCurrent}
-                        @change=${(ev) => {
-                          const raw = (ev.currentTarget).value;
-                          if (raw.startsWith("collection:")) {
-                            void store.groups.updateGroupBaseline(gid, {
-                              screensaver_photo_mode: "collection",
-                              screensaver_photo_collection: raw.slice(11),
-                              screensaver_photo_source: "",
-                            });
-                          } else if (raw.startsWith("single:")) {
-                            void store.groups.updateGroupBaseline(gid, {
-                              screensaver_photo_mode: "single",
-                              screensaver_photo_source: raw.slice(7),
-                              screensaver_photo_collection: "",
-                            });
-                          } else {
-                            void store.groups.updateGroupBaseline(gid, {
-                              screensaver_photo_mode: "off",
-                              screensaver_photo_source: "",
-                              screensaver_photo_collection: "",
-                            });
-                          }
-                        }}
-                      >
-                        ${ssPoolOptions.map(
-                          (opt) => html`<option
-                            value=${opt.value}
-                            ?selected=${opt.value === ssPoolCurrent}
-                          >
-                            ${opt.label}
-                          </option>`,
-                        )}
-                      </select>`,
-                    })}
-                    ${renderBaselineLabeledSelect(
-                      store,
-                      group,
-                      "screensaver_cycle_minutes",
-                      cfg.screensaver_cycle_minutes,
-                      rotationOptions,
-                      "15",
-                      true,
-                    )}
-                    ${renderSwitchRow({
-                      label: store.tPrefLabel("screensaver_shuffle"),
-                      ariaLabel: store.t("groups.for_group_aria", {
-                        label: store.tPrefLabel("screensaver_shuffle"),
-                        group: group.name,
-                      }),
-                      checked: Boolean(cfg.screensaver_shuffle),
-                      onChange: (checked) =>
-                        void store.groups.updateGroupBaseline(gid, {
-                          screensaver_shuffle: checked,
-                        }),
-                    })}
-                    ${renderSpecSwitch(
-                      store,
-                      group,
-                      "screensaver_photo_clock",
-                      cfg.screensaver_photo_clock,
-                      caps,
-                    )}`
-                : nothing}
-              ${renderSpecSelect(store, group, "color_profile", cfg.color_profile, caps)}
-              ${colorProfile === "Custom"
-                ? renderSettingsRow({
-                    label: store.tPrefLabel("device_custom_color"),
-                    control: html`<input
-                        type="color"
-                        aria-label=${store.t("groups.for_group_aria", {
-                          label: store.tPrefLabel("device_custom_color"),
-                          group: group.name,
-                        })}
-                        .value=${customHex}
-                        @change=${(ev) => {
-                          const raw = (ev.currentTarget).value.toUpperCase();
-                          if (isValidHexColor(raw)) {
-                            void store.groups.updateGroupBaseline(gid, {
-                              device_custom_color: raw,
-                            });
-                          }
-                        }}
-                      />
-                      <span class="chip">${customHex}</span>`,
-                  })
-                : nothing}
-              ${renderSpecSelect(store, group, "va_visual_profile", cfg.va_visual_profile, caps)}
-            </div>
-          </details>`
-        : nothing}
-
-      ${includeInterface && caps.has_display !== false
-        ? html`<details class="sub-collapsible" open>
-            <summary>${store.t("groups.section_interface")}</summary>
-            <div class="card-content settings-list">
-              ${renderSpecSwitch(
-                store,
-                group,
-                "home_screen_enabled",
-                cfg.home_screen_enabled,
-                caps,
-              )}
-              ${renderSpecSelect(store, group, "start_screen", cfg.start_screen, caps)}
-              ${renderSpecSelect(store, group, "time_format", cfg.time_format, caps)}
-              ${renderSpecSelect(
-                store,
-                group,
-                "home_clock_tap_action",
-                cfg.home_clock_tap_action,
-                caps,
-              )}
-              ${renderSpecSelect(store, group, "clock_face", cfg.clock_face, caps)}
-              ${renderSpecSelect(
-                store,
-                group,
-                "home_date_tap_action",
-                cfg.home_date_tap_action,
-                caps,
-              )}
-              ${renderSpecSelect(
-                store,
-                group,
-                "return_to_home_timeout",
-                cfg.return_to_home_timeout,
-                caps,
-              )}
-              ${renderSpecSwitch(store, group, "wake_greeting", cfg.wake_greeting, caps)}
-              ${renderSpecSwitch(
-                store,
-                group,
-                "weather_background",
-                cfg.weather_background,
-                caps,
-              )}
-              ${renderSpecSwitch(
-                store,
-                group,
-                "weather_app_background",
-                cfg.weather_app_background,
-                caps,
-              )}
-              ${renderSpecSwitch(store, group, "home_sun", cfg.home_sun, caps)}
-              ${renderSpecSwitch(store, group, "home_moon", cfg.home_moon, caps)}
-              ${renderSwitchRow({
-                label: store.tPrefLabel("activity_card"),
-                ariaLabel: store.t("groups.for_group_aria", {
-                  label: store.tPrefLabel("activity_card"),
-                  group: group.name,
-                }),
-                checked: cfg.activity_card !== false,
-                onChange: (checked) =>
-                  void store.groups.updateGroupBaseline(gid, { activity_card: checked }),
-              })}
-              ${renderBaselinePills(
-                store,
-                group,
-                "activity_sources",
-                cfg.activity_sources,
-                ACTIVITY_SOURCES_CATALOG,
-                DEFAULT_ACTIVITY_SOURCES,
-                0,
-                caps,
-              )}
-              ${renderBaselinePills(
-                store,
-                group,
-                "home_categories",
-                cfg.home_categories,
-                HOME_CATEGORIES_CATALOG,
-                DEFAULT_HOME_CATEGORIES,
-                1,
-                caps,
-              )}
-              ${renderBaselinePills(
-                store,
-                group,
-                "area_categories",
-                cfg.area_categories,
-                AREA_CATEGORIES_CATALOG,
-                DEFAULT_AREA_CATEGORIES,
-                1,
-                caps,
-              )}
-              ${renderBaselinePills(
-                store,
-                group,
-                "tools_items",
-                cfg.tools_items,
-                TOOLS_ITEMS_CATALOG,
-                DEFAULT_TOOLS_ITEMS,
-                1,
-                caps,
-              )}
-              ${renderBaselinePills(
-                store,
-                group,
-                "games_items",
-                cfg.games_items,
-                GAMES_ITEMS_CATALOG,
-                DEFAULT_GAMES_ITEMS,
-                1,
-                caps,
-              )}
-              ${renderBaselineLabeledSelect(
-                store,
-                group,
-                "device_remote_group",
-                cfg.device_remote_group,
-                remoteScopeOptions,
-                "area_auto",
-              )}
-              ${renderSpecSwitch(store, group, "show_utc_clock", cfg.show_utc_clock, caps)}
-              ${renderBaselineLabeledSelect(
-                store,
-                group,
-                "calendar_lookahead_days",
-                cfg.calendar_lookahead_days ?? 30,
-                lookaheadOptions,
-                "30",
-                true,
-              )}
-              ${renderSpecSelect(
-                store,
-                group,
-                "calendar_week_start",
-                cfg.calendar_week_start,
-                caps,
-              )}
-              ${renderSpecSelect(store, group, "album_art_style", cfg.album_art_style, caps)}
-              ${renderSpecSelect(
-                store,
-                group,
-                "music_overlay_style",
-                cfg.music_overlay_style,
-                caps,
-              )}
-              ${renderSpecSelect(store, group, "album_sort_order", cfg.album_sort_order, caps)}
-              ${renderSpecSelect(
-                store,
-                group,
-                "artist_album_sort_order",
-                cfg.artist_album_sort_order,
-                caps,
-              )}
-              ${renderSpecSelect(
-                store,
-                group,
-                "podcast_sort_order",
-                cfg.podcast_sort_order,
-                caps,
-              )}
-              ${renderSpecSelect(
-                store,
-                group,
-                "camera_default_view",
-                cfg.camera_default_view,
-                caps,
-              )}
-              ${renderSpecSelect(store, group, "camera_framing", cfg.camera_framing, caps)}
-              ${renderSpecSelect(
-                store,
-                group,
-                "camera_carousel_interval",
-                cfg.camera_carousel_interval,
-                caps,
-              )}
-              ${renderSpecSelect(
-                store,
-                group,
-                "camera_stream_mode",
-                cfg.camera_stream_mode,
-                caps,
-              )}
-              ${renderSpecSelect(
-                store,
-                group,
-                "camera_doorbell_popup",
-                cfg.camera_doorbell_popup,
-                caps,
-              )}
-              ${latterDevices.length
-                ? html`${renderSettingsRow({
-                      label: store.t("card.app_dock"),
-                      description:
-                        dockCount === 1
-                          ? store.t("groups.dock_baseline_desc_one")
-                          : store.t("groups.dock_baseline_desc_many", {
-                              count: fmtNumber(dockCount, store.hass, 0),
-                            }),
-                      control: html`<button
-                        type="button"
-                        @click=${() =>
-                          requestCopyDeviceIntoGroup(
-                            store,
-                            group,
-                            members.length,
-                            copySrc,
-                            latterDevices,
-                            ["dock_items"],
-                            store.t("card.app_dock"),
-                          )}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        ${store.t("groups.copy_dock")}
-                      </button>`,
-                    })}
-                    ${renderSettingsRow({
-                      label: store.t("dialogs.pinned_label"),
-                      description:
-                        pinnedCount === 1
-                          ? store.t("groups.pinned_baseline_desc_one")
-                          : store.t("groups.pinned_baseline_desc_many", {
-                              count: fmtNumber(pinnedCount, store.hass, 0),
-                            }),
-                      control: html`<button
-                        type="button"
-                        @click=${() =>
-                          requestCopyDeviceIntoGroup(
-                            store,
-                            group,
-                            members.length,
-                            copySrc,
-                            latterDevices,
-                            ["pinned_items"],
-                            store.t("dialogs.pinned_label"),
-                          )}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        ${store.t("groups.copy_pinned")}
-                      </button>`,
-                    })}
-                    ${renderSettingsRow({
-                      label: store.t("dialogs.world_clocks_label"),
-                      description:
-                        clockCount === 1
-                          ? store.t("groups.clocks_baseline_desc_one")
-                          : store.t("groups.clocks_baseline_desc_many", {
-                              count: fmtNumber(clockCount, store.hass, 0),
-                            }),
-                      control: html`<button
-                        type="button"
-                        @click=${() =>
-                          requestCopyDeviceIntoGroup(
-                            store,
-                            group,
-                            members.length,
-                            copySrc,
-                            latterDevices,
-                            ["world_clocks"],
-                            store.t("dialogs.world_clocks_label"),
-                          )}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        ${store.t("groups.copy_clocks")}
-                      </button>`,
-                    })}`
-                : nothing}
-            </div>
-          </details>`
-        : nothing}
+      ${renderBaselineBehaviorSection(store, group, helpers)}
+      ${renderBaselineDisplaySection(store, group, helpers)}
+      ${renderBaselineInterfaceSection(store, group, helpers)}
 
       ${latterDevices.length
         ? html`<div class="settings-list">
@@ -24840,7 +25342,7 @@ function renderSystemRemotesView(store) {
   const inventoryIds = remotes.filter(Boolean);
   const friendlyRemoteLabel = (entId) => {
     const found = (cat.remotes || []).find((r) => r.id === entId);
-    return found ? found.name.split(" (")[0] : entId;
+    return found ? (found.name.split(" (")[0] || entId) : entId;
   };
   return html`<section id="view-remotes">
     <div class="columns">

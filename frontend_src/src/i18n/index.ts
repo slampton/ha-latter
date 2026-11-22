@@ -6,7 +6,12 @@
  * - Home Assistant entity state formatter bridge (`formatHaEntityState`)
  */
 
-import type { HassEntityState, HomeAssistant } from "../types.js";
+import type {
+  HassEntityState,
+  HomeAssistant,
+  SecurityPinPolicy,
+  StudioViewId,
+} from "../types.js";
 import {
   buildStudioEnLocaleCatalog,
   EN_STRINGS,
@@ -22,6 +27,52 @@ export {
   PREF_OPTION_LABELS,
   type StudioTranslationKey,
 };
+
+export const VIEW_TITLE_KEYS: Readonly<Record<StudioViewId, StudioTranslationKey>> = {
+  system_overview: "view.system_overview",
+  shared_entities: "view.shared_entities",
+  photos: "view.photos",
+  remotes: "view.remotes",
+  system_sync: "view.system_sync",
+  area_tracking: "view.area_tracking",
+  system_tools: "view.system_tools",
+  select_device_prompt: "view.select_device_prompt",
+  discovered_devices: "view.discovered_devices",
+  dashboard: "view.dashboard",
+  display: "view.display",
+  interface: "view.interface",
+  audio_voice: "view.audio_voice",
+  power: "view.power",
+  presence: "view.presence",
+  tools: "view.tools",
+};
+
+export const CALENDAR_LOOKAHEAD_OPTIONS: ReadonlyArray<{ value: number; label: string }> = [
+  { value: 7, label: "7 days" },
+  { value: 14, label: "14 days" },
+  { value: 30, label: "30 days" },
+  { value: 60, label: "60 days" },
+];
+
+export const SECURITY_PIN_POLICY_OPTIONS: ReadonlyArray<{
+  value: SecurityPinPolicy;
+  label: string;
+}> = [
+  { value: "auto", label: "Auto (recommended)" },
+  { value: "allow", label: "Allow without PIN" },
+  { value: "require_pin", label: "Require PIN" },
+  { value: "block", label: "Block unlock & disarm" },
+];
+
+export const WALLPAPER_ROTATION_OPTIONS: ReadonlyArray<{ value: number; label: string }> = [
+  { value: 0, label: "Do not rotate" },
+  { value: 5, label: "Every 5 minutes" },
+  { value: 15, label: "Every 15 minutes" },
+  { value: 30, label: "Every 30 minutes" },
+  { value: 60, label: "Every hour" },
+  { value: 360, label: "Every 6 hours" },
+  { value: 1440, label: "Once a day" },
+];
 
 type HassI18nCapable = HomeAssistant & {
   localize?: (key: string, placeholders?: Record<string, string | number>) => string;

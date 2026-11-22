@@ -1,21 +1,19 @@
-"""Home Assistant Diagnostics platform and PII/secret redaction pipeline for Latter."""
+"""Home Assistant Diagnostics platform and PII/secret redaction pipeline for Latter (`L3`)."""
 
 from __future__ import annotations
 
 import hashlib
 import re
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from .hub import LatterSystemHub, get_latter_system
-from .presence import get_all_scanners_diagnostic_map
-
-if TYPE_CHECKING:
-    from .coordinator import LatterCoordinator
+from .coordinator import LatterCoordinator, resolve_coordinator
+from .hub_registry import LatterSystemHub, get_latter_system
+from .presence.ble_registry import get_all_scanners_diagnostic_map
 
 REDACTED = "**REDACTED**"
 
@@ -42,8 +40,11 @@ TO_REDACT: set[str] = set(REDACTED_FIELD_KEYS)
 
 _MAC_KEY_RE = re.compile(r"^(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
 _MAC_HEX12_RE = re.compile(r"^[0-9A-Fa-f]{12}$")
-_MAC_INLINE_RE = re.compile(r"(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?![0-9A-Fa-f])")
+_MAC_INLINE_RE = re.compile(
+    r"(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?![0-9A-Fa-f])"
+)
 _SIG_QUERY_RE = re.compile(r"([?&])sig=[^&#\s\"']+")
+_MIN_CALENDAR_RECORD_FIELDS = 4
 
 
 def _mac_digest_token(raw_mac: str) -> str:
@@ -88,15 +89,13 @@ def sanitize_diagnostics_payload(obj: Any, *, parent_key: str = "") -> Any:
                 and k_str == "records"
                 and isinstance(raw_v, list)
             ):
-                sanitized_records: list[Any] = []
-                for rec in raw_v:
-                    if isinstance(rec, (list, tuple)) and len(rec) >= 4:
-                        sanitized_records.append(
-                            [str(rec[0]), REDACTED, REDACTED, str(rec[3])]
-                        )
-                    else:
-                        sanitized_records.append(REDACTED)
-                out[safe_k] = sanitized_records
+                out[safe_k] = [
+                    [str(rec[0]), REDACTED, REDACTED, str(rec[3])]
+                    if isinstance(rec, (list, tuple))
+                    and len(rec) >= _MIN_CALENDAR_RECORD_FIELDS
+                    else REDACTED
+                    for rec in raw_v
+                ]
                 continue
             out[safe_k] = sanitize_diagnostics_payload(raw_v, parent_key=k_str)
         return out
@@ -108,7 +107,7 @@ def sanitize_diagnostics_payload(obj: Any, *, parent_key: str = "") -> Any:
 
 
 def _build_coordinator_diagnostics(coordinator: LatterCoordinator) -> dict[str, Any]:
-    """Build diagnostic snapshot for a single LatterCoordinator."""
+    """Build diagnostic snapshot for a single `LatterCoordinator`."""
     cur_area_state, cur_area_attrs = coordinator.get_current_area_and_distance()
     if coordinator.is_ble_tag:
         sensors_diag: dict[str, Any] = {
@@ -200,8 +199,6 @@ async def async_get_device_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry[LatterSystemHub], device: dr.DeviceEntry
 ) -> dict[str, Any]:
     """Return diagnostics for an individual Latter device or the Latter System service device."""
-    from .coordinator import resolve_coordinator
-
     coord = resolve_coordinator(hass, device.id)
     if coord is not None:
         dev_redacted: dict[str, Any] = async_redact_data(

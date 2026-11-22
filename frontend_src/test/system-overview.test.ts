@@ -10,11 +10,10 @@
 import "./dom-shim.js";
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
-import { render } from "../src/lib/lit.js";
 import type { SystemDeviceEntry } from "../src/types.js";
 import { renderSystemOverviewView } from "../src/views/system-overview-view.js";
 import { resetDomBody, simDocument } from "./dom-shim.js";
-import { makeFakeStore } from "./fake-store.js";
+import { makeFakeStore, render } from "./fake-store.js";
 
 function makeDevice(overrides: Partial<SystemDeviceEntry>): SystemDeviceEntry {
   return {
@@ -95,6 +94,8 @@ describe("System -> Overview streamlined 2-card layout & health semantics (D-076
     assert.ok(colsWrap);
     const cols = colsWrap.querySelectorAll(".column");
     assert.equal(cols.length, 2);
+    assert.ok(cols[0]);
+    assert.ok(cols[1]);
     assert.ok(cols[0].querySelector("#card-system-status"));
     assert.equal(cols[0].querySelector("#card-area-deployment"), null);
     assert.ok(cols[1].querySelector("#card-area-deployment"));

@@ -1,4 +1,4 @@
-"""Constants and target classifiers for the Latter integration."""
+"""Constants and target classifiers for the Latter integration (`L0a`, pure Python stdlib)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,6 @@ import json
 from pathlib import Path
 import re
 from typing import Any, Final, Literal
-
-from homeassistant.const import Platform
 
 _PROTOCOL_SCHEMA: Final[dict[str, Any]] = json.loads(
     (Path(__file__).resolve().parent / "protocol_v3.json").read_text(encoding="utf-8")
@@ -22,16 +20,16 @@ if int(_PROTOCOL_SCHEMA["studio_contract"]["studio_rev"]) != STUDIO_REV:
     raise RuntimeError("const.py STUDIO_REV is out of sync with protocol_v3.json")
 
 MIN_FIRMWARE_SDK_REV: Final = 2026112007
-PLATFORMS: Final[list[Platform]] = [
-    Platform.SENSOR,
-    Platform.BINARY_SENSOR,
-    Platform.DEVICE_TRACKER,
-    Platform.SELECT,
-    Platform.NUMBER,
-    Platform.BUTTON,
-    Platform.SWITCH,
-    Platform.LIGHT,
-]
+PLATFORMS: Final[tuple[str, ...]] = (
+    "sensor",
+    "binary_sensor",
+    "device_tracker",
+    "select",
+    "number",
+    "button",
+    "switch",
+    "light",
+)
 
 STORAGE_VERSION: Final = 1
 STORAGE_KEY_PREFIX: Final = "latter.runtime"
@@ -218,6 +216,8 @@ DEFAULT_SCREENSAVER_CYCLE_MINUTES: Final = 5
 DEFAULT_SCREENSAVER_SHUFFLE: Final = False
 DEFAULT_ART_SIZE: Final = 466  # artwork edge until the Device reports its hardware manifest
 WALLPAPER_MAX_DIM: Final = 720  # native wallpaper ceiling for 720x720 high-resolution displays
+DAY_NIGHT_SKY_PRESET_ID: Final = "preset:day_night_sky"
+DAY_NIGHT_SKY_NATIVE_URL: Final = "latter://day_night_sky"
 
 # Public Home Assistant Services (`latter.<service>` — strictly matches services.yaml)
 SERVICE_NOTIFY: Final = "notify"
@@ -290,7 +290,7 @@ API_CAMERA_GRID_PATH: Final = "/api/latter/camera_grid/{target_device}"
 API_CAMERA_AUDIO_STREAM_PATH: Final = "/api/latter/camera_audio/{target_device}"
 API_MAP_PROXY_PATH: Final = "/api/latter/map/{target_device}"
 API_BRAND_ICON_PATH: Final = "/api/latter/brand/icon.png"
-DATA_HMAC_SECRET: Final = "hmac_secret"
+DATA_HMAC_SECRET: Final = "hmac_secret"  # noqa: S105
 DATA_DISCOVERY_UNSUB: Final = "discovery_unsub"
 
 # Feed refresh intervals
@@ -375,7 +375,7 @@ def build_device_entity_id(
     return f"{domain}.{norm}_{suffix}"
 
 
-def target_kind(value: Any) -> TargetKind:
+def target_kind(value: object) -> TargetKind:
     """Classify a `target_device` value."""
     text = str(value or "").strip().lower()
     if not text:
@@ -389,12 +389,12 @@ def target_kind(value: Any) -> TargetKind:
     return "device"
 
 
-def other_latter_devices(candidates: Iterable[Any], caller_slug: str) -> list[Any]:
+def other_latter_devices[T](candidates: Iterable[T], caller_slug: str) -> list[T]:
     """Return the Latter Devices other than the caller: objects with a `device_slug` that aren't BLE tags."""
     return [
         c
         for c in candidates
         if getattr(c, "device_slug", None)
         and not getattr(c, "is_ble_tag", False)
-        and c.device_slug != caller_slug
+        and getattr(c, "device_slug", None) != caller_slug
     ]

@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 import unittest
 
-from custom_components.latter import media_browse as ma_browse
+from custom_components.latter.media import browse as ma_browse
 
 DIRT_CHILDREN = [
     {"title": "Alice In Chains - Them Bones", "media_class": "track", "media_content_type": "music", "media_content_id": "library://track/831"},

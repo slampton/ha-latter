@@ -1,31 +1,130 @@
-"""Canonical ESPHome device identity, hardware traits, and chunked RPC Outbox receiver for Latter.
-
-Every lookup starts from a bound ESPHome device ID (stored in the Device subentry), or from the
-Device's stored MAC when the ESPHome device was re-created. Nothing is resolved from names,
-slugs or entity_id patterns.
-"""
+"""Canonical ESPHome device identity, hardware traits, and unbound device discovery (`L1b`)."""
 
 from __future__ import annotations
 
-from collections import OrderedDict
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Mapping
 import json
-import logging
-import time
-from typing import TYPE_CHECKING, Any
+from typing import Any, Final
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr, entity_registry as er
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import (
+    area_registry as ar,
+    device_registry as dr,
+    entity_registry as er,
+)
 
-from .const import DOMAIN, normalize_device_slug
+from .config_defaults import compute_hardware_defaults
+from .const import (
+    CONF_DEVICE_GROUP,
+    CONF_ESPHOME_DEVICE_ID,
+    CONF_IGNORED_DISCOVERED_DEVICES,
+    DATA_GLOBAL_CONFIG,
+    DEFAULT_DEVICE_GROUP,
+    DOMAIN,
+    SUBENTRY_DEVICE,
+    normalize_device_slug,
+)
+from .protocol_specs import humanize_device_model_label
 
-if TYPE_CHECKING:
-    from .coordinator import LatterCoordinator
+_DEFAULT_DISPLAY_DIM: Final = 466
+_DEFAULT_ALIGNED_DIM: Final = 464
+_MIN_VIDEO_DIM: Final = 64
+_MACROBLOCK_ALIGN: Final = 16
+_MAX_VIDEO_FPS_CAP: Final = 15
 
-_LOGGER = logging.getLogger(__name__)
+# ---------------------------------------------------------------------------
+# Registry Iteration & Bound Identity Helpers
+# ---------------------------------------------------------------------------
+
+
+def iter_devices(dev_reg: dr.DeviceRegistry) -> Iterable[dr.DeviceEntry]:
+    """Iterate `DeviceRegistry` entries across Home Assistant versions and test doubles."""
+    devices = getattr(dev_reg, "devices", None)
+    if devices is None:
+        return ()
+    if hasattr(devices, "values"):
+        vals: Iterable[dr.DeviceEntry] = devices.values()
+        return vals
+    items: Iterable[dr.DeviceEntry] = devices
+    return items
+
+
+_iter_devices = iter_devices
+
+
+def iter_entities(ent_reg: er.EntityRegistry) -> Iterable[er.RegistryEntry]:
+    """Iterate `EntityRegistry` entries across Home Assistant versions and test doubles."""
+    entities = getattr(ent_reg, "entities", None)
+    if entities is None:
+        return ()
+    if hasattr(entities, "values"):
+        vals: Iterable[er.RegistryEntry] = entities.values()
+        return vals
+    items: Iterable[er.RegistryEntry] = entities
+    return items
+
+
+_iter_entities = iter_entities
+
+
+def device_mac(dev: dr.DeviceEntry) -> str:
+    """Return the ESPHome device's network MAC connection, formatted, or `''`."""
+    for ctype, cval in dev.connections:
+        if ctype == dr.CONNECTION_NETWORK_MAC and cval:
+            return str(dr.format_mac(str(cval)))
+    return ""
+
+
+_device_mac = device_mac
+
+
+def device_unique_id(dev: dr.DeviceEntry) -> str:
+    """Return the subentry `unique_id` for an ESPHome device: its MAC, else its device ID."""
+    mac = device_mac(dev)
+    return f"{DOMAIN}_{mac}" if mac else f"{DOMAIN}_{dev.id}"
+
+
+_device_unique_id = device_unique_id
+
+
+def ble_unique_id(slug: str) -> str:
+    """Return the subentry `unique_id` for a Studio-adopted BLE tag (no ESPHome device)."""
+    return f"{DOMAIN}_ble_{slug}"
+
+
+_ble_unique_id = ble_unique_id
+
+
+def device_title(dev: dr.DeviceEntry) -> str:
+    """Return the friendly name of the bound ESPHome device."""
+    return str(dev.name_by_user or dev.name or dev.id).strip()
+
+
+_device_title = device_title
+
+
+def bound_elsewhere(
+    entry: ConfigEntry[Any],
+    dev: dr.DeviceEntry,
+    target_uid: str,
+    skip_subentry_id: str = "",
+) -> bool:
+    """Return True if another Device subentry already binds this ESPHome device."""
+    for sub in entry.subentries.values():
+        if sub.subentry_id == skip_subentry_id:
+            continue
+        if (
+            sub.unique_id == target_uid
+            or sub.data.get(CONF_ESPHOME_DEVICE_ID) == dev.id
+        ):
+            return True
+    return False
+
+
+_bound_elsewhere = bound_elsewhere
+
 
 # ---------------------------------------------------------------------------
 # Hardware Manifest Traits
@@ -33,17 +132,20 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def manifest_flag(manifest: Mapping[str, Any], key: str) -> int | None:
-    """Return an integer hardware-manifest trait, or None when it is missing or malformed."""
+    """Return an integer hardware-manifest trait, or `None` when missing or malformed."""
     if key not in manifest:
         return None
+    raw = manifest[key]
+    if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
+        return None
     try:
-        return int(manifest[key])
+        return int(raw)
     except (TypeError, ValueError):
         return None
 
 
 def manifest_is_roaming(manifest: Mapping[str, Any]) -> bool:
-    """Return True for roaming hardware: `stationary == 0`, or `wearable == 1`. Unknown traits are not roaming."""
+    """Return True for roaming hardware: `stationary == 0`, or `wearable == 1`."""
     return (
         manifest_flag(manifest, "stationary") == 0
         or manifest_flag(manifest, "wearable") == 1
@@ -79,11 +181,14 @@ def manifest_has_imu(manifest: Mapping[str, Any]) -> bool:
     """Return True when the hardware exposes an active motion IMU (non-stationary `imu == 1`)."""
     if not manifest:
         return True
-    return manifest_flag(manifest, "imu") == 1 and manifest_flag(manifest, "stationary") != 1
+    return (
+        manifest_flag(manifest, "imu") == 1
+        and manifest_flag(manifest, "stationary") != 1
+    )
 
 
 def manifest_has_battery(manifest: Mapping[str, Any]) -> bool:
-    """Return True when the hardware has a rechargeable battery (`battery == 1` or non-stationary pre-hello)."""
+    """Return True when the hardware has a rechargeable battery (`battery == 1` or pre-hello)."""
     if not manifest:
         return True
     return manifest_flag(manifest, "battery") == 1
@@ -104,20 +209,24 @@ def manifest_video_caps(manifest: Mapping[str, Any]) -> dict[str, Any]:
     is_p4 = chip == "ESP32-P4" or "P4" in chip
 
     raw_video = manifest.get("video")
+    default_w = (int(manifest.get("w") or _DEFAULT_DISPLAY_DIM) & ~15) if has_disp else 0
+    default_h = (int(manifest.get("h") or _DEFAULT_DISPLAY_DIM) & ~15) if has_disp else 0
     if isinstance(raw_video, Mapping):
         hw_jpeg = has_disp and bool(int(raw_video.get("hw_jpeg") or 0))
-        default_w = (int(manifest.get("w") or 466) & ~15) if has_disp else 0
-        default_h = (int(manifest.get("h") or 466) & ~15) if has_disp else 0
         raw_max_w = raw_video.get("max_w")
         raw_max_h = raw_video.get("max_h")
         max_w = int(raw_max_w) if raw_max_w is not None else default_w
         max_h = int(raw_max_h) if raw_max_h is not None else default_h
-        max_fps = int(raw_video.get("max_fps") or ((10 if has_batt else 15) if hw_jpeg else 5))
-        grid_fps = int(raw_video.get("grid_fps") or ((5 if has_batt else 8) if hw_jpeg else 2))
+        max_fps = int(
+            raw_video.get("max_fps") or ((10 if has_batt else 15) if hw_jpeg else 5)
+        )
+        grid_fps = int(
+            raw_video.get("grid_fps") or ((5 if has_batt else 8) if hw_jpeg else 2)
+        )
     else:
         hw_jpeg = has_disp and is_p4
-        max_w = (int(manifest.get("w") or 466) & ~15) if has_disp else 0
-        max_h = (int(manifest.get("h") or 466) & ~15) if has_disp else 0
+        max_w = default_w
+        max_h = default_h
         max_fps = (10 if has_batt else 15) if is_p4 else 5
         grid_fps = (5 if has_batt else 8) if is_p4 else 2
 
@@ -125,20 +234,28 @@ def manifest_video_caps(manifest: Mapping[str, Any]) -> dict[str, Any]:
         max_w = 0
         max_h = 0
     else:
-        max_w = max(64, (max_w // 16) * 16) if max_w > 0 else 464
-        max_h = max(64, (max_h // 16) * 16) if max_h > 0 else 464
+        max_w = (
+            max(_MIN_VIDEO_DIM, (max_w // _MACROBLOCK_ALIGN) * _MACROBLOCK_ALIGN)
+            if max_w > 0
+            else _DEFAULT_ALIGNED_DIM
+        )
+        max_h = (
+            max(_MIN_VIDEO_DIM, (max_h // _MACROBLOCK_ALIGN) * _MACROBLOCK_ALIGN)
+            if max_h > 0
+            else _DEFAULT_ALIGNED_DIM
+        )
 
     return {
         "hw_jpeg": hw_jpeg,
         "max_w": max_w,
         "max_h": max_h,
-        "max_fps": max(1, min(15, max_fps)),
-        "grid_fps": max(1, min(15, grid_fps)),
+        "max_fps": max(1, min(_MAX_VIDEO_FPS_CAP, max_fps)),
+        "grid_fps": max(1, min(_MAX_VIDEO_FPS_CAP, grid_fps)),
     }
 
 
 def manifest_supports_hw_jpeg(manifest: Mapping[str, Any]) -> bool:
-    """Return True when the hardware manifest reports an ESP32-P4 HW JPEG decoder."""
+    """Return True when the hardware manifest reports a hardware JPEG decoder."""
     return bool(manifest_video_caps(manifest)["hw_jpeg"])
 
 
@@ -146,7 +263,7 @@ def manifest_supports_hw_jpeg(manifest: Mapping[str, Any]) -> bool:
 # Bound ESPHome Device Identity & Service Resolution
 # ---------------------------------------------------------------------------
 
-LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
+LATTER_CONTRACT_ACTION_SUFFIXES: Final[tuple[str, ...]] = (
     "_latter_push_v3",
     "_latter_device_command",
     "_latter_set_slots",
@@ -161,8 +278,8 @@ LATTER_CONTRACT_ACTION_SUFFIXES: tuple[str, ...] = (
 
 def _esphome_entry_for_device(
     hass: HomeAssistant, device: dr.DeviceEntry
-) -> Any | None:
-    """Return the ESPHome config entry that owns `device`, or None if it isn't an ESPHome device."""
+) -> ConfigEntry[Any] | None:
+    """Return the ESPHome config entry that owns `device`, or `None` if it isn't an ESPHome device."""
     dev_reg = dr.async_get(hass)
     for ce in hass.config_entries.async_entries("esphome"):
         if any(
@@ -178,43 +295,10 @@ def is_esphome_device(hass: HomeAssistant, device: dr.DeviceEntry) -> bool:
     return _esphome_entry_for_device(hass, device) is not None
 
 
-def esphome_node_name(
-    hass: HomeAssistant, device_or_id: dr.DeviceEntry | str | None
-) -> str:
-    """Return the ESPHome node name (`device_name` of its ESPHome config entry), normalized for `esphome.<node>_*` services."""
-    dev = get_bound_esphome_device(hass, device_or_id)
-    if dev is None:
-        return ""
-    ce = _esphome_entry_for_device(hass, dev)
-    if ce is None:
-        return ""
-    node = str(ce.data.get("device_name") or "").strip()
-    return normalize_device_slug(node) if node else ""
-
-
-def is_latter_compatible_esphome_device(
-    hass: HomeAssistant, device: dr.DeviceEntry
-) -> bool:
-    """Return True ONLY if the ESPHome device implements the Latter API contract or runs Latter firmware."""
-    node = esphome_node_name(hass, device)
-    if node:
-        esphome_services = hass.services.async_services_for_domain("esphome")
-        if any(f"{node}{sfx}" in esphome_services for sfx in LATTER_CONTRACT_ACTION_SUFFIXES):
-            return True
-
-    model_str = f"{device.model or ''} {device.sw_version or ''}".lower()
-    if "latter" in model_str:
-        return True
-    return (
-        find_device_entity_by_suffix(hass, device, "update", ("_project_firmware",))
-        is not None
-    )
-
-
 def get_bound_esphome_device(
     hass: HomeAssistant, device_or_id: dr.DeviceEntry | str | None
 ) -> dr.DeviceEntry | None:
-    """Return the ESPHome DeviceEntry for an ESPHome device ID, or for a Latter device ID (followed via `via_device_id`)."""
+    """Return the ESPHome `DeviceEntry` for an ESPHome device ID, or follow `via_device_id`."""
     dev_reg = dr.async_get(hass)
     if isinstance(device_or_id, dr.DeviceEntry):
         dev: dr.DeviceEntry | None = device_or_id
@@ -233,29 +317,18 @@ def get_bound_esphome_device(
     return dev
 
 
-def find_esphome_device_by_mac(
-    hass: HomeAssistant, mac: str | None
-) -> dr.DeviceEntry | None:
-    """Return the ESPHome device whose network MAC connection equals `mac` exactly, or None."""
-    if not mac:
-        return None
-    target = (dr.CONNECTION_NETWORK_MAC, dr.format_mac(mac))
-    dev_reg = dr.async_get(hass)
-    for ce in hass.config_entries.async_entries("esphome"):
-        for dev in dr.async_entries_for_config_entry(dev_reg, ce.entry_id):
-            if target in dev.connections:
-                return dev
-    return None
-
-
-def resolve_bound_esphome_device_id(
-    hass: HomeAssistant, esphome_device_id: str | None, mac: str | None
-) -> str | None:
-    """Resolve a Device's ESPHome device: the stored device ID, else the ESPHome device carrying the stored MAC."""
-    dev = get_bound_esphome_device(hass, esphome_device_id)
+def esphome_node_name(
+    hass: HomeAssistant, device_or_id: dr.DeviceEntry | str | None
+) -> str:
+    """Return the ESPHome node name (`device_name` of its ESPHome config entry), normalized."""
+    dev = get_bound_esphome_device(hass, device_or_id)
     if dev is None:
-        dev = find_esphome_device_by_mac(hass, mac)
-    return dev.id if dev is not None else None
+        return ""
+    ce = _esphome_entry_for_device(hass, dev)
+    if ce is None:
+        return ""
+    node = str(ce.data.get("device_name") or "").strip()
+    return normalize_device_slug(node) if node else ""
 
 
 def device_entities(
@@ -273,12 +346,10 @@ def device_entities(
         for e in er.async_entries_for_device(er.async_get(hass), dev.id)
         if include_disabled or not e.disabled_by
     ]
-    if domain:
-        return [e for e in entries if e.domain == domain]
-    return entries
+    return [e for e in entries if e.domain == domain] if domain else entries
 
 
-def find_device_entity_by_suffix(
+def find_device_entity_by_suffix(  # noqa: PLR0913, PLR0917
     hass: HomeAssistant,
     device_or_id: dr.DeviceEntry | str | None,
     domain: str,
@@ -286,7 +357,7 @@ def find_device_entity_by_suffix(
     original_names: tuple[str, ...] = (),
     unique_id_suffixes: tuple[str, ...] = (),
 ) -> str | None:
-    """Find an enabled entity on the bound device in `domain` matching `suffixes` (or `original_names` / `unique_id_suffixes` if renamed)."""
+    """Find an enabled entity on the bound device in `domain` matching `suffixes` or `original_names`."""
     entries = device_entities(hass, device_or_id, domain=domain)
     for sfx in suffixes:
         for entry in entries:
@@ -303,12 +374,59 @@ def find_device_entity_by_suffix(
     return None
 
 
+def is_latter_compatible_esphome_device(
+    hass: HomeAssistant, device: dr.DeviceEntry
+) -> bool:
+    """Return True ONLY if the ESPHome device implements the Latter API contract or runs Latter firmware."""
+    node = esphome_node_name(hass, device)
+    if node:
+        esphome_services = hass.services.async_services_for_domain("esphome")
+        if any(
+            f"{node}{sfx}" in esphome_services
+            for sfx in LATTER_CONTRACT_ACTION_SUFFIXES
+        ):
+            return True
+
+    model_str = f"{device.model or ''} {device.sw_version or ''}".lower()
+    if "latter" in model_str:
+        return True
+    return (
+        find_device_entity_by_suffix(hass, device, "update", ("_project_firmware",))
+        is not None
+    )
+
+
+def find_esphome_device_by_mac(
+    hass: HomeAssistant, mac: str | None
+) -> dr.DeviceEntry | None:
+    """Return the ESPHome device whose network MAC connection equals `mac` exactly, or `None`."""
+    if not mac:
+        return None
+    target = (dr.CONNECTION_NETWORK_MAC, dr.format_mac(mac))
+    dev_reg = dr.async_get(hass)
+    for ce in hass.config_entries.async_entries("esphome"):
+        for dev in dr.async_entries_for_config_entry(dev_reg, ce.entry_id):
+            if target in dev.connections:
+                return dev
+    return None
+
+
+def resolve_bound_esphome_device_id(
+    hass: HomeAssistant, esphome_device_id: str | None, mac: str | None
+) -> str | None:
+    """Resolve a Device's ESPHome device: stored device ID, else stored MAC."""
+    dev = get_bound_esphome_device(hass, esphome_device_id)
+    if dev is None:
+        dev = find_esphome_device_by_mac(hass, mac)
+    return dev.id if dev is not None else None
+
+
 def esphome_service(
     hass: HomeAssistant,
     device_or_id: dr.DeviceEntry | str | None,
     action: str,
 ) -> str | None:
-    """Resolve the registered `esphome.<node>_<action>` service name for a bound device, or None if unavailable."""
+    """Resolve the registered `esphome.<node>_<action>` service name for a bound device, or `None`."""
     node = esphome_node_name(hass, device_or_id)
     if not node:
         return None
@@ -321,7 +439,7 @@ def read_device_hardware_manifest(
     device_or_id: dr.DeviceEntry | str | None,
     cached_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Read and merge the parsed JSON hardware manifest from `device_hello` and the bound device's manifest sensor."""
+    """Read and merge the parsed JSON hardware manifest from `device_hello` and the manifest sensor."""
     merged: dict[str, Any] = {}
     manifest_ent_id = find_device_entity_by_suffix(
         hass,
@@ -351,343 +469,87 @@ def read_device_hardware_manifest(
 
 
 # ---------------------------------------------------------------------------
-# Chunked RPC Outbox Wire-Frame Parser & Reassembler (`Device -> HA`)
+# Unbound Latter ESPHome Discovery Queries (`L1b`)
 # ---------------------------------------------------------------------------
 
-MAX_RPC_PARTS: int = 16
-MAX_RPC_BYTES: int = 8192
-PARTIAL_TTL_SECONDS: float = 15.0
-DEDUP_HISTORY_LIMIT: int = 64
+
+def get_ignored_discovered_device_ids(hass: HomeAssistant) -> set[str]:
+    """Return the set of `esphome_device_id` values marked ignored in System config."""
+    raw_cfg = (hass.data.get(DOMAIN) or {}).get(DATA_GLOBAL_CONFIG)
+    if not isinstance(raw_cfg, dict):
+        return set()
+    raw_list = raw_cfg.get(CONF_IGNORED_DISCOVERED_DEVICES)
+    if not isinstance(raw_list, (list, tuple)):
+        return set()
+    return {str(x).strip() for x in raw_list if str(x or "").strip()}
 
 
-@dataclass(slots=True)
-class RpcFrame:
-    """One parsed chunk from `System: RPC Outbox`."""
-
-    boot_id: str
-    seq: int
-    part: int
-    total: int
-    payload_slice: str
-
-
-@dataclass(slots=True)
-class _PartialMessage:
-    """In-flight multi-part RPC envelope awaiting remaining chunks."""
-
-    total: int
-    created_mono: float
-    byte_len: int = 0
-    parts: dict[int, str] = field(default_factory=dict)
-
-
-def parse_rpc_frame(raw: str | None) -> RpcFrame | None:
-    """Parse `<boot_hex>:<seq>:<part>/<total>|<json_slice>`, or return None on malformed input."""
-    if not raw or not isinstance(raw, str) or "|" not in raw:
-        return None
-    header, body = raw.split("|", 1)
-    hparts = header.split(":")
-    if len(hparts) != 3:
-        return None
-    boot_id, seq_s, frac_s = hparts
-    if not boot_id or len(boot_id) > 16 or "/" not in frac_s:
-        return None
-    if not all(c in "0123456789abcdefABCDEF" for c in boot_id):
-        return None
-    part_s, total_s = frac_s.split("/", 1)
-    if not (seq_s.isdigit() and part_s.isdigit() and total_s.isdigit()):
-        return None
-    seq = int(seq_s)
-    part = int(part_s)
-    total = int(total_s)
-    if seq <= 0 or total < 1 or total > MAX_RPC_PARTS or part < 1 or part > total:
-        return None
-    if len(body.encode("utf-8")) > MAX_RPC_BYTES:
-        return None
-    return RpcFrame(
-        boot_id=boot_id.lower(),
-        seq=seq,
-        part=part,
-        total=total,
-        payload_slice=body,
+def _has_ble_beacon_entity_or_manifest(
+    hass: HomeAssistant, dev: dr.DeviceEntry, manifest: Mapping[str, Any]
+) -> bool:
+    if isinstance(manifest.get("beacon"), Mapping):
+        return True
+    ent_reg = er.async_get(hass)
+    return any(
+        e.entity_id.endswith("_ble_radio_active")
+        for e in er.async_entries_for_device(ent_reg, dev.id)
     )
 
 
-def _decode_envelope(assembled: str) -> tuple[str, dict[str, Any]] | None:
-    """Decode `{"s": "<service>", "d": {...}}` into `(service_name, data_dict)`."""
-    try:
-        parsed = json.loads(assembled)
-    except (ValueError, TypeError):
-        return None
-    if not isinstance(parsed, dict):
-        return None
-    svc = str(parsed.get("s") or "").strip()
-    if not svc or not svc.isascii():
-        return None
-    if svc.startswith("latter."):
-        svc = svc.split(".", 1)[1]
-    data = parsed.get("d")
-    if data is None:
-        return svc, {}
-    if not isinstance(data, dict):
-        return None
-    return svc, dict(data)
+def get_discovered_latter_devices(
+    hass: HomeAssistant, *, only_ignored: bool = False
+) -> list[dict[str, Any]]:
+    """Return unbound ESPHome devices running Latter firmware ready for Studio adoption (or ignored)."""
+    configured_ids: set[str] = set()
+    configured_uids: set[str] = set()
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for sub in entry.subentries.values():
+            if sub.subentry_type != SUBENTRY_DEVICE:
+                continue
+            dev_id = str(sub.data.get(CONF_ESPHOME_DEVICE_ID) or "")
+            if dev_id:
+                configured_ids.add(dev_id)
+            if sub.unique_id:
+                configured_uids.add(str(sub.unique_id))
 
+    ignored_ids = get_ignored_discovered_device_ids(hass)
+    area_reg = ar.async_get(hass)
+    candidates = [
+        dev
+        for dev in iter_devices(dr.async_get(hass))
+        if dev.id not in configured_ids
+        and device_unique_id(dev) not in configured_uids
+        and ((dev.id in ignored_ids) if only_ignored else (dev.id not in ignored_ids))
+        and is_esphome_device(hass, dev)
+        and is_latter_compatible_esphome_device(hass, dev)
+    ]
+    candidates.sort(key=lambda d: str(d.name_by_user or d.name or d.id).lower())
 
-class RpcReassembler:
-    """Per-Device bounded multi-part RPC reassembler with `(boot_id, seq)` replay protection."""
-
-    def __init__(self) -> None:
-        self._inflight: dict[tuple[str, int], _PartialMessage] = {}
-        self._completed: OrderedDict[tuple[str, int], None] = OrderedDict()
-        self._last_boot_id: str = ""
-
-    def _prune(self, now_mono: float) -> None:
-        expired = [
-            key
-            for key, partial in self._inflight.items()
-            if (now_mono - partial.created_mono) > PARTIAL_TTL_SECONDS
-        ]
-        for key in expired:
-            self._inflight.pop(key, None)
-
-    def feed(
-        self, raw: str | None, *, now_mono: float | None = None
-    ) -> tuple[str, dict[str, Any]] | None:
-        """Ingest one `text_sensor` state string; return `(service, data)` once complete and valid."""
-        frame = parse_rpc_frame(raw)
-        if frame is None:
-            return None
-
-        now = time.monotonic() if now_mono is None else float(now_mono)
-        if self._last_boot_id and frame.boot_id != self._last_boot_id:
-            self._inflight.clear()
-        self._last_boot_id = frame.boot_id
-        self._prune(now)
-
-        msg_key = (frame.boot_id, frame.seq)
-        if msg_key in self._completed:
-            return None
-
-        if frame.total == 1:
-            assembled = frame.payload_slice
-            if len(assembled.encode("utf-8")) > MAX_RPC_BYTES:
-                return None
-            self._record_completed(msg_key)
-            return _decode_envelope(assembled)
-
-        partial = self._inflight.get(msg_key)
-        if partial is None or partial.total != frame.total:
-            partial = _PartialMessage(total=frame.total, created_mono=now)
-            self._inflight[msg_key] = partial
-
-        if frame.part not in partial.parts:
-            slice_bytes = len(frame.payload_slice.encode("utf-8"))
-            if partial.byte_len + slice_bytes > MAX_RPC_BYTES:
-                self._inflight.pop(msg_key, None)
-                return None
-            partial.parts[frame.part] = frame.payload_slice
-            partial.byte_len += slice_bytes
-
-        if len(partial.parts) < partial.total:
-            return None
-
-        self._inflight.pop(msg_key, None)
-        assembled = "".join(partial.parts[idx] for idx in range(1, partial.total + 1))
-        self._record_completed(msg_key)
-        return _decode_envelope(assembled)
-
-    def seed_silent(self, raw: str | None) -> None:
-        """Seed current `(boot_id, seq)` silently on `rebind()` without dispatching (`M-P0-02`)."""
-        frame = parse_rpc_frame(raw)
-        if frame is None:
-            return
-        if self._last_boot_id and frame.boot_id != self._last_boot_id:
-            self._inflight.clear()
-            self._completed.clear()
-        self._last_boot_id = frame.boot_id
-        if (frame.boot_id, frame.seq) not in self._completed:
-            self._record_completed((frame.boot_id, frame.seq))
-
-    def _record_completed(self, key: tuple[str, int]) -> None:
-        self._completed[key] = None
-        while len(self._completed) > DEDUP_HISTORY_LIMIT:
-            self._completed.popitem(last=False)
-
-
-# ---------------------------------------------------------------------------
-# Bound ESPHome RPC Outbox Listener
-# ---------------------------------------------------------------------------
-
-RPC_OUTBOX_SUFFIXES: tuple[str, ...] = ("_system_rpc_outbox", "_rpc_outbox")
-RPC_OUTBOX_ORIGINAL_NAMES: tuple[str, ...] = ("System: RPC Outbox", "RPC Outbox")
-RPC_OUTBOX_UNIQUE_ID_SUFFIXES: tuple[str, ...] = ("/text_sensor/System: RPC Outbox",)
-
-
-class LatterRpcReceiver:
-    """Watches a bound ESPHome Device's `System: RPC Outbox` entity and dispatches authenticated RPCs."""
-
-    def __init__(self, hass: HomeAssistant, coordinator: LatterCoordinator) -> None:
-        self.hass = hass
-        self.coordinator = coordinator
-        self._reassembler = RpcReassembler()
-        self._tracked_entity_id: str | None = None
-        self._was_unavailable: bool = False
-        self._unsub_state: Callable[[], None] | None = None
-        self._unsub_ent_reg: Callable[[], None] | None = None
-
-    def is_device_unavailable(self) -> bool:
-        """Return True when the bound RPC outbox entity exists in HA and reports `unavailable`."""
-        if not self._tracked_entity_id:
-            return False
-        st = self.hass.states.get(self._tracked_entity_id)
-        return st is not None and st.state == STATE_UNAVAILABLE
-
-    @callback
-    def start(self) -> None:
-        """Bind to the Device's RPC outbox entity and track entity-registry rebinds."""
-        self.rebind()
-        if self._unsub_ent_reg is None:
-            self._unsub_ent_reg = self.hass.bus.async_listen(
-                er.EVENT_ENTITY_REGISTRY_UPDATED,
-                self._async_on_entity_registry_updated,
-            )
-
-    @callback
-    def stop(self) -> None:
-        """Unsubscribe all listeners."""
-        if self._unsub_state is not None:
-            self._unsub_state()
-            self._unsub_state = None
-        if self._unsub_ent_reg is not None:
-            self._unsub_ent_reg()
-            self._unsub_ent_reg = None
-        self._tracked_entity_id = None
-        self._was_unavailable = False
-
-    @callback
-    def rebind(self) -> None:
-        """Resolve the bound ESPHome Device's RPC outbox `sensor` entity and subscribe if changed."""
-        if self.coordinator.is_ble_tag:
-            self.stop()
-            return
-        dev_id = self.coordinator.esphome_device_id
-        ent_id = (
-            find_device_entity_by_suffix(
-                self.hass,
-                dev_id,
-                "sensor",
-                RPC_OUTBOX_SUFFIXES,
-                original_names=RPC_OUTBOX_ORIGINAL_NAMES,
-                unique_id_suffixes=RPC_OUTBOX_UNIQUE_ID_SUFFIXES,
-            )
-            if dev_id
-            else None
+    out: list[dict[str, Any]] = []
+    for dev in candidates:
+        manifest = read_device_hardware_manifest(hass, dev.id)
+        esp_area_id = str(dev.area_id or "").strip()
+        hw_defs = compute_hardware_defaults(
+            manifest,
+            esp_area_id=esp_area_id,
+            has_native_slots=bool(esphome_service(hass, dev.id, "latter_set_slots")),
+            has_ble_beacon=_has_ble_beacon_entity_or_manifest(hass, dev, manifest),
         )
-        if ent_id:
-            ent_reg = er.async_get(self.hass)
-            reg_entry = ent_reg.async_get(ent_id)
-            if reg_entry is not None and reg_entry.hidden_by is None:
-                ent_reg.async_update_entity(
-                    ent_id, hidden_by=er.RegistryEntryHider.INTEGRATION
-                )
-        if ent_id == self._tracked_entity_id:
-            return
-        if self._unsub_state is not None:
-            self._unsub_state()
-            self._unsub_state = None
-        self._tracked_entity_id = ent_id
-        if not ent_id:
-            return
-
-        self._unsub_state = async_track_state_change_event(
-            self.hass,
-            [ent_id],
-            self._async_on_outbox_state_change,
+        raw_model = str(dev.model or "").strip()
+        model_label = humanize_device_model_label(
+            raw_model, manifest, fallback="Latter ESPHome Device"
         )
-        st = self.hass.states.get(ent_id)
-        if st is not None:
-            self._was_unavailable = st.state == STATE_UNAVAILABLE
-            if st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
-                self._reassembler.seed_silent(st.state)
-
-    @callback
-    def _async_on_entity_registry_updated(self, event: Event[Any]) -> None:
-        action = event.data.get("action")
-        if action not in ("create", "update", "remove"):
-            return
-        ent_id = str(event.data.get("entity_id") or "")
-        old_ent_id = str(event.data.get("old_entity_id") or "")
-        if (
-            self._tracked_entity_id is None
-            or ent_id == self._tracked_entity_id
-            or (old_ent_id and old_ent_id == self._tracked_entity_id)
-            or any(ent_id.endswith(sfx) for sfx in RPC_OUTBOX_SUFFIXES)
-        ):
-            self.rebind()
-
-    @callback
-    def _async_on_outbox_state_change(
-        self, event: Event[EventStateChangedData]
-    ) -> None:
-        old_state = event.data.get("old_state")
-        new_state = event.data.get("new_state")
-        if new_state is None:
-            return
-        if new_state.state == STATE_UNAVAILABLE:
-            if not self._was_unavailable:
-                self._was_unavailable = True
-                _LOGGER.info(
-                    "Latter device '%s' is unavailable",
-                    self.coordinator.device_slug,
-                )
-            self.coordinator._last_pushed_v3.clear()
-            self.coordinator.async_update_listeners()
-            return
-        was_unavail = self._was_unavailable or (
-            old_state is not None and old_state.state == STATE_UNAVAILABLE
+        area_obj = area_reg.async_get_area(esp_area_id) if esp_area_id else None
+        out.append(
+            {
+                "esphome_device_id": dev.id,
+                "node_name": esphome_node_name(hass, dev),
+                "title": device_title(dev),
+                "model_label": model_label,
+                "area_name": area_obj.name if area_obj else "",
+                "default_group": str(
+                    hw_defs.get(CONF_DEVICE_GROUP) or DEFAULT_DEVICE_GROUP
+                ),
+            }
         )
-        if was_unavail:
-            self._was_unavailable = False
-            _LOGGER.info(
-                "Latter device '%s' reconnected",
-                self.coordinator.device_slug,
-            )
-            self.coordinator._last_pushed_v3.clear()
-            self.hass.async_create_task(
-                self.coordinator.async_provision_pin_session_key()
-            )
-            self.coordinator.force_republish_all_domains()
-            self.coordinator.async_update_listeners()
-        if new_state.state in (STATE_UNKNOWN, ""):
-            return
-        self._ingest_raw_state(new_state.state)
-
-    @callback
-    def _ingest_raw_state(self, raw: str) -> None:
-        decoded = self._reassembler.feed(raw)
-        if decoded is None:
-            return
-        svc_name, data = decoded
-        from .services import async_dispatch_bound_rpc
-
-        self.hass.async_create_task(
-            self._async_safe_dispatch(async_dispatch_bound_rpc, svc_name, data),
-            f"latter_rpc_{self.coordinator.device_slug}_{svc_name}",
-        )
-
-    async def _async_safe_dispatch(
-        self,
-        dispatcher: Callable[..., Any],
-        svc_name: str,
-        data: dict[str, Any],
-    ) -> None:
-        try:
-            await dispatcher(self.hass, self.coordinator, svc_name, data)
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.warning(
-                "Bound RPC '%s' from device '%s' failed: %s",
-                svc_name,
-                self.coordinator.device_slug,
-                err,
-            )
+    return out

@@ -10,11 +10,10 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import { renderAppConfigModalBody } from "../src/components/dialogs/app-config.js";
 import { HOME_CATEGORIES_CATALOG, STUDIO_REV } from "../src/constants.js";
-import { render } from "../src/lib/lit.js";
 import { ROUTE_PREVIEW_ICONS } from "../src/mdi-catalog.js";
 import { renderSystemSharedView } from "../src/views/system-shared-view.js";
 import { resetDomBody, simDocument } from "./dom-shim.js";
-import { makeFakeStore, renderToHtml } from "./fake-store.js";
+import { makeFakeStore, render, renderToHtml } from "./fake-store.js";
 
 describe("Home Hub Broadcast App (D-074 / STUDIO_REV 41)", () => {
   beforeEach(() => {

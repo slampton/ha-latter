@@ -1,4 +1,4 @@
-"""On-device Screen Light entity (`light.<device_slug>_screen`) for Latter Displays."""
+"""On-device Screen Light entity (`light.<device_slug>_screen`) for Latter Displays (`L4`)."""
 
 from __future__ import annotations
 
@@ -12,20 +12,22 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import build_device_entity_id
 from .coordinator import LatterCoordinator
-from .hub import LatterSystemHub, get_latter_system
+from .hub_registry import LatterSystemHub, get_latter_system
 
 PARALLEL_UPDATES = 0
+_MAX_HA_BRIGHTNESS = 255
+_MAX_BRIGHTNESS_PCT = 100
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: ConfigEntry[LatterSystemHub],
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up `light.<device_slug>_screen` for each display Device subentry."""
-    runtime = entry.runtime_data
+    runtime = getattr(entry, "runtime_data", None)
     if isinstance(runtime, LatterSystemHub):
-        coordinators = list(runtime.coordinators.values())
+        coordinators: list[LatterCoordinator] = list(runtime.coordinators.values())
     else:
         sys_obj = get_latter_system(hass)
         coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
@@ -40,7 +42,7 @@ async def async_setup_entry(
 
 
 class LatterScreenLight(LightEntity):
-    """Exposes `light.<device_slug>_screen` with 1..100% brightness and radio-honest availability."""
+    """Exposes `light.<device_slug>_screen` with `1..100%` brightness and radio-honest availability."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -58,7 +60,7 @@ class LatterScreenLight(LightEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo."""
+        """Return canonical Latter `DeviceInfo`."""
         return self.coordinator.get_device_info()
 
     @property
@@ -73,9 +75,17 @@ class LatterScreenLight(LightEntity):
 
     @property
     def brightness(self) -> int:
-        """Return screen brightness scaled to Home Assistant's 0..255 range."""
+        """Return screen brightness scaled to Home Assistant's `0..255` range."""
         return max(
-            1, min(255, round(self.coordinator.display_brightness_pct * 255 / 100))
+            1,
+            min(
+                _MAX_HA_BRIGHTNESS,
+                round(
+                    self.coordinator.display_brightness_pct
+                    * _MAX_HA_BRIGHTNESS
+                    / _MAX_BRIGHTNESS_PCT
+                ),
+            ),
         )
 
     async def async_added_to_hass(self) -> None:
@@ -93,7 +103,17 @@ class LatterScreenLight(LightEntity):
         """Wake the screen and optionally update display brightness."""
         pct: int | None = None
         if ATTR_BRIGHTNESS in kwargs and kwargs[ATTR_BRIGHTNESS] is not None:
-            pct = max(1, min(100, round(int(kwargs[ATTR_BRIGHTNESS]) * 100 / 255)))
+            pct = max(
+                1,
+                min(
+                    _MAX_BRIGHTNESS_PCT,
+                    round(
+                        int(kwargs[ATTR_BRIGHTNESS])
+                        * _MAX_BRIGHTNESS_PCT
+                        / _MAX_HA_BRIGHTNESS
+                    ),
+                ),
+            )
         await self.coordinator.async_set_screen_light(
             turn_on=True, brightness_pct=pct
         )

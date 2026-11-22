@@ -21,7 +21,6 @@ import {
   SYSTEM_VIEW_SLUGS,
 } from "../src/constants.js";
 import { tPrefLabel, tPrefOption } from "../src/i18n/index.js";
-import { render } from "../src/lib/lit.js";
 import { DIALOG_STYLES } from "../src/styles/dialogs.js";
 import { DATA_STYLES } from "../src/styles/data.js";
 import type { DeviceGroup, PhotoCollection, PhotoItem } from "../src/types.js";
@@ -32,8 +31,8 @@ import { renderGroupBaselineDrawer } from "../src/views/groups/group-baseline-dr
 import { renderSystemOverviewView } from "../src/views/system-overview-view.js";
 import { renderSystemPhotosView } from "../src/views/system-photos-view.js";
 import { renderSystemSharedView } from "../src/views/system-shared-view.js";
-import { resetDomBody, simDocument, SimEvent } from "./dom-shim.js";
-import { makeFakeStore, renderToHtml } from "./fake-store.js";
+import { resetDomBody, simDocument, SimEvent, SimHTMLInputElement } from "./dom-shim.js";
+import { makeFakeStore, render, renderToHtml } from "./fake-store.js";
 
 function samplePhotos(): PhotoItem[] {
   return [
@@ -197,6 +196,7 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
     // Save photo metadata calls update_photo_metadata
     await store.entity.savePhotoEditModal();
     assert.equal(sysCalls.length, 1);
+    assert.ok(sysCalls[0]);
     assert.equal(sysCalls[0].command, "update_photo_metadata");
     assert.equal(sysCalls[0].payload.photo_id, "photo:beach_01");
 
@@ -205,6 +205,7 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
     toggleSel.click();
     store.photosSelectedIds.add("photo:beach_01");
     await store.entity.bulkUpdatePhotos({ addCollection: "col_nature" });
+    assert.ok(sysCalls[1]);
     assert.equal(sysCalls[1].command, "bulk_update_photos");
     assert.deepEqual(sysCalls[1].payload, {
       photo_ids: ["photo:beach_01"],
@@ -235,7 +236,7 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
     const f2 = new File([new Uint8Array([4, 5, 6])], "coast_sunset.png", { type: "image/png" });
     store.entity.stageUploadFiles([f1, f2]);
     assert.equal(store.photoUploadModal.files.length, 2);
-    assert.equal(store.photoUploadModal.files[0].name, "alps morning");
+    assert.equal(store.photoUploadModal.files[0]?.name, "alps morning");
 
     const uploadContainer = simDocument.createElement("div");
     render(renderPhotoUploadDialog(store), uploadContainer);
@@ -284,6 +285,7 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
 
     await store.entity.importSelectedMedia();
     assert.equal(sysCalls.length, 1);
+    assert.ok(sysCalls[0]);
     assert.equal(sysCalls[0].command, "import_media_photos");
     assert.deepEqual(sysCalls[0].payload, {
       root: "local",
@@ -403,6 +405,7 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
     };
     await store.entity.applyPhotoPickerModal();
     assert.equal(devCalls.length, 1);
+    assert.ok(devCalls[0]);
     assert.equal(devCalls[0].command, "set_device_photo_pool");
     assert.equal(devCalls[0].payload.target, "screensaver");
     assert.equal(devCalls[0].payload.mode, "collection");
@@ -418,7 +421,7 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
     render(renderAppConfigModalBody(store), weatherModalContainer);
     const toggle = weatherModalContainer.querySelector(
       "#cfg-weather_app_background",
-    ) as unknown as HTMLInputElement;
+    ) as SimHTMLInputElement;
     assert.ok(toggle);
     assert.equal(toggle.checked, false);
     toggle.checked = true;
@@ -511,6 +514,7 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
 
     // Applying 1 selected photo sends mode="single"; applying 2 sends mode="custom"
     await store.entity.applyPhotoPickerModal();
+    assert.ok(harness.devCalls[0]);
     assert.equal(harness.devCalls[0].payload.mode, "single");
     assert.equal(harness.devCalls[0].payload.source_id, "photo:beach_01");
 
@@ -520,6 +524,7 @@ describe("Photo Library, Photo Frame Screensaver, & Weather Backdrops (D-072 / S
       selectedIds: ["photo:beach_01", "preset:forest_mountains"],
     };
     await store.entity.applyPhotoPickerModal();
+    assert.ok(harness.devCalls[1]);
     assert.equal(harness.devCalls[1].payload.mode, "custom");
     assert.deepEqual(harness.devCalls[1].payload.photo_ids, [
       "photo:beach_01",

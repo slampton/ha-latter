@@ -1,7 +1,8 @@
-"""Per-Area Occupancy and per-Device Timer/Alarm Binary Sensors for Latter."""
+"""Per-Area Occupancy and per-Device Timer/Alarm Binary Sensors for Latter (`L4`)."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from homeassistant.components.binary_sensor import (
@@ -16,9 +17,9 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN, build_device_entity_id, normalize_device_slug
 from .coordinator import LatterCoordinator
-from .hub import LatterSystemHub, get_latter_system, get_system_device_info
-from .presence import (
-    get_ble_fabric,
+from .hub_registry import LatterSystemHub, get_latter_system, get_system_device_info
+from .presence.ble_fabric import get_ble_fabric
+from .presence.ble_registry import (
     get_ble_proxy_area_ids,
     get_ble_signature_area_ids,
 )
@@ -27,25 +28,94 @@ PARALLEL_UPDATES = 0
 DATA_CREATED_AREA_OCCUPANCY_IDS = "created_area_occupancy_ids"
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddConfigEntryEntitiesCallback,
-) -> None:
-    """Set up per-Device timer/alarm binary sensors and per-Area occupancy binary sensors."""
-    runtime = entry.runtime_data
+def _entry_coordinators(
+    hass: HomeAssistant, entry: ConfigEntry[LatterSystemHub]
+) -> list[LatterCoordinator]:
+    runtime = getattr(entry, "runtime_data", None)
     if isinstance(runtime, LatterSystemHub):
-        coordinators = list(runtime.coordinators.values())
-    else:
-        sys_obj = get_latter_system(hass)
-        coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
+        return list(runtime.coordinators.values())
+    sys_obj = get_latter_system(hass)
+    return list(sys_obj.coordinators.values()) if sys_obj else []
 
-    ent_reg = er.async_get(hass)
-    for reg_entry in list(er.async_entries_for_config_entry(ent_reg, entry.entry_id)):
+
+@callback
+def _purge_legacy_area_occupancy_entities(
+    ent_reg: er.EntityRegistry, entry_id: str
+) -> None:
+    for reg_entry in list(er.async_entries_for_config_entry(ent_reg, entry_id)):
         if reg_entry.domain == "binary_sensor" and (
             reg_entry.unique_id or ""
         ).startswith("latter_area_ble_occupancy_"):
             ent_reg.async_remove(reg_entry.entity_id)
+
+
+@dataclass
+class _EntryBinaryTracking:
+    created_areas: set[str]
+    entry_area_ids: set[str] = field(default_factory=set)
+    area_entities_by_id: dict[str, LatterAreaOccupancyBinarySensor] = field(
+        default_factory=dict
+    )
+
+    @callback
+    def cleanup(self) -> None:
+        self.created_areas.difference_update(self.entry_area_ids)
+        self.area_entities_by_id.clear()
+
+
+@callback
+def _handle_area_occupancy_registry_change(
+    hass: HomeAssistant,
+    entry: ConfigEntry[LatterSystemHub],
+    tracking: _EntryBinaryTracking,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+    event: Event[Any],
+) -> None:
+    action = event.data.get("action")
+    area_id = str(event.data.get("area_id") or "").strip()
+    if not area_id:
+        return
+    if action == "create":
+        if area_id in tracking.created_areas:
+            return
+        area_entry = ar.async_get(hass).async_get_area(area_id)
+        if area_entry is None:
+            return
+        tracking.created_areas.add(area_id)
+        tracking.entry_area_ids.add(area_id)
+        ent = LatterAreaOccupancyBinarySensor(hass, area_entry.id, area_entry.name)
+        tracking.area_entities_by_id[area_id] = ent
+        async_add_entities([ent])
+    elif action == "update":
+        existing_ent = tracking.area_entities_by_id.get(area_id)
+        area_entry = ar.async_get(hass).async_get_area(area_id)
+        if existing_ent is not None and area_entry is not None:
+            existing_ent.update_area_metadata(area_entry.name)
+    elif action == "remove":
+        tracking.created_areas.discard(area_id)
+        tracking.entry_area_ids.discard(area_id)
+        removed_ent = tracking.area_entities_by_id.pop(area_id, None)
+        if removed_ent is not None:
+            reg = er.async_get(hass)
+            if reg.async_get(removed_ent.entity_id) is not None:
+                reg.async_remove(removed_ent.entity_id)
+            if removed_ent.hass is not None:
+                entry.async_create_background_task(
+                    hass,
+                    removed_ent.async_remove(),
+                    f"latter_remove_area_occ_{area_id}",
+                )
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry[LatterSystemHub],
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up per-Device timer/alarm binary sensors and per-Area occupancy binary sensors."""
+    coordinators = _entry_coordinators(hass, entry)
+    ent_reg = er.async_get(hass)
+    _purge_legacy_area_occupancy_entities(ent_reg, entry.entry_id)
 
     for coordinator in coordinators:
         if not coordinator.is_ble_tag and coordinator.has_display:
@@ -56,12 +126,11 @@ async def async_setup_entry(
                 ],
                 config_subentry_id=coordinator.subentry_id,
             )
+
     domain_data = hass.data.setdefault(DOMAIN, {})
-    created_areas: set[str] = domain_data.setdefault(
-        DATA_CREATED_AREA_OCCUPANCY_IDS, set()
+    tracking = _EntryBinaryTracking(
+        created_areas=domain_data.setdefault(DATA_CREATED_AREA_OCCUPANCY_IDS, set())
     )
-    entry_area_ids: set[str] = set()
-    area_entities_by_id: dict[str, LatterAreaOccupancyBinarySensor] = {}
 
     area_reg = ar.async_get(hass)
     ble_areas = get_ble_proxy_area_ids(hass) | get_ble_signature_area_ids(hass)
@@ -74,62 +143,24 @@ async def async_setup_entry(
         )
         if legacy_eid is not None:
             ent_reg.async_remove(legacy_eid)
-        if area_id in created_areas:
+        if area_id in tracking.created_areas:
             continue
         area_entry = area_reg.async_get_area(area_id)
         if area_entry is None:
             continue
-        created_areas.add(area_id)
-        entry_area_ids.add(area_id)
+        tracking.created_areas.add(area_id)
+        tracking.entry_area_ids.add(area_id)
         ent = LatterAreaOccupancyBinarySensor(hass, area_entry.id, area_entry.name)
-        area_entities_by_id[area_id] = ent
+        tracking.area_entities_by_id[area_id] = ent
         new_entities.append(ent)
 
     @callback
-    def _async_on_area_registry_updated(event: Event) -> None:
-        action = event.data.get("action")
-        area_id = str(event.data.get("area_id") or "").strip()
-        if not area_id:
-            return
-        if action == "create":
-            if area_id in created_areas:
-                return
-            area_entry = ar.async_get(hass).async_get_area(area_id)
-            if area_entry is None:
-                return
-            created_areas.add(area_id)
-            entry_area_ids.add(area_id)
-            ent = LatterAreaOccupancyBinarySensor(
-                hass, area_entry.id, area_entry.name
-            )
-            area_entities_by_id[area_id] = ent
-            async_add_entities([ent])
-        elif action == "update":
-            existing_ent = area_entities_by_id.get(area_id)
-            area_entry = ar.async_get(hass).async_get_area(area_id)
-            if existing_ent is not None and area_entry is not None:
-                existing_ent.update_area_metadata(area_entry.name)
-        elif action == "remove":
-            created_areas.discard(area_id)
-            entry_area_ids.discard(area_id)
-            removed_ent = area_entities_by_id.pop(area_id, None)
-            if removed_ent is not None:
-                reg = er.async_get(hass)
-                if reg.async_get(removed_ent.entity_id) is not None:
-                    reg.async_remove(removed_ent.entity_id)
-                if removed_ent.hass is not None:
-                    entry.async_create_background_task(
-                        hass,
-                        removed_ent.async_remove(),
-                        f"latter_remove_area_occ_{area_id}",
-                    )
+    def _async_on_area_registry_updated(event: Event[Any]) -> None:
+        _handle_area_occupancy_registry_change(
+            hass, entry, tracking, async_add_entities, event
+        )
 
-    @callback
-    def _cleanup_entry_areas() -> None:
-        created_areas.difference_update(entry_area_ids)
-        area_entities_by_id.clear()
-
-    entry.async_on_unload(_cleanup_entry_areas)
+    entry.async_on_unload(tracking.cleanup)
     entry.async_on_unload(
         hass.bus.async_listen(
             ar.EVENT_AREA_REGISTRY_UPDATED, _async_on_area_registry_updated
@@ -177,7 +208,9 @@ class LatterAreaOccupancyBinarySensor(BinarySensorEntity):
     def _get_occ(self) -> dict[str, Any]:
         """Return cached or freshly evaluated occupancy snapshot for this Area."""
         if self._cached_occ is None:
-            self._cached_occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
+            self._cached_occ = get_ble_fabric(self.hass).get_area_occupancy(
+                self._area_id
+            )
         return self._cached_occ
 
     @property
@@ -231,7 +264,7 @@ class LatterAreaOccupancyBinarySensor(BinarySensorEntity):
 
 
 class _BaseLatterDeviceBinarySensor(BinarySensorEntity):
-    """Base binary sensor subscribed to event-driven LatterCoordinator updates."""
+    """Base binary sensor subscribed to event-driven `LatterCoordinator` updates."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -247,7 +280,7 @@ class _BaseLatterDeviceBinarySensor(BinarySensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo."""
+        """Return canonical Latter `DeviceInfo`."""
         return self.coordinator.get_device_info()
 
     async def async_added_to_hass(self) -> None:

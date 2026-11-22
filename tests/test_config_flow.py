@@ -7,12 +7,11 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.helpers import device_registry as dr
 
+from custom_components.latter.config_defaults import ble_tag_option_defaults
 from custom_components.latter.config_flow import (
     LatterBleTagSubentryFlow,
     LatterConfigFlow,
     LatterDeviceSubentryFlow,
-    ble_tag_option_defaults,
-    device_option_defaults,
 )
 from custom_components.latter.const import (
     CONF_ASSIGNED_PERSON,
@@ -24,6 +23,10 @@ from custom_components.latter.const import (
     DOMAIN,
     SUBENTRY_BLE_TAG,
     SUBENTRY_DEVICE,
+)
+from custom_components.latter.groups.device_groups import (
+    detect_hardware_defaults as _detect_hardware_defaults,
+    device_option_defaults,
 )
 
 
@@ -286,7 +289,6 @@ async def test_onboarding_smart_area_and_roaming_defaults(
     """Verify D-032 trait + Area onboarding smart defaults and explicit user overrides."""
     from custom_components.latter.config_flow import (
         _apply_onboarding_profile_and_defaults,
-        _detect_hardware_defaults,
     )
     from custom_components.latter.const import (
         CONF_BLE_AUTO_SWITCH,

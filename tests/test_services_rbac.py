@@ -15,7 +15,7 @@ from homeassistant.helpers import (
 import pytest
 
 from custom_components.latter import async_unload_entry
-from custom_components.latter.areas import async_execute_area_action
+from custom_components.latter.areas.actions import async_execute_area_action
 from custom_components.latter.const import (
     CONF_BROADCAST_SPEAKERS,
     CONF_CAMERA_ENTITIES,
@@ -47,21 +47,22 @@ from custom_components.latter.const import (
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
 )
-from custom_components.latter.media import (
-    VOLUME_MUTE_FLAG,
-    VOLUME_STEP_FLAG,
-    async_execute_volume_action,
+from custom_components.latter.media import browse as _browse_mod, lyrics as _lyrics_mod
+from custom_components.latter.media.browse import (
+    MAX_BROWSE_CACHE_ENTRIES,
+    clear_browse_cache,
+)
+from custom_components.latter.media.linking import (
     clear_ma_counterpart_cache,
     resolve_ma_counterpart_entity,
 )
-from custom_components.latter.media_browse import (
-    _BROWSE_LYRICS_BIO_CACHE,
-    MAX_BROWSE_CACHE_ENTRIES,
-    _cache_put,
-    clear_browse_cache,
+from custom_components.latter.media.volume import (
+    VOLUME_MUTE_FLAG,
+    VOLUME_STEP_FLAG,
+    async_execute_volume_action,
 )
-from custom_components.latter.presence import get_ble_fabric
-from custom_components.latter.protocol import hash_security_pin, wrap_pin_code
+from custom_components.latter.presence.ble_fabric import get_ble_fabric
+from custom_components.latter.protocol_policy import hash_security_pin, wrap_pin_code
 
 
 @pytest.mark.asyncio
@@ -175,8 +176,8 @@ async def test_services_rbac_and_validation_errors(
     assert exc_pin_req.value.translation_key == "security_pin_required"
 
     wrapped_sc_pin = wrap_pin_code(
-        coord._pin_key_id,
-        coord._pin_key_bytes,
+        coord.pin_session_key_id,
+        coord.pin_session_key_bytes,
         1,
         "lock.front_door",
         "unlock",
@@ -216,11 +217,13 @@ async def test_all_domain_services_ma_link_and_browse_lru(
     # Verify bounded 64-entry LRU cache on browse lyrics/bio
     clear_browse_cache()
     assert MAX_BROWSE_CACHE_ENTRIES == 64
+    cache_dict = vars(_lyrics_mod).get("_BROWSE_LYRICS_BIO_CACHE") if "_BROWSE_LYRICS_BIO_CACHE" in vars(_lyrics_mod) else vars(_browse_mod)["_BROWSE_LYRICS_BIO_CACHE"]
+    cache_put = vars(_lyrics_mod).get("_cache_put") or vars(_lyrics_mod).get("cache_put") or vars(_browse_mod).get("_cache_put") or vars(_browse_mod)["cache_put"]
     for i in range(80):
-        _cache_put(f"song_{i}", {"lines": [f"Line {i}"]})
-    assert len(_BROWSE_LYRICS_BIO_CACHE) == 64
-    assert "song_0" not in _BROWSE_LYRICS_BIO_CACHE
-    assert "song_79" in _BROWSE_LYRICS_BIO_CACHE
+        cache_put(f"song_{i}", {"lines": [f"Line {i}"]})
+    assert len(cache_dict) == 64
+    assert "song_0" not in cache_dict
+    assert "song_79" in cache_dict
 
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     ent_reg = er.async_get(hass)

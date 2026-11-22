@@ -1,7 +1,8 @@
-"""Sensor platform for Latter exposing device-scoped (`sensor.<device_slug>_*`) and System-scoped entities."""
+"""Sensor platform for Latter exposing device-scoped (`sensor.<device_slug>_*`) and System-scoped entities (`L4`)."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -16,17 +17,17 @@ from homeassistant.helpers import area_registry as ar, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .areas import resolve_person_area_and_distance
+from .areas.registry import resolve_person_area_and_distance
 from .const import DOMAIN, build_device_entity_id, normalize_device_slug
 from .coordinator import LatterCoordinator
-from .hub import (
+from .hub_registry import (
     LatterSystemHub,
     get_latter_system,
     get_system_device_info,
     iter_coordinators,
 )
-from .presence import (
-    get_ble_fabric,
+from .presence.ble_fabric import get_ble_fabric
+from .presence.ble_registry import (
     get_ble_proxy_area_ids,
     get_ble_signature_area_ids,
     has_configured_floors,
@@ -46,47 +47,51 @@ _REMOVED_DIAGNOSTIC_SENSOR_SUFFIXES: tuple[str, ...] = (
 )
 
 
-def _strip_legacy_ft(attrs: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of `attrs` without legacy imperial `_ft` keys."""
-    return {k: v for k, v in attrs.items() if k != "distance_ft"}
+@dataclass
+class _EntrySensorTracking:
+    """Per-entry dynamic entity tracking sets cleaned up on unload."""
+
+    registered_persons: set[str]
+    registered_subentry_floors: set[str]
+    registered_person_floors: set[str]
+    created_area_occupants: set[str]
+    entry_area_ids: set[str] = field(default_factory=set)
+    entry_persons: set[str] = field(default_factory=set)
+    entry_subentry_floors: set[str] = field(default_factory=set)
+    entry_person_floors: set[str] = field(default_factory=set)
+    area_entities_by_id: dict[str, LatterAreaOccupantsSensor] = field(
+        default_factory=dict
+    )
+    floor_entities: list[SensorEntity] = field(default_factory=list)
+
+    @callback
+    def cleanup(self) -> None:
+        self.created_area_occupants.difference_update(self.entry_area_ids)
+        self.registered_persons.difference_update(self.entry_persons)
+        self.registered_subentry_floors.difference_update(self.entry_subentry_floors)
+        self.registered_person_floors.difference_update(self.entry_person_floors)
+        self.area_entities_by_id.clear()
+        self.floor_entities.clear()
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
+def _entry_coordinators(
+    hass: HomeAssistant, entry: ConfigEntry[LatterSystemHub]
+) -> list[LatterCoordinator]:
+    runtime = getattr(entry, "runtime_data", None)
+    if isinstance(runtime, LatterSystemHub):
+        return list(runtime.coordinators.values())
+    sys_obj = get_latter_system(hass)
+    return list(sys_obj.coordinators.values()) if sys_obj else []
+
+
+def _setup_device_sensors(
+    ent_reg: er.EntityRegistry,
+    coordinators: list[LatterCoordinator],
+    tracking: _EntrySensorTracking,
+    *,
+    floors_initially_enabled: bool,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up Latter sensors for all device subentries and System-level Area/Person entities."""
-    runtime = entry.runtime_data
-    if isinstance(runtime, LatterSystemHub):
-        coordinators = list(runtime.coordinators.values())
-    else:
-        sys_obj = get_latter_system(hass)
-        coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
-
-    ent_reg = er.async_get(hass)
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    registered_persons: set[str] = domain_data.setdefault(
-        "registered_person_sensors", set()
-    )
-    registered_subentry_floors: set[str] = domain_data.setdefault(
-        "registered_subentry_floor_sensors", set()
-    )
-    registered_person_floors: set[str] = domain_data.setdefault(
-        "registered_person_floor_sensors", set()
-    )
-    created_area_occupants: set[str] = domain_data.setdefault(
-        DATA_CREATED_AREA_OCCUPANT_IDS, set()
-    )
-    entry_area_ids: set[str] = set()
-    entry_persons: set[str] = set()
-    entry_subentry_floors: set[str] = set()
-    entry_person_floors: set[str] = set()
-    area_entities_by_id: dict[str, LatterAreaOccupantsSensor] = {}
-    floor_entities: list[SensorEntity] = []
-    system_entities: list[SensorEntity] = []
-    floors_initially_enabled = has_configured_floors(hass)
-
     for coordinator in coordinators:
         for sfx in _REMOVED_DIAGNOSTIC_SENSOR_SUFFIXES:
             orphan_eid = ent_reg.async_get_entity_id(
@@ -103,130 +108,182 @@ async def async_setup_entry(
             dev_entities.append(LatterTimerRemainingSensor(coordinator))
         if (
             floors_initially_enabled
-            and coordinator.subentry_id not in registered_subentry_floors
+            and coordinator.subentry_id not in tracking.registered_subentry_floors
         ):
-            registered_subentry_floors.add(coordinator.subentry_id)
-            entry_subentry_floors.add(coordinator.subentry_id)
+            tracking.registered_subentry_floors.add(coordinator.subentry_id)
+            tracking.entry_subentry_floors.add(coordinator.subentry_id)
             floor_ent = LatterCurrentFloorSensor(coordinator)
-            floor_entities.append(floor_ent)
+            tracking.floor_entities.append(floor_ent)
             dev_entities.append(floor_ent)
         async_add_entities(dev_entities, config_subentry_id=coordinator.subentry_id)
 
+
+def _create_initial_area_occupant_sensors(
+    hass: HomeAssistant, tracking: _EntrySensorTracking
+) -> list[SensorEntity]:
     area_reg = ar.async_get(hass)
     ble_areas = get_ble_proxy_area_ids(hass) | get_ble_signature_area_ids(hass)
     candidate_areas = ble_areas or {a.id for a in area_reg.async_list_areas()}
+    system_entities: list[SensorEntity] = []
     for area_id in sorted(candidate_areas):
-        if area_id in created_area_occupants:
+        if area_id in tracking.created_area_occupants:
             continue
         area_entry = area_reg.async_get_area(area_id)
         if area_entry is None:
             continue
-        created_area_occupants.add(area_id)
-        entry_area_ids.add(area_id)
+        tracking.created_area_occupants.add(area_id)
+        tracking.entry_area_ids.add(area_id)
         ent = LatterAreaOccupantsSensor(hass, area_entry.id, area_entry.name)
-        area_entities_by_id[area_id] = ent
+        tracking.area_entities_by_id[area_id] = ent
         system_entities.append(ent)
+    return system_entities
+
+
+@callback
+def _handle_area_occupants_registry_change(
+    hass: HomeAssistant,
+    entry: ConfigEntry[LatterSystemHub],
+    tracking: _EntrySensorTracking,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+    event: Event[Any],
+) -> None:
+    area_id = str(event.data.get("area_id") or "").strip()
+    if not area_id:
+        return
+    action = event.data.get("action")
+    if action == "create":
+        if area_id in tracking.created_area_occupants:
+            return
+        area_entry = ar.async_get(hass).async_get_area(area_id)
+        if area_entry is None:
+            return
+        tracking.created_area_occupants.add(area_id)
+        tracking.entry_area_ids.add(area_id)
+        ent = LatterAreaOccupantsSensor(hass, area_entry.id, area_entry.name)
+        tracking.area_entities_by_id[area_id] = ent
+        async_add_entities([ent])
+    elif action == "update":
+        existing_ent = tracking.area_entities_by_id.get(area_id)
+        area_entry = ar.async_get(hass).async_get_area(area_id)
+        if existing_ent is not None and area_entry is not None:
+            existing_ent.update_area_metadata(area_entry.name)
+    elif action == "remove":
+        tracking.created_area_occupants.discard(area_id)
+        tracking.entry_area_ids.discard(area_id)
+        removed_ent = tracking.area_entities_by_id.pop(area_id, None)
+        if removed_ent is not None:
+            reg = er.async_get(hass)
+            if reg.async_get(removed_ent.entity_id) is not None:
+                reg.async_remove(removed_ent.entity_id)
+            if removed_ent.hass is not None:
+                entry.async_create_background_task(
+                    hass,
+                    removed_ent.async_remove(),
+                    f"latter_remove_area_occupants_{area_id}",
+                )
+
+
+@callback
+def _ensure_person_sensors(
+    hass: HomeAssistant,
+    coordinators: list[LatterCoordinator],
+    tracking: _EntrySensorTracking,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    new_person_entities: list[SensorEntity] = []
+    floors_enabled = has_configured_floors(hass)
+    for coord in coordinators:
+        person_ent = coord.assigned_person
+        if not person_ent or not person_ent.startswith("person."):
+            continue
+        if person_ent not in tracking.registered_persons:
+            tracking.registered_persons.add(person_ent)
+            tracking.entry_persons.add(person_ent)
+            new_person_entities.extend(
+                [
+                    LatterPersonCurrentAreaSensor(hass, person_ent),
+                    LatterPersonBleDistanceSensor(hass, person_ent),
+                ]
+            )
+        if floors_enabled and person_ent not in tracking.registered_person_floors:
+            tracking.registered_person_floors.add(person_ent)
+            tracking.entry_person_floors.add(person_ent)
+            person_floor_ent = LatterPersonCurrentFloorSensor(hass, person_ent)
+            tracking.floor_entities.append(person_floor_ent)
+            new_person_entities.append(person_floor_ent)
+    if new_person_entities:
+        async_add_entities(new_person_entities)
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry[LatterSystemHub],
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up Latter sensors for all device subentries and System-level Area/Person entities."""
+    coordinators = _entry_coordinators(hass, entry)
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    tracking = _EntrySensorTracking(
+        registered_persons=domain_data.setdefault("registered_person_sensors", set()),
+        registered_subentry_floors=domain_data.setdefault(
+            "registered_subentry_floor_sensors", set()
+        ),
+        registered_person_floors=domain_data.setdefault(
+            "registered_person_floor_sensors", set()
+        ),
+        created_area_occupants=domain_data.setdefault(
+            DATA_CREATED_AREA_OCCUPANT_IDS, set()
+        ),
+    )
+
+    _setup_device_sensors(
+        er.async_get(hass),
+        coordinators,
+        tracking,
+        floors_initially_enabled=has_configured_floors(hass),
+        async_add_entities=async_add_entities,
+    )
+
+    system_entities = _create_initial_area_occupant_sensors(hass, tracking)
+    if system_entities:
+        async_add_entities(system_entities)
 
     @callback
     def _async_ensure_person_sensors() -> None:
-        new_person_entities: list[SensorEntity] = []
-        floors_enabled = has_configured_floors(hass)
-        for coord in coordinators:
-            person_ent = coord.assigned_person
-            if not person_ent or not person_ent.startswith("person."):
-                continue
-            if person_ent not in registered_persons:
-                registered_persons.add(person_ent)
-                entry_persons.add(person_ent)
-                new_person_entities.extend(
-                    [
-                        LatterPersonCurrentAreaSensor(hass, person_ent),
-                        LatterPersonBleDistanceSensor(hass, person_ent),
-                    ]
-                )
-            if floors_enabled and person_ent not in registered_person_floors:
-                registered_person_floors.add(person_ent)
-                entry_person_floors.add(person_ent)
-                person_floor_ent = LatterPersonCurrentFloorSensor(hass, person_ent)
-                floor_entities.append(person_floor_ent)
-                new_person_entities.append(person_floor_ent)
-        if new_person_entities:
-            async_add_entities(new_person_entities)
+        _ensure_person_sensors(hass, coordinators, tracking, async_add_entities)
 
     @callback
     def _async_ensure_floor_sensors() -> None:
         if has_configured_floors(hass):
             for coord in coordinators:
-                if coord.subentry_id not in registered_subentry_floors:
-                    registered_subentry_floors.add(coord.subentry_id)
-                    entry_subentry_floors.add(coord.subentry_id)
+                if coord.subentry_id not in tracking.registered_subentry_floors:
+                    tracking.registered_subentry_floors.add(coord.subentry_id)
+                    tracking.entry_subentry_floors.add(coord.subentry_id)
                     floor_ent = LatterCurrentFloorSensor(coord)
-                    floor_entities.append(floor_ent)
+                    tracking.floor_entities.append(floor_ent)
                     async_add_entities(
                         [floor_ent], config_subentry_id=coord.subentry_id
                     )
             _async_ensure_person_sensors()
-        for f_ent in floor_entities:
+        for f_ent in tracking.floor_entities:
             if isinstance(f_ent, _BaseLatterPersonSensor):
-                f_ent._cached_person = None
+                f_ent.invalidate_person_cache()
             if f_ent.hass is not None:
                 f_ent.async_write_ha_state()
 
     @callback
-    def _async_on_area_registry_updated(event: Event) -> None:
-        action = event.data.get("action")
-        area_id = str(event.data.get("area_id") or "").strip()
-        if area_id:
-            if action == "create":
-                if area_id not in created_area_occupants:
-                    area_entry = ar.async_get(hass).async_get_area(area_id)
-                    if area_entry is not None:
-                        created_area_occupants.add(area_id)
-                        entry_area_ids.add(area_id)
-                        ent = LatterAreaOccupantsSensor(
-                            hass, area_entry.id, area_entry.name
-                        )
-                        area_entities_by_id[area_id] = ent
-                        async_add_entities([ent])
-            elif action == "update":
-                existing_ent = area_entities_by_id.get(area_id)
-                area_entry = ar.async_get(hass).async_get_area(area_id)
-                if existing_ent is not None and area_entry is not None:
-                    existing_ent.update_area_metadata(area_entry.name)
-            elif action == "remove":
-                created_area_occupants.discard(area_id)
-                entry_area_ids.discard(area_id)
-                removed_ent = area_entities_by_id.pop(area_id, None)
-                if removed_ent is not None:
-                    reg = er.async_get(hass)
-                    if reg.async_get(removed_ent.entity_id) is not None:
-                        reg.async_remove(removed_ent.entity_id)
-                    if removed_ent.hass is not None:
-                        entry.async_create_background_task(
-                            hass,
-                            removed_ent.async_remove(),
-                            f"latter_remove_area_occupants_{area_id}",
-                        )
+    def _async_on_area_registry_updated(event: Event[Any]) -> None:
+        _handle_area_occupants_registry_change(
+            hass, entry, tracking, async_add_entities, event
+        )
         _async_ensure_floor_sensors()
 
     @callback
-    def _async_on_floor_registry_updated(_event: Event) -> None:
+    def _async_on_floor_registry_updated(_event: Event[Any]) -> None:
         _async_ensure_floor_sensors()
-
-    @callback
-    def _cleanup_entry_tracked_ids() -> None:
-        created_area_occupants.difference_update(entry_area_ids)
-        registered_persons.difference_update(entry_persons)
-        registered_subentry_floors.difference_update(entry_subentry_floors)
-        registered_person_floors.difference_update(entry_person_floors)
-        area_entities_by_id.clear()
-        floor_entities.clear()
-
-    if system_entities:
-        async_add_entities(system_entities)
 
     _async_ensure_person_sensors()
-    entry.async_on_unload(_cleanup_entry_tracked_ids)
+    entry.async_on_unload(tracking.cleanup)
     entry.async_on_unload(
         hass.bus.async_listen(
             ar.EVENT_AREA_REGISTRY_UPDATED, _async_on_area_registry_updated
@@ -244,13 +301,13 @@ async def async_setup_entry(
 
 
 class _BaseLatterSensor(SensorEntity):
-    """Base sensor subscribed to LatterCoordinator updates."""
+    """Base sensor subscribed to `LatterCoordinator` updates."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(self, coordinator: LatterCoordinator, suffix: str) -> None:
-        """Initialize base sensor with a device-scoped entity_id under its Latter DeviceEntry."""
+        """Initialize base sensor with a device-scoped `entity_id` under its Latter `DeviceEntry`."""
         self.coordinator = coordinator
         slug = coordinator.device_slug
         self._attr_translation_key = suffix
@@ -259,7 +316,7 @@ class _BaseLatterSensor(SensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return canonical Latter DeviceInfo."""
+        """Return canonical Latter `DeviceInfo`."""
         return self.coordinator.get_device_info()
 
     async def async_added_to_hass(self) -> None:
@@ -296,12 +353,12 @@ class LatterTimerRemainingSensor(_BaseLatterSensor):
 
     @property
     def native_value(self) -> int:
-        """Return remaining timer seconds (0 when idle)."""
+        """Return remaining timer seconds (`0` when idle)."""
         return self.coordinator.current_timer_remaining_sec
 
 
 class LatterCurrentAreaSensor(_BaseLatterSensor):
-    """Exposes `sensor.<device_slug>_current_area` with live Area name or 'Away'."""
+    """Exposes `sensor.<device_slug>_current_area` with live Area name or `'Away'`."""
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize current area sensor."""
@@ -309,7 +366,7 @@ class LatterCurrentAreaSensor(_BaseLatterSensor):
 
     @property
     def native_value(self) -> str:
-        """Return active Area name or 'Away'."""
+        """Return active Area name or `'Away'`."""
         state, _ = self.coordinator.get_current_area_and_distance()
         return state
 
@@ -317,11 +374,11 @@ class LatterCurrentAreaSensor(_BaseLatterSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return BLE distance in meters, closest proxy, and person assignment."""
         _, attrs = self.coordinator.get_current_area_and_distance()
-        return _strip_legacy_ft(attrs)
+        return dict(attrs)
 
 
 class LatterCurrentFloorSensor(_BaseLatterSensor):
-    """Exposes `sensor.<device_slug>_current_floor` with live Floor name, 'Unassigned', or 'Away'."""
+    """Exposes `sensor.<device_slug>_current_floor` with live Floor name, `'Unassigned'`, or `'Away'`."""
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize current floor sensor."""
@@ -329,7 +386,7 @@ class LatterCurrentFloorSensor(_BaseLatterSensor):
 
     @property
     def native_value(self) -> str:
-        """Return active Floor name, 'Unassigned', or 'Away'."""
+        """Return active Floor name, `'Unassigned'`, or `'Away'`."""
         _, attrs = self.coordinator.get_current_area_and_distance()
         return str(attrs["floor_name"])
 
@@ -369,7 +426,7 @@ class LatterBleDistanceSensor(_BaseLatterSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return distance in meters, RSSI, and closest proxy."""
         _, attrs = self.coordinator.get_current_area_and_distance()
-        return _strip_legacy_ft(attrs)
+        return dict(attrs)
 
 
 class _BaseLatterPersonSensor(SensorEntity):
@@ -391,6 +448,11 @@ class _BaseLatterPersonSensor(SensorEntity):
         ) or self._person_slug.replace("_", " ").title()
         self._attr_translation_placeholders = {"person_name": self._person_friendly}
         self._cached_person: tuple[str, dict[str, Any]] | None = None
+
+    @callback
+    def invalidate_person_cache(self) -> None:
+        """Clear cached person state snapshot so floor/area re-reads cleanly."""
+        self._cached_person = None
 
     def _get_person_state(self) -> tuple[str, dict[str, Any]]:
         """Return cached or freshly evaluated person Area and distance snapshot."""
@@ -450,7 +512,7 @@ class LatterPersonCurrentAreaSensor(_BaseLatterPersonSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return person BLE Area tracking attributes."""
         _, attrs = self._get_person_state()
-        return _strip_legacy_ft(attrs)
+        return dict(attrs)
 
 
 class LatterPersonCurrentFloorSensor(_BaseLatterPersonSensor):
@@ -474,7 +536,7 @@ class LatterPersonCurrentFloorSensor(_BaseLatterPersonSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return person BLE floor and Area tracking attributes."""
         _, attrs = self._get_person_state()
-        return _strip_legacy_ft(attrs)
+        return dict(attrs)
 
 
 class LatterPersonBleDistanceSensor(_BaseLatterPersonSensor):
@@ -503,7 +565,7 @@ class LatterPersonBleDistanceSensor(_BaseLatterPersonSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return person BLE distance attributes."""
         _, attrs = self._get_person_state()
-        return _strip_legacy_ft(attrs)
+        return dict(attrs)
 
 
 def format_bounded_occupant_names(
@@ -535,7 +597,7 @@ def format_bounded_occupant_names(
 
 
 class LatterAreaOccupantsSensor(SensorEntity):
-    """Exposes `sensor.<area_slug>_occupants` with bounded state (<255 chars) and full `occupant_names` attribute."""
+    """Exposes `sensor.<area_slug>_occupants` with bounded state (`<255` chars) and full `occupant_names` attribute."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -570,7 +632,9 @@ class LatterAreaOccupantsSensor(SensorEntity):
     def _get_occ(self) -> dict[str, Any]:
         """Return cached or freshly evaluated occupancy snapshot for this Area."""
         if self._cached_occ is None:
-            self._cached_occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
+            self._cached_occ = get_ble_fabric(self.hass).get_area_occupancy(
+                self._area_id
+            )
         return self._cached_occ
 
     @property
@@ -595,7 +659,7 @@ class LatterAreaOccupantsSensor(SensorEntity):
 
     @property
     def native_value(self) -> str:
-        """Return comma-separated occupant names (<255 chars), 'Occupied (Sensor)', or 'Empty'."""
+        """Return comma-separated occupant names (`<255` chars), `'Occupied (Sensor)'`, or `'Empty'`."""
         occ = self._get_occ()
         names = list(occ.get("occupant_names") or [])
         if names:

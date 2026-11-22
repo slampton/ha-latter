@@ -11,6 +11,7 @@
 
 import {
   renderCard,
+  renderDeviceOfflineBanner,
   renderPillList,
   renderSelectRow,
   renderSettingsRow,
@@ -36,11 +37,11 @@ import { html, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import { ROUTE_PREVIEW_ICONS, shortcutActionLabel } from "../mdi-catalog.js";
 import { isCatalogItemSupported, type StudioStore } from "../state/store.js";
 import type { ShortcutItem } from "../types.js";
-import { fmtNumber, hassFirstWeekday } from "../utils/format.js";
 import {
   defaultLocaleTimeFormat,
-  renderDeviceOfflineBanner,
-} from "./device-overview-view.js";
+  fmtNumber,
+  hassFirstWeekday,
+} from "../utils/format.js";
 
 const IFACE_UTC_ZONES = new Set([
   "UTC",
@@ -228,9 +229,9 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
       : rawClockFaceOpts;
   const clockFaceRaw = String(clockFacePref?.value ?? cfg.clock_face ?? "Minimal Digital");
   const resolvedClockFaceValue =
-    filteredClockFaceOpts.length > 0 && !filteredClockFaceOpts.includes(clockFaceRaw)
+    (filteredClockFaceOpts.length > 0 && !filteredClockFaceOpts.includes(clockFaceRaw)
       ? filteredClockFaceOpts[0]
-      : clockFaceRaw;
+      : undefined) ?? clockFaceRaw;
   const clockFaceOptions = filteredClockFaceOpts.map((opt) => ({
     value: opt,
     label: store.tPrefOption("clock_face", opt),
@@ -252,9 +253,9 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
       ? String(rawTimeFormatVal)
       : defaultLocaleTimeFormat(store.hass);
   const resolvedTimeFormatValue =
-    rawTimeFormatOpts.length > 0 && !rawTimeFormatOpts.includes(effectiveTimeFormat)
+    (rawTimeFormatOpts.length > 0 && !rawTimeFormatOpts.includes(effectiveTimeFormat)
       ? rawTimeFormatOpts[0]
-      : effectiveTimeFormat;
+      : undefined) ?? effectiveTimeFormat;
   const timeFormatOptions = rawTimeFormatOpts.map((opt) => ({
     value: opt,
     label: store.tPrefOption("time_format", opt),
@@ -727,7 +728,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                     ariaLabel: store.t("dev_interface.active_dock_aria"),
                     items: dockItems,
                     rowClass: "dock-row",
-                    getKey: (_item, idx) => dockItemKeys[idx],
+                    getKey: (_item, idx) => dockItemKeys[idx] ?? String(idx),
                     getLabel: (item) => resolveDockItemPresentation(item).title,
                     onReorder: (fromIdx, toIdx) => {
                       store.entity.reorderShortcutItems("dock_items", fromIdx, toIdx);

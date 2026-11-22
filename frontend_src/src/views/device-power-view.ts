@@ -3,10 +3,14 @@
  * Sleep & wake controls, Bedtime mode, and Power & battery telemetry.
  */
 
-import { renderCard, renderPrefControlRow } from "../components/controls.js";
+import {
+  renderCard,
+  renderDeviceEntityRow,
+  renderDeviceOfflineBanner,
+  renderPrefControlRow,
+} from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
-import { renderDeviceEntityRow, renderDeviceOfflineBanner } from "./device-overview-view.js";
 
 const SCREENSAVER_KEYS = new Set([
   "screensaver_mode",

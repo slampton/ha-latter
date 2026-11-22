@@ -2,6 +2,8 @@
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
+ * Upstream: lit-html@3.3.3 (lit-html.d.ts) — upstream SHA-256 (LF): 79d831bb717b5e64e92fcb612e1bda4b605d55d4137ca58f60720ad220f32033
+ * Latter Studio adaptation: self-contained TrustedHTML type alias without external @types/trusted-types import.
  */
 import type { Directive } from './directive.js';
 type TrustedHTML = string & { readonly __trustedHtmlBrand?: unique symbol };

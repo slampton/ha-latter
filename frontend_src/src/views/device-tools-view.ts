@@ -7,13 +7,14 @@
 
 import {
   renderCard,
+  renderDeviceEntityRow,
+  renderDeviceOfflineBanner,
   renderPrefControlRow,
   renderSelectRow,
   renderSettingsRow,
   renderSwitchRow,
 } from "../components/controls.js";
-import { SECURITY_PIN_POLICY_OPTIONS } from "../constants.js";
-import { t } from "../i18n/index.js";
+import { SECURITY_PIN_POLICY_OPTIONS, t } from "../i18n/index.js";
 import { focusSafe, html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type {
@@ -22,7 +23,6 @@ import type {
   HomeAssistant,
 } from "../types.js";
 import { fmtNumber } from "../utils/format.js";
-import { renderDeviceEntityRow, renderDeviceOfflineBanner } from "./device-overview-view.js";
 
 export interface DiagnosticsTelemetryRow {
   label: string;

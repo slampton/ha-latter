@@ -58,7 +58,7 @@ jobs:
           npm --prefix frontend_src run check
           npm --prefix frontend_src test
       - name: Run ruff static analysis
-        run: ruff check custom_components/latter tests tools/verify_ha.py
+        run: ruff check custom_components/latter tests tools
       - name: Run strict mypy type checking (HA Platinum strict-typing)
         run: mypy custom_components/latter
       - name: Run pytest integration suite with coverage gate

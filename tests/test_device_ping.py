@@ -71,7 +71,7 @@ class TestPingBoundDevices(unittest.TestCase):
         """The firmware's latter_ping action (id latter_ping_action) is what answers with a hello."""
         self.assertEqual(PING_ACTION, "latter_ping")
         core_root = REPO_ROOT.parent / "esphome-latter-core" / "modules"
-        for rel in ("system_core.yaml", "features/core_system.yaml"):
+        for rel in ("system_core.yaml", "system_ui_sync.yaml", "features/core_system.yaml"):
             candidate = core_root / rel
             if candidate.exists():
                 text = candidate.read_text(encoding="utf-8")

@@ -17,57 +17,20 @@ import {
   isValidHexColor,
   triggerJsonDownload,
 } from "../utils/format.js";
-import type { StudioStore } from "./store.js";
+import {
+  type ConfirmModalState,
+  emptyConfirmModalState,
+  type OpenConfirmOptions,
+  type StudioStoreContext,
+  type ToolsControllerContract,
+} from "./store-types.js";
 
-export interface ConfirmModalState {
-  open: boolean;
-  kind: string;
-  title: string;
-  consequence: string;
-  confirmLabel: string;
-  cancelLabel: string;
-  danger: boolean;
-  blastRadiusCount: number | null;
-  blastRadiusLabel: string;
-  busy: boolean;
-  onConfirm: (() => Promise<void> | void) | null;
-  onDownloadBackupFirst: (() => Promise<void> | void) | null;
-}
+export { type ConfirmModalState, emptyConfirmModalState, type OpenConfirmOptions };
 
-export interface OpenConfirmOptions {
-  kind?: string;
-  title: string;
-  consequence: string;
-  confirmLabel: string;
-  cancelLabel?: string;
-  danger?: boolean;
-  blastRadiusCount?: number | null;
-  blastRadiusLabel?: string;
-  onConfirm: () => Promise<void> | void;
-  onDownloadBackupFirst?: (() => Promise<void> | void) | null;
-}
+export class ToolsController implements ToolsControllerContract {
+  private readonly store: StudioStoreContext;
 
-export function emptyConfirmModalState(): ConfirmModalState {
-  return {
-    open: false,
-    kind: "",
-    title: "",
-    consequence: "",
-    confirmLabel: "",
-    cancelLabel: "",
-    danger: true,
-    blastRadiusCount: null,
-    blastRadiusLabel: "",
-    busy: false,
-    onConfirm: null,
-    onDownloadBackupFirst: null,
-  };
-}
-
-export class ToolsController {
-  private readonly store: StudioStore;
-
-  constructor(store: StudioStore) {
+  constructor(store: StudioStoreContext) {
     this.store = store;
   }
 

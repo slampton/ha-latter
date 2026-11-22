@@ -10,12 +10,15 @@
 
 import {
   renderCard,
+  renderDeviceOfflineBanner,
   renderPrefControlRow,
   renderSettingsRow,
   renderSwitchRow,
 } from "../components/controls.js";
-import { WALLPAPER_ROTATION_OPTIONS } from "../constants.js";
-import type { StudioTranslationKey } from "../i18n/index.js";
+import {
+  type StudioTranslationKey,
+  WALLPAPER_ROTATION_OPTIONS,
+} from "../i18n/index.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import {
   resolveCollectionDisplayName,
@@ -24,7 +27,6 @@ import {
 import type { StudioStore } from "../state/store.js";
 import type { PhotoItem } from "../types.js";
 import { defaultThemeHex, fmtNumber, isValidHexColor } from "../utils/format.js";
-import { renderDeviceOfflineBanner } from "./device-overview-view.js";
 
 function rotationLabel(store: StudioStore, minutes: number, fallback: string): string {
   const key = `dev_display.rot_${minutes}` as StudioTranslationKey;

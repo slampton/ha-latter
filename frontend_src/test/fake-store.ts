@@ -6,18 +6,23 @@
 
 import "./dom-shim.js";
 import { STUDIO_REV } from "../src/constants.js";
-import { render } from "../src/lib/lit.js";
+import { render as litRender, type RenderRootNode } from "../src/lib/lit.js";
 import { StudioStore } from "../src/state/store.js";
 import type {
   DevicePrefItem,
   EspHomeEntityItem,
-  EspHomeSection,
   HomeAssistant,
   StudioScope,
   StudioStatePayload,
   StudioViewId,
 } from "../src/types.js";
 import { simDocument, SimElement } from "./dom-shim.js";
+
+interface EspHomeSection {
+  id: string;
+  title: string;
+  items: EspHomeEntityItem[];
+}
 
 export interface FakeStoreOptions {
   activeSubentryId?: string;
@@ -61,7 +66,9 @@ function inferDevicePrefsFromSections(
       }
       let key = it.pref_key || it.key || "";
       if (!key && it.entity_id) {
-        const objId = it.entity_id.includes(".") ? it.entity_id.split(".", 2)[1] : it.entity_id;
+        const objId =
+          (it.entity_id.includes(".") ? it.entity_id.split(".", 2)[1] : it.entity_id) ||
+          it.entity_id;
         // Strip leading `<slug>_<section>_` prefix such as `pocket_display_clock_face`
         const parts = objId.split("_");
         key = parts.length >= 3 ? parts.slice(2).join("_") : objId;
@@ -151,11 +158,11 @@ export function makeFakeStore(opts: FakeStoreOptions = {}): FakeStoreHarness {
   }) as HomeAssistant;
   store.ws.setHass(hassObj);
 
-  store.ws.runSystemCommand = async (command, payload) => {
+  store.ws.runSystemCommand = async (command, payload = {}) => {
     sysCalls.push({ command, payload: structuredClone(payload) });
     return structuredClone(store.state) as StudioStatePayload;
   };
-  store.ws.runDeviceCommand = async (subentryId, command, payload) => {
+  store.ws.runDeviceCommand = async (subentryId, command, payload = {}) => {
     devCalls.push({ subentryId, command, payload: structuredClone(payload) });
     return structuredClone(store.state) as StudioStatePayload;
   };
@@ -269,6 +276,10 @@ export function makeFakeStore(opts: FakeStoreOptions = {}): FakeStoreHarness {
   }
 
   return { store, host, sysCalls, devCalls, toasts, scrolled, focused };
+}
+
+export function render(tpl: unknown, container: SimElement): void {
+  litRender(tpl, container as unknown as RenderRootNode);
 }
 
 export function renderToContainer(tpl: unknown): SimElement {

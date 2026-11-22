@@ -11,7 +11,28 @@ import unittest
 
 from PIL import Image
 
-from custom_components.latter import http as resource_signing, wallpapers as wp
+from custom_components.latter.http import signing as resource_signing
+from custom_components.latter.wallpapers import (
+    media_import as _wp_import,
+    models as _wp_models,
+    pools as _wp_pools,
+    store as _wp_store,
+)
+
+wp = SimpleNamespace(
+    **(
+        vars(_wp_models)
+        | vars(_wp_store)
+        | vars(_wp_import)
+        | vars(_wp_pools)
+        | {
+            "_load_photo_library_sync": vars(_wp_store).get(
+                "_load_photo_library_sync"
+            )
+            or vars(_wp_store).get("load_photo_library_sync")
+        }
+    )
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LATTER_DIR = REPO_ROOT / "custom_components" / "latter"

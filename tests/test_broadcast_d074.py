@@ -20,10 +20,10 @@ from custom_components.latter.const import (
     DEFAULT_BROADCAST_PHRASES,
     DOMAIN,
     SERVICE_INTERCOM_BROADCAST,
+    STUDIO_REV,
     SUBENTRY_DEVICE,
 )
-from custom_components.latter.studio.commands import STUDIO_REV
-from custom_components.latter.studio.settings import (
+from custom_components.latter.studio.settings_cleaners import (
     SettingsScopeError,
     clean_device_settings,
     clean_system_settings,
@@ -177,7 +177,7 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
     global_cfg[CONF_BROADCAST_PHRASES] = ["Dinner is ready", "Time to leave"]
 
     # Area context packs custom broadcast phrases at field index 23 and enables 'intercom'
-    caller._cached_area_payload = None
+    caller.cached_area_payload = None
     _st, attrs = caller.get_area_context_payload()
     assert "intercom" in attrs["home_categories"].split(",")
     assert attrs["payload"].split("\x1f")[23] == "Dinner is ready\x1eTime to leave"
@@ -262,7 +262,7 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
     # 5. target_device="occupied_areas" intersects System broadcast_speakers with occupied areas
     from homeassistant.helpers import area_registry as ar
 
-    from custom_components.latter.presence import get_ble_fabric
+    from custom_components.latter.presence.ble_fabric import get_ble_fabric
 
     area_reg = ar.async_get(hass)
     area_reg.areas["kitchen"] = ar.AreaEntry("kitchen", "Kitchen")

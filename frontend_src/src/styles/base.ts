@@ -64,7 +64,6 @@ export const BASE_STYLES = css`
     --studio-text-disabled: var(--disabled-text-color, #9e9e9e);
     --studio-primary: var(--primary-color, #007299);
     --studio-primary-tint: rgba(var(--rgb-primary-color, 0, 154, 199), 0.12);
-    --studio-primary-tint-strong: rgba(var(--rgb-primary-color, 0, 154, 199), 0.24);
     --studio-hover: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.06);
 
     /* WCAG 2.2 AA (>= 4.5:1) tonal fill/text pairs for buttons, active nav, & semantic chips */
@@ -107,7 +106,6 @@ export const BASE_STYLES = css`
     --studio-warning: var(--warning-color, #ef6c00);
     --studio-error: var(--error-color, #c62828);
     --studio-info: var(--info-color, #0277bd);
-    --studio-success-tint: color-mix(in srgb, var(--studio-success) 14%, transparent);
     --studio-warning-tint: color-mix(in srgb, var(--studio-warning) 14%, transparent);
     --studio-error-tint: color-mix(in srgb, var(--studio-error) 14%, transparent);
     --studio-info-tint: color-mix(in srgb, var(--studio-info) 14%, transparent);

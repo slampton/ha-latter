@@ -18,13 +18,12 @@ import {
   isActivelyFocusedTextControl,
   LitElement,
   nothing,
-  render,
   repeat,
   type ReactiveController,
 } from "../src/lib/lit.js";
 import { renderDeviceInterfaceView } from "../src/views/device-interface-view.js";
 import { resetDomBody, simDocument } from "./dom-shim.js";
-import { makeFakeStore } from "./fake-store.js";
+import { makeFakeStore, render } from "./fake-store.js";
 
 const SHARED_SHEET_A = css`
   :host {
@@ -444,6 +443,7 @@ describe("src/lib/lit.ts — LitElement, repeat(), nested arrays & focusSafe()",
       const hiddenSwitches1 = container
         .querySelector("#dock-hidden-native-apps")!
         .querySelectorAll('input[type="checkbox"]') as unknown as HTMLInputElement[];
+      assert.ok(hiddenSwitches1[0]);
       hiddenSwitches1[0].checked = true;
       hiddenSwitches1[0].dispatchEvent(new Event("change", { bubbles: true }));
       rerender();
@@ -460,6 +460,7 @@ describe("src/lib/lit.ts — LitElement, repeat(), nested arrays & focusSafe()",
       const hiddenSwitches2 = container
         .querySelector("#dock-hidden-native-apps")!
         .querySelectorAll('input[type="checkbox"]') as unknown as HTMLInputElement[];
+      assert.ok(hiddenSwitches2[0]);
       hiddenSwitches2[0].checked = true;
       hiddenSwitches2[0].dispatchEvent(new Event("change", { bubbles: true }));
       rerender();
@@ -496,6 +497,7 @@ describe("src/lib/lit.ts — LitElement, repeat(), nested arrays & focusSafe()",
         const curHidden = container
           .querySelector("#dock-hidden-native-apps")!
           .querySelectorAll('input[type="checkbox"]') as unknown as HTMLInputElement[];
+        assert.ok(curHidden[0]);
         curHidden[0].checked = true;
         curHidden[0].dispatchEvent(new Event("change", { bubbles: true }));
         rerender();

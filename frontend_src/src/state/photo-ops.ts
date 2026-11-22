@@ -12,145 +12,35 @@ import {
   VIRTUAL_COLLECTION_UPLOADS,
 } from "../constants.js";
 import type {
-  CropPreviewAspect,
-  MediaBrowseFolder,
-  MediaBrowseImage,
-  MediaBrowseRoot,
-  PhotoCrop,
   PhotoItem,
   PhotoPoolMode,
   PhotoPoolTarget,
 } from "../types.js";
 import { DEFAULT_PHOTO_CROP, normalizePhotoCrop } from "../utils/crop-math.js";
-import type { StudioStore } from "./store.js";
+import {
+  emptyMediaImportModalState,
+  emptyPhotoEditModalState,
+  emptyPhotoPickerModalState,
+  emptyPhotoUploadModalState,
+  type MediaImportModalState,
+  type PhotoEditModalState,
+  type PhotoPickerModalState,
+  type PhotoUploadModalState,
+  type StagedUploadPhoto,
+  type StudioStoreContext,
+} from "./store-types.js";
 
-export interface StagedUploadPhoto {
-  id: string;
-  file: File;
-  name: string;
-  crop: PhotoCrop;
-  objectUrl: string;
-  width: number;
-  height: number;
-}
-
-export interface PhotoUploadModalState {
-  open: boolean;
-  files: StagedUploadPhoto[];
-  activeIndex: number;
-  collectionId: string;
-  newCollectionOpen: boolean;
-  newCollectionName: string;
-  creatingCollection: boolean;
-  previewAspect: CropPreviewAspect;
-  uploading: boolean;
-  currentIndex: number;
-  currentPercent: number;
-  draggingFiles: boolean;
-  onComplete: ((uploadedIds: string[]) => void) | null;
-}
-
-export interface PhotoEditModalState {
-  open: boolean;
-  photoId: string;
-  name: string;
-  crop: PhotoCrop;
-  collections: string[];
-  previewAspect: CropPreviewAspect;
-  busy: boolean;
-}
-
-export interface MediaImportModalState {
-  open: boolean;
-  loading: boolean;
-  importing: boolean;
-  error: string;
-  roots: MediaBrowseRoot[];
-  root: string;
-  subpath: string;
-  parentSubpath: string | null;
-  folders: MediaBrowseFolder[];
-  images: MediaBrowseImage[];
-  selectedPaths: string[];
-  collectionId: string;
-  useNewFolderCollection: boolean;
-  newCollectionName: string;
-  deduplicate: boolean;
-}
-
-export interface PhotoPickerModalState {
-  open: boolean;
-  target: PhotoPoolTarget;
-  mode: "photos" | "collection";
-  collectionId: string;
-  selectedIds: string[];
-  search: string;
-  filterCollection: string;
-  busy: boolean;
-}
-
-export function emptyPhotoUploadModalState(): PhotoUploadModalState {
-  return {
-    open: false,
-    files: [],
-    activeIndex: 0,
-    collectionId: "",
-    newCollectionOpen: false,
-    newCollectionName: "",
-    creatingCollection: false,
-    previewAspect: "square",
-    uploading: false,
-    currentIndex: 0,
-    currentPercent: 0,
-    draggingFiles: false,
-    onComplete: null,
-  };
-}
-
-export function emptyPhotoEditModalState(): PhotoEditModalState {
-  return {
-    open: false,
-    photoId: "",
-    name: "",
-    crop: { ...DEFAULT_PHOTO_CROP },
-    collections: [],
-    previewAspect: "square",
-    busy: false,
-  };
-}
-
-export function emptyMediaImportModalState(): MediaImportModalState {
-  return {
-    open: false,
-    loading: false,
-    importing: false,
-    error: "",
-    roots: [],
-    root: "",
-    subpath: "",
-    parentSubpath: null,
-    folders: [],
-    images: [],
-    selectedPaths: [],
-    collectionId: "",
-    useNewFolderCollection: false,
-    newCollectionName: "",
-    deduplicate: true,
-  };
-}
-
-export function emptyPhotoPickerModalState(): PhotoPickerModalState {
-  return {
-    open: false,
-    target: "wallpaper",
-    mode: "photos",
-    collectionId: VIRTUAL_COLLECTION_ALL,
-    selectedIds: [],
-    search: "",
-    filterCollection: VIRTUAL_COLLECTION_ALL,
-    busy: false,
-  };
-}
+export {
+  emptyMediaImportModalState,
+  emptyPhotoEditModalState,
+  emptyPhotoPickerModalState,
+  emptyPhotoUploadModalState,
+  type MediaImportModalState,
+  type PhotoEditModalState,
+  type PhotoPickerModalState,
+  type PhotoUploadModalState,
+  type StagedUploadPhoto,
+};
 
 export function isPhotoUploaded(photo: PhotoItem): boolean {
   return (
@@ -222,7 +112,7 @@ export function filterLibraryPhotos(
   });
 }
 
-export function resolveCollectionDisplayName(store: StudioStore, collectionId: string): string {
+export function resolveCollectionDisplayName(store: StudioStoreContext, collectionId: string): string {
   if (!collectionId || collectionId === VIRTUAL_COLLECTION_ALL) {
     return store.t("photos.filter_all");
   }
@@ -284,7 +174,7 @@ function revokeStagedUrls(files: readonly StagedUploadPhoto[]): void {
 let stagedUploadSeq = 0;
 
 export function openPhotoUploadModalOp(
-  store: StudioStore,
+  store: StudioStoreContext,
   options?: { defaultCollectionId?: string; onComplete?: (uploadedIds: string[]) => void },
 ): void {
   revokeStagedUrls(store.photoUploadModal.files);
@@ -300,14 +190,14 @@ export function openPhotoUploadModalOp(
   store.host.requestUpdate();
 }
 
-export function closePhotoUploadModalOp(store: StudioStore): void {
+export function closePhotoUploadModalOp(store: StudioStoreContext): void {
   if (store.photoUploadModal.uploading) return;
   revokeStagedUrls(store.photoUploadModal.files);
   store.photoUploadModal = emptyPhotoUploadModalState();
   store.host.requestUpdate();
 }
 
-export function stageUploadFilesOp(store: StudioStore, fileList: FileList | readonly File[]): void {
+export function stageUploadFilesOp(store: StudioStoreContext, fileList: FileList | readonly File[]): void {
   const incoming = Array.from(fileList || []);
   if (!incoming.length) return;
   const nextFiles = [...store.photoUploadModal.files];
@@ -348,7 +238,7 @@ export function stageUploadFilesOp(store: StudioStore, fileList: FileList | read
   store.host.requestUpdate();
 }
 
-export function removeStagedUploadOp(store: StudioStore, index: number): void {
+export function removeStagedUploadOp(store: StudioStoreContext, index: number): void {
   const files = store.photoUploadModal.files;
   if (index < 0 || index >= files.length || store.photoUploadModal.uploading) return;
   const removed = files[index];
@@ -363,7 +253,7 @@ export function removeStagedUploadOp(store: StudioStore, index: number): void {
   store.host.requestUpdate();
 }
 
-export async function uploadAllStagedPhotosOp(store: StudioStore): Promise<void> {
+export async function uploadAllStagedPhotosOp(store: StudioStoreContext): Promise<void> {
   let modal = store.photoUploadModal;
   if (modal.uploading || modal.creatingCollection || modal.files.length === 0) return;
 
@@ -389,6 +279,7 @@ export async function uploadAllStagedPhotosOp(store: StudioStore): Promise<void>
   try {
     for (let i = 0; i < total; i += 1) {
       const item = modal.files[i];
+      if (!item) continue;
       store.photoUploadModal = {
         ...store.photoUploadModal,
         currentIndex: i + 1,
@@ -446,7 +337,7 @@ export async function uploadAllStagedPhotosOp(store: StudioStore): Promise<void>
 
 // ---------- Photo Editor & Crop Modal ----------
 
-export function openPhotoEditModalOp(store: StudioStore, photo: PhotoItem): void {
+export function openPhotoEditModalOp(store: StudioStoreContext, photo: PhotoItem): void {
   store.photoEditModal = {
     open: true,
     photoId: photo.id,
@@ -459,13 +350,13 @@ export function openPhotoEditModalOp(store: StudioStore, photo: PhotoItem): void
   store.host.requestUpdate();
 }
 
-export function closePhotoEditModalOp(store: StudioStore): void {
+export function closePhotoEditModalOp(store: StudioStoreContext): void {
   if (store.photoEditModal.busy) return;
   store.photoEditModal = emptyPhotoEditModalState();
   store.host.requestUpdate();
 }
 
-export async function savePhotoEditModalOp(store: StudioStore): Promise<void> {
+export async function savePhotoEditModalOp(store: StudioStoreContext): Promise<void> {
   const modal = store.photoEditModal;
   if (!modal.open || !modal.photoId || modal.busy) return;
 
@@ -504,7 +395,7 @@ export async function savePhotoEditModalOp(store: StudioStore): Promise<void> {
 // ---------- Photo Library Collections & Bulk Actions ----------
 
 export async function createPhotoCollectionOp(
-  store: StudioStore,
+  store: StudioStoreContext,
   rawName: string,
 ): Promise<string | null> {
   const name = String(rawName || "").trim();
@@ -527,7 +418,7 @@ export async function createPhotoCollectionOp(
   }
 }
 
-export async function createUploadCollectionOp(store: StudioStore): Promise<string | null> {
+export async function createUploadCollectionOp(store: StudioStoreContext): Promise<string | null> {
   const modal = store.photoUploadModal;
   const name = modal.newCollectionName.trim();
   if (!modal.open || modal.uploading || modal.creatingCollection || !name) return null;
@@ -553,7 +444,7 @@ export async function createUploadCollectionOp(store: StudioStore): Promise<stri
 }
 
 export async function renamePhotoCollectionOp(
-  store: StudioStore,
+  store: StudioStoreContext,
   collectionId: string,
   rawName: string,
 ): Promise<void> {
@@ -576,7 +467,7 @@ export async function renamePhotoCollectionOp(
 }
 
 export function requestDeletePhotoCollectionOp(
-  store: StudioStore,
+  store: StudioStoreContext,
   collectionId: string,
   name: string,
 ): void {
@@ -608,7 +499,7 @@ export function requestDeletePhotoCollectionOp(
   });
 }
 
-export async function deletePhotoOp(store: StudioStore, photoId: string): Promise<void> {
+export async function deletePhotoOp(store: StudioStoreContext, photoId: string): Promise<void> {
   const cleanId = String(photoId || "").trim();
   if (!cleanId) return;
   try {
@@ -628,7 +519,7 @@ export async function deletePhotoOp(store: StudioStore, photoId: string): Promis
   }
 }
 
-export function requestDeletePhotoOp(store: StudioStore, photoId: string, name?: string): void {
+export function requestDeletePhotoOp(store: StudioStoreContext, photoId: string, name?: string): void {
   const cleanId = String(photoId || "").trim();
   if (!cleanId) return;
   const label = String(name || cleanId).trim();
@@ -645,7 +536,7 @@ export function requestDeletePhotoOp(store: StudioStore, photoId: string, name?:
 }
 
 export async function bulkUpdatePhotosOp(
-  store: StudioStore,
+  store: StudioStoreContext,
   options: { addCollection?: string; removeCollection?: string; deletePhotos?: boolean },
 ): Promise<void> {
   const ids = Array.from(store.photosSelectedIds);
@@ -677,7 +568,7 @@ export async function bulkUpdatePhotosOp(
   }
 }
 
-export function requestBulkDeletePhotosOp(store: StudioStore): void {
+export function requestBulkDeletePhotosOp(store: StudioStoreContext): void {
   const deletableSelected = Array.from(store.photosSelectedIds).filter((id) => {
     const item = (store.state?.system_wallpapers || []).find((p) => p.id === id);
     return item ? isPhotoUploaded(item) : false;
@@ -702,7 +593,7 @@ export function requestBulkDeletePhotosOp(store: StudioStore): void {
 // ---------- HA Media Folder Import Modal ----------
 
 export async function browseMediaFolderOp(
-  store: StudioStore,
+  store: StudioStoreContext,
   root?: string,
   subpath?: string,
 ): Promise<void> {
@@ -741,7 +632,7 @@ export async function browseMediaFolderOp(
   store.host.requestUpdate();
 }
 
-export function openMediaImportModalOp(store: StudioStore): void {
+export function openMediaImportModalOp(store: StudioStoreContext): void {
   const defaultCol = store.photosFilterCollection.startsWith("col_")
     ? store.photosFilterCollection
     : "";
@@ -754,13 +645,13 @@ export function openMediaImportModalOp(store: StudioStore): void {
   void browseMediaFolderOp(store);
 }
 
-export function closeMediaImportModalOp(store: StudioStore): void {
+export function closeMediaImportModalOp(store: StudioStoreContext): void {
   if (store.mediaImportModal.importing) return;
   store.mediaImportModal = emptyMediaImportModalState();
   store.host.requestUpdate();
 }
 
-export async function importSelectedMediaOp(store: StudioStore): Promise<void> {
+export async function importSelectedMediaOp(store: StudioStoreContext): Promise<void> {
   const modal = store.mediaImportModal;
   if (modal.importing || !modal.root || modal.selectedPaths.length === 0) return;
 
@@ -809,7 +700,7 @@ export async function importSelectedMediaOp(store: StudioStore): Promise<void> {
 // ---------- Device Photo Pool Picker & Command ----------
 
 export async function setDevicePhotoPoolOp(
-  store: StudioStore,
+  store: StudioStoreContext,
   options: {
     target: PhotoPoolTarget;
     mode: PhotoPoolMode;
@@ -854,7 +745,7 @@ export async function setDevicePhotoPoolOp(
   }
 }
 
-export function openPhotoPickerModalOp(store: StudioStore, target: PhotoPoolTarget): void {
+export function openPhotoPickerModalOp(store: StudioStoreContext, target: PhotoPoolTarget): void {
   const cfg = store.state?.config || {};
   const isScreensaver = target === "screensaver";
   const allPhotos =
@@ -905,13 +796,13 @@ export function openPhotoPickerModalOp(store: StudioStore, target: PhotoPoolTarg
   store.host.requestUpdate();
 }
 
-export function closePhotoPickerModalOp(store: StudioStore): void {
+export function closePhotoPickerModalOp(store: StudioStoreContext): void {
   if (store.photoPickerModal.busy) return;
   store.photoPickerModal = emptyPhotoPickerModalState();
   store.host.requestUpdate();
 }
 
-export async function applyPhotoPickerModalOp(store: StudioStore): Promise<void> {
+export async function applyPhotoPickerModalOp(store: StudioStoreContext): Promise<void> {
   const modal = store.photoPickerModal;
   if (!modal.open || modal.busy) return;
 

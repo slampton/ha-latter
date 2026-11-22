@@ -318,7 +318,8 @@ export function fmtDateTime(
 function formatSentenceSegment(seg: string, isFirstWord: boolean): string {
   if (!seg) return seg;
   const low = seg.toLowerCase();
-  if (LABEL_ACRONYMS[low]) return LABEL_ACRONYMS[low];
+  const acronym = LABEL_ACRONYMS[low];
+  if (acronym) return acronym;
   if (/^[a-z]+[A-Z]/.test(seg) || /^[A-Z0-9]{2,}$/.test(seg)) return seg;
   if (isFirstWord) {
     return seg.charAt(0).toUpperCase() + seg.slice(1);
@@ -338,9 +339,9 @@ export function entityLabel(rawName: string | null | undefined): string {
   return words
     .map((word, idx) => {
       const m = /^([([{"']*)(.*?)([)\]}"':,.?]*)$/.exec(word);
-      const lead = m ? m[1] : "";
-      const core = m ? m[2] : word;
-      const trail = m ? m[3] : "";
+      const lead = m?.[1] ?? "";
+      const core = m?.[2] ?? word;
+      const trail = m?.[3] ?? "";
       if (!core) return word;
       if (
         lead === "(" &&
@@ -350,8 +351,9 @@ export function entityLabel(rawName: string | null | undefined): string {
         return word;
       }
       const low = core.toLowerCase();
-      if (LABEL_ACRONYMS[low]) {
-        return `${lead}${LABEL_ACRONYMS[low]}${trail}`;
+      const acronym = LABEL_ACRONYMS[low];
+      if (acronym) {
+        return `${lead}${acronym}${trail}`;
       }
       const hyph = core
         .split("-")
@@ -497,4 +499,22 @@ export function navigateHaPath(path: string, replace = false): void {
     globalThis.history.pushState(null, "", path);
   }
   globalThis.dispatchEvent(new Event("location-changed", { bubbles: true, composed: true }));
+}
+
+export function truncateUtf8Bytes(raw: string, maxBytes: number): string {
+  const str = String(raw ?? "");
+  if (maxBytes <= 0 || !str) return "";
+  if (typeof TextEncoder === "undefined") {
+    return str.slice(0, maxBytes);
+  }
+  const enc = new TextEncoder();
+  if (enc.encode(str).length <= maxBytes) {
+    return str;
+  }
+  let out = "";
+  for (const cp of str) {
+    if (enc.encode(out + cp).length > maxBytes) break;
+    out += cp;
+  }
+  return out;
 }

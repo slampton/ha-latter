@@ -1,8 +1,8 @@
 # Services Reference
 
-Latter registers **20 services** under the `latter` domain ([`services.py`](../../custom_components/latter/services.py), [`services.yaml`](../../custom_components/latter/services.yaml)): **18 user/automation-callable services** plus **2 device-reported state/handshake services** (`latter.device_hello` and `latter.timer_alarm_state`).
+Latter registers **5 public user/automation actions** under the `latter` domain ([`services/`](../../custom_components/latter/services/), [`services.yaml`](../../custom_components/latter/services.yaml)): `notify`, `intercom_broadcast`, `set_active_area`, `set_active_speaker`, and `reset_device`.
 
-Bound ESPHome displays invoke the 19 device-permitted operations over their Zero-Privilege **System: RPC Outbox** (`LatterRpcReceiver` in `identity.py`, authenticated by `esphome_device_id` so `allow_service_calls` is never required), while Home Assistant automations and scripts call `latter.*` directly. Administrative mutations (`reset_device`, `save_custom_color`, `set_device_prefs`) require an admin user context when invoked from Home Assistant.
+Bound ESPHome displays invoke all **20 device-reported RPC methods** over their Zero-Privilege **System: RPC Outbox** (`LatterRpcReceiver` in `services/rpc_receiver.py` -> private `LatterRpcDispatcher` in `services/rpc_dispatcher.py`, authenticated by bound `esphome_device_id` so `allow_service_calls` is never required), while Home Assistant automations and scripts call the 5 public `latter.*` actions directly. `latter.reset_device` requires an admin user context when invoked from Home Assistant.
 
 ---
 

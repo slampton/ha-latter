@@ -2,6 +2,7 @@
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
+ * Upstream: lit-html@3.3.3 (directive.d.ts) — upstream SHA-256 (LF): 38e68fc600b21dcc36b2bf955848cbae2051f56742034bf68f1f47b1a37c10a3
  */
 import { Disconnectable, Part } from './lit-html.js';
 export { AttributePart, BooleanAttributePart, ChildPart, ElementPart, EventPart, Part, PropertyPart, } from './lit-html.js';

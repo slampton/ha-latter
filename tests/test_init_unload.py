@@ -14,7 +14,7 @@ from custom_components.latter import (
     async_unload_entry,
 )
 from custom_components.latter.backup import async_post_backup, async_pre_backup
-from custom_components.latter.cameras import _CameraIngest, get_camera_stream_hub
+from custom_components.latter.cameras.stream_hub import _CameraIngest, get_camera_stream_hub
 from custom_components.latter.const import CONF_DEFAULT_AREA, CONF_DEVICE_SLUG, DOMAIN
 from custom_components.latter.repairs import (
     LinkMaPlayerRepairFlow,
@@ -255,7 +255,7 @@ async def test_esphome_device_and_entity_rename_sync_and_heal(
 ) -> None:
     """Renaming a bound ESPHome device & its entities syncs title, subentry, child device, speaker & Studio payload."""
     from custom_components.latter.const import CONF_DEFAULT_SPEAKER
-    from custom_components.latter.media import build_active_media_payload
+    from custom_components.latter.media.state_payload import build_active_media_payload
     from custom_components.latter.studio.payload import build_studio_state_payload
 
     entry, _sys_obj, coord = await setup_latter_hub(hass)
@@ -313,7 +313,7 @@ async def test_esphome_device_and_entity_rename_sync_and_heal(
     # Default speaker, active_speaker, last_speaker & RPC outbox all migrated cleanly
     assert coord.get_opt(CONF_DEFAULT_SPEAKER) == "media_player.living_room_assistant_music"
     assert coord.active_speaker == "media_player.living_room_assistant_music"
-    assert coord._rpc_receiver._tracked_entity_id == "sensor.living_room_assistant_system_rpc_outbox"
+    assert coord.rpc_receiver.tracked_entity_id == "sensor.living_room_assistant_system_rpc_outbox"
     _m_state, m_attrs = build_active_media_payload(coord)
     assert m_attrs["speaker_name"] == "Living Room Assistant"
     assert not any(

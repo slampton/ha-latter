@@ -13,7 +13,7 @@ Most ESPHome display projects hardcode entity IDs into YAML—a renamed light, a
 
 | Repository | Runs on | Responsibility |
 | :--- | :--- | :--- |
-| **ha-latter** *(this repo)* | Home Assistant | Integration and **Latter Studio**: live entity mapping, BLE Area presence & sensor fusion, signed ESP32 media proxy, and 20 `latter.*` services. |
+| **ha-latter** *(this repo)* | Home Assistant | Integration and **Latter Studio**: live entity mapping, BLE Area presence & sensor fusion, signed ESP32 media proxy, and 5 public `latter.*` services. |
 | **[esphome-latter-core](https://github.com/slampton/esphome-latter-core)** | ESP32-S3 / ESP32-P4 | Compiled C++20 firmware for five Waveshare touch displays, [Web Installer](https://slampton.github.io/esphome-latter-core/), and the Latter Core SDK. |
 
 You need both repos for the touch displays. If you only want BLE Area presence and occupancy fusion from the Bluetooth proxies, phones, watches, and beacons you already own, `ha-latter` works standalone with zero displays configured.
@@ -56,7 +56,7 @@ Latter reads RSSI from your existing Bluetooth proxies to track Latter displays,
 ### Music Assistant on a Small Screen
 - **Paginated browsing:** favorites, playlists, artists, albums, podcasts, radio, and audiobooks sized to each screen's geometry.
 - **Seamless speaker moves & grouping:** transfer playback queues across speakers (holding metadata and album art steady across spin-up and healing cold/idle queues automatically) or join/unjoin speaker groups.
-- **Lyrics, bios & universal transport:** pulls lyrics from Music Assistant or [LRCLIB](https://lrclib.net) and bios from Wikipedia; transport, seek, and AV-receiver volume overrides work with any `media_player`.
+- **Lyrics & universal transport:** pulls synced and plain lyrics directly from Music Assistant over your LAN; transport, seek, and AV-receiver volume overrides work with any `media_player`.
 
 ### Dynamic Area Control, 6-Tab Home Hub & Time
 - **Area Control:** scenes, lights (brightness, HSV color wheel, 2700–6500 K temperature), blinds/curtains, fans, switches, climate, and media—ordered and filtered automatically to entities present in the active Area.
@@ -90,9 +90,9 @@ flowchart LR
     HA <--> ECOSYS["HA Areas · Assist · Music Assistant"]
 ```
 
-- **Zero-Privilege Bound RPC & 7-Domain Protocol v3 Push.** Devices bind strictly by `esphome_device_id` and hardware MAC (`via_device_id`). Outbound device taps emit compact chunked frames on `System: RPC Outbox` (`identity.py`) and inbound state pushes directly over `esphome.<node>_latter_push_v3` across 7 content-hashed domains (`area_context`, `active_media`, `remote_config`, `weather_forecast`, `calendar_agenda`, `device_prefs`, `shortcuts`) plus `latter_set_slots`—requiring neither `allow_service_calls` nor `device_slug` YAML substitutions, and keeping `~8 KB` of signed URLs off Home Assistant's `state_changed` bus and SQLite recorder.
-- **3-Tier Sleep-Safe Entity Architecture & `O(1)` `AreaStateIndex`.** All 50 device preferences persist in subentries (`studio/settings.py`) and reconcile offline NVS edits on `device_hello`, so Studio and Device groups work even while battery handhelds hibernate. Home Assistant gets a clean Tier 2 automation surface (`Device Group`, `Wake Word Mode`, `Alert Volume`, `Find My Device`, `Activate Screensaver`, `Timer Active`, `Timer Remaining`, `Alarm Ringing`) backed by an isolated 1 Hz local `Timer Remaining` tick and an incremental `O(1)` `AreaStateIndex` (`hub.py`—never calling `hass.states.async_all()`).
-- **ESP32-Native Signed Media Proxy.** ESP-IDF's JPEG decoder rejects progressive JPEGs and can't resolve `.local` mDNS hostnames. Latter re-encodes artwork, `720p` wallpapers, camera snapshots (with predictive live-feed prefetching and on-demand 600 s Studio previews), and OpenStreetMap event pins as baseline 4:2:0 JPEG on executor threads—applying circular masks on round panels—and serves them over Home Assistant's numeric LAN IPv4 with constant-time, parameter-scoped HMAC signatures (`http.py`).
+- **Zero-Privilege Bound RPC & 7-Domain Protocol v3 Push.** Devices bind strictly by `esphome_device_id` and hardware MAC (`via_device_id`). Outbound device taps emit compact chunked frames on `System: RPC Outbox` (`services/rpc_receiver.py`) and inbound state pushes directly over `esphome.<node>_latter_push_v3` across 7 content-hashed domains (`area_context`, `active_media`, `remote_config`, `weather_forecast`, `calendar_agenda`, `device_prefs`, `shortcuts`) plus `latter_set_slots`—requiring neither `allow_service_calls` nor `device_slug` YAML substitutions, and keeping `~8 KB` of signed URLs off Home Assistant's `state_changed` bus and SQLite recorder.
+- **3-Tier Sleep-Safe Entity Architecture & `O(1)` `AreaStateIndex`.** All 50 device preferences persist in subentries (`studio/settings_cleaners.py`) and reconcile offline NVS edits on `device_hello`, so Studio and Device groups work even while battery handhelds hibernate. Home Assistant gets a clean Tier 2 automation surface (`Device Group`, `Wake Word Mode`, `Alert Volume`, `Find My Device`, `Activate Screensaver`, `Timer Active`, `Timer Remaining`, `Alarm Ringing`) backed by an isolated 1 Hz local `Timer Remaining` tick and an incremental `O(1)` `AreaStateIndex` (`hub_registry.py`—never calling `hass.states.async_all()`).
+- **ESP32-Native Signed Media Proxy.** ESP-IDF's JPEG decoder rejects progressive JPEGs and can't resolve `.local` mDNS hostnames. Latter re-encodes artwork, `720p` wallpapers, and camera snapshots (with predictive live-feed prefetching and on-demand 600 s Studio previews) as baseline 4:2:0 JPEG on executor threads—applying circular masks on round panels—and serves them over Home Assistant's numeric LAN IPv4 with constant-time, parameter-scoped HMAC signatures (`http/`).
 
 ---
 
@@ -103,9 +103,9 @@ flowchart LR
 
 | Reference | Covers |
 | :--- | :--- |
-| **[Services](docs/reference/services.md)** | All 20 `latter.*` services, parameters, security PIN rules, and special targets (`all`, `occupied_areas`, `person.<id>`) |
-| **[Entities](docs/reference/entities.md)** | The 3-tier entity architecture across all 6 Home Assistant platforms, occupancy attributes, and `latter_event` payloads |
-| **[HTTP API](docs/reference/http-api.md)** | Signed baseline-JPEG & FLAC endpoints, Bearer wallpaper upload, and Studio WebSocket architecture |
+| **[Services](docs/reference/services.md)** | All 5 public `latter.*` services, parameters, security PIN rules, and special targets (`all`, `occupied_areas`, `person.<id>`) |
+| **[Entities](docs/reference/entities.md)** | The 3-tier entity architecture across all 8 Home Assistant platforms, occupancy attributes, and `latter_event` payloads |
+| **[HTTP API](docs/reference/http-api.md)** | Signed baseline-JPEG & PCM/FLAC endpoints, Bearer wallpaper upload, and Studio WebSocket architecture |
 | **[Device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md)** | Discovery, Manifest v2, 7-domain Protocol v3 push, and `System: RPC Outbox` framing |
 | **[Building a GUI](https://github.com/slampton/esphome-latter-core/blob/main/docs/building-a-gui.md)** | Writing a custom touch or rotary UI on top of `esphome-latter-core` |
 
@@ -119,14 +119,14 @@ flowchart LR
 | **ESPHome** | `2026.11.0` or newer | Only needed when compiling firmware in ESPHome Device Builder |
 | **Music Assistant** | `2.10.12` or newer *(optional)* | Needed for library browsing, queue transfer, and default intercom speakers |
 | **Bluetooth proxies** | 1 per Area *(optional)* | ESPHome active proxies verified; assign each proxy to its Home Assistant Area |
-| **`ffmpeg`** | Optional (bundled in HA OS) | Used for noise-reduced doorbell camera audio streaming |
+| **`ffmpeg`** | Optional (bundled in HA OS) | Used for noise-reduced doorbell camera audio & video streaming |
 
-**Local-first network footprint:** everything runs locally on your LAN except four optional lookups—OpenStreetMap tiles + Nominatim geocoding for calendar event maps, and LRCLIB lyrics + Wikipedia bios when Music Assistant lacks text metadata.
+**Zero-WAN local-first network footprint:** everything in `custom_components/latter` runs 100% locally on your LAN with zero outbound WAN calls.
 
 **Version `3.0.0` Status:**
 - **Stable:** device discovery, Latter Studio, 7-domain Protocol v3 sync, Area control, Home Hub, Time/Alarms, Music Assistant browsing & transfer, BLE Area presence & sensor fusion, doorbell camera popups, and JSON backup/restore.
 - **Experimental / Current Limits:** doorbell listen & push-to-talk TTS reply (no live device-to-door audio or on-device echo cancellation yet); BLE calibration uses per-scanner gain trim + multi-scanner Area signatures rather than `(x, y, z)` floorplan coordinates.
-- **CI Gate:** every push to `dev` runs `hassfest`, HACS validation, `ruff`, `tools/verify_ha.py`, TypeScript + `lit-html` Studio bundle & DOM test parity (`npm --prefix frontend_src run check && npm --prefix frontend_src test`), and the `pytest` suite (`>= 75%` coverage across the **31-module** backend: 27 root `.py` modules + 4 `studio/` `.py` modules) before fast-forwarding `main`.
+- **CI Gate:** every push to `dev` runs `hassfest`, HACS validation, `ruff`, `mypy`, `tools/verify_ha.py` (`L0a`–`L4` Tarjan SCC + layer verifier), TypeScript + `lit-html` Studio bundle & DOM test parity (`npm --prefix frontend_src run check && npm --prefix frontend_src test`), and the `pytest` suite (`>= 75%` coverage across the `L0a`–`L4` acyclic DAG backend) before fast-forwarding `main`.
 
 Bugs and feature requests: [GitHub Issues](https://github.com/slampton/ha-latter/issues).
 

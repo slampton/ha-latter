@@ -2,6 +2,7 @@
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
+ * Upstream: lit-html@3.3.3 (directives/repeat.d.ts) — upstream SHA-256 (LF): 25f99f07f8fe189bedab93389438ac90b66fb6eae33a76634ed7a11d49715c44
  */
 import { ChildPart, noChange } from '../lit-html.js';
 import { Directive, PartInfo } from '../directive.js';

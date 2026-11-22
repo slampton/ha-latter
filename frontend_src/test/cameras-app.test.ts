@@ -19,14 +19,13 @@ import {
   START_SCREEN_CONFIG_APP_MAP,
 } from "../src/constants.js";
 import { tPrefLabel, tPrefOption } from "../src/i18n/index.js";
-import { render } from "../src/lib/lit.js";
 import { ROUTE_PREVIEW_ICONS } from "../src/mdi-catalog.js";
 import type { DeviceGroup, SystemDeviceEntry } from "../src/types.js";
 import { renderDeviceInterfaceView } from "../src/views/device-interface-view.js";
 import { renderGroupBaselineDrawer } from "../src/views/groups/group-baseline-drawer.js";
 import { renderSystemSharedView } from "../src/views/system-shared-view.js";
 import { resetDomBody, simDocument } from "./dom-shim.js";
-import { makeFakeStore, renderToHtml } from "./fake-store.js";
+import { makeFakeStore, render, renderToHtml } from "./fake-store.js";
 
 describe("Dedicated Cameras App (D-071 / STUDIO_REV 38)", () => {
   beforeEach(() => {

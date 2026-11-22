@@ -8,7 +8,7 @@ from homeassistant.components import websocket_api
 from homeassistant.helpers import area_registry as ar, entity_registry as er
 import pytest
 
-from custom_components.latter.areas import (
+from custom_components.latter.areas.registry import (
     apply_ambient_light_deadband,
     area_illuminance_sensor_choices,
     format_ambient_lux,
@@ -21,10 +21,10 @@ from custom_components.latter.const import (
     DOMAIN,
     STUDIO_REV,
 )
-from custom_components.latter.studio.commands import (
+from custom_components.latter.studio.cmd_presence_devices import (
     compute_illuminance_calibration_from_stats,
 )
-from custom_components.latter.studio.settings import (
+from custom_components.latter.studio.settings_cleaners import (
     SettingsScopeError,
     clean_area_illuminance,
 )
@@ -231,7 +231,7 @@ async def test_area_ambient_light_wire_packing_and_studio_command(
     assert amb["ambient_pct"] is not None
 
     coord.async_set_active_area("living_room")
-    coord._cached_area_payload = None
+    coord.cached_area_payload = None
     _state, area_attrs = coord.get_area_context_payload()
     wire = area_attrs["payload"].split("\x1f")
     assert len(wire) == 43

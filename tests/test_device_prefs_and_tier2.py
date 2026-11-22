@@ -12,13 +12,13 @@ from homeassistant.helpers import entity_registry as er
 import pytest
 
 from custom_components.latter import async_unload_entry
-from custom_components.latter.groups import (
+from custom_components.latter.const import STUDIO_REV
+from custom_components.latter.groups.device_groups import (
     device_matches_group_baseline,
     get_device_groups,
     resolve_effective_device_group,
 )
-from custom_components.latter.services import async_dispatch_bound_rpc
-from custom_components.latter.studio.commands import STUDIO_REV
+from custom_components.latter.services.rpc_dispatcher import async_dispatch_bound_rpc
 
 
 def _register_wifi_sensor(hass: Any, coord: Any, state: str = "-52") -> str:

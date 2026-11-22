@@ -1,6 +1,6 @@
 # HTTP API Reference
 
-Latter registers **7 `HomeAssistantView` endpoints** under `/api/latter/` ([`http.py`](../../custom_components/latter/http.py), [`doorbell.py`](../../custom_components/latter/doorbell.py), [`wallpapers.py`](../../custom_components/latter/wallpapers.py)).
+Latter registers **8 `HomeAssistantView` endpoints** under `/api/latter/` ([`http/`](../../custom_components/latter/http/), [`doorbell.py`](../../custom_components/latter/doorbell.py), [`wallpapers/`](../../custom_components/latter/wallpapers/)).
 
 Device media/audio endpoints exist so an ESP32 can fetch baseline JPEGs and FLAC streams over LAN HTTP without carrying a Home Assistant bearer token; Studio multipart wallpaper uploads use Home Assistant's authenticated administrator session.
 

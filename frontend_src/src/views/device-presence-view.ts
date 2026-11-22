@@ -5,6 +5,8 @@
 
 import {
   renderCard,
+  renderDeviceEntityRow,
+  renderDeviceOfflineBanner,
   renderPrefControlRow,
   renderSelectRow,
   renderSwitchRow,
@@ -12,7 +14,6 @@ import {
 import { focusSafe, html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import { fmtNumber } from "../utils/format.js";
-import { renderDeviceEntityRow, renderDeviceOfflineBanner } from "./device-overview-view.js";
 
 export function renderDevicePresenceView(store: StudioStore): TemplateResult {
   const data = store.state;

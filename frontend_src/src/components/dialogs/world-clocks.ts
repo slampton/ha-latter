@@ -5,6 +5,13 @@
  */
 
 import { MAX_WORLD_CLOCKS, WORLD_CLOCK_ZONES_CATALOG } from "../../constants.js";
+import {
+  isValidWorldClockZone,
+  parseWorldClocksSpec,
+  sanitizeClockLabel,
+  serializeWorldClocksSpec,
+  type WorldClockItemView,
+} from "../../domain/world-clocks.js";
 import { focusSafe, html, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import { defaultLocaleTimeFormat } from "../../utils/format.js";
@@ -16,112 +23,17 @@ import {
   renderTrashIconButton,
 } from "../controls.js";
 
-export interface WorldClockItemView {
-  label: string;
-  iana: string;
-}
+export {
+  parseWorldClocksSpec,
+  sanitizeClockLabel,
+  serializeWorldClocksSpec,
+  type WorldClockItemView,
+};
 
-const PINNED_UTC_ZONES = new Set([
-  "UTC",
-  "Etc/UTC",
-  "GMT",
-  "Etc/GMT",
-  "Etc/GMT+0",
-  "Etc/GMT-0",
-  "Etc/GMT0",
-]);
-const IANA_ZONE_PATTERN = /^[A-Za-z0-9_+-]+(?:\/[A-Za-z0-9_+-]+)+$/;
 const TEXT_INPUT_DEBOUNCE_MS = 600;
 
 function isImeSafeEnter(ev: KeyboardEvent): boolean {
   return ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229;
-}
-
-export function sanitizeClockLabel(
-  raw: unknown,
-  maxBytes = 32,
-  trimEdges = true,
-): string {
-  const str = String(raw ?? "");
-  let collapsed = "";
-  let prevSpace = trimEdges;
-  for (const ch of str) {
-    const code = ch.charCodeAt(0);
-    if (
-      code < 0x20 ||
-      code === 0x7f ||
-      ch === "|" ||
-      ch === ";" ||
-      ch === "\x1e" ||
-      ch === "\x1f" ||
-      ch === " " ||
-      ch === "\t" ||
-      ch === "\r" ||
-      ch === "\n"
-    ) {
-      if (!prevSpace) {
-        collapsed += " ";
-        prevSpace = true;
-      }
-      continue;
-    }
-    collapsed += ch;
-    prevSpace = false;
-  }
-  const normalized = trimEdges ? collapsed.trim() : collapsed;
-  if (typeof TextEncoder === "undefined") {
-    const sliced = normalized.slice(0, maxBytes);
-    return trimEdges ? sliced.trimEnd() : sliced;
-  }
-  const enc = new TextEncoder();
-  if (enc.encode(normalized).length <= maxBytes) {
-    return normalized;
-  }
-  let out = "";
-  for (const cp of normalized) {
-    if (enc.encode(out + cp).length > maxBytes) break;
-    out += cp;
-  }
-  return trimEdges ? out.trimEnd() : out;
-}
-
-function fallbackLabelForIana(iana: string): string {
-  const tail = iana.split("/").pop() || iana;
-  return sanitizeClockLabel(tail.replace(/_/g, " ")) || iana;
-}
-
-export function parseWorldClocksSpec(raw: unknown): WorldClockItemView[] {
-  const out: WorldClockItemView[] = [];
-  const seen = new Set<string>();
-  for (const part of String(raw ?? "").split(";")) {
-    const rec = part.trim();
-    if (!rec) continue;
-    const pipeIdx = rec.indexOf("|");
-    if (pipeIdx < 0) continue;
-    const rawLbl = rec.slice(0, pipeIdx);
-    const iana = rec.slice(pipeIdx + 1).trim();
-    if (!iana || PINNED_UTC_ZONES.has(iana) || !IANA_ZONE_PATTERN.test(iana)) {
-      continue;
-    }
-    const label = sanitizeClockLabel(rawLbl) || fallbackLabelForIana(iana);
-    const dedupKey = `${label.toLowerCase()}|${iana}`;
-    if (seen.has(dedupKey)) continue;
-    seen.add(dedupKey);
-    out.push({ label, iana });
-    if (out.length >= MAX_WORLD_CLOCKS) break;
-  }
-  return out;
-}
-
-export function serializeWorldClocksSpec(items: ReadonlyArray<WorldClockItemView>): string {
-  return items
-    .slice(0, MAX_WORLD_CLOCKS)
-    .map((item) => {
-      const cleaned = sanitizeClockLabel(item.label);
-      return cleaned ? `${cleaned}|${item.iana}` : "";
-    })
-    .filter(Boolean)
-    .join(";");
 }
 
 export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
@@ -187,8 +99,9 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
   ): void => {
     if (idx < 0 || idx >= enabledWorldClocks.length) return;
     const prev = enabledWorldClocks[idx];
+    if (!prev) return;
     const nextIana = (patch.iana ?? prev.iana).trim();
-    if (!nextIana || PINNED_UTC_ZONES.has(nextIana) || !IANA_ZONE_PATTERN.test(nextIana)) {
+    if (!isValidWorldClockZone(nextIana)) {
       return;
     }
     const nextLabel =
@@ -221,10 +134,13 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
     }
     const next = [...enabledWorldClocks];
     const [picked] = next.splice(fromIdx, 1);
+    if (!picked) return;
     next.splice(toIdx, 0, picked);
     if (store.worldClockRowKeys.length === enabledWorldClocks.length) {
       const [pickedKey] = store.worldClockRowKeys.splice(fromIdx, 1);
-      store.worldClockRowKeys.splice(toIdx, 0, pickedKey);
+      if (pickedKey !== undefined) {
+        store.worldClockRowKeys.splice(toIdx, 0, pickedKey);
+      }
     }
     updateWorldClocks(next);
   };
@@ -255,7 +171,7 @@ export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
       newLabelEl?.focus();
       return;
     }
-    if (!picked || PINNED_UTC_ZONES.has(picked) || !IANA_ZONE_PATTERN.test(picked)) {
+    if (!isValidWorldClockZone(picked)) {
       store.showToast(store.t("dialogs.toast_select_tz"), true);
       zoneSelEl?.focus();
       return;

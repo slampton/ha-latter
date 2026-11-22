@@ -44,7 +44,7 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
     selectableImages.length > 0 && selectableImages.every((img) => selectedSet.has(img.relpath));
 
   const crumbs = modal.subpath ? modal.subpath.split("/").filter(Boolean) : [];
-  const currentFolderName = crumbs.length > 0 ? crumbs[crumbs.length - 1] : modal.root || "Media";
+  const currentFolderName = (crumbs.length > 0 ? crumbs[crumbs.length - 1] : undefined) ?? (modal.root || "Media");
 
   const toggleImagePath = (relpath: string): void => {
     const next = selectedSet.has(relpath)

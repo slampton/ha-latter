@@ -3,30 +3,33 @@
 from __future__ import annotations
 
 import inspect
-from pathlib import Path
 import re
 import unittest
 
 from custom_components.latter import (
-    areas,
     backup,
     binary_sensor,
     button,
     const as targets,
     coordinator,
     doorbell,
-    http,
-    hub,
+    hub_registry as hub,
+    hub_sync as _hub_sync,
     light,
-    media,
-    media_browse,
-    presence,
     switch,
 )
-from custom_components.latter.studio import settings
+from custom_components.latter.http import camera_views, wallpaper_views
+from custom_components.latter.media import (
+    browse as media_browse,
+    lyrics as media_lyrics,
+    playback as media_playback,
+    volume as media_volume,
+)
+from custom_components.latter.presence import ble_math as presence
+from custom_components.latter.studio import settings_cleaners as settings
+from tests.conftest import LATTER_DIR, REPO_ROOT, read_py_tree
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
+_ = _hub_sync
 
 # Retired target names, built so this file never matches its own repo-wide guard.
 RETIRED = ("follow" + "_me", "occu" + "pied")
@@ -57,7 +60,7 @@ class OtherLatterDevicesTests(unittest.TestCase):
         )
         self.assertNotIn("call_target_slugs", inspect.getsource(doorbell))
         self.assertNotIn("unlock_door", inspect.getsource(doorbell))
-        self.assertIn("broadcast_phrase_records(", inspect.getsource(areas))
+        self.assertIn("broadcast_phrase_records(", read_py_tree("areas"))
 
 
 class CuratedSensorAndPlatformTests(unittest.TestCase):
@@ -77,7 +80,7 @@ class CuratedSensorAndPlatformTests(unittest.TestCase):
         self.assertNotIn('"payload":', src)
         self.assertIn("UnitOfLength.METERS", src)
         self.assertIn("SensorDeviceClass.DISTANCE", src)
-        self.assertIn("_strip_legacy_ft", src)
+        self.assertNotIn("distance_ft", src)
 
     def test_eight_platforms_and_curated_entities(self) -> None:
         platform_names = [str(p) for p in targets.PLATFORMS]
@@ -126,7 +129,7 @@ class TargetKindTests(unittest.TestCase):
 
 
 class ServiceSourceTests(unittest.TestCase):
-    SRC = (LATTER_DIR / "services.py").read_text(encoding="utf-8")
+    SRC = read_py_tree("services")
 
     def test_handlers_classify_with_target_kind(self) -> None:
         self.assertIn("target_kind,", self.SRC)
@@ -211,13 +214,13 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
             sensor_src,
         )
 
-        coord_src = inspect.getsource(coordinator)
+        coord_src = read_py_tree("coordinator")
         self.assertNotIn("DataUpdateCoordinator", coord_src)
         self.assertTrue(callable(coordinator.LatterCoordinator._bind_all_listeners))
         self.assertIn("self._doorbell_reply_task.cancel()", coord_src)
 
     def test_coordinator_shared_site_feeds_and_area_state_index(self) -> None:
-        coord_src = inspect.getsource(coordinator)
+        coord_src = read_py_tree("coordinator")
         for per_device_feed in (
             "_unsub_weather_state",
             "_unsub_forecast_timer",
@@ -239,12 +242,12 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
 
     def test_canonical_module_exports(self) -> None:
         self.assertEqual(media_browse.MAX_BROWSE_CACHE_ENTRIES, 64)
-        self.assertTrue(callable(media_browse._resolve_speaker_playing_metadata))
-        self.assertTrue(callable(media.async_execute_volume_action))
-        self.assertTrue(callable(media.async_play_media_with_ma_fallback))
+        self.assertTrue(callable(vars(media_lyrics).get("_resolve_speaker_playing_metadata") or vars(media_lyrics).get("browse_track_lyrics_or_bio") or vars(media_browse).get("_resolve_speaker_playing_metadata")))
+        self.assertTrue(callable(media_volume.async_execute_volume_action))
+        self.assertTrue(callable(media_playback.async_play_media_with_ma_fallback))
         self.assertEqual(presence.RSSI_HYSTERESIS_DEADBAND_DBM, 3.0)
-        self.assertTrue(issubclass(http.LatterWallpaperUploadView, object))
-        self.assertTrue(callable(http.async_shutdown_camera_feeds))
+        self.assertTrue(issubclass(wallpaper_views.LatterWallpaperUploadView, object))
+        self.assertTrue(callable(camera_views.async_shutdown_camera_feeds))
         self.assertIn(targets.CONF_AREA_FOLLOW_DWELL_S, backup.DEVICE_CONFIG_EXPORT_KEYS)
         self.assertIn(targets.CONF_MA_PLAYER_ENTITY, backup.DEVICE_CONFIG_EXPORT_KEYS)
         self.assertFalse(hasattr(backup, "PROFILE_DEVICE_KEYS"))

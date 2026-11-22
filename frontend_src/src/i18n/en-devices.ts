@@ -40,7 +40,6 @@ export const EN_DEVICES_STRINGS = {
   "devices.col_group": "Group",
   "devices.col_status": "Status",
   "devices.filter_aria": "Filter managed Devices by category",
-  "devices.open_row_aria": "Open {title}",
   "devices.all": "All Devices",
   "devices.online": "Online Devices",
   "devices.roaming": "Roaming Devices",
@@ -98,19 +97,8 @@ export const EN_DEVICES_STRINGS = {
   "discovered.restored_toast": "Restored \"{title}\" to discovered list",
 
   // Wallpaper gallery & multipart upload (D-25 / Q5)
-  "wp_gallery.empty": "No wallpapers available yet.",
-  "wp_gallery.use_aria": "Use wallpaper {name}",
-  "wp_gallery.star_add_aria": "Star {name} for rotation",
-  "wp_gallery.star_remove_aria": "Remove {name} from favorites",
-  "wp_gallery.star_active_title": "Starred for rotation",
-  "wp_gallery.star_inactive_title": "Star for rotation",
-  "wp_gallery.delete_aria": "Delete wallpaper {name}",
-  "wp_gallery.uploaded": "Uploaded",
   "wp_gallery.builtin": "Built-in",
-  "wp_gallery.file_aria": "Wallpaper image (up to 15 MB)",
-  "wp_gallery.upload_photo": "Upload photo",
   "wp_gallery.uploading": "Uploading…",
-  "wp_gallery.uploading_photo": "Uploading photo…",
   "wp_gallery.upload_progress_aria": "Wallpaper upload progress",
 
   // Device -> Overview (D-003 / D-066 / F-01)
@@ -208,7 +196,6 @@ export const EN_DEVICES_STRINGS = {
   "dev_display.add_color_btn": "Add color",
   "dev_display.wallpapers_subtitle":
     "Shared photo library and collections cropped automatically for this display.",
-  "dev_display.active_wallpaper_label": "Active wallpaper",
   "dev_display.choose_wallpaper": "Choose wallpaper…",
   "dev_display.manage_photo_library": "Manage photo library",
   "dev_display.pool_single_meta": "Single photo • {name}",
@@ -224,26 +211,6 @@ export const EN_DEVICES_STRINGS = {
   "dev_display.wp_override_weather_only":
     "Live weather background is active in Sky & weather — wallpapers appear on Home and other screens.",
   "dev_display.open_interface": "Open Interface",
-  "dev_display.wp_weather_bg_note":
-    "Weather background is enabled on Home — wallpapers appear across other screens.",
-  "dev_display.wp_rotating_named_starred_one":
-    "{name} • rotating 1 starred wallpaper.",
-  "dev_display.wp_rotating_named_starred_many":
-    "{name} • rotating {count} starred wallpapers.",
-  "dev_display.wp_rotating_named_all": "{name} • rotating all {count} wallpapers.",
-  "dev_display.wp_rotating_starred_one": "Rotating 1 starred wallpaper.",
-  "dev_display.wp_rotating_starred_many": "Rotating {count} starred wallpapers.",
-  "dev_display.wp_rotating_all": "Rotating all {count} wallpapers.",
-  "dev_display.wp_static_named": "{name} (static — not rotating).",
-  "dev_display.wp_off": "Off — select Use on a wallpaper below or enable rotation.",
-  "dev_display.wp_hint_none":
-    "No wallpapers starred — rotation cycles through all wallpapers.",
-  "dev_display.wp_hint_one":
-    "1 wallpaper starred — star at least 2 to cycle between favorites.",
-  "dev_display.wp_hint_many":
-    "{starred} of {total} wallpapers starred for rotation.",
-  "dev_display.stop_rotation": "Stop rotation",
-  "dev_display.enable_rotation": "Enable rotation",
   "dev_display.turn_off_wallpaper": "Turn off wallpaper",
   "dev_display.rotation_interval_label": "Rotation interval",
   "dev_display.rotation_interval_aria": "Wallpaper rotation interval",
@@ -254,8 +221,6 @@ export const EN_DEVICES_STRINGS = {
   "dev_display.rot_60": "Every hour",
   "dev_display.rot_360": "Every 6 hours",
   "dev_display.rot_1440": "Once a day",
-  "dev_display.star_all": "Star all",
-  "dev_display.clear_stars": "Clear stars",
 
   // Device -> Interface (D-053 / D-064 / D-069 / U4)
   "dev_interface.enable_home_desc":
@@ -311,7 +276,6 @@ export const EN_DEVICES_STRINGS = {
   "dev_interface.categories_enabled_many": "{count} categories enabled",
   "dev_interface.remote_follow_area": "Follow the active Area",
   "dev_interface.remote_all": "All System remotes",
-  "dev_interface.weather_meta": "Current, forecast, Sun & Moon",
   "dev_interface.weather_meta_live_sky": "Live weather sky",
   "dev_interface.weather_meta_wallpaper": "Uses device wallpaper",
   "dev_interface.time_utc_world_one": "UTC + 1 world clock",
