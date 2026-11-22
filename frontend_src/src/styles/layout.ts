@@ -45,6 +45,7 @@ export const LAYOUT_STYLES = css`
     min-height: calc(100dvh - var(--studio-header-height));
   }
   aside.sidebar {
+    min-inline-size: 0;
     background: var(--studio-sidebar-bg);
     border-inline-end: 1px solid var(--studio-divider);
     display: flex;
@@ -152,6 +153,7 @@ export const LAYOUT_STYLES = css`
     display: flex;
     flex-direction: column;
     gap: var(--studio-space-4);
+    min-inline-size: 0;
   }
   .page-title {
     display: flex;

@@ -126,6 +126,7 @@ test.describe("WCAG 2.2 AA axe-core, Light/Dark Themes, Mobile 360x800 & RTL E2E
     // Columns stack vertically on 360px mobile and status tiles stay compact 2x2 without overflow
     for (const mobilePath of [
       "/latter/system/overview",
+      "/latter/system/shared",
       "/latter/system/presence",
       "/latter/devices",
       "/latter/devices/sub_desk/overview",

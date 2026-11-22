@@ -517,8 +517,10 @@ export const CONTROL_STYLES = css`
   .sortable-row-actions {
     display: inline-flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--studio-space-1);
-    flex-shrink: 0;
+    min-inline-size: 0;
+    max-inline-size: 100%;
   }
   .sortable-row-stacked {
     flex-direction: column;

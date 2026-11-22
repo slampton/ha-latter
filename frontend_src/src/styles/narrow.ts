@@ -23,7 +23,7 @@ export const NARROW_STYLES = css`
   @media (max-width: 860px) {
     .titlebar-brand .ha-menu-btn { display: inline-flex; }
     .titlebar-title { padding-inline-start: 0; }
-    .app-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
     aside.sidebar {
       align-self: start;
       position: sticky;

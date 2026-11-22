@@ -699,7 +699,8 @@ export const DATA_STYLES = css`
     align-items: center;
     flex-wrap: wrap;
     gap: var(--studio-space-2);
-    flex-shrink: 0;
+    min-inline-size: 0;
+    max-inline-size: 100%;
   }
   .cam-preview {
     display: flex;
