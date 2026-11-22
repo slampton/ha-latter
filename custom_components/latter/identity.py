@@ -40,30 +40,16 @@ _MAX_VIDEO_FPS_CAP: Final = 15
 
 
 def iter_devices(dev_reg: dr.DeviceRegistry) -> Iterable[dr.DeviceEntry]:
-    """Iterate `DeviceRegistry` entries across Home Assistant versions and test doubles."""
-    devices = getattr(dev_reg, "devices", None)
-    if devices is None:
-        return ()
-    if hasattr(devices, "values"):
-        vals: Iterable[dr.DeviceEntry] = devices.values()
-        return vals
-    items: Iterable[dr.DeviceEntry] = devices
-    return items
+    """Iterate active `DeviceEntry` objects in the Home Assistant `DeviceRegistry`."""
+    return dev_reg.devices
 
 
 _iter_devices = iter_devices
 
 
 def iter_entities(ent_reg: er.EntityRegistry) -> Iterable[er.RegistryEntry]:
-    """Iterate `EntityRegistry` entries across Home Assistant versions and test doubles."""
-    entities = getattr(ent_reg, "entities", None)
-    if entities is None:
-        return ()
-    if hasattr(entities, "values"):
-        vals: Iterable[er.RegistryEntry] = entities.values()
-        return vals
-    items: Iterable[er.RegistryEntry] = entities
-    return items
+    """Iterate active `RegistryEntry` objects in the Home Assistant `EntityRegistry`."""
+    return ent_reg.entities.values()
 
 
 _iter_entities = iter_entities
@@ -303,7 +289,8 @@ def get_bound_esphome_device(
     if isinstance(device_or_id, dr.DeviceEntry):
         dev: dr.DeviceEntry | None = device_or_id
     elif isinstance(device_or_id, str) and device_or_id.strip():
-        dev = dev_reg.async_get(device_or_id.strip())
+        got = dev_reg.async_get(device_or_id.strip())
+        dev = got if isinstance(got, dr.DeviceEntry) else None
     else:
         return None
     if dev is None:
@@ -313,7 +300,8 @@ def get_bound_esphome_device(
         and not is_esphome_device(hass, dev)
         and dev.via_device_id
     ):
-        return dev_reg.async_get(dev.via_device_id)
+        via = dev_reg.async_get(dev.via_device_id)
+        return via if isinstance(via, dr.DeviceEntry) else None
     return dev
 
 

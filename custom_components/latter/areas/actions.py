@@ -6,7 +6,7 @@ import logging
 import math
 from typing import Any, Final
 
-from homeassistant.components.lock import LockEntityFeature
+from homeassistant.components.lock.const import LockEntityFeature
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     STATE_ON,

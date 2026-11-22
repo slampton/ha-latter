@@ -127,7 +127,7 @@ class CoordinatorStateBase:
     _packer: DomainPayloadPacker
     _cached_esphome_device_id: str | None
     rev: int
-    _notify_debouncer: Debouncer[None]
+    _notify_debouncer: Debouncer[Coroutine[Any, Any, None]]
     _rpc_receiver: Any
 
     _cached_media_payload: tuple[float, tuple[str | None, dict[str, Any]]] | None

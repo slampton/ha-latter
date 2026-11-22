@@ -7,14 +7,10 @@ from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-from homeassistant.helpers import (
-    area_registry as ar,
-    device_registry as dr,
-    entity_registry as er,
-)
+from homeassistant.core import SupportsResponse
+from homeassistant.helpers import area_registry as ar, device_registry as dr
 from homeassistant.util import dt as dt_util
 
-from custom_components.latter import async_unload_entry
 from custom_components.latter.areas.registry import (
     infer_area_icon_from_name,
     resolve_area_icon,
@@ -45,6 +41,7 @@ from custom_components.latter.hub_registry import (
     get_area_state_index,
     is_media_position_only_tick,
 )
+from tests.helpers import ensure_area, mock_service, register_device, register_entity
 
 
 def _make_query_request(url: str) -> Any:
@@ -59,23 +56,25 @@ async def test_area_state_index_reactive_lookup_and_media_tick_filtering(
     """Verify O(1) AreaStateIndex updates on registry events and ignores media_position-only ticks."""
     entry, _sys_obj, _coord = await setup_latter_hub(hass)
     idx = get_area_state_index(hass)
-    ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
     area_reg = ar.async_get(hass)
 
-    # Register a lamp device in living_room with a light and temperature sensor
-    lamp_dev = dev_reg.async_get_or_create(
+    # Register a lamp device in living_room with a light
+    lamp_dev = register_device(
+        hass,
         config_entry_id="hue_entry",
+        entry_domain="hue",
         identifiers={("hue", "lamp_1")},
         name="Floor Lamp",
+        manufacturer="Latter",
         area_id="living_room",
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="light.floor_lamp",
-            platform="hue",
-            device_id=lamp_dev.id,
-        )
+    register_entity(
+        hass,
+        "light.floor_lamp",
+        platform="hue",
+        config_entry_id="hue_entry",
+        device_id=lamp_dev.id,
     )
     hass.states.async_set(
         "light.floor_lamp",
@@ -83,12 +82,11 @@ async def test_area_state_index_reactive_lookup_and_media_tick_filtering(
         {"brightness": 204, "friendly_name": "Living Room Floor Lamp"},
     )
 
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.living_speaker",
-            platform="music_assistant",
-            area_id="living_room",
-        )
+    register_entity(
+        hass,
+        "media_player.living_speaker",
+        platform="music_assistant",
+        area_id="living_room",
     )
     now_dt = dt_util.utcnow()
     hass.states.async_set(
@@ -123,6 +121,7 @@ async def test_area_state_index_reactive_lookup_and_media_tick_filtering(
             "mass_player_type": "player",
         },
     )
+    await hass.async_block_till_done()
     new_mp = hass.states.get("media_player.living_speaker")
     assert is_media_position_only_tick(old_mp, new_mp) is True
     assert fired_events == []
@@ -138,6 +137,7 @@ async def test_area_state_index_reactive_lookup_and_media_tick_filtering(
             "mass_player_type": "player",
         },
     )
+    await hass.async_block_till_done()
     assert len(fired_events) == 1
 
     # Move device from living_room -> kitchen dynamically
@@ -148,14 +148,14 @@ async def test_area_state_index_reactive_lookup_and_media_tick_filtering(
     assert "light.floor_lamp" not in [s.entity_id for s in idx.entities_in_area("living_room", ("light",))]
 
     # Dynamic new Area creation & deletion
-    area_reg.async_create("Patio", area_id="patio")
+    patio = ensure_area(hass, "Patio", area_id="patio")
     await hass.async_block_till_done()
     assert hass.states.get("binary_sensor.patio_occupancy") is not None
-    area_reg.async_delete("patio")
+    area_reg.async_delete(patio.id)
     await hass.async_block_till_done()
 
     unsub_lr()
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_calendar_feeds_and_doorbell_ring_reflex(
@@ -163,8 +163,6 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
 ) -> None:
     """Verify calendar/forecast snapshot builders and doorbell ring (not motion) auto-wake reflex."""
     entry, _sys_obj, coord = await setup_latter_hub(hass)
-    ent_reg = er.async_get(hass)
-    dev_reg = dr.async_get(hass)
 
     # Calendar + Sun/Moon + Weather forecast
     assert compute_moon_phase(947182440.0) == "new_moon"
@@ -177,7 +175,8 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
     tomorrow_str = (now_local + timedelta(days=2)).strftime("%Y-%m-%d")
     event_iso = (now_local + timedelta(hours=2)).isoformat()
 
-    hass.services.async_register(
+    mock_service(
+        hass,
         "calendar",
         "get_events",
         lambda _call: {
@@ -203,8 +202,10 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
                 ]
             }
         },
+        supports_response=SupportsResponse.ONLY,
     )
-    hass.services.async_register(
+    mock_service(
+        hass,
         "weather",
         "get_forecasts",
         lambda _call: {
@@ -220,6 +221,7 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
                 ]
             }
         },
+        supports_response=SupportsResponse.ONLY,
     )
 
     records, slots = await async_fetch_calendar_agenda(
@@ -232,10 +234,13 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
     assert not hasattr(coord, "build_map_snapshot_url")
 
     # Doorbell device with camera, speaker, lock, ring sensor, AND motion sensor
-    door_dev = dev_reg.async_get_or_create(
+    door_dev = register_device(
+        hass,
         config_entry_id="protect_entry",
+        entry_domain="unifiprotect",
         identifiers={("unifiprotect", "g4_doorbell")},
         name="Front Doorbell",
+        manufacturer="Latter",
         area_id="living_room",
     )
     for eid, orig_name, st_val in (
@@ -245,13 +250,13 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
         ("binary_sensor.front_door_doorbell", "Doorbell", "off"),
         ("binary_sensor.front_door_motion", "Motion", "off"),
     ):
-        ent_reg.async_register(
-            er.RegistryEntry(
-                entity_id=eid,
-                platform="unifiprotect",
-                device_id=door_dev.id,
-                original_name=orig_name,
-            )
+        register_entity(
+            hass,
+            eid,
+            platform="unifiprotect",
+            config_entry_id="protect_entry",
+            device_id=door_dev.id,
+            original_name=orig_name,
         )
         hass.states.async_set(eid, st_val, {"friendly_name": orig_name})
 
@@ -270,23 +275,35 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
     assert targets["tts_lead_in"] is True
 
     # Exact device_id sibling matching: a standalone camera MUST NOT substring-match an unrelated speaker
-    patio_cam_dev = dev_reg.async_get_or_create(
+    patio_cam_dev = register_device(
+        hass,
         config_entry_id="protect_entry",
+        entry_domain="unifiprotect",
         identifiers={("unifiprotect", "patio_cam")},
         name="Patio Cam",
+        manufacturer="Latter",
     )
-    other_spk_dev = dev_reg.async_get_or_create(
+    other_spk_dev = register_device(
+        hass,
         config_entry_id="sonos_entry",
+        entry_domain="sonos",
         identifiers={("sonos", "patio_spk")},
         name="Patio Cam Speaker",
+        manufacturer="Latter",
     )
-    ent_reg.async_register(
-        er.RegistryEntry(entity_id="camera.patio_cam", platform="unifiprotect", device_id=patio_cam_dev.id)
+    register_entity(
+        hass,
+        "camera.patio_cam",
+        platform="unifiprotect",
+        config_entry_id="protect_entry",
+        device_id=patio_cam_dev.id,
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.patio_cam_speaker", platform="sonos", device_id=other_spk_dev.id
-        )
+    register_entity(
+        hass,
+        "media_player.patio_cam_speaker",
+        platform="sonos",
+        config_entry_id="sonos_entry",
+        device_id=other_spk_dev.id,
     )
     hass.states.async_set("camera.patio_cam", "streaming")
     hass.states.async_set("media_player.patio_cam_speaker", "idle")
@@ -355,7 +372,7 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
     assert r_no_rtsp.body[:4] == b"RIFF"
 
     await async_shutdown_doorbell_streams(hass)
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_area_icon_resolution_wire_packing_and_live_registry_update(
@@ -412,10 +429,10 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     area_reg = ar.async_get(hass)
     dev_reg = dr.async_get(hass)
-    living = area_reg.async_create("Living Area", area_id="living")
+    living = ensure_area(hass, "Living Area", area_id="living")
     assert living.icon is None
 
-    hass.config.time_zone = "America/Los_Angeles"
+    await hass.config.async_set_time_zone("America/Los_Angeles")
     coord.async_set_active_area("living")
     coord.cached_area_payload = None
     area_state, area_attrs = coord.get_area_context_payload()
@@ -432,17 +449,22 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     assert wire_tokens[41] == ""
 
     # Live Area registry icon edit invalidates cached payload and updates wire index 35
-    area_reg.async_update("living", icon="mdi:television-classic")
+    area_reg.async_update(living.id, icon="mdi:television-classic")
+    await hass.async_block_till_done()
     area_state_updated, area_attrs_updated = coord.get_area_context_payload()
     assert area_state_updated == "Living Area"
     assert area_attrs_updated["area_icon"] == "mdi:television-classic"
     assert area_attrs_updated["payload"].split("\x1f")[35] == "mdi:television-classic"
 
     # Unassigned Device sends empty area_icon ("")
-    esp_dev = dev_reg.async_get(coord.esphome_device_id)
-    if esp_dev is not None:
-        esp_dev.area_id = None
-    coord._live_subentry().data[CONF_DEFAULT_AREA] = ""
+    if coord.esphome_device_id:
+        dev_reg.async_update_device(coord.esphome_device_id, area_id=None)
+    hass.config_entries.async_update_subentry(
+        entry,
+        coord._live_subentry(),
+        data={**coord.device_data, CONF_DEFAULT_AREA: ""},
+    )
+    await hass.async_block_till_done()
     coord._clear_active_area()
     coord.cached_area_payload = None
     unassigned_state, unassigned_attrs = coord.get_area_context_payload()
@@ -450,4 +472,4 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     assert unassigned_attrs["area_icon"] == ""
     assert unassigned_attrs["payload"].split("\x1f")[35] == ""
 
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

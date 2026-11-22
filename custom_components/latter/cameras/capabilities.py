@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping
 from typing import Any, Final
 
-from homeassistant.components.camera import CameraEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
@@ -20,7 +19,8 @@ from .transcode import (
     CAMERA_CAP_SHOW_UNLOCK as CAMERA_CAP_SHOW_UNLOCK,
 )
 
-_CAMERA_FEATURE_STREAM: Final[int] = int(CameraEntityFeature.STREAM)
+# Matches `CameraEntityFeature.STREAM` (bit 1 = 2); avoids eager import of optional `camera`/`stream`.
+_CAMERA_FEATURE_STREAM: Final[int] = 2
 _MAX_LABEL_LEN: Final[int] = 32
 _AUDIO_TRUE_TOKENS: Final[frozenset[str]] = frozenset({"1", "true", "yes", "on"})
 

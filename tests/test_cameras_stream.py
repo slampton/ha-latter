@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import io
-import sys
 from types import SimpleNamespace
 from typing import Any
 
+from homeassistant.components import camera as ha_camera
+from homeassistant.exceptions import HomeAssistantError
 from PIL import Image
 import pytest
 
@@ -21,11 +22,12 @@ from custom_components.latter.cameras.transcode import (
     format_mjpeg_chunk,
     inspect_jpeg_header,
 )
+from tests.helpers import install_camera_mocks, make_jpeg_bytes
 
 
 def _make_baseline_420_jpeg(width: int, height: int) -> bytes:
-    """Build a valid Baseline 4:2:0 JPEG (real via Pillow when installed, SOF0 stub fallback)."""
-    real_raw = _make_real_or_stub_jpeg(width, height)
+    """Build a valid Baseline 4:2:0 JPEG via Pillow with SOF0 stub fallback."""
+    real_raw = make_jpeg_bytes(width, height, (36, 92, 148))
     is_b420, rw, rh = inspect_jpeg_header(real_raw)
     if is_b420 and rw == width and rh == height:
         return real_raw
@@ -42,14 +44,6 @@ def _make_baseline_420_jpeg(width: int, height: int) -> bytes:
     )
     sos = b"\xff\xda\x00\x08\x01\x01\x00\x00?\x00\x00"
     return b"\xff\xd8" + sof0 + sos + b"\xff\xd9"
-
-
-def _make_real_or_stub_jpeg(width: int, height: int) -> bytes:
-    buf = io.BytesIO()
-    Image.new("RGB", (width, height), (36, 92, 148)).save(
-        buf, format="JPEG", progressive=False, subsampling=2
-    )
-    return buf.getvalue()
 
 
 def _jpeg_size(raw: bytes) -> tuple[int, int]:
@@ -111,9 +105,14 @@ async def test_rtsp_tier_1_ingest_fanout_and_zero_copy(
     hass: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Two subscribers on one RTSP camera share 1 FFmpeg ingest; exact match is zero-copy, smaller downscales."""
-    hass.data.setdefault("_camera_streams", {})["camera.front_door"] = (
-        "rtsp://10.0.0.10/front"
+    # Disable parallel snapshot primer via HomeAssistantError so frame #1 strictly exercises zero-copy RTSP pass-through
+    install_camera_mocks(
+        monkeypatch,
+        images={"camera.front_door": HomeAssistantError("primer disabled")},
+        streams={"camera.front_door": "rtsp://10.0.0.10/front"},
     )
+    monkeypatch.setattr(cameras_mod.shutil, "which", lambda _cmd: "/usr/bin/ffmpeg")
+
     frame_a = _make_baseline_420_jpeg(464, 256)
     frame_b = _make_baseline_420_jpeg(464, 256)
     spawned: list[_FakeSubprocess] = []
@@ -128,9 +127,6 @@ async def test_rtsp_tier_1_ingest_fanout_and_zero_copy(
         return proc
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_exec)
-    # Disable parallel snapshot primer on this test so frame #1 strictly exercises zero-copy RTSP pass-through
-    cam_mod = sys.modules["homeassistant.components.camera"]
-    monkeypatch.setattr(cam_mod, "async_get_image", None, raising=False)
 
     transcode_calls: list[tuple[int, int]] = []
     orig_transcode = cameras_mod.transcode_camera_frame
@@ -150,7 +146,7 @@ async def test_rtsp_tier_1_ingest_fanout_and_zero_copy(
             "camera.front_door", 240, 240, fps=5, fit="contain"
         )
 
-        # Primary exact match gets zero-copy JPEG bytes (exact identity `is` or equal without Pillow)
+        # Primary exact match gets zero-copy JPEG bytes
         p_frame = await anext(gen_primary)
         assert p_frame == frame_a
         assert len(spawned) == 1
@@ -178,7 +174,6 @@ async def test_mjpeg_tier2_fallback_when_no_rtsp(
     hass: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """When `async_get_stream_source` returns None, hub cascades to Tier 2 `camera.async_get_mjpeg_stream`."""
-    cam_mod = sys.modules["homeassistant.components.camera"]
     raw_frame = _make_baseline_420_jpeg(320, 192)
     mjpeg_payload = format_mjpeg_chunk(raw_frame)
 
@@ -186,7 +181,7 @@ async def test_mjpeg_tier2_fallback_when_no_rtsp(
         assert entity_id == "camera.garage"
         return SimpleNamespace(body=mjpeg_payload)
 
-    monkeypatch.setattr(cam_mod, "async_get_mjpeg_stream", _fake_mjpeg_stream, raising=False)
+    install_camera_mocks(monkeypatch, mjpeg_fn=_fake_mjpeg_stream)
 
     hub = LatterCameraStreamHub(hass, idle_timeout_s=0.1)
     try:
@@ -204,15 +199,16 @@ async def test_snapshot_tier3_fallback_when_no_rtsp_or_mjpeg(
     hass: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """When RTSP and MJPEG are unavailable, hub falls back to Tier 3 paced `camera.async_get_image`."""
-    cam_mod = sys.modules["homeassistant.components.camera"]
-    monkeypatch.setattr(cam_mod, "async_get_mjpeg_stream", None, raising=False)
-    hass.data.setdefault("_camera_images", {})["camera.cloud_cam"] = _make_real_or_stub_jpeg(
-        640, 360
+    install_camera_mocks(
+        monkeypatch, images={"camera.cloud_cam": make_jpeg_bytes(640, 360)}
     )
+    monkeypatch.setattr(ha_camera, "async_get_mjpeg_stream", None, raising=False)
 
     hub = LatterCameraStreamHub(hass, idle_timeout_s=0.1)
     try:
-        gen = hub.async_iter_stream_frames("camera.cloud_cam", 320, 240, fps=10, fit="contain")
+        gen = hub.async_iter_stream_frames(
+            "camera.cloud_cam", 320, 240, fps=10, fit="contain"
+        )
         frame = await anext(gen)
         assert frame.startswith(b"\xff\xd8")
         w, h = _jpeg_size(frame)
@@ -223,28 +219,27 @@ async def test_snapshot_tier3_fallback_when_no_rtsp_or_mjpeg(
         await hub.async_shutdown()
 
 
-# ---------------------------------------------------------------------------
-# 2x2 Grid Compositor, Warm Snapshot, Guardrails & Capabilities Tests
-# ---------------------------------------------------------------------------
-
-
 async def test_grid_compositor_with_one_offline_camera(
     hass: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """2x2 Grid composites 3 live cameras + 1 offline camera into one 16px-aligned Baseline JPEG."""
-    cam_mod = sys.modules["homeassistant.components.camera"]
-    monkeypatch.setattr(cam_mod, "async_get_mjpeg_stream", None, raising=False)
-
-    images = hass.data.setdefault("_camera_images", {})
-    images["camera.front"] = _make_real_or_stub_jpeg(640, 360)
-    images["camera.back"] = _make_real_or_stub_jpeg(640, 480)
-    images["camera.driveway"] = _make_real_or_stub_jpeg(360, 640)
-    images["camera.broken"] = RuntimeError("Camera offline")
+    images, _ = install_camera_mocks(
+        monkeypatch,
+        images={
+            "camera.front": make_jpeg_bytes(640, 360),
+            "camera.back": make_jpeg_bytes(640, 480),
+            "camera.driveway": make_jpeg_bytes(360, 640),
+            "camera.broken": RuntimeError("Camera offline"),
+        },
+    )
+    monkeypatch.setattr(ha_camera, "async_get_mjpeg_stream", None, raising=False)
 
     hass.states.async_set("camera.front", "idle", {"friendly_name": "Front Door"})
     hass.states.async_set("camera.back", "idle", {"friendly_name": "Backyard"})
     hass.states.async_set("camera.driveway", "idle", {"friendly_name": "Driveway"})
-    hass.states.async_set("camera.broken", "unavailable", {"friendly_name": "Side Gate"})
+    hass.states.async_set(
+        "camera.broken", "unavailable", {"friendly_name": "Side Gate"}
+    )
 
     hub = LatterCameraStreamHub(hass, idle_timeout_s=0.1)
     try:
@@ -265,8 +260,11 @@ async def test_grid_compositor_with_one_offline_camera(
         await hub.async_shutdown()
 
     # Pure compose_grid_frame check with corrupt frame bytes falls back to clean offline tile
+    front_bytes = images["camera.front"]
+    back_bytes = images["camera.back"]
+    assert isinstance(front_bytes, bytes) and isinstance(back_bytes, bytes)
     direct = compose_grid_frame(
-        [images["camera.front"], b"NOT_AN_IMAGE", None, images["camera.back"]],
+        [front_bytes, b"NOT_AN_IMAGE", None, back_bytes],
         ["Front", "Corrupt", "Offline", "Back"],
         466,
         466,
@@ -279,20 +277,20 @@ async def test_instant_snapshot_warm_hit_and_cold_miss(
     hass: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`async_get_snapshot` returns warm ingest frame immediately without fetching; cold miss fetches & transcodes."""
-    cam_mod = sys.modules["homeassistant.components.camera"]
-    monkeypatch.setattr(cam_mod, "async_get_mjpeg_stream", None, raising=False)
+    images, _ = install_camera_mocks(
+        monkeypatch, images={"camera.patio": make_jpeg_bytes(640, 360)}
+    )
+    monkeypatch.setattr(ha_camera, "async_get_mjpeg_stream", None, raising=False)
+
     fetch_count = 0
-    orig_get_image = cam_mod.async_get_image
+    orig_get_image = ha_camera.async_get_image
 
     async def _counting_get_image(h: Any, eid: str, **kw: Any) -> Any:
         nonlocal fetch_count
         fetch_count += 1
         return await orig_get_image(h, eid, **kw)
 
-    monkeypatch.setattr(cam_mod, "async_get_image", _counting_get_image)
-    hass.data.setdefault("_camera_images", {})["camera.patio"] = _make_real_or_stub_jpeg(
-        640, 360
-    )
+    monkeypatch.setattr(ha_camera, "async_get_image", _counting_get_image)
 
     hub = LatterCameraStreamHub(hass, idle_timeout_s=0.2)
     try:
@@ -318,7 +316,7 @@ async def test_instant_snapshot_warm_hit_and_cold_miss(
         await hub.async_shutdown()
 
     # Cold fetch error raises CameraFetchError
-    hass.data["_camera_images"]["camera.err"] = RuntimeError("timeout")
+    images["camera.err"] = RuntimeError("timeout")
     with pytest.raises(CameraFetchError):
         await hub.async_get_snapshot("camera.err", 320, 240)
 
@@ -328,14 +326,14 @@ async def test_video_semaphore_cap_and_shutdown_cleanup(
 ) -> None:
     """Dedicated video semaphore enforces max concurrent distinct ingests and releases cleanly on shutdown."""
     assert MAX_CONCURRENT_VIDEO_INGESTS == 6
-    cam_mod = sys.modules["homeassistant.components.camera"]
-    monkeypatch.setattr(cam_mod, "async_get_mjpeg_stream", None, raising=False)
+    images, _ = install_camera_mocks(monkeypatch)
+    monkeypatch.setattr(ha_camera, "async_get_mjpeg_stream", None, raising=False)
 
     hub = LatterCameraStreamHub(hass, max_concurrent_ingests=2, idle_timeout_s=0.1)
     gens: list[Any] = []
     try:
         for cid in ("camera.c1", "camera.c2"):
-            hass.data.setdefault("_camera_images", {})[cid] = _make_real_or_stub_jpeg(320, 240)
+            images[cid] = make_jpeg_bytes(320, 240)
             g = hub.async_iter_stream_frames(cid, 320, 240, fps=5)
             await anext(g)
             gens.append(g)
@@ -349,7 +347,7 @@ async def test_video_semaphore_cap_and_shutdown_cleanup(
         assert hub.active_ingest_count == 2
 
         # A 3rd distinct camera exceeds max_concurrent_ingests=2
-        hass.data["_camera_images"]["camera.c3"] = _make_real_or_stub_jpeg(320, 240)
+        images["camera.c3"] = make_jpeg_bytes(320, 240)
         g_over = hub.async_iter_stream_frames("camera.c3", 320, 240, fps=5)
         with pytest.raises(CameraIngestLimitError):
             await anext(g_over)
@@ -372,27 +370,41 @@ async def test_cold_rtsp_snapshot_primer_and_lru_idle_eviction(
     hass: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Cold RTSP emits an instant parallel snapshot primer, and idle warm ingests evict LRU when full."""
-    hass.data.setdefault("_camera_streams", {})["camera.slow_rtsp"] = "rtsp://10.0.0.99/slow"
-    hass.data["_camera_streams"]["camera.cam_two"] = "rtsp://10.0.0.99/two"
     live_jpeg = _make_baseline_420_jpeg(464, 256)
     snap_jpeg = _make_baseline_420_jpeg(464, 256)
+    install_camera_mocks(
+        monkeypatch,
+        images={"camera.slow_rtsp": snap_jpeg, "camera.cam_two": snap_jpeg},
+        streams={
+            "camera.slow_rtsp": "rtsp://10.0.0.99/slow",
+            "camera.cam_two": "rtsp://10.0.0.99/two",
+        },
+    )
+    monkeypatch.setattr(cameras_mod.shutil, "which", lambda _cmd: "/usr/bin/ffmpeg")
 
     release_rtsp = asyncio.Event()
 
     class _DelayedStdout:
         def __init__(self) -> None:
             self._sent = False
+            self._closed = False
+            self._eof_gate = asyncio.Event()
 
         async def read(self, _n: int = 32768) -> bytes:
-            if not self._sent:
+            if not self._sent and not self._closed:
                 await release_rtsp.wait()
+                if self._closed:
+                    return b""
                 self._sent = True
                 return format_mjpeg_chunk(live_jpeg)
-            await asyncio.sleep(3600)
+            if not self._closed:
+                await self._eof_gate.wait()
             return b""
 
         def close(self) -> None:
-            pass
+            self._closed = True
+            release_rtsp.set()
+            self._eof_gate.set()
 
     class _DelayedProc:
         def __init__(self) -> None:
@@ -401,9 +413,11 @@ async def test_cold_rtsp_snapshot_primer_and_lru_idle_eviction(
 
         def terminate(self) -> None:
             self.returncode = 0
+            self.stdout.close()
 
         def kill(self) -> None:
             self.returncode = -9
+            self.stdout.close()
 
         async def wait(self) -> int:
             return 0
@@ -411,18 +425,14 @@ async def test_cold_rtsp_snapshot_primer_and_lru_idle_eviction(
     async def _fake_exec(*_cmd: str, **_kwargs: Any) -> _DelayedProc:
         return _DelayedProc()
 
-    cam_mod = sys.modules["homeassistant.components.camera"]
-
-    async def _fast_snap(*_a: Any, **_kw: Any) -> Any:
-        return SimpleNamespace(content=snap_jpeg)
-
     monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_exec)
-    monkeypatch.setattr(cam_mod, "async_get_image", _fast_snap, raising=False)
 
     # Cap at 1 ingest with a long 10s idle timer to test LRU idle eviction
     hub = LatterCameraStreamHub(hass, max_concurrent_ingests=1, idle_timeout_s=10.0)
     try:
-        gen1 = hub.async_iter_stream_frames("camera.slow_rtsp", 464, 256, fps=10, fit="contain")
+        gen1 = hub.async_iter_stream_frames(
+            "camera.slow_rtsp", 464, 256, fps=10, fit="contain"
+        )
         # Primer delivers frame #0 immediately even while RTSP is still blocked waiting for IDR keyframe!
         primer_frame = await asyncio.wait_for(anext(gen1), timeout=1.0)
         assert primer_frame.startswith(b"\xff\xd8")
@@ -436,7 +446,9 @@ async def test_cold_rtsp_snapshot_primer_and_lru_idle_eviction(
         assert hub.active_ingest_count == 1
 
         # Subscribing to camera #2 immediately evicts idle camera #1 instead of raising CameraIngestLimitError
-        gen2 = hub.async_iter_stream_frames("camera.cam_two", 464, 256, fps=10, fit="contain")
+        gen2 = hub.async_iter_stream_frames(
+            "camera.cam_two", 464, 256, fps=10, fit="contain"
+        )
         frame2 = await asyncio.wait_for(anext(gen2), timeout=1.0)
         assert frame2.startswith(b"\xff\xd8")
         assert hub.get_ingest("camera.slow_rtsp") is None
@@ -450,22 +462,26 @@ async def test_offline_stream_fast_fail_grid_429_and_rtsp_fallback(
     hass: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Offline camera fails fast with CameraFetchError, saturated grid raises CameraIngestLimitError, and dead RTSP falls back."""
-    cam_mod = sys.modules["homeassistant.components.camera"]
-    monkeypatch.setattr(cam_mod, "async_get_mjpeg_stream", None, raising=False)
-    hass.data.setdefault("_camera_images", {})["camera.dead"] = RuntimeError("camera down")
+    images, streams = install_camera_mocks(
+        monkeypatch, images={"camera.dead": RuntimeError("camera down")}
+    )
+    monkeypatch.setattr(ha_camera, "async_get_mjpeg_stream", None, raising=False)
+    monkeypatch.setattr(cameras_mod.shutil, "which", lambda _cmd: "/usr/bin/ffmpeg")
 
     hub = LatterCameraStreamHub(hass, max_concurrent_ingests=1, idle_timeout_s=0.1)
     try:
         # 1) Offline camera raises CameraFetchError promptly (does not hang until timeout)
-        gen_dead = hub.async_iter_stream_frames("camera.dead", 320, 240, fps=5, wait_timeout_s=5.0)
+        gen_dead = hub.async_iter_stream_frames(
+            "camera.dead", 320, 240, fps=5, wait_timeout_s=5.0
+        )
         with pytest.raises(CameraFetchError):
             await asyncio.wait_for(anext(gen_dead), timeout=1.0)
         await gen_dead.aclose()
         await hub.async_shutdown()
 
         # 2) Saturated video semaphore raises CameraIngestLimitError when 0 grid slots can attach
-        hass.data["_camera_images"]["camera.live1"] = _make_real_or_stub_jpeg(320, 240)
-        hass.data["_camera_images"]["camera.live2"] = _make_real_or_stub_jpeg(320, 240)
+        images["camera.live1"] = make_jpeg_bytes(320, 240)
+        images["camera.live2"] = make_jpeg_bytes(320, 240)
         g_hold = hub.async_iter_stream_frames("camera.live1", 320, 240, fps=5)
         await anext(g_hold)
         g_grid = hub.async_iter_grid_frames(["camera.live2"], 320, 240, fps=5)
@@ -476,8 +492,8 @@ async def test_offline_stream_fast_fail_grid_429_and_rtsp_fallback(
         await hub.async_shutdown()
 
         # 3) RTSP camera that stops producing frames falls back to Tier 3 Snapshot after retries
-        hass.data.setdefault("_camera_streams", {})["camera.flaky"] = "rtsp://10.0.0.99/flaky"
-        hass.data["_camera_images"]["camera.flaky"] = _make_real_or_stub_jpeg(320, 240)
+        streams["camera.flaky"] = "rtsp://10.0.0.99/flaky"
+        images["camera.flaky"] = make_jpeg_bytes(320, 240)
         rtsp_calls = 0
 
         async def _flaky_exec(*_cmd: str, **_kw: Any) -> _FakeSubprocess:
@@ -496,17 +512,17 @@ async def test_offline_stream_fast_fail_grid_429_and_rtsp_fallback(
         async def _fast_sleep(delay: float) -> None:
             await orig_sleep(min(delay, 0.005))
 
-        monkeypatch.setattr(asyncio, "sleep", _fast_sleep)
-
-        g_flaky = hub.async_iter_stream_frames("camera.flaky", 320, 240, fps=10)
-        await anext(g_flaky)
-        # Wait briefly for dead RTSP retries to exhaust and fall back to Tier 3 snapshot
-        for _ in range(20):
-            ing = hub.get_ingest("camera.flaky")
-            if ing is not None and ing.source_tier == "snapshot":
-                break
-            await orig_sleep(0.01)
-        assert hub.get_ingest("camera.flaky").source_tier == "snapshot"
-        await g_flaky.aclose()
+        with monkeypatch.context() as mp:
+            mp.setattr(asyncio, "sleep", _fast_sleep)
+            g_flaky = hub.async_iter_stream_frames("camera.flaky", 320, 240, fps=10)
+            await anext(g_flaky)
+            # Wait briefly for dead RTSP retries to exhaust and fall back to Tier 3 snapshot
+            for _ in range(30):
+                ing = hub.get_ingest("camera.flaky")
+                if ing is not None and ing.source_tier == "snapshot":
+                    break
+                await orig_sleep(0.01)
+            assert hub.get_ingest("camera.flaky").source_tier == "snapshot"
+            await g_flaky.aclose()
     finally:
         await hub.async_shutdown()

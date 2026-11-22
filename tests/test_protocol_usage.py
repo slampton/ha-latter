@@ -254,7 +254,6 @@ async def test_live_hub_registers_only_five_public_services_and_private_rpc_disp
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify runtime `hass.services` exposes ONLY the 5 public actions while `hub.rpc_dispatcher` handles all 20 RPCs."""
-    from custom_components.latter import async_unload_entry
     from custom_components.latter.const import ALL_RPC_METHODS, DOMAIN, PUBLIC_SERVICES
     from custom_components.latter.services.rpc_dispatcher import LatterRpcDispatcher
 
@@ -273,7 +272,7 @@ async def test_live_hub_registers_only_five_public_services_and_private_rpc_disp
     )
     assert coord.screensaver_active is True
     assert coord.display_brightness_pct == 45
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 if __name__ == "__main__":

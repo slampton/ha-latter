@@ -492,7 +492,6 @@ def _update_ma_link_issue(hass: HomeAssistant, coordinator: Any, speaker_entity_
     ir.async_create_issue(
         hass, DOMAIN, issue_id, is_fixable=True, severity=ir.IssueSeverity.WARNING,
         translation_key="link_ma_player", translation_placeholders=placeholders,
-        config_entry_id=getattr(getattr(coordinator, "entry", None), "entry_id", None),
         data={"subentry_id": str(getattr(coordinator, "subentry_id", ""))},
     )
 
@@ -518,7 +517,8 @@ def _collect_device_target_identity(
     if speaker_entity_id and (spk_entry := ent_reg.async_get(speaker_entity_id)) is not None:
         if spk_entry.device_id:
             target_dev_ids.add(spk_entry.device_id)
-            spk_dev = dev_reg.async_get(spk_entry.device_id)
+            got_spk = dev_reg.async_get(spk_entry.device_id)
+            spk_dev = got_spk if isinstance(got_spk, dr.DeviceEntry) else None
         target_macs.update(_extract_macs_from_device_or_entry(spk_dev, spk_entry))
     if owner_coord is not None:
         if esp_dev_id := getattr(owner_coord, "esphome_device_id", None):
@@ -526,7 +526,7 @@ def _collect_device_target_identity(
         if coord_mac := getattr(owner_coord, "device_mac", None):
             target_macs.add(dr.format_mac(str(coord_mac)))
     for did in list(target_dev_ids):
-        if (d_obj := dev_reg.async_get(did)) is not None:
+        if isinstance(d_obj := dev_reg.async_get(did), dr.DeviceEntry):
             if d_obj.via_device_id:
                 target_dev_ids.add(d_obj.via_device_id)
             target_macs.update(_extract_macs_from_device_or_entry(d_obj, None))
@@ -557,7 +557,8 @@ def _build_ma_candidates(hass: HomeAssistant) -> tuple[list[CandidateRow], list[
     dev_reg = dr.async_get(hass)
     live, offline = list[CandidateRow](), list[CandidateRow]()
     for entry in ma_player_entities(hass):
-        c_dev = dev_reg.async_get(entry.device_id) if entry.device_id else None
+        got_c = dev_reg.async_get(entry.device_id) if entry.device_id else None
+        c_dev = got_c if isinstance(got_c, dr.DeviceEntry) else None
         c_macs, c_ha_ents, c_protos = _candidate_identity(hass, entry, c_dev)
         (live if _is_entity_live(hass, entry.entity_id) else offline).append(
             (entry, c_dev, c_macs, c_ha_ents, c_protos)

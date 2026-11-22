@@ -14,12 +14,20 @@ import math
 import time
 from typing import Any, Final
 
-from homeassistant.components import websocket_api
+from homeassistant.components.websocket_api import async_register_command
+from homeassistant.components.websocket_api.connection import ActiveConnection
+from homeassistant.components.websocket_api.decorators import (
+    async_response,
+    require_admin,
+    websocket_command,
+)
+from homeassistant.components.websocket_api.messages import event_message
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
-import voluptuous as vol
+import probatio as vol
 
 from ..backup import async_restore_backup_bundle, build_backup_bundle
 from ..const import (
@@ -163,7 +171,7 @@ _STUDIO_COMMAND_HANDLERS: dict[str, _CommandHandler] = {
 
 
 def _check_studio_rev(
-    connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+    connection: ActiveConnection, msg: dict[str, Any]
 ) -> bool:
     """Validate mandatory `studio_rev`; send `studio_rev_mismatch` and return False on mismatch."""
     rev = msg.get("studio_rev")
@@ -199,17 +207,17 @@ async def _async_execute_studio_command(
     return extra
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({
+@require_admin
+@websocket_command({
     vol.Required("type"): "latter/system/get_state",
     vol.Optional("subentry_id"): vol.Any(str, None),
     vol.Optional("include_logs", default=False): bool,
     vol.Required("studio_rev"): int,
 })
-@websocket_api.async_response
+@async_response
 async def ws_handle_get_state(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Return the current Latter Studio state payload."""
@@ -226,7 +234,7 @@ async def ws_handle_get_state(
 
 def _register_ble_survey_listener(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg_id: int,
     survey_sub_id: str,
     ble_fabric: Any,
@@ -243,10 +251,12 @@ def _register_ble_survey_listener(
         pending_survey_event[0] = None
         if ev is not None:
             last_survey_sent_mono[0] = time.monotonic()
-            connection.send_message(websocket_api.event_message(msg_id, ev))
+            connection.send_message(event_message(msg_id, ev))
 
     @callback
     def _on_survey_delta(delta: dict[str, Any]) -> None:
+        if hass.is_stopping:
+            return
         target_coord = find_by_subentry_id(iter_coordinators(hass), survey_sub_id)
         tracker = target_coord.ble_tracker if target_coord is not None else None
         if target_coord is None or tracker is None:
@@ -282,7 +292,7 @@ def _register_ble_survey_listener(
         elapsed = now_m - last_survey_sent_mono[0]
         if elapsed >= _SURVEY_COALESCE_INTERVAL_S and survey_timer_cancel[0] is None:
             last_survey_sent_mono[0] = now_m
-            connection.send_message(websocket_api.event_message(msg_id, ev_payload))
+            connection.send_message(event_message(msg_id, ev_payload))
         else:
             pending_survey_event[0] = ev_payload
             if survey_timer_cancel[0] is None:
@@ -411,18 +421,49 @@ def _cleanup_subscription_handles(
     unsubs.clear()
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({
+@callback
+def _bind_subscription_cleanup(
+    hass: HomeAssistant,
+    debounce_cancel: list[Any],
+    state_unsub: list[Any],
+    coord_unsubs: dict[int, Any],
+    unsubs: list[Any],
+) -> Callable[[], None]:
+    """Build an idempotent subscription cleanup callback that also fires on HA stop."""
+    stop_unsub: list[Any] = [None]
+
+    @callback
+    def _cleanup_all() -> None:
+        if callable(stop_unsub[0]):
+            stop_unsub[0]()
+            stop_unsub[0] = None
+        _cleanup_subscription_handles(
+            debounce_cancel, state_unsub, coord_unsubs, unsubs
+        )
+
+    @callback
+    def _on_ha_stop(_ev: Any) -> None:
+        stop_unsub[0] = None
+        _cleanup_subscription_handles(
+            debounce_cancel, state_unsub, coord_unsubs, unsubs
+        )
+
+    stop_unsub[0] = hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _on_ha_stop)
+    return _cleanup_all
+
+
+@require_admin
+@websocket_command({
     vol.Required("type"): "latter/system/subscribe",
     vol.Optional("subentry_id"): vol.Any(str, None),
     vol.Optional("survey_subentry_id"): vol.Any(str, None),
     vol.Optional("include_logs", default=False): bool,
     vol.Required("studio_rev"): int,
 })
-@websocket_api.async_response
+@async_response
 async def ws_handle_subscribe(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Subscribe to live Latter Studio state and scoped 4 Hz BLE survey updates."""
@@ -469,10 +510,12 @@ async def ws_handle_subscribe(
             skip_sections=skip,
         )
         section_gate.filter_sections(payload)
-        connection.send_message(websocket_api.event_message(msg["id"], payload))
+        connection.send_message(event_message(msg["id"], payload))
 
     @callback
     def _schedule_push() -> None:
+        if hass.is_stopping:
+            return
         if debounce_cancel[0] is None:
             debounce_cancel[0] = async_call_later(hass, _PUSH_DEBOUNCE_S, _push_now)
 
@@ -506,26 +549,23 @@ async def ws_handle_subscribe(
             )
         )
     unsubs.extend(
-        hass.bus.async_listen(registry_event, _registry_changed)
-        for registry_event in (
-            er.EVENT_ENTITY_REGISTRY_UPDATED,
-            dr.EVENT_DEVICE_REGISTRY_UPDATED,
-            ar.EVENT_AREA_REGISTRY_UPDATED,
+        (
+            hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, _registry_changed),
+            hass.bus.async_listen(dr.EVENT_DEVICE_REGISTRY_UPDATED, _registry_changed),
+            hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, _registry_changed),
         )
     )
 
-    connection.subscriptions[msg["id"]] = callback(
-        lambda: _cleanup_subscription_handles(
-            debounce_cancel, state_unsub, coord_unsubs, unsubs
-        )
+    connection.subscriptions[msg["id"]] = _bind_subscription_cleanup(
+        hass, debounce_cancel, state_unsub, coord_unsubs, unsubs
     )
     connection.send_result(msg["id"], {"subscribed": True})
-    connection.send_message(websocket_api.event_message(msg["id"], initial_payload))
+    connection.send_message(event_message(msg["id"], initial_payload))
 
 
 async def _async_handle_ws_command_impl(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
     scope: Scope,
 ) -> None:
@@ -589,51 +629,51 @@ async def _async_handle_ws_command_impl(
     )
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({
+@require_admin
+@websocket_command({
     vol.Required("type"): "latter/system/command",
     vol.Required("command"): str,
     vol.Optional("subentry_id"): vol.Any(str, None),
     vol.Optional("payload", default={}): dict,
     vol.Required("studio_rev"): int,
 })
-@websocket_api.async_response
+@async_response
 async def ws_handle_system_command(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Execute an admin-gated System command from Latter Studio."""
     await _async_handle_ws_command_impl(hass, connection, msg, "system")
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({
+@require_admin
+@websocket_command({
     vol.Required("type"): "latter/device/command",
     vol.Required("command"): str,
     vol.Required("subentry_id"): str,
     vol.Optional("payload", default={}): dict,
     vol.Required("studio_rev"): int,
 })
-@websocket_api.async_response
+@async_response
 async def ws_handle_device_command(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Execute an admin-gated Device command from Latter Studio."""
     await _async_handle_ws_command_impl(hass, connection, msg, "device")
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({
+@require_admin
+@websocket_command({
     vol.Required("type"): "latter/system/export",
     vol.Required("studio_rev"): int,
 })
-@websocket_api.async_response
+@async_response
 async def ws_handle_system_export(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Export the System's non-secret settings and every Device's settings as JSON."""
@@ -645,16 +685,16 @@ async def ws_handle_system_export(
     connection.send_result(msg["id"], {"bundle": bundle})
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({
+@require_admin
+@websocket_command({
     vol.Required("type"): "latter/device/export",
     vol.Required("subentry_id"): str,
     vol.Required("studio_rev"): int,
 })
-@websocket_api.async_response
+@async_response
 async def ws_handle_device_export(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Export one Device's non-secret settings as JSON."""
@@ -679,7 +719,7 @@ async def ws_handle_device_export(
 
 async def _async_restore_bundle(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
     target: LatterCoordinator | None,
 ) -> None:
@@ -704,11 +744,11 @@ async def _async_restore_bundle(
     )
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "latter/system/import", vol.Optional("subentry_id"): vol.Any(str, None), vol.Required("bundle"): dict, vol.Required("studio_rev"): int})
-@websocket_api.async_response
+@require_admin
+@websocket_command({vol.Required("type"): "latter/system/import", vol.Optional("subentry_id"): vol.Any(str, None), vol.Required("bundle"): dict, vol.Required("studio_rev"): int})
+@async_response
 async def ws_handle_system_import(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Restore a System backup (System settings and every Device it names)."""
     if not _check_studio_rev(connection, msg):
@@ -719,11 +759,11 @@ async def ws_handle_system_import(
     await _async_restore_bundle(hass, connection, msg, None)
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "latter/device/import", vol.Required("subentry_id"): str, vol.Required("bundle"): dict, vol.Required("studio_rev"): int})
-@websocket_api.async_response
+@require_admin
+@websocket_command({vol.Required("type"): "latter/device/import", vol.Required("subentry_id"): str, vol.Required("bundle"): dict, vol.Required("studio_rev"): int})
+@async_response
 async def ws_handle_device_import(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Restore a Device backup onto the Device named by `subentry_id`."""
     if not _check_studio_rev(connection, msg):
@@ -738,11 +778,11 @@ async def ws_handle_device_import(
     await _async_restore_bundle(hass, connection, msg, coord)
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "latter/device/reset", vol.Required("subentry_id"): str, vol.Optional("device_settings", default=True): bool, vol.Optional("latter_options", default=True): bool, vol.Required("studio_rev"): int})
-@websocket_api.async_response
+@require_admin
+@websocket_command({vol.Required("type"): "latter/device/reset", vol.Required("subentry_id"): str, vol.Optional("device_settings", default=True): bool, vol.Optional("latter_options", default=True): bool, vol.Required("studio_rev"): int})
+@async_response
 async def ws_handle_device_reset(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Reset a Device to defaults through the same path as `latter.reset_device`."""
     if not _check_studio_rev(connection, msg):
@@ -776,7 +816,7 @@ def async_register_studio_ws_commands(hass: HomeAssistant) -> None:
         ws_handle_device_command, ws_handle_system_export, ws_handle_device_export,
         ws_handle_system_import, ws_handle_device_import, ws_handle_device_reset,
     ):
-        websocket_api.async_register_command(hass, handler)
+        async_register_command(hass, handler)
 
 
 __all__ = [

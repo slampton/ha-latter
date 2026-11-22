@@ -13,7 +13,8 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.helpers import config_validation as cv
-import voluptuous as vol
+from homeassistant.util.json import JsonObjectType
+import probatio as vol
 
 from ..const import (
     DOMAIN,
@@ -188,7 +189,13 @@ async def _async_handle_notify(call: ServiceCall) -> None:
 async def _async_handle_intercom_broadcast(call: ServiceCall) -> ServiceResponse:
     """Execute `latter.intercom_broadcast`."""
     res = await async_execute_intercom_broadcast(call.hass, call.data)
-    return dict(res)
+    out: JsonObjectType = {
+        "delivered": res["delivered"],
+        "targets": list(res["targets"]),
+    }
+    if isinstance(reason := res.get("reason"), str):
+        out["reason"] = reason
+    return out
 
 
 async def _async_handle_set_active_area(call: ServiceCall) -> None:

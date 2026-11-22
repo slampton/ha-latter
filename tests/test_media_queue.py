@@ -5,11 +5,20 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import SupportsResponse
+from homeassistant.helpers import device_registry as dr
 import pytest
 
 from custom_components.latter.const import RPC_MUSIC_BROWSE
 from custom_components.latter.media import browse as ma_browse
 from custom_components.latter.protocol_codec import FIELD_SEP, RECORD_SEP
+from tests.helpers import (
+    add_mock_entry,
+    mock_service,
+    register_device,
+    register_entity,
+)
 
 
 def _seed_music_assistant(
@@ -26,16 +35,16 @@ def _seed_music_assistant(
     ),
 ) -> tuple[Any, SimpleNamespace | None]:
     """Register a loaded Music Assistant config entry, linked entity, and optional `mass` runtime client."""
-    from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-    from homeassistant.helpers import device_registry as dr, entity_registry as er
-
-    ma_entry = ConfigEntry(
-        entry_id="entry_ma_test",
+    ma_entry = add_mock_entry(
+        hass,
         domain="music_assistant",
         title="Music Assistant",
+        entry_id="entry_ma_test",
         data={},
-        state=ConfigEntryState.LOADED,
     )
+    if hasattr(ma_entry, "mock_state"):
+        ma_entry.mock_state(hass, ConfigEntryState.LOADED)
+
     mass_client: SimpleNamespace | None = None
     if with_runtime_mass:
         q_list = list(queue_items or [])
@@ -64,7 +73,9 @@ def _seed_music_assistant(
         async def _add_item_to_favorites(item: Any) -> None:
             fav_add_calls.append(item)
 
-        async def _remove_item_from_favorites(media_type: Any, library_item_id: Any) -> None:
+        async def _remove_item_from_favorites(
+            media_type: Any, library_item_id: Any
+        ) -> None:
             fav_remove_calls.append((str(media_type), library_item_id))
 
         async def _get_item_by_uri(uri: str) -> dict[str, Any]:
@@ -82,7 +93,9 @@ def _seed_music_assistant(
             current_index=1,
             shuffle_enabled=False,
             repeat_mode=SimpleNamespace(value="off"),
-            current_item=(q_list[1] if len(q_list) > 1 else (q_list[0] if q_list else None)),
+            current_item=(
+                q_list[1] if len(q_list) > 1 else (q_list[0] if q_list else None)
+            ),
         )
         player_queues = SimpleNamespace(
             fetch_player_queue_items=_fetch_player_queue_items,
@@ -110,25 +123,23 @@ def _seed_music_assistant(
         )
         ma_entry.runtime_data = SimpleNamespace(mass=mass_client)
 
-    hass.config_entries.add_entry(ma_entry)
-
-    dev_reg = dr.async_get(hass)
-    ma_dev = dev_reg.async_get_or_create(
+    ma_dev = register_device(
+        hass,
         config_entry_id=ma_entry.entry_id,
+        entry_domain="music_assistant",
         connections={(dr.CONNECTION_NETWORK_MAC, mac)},
         identifiers={("music_assistant", queue_id)},
         name="Pocket Assistant MA",
+        manufacturer="Latter",
     )
-    ent_reg = er.async_get(hass)
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id=ma_entity,
-            platform="music_assistant",
-            device_id=ma_dev.id,
-            config_entry_id=ma_entry.entry_id,
-            unique_id=queue_id,
-            original_name="Pocket Assistant MA",
-        )
+    register_entity(
+        hass,
+        ma_entity,
+        platform="music_assistant",
+        device_id=ma_dev.id,
+        config_entry=ma_entry,
+        unique_id=queue_id,
+        original_name="Pocket Assistant MA",
     )
     hass.states.async_set(
         ma_entity,
@@ -159,11 +170,12 @@ async def test_active_queue_fetches_player_queue_items_when_get_queue_items_is_i
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """`music_assistant.get_queue` returns `"items": 15` (int); `_browse_active_queue` must fetch real queue items."""
-    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+    entry, sys_obj, coord = await setup_latter_hub(hass)
     assert coord is not None
 
     pushed_slots: list[dict[str, Any]] = []
-    hass.services.async_register(
+    mock_service(
+        hass,
         "esphome",
         f"{coord.device_slug}_latter_set_slots",
         lambda call: pushed_slots.append(dict(call.data)),
@@ -185,7 +197,8 @@ async def test_active_queue_fetches_player_queue_items_when_get_queue_items_is_i
     assert mass is not None
 
     # Realistic MA 2.x get_queue payload where "items" is an integer count (15)!
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "get_queue",
         lambda _call: {
@@ -197,6 +210,7 @@ async def test_active_queue_fetches_player_queue_items_when_get_queue_items_is_i
                 "next_item": fifteen_items[3],
             }
         },
+        supports_response=SupportsResponse.ONLY,
     )
 
     slots = await ma_browse.async_browse_media_items(
@@ -223,7 +237,7 @@ async def test_active_queue_fetches_player_queue_items_when_get_queue_items_is_i
     assert sum(1 for s in slots if s["is_current"]) == 1
 
     # Verify 7-column latter_set_slots wire encoding via music_browse RPC
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MUSIC_BROWSE,
         {
@@ -261,16 +275,18 @@ async def test_active_queue_fetches_player_queue_items_when_get_queue_items_is_i
         "1",
     ]
 
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
 
 @pytest.mark.asyncio
 async def test_active_queue_graceful_fallback_and_offset_pagination(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """When `mass` runtime client is unreachable and `items` is an int, fallback returns current + next item."""
-    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+    entry, sys_obj, coord = await setup_latter_hub(hass)
     assert coord is not None
 
-    _ma_entry, _ = _seed_music_assistant(hass, with_runtime_mass=False)
+    ma_entry, _ = _seed_music_assistant(hass, with_runtime_mass=False)
     cur_item = {
         "queue_item_id": "qid_cur",
         "media_item": {
@@ -287,7 +303,8 @@ async def test_active_queue_graceful_fallback_and_offset_pagination(
             "artists": [{"name": "Alice In Chains"}],
         },
     }
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "get_queue",
         lambda _call: {
@@ -298,6 +315,7 @@ async def test_active_queue_graceful_fallback_and_offset_pagination(
                 "next_item": nxt_item,
             }
         },
+        supports_response=SupportsResponse.ONLY,
     )
 
     fallback_slots = await ma_browse.async_browse_media_items(
@@ -328,16 +346,19 @@ async def test_active_queue_graceful_fallback_and_offset_pagination(
     ]
     fetch_log: list[tuple[str, int, int]] = []
 
-    async def _fetch_75(qid: str, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+    async def _fetch_75(
+        qid: str, limit: int = 50, offset: int = 0
+    ) -> list[dict[str, Any]]:
         fetch_log.append((qid, limit, offset))
         return seventy_five[offset : offset + limit]
 
-    _ma_entry.runtime_data = SimpleNamespace(
+    ma_entry.runtime_data = SimpleNamespace(
         mass=SimpleNamespace(
             player_queues=SimpleNamespace(fetch_player_queue_items=_fetch_75)
         )
     )
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "get_queue",
         lambda _call: {
@@ -347,14 +368,16 @@ async def test_active_queue_graceful_fallback_and_offset_pagination(
                 "current_item": seventy_five[0],
             }
         },
+        supports_response=SupportsResponse.ONLY,
     )
     pushed_p12: list[dict[str, Any]] = []
-    hass.services.async_register(
+    mock_service(
+        hass,
         "esphome",
         f"{coord.device_slug}_latter_set_slots",
         lambda call: pushed_p12.append(dict(call.data)),
     )
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MUSIC_BROWSE,
         {
@@ -367,5 +390,9 @@ async def test_active_queue_graceful_fallback_and_offset_pagination(
     assert fetch_log == [("ma_queue_pocket", 50, 50)]
     assert pushed_p12[0]["page"] == 12
     assert pushed_p12[0]["total_pages"] == 15
-    p12_names = [r.split(FIELD_SEP)[0] for r in pushed_p12[0]["slots"].split(RECORD_SEP)]
+    p12_names = [
+        r.split(FIELD_SEP)[0] for r in pushed_p12[0]["slots"].split(RECORD_SEP)
+    ]
     assert p12_names == [f"Song {i} — Band" for i in range(55, 60)]
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

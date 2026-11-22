@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import TypedDict, Unpack
 
 from aiohttp import BodyPartReader, MultipartReader, web
-from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.http import HomeAssistantView
 from PIL import Image, ImageEnhance, ImageOps
 
 from ..const import (

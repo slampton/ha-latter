@@ -270,9 +270,10 @@ def _describe_bthome_entity(hass: HomeAssistant, dev_entry: dr.DeviceEntry | Non
 
 def _describe_entity_ble_target(hass: HomeAssistant, addr: str) -> str:
     ent_entry = er.async_get(hass).async_get(addr)
-    dev_entry = (
+    got_dev = (
         dr.async_get(hass).async_get(ent_entry.device_id) if (ent_entry and ent_entry.device_id) else None
     )
+    dev_entry = got_dev if isinstance(got_dev, dr.DeviceEntry) else None
     st = hass.states.get(addr)
     low = addr.lower()
     uid_low = str(ent_entry.unique_id or "").lower() if ent_entry is not None else ""
@@ -649,10 +650,10 @@ def _resolve_bthome_candidate_telemetry(
     src_scanner: str,
 ) -> tuple[str, int | None, str, str]:
     kind_lbl = "BTHome v2 Tag"
-    dev_entry = ctx.dev_reg.async_get(entry.device_id) if entry.device_id else None
-    if dev_entry is None:
+    got_dev = ctx.dev_reg.async_get(entry.device_id) if entry.device_id else None
+    if not isinstance(got_dev, dr.DeviceEntry):
         return kind_lbl, rssi_int, area_name, src_scanner
-    for _ct, cv in dev_entry.connections:
+    for _ct, cv in got_dev.connections:
         m_int = mac_to_int(str(cv))
         if m_int is None:
             continue

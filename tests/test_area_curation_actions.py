@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.lock import LockEntityFeature
+from homeassistant.components.lock.const import LockEntityFeature
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import area_registry as ar, entity_registry as er
 import pytest
 
-from custom_components.latter import async_unload_entry
 from custom_components.latter.areas.actions import async_execute_area_action
 from custom_components.latter.areas.catalogs import (
     find_area_media_entities,
@@ -47,6 +45,13 @@ from custom_components.latter.groups.esphome_inspector import (
 )
 from custom_components.latter.protocol_policy import hash_security_pin, wrap_pin_code
 from custom_components.latter.remotes import build_remote_config_payload
+from tests.helpers import (
+    ensure_area,
+    get_service_calls,
+    make_subentry,
+    mock_service,
+    register_entity,
+)
 
 
 async def test_context_builder_curated_entities_and_area_actions(
@@ -54,10 +59,9 @@ async def test_context_builder_curated_entities_and_area_actions(
 ) -> None:
     """Exercise Area Context v3 building, curated filtering, whole-home summary, and all action verbs."""
     entry, _sys_obj, coord = await setup_latter_hub(hass)
-    ent_reg = er.async_get(hass)
 
     # Seed rich controllable & environmental entities in living_room
-    seeded = [
+    seeded: list[tuple[str, str, str, dict[str, Any]]] = [
         ("light.lr_ceiling", "hue", "on", {"brightness": 128, "friendly_name": "Living Room Ceiling"}),
         ("cover.lr_shades", "lutron", "open", {"current_position": 80, "device_class": "shade"}),
         ("fan.lr_fan", "bond", "on", {"percentage": 50, "friendly_name": "Ceiling Fan"}),
@@ -91,9 +95,7 @@ async def test_context_builder_curated_entities_and_area_actions(
         ("remote.lr_tv", "androidtv_remote", "on", {"friendly_name": "Living TV"}),
     ]
     for eid, platform, st_val, attrs in seeded:
-        ent_reg.async_register(
-            er.RegistryEntry(entity_id=eid, platform=platform, area_id="living_room")
-        )
+        register_entity(hass, eid, platform=platform, area_id="living_room")
         hass.states.async_set(eid, st_val, attrs)
 
     # Whole-home perimeter & utility entities
@@ -129,7 +131,7 @@ async def test_context_builder_curated_entities_and_area_actions(
     assert match_area_by_name_or_id(hass, "away") is None
 
     # Exact non-substring matching: Area "Garden" ("garden") MUST NOT match query "den"
-    ar.async_get(hass).async_create("Garden", area_id="garden")
+    ensure_area(hass, "Garden", area_id="garden")
     assert match_area_by_name_or_id(hass, "Garden") == "garden"
     assert match_area_by_name_or_id(hass, "den") is None
 
@@ -255,8 +257,7 @@ async def test_context_builder_curated_entities_and_area_actions(
     assert area_state == "Living Room"
     assert area_attrs["payload"].startswith("v3\x1f")
 
-    # Record service calls across all action domains
-    recorded: list[tuple[str, str, dict[str, Any]]] = []
+    # Mock target services and record calls across all action domains
     for svc_dom, svcs in {
         "light": ("turn_on", "turn_off", "toggle"),
         "cover": ("open_cover", "close_cover", "set_cover_position"),
@@ -274,11 +275,10 @@ async def test_context_builder_curated_entities_and_area_actions(
         "media_player": ("volume_set", "media_play_pause"),
     }.items():
         for s_name in svcs:
-            hass.services.async_register(
-                svc_dom,
-                s_name,
-                lambda call, d=svc_dom, s=s_name: recorded.append((d, s, dict(call.data))),
-            )
+            mock_service(hass, svc_dom, s_name)
+
+    calls = get_service_calls(hass)
+    calls.clear()
 
     await async_execute_area_action(hass, "light.lr_ceiling", "set_level", level=80)
     await async_execute_area_action(hass, "light.lr_ceiling", "set_level", level=0)
@@ -317,7 +317,7 @@ async def test_context_builder_curated_entities_and_area_actions(
         await async_execute_area_action(hass, "alarm_control_panel.home_alarm", "toggle")
     assert exc_alarm_toggle.value.translation_key == "explicit_action_required"
 
-    called_pairs = {(d, s) for d, s, _ in recorded}
+    called_pairs = {(c.domain, c.service) for c in calls}
     assert ("light", "turn_on") in called_pairs
     assert ("cover", "close_cover") in called_pairs
     assert ("cover", "set_cover_position") in called_pairs
@@ -328,15 +328,13 @@ async def test_context_builder_curated_entities_and_area_actions(
     assert ("lock", "open") in called_pairs
     assert ("alarm_control_panel", "alarm_arm_home") in called_pairs
 
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_home_hub_strict_shared_entities_no_auto_discovery(
     hass: Any, setup_latter_hub: Any, make_esphome_device: Any
 ) -> None:
     """Verify unassigned Shared Entities never auto-discover HA entities or show Home Hub tabs."""
-    from homeassistant.config_entries import ConfigSubentry
-
     entry, _sys_obj, coord = await setup_latter_hub(
         hass, extra_device_data={CONF_DEFAULT_SPEAKER: ""}
     )
@@ -427,7 +425,8 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
 
     # Unassigned home_hub.alarm must NOT command unconfigured HA entities
     dispatched: list[tuple[str, str, dict[str, Any]]] = []
-    hass.services.async_register(
+    mock_service(
+        hass,
         "vacuum",
         "return_to_base",
         lambda call: dispatched.append(("vacuum", "return_to_base", dict(call.data))),
@@ -491,17 +490,22 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
         area_id="kitchen",
         stationary=1,
     )
-    entry.subentries["sub_kitchen"] = ConfigSubentry(
-        data={
-            CONF_ESPHOME_DEVICE_ID: esp_dev_2.id,
-            "mac": mac_2,
-            CONF_DEVICE_SLUG: "kitchen_panel",
-        },
-        subentry_type=SUBENTRY_DEVICE,
-        title="Kitchen Panel",
-        unique_id=mac_2,
-        subentry_id="sub_kitchen",
+    hass.config_entries.async_add_subentry(
+        entry,
+        make_subentry(
+            {
+                CONF_ESPHOME_DEVICE_ID: esp_dev_2.id,
+                "mac": mac_2,
+                CONF_DEVICE_SLUG: "kitchen_panel",
+            },
+            subentry_type=SUBENTRY_DEVICE,
+            title="Kitchen Panel",
+            unique_id=mac_2,
+            subentry_id="sub_kitchen",
+        ),
     )
+    await hass.async_block_till_done()
+    coord = entry.runtime_data.coordinators["sub_pocket"]
     coord.cached_area_payload = None
     assert (
         coord.get_area_context_payload()[1]["home_categories"]
@@ -522,25 +526,20 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
         == "alarm,thermostat,entry,vacuum"
     )
 
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_wrapped_pin_enforced_on_area_and_shortcut_rpc(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify `area_action` and `shortcut_action` enforce `wrap_pin_code` envelopes and anti-replay nonces."""
-    from homeassistant.exceptions import ServiceValidationError
-
     entry, sys_obj, coord = await setup_latter_hub(hass)
-    ent_reg = er.async_get(hass)
-    ent_reg.async_register(
-        er.RegistryEntry(entity_id="lock.front_door", platform="zwave_js", area_id="living_room")
-    )
+    register_entity(hass, "lock.front_door", platform="zwave_js", area_id="living_room")
     hass.states.async_set("lock.front_door", "locked", {"friendly_name": "Front Door"})
 
     unlocked_calls: list[dict[str, Any]] = []
-    hass.services.async_register(
-        "lock", "unlock", lambda call: unlocked_calls.append(dict(call.data))
+    mock_service(
+        hass, "lock", "unlock", lambda call: unlocked_calls.append(dict(call.data))
     )
 
     pin_hash = hash_security_pin("2468")
@@ -554,6 +553,7 @@ async def test_wrapped_pin_enforced_on_area_and_shortcut_rpc(
             ],
         }
     )
+    await hass.async_block_till_done()
     assert coord.pin_session_key_id and coord.pin_session_key_bytes
 
     # 1. Unwrapped plaintext PIN on `area_action` is rejected
@@ -608,4 +608,4 @@ async def test_wrapped_pin_enforced_on_area_and_shortcut_rpc(
     )
     assert len(unlocked_calls) == 2
 
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

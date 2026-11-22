@@ -12,8 +12,8 @@ import shutil
 import wave
 
 from aiohttp import web
-from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.http import HomeAssistantView
 
 from ..cameras.stream_hub import (
     async_shutdown_camera_stream_hub,

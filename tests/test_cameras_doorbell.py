@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import io
-import sys
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
-from PIL import Image
+from homeassistant.components import camera as ha_camera
 import pytest
 
-from custom_components.latter import async_unload_entry
 from custom_components.latter.cameras.capabilities import (
     CAMERA_CAP_HAS_AUDIO,
     CAMERA_CAP_HAS_TALKBACK,
@@ -24,7 +22,10 @@ from custom_components.latter.cameras.stream_hub import (
     async_shutdown_camera_stream_hub,
     get_camera_stream_hub,
 )
-from custom_components.latter.cameras.transcode import format_mjpeg_chunk, inspect_jpeg_header
+from custom_components.latter.cameras.transcode import (
+    format_mjpeg_chunk,
+    inspect_jpeg_header,
+)
 from custom_components.latter.const import (
     CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_CAMERA_ENTITIES,
@@ -46,11 +47,17 @@ from custom_components.latter.studio.cmd_groups_security import (
 from custom_components.latter.studio.cmd_presence_devices import StudioCommandError
 from custom_components.latter.studio.payload import build_studio_state_payload
 from custom_components.latter.studio.settings_cleaners import SettingsScopeError
+from tests.helpers import (
+    install_camera_mocks,
+    make_jpeg_bytes,
+    register_device,
+    register_entity,
+)
 
 
 def _make_baseline_420_jpeg(width: int, height: int) -> bytes:
-    """Build a valid Baseline 4:2:0 JPEG (real via Pillow when installed, SOF0 stub fallback)."""
-    real_raw = _make_real_or_stub_jpeg(width, height)
+    """Build a valid Baseline 4:2:0 JPEG via Pillow with SOF0 stub fallback."""
+    real_raw = make_jpeg_bytes(width, height, (36, 92, 148))
     is_b420, rw, rh = inspect_jpeg_header(real_raw)
     if is_b420 and rw == width and rh == height:
         return real_raw
@@ -69,42 +76,32 @@ def _make_baseline_420_jpeg(width: int, height: int) -> bytes:
     return b"\xff\xd8" + sof0 + sos + b"\xff\xd9"
 
 
-def _make_real_or_stub_jpeg(width: int, height: int) -> bytes:
-    buf = io.BytesIO()
-    Image.new("RGB", (width, height), (36, 92, 148)).save(
-        buf, format="JPEG", progressive=False, subsampling=2
-    )
-    return buf.getvalue()
-
-
-async def test_resolve_camera_capabilities_and_singleton_lifecycle(hass: Any) -> None:
+async def test_resolve_camera_capabilities_and_singleton_lifecycle(
+    hass: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """`resolve_camera_capabilities` computes accurate bitmask + Studio metadata, and singleton shuts down cleanly."""
-    from homeassistant.helpers import device_registry as dr, entity_registry as er
-
-    dev_reg = dr.async_get(hass)
-    ent_reg = er.async_get(hass)
-
-    doorbell_dev = dev_reg.async_get_or_create(
+    doorbell_dev = register_device(
+        hass,
         config_entry_id="unifi_entry",
+        entry_domain="unifiprotect",
         identifiers={("unifiprotect", "doorbell_1")},
         name="Front Doorbell",
+        manufacturer="Latter",
         area_id="entryway",
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="camera.front_door",
-            platform="unifiprotect",
-            device_id=doorbell_dev.id,
-            config_entry_id="unifi_entry",
-        )
+    register_entity(
+        hass,
+        "camera.front_door",
+        platform="unifiprotect",
+        device_id=doorbell_dev.id,
+        config_entry_id="unifi_entry",
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.front_door_speaker",
-            platform="unifiprotect",
-            device_id=doorbell_dev.id,
-            config_entry_id="unifi_entry",
-        )
+    register_entity(
+        hass,
+        "media_player.front_door_speaker",
+        platform="unifiprotect",
+        device_id=doorbell_dev.id,
+        config_entry_id="unifi_entry",
     )
     hass.states.async_set(
         "camera.front_door",
@@ -121,7 +118,9 @@ async def test_resolve_camera_capabilities_and_singleton_lifecycle(hass: Any) ->
         "idle",
         {"friendly_name": "Cloud Snap", "supported_features": 0},
     )
-    hass.data.setdefault("_camera_streams", {})["camera.front_door"] = "rtsp://10.0.0.5/door"
+    install_camera_mocks(
+        monkeypatch, streams={"camera.front_door": "rtsp://10.0.0.5/door"}
+    )
 
     caps_doorbell = resolve_camera_capabilities(
         hass,
@@ -196,9 +195,6 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
     hass: Any, setup_latter_hub: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """End-to-end Stage 2 test: P4 video manifest, Studio payload/commands, area_context v3, and HTTP stream/grid."""
-    from urllib.parse import parse_qs, urlsplit
-
-
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     try:
         # S3 default manifest has hw_jpeg=False, 5/2 fps
@@ -242,10 +238,14 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
             "idle",
             {"friendly_name": "Backyard", "supported_features": 0},
         )
-        hass.data.setdefault("_camera_images", {})["camera.front_door"] = _make_real_or_stub_jpeg(
-            640, 360
+        install_camera_mocks(
+            monkeypatch,
+            images={
+                "camera.front_door": make_jpeg_bytes(640, 360),
+                "camera.backyard": make_jpeg_bytes(640, 480),
+            },
         )
-        hass.data["_camera_images"]["camera.backyard"] = _make_real_or_stub_jpeg(640, 480)
+        monkeypatch.setattr(ha_camera, "async_get_mjpeg_stream", None, raising=False)
 
         # Save valid per-Device camera_visible_entities & camera_carousel_entities via Studio command
         await _cmd_save_device_config(
@@ -253,7 +253,10 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
             coord,
             {
                 "config": {
-                    CONF_CAMERA_VISIBLE_ENTITIES: ["camera.front_door", "camera.backyard"],
+                    CONF_CAMERA_VISIBLE_ENTITIES: [
+                        "camera.front_door",
+                        "camera.backyard",
+                    ],
                     CONF_CAMERA_CAROUSEL_ENTITIES: ["camera.front_door"],
                     "camera_default_view": "Single",
                     "camera_doorbell_popup": "Live Video",
@@ -263,7 +266,10 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
             global_cfg,
             {},
         )
-        assert coord.visible_camera_entities == ["camera.front_door", "camera.backyard"]
+        assert coord.visible_camera_entities == [
+            "camera.front_door",
+            "camera.backyard",
+        ]
         assert coord.carousel_camera_entities == ["camera.front_door"]
 
         # Reject camera not in System shared entities
@@ -341,8 +347,6 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
 
         # Stream 1 chunk from LatterCameraStreamView & LatterCameraGridView
         stream_sig = parse_qs(urlsplit(wire[39]).query)["sig"][0]
-        cam_mod = sys.modules["homeassistant.components.camera"]
-        monkeypatch.setattr(cam_mod, "async_get_mjpeg_stream", None, raising=False)
 
         async def _one_chunk_single(*_a: Any, **_kw: Any) -> Any:
             yield format_mjpeg_chunk(_make_baseline_420_jpeg(464, 256))
@@ -355,7 +359,9 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
         monkeypatch.setattr(hub, "async_iter_grid_mjpeg_chunks", _one_chunk_grid)
 
         class _CapturingStreamResponse:
-            def __init__(self, *, status: int = 200, headers: dict[str, str] | None = None) -> None:
+            def __init__(
+                self, *, status: int = 200, headers: dict[str, str] | None = None
+            ) -> None:
                 self.status = status
                 self.headers = dict(headers or {})
                 self._chunks: list[bytes] = []
@@ -417,13 +423,15 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
         snap_base = area_attrs["camera_snapshot_url"]
         snap_qs = {k: v[0] for k, v in parse_qs(urlsplit(snap_base).query).items()}
         r_cam2 = await snap_view.get(
-            SimpleNamespace(query={**snap_qs, "entity_id": "camera.backyard"}, headers={}),
+            SimpleNamespace(
+                query={**snap_qs, "entity_id": "camera.backyard"}, headers={}
+            ),
             coord.device_slug,
         )
         assert r_cam2.status == 200
         assert r_cam2.body.startswith(b"\xff\xd8")
 
-        # Hide camera.backyard from device's visible_camera_entities -> old or new allowlist sig rejects camera.backyard with 403
+        # Hide camera.backyard from device's visible_camera_entities -> allowlist sig rejects camera.backyard with 403
         await _cmd_save_device_config(
             hass,
             coord,
@@ -438,11 +446,15 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
         new_snap_qs = {
             k: v[0]
             for k, v in parse_qs(
-                urlsplit(coord.get_area_context_payload()[1]["camera_snapshot_url"]).query
+                urlsplit(
+                    coord.get_area_context_payload()[1]["camera_snapshot_url"]
+                ).query
             ).items()
         }
         r_hidden = await snap_view.get(
-            SimpleNamespace(query={**new_snap_qs, "entity_id": "camera.backyard"}, headers={}),
+            SimpleNamespace(
+                query={**new_snap_qs, "entity_id": "camera.backyard"}, headers={}
+            ),
             coord.device_slug,
         )
         assert r_hidden.status == 403
@@ -457,8 +469,7 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
             camera_entity="camera.backyard",
         )
         alert_qs = {
-            k: v[0]
-            for k, v in parse_qs(urlsplit(coord.alert_camera_url).query).items()
+            k: v[0] for k, v in parse_qs(urlsplit(coord.alert_camera_url).query).items()
         }
         r_alert = await snap_view.get(
             SimpleNamespace(query=alert_qs, headers={}),
@@ -480,13 +491,19 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
             "display": 1,
             "battery": 1,
             "stationary": 0,
-            "video": {"hw_jpeg": 0, "max_w": 464, "max_h": 464, "max_fps": 5, "grid_fps": 2},
+            "video": {
+                "hw_jpeg": 0,
+                "max_w": 464,
+                "max_h": 464,
+                "max_fps": 5,
+                "grid_fps": 2,
+            },
         }
         s3_payload = build_studio_state_payload(hass, coord, include_catalog=False)
         assert s3_payload["config"]["camera_doorbell_popup"] == "Snapshot"
-        assert {d["subentry_id"]: d for d in s3_payload["system_devices"]}[coord.subentry_id][
-            "hw_jpeg"
-        ] is False
+        assert {d["subentry_id"]: d for d in s3_payload["system_devices"]}[
+            coord.subentry_id
+        ]["hw_jpeg"] is False
         with pytest.raises(SettingsScopeError):
             await _cmd_save_device_config(
                 hass,
@@ -499,4 +516,4 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
                 {},
             )
     finally:
-        await async_unload_entry(hass, entry)
+        assert await hass.config_entries.async_unload(entry.entry_id) is True

@@ -201,7 +201,9 @@ def _build_esphome_device_meta(
         "sw_version": "",
         "mac": "",
     }
-    if target_device_id and (dev := dr.async_get(hass).async_get(target_device_id)) is not None:
+    if target_device_id and isinstance(
+        dev := dr.async_get(hass).async_get(target_device_id), dr.DeviceEntry
+    ):
         dev_meta["name"] = str(dev.name_by_user or dev.name or device_slug)
         dev_meta["model"] = str(dev.model or "ESPHome Node")
         dev_meta["manufacturer"] = str(dev.manufacturer or "ESPHome")

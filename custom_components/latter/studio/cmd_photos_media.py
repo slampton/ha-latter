@@ -6,7 +6,7 @@ from typing import Any, Final
 from urllib.parse import quote
 
 from homeassistant.core import HomeAssistant
-import voluptuous as vol
+import probatio as vol
 
 from ..const import (
     CONF_SCREENSAVER_CYCLE_MINUTES,

@@ -2,20 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
-from types import SimpleNamespace
 from typing import Any
-import uuid
 
-from homeassistant.config_entries import ConfigEntry, ConfigSubentry
-from homeassistant.helpers import (
-    area_registry as ar,
-    device_registry as dr,
-    entity_registry as er,
-)
-import pytest
+from homeassistant.setup import async_setup_component
 
-from custom_components.latter import async_setup, async_setup_entry, async_unload_entry
 from custom_components.latter.areas.telemetry import build_area_context_payload
 from custom_components.latter.const import (
     CONF_DEVICE_SLUG,
@@ -34,84 +26,38 @@ from custom_components.latter.presence.ble_math import (
     RSSI_HYSTERESIS_DEADBAND_DBM,
 )
 from custom_components.latter.presence.ble_registry import (
-    APPLE_COMPANY_ID,
     AWAY_TIMEOUT_SECONDS,
-    IBEACON_PREFIX,
     SURVEY_RETENTION_SECONDS,
     WAKE_GAP_SECONDS,
     count_area_ble_proxies,
     get_all_scanners_diagnostic_map,
     get_ble_proxy_area_ids,
 )
-
-
-def _make_ibeacon_adv(
-    beacon_uuid: str,
-    *,
-    rssi: int,
-    source: str,
-    obs_time: float,
-    address: str = "AA:BB:CC:DD:EE:03",
-    major: int = 1,
-    minor: int = 1,
-    tx_power_1m: int = -59,
-) -> Any:
-    u_bytes = uuid.UUID(beacon_uuid).bytes
-    payload = (
-        IBEACON_PREFIX
-        + u_bytes
-        + major.to_bytes(2, "big")
-        + minor.to_bytes(2, "big")
-        + bytes([tx_power_1m & 0xFF])
-    )
-    return SimpleNamespace(
-        address=address,
-        rssi=rssi,
-        source=source,
-        time=obs_time,
-        manufacturer_data={APPLE_COMPANY_ID: payload},
-    )
-
-
-def _seed_ble_proxies(hass: Any) -> None:
-    dev_reg = dr.async_get(hass)
-    proxies = [
-        ("lr_proxy", "aa:bb:cc:00:00:11", "Living Room Proxy", "living_room"),
-        ("kit_proxy", "aa:bb:cc:00:00:22", "Kitchen Proxy", "kitchen"),
-        ("bed_proxy", "aa:bb:cc:00:00:33", "Bedroom Proxy", "bedroom"),
-    ]
-    scanners = []
-    for slug, mac, title, area_id in proxies:
-        dev_reg.async_get_or_create(
-            config_entry_id=f"esp_{slug}",
-            connections={(dr.CONNECTION_NETWORK_MAC, mac)},
-            identifiers={("esphome", mac)},
-            name=title,
-            area_id=area_id,
-        )
-        scanners.append(SimpleNamespace(source=mac.upper(), name=title, details={"source": mac}))
-    hass.data["_bt_scanners"] = scanners
+from tests.helpers import (
+    add_mock_entry,
+    ensure_area,
+    inject_ble_adv,
+    make_ibeacon_service_info,
+    make_subentry_dict,
+    prepare_latter_dependencies,
+    register_entity,
+    seed_ble_proxies,
+)
 
 
 async def test_ble_passive_matcher_rssi_hysteresis_and_cross_floor_penalty(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify BluetoothCallbackMatcher() passive registration, 3.0 dBm deadband, and 6.0 dB cross-floor attenuation."""
+    """Verify BluetoothCallbackMatcher(connectable=False) passive registration, 3.0 dBm deadband, and 6.0 dB cross-floor attenuation."""
     assert RSSI_HYSTERESIS_DEADBAND_DBM == 3.0
     assert CROSS_FLOOR_ATTENUATION_DB == 6.0
 
-    _seed_ble_proxies(hass)
+    await seed_ble_proxies(hass)
     entry, _sys_obj, coord = await setup_latter_hub(
         hass,
         with_ble_tag=True,
         extra_device_data={"area_follow_dwell_s": 5},
     )
-
-    bt_callbacks = hass.data.get("_bt_callbacks", [])
-    assert len(bt_callbacks) >= 1
-    _cb_fn, matcher_dict, scan_mode = bt_callbacks[0]
-    assert matcher_dict == {"connectable": False}
-    assert str(scan_mode) == "passive"
 
     assert get_ble_proxy_area_ids(hass) == {"living_room", "kitchen", "bedroom"}
     assert count_area_ble_proxies(hass) == 3
@@ -119,6 +65,7 @@ async def test_ble_passive_matcher_rssi_hysteresis_and_cross_floor_penalty(
     assert len(diag_map) == 3
 
     fabric = get_ble_fabric(hass)
+    assert fabric._unsub_ble is not None
     tracker = coord.ble_tracker
     assert tracker is not None
     tracker.update_manifest_beacon({"uuid": tracker.beacon_uuid, "major": 1, "minor": 1})
@@ -129,11 +76,13 @@ async def test_ble_passive_matcher_rssi_hysteresis_and_cross_floor_penalty(
     unsub_survey = fabric.register_survey_listener(lambda d: survey_deltas.append(d))
 
     t0 = time.monotonic()
-    # 1) Initial lock in living_room (floor_1) at -55 dBm
-    adv_lr = _make_ibeacon_adv(
-        tracker.beacon_uuid, rssi=-55, source="AA:BB:CC:00:00:11", obs_time=t0
+    # 1) Initial lock in living_room (floor_1) at -55 dBm delivered through real non-connectable scanner
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
+            tracker.beacon_uuid, rssi=-55, source="AA:BB:CC:00:00:11", obs_time=t0
+        ),
     )
-    tracker._async_on_ble_advertisement(adv_lr, "adv")
     assert tracker.current_area_id == "living_room"
     assert tracker.winning_rssi == -55
     initial_fires = len(occupancy_fires)
@@ -143,37 +92,37 @@ async def test_ble_passive_matcher_rssi_hysteresis_and_cross_floor_penalty(
     # 2) Sub-3.0 dBm RSSI jitter (-56 dBm, -54 dBm) in same confirmed_area -> ZERO occupancy callbacks!
     occupancy_fires.clear()
     survey_deltas.clear()
-    tracker._async_on_ble_advertisement(
-        _make_ibeacon_adv(
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
             tracker.beacon_uuid,
             rssi=-56,
             source="AA:BB:CC:00:00:11",
             obs_time=t0 + 0.5,
         ),
-        "adv",
     )
-    tracker._async_on_ble_advertisement(
-        _make_ibeacon_adv(
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
             tracker.beacon_uuid,
             rssi=-54,
             source="AA:BB:CC:00:00:11",
             obs_time=t0 + 1.0,
         ),
-        "adv",
     )
     assert occupancy_fires == []
     assert len(survey_deltas) == 2  # Survey listeners still receive live telemetry
 
     # >= 3.0 dBm shift in same area updates metrics
     for step in range(4):
-        tracker._async_on_ble_advertisement(
-            _make_ibeacon_adv(
+        inject_ble_adv(
+            hass,
+            make_ibeacon_service_info(
                 tracker.beacon_uuid,
                 rssi=-42,
                 source="AA:BB:CC:00:00:11",
                 obs_time=t0 + 1.5 + step * 0.3,
             ),
-            "adv",
         )
     assert len(occupancy_fires) >= 1
 
@@ -213,14 +162,14 @@ async def test_ble_passive_matcher_rssi_hysteresis_and_cross_floor_penalty(
 
     unsub_occ()
     unsub_survey()
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify static-payload BLE roaming via raw address callbacks, custom UUID preservation, sticky wake hot-swap, and BLE sleep hold."""
-    _seed_ble_proxies(hass)
+    await seed_ble_proxies(hass)
     custom_uuid = "12345678-1234-5678-9ABC-DEF012345678"
     entry, _sys_obj, coord = await setup_latter_hub(
         hass,
@@ -235,6 +184,7 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     await coord.async_on_global_config_updated({CONF_SYSTEM_BLE_UUID})
     coord.sync_ble_tracker()
 
+    fabric = get_ble_fabric(hass)
     tracker = coord.ble_tracker
     assert tracker is not None
     assert tracker.beacon_uuid == custom_uuid
@@ -248,42 +198,37 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     )
     assert tracker._target_uuid_hex == custom_uuid.replace("-", "").lower()
 
-    # 2) Raw per-address advertisement callbacks registered for ESP32 BLE MAC (Wi-Fi MAC + 2 = AA:BB:CC:DD:EE:03)
-    adv_cbs = dict(hass.data.get("_bt_adv_callbacks", []))
-    raw_cb = next(
-        (cb for cb, addr in hass.data.get("_bt_adv_callbacks", []) if addr == "AA:BB:CC:DD:EE:03"),
-        None,
-    )
-    _ = adv_cbs
-    assert raw_cb is not None
-    shared_cb, _matcher, _mode = hass.data["_bt_callbacks"][0]
+    # 2) Raw per-address advertisement callback registered for ESP32 BLE MAC (Wi-Fi MAC + 2 = AA:BB:CC:DD:EE:03)
+    assert "AA:BB:CC:DD:EE:03" in fabric._adv_unsubs
 
-    # Simulate habluetooth: packet 1 in living_room fires BOTH shared_cb and raw_cb (deduped cleanly!)
+    # Real habluetooth: packet 1 in living_room fires BOTH passive matcher and raw address callback (deduped cleanly!)
     t0 = time.monotonic()
-    pkt_lr = _make_ibeacon_adv(
-        custom_uuid,
-        rssi=-58,
-        source="AA:BB:CC:00:00:11",
-        obs_time=t0,
-        address="AA:BB:CC:DD:EE:03",
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
+            custom_uuid,
+            rssi=-58,
+            source="AA:BB:CC:00:00:11",
+            obs_time=t0,
+            address="AA:BB:CC:DD:EE:03",
+        ),
     )
-    raw_cb(pkt_lr)
-    shared_cb(pkt_lr, "adv")
     assert tracker.packets_seen == 1
     assert tracker.current_area_id == "living_room"
     assert coord.active_area_id == "living_room"
 
-    # Simulate static payload roam to kitchen: habluetooth suppresses shared_cb, ONLY raw_cb fires!
+    # Static payload roam to kitchen: habluetooth suppresses unchanged-payload matcher, raw address callback delivers!
     tracker._last_switch_monotonic = t0 - 10.0
     for step in range(3):
-        raw_cb(
-            _make_ibeacon_adv(
+        inject_ble_adv(
+            hass,
+            make_ibeacon_service_info(
                 custom_uuid,
                 rssi=-44,
                 source="AA:BB:CC:00:00:22",
                 obs_time=t0 + 1.0 + step * 0.3,
                 address="AA:BB:CC:DD:EE:03",
-            )
+            ),
         )
     assert tracker.current_area_id == "kitchen"
     assert coord.active_area_id == "kitchen"
@@ -297,28 +242,30 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     assert area_attrs["area_id"] == "kitchen"
 
     t_wake = time.monotonic()
-    raw_cb(
-        _make_ibeacon_adv(
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
             custom_uuid,
             rssi=-86,
             source="AA:BB:CC:00:00:33",
             obs_time=t_wake + WAKE_GAP_SECONDS + 0.5,
             address="AA:BB:CC:DD:EE:03",
-        )
+        ),
     )
     assert tracker.current_area_id == "kitchen"  # -86 dBm (~16.9m) > 12.0m max_radius_m!
 
     tracker.last_packet_monotonic = t0 - 20.0
     tracker.reset_for_device_wake()
     t_wake2 = time.monotonic()
-    raw_cb(
-        _make_ibeacon_adv(
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
             custom_uuid,
             rssi=-78,
             source="AA:BB:CC:00:00:33",
             obs_time=t_wake2 + WAKE_GAP_SECONDS + 1.0,
             address="AA:BB:CC:DD:EE:03",
-        )
+        ),
     )
     assert tracker.current_area_id == "bedroom"
     assert coord.active_area_id == "bedroom"
@@ -331,19 +278,18 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     assert coord.is_roaming_device is True
 
     # 5) Intentional BLE sleep (screen-off on Wi-Fi -> ble_radio_active == "off") holds last Area past 180s
-    ent_reg = er.async_get(hass)
     for eid, suffix, init_state in (
         ("sensor.pocket_assistant_wi_fi_signal", "Wi-Fi Signal", "-58"),
         ("binary_sensor.pocket_assistant_ble_radio_active", "BLE Radio Active", "off"),
         ("sensor.pocket_assistant_system_link_report", "System: Link Report", "ok"),
     ):
-        ent_reg.async_register(
-            er.RegistryEntry(
-                entity_id=eid,
-                platform="esphome",
-                device_id=coord.esphome_device_id,
-                original_name=suffix,
-            )
+        register_entity(
+            hass,
+            eid,
+            platform="esphome",
+            config_entry_id="esp_entry_pocket_assistant",
+            device_id=coord.esphome_device_id,
+            original_name=suffix,
         )
         hass.states.async_set(eid, init_state)
     coord._bind_link_report_listener()
@@ -374,23 +320,18 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     assert coord.is_device_away() is True
     assert coord.get_current_area_and_distance()[0] == "Away"
 
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grace(
     hass: Any, make_esphome_device: Any
 ) -> None:
     """Verify ESP32-P4+C6 co-processor BLE MAC seeding (>180s stale scanner cache), sleep retention, and BLE wake grace."""
-
-    area_reg = ar.async_get(hass)
-    area_reg.async_create("Garage", area_id="garage")
-    dev_reg = dr.async_get(hass)
-    dev_reg.async_get_or_create(
-        config_entry_id="esp_garage_proxy",
-        connections={(dr.CONNECTION_NETWORK_MAC, "a8:42:e3:21:af:e2")},
-        identifiers={("esphome", "a8:42:e3:21:af:e2")},
-        name="garage-ep1",
-        area_id="garage",
+    await prepare_latter_dependencies(hass)
+    ensure_area(hass, "Garage", area_id="garage")
+    await seed_ble_proxies(
+        hass,
+        [("garage_proxy", "a8:42:e3:21:af:e2", "garage-ep1", "garage")],
     )
 
     custom_uuid = "49BDD15E-2D6F-417C-B0C2-4E39EB0AF1DF"
@@ -398,26 +339,18 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
     p4_host_mac = "e8:f6:0a:e8:a4:a9"
     t0 = time.monotonic()
     stale_ts = t0 - SURVEY_RETENTION_SECONDS - 120.0
-    stale_adv = _make_ibeacon_adv(
-        custom_uuid,
-        rssi=-53,
-        source="A8:42:E3:21:AF:E2",
-        obs_time=stale_ts,
-        address=c6_ble_mac,
-        major=1,
-        minor=4,
-    )
-    hass.data["_bt_scanners"] = [
-        SimpleNamespace(
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
+            custom_uuid,
+            rssi=-53,
             source="A8:42:E3:21:AF:E2",
-            name="garage-ep1",
-            details={"source": "a8:42:e3:21:af:e2"},
-            discovered_device_timestamps={c6_ble_mac: stale_ts},
-            discovered_devices_and_advertisement_data={
-                c6_ble_mac: (SimpleNamespace(rssi=-53, name=None), stale_adv)
-            },
-        )
-    ]
+            obs_time=stale_ts,
+            address=c6_ble_mac,
+            major=1,
+            minor=4,
+        ),
+    )
 
     esp_dev, mac = make_esphome_device(
         hass,
@@ -434,72 +367,67 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
         '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":0,"battery":1,'
         '"stationary":0,"wearable":0,"ips":1,"chip":"ESP32-P4","psram_mb":32,"minor":4}',
     )
-    ent_reg = er.async_get(hass)
-    if ent_reg.async_get("sensor.remote_assistant_wi_fi_signal") is None:
-        ent_reg.async_register(
-            er.RegistryEntry(
-                entity_id="sensor.remote_assistant_wi_fi_signal",
-                platform="esphome",
-                device_id=esp_dev.id,
-                original_name="Wi-Fi Signal",
-            )
-        )
+    register_entity(
+        hass,
+        "sensor.remote_assistant_wi_fi_signal",
+        platform="esphome",
+        config_entry_id="esp_entry_remote_assistant",
+        device_id=esp_dev.id,
+        original_name="Wi-Fi Signal",
+    )
     hass.states.async_set("sensor.remote_assistant_wi_fi_signal", "-62")
     hass.states.async_set("binary_sensor.remote_assistant_ble_radio_active", "off")
 
-    await async_setup(hass, {})
-    entry = hass.config_entries.add_entry(
-        ConfigEntry(
-            entry_id="latter_hub_p4",
-            domain=DOMAIN,
-            title="Latter",
-            data={},
-            subentries_data=[
-                ConfigSubentry(
-                    subentry_id="sub_remote_p4",
-                    subentry_type=SUBENTRY_DEVICE,
-                    title="Remote Assistant",
-                    unique_id=mac,
-                    data={
-                        CONF_DEVICE_SLUG: "remote_assistant",
-                        CONF_ESPHOME_DEVICE_ID: esp_dev.id,
-                        "mac": mac,
-                        CONF_NATIVE_BLE_TRACKING: True,
-                        "ble_auto_switch": True,
-                        "sync_device_area": True,
-                    },
-                )
-            ],
-            unique_id=DOMAIN,
-        )
+    assert await async_setup_component(hass, DOMAIN, {}) is True
+    entry = add_mock_entry(
+        hass,
+        entry_id="latter_hub_p4",
+        domain=DOMAIN,
+        title="Latter",
+        data={},
+        subentries_data=[
+            make_subentry_dict(
+                {
+                    CONF_DEVICE_SLUG: "remote_assistant",
+                    CONF_ESPHOME_DEVICE_ID: esp_dev.id,
+                    "mac": mac,
+                    CONF_NATIVE_BLE_TRACKING: True,
+                    "ble_auto_switch": True,
+                    "sync_device_area": True,
+                },
+                subentry_id="sub_remote_p4",
+                subentry_type=SUBENTRY_DEVICE,
+                title="Remote Assistant",
+                unique_id=mac,
+            )
+        ],
+        unique_id=DOMAIN,
     )
-    assert await async_setup_entry(hass, entry) is True
+    assert await hass.config_entries.async_setup(entry.entry_id) is True
     await hass.async_block_till_done()
     coord = entry.runtime_data.coordinators["sub_remote_p4"]
     hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_SYSTEM_BLE_UUID] = custom_uuid
     await coord.async_on_global_config_updated({CONF_SYSTEM_BLE_UUID})
+    assert coord.ble_tracker is not None
     coord.ble_tracker.async_stop()
     coord._ble_tracker = None
     coord.sync_ble_tracker()
 
+    fabric = get_ble_fabric(hass)
     tracker = coord.ble_tracker
     assert tracker is not None
 
     # 1) Stale (>180s) scanner cache still seeds C6 BLE MAC for raw callback without scoring stale RSSI
     assert c6_ble_mac in tracker.matched_ble_addresses
     assert tracker.packets_seen == 0
-    raw_cb = next(
-        (cb for cb, addr in hass.data.get("_bt_adv_callbacks", []) if addr == c6_ble_mac),
-        None,
-    )
-    assert raw_cb is not None
+    assert c6_ble_mac in fabric._adv_unsubs
     snap = coord._build_persisted_snapshot()
     assert snap["matched_ble_addresses"] == [c6_ble_mac]
 
-    # 2) Screen-off BLE sleep > 180s MUST NOT evict C6 BLE MAC or unsubscribe raw_cb
+    # 2) Screen-off BLE sleep > 180s MUST NOT evict C6 BLE MAC or unsubscribe per-address callback
     tracker.check_away_timeout(t0 + AWAY_TIMEOUT_SECONDS + 90.0)
     assert tracker.is_away is False
-    assert any(addr == c6_ble_mac for _cb, addr in hass.data.get("_bt_adv_callbacks", []))
+    assert c6_ble_mac in fabric._adv_unsubs
 
     # 3) Even if tracker was previously Away, reboot (`device_hello`) + `BLE Radio Active -> on` 4s later
     #    holds sticky Garage instead of flipping to Away / Unassigned before BLE packets arrive
@@ -523,9 +451,10 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
     assert tracker.is_away is False
     assert coord.is_device_away() is False
 
-    # 4) Static iBeacon packet on C6 BLE MAC arrives via raw_cb (habluetooth suppresses shared_cb)
-    raw_cb(
-        _make_ibeacon_adv(
+    # 4) Static iBeacon packet on C6 BLE MAC arrives via per-address callback (habluetooth suppresses passive matcher)
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
             custom_uuid,
             rssi=-53,
             source="A8:42:E3:21:AF:E2",
@@ -533,22 +462,21 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
             address=c6_ble_mac,
             major=1,
             minor=4,
-        )
+        ),
     )
     assert tracker.packets_seen == 1
     assert tracker.current_area_id == "garage"
     assert tracker.winning_rssi == -53
     assert coord.get_current_area_and_distance()[0] == "Garage"
 
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
-@pytest.mark.asyncio
 async def test_wake_and_gap_multi_proxy_tcp_race_coalescing(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify post-wake 0.35s multi-proxy coalescing blocks 20ms TCP race jumps while allowing genuine moves."""
-    _seed_ble_proxies(hass)
+    await seed_ble_proxies(hass)
     entry, _sys_obj, coord = await setup_latter_hub(
         hass,
         stationary=0,
@@ -568,12 +496,13 @@ async def test_wake_and_gap_multi_proxy_tcp_race_coalescing(
     )
 
     t0 = time.monotonic()
-    tracker._async_on_ble_advertisement(
-        _make_ibeacon_adv(
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
             tracker.beacon_uuid, rssi=-52, source="AA:BB:CC:00:00:11", obs_time=t0
         ),
-        "adv",
     )
+    await hass.async_block_till_done()
     assert tracker.current_area_id == "living_room"
     area_changes.clear()
 
@@ -582,14 +511,14 @@ async def test_wake_and_gap_multi_proxy_tcp_race_coalescing(
     tracker.reset_for_device_wake()
     t_wake = time.monotonic()
 
-    tracker._async_on_ble_advertisement(
-        _make_ibeacon_adv(
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
             tracker.beacon_uuid,
             rssi=-78,
             source="AA:BB:CC:00:00:33",
             obs_time=t_wake + 0.01,
         ),
-        "adv",
     )
     assert tracker.current_area_id == "living_room"
     assert coord.active_area_id == "living_room"
@@ -597,15 +526,16 @@ async def test_wake_and_gap_multi_proxy_tcp_race_coalescing(
     assert area_changes == []
 
     # 20ms later local living_room proxy packet arrives -> cancels coalesce timer, zero transient jump!
-    tracker._async_on_ble_advertisement(
-        _make_ibeacon_adv(
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
             tracker.beacon_uuid,
             rssi=-52,
             source="AA:BB:CC:00:00:11",
             obs_time=t_wake + 0.03,
         ),
-        "adv",
     )
+    await hass.async_block_till_done()
     assert tracker._unsub_wake_coalesce is None
     assert tracker.current_area_id == "living_room"
     assert coord.active_area_id == "living_room"
@@ -615,22 +545,19 @@ async def test_wake_and_gap_multi_proxy_tcp_race_coalescing(
     tracker.last_packet_monotonic = time.monotonic() - 25.0
     tracker.reset_for_device_wake()
     t_wake2 = time.monotonic()
-    tracker._async_on_ble_advertisement(
-        _make_ibeacon_adv(
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
             tracker.beacon_uuid,
             rssi=-64,
             source="AA:BB:CC:00:00:33",
             obs_time=t_wake2 + 0.01,
         ),
-        "adv",
     )
     assert tracker.current_area_id == "living_room"
     assert tracker._unsub_wake_coalesce is not None
-    coalesce_cbs = [
-        cb for delay, cb in hass._timers if isinstance(delay, float) and abs(delay - 0.35) < 0.01
-    ]
-    assert len(coalesce_cbs) == 1
-    coalesce_cbs[0](None)
+    await asyncio.sleep(0.4)
+    await hass.async_block_till_done()
     assert tracker._unsub_wake_coalesce is None
     assert tracker.current_area_id == "bedroom"
     assert coord.active_area_id == "bedroom"
@@ -641,30 +568,31 @@ async def test_wake_and_gap_multi_proxy_tcp_race_coalescing(
     tracker.last_packet_monotonic = time.monotonic() - 25.0
     tracker.reset_for_device_wake()
     t_wake3 = time.monotonic()
-    tracker._async_on_ble_advertisement(
-        _make_ibeacon_adv(
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
             tracker.beacon_uuid,
             rssi=-60,
             source="AA:BB:CC:00:00:22",
             obs_time=t_wake3 + 0.01,
         ),
-        "adv",
     )
     assert tracker.current_area_id == "bedroom"
     assert tracker._unsub_wake_coalesce is not None
-    tracker._async_on_ble_advertisement(
-        _make_ibeacon_adv(
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
             tracker.beacon_uuid,
             rssi=-59,
             source="AA:BB:CC:00:00:22",
             obs_time=t_wake3 + 0.12,
         ),
-        "adv",
     )
+    await hass.async_block_till_done()
     assert tracker._unsub_wake_coalesce is None
     assert tracker.current_area_id == "kitchen"
     assert coord.active_area_id == "kitchen"
     assert area_changes == ["kitchen"]
 
     unsub_ev()
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

@@ -15,6 +15,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import (
     EVENT_HOMEASSISTANT_STARTED,
+    EVENT_HOMEASSISTANT_STOP,
     EVENT_SERVICE_REGISTERED,
 )
 from homeassistant.core import Event, HomeAssistant, callback
@@ -284,7 +285,8 @@ def _register_domain_bus_listeners(
         dev_id = event.data.get("device_id")
         if action not in ("create", "update") or not dev_id:
             return
-        dev = dr.async_get(hass).async_get(dev_id)
+        got_dev = dr.async_get(hass).async_get(dev_id)
+        dev = got_dev if isinstance(got_dev, dr.DeviceEntry) else None
         own_writes = domain_data.get("_own_area_writes")
         if isinstance(own_writes, dict) and dev_id in own_writes:
             expected_area, write_ts = own_writes[dev_id]
@@ -337,6 +339,14 @@ def _register_domain_bus_listeners(
     )
 
 
+@callback
+def _cancel_delayed_discovery_scan(domain_data: dict[str, Any]) -> None:
+    """Cancel any pending debounced ESPHome discovery scan timer."""
+    prev_timer = domain_data.pop("_unsub_delayed_scan", None)
+    if callable(prev_timer):
+        prev_timer()
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Latter domain, register services, and scan for Latter-compatible ESPHome devices."""
     _ = config
@@ -352,14 +362,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     @callback
     def _schedule_debounced_discovery_scan(delay_s: float = 2.0) -> None:
-        prev_timer = domain_data.pop("_unsub_delayed_scan", None)
-        if callable(prev_timer):
-            prev_timer()
+        _cancel_delayed_discovery_scan(domain_data)
+        if hass.is_stopping:
+            return
 
         @callback
         def _delayed_scan(_now: Any) -> None:
             domain_data.pop("_unsub_delayed_scan", None)
-            _async_scan_all_esphome_devices_for_discovery(hass)
+            if not hass.is_stopping:
+                _async_scan_all_esphome_devices_for_discovery(hass)
 
         domain_data["_unsub_delayed_scan"] = async_call_later(
             hass, delay_s, _delayed_scan
@@ -369,14 +380,38 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         hass, domain_data, _schedule_debounced_discovery_scan
     )
 
+    if "_unsub_stop_cleanup" not in domain_data:
+
+        @callback
+        def _on_ha_stop(_ev: Event[Any]) -> None:
+            domain_data.pop("_unsub_stop_cleanup", None)
+            started_unsub = domain_data.pop("_unsub_started_scan", None)
+            if callable(started_unsub):
+                started_unsub()
+            _cancel_delayed_discovery_scan(domain_data)
+            unsubs = domain_data.pop(DATA_DISCOVERY_UNSUB, ())
+            if isinstance(unsubs, tuple):
+                for unsub in unsubs:
+                    if callable(unsub):
+                        unsub()
+            clear_ma_counterpart_cache(hass)
+            async_stop_area_state_index(hass)
+
+        domain_data["_unsub_stop_cleanup"] = hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STOP, _on_ha_stop
+        )
+
     @callback
     def _on_ha_started(_ev: Event[Any]) -> None:
+        domain_data.pop("_unsub_started_scan", None)
         _async_scan_all_esphome_devices_for_discovery(hass)
 
     if hass.is_running:
         _async_scan_all_esphome_devices_for_discovery(hass)
-    else:
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_ha_started)
+    elif "_unsub_started_scan" not in domain_data:
+        domain_data["_unsub_started_scan"] = hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED, _on_ha_started
+        )
     return True
 
 
@@ -543,6 +578,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
         clear_browse_cache()
         clear_ma_counterpart_cache(hass)
         domain_data = hass.data.get(DOMAIN, {})
+        if isinstance(domain_data, dict):
+            _cancel_delayed_discovery_scan(domain_data)
         runtime = getattr(entry, "runtime_data", None)
         sys_obj = runtime if isinstance(runtime, LatterSystemHub) else get_latter_system(hass)
         if sys_obj is not None:
@@ -566,8 +603,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> None:
-    """Unregister Studio panel, icon module, and services when the Latter System entry is removed."""
-    _ = entry
+    """Unregister Studio panel, icon module, repairs, and services when the Latter System entry is removed."""
+    for sub_id in entry.subentries:
+        async_delete_device_issues(hass, sub_id)
     async_unregister_studio_panel(hass, remove_icon_module=True)
     if not hass.config_entries.async_entries(DOMAIN):
         await async_unload_services(hass)
@@ -594,7 +632,7 @@ async def async_remove_config_entry_device(
         esp_dev_id = str(sub.data.get(CONF_ESPHOME_DEVICE_ID) or "").strip()
         if esp_dev_id:
             esp_dev = dr.async_get(hass).async_get(esp_dev_id)
-            if esp_dev is not None:
+            if isinstance(esp_dev, dr.DeviceEntry):
                 for ctype, cval in esp_dev.connections:
                     if ctype == dr.CONNECTION_NETWORK_MAC and cval:
                         active_identifiers.add((DOMAIN, dr.format_mac(str(cval))))

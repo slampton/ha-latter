@@ -1,19 +1,21 @@
-Latter Home Assistant Integration (ha-latter)
+Latter (ha-latter)
 Copyright 2026 Sean Lampton
 
-This product includes software and visual assets developed for the Latter
-project (https://github.com/slampton/ha-latter), licensed under the
+This product includes software developed for the Latter project
+(https://github.com/slampton/ha-latter), licensed under the
 Apache License, Version 2.0.
 
-Bundled Asset & Third-Party Attributions
-----------------------------------------
+Third-Party Attributions
+------------------------
 
-1. Preset Wallpapers (`custom_components/latter/wallpapers/*.jpg`)
-   Original project artwork created for Latter.
-   Copyright 2026 Sean Lampton
-   Licensed under the Apache License, Version 2.0.
-
-2. Lit & Reactive Element Runtime (bundled in `custom_components/latter/frontend/latter-studio.js`)
+1. lit-html v3.3.3 (`frontend_src/src/lib/vendor/`, bundled into
+   `custom_components/latter/frontend/latter-studio.js`)
    Source: https://github.com/lit/lit
    Copyright Google LLC
-   Licensed under the BSD 3-Clause License.
+   Licensed under the BSD 3-Clause License (see `frontend_src/src/lib/vendor/LICENSE`).
+
+2. Pictogrammers Material Design Icons (`@mdi/js` v7.4.47, packed in
+   `frontend_src/src/mdi-chunks.ts` and `custom_components/latter/frontend/latter-studio-mdi.js`)
+   Source: https://github.com/Templarian/MaterialDesign-JS
+   Copyright Pictogrammers / Austin Andrews & Contributors
+   Licensed under the Pictogrammers Free License / Apache License, Version 2.0.

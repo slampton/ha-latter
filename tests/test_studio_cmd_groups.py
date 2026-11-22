@@ -5,9 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from homeassistant.components import websocket_api
-
-from custom_components.latter import async_setup_entry, async_unload_entry
 from custom_components.latter.const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_GROUPS,
@@ -20,16 +17,7 @@ from custom_components.latter.groups.device_groups import (
     CONF_BUILTIN_GROUP_PRESET_VERSION,
     get_device_groups,
 )
-
-
-async def _call_ws(
-    hass: Any, conn: Any, msg_id: int, ws_type: str, **payload: Any
-) -> None:
-    handler = hass._ws_commands[ws_type]
-    schema = getattr(handler, "_ws_schema", None)
-    raw_msg = {"id": msg_id, "type": ws_type, **payload}
-    validated = schema(raw_msg) if schema is not None else raw_msg
-    await handler(hass, conn, validated)
+from tests.helpers import call_ws, ensure_area, make_ws_connection
 
 
 async def test_studio_commands_device_groups_and_backup_restore(
@@ -37,16 +25,16 @@ async def test_studio_commands_device_groups_and_backup_restore(
 ) -> None:
     """Exercise Studio Device Groups lifecycle, Backup Export/Import, and Device Reset."""
     entry, _sys_obj, coord = await setup_latter_hub(hass)
-    from homeassistant.helpers import area_registry as ar
-
-    ar.async_get(hass).areas["living_room"] = ar.AreaEntry("living_room", "Living Room")
-    conn = websocket_api.ActiveConnection()
+    ensure_area(hass, "Living Room", area_id="living_room")
+    conn = make_ws_connection(hass)
     msg_seq = 100
 
-    async def _sys_cmd(command: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def _sys_cmd(
+        command: str, payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         nonlocal msg_seq
         msg_seq += 1
-        await _call_ws(
+        await call_ws(
             hass,
             conn,
             msg_seq,
@@ -59,10 +47,12 @@ async def test_studio_commands_device_groups_and_backup_restore(
         assert not conn.errors, f"{command} failed: {conn.errors}"
         return conn.results[-1][1]
 
-    async def _dev_cmd(command: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def _dev_cmd(
+        command: str, payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         nonlocal msg_seq
         msg_seq += 1
-        await _call_ws(
+        await call_ws(
             hass,
             conn,
             msg_seq,
@@ -77,10 +67,15 @@ async def test_studio_commands_device_groups_and_backup_restore(
 
     secret_pin = "846291"
     await _sys_cmd("set_security_pin", {"pin": secret_pin})
-    await _sys_cmd("set_security_pin", {"subentry_id": coord.subentry_id, "pin": secret_pin})
+    await _sys_cmd(
+        "set_security_pin", {"subentry_id": coord.subentry_id, "pin": secret_pin}
+    )
 
     # Device Groups lifecycle: create -> update_group_baseline -> apply_batch_device_setting -> Save Custom Group -> delete
-    await _sys_cmd("create_device_group", {"name": "Guest Suites", "description": "Guest displays"})
+    await _sys_cmd(
+        "create_device_group",
+        {"name": "Guest Suites", "description": "Guest displays"},
+    )
     await _dev_cmd("save_device_config", {"config": {"device_group": "guest_suites"}})
     assert coord.device_group == "guest_suites"
     await _sys_cmd(
@@ -90,11 +85,16 @@ async def test_studio_commands_device_groups_and_backup_restore(
     assert coord.device_group == "guest_suites"
     baseline_state = await _sys_cmd(
         "update_group_baseline",
-        {"group_id": "guest_suites", "config": {"alert_volume": 65, "area_handoff": True}},
+        {
+            "group_id": "guest_suites",
+            "config": {"alert_volume": 65, "area_handoff": True},
+        },
     )
     assert coord.device_group == "guest_suites"
     sys_ctrl_by_pref = {
-        c["pref_key"]: c for c in baseline_state["system_controls"] if c.get("pref_key")
+        c["pref_key"]: c
+        for c in baseline_state["system_controls"]
+        if c.get("pref_key")
     }
     for op_key in (
         "native_ble_tracking",
@@ -156,12 +156,14 @@ async def test_studio_commands_device_groups_and_backup_restore(
         },
     )
     assert coord.device_group == "vip_suites"
-    vip_grp = next(g for g in saved_grp_state["device_groups"] if g["id"] == "vip_suites")
+    vip_grp = next(
+        g for g in saved_grp_state["device_groups"] if g["id"] == "vip_suites"
+    )
     assert vip_grp["device_config"]["alert_volume"] == 40
 
     # Built-in groups cannot be deleted; deleting custom group resets members to 'custom'
     msg_seq += 1
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         msg_seq,
@@ -179,7 +181,7 @@ async def test_studio_commands_device_groups_and_backup_restore(
 
     # Wrong scope error check ('save_device_config' sent to system scope)
     msg_seq += 1
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         msg_seq,
@@ -193,7 +195,7 @@ async def test_studio_commands_device_groups_and_backup_restore(
 
     # 3) Backup Export & Import (System + Device scopes) & Device Reset
     msg_seq += 1
-    await _call_ws(hass, conn, msg_seq, "latter/system/export", studio_rev=STUDIO_REV)
+    await call_ws(hass, conn, msg_seq, "latter/system/export", studio_rev=STUDIO_REV)
     sys_bundle = conn.results[-1][1]["bundle"]
     assert sys_bundle["scope"] == "system"
     assert "photo_collections" in sys_bundle
@@ -201,13 +203,18 @@ async def test_studio_commands_device_groups_and_backup_restore(
     assert secret_pin not in json.dumps(sys_bundle)
 
     msg_seq += 1
-    await _call_ws(
-        hass, conn, msg_seq, "latter/system/import", bundle=sys_bundle, studio_rev=STUDIO_REV
+    await call_ws(
+        hass,
+        conn,
+        msg_seq,
+        "latter/system/import",
+        bundle=sys_bundle,
+        studio_rev=STUDIO_REV,
     )
     assert not conn.errors
 
     msg_seq += 1
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         msg_seq,
@@ -217,11 +224,14 @@ async def test_studio_commands_device_groups_and_backup_restore(
     )
     dev_bundle = conn.results[-1][1]["bundle"]
     assert dev_bundle["scope"] == "device"
-    assert dev_bundle["device"]["device_config"]["tools_items"] == "flashlight,calculator,dice"
+    assert (
+        dev_bundle["device"]["device_config"]["tools_items"]
+        == "flashlight,calculator,dice"
+    )
     assert dev_bundle["device"]["device_config"]["games_items"] == "2048,chomp"
 
     msg_seq += 1
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         msg_seq,
@@ -233,7 +243,7 @@ async def test_studio_commands_device_groups_and_backup_restore(
     assert not conn.errors
 
     msg_seq += 1
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         msg_seq,
@@ -245,7 +255,7 @@ async def test_studio_commands_device_groups_and_backup_restore(
     )
     assert not conn.errors
 
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_multi_entity_home_hub_settings_and_strict_garage_cover_filtering(
@@ -296,8 +306,8 @@ async def test_multi_entity_home_hub_settings_and_strict_garage_cover_filtering(
     )
     await hass.async_block_till_done()
 
-    conn = websocket_api.ActiveConnection()
-    await _call_ws(hass, conn, 1, "latter/system/get_state", studio_rev=STUDIO_REV)
+    conn = make_ws_connection(hass)
+    await call_ws(hass, conn, 1, "latter/system/get_state", studio_rev=STUDIO_REV)
     assert not conn.errors
     st = conn.results[-1][1]
     garage_ids = [item["id"] for item in st["catalog"]["garages"]]
@@ -306,7 +316,7 @@ async def test_multi_entity_home_hub_settings_and_strict_garage_cover_filtering(
     assert "state_label" not in clim_meta["climate.downstairs"]
     assert "state_tone" not in clim_meta["climate.downstairs"]
 
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         2,
@@ -324,14 +334,20 @@ async def test_multi_entity_home_hub_settings_and_strict_garage_cover_filtering(
     )
     assert not conn.errors
     saved_sc = conn.results[-1][1]["system_config"]
-    assert saved_sc["thermostat_entities"] == ["climate.downstairs", "climate.upstairs"]
+    assert saved_sc["thermostat_entities"] == [
+        "climate.downstairs",
+        "climate.upstairs",
+    ]
     assert saved_sc["lock_entities"] == ["lock.front_door", "lock.back_door"]
-    assert saved_sc["garage_entities"] == ["cover.main_garage", "cover.workshop_bay_garage"]
+    assert saved_sc["garage_entities"] == [
+        "cover.main_garage",
+        "cover.workshop_bay_garage",
+    ]
     assert saved_sc["vacuum_entities"] == ["vacuum.main_floor", "vacuum.upstairs"]
     assert coord.thermostat_entities == ["climate.downstairs", "climate.upstairs"]
 
     # Wrong domain inside thermostat_entities is rejected cleanly
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         3,
@@ -342,18 +358,18 @@ async def test_multi_entity_home_hub_settings_and_strict_garage_cover_filtering(
     )
     assert conn.errors and conn.errors[-1][0] == 3
 
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_builtin_group_reset_preset_and_v2_preset_migration(
-    hass: Any, setup_latter_hub: Any, make_esphome_device: Any
+    hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify `update_group_baseline(reset_to_default=True)` and one-time `BUILTIN_GROUP_PRESET_VERSION = 2` sync (`D-067`)."""
+    """Verify `update_group_baseline(reset_to_default=True)` and one-time `BUILTIN_GROUP_PRESET_VERSION` sync (`D-067`)."""
     entry, _sys_obj, coord = await setup_latter_hub(hass, stationary=1)
-    conn = websocket_api.ActiveConnection()
+    conn = make_ws_connection(hass)
 
     # Wall & Desk Panels default: `screensaver_mode == "Never"`, `docked_idle_timeout == "Never"`
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         1,
@@ -369,7 +385,7 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     assert coord.get_device_pref("docked_idle_timeout") == "Never"
 
     # Mutate `wall_panels` baseline, then reset it via `reset_to_default: True`
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         2,
@@ -386,7 +402,7 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     assert coord.get_device_pref("screensaver_mode") == "Always"
     assert coord.get_device_pref("docked_idle_timeout") == "5 min"
 
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         3,
@@ -401,7 +417,7 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     assert coord.get_device_pref("docked_idle_timeout") == "Never"
 
     # Custom groups reject `reset_to_default: True` with `not_allowed`
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         4,
@@ -411,7 +427,7 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
         studio_rev=STUDIO_REV,
     )
     assert not conn.errors
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         5,
@@ -421,7 +437,7 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
         studio_rev=STUDIO_REV,
     )
     assert conn.errors[-1][1] == "not_allowed"
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
     # Simulate an existing pre-v2 `.storage/latter.site` reload where `handhelds` had stale `wake_word_mode = "Always On"`
     global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
@@ -441,27 +457,36 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
         },
     ]
     sub = next(iter(entry.subentries.values()))
-    sub.data = {
-        **sub.data,
-        CONF_DEVICE_GROUP: "handhelds",
-        "wake_word_mode": "Always On",
-    }
+    hass.config_entries.async_update_subentry(
+        entry,
+        sub,
+        data={
+            **sub.data,
+            CONF_DEVICE_GROUP: "handhelds",
+            "wake_word_mode": "Always On",
+        },
+    )
 
-    assert await async_setup_entry(hass, entry) is True
+    assert await hass.config_entries.async_setup(entry.entry_id) is True
+    await hass.async_block_till_done()
     assert BUILTIN_GROUP_PRESET_VERSION == 4
     assert global_cfg[CONF_BUILTIN_GROUP_PRESET_VERSION] == BUILTIN_GROUP_PRESET_VERSION
     upgraded_groups = {g["id"]: g for g in get_device_groups(hass)}
-    assert upgraded_groups["handhelds"]["device_config"]["wake_word_mode"] == "Docked Only"
+    assert (
+        upgraded_groups["handhelds"]["device_config"]["wake_word_mode"] == "Docked Only"
+    )
     assert upgraded_groups["handhelds"]["device_config"]["day_brightness"] == 90
     assert upgraded_groups["handhelds"]["device_config"]["night_brightness"] == 35
     assert upgraded_groups["handhelds"]["device_config"]["bedtime_brightness"] == 15
     assert upgraded_groups["wearables"]["device_config"]["day_brightness"] == 80
     assert upgraded_groups["wearables"]["device_config"]["night_brightness"] == 25
     assert upgraded_groups["wearables"]["device_config"]["bedtime_brightness"] == 15
-    assert upgraded_groups["nightstands"]["device_config"]["wake_word_mode"] == "Disabled"
+    assert (
+        upgraded_groups["nightstands"]["device_config"]["wake_word_mode"] == "Disabled"
+    )
     reloaded_coord = entry.runtime_data.coordinators[sub.subentry_id]
     assert reloaded_coord.get_device_pref("wake_word_mode") == "Docked Only"
     assert reloaded_coord.get_device_pref("night_brightness") == 35
     assert reloaded_coord.get_device_pref("bedtime_brightness") == 15
     assert reloaded_coord.device_group == "handhelds"
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

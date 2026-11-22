@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
+from homeassistant.components.repairs.models import RepairsFlowResult
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import entity_registry as er, issue_registry as ir, selector
-import voluptuous as vol
+import probatio as vol
 
 from .const import (
     CONF_ALARM_ENTITY,
@@ -98,7 +98,6 @@ def async_audit_coordinator_health(
     hass: HomeAssistant, coordinator: CoordinatorHealthTarget
 ) -> list[dict[str, str]]:
     """Audit mapped entities and BLE proxy availability, updating HA Repairs and returning active warnings."""
-    entry_id = coordinator.entry.entry_id
     sub_id = coordinator.subentry_id
     slug = coordinator.device_slug
     warnings: list[dict[str, str]] = []
@@ -135,7 +134,6 @@ def async_audit_coordinator_health(
             severity=ir.IssueSeverity.WARNING,
             translation_key=translation_key,
             translation_placeholders=placeholders,
-            config_entry_id=entry_id,
         )
 
     missing_issue_id = missing_mapped_entity_issue_id(sub_id)
@@ -210,14 +208,14 @@ class LinkMaPlayerRepairFlow(RepairsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, str] | None = None
-    ) -> FlowResult:
+    ) -> RepairsFlowResult:
         """Start at the player picker."""
         _ = user_input
         return await self.async_step_pick()
 
     async def async_step_pick(
         self, user_input: dict[str, str] | None = None
-    ) -> FlowResult:
+    ) -> RepairsFlowResult:
         """Show the MA player picker and save the choice."""
         sys_obj = get_latter_system(self.hass)
         coordinator = sys_obj.coordinators.get(self._subentry_id) if sys_obj else None

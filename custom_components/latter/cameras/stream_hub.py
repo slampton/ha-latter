@@ -11,7 +11,6 @@ import shutil
 import time
 from typing import Any, Final
 
-from homeassistant.components import camera as ha_camera
 from homeassistant.core import HomeAssistant
 
 from ..const import DOMAIN
@@ -107,6 +106,8 @@ class LatterCameraStreamHub:
 
     async def _async_get_stream_source(self, entity_id: str) -> str | None:
         try:
+            from homeassistant.components import camera as ha_camera
+
             url = await ha_camera.async_get_stream_source(self.hass, entity_id)
             result = str(url).strip() if url else None
         except Exception as err:  # noqa: BLE001
@@ -219,6 +220,8 @@ class LatterCameraStreamHub:
         for aux_task in (ingest.idle_task, ingest.prime_task):
             if aux_task is not None and not aux_task.done() and aux_task is not asyncio.current_task():
                 aux_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await aux_task
         ingest.idle_task = None
         ingest.prime_task = None
 
@@ -253,6 +256,8 @@ class LatterCameraStreamHub:
     ) -> None:
         width, height, fit, rot = profile
         try:
+            from homeassistant.components import camera as ha_camera
+
             get_img = getattr(ha_camera, "async_get_image", None)
             if not callable(get_img):
                 return
@@ -366,21 +371,28 @@ class LatterCameraStreamHub:
                 return True
             read_task = asyncio.create_task(stdout.read(FFMPEG_READ_CHUNK_BYTES))
             restart_task = asyncio.create_task(ingest.restart_event.wait())
-            done, pending = await asyncio.wait(
-                {read_task, restart_task},
-                timeout=FFMPEG_READ_TIMEOUT_SECONDS,
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            for p in pending:
-                p.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await p
+            try:
+                done, _pending = await asyncio.wait(
+                    {read_task, restart_task},
+                    timeout=FFMPEG_READ_TIMEOUT_SECONDS,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            finally:
+                for p in (read_task, restart_task):
+                    if not p.done():
+                        p.cancel()
+                        with contextlib.suppress(asyncio.CancelledError, Exception):
+                            await p
             if not done:
                 _LOGGER.debug("RTSP FFmpeg read timeout for %s", ingest.entity_id)
                 return False
             if restart_task in done and ingest.restart_event.is_set():
                 return True
-            chunk = read_task.result() if read_task in done else b""
+            chunk = (
+                read_task.result()
+                if read_task in done and not read_task.cancelled()
+                else b""
+            )
             if not chunk:
                 return False
             for frame in parser.feed(chunk):
@@ -536,6 +548,10 @@ class LatterCameraStreamHub:
 
     async def _async_run_mjpeg_tier(self, ingest: _CameraIngest) -> bool:
         """Attempt Tier 2 native MJPEG ingest with clean `FIRST_COMPLETED` pending cleanup (`M-P2-23`)."""
+        try:
+            from homeassistant.components import camera as ha_camera
+        except Exception:  # noqa: BLE001
+            return False
         mjpeg_fn = getattr(ha_camera, "async_get_mjpeg_stream", None)
         if not callable(mjpeg_fn):
             return False
@@ -579,6 +595,8 @@ class LatterCameraStreamHub:
     ) -> bool:
         target_w, target_h, target_fit, target_rot = profile
         try:
+            from homeassistant.components import camera as ha_camera
+
             image_obj = await ha_camera.async_get_image(
                 self.hass, ingest.entity_id, width=target_w, height=target_h, timeout=_SNAPSHOT_TIMEOUT_S
             )
@@ -671,6 +689,8 @@ class LatterCameraStreamHub:
                 raise CameraTranscodeError(str(err)) from err
 
         try:
+            from homeassistant.components import camera as ha_camera
+
             image_obj = await ha_camera.async_get_image(
                 self.hass, entity_id, width=target_w, height=target_h, timeout=_SNAPSHOT_TIMEOUT_S
             )
@@ -763,7 +783,7 @@ class LatterCameraStreamHub:
         fit: str = "contain",
         rot: int = 0,
         circular_mask: bool = False,
-    ) -> AsyncGenerator[bytes, None]:
+    ) -> AsyncGenerator[bytes]:
         """Yield multipart MJPEG chunks with exact `Content-Length` headers for HTTP streaming."""
         async for frame in self.async_iter_stream_frames(
             entity_id, width, height, fps=fps, fit=fit, rot=rot, circular_mask=circular_mask
@@ -840,15 +860,18 @@ class LatterCameraStreamHub:
 
             if active_ingests and not any(ing.latest_frame is not None for ing in active_ingests):
                 waiters = [asyncio.create_task(ing.next_frame_event.wait()) for ing in active_ingests]
-                _done, pending = await asyncio.wait(
-                    waiters,
-                    timeout=min(_GRID_FIRST_FRAME_CAP_S, interval * 2.0),
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                for p in pending:
-                    p.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await p
+                try:
+                    await asyncio.wait(
+                        waiters,
+                        timeout=min(_GRID_FIRST_FRAME_CAP_S, interval * 2.0),
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                finally:
+                    for p in waiters:
+                        if not p.done():
+                            p.cancel()
+                            with contextlib.suppress(asyncio.CancelledError, Exception):
+                                await p
 
             while True:
                 t0 = time.monotonic()
@@ -882,7 +905,7 @@ class LatterCameraStreamHub:
         fps: int = 5,
         fit: str = "contain",
         label_overrides: Mapping[str, str] | None = None,
-    ) -> AsyncGenerator[bytes, None]:
+    ) -> AsyncGenerator[bytes]:
         """Yield multipart MJPEG chunks for the server-side 2x2 camera grid."""
         async for frame in self.async_iter_grid_frames(
             entity_ids, width, height, fps=fps, fit=fit, label_overrides=label_overrides

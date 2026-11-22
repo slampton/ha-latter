@@ -21,7 +21,7 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 from homeassistant.util import dt as dt_util
-import voluptuous as vol
+import probatio as vol
 
 from ..areas.catalogs import get_area_available_domains, get_area_entities
 from ..areas.registry import resolve_person_area_and_distance
@@ -240,7 +240,6 @@ def _record_slot_push_failure(
                 "service_name": f"esphome.{esphome_action}",
                 "error": utf8_safe_truncate(str(err), 160),
             },
-            config_entry_id=coord.entry.entry_id,
         )
 
 

@@ -539,7 +539,7 @@ class BleTargetMatcherMixin:
         if ent_entry is None or not ent_entry.device_id:
             return ""
         dev_entry = dr.async_get(self.hass).async_get(ent_entry.device_id)
-        if dev_entry is None:
+        if not isinstance(dev_entry, dr.DeviceEntry):
             return ""
         for _ct, cv in dev_entry.connections:
             if mac_to_int(str(cv)) is not None:

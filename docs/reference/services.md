@@ -1,121 +1,84 @@
 # Services Reference
 
-Latter registers **5 public user/automation actions** under the `latter` domain ([`services/`](../../custom_components/latter/services/), [`services.yaml`](../../custom_components/latter/services.yaml)): `notify`, `intercom_broadcast`, `set_active_area`, `set_active_speaker`, and `reset_device`.
+Latter separates its service surface cleanly into two layers ([`services/`](../../custom_components/latter/services/), [`services.yaml`](../../custom_components/latter/services.yaml)):
 
-Bound ESPHome displays invoke all **20 device-reported RPC methods** over their Zero-Privilege **System: RPC Outbox** (`LatterRpcReceiver` in `services/rpc_receiver.py` -> private `LatterRpcDispatcher` in `services/rpc_dispatcher.py`, authenticated by bound `esphome_device_id` so `allow_service_calls` is never required), while Home Assistant automations and scripts call the 5 public `latter.*` actions directly. `latter.reset_device` requires an admin user context when invoked from Home Assistant.
+1. **5 Public Home Assistant Actions (`hass.services` under `latter.*`):** `latter.notify`, `latter.intercom_broadcast`, `latter.set_active_area`, `latter.set_active_speaker`, and `latter.reset_device`—registered for Home Assistant automations, scripts, and Developer Tools.
+2. **20 Private Bound-Device Wire RPCs (`LatterRpcDispatcher`):** invoked strictly by bound ESPHome displays over their Zero-Privilege **System: RPC Outbox** (`LatterRpcReceiver` in `services/rpc_receiver.py` -> private `LatterRpcDispatcher` in `services/rpc_dispatcher.py`, authenticated by bound `esphome_device_id` so `allow_service_calls` is never required and internal wire RPCs never pollute `hass.services`).
 
 ---
 
-## Targeting (`target_device`)
+## Public Home Assistant Actions (`latter.*`)
 
-Services that act on a device accept `target_device` (a device slug such as `pocket_assistant`, a subentry ID, a Home Assistant device ID, or a special target below). When only one Latter device is configured, `target_device` is optional (except on `latter.reset_device`, which always requires an explicit target).
+### Special Target Values
+
+Actions that target a device accept `target_device` (a device slug such as `pocket_assistant`, a subentry ID, a Home Assistant device ID, or a special target below). When only one Latter device is configured, `target_device` is optional (except on `latter.reset_device`, which always requires an explicit target).
 
 | Special Target | `latter.notify` | `latter.intercom_broadcast` |
 | :--- | :--- | :--- |
-| `all` | Every display device | Every online Music Assistant speaker *(same as omitting target)* |
-| `occupied_areas` | Display devices whose current Area is occupied | Music Assistant speakers in occupied Areas, plus matching devices' active/local speakers |
-| `person.<id>` | Display devices assigned to that person or in their current Area | Music Assistant speakers in that person's current Area, plus matching devices' active/local speakers |
+| `all` | Every display device | Configured System broadcast speakers *(same as omitting target)* |
+| `occupied_areas` | Display devices whose current Area is occupied | Configured broadcast speakers in occupied Areas |
+| `person.<id>` | Display devices assigned to that person or in their current Area | Configured broadcast speakers in that person's current Area |
 | *(No match)* | Delivers nothing | No-op (never broadcasts to unoccupied Areas) |
 
----
-
-## Notifications & Intercom
-
 ### `latter.notify`
-Wakes target displays via `esphome.<node>_latter_show_notification`, shows an alert banner, optionally plays an embedded chime or speaks TTS, optionally attaches a signed camera snapshot, and fires `latter_event` (`type: notification_dispatched`).
+Wakes target displays via `esphome.<node>_latter_show_notification` (respecting sleep-safe `switch.<slug>_do_not_disturb` on non-critical alerts), shows an alert banner, optionally plays an embedded chime or speaks TTS, optionally attaches a signed camera snapshot, and fires `latter_event` (`type: notification_dispatched`).
 
 | Field | Type | Default | Notes |
 | :--- | :--- | :--- | :--- |
 | `message` | string | **required** | Truncated to 160 characters on the device |
 | `title` | string | `Notification` | Truncated to 48 characters |
-| `priority` | `normal` \| `warning` \| `critical` | `normal` | |
+| `priority` | `normal` \| `warning` \| `critical` | `normal` | `critical` bypasses Do Not Disturb |
 | `duration` | int (seconds) | `8` | Clamped to 2–60 |
 | `chime` | bool | `true` | Skipped when `announce: true` |
 | `camera_entity` | `camera.*` | — | Mints a signed baseline-JPEG snapshot URL |
 | `announce` | bool | `false` | Speaks `message` via TTS on the device's Assist satellite or local speaker |
+| `target_device` | string | — | Device slug, device ID, `all`, `occupied_areas`, or `person.<id>` |
 
 ### `latter.intercom_broadcast`
-Broadcasts a TTS announcement (`message`) or local/media-source clip (`media_url`) across `target_speakers` (or `target_device` special targets) using `tts_entity` (defaults to the first `tts.*` entity). Uses `music_assistant.play_announcement` on Music Assistant players and `media_player.play_media` (`announce: true`) elsewhere.
-
----
-
-## Media & Remotes
-
-### `latter.set_active_speaker`
-Selects `entity_id` (`media_player.*`, required) as the device's active speaker. With `transfer_queue: true` (default), transfers Music Assistant queues via `music_assistant.transfer_queue` (holding Now Playing metadata/art steady across spin-up) or pauses and replays `media_content_id` on standard players.
-
-### `latter.media_command`
-| Field | Type | Default | Notes |
-| :--- | :--- | :--- | :--- |
-| `command` | string | `toggle` | `play`, `pause`, `toggle`, `next`, `previous`, `stop`, `seek`, `clear_queue`, `play_media`, `join`, `unjoin` |
-| `entity_id` | `media_player.*` | active speaker | If idle/cold with an empty Sendspin buffer, `play` automatically heals and re-streams the Music Assistant queue |
-| `seek_position` | float (seconds) | — | For `seek` |
-| `media_id`, `media_type`, `enqueue` | string | — | For `play_media` (expands unplayable artist/album URIs up to 25 tracks) |
-| `group_members` | `media_player.*` list/CSV | — | Target speaker entities for `join` / `unjoin` speaker grouping |
-
-### `latter.media_volume`
-Adjusts volume (`action`: `set` \| `up` \| `down` \| `mute`, `volume_level`: `0–1` or `0–100`, optional `entity_id`), automatically routing through any Studio **Speaker Volume Override** (`media_player`, `number`, or `input_number`).
-
-### `latter.music_browse`
-Fetches a page of library items, speakers, queues, lyrics (Music Assistant → [LRCLIB](https://lrclib.net)), or bios (Music Assistant → Wikipedia) and pushes it to the device via `esphome.<node>_latter_set_slots` (`is_area_slots: false`), echoing `req_id` to discard stale rapid-tap responses.
-- **Fields:** `mode` (`speakers`, `favorites`, `playlist`, `artist`, `album`, `radio`, `podcast`, `audiobook`, `track`, `artist_albums`, `album_tracks`, `current_album_tracks`, `active_queue`, `podcast_episodes`, `lyrics`, `bio`), `page` (`1`), `page_size` (`5`, capped to manifest `slot_count`), `search` (`Title|Artist|Album` for lyrics/bio), `speaker`, `last_speaker`, `album_sort` (`name` \| `year` \| `year_desc`), `artist_album_sort` (`year` \| `year_desc` \| `name`), `podcast_sort` (`newest` \| `oldest`), `req_id` (`0`).
-
-### `latter.remote_action`
-Sends a TV/AV remote action (`slot`: `1–10`, `action`: `select_slot` \| `toggle` \| `command` \| `volume_up` \| `volume_down` \| `volume_mute` \| `media_play_pause`, `command`: `up`, `down`, `left`, `right`, `select`, `back`, `home`, etc.), translating key codes automatically for Android TV, Fire TV, Bravia, Denon AVR, LG webOS, Apple TV, or generic `remote.send_command`.
-
----
-
-## Areas & Home Hub
+Broadcasts a TTS announcement (`message`) or local/`media-source://` clip (`media_url`) across `target_speakers` (or `target_device` special targets) using `tts_entity` (defaults to the first `tts.*` entity). Uses `music_assistant.play_announcement` on Music Assistant players and `media_player.play_media` (`announce: true`) elsewhere.
 
 ### `latter.set_active_area`
-Switches the device's active Area (`area_id`, ID or name). Moves media along when **Media Follows This Device to Its New Area** is on, and updates the Home Assistant Device Area on roaming hardware (`stationary == 0`) when **Voice Follows Me** is enabled.
+Switches the device's active Area (`area_id`, ID or name). Moves media along when **Media Area handoff** is on, and updates the Home Assistant Device Area on roaming hardware (`stationary == 0`) when **Voice Follows Me** is enabled.
 
-### `latter.area_browse`
-Pushes paginated Areas (`mode: areas`) or controllable entities (`mode: entities` \| `home`) via `esphome.<node>_latter_set_slots` (`is_area_slots: true` for entity/home slider cards; `false` for Area lists).
-- **Fields:** `mode` (`entities`), `area_id`, `domain_filter` (`all`, `scene`, `light`, `cover`, `fan`, `switch`, `climate`, `media`, or CSV), `page` (`1`), `page_size` (`3`–`6` cards or `5`–`7` list rows per manifest), `req_id` (`0`).
+### `latter.set_active_speaker`
+Selects `entity_id` (`media_player.*`, required) as the device's active speaker. With `transfer_queue: true` (default), transfers Music Assistant queues via `music_assistant.transfer_queue` (holding Now Playing metadata and album art steady across spin-up) or pauses and replays `media_content_id` on standard players.
 
-### `latter.area_action`
-Executes an explicit Area or Home Hub control action.
-
-| Field | Type | Notes |
-| :--- | :--- | :--- |
-| `entity_id` | string | Any entity ID, or a Home Hub virtual target: **`home_hub.alarm`**, **`home_hub.thermostat`** *(or `home_hub.climate`)*, **`home_hub.lock`**, **`home_hub.garage`**, **`home_hub.vacuum`** |
-| `action` | string | `toggle`, `turn_on`, `turn_off`, `set_level`, `set_color`, `set_kelvin`, `set_temperature`, `step_up`, `step_down`, `arm_home` / `alarm_arm_home`, `arm_away` / `alarm_arm_away`, `arm_night` / `alarm_arm_night`, `disarm` / `alarm_disarm`, `heat`, `cool`, `auto`, `off`, `lock`, `unlock`, `open`, `open_cover`, `close_cover`, `stop_cover`, `start`, `pause`, `dock` / `return_to_base` *(`lock` and `alarm_control_panel` reject `toggle`)* |
-| `level` | number | `0–100` (brightness/position/fan speed), Kelvin (`set_kelvin`), or target temperature (`set_temperature`) |
-| `code` | string | `#RRGGBB` (`set_color`), Home Assistant Alarm PIN, or Latter Security PIN |
-| `area_id` | area | Optional Area scope |
-
-**Separate Alarm PINs vs. Perimeter Security (`protocol.py`, `services.py`):**
-- **Home Assistant Alarm Panels with a Code (`alarm_caps`):** when the target `alarm_control_panel` defines `code_format`, `disarm` (and `arm_*` when `code_arm_required` is true) validates `code` and passes it straight through to Home Assistant's alarm service. Arming is never blocked by `security_pin_policy: block`.
-- **Locks, Garage/Gate Covers & Code-Less Alarms:** opening actions (`unlock`/`open`, opening garage/gate/door covers, and `disarm` on code-less alarms) enforce the calling Device's Studio **Perimeter Security Policy** (`allow`, `require_pin`, or `block`; `auto` resolves to `require_pin` on stationary panels or when an HA alarm code exists), verifying `code` in constant time against the PBKDF2-HMAC-SHA256 Device Security PIN (falling back to the System Security PIN).
-
----
-
-## Calendar & Doorbell
-
-- **`latter.calendar_fetch`** (`mode`: `window` \| `map` default `window`, `start_date`, `end_date`, `days: 1–60` default `30`, `location`, `req_id: 0`): in `window` mode, fetches and deduplicates up to 64 structured events across configured Site calendars (`[start_date .. end_date]`) and pushes atomic chunks via `esphome.<node>_latter_set_calendar_view`; in `map` mode, signs a baseline-JPEG OpenStreetMap snapshot URL for `location` and pushes `map_url` via `latter_set_calendar_view`.
-- **`latter.calendar_create_event`** (`summary` required, optional `calendar_entity`, `location`, `description`, `all_day: false`, `start_date`, `end_date`, `start_date_time`, `end_date_time`, `rrule`): creates a timed, all-day, or RFC 5545 recurring (`rrule`) event on a writable configured Site calendar, refreshes `calendar_agenda`, and pushes the updated window to the device.
-- **`latter.calendar_delete_event`** (`calendar_entity` and `uid` required, optional `recurrence_id`, `recurrence_range`): deletes an event (or recurring instance) from a configured Site calendar advertising `DELETE_EVENT`, refreshes `calendar_agenda`, and pushes the updated window to the device.
-- **`latter.doorbell_intercom`** *(experimental)* (`action`: `listen_start` \| `listen_stop` \| `listen_toggle` \| `talk_message` \| `quick_reply` \| `unlock_door` \| `call_target` \| `set_noise_reduction` \| `select_camera`, plus `camera_entity` / `camera_index`, `message`, `noise_reduction`: `strong` \| `light` \| `off`, `code`): streams noise-reduced camera audio as FLAC, speaks push-to-talk/quick replies via TTS on the camera's speaker, unlocks the door (`code` verified under `require_pin`), or rings other displays (`call_target`).
-
----
-
-## Preferences, Appearance & Device Lifecycle
-
-### `latter.save_custom_color` *(admin)*
-Saves `hex_color` (`#RRGGBB`, optional `name`) into the 24-swatch System color library and applies it to the target device.
-
-### `latter.shortcut_action` *(bound-device RPC / user)*
-Executes a Home Assistant entity shortcut (`entity_id`, `action`, optional `code`) configured on the target device's **App Dock** (`dock_items`) or **Pinned App** (`pinned_items`), strictly enforcing the device's configured `(entity_id, action)` allowlist and `security_pin_policy` (`auto` / `allow` / `require_pin` / `block`) on perimeter locks, garage/gate/door covers, and security alarms.
-
-### `latter.set_device_prefs` *(admin / bound-device RPC)*
-Applies typed preference updates (`changes` dict, optional `base_seq`) to the Device's sleep-safe subentry (`studio/settings.py`), switching `device_group` to `custom` when an enforced baseline setting diverges, incrementing `prefs_seq`, and pushing the updated `device_prefs` Protocol v3 frame.
-
-### `latter.reset_device` *(admin)*
-Resets `target_device` (**required**; never falls back to a default device):
-- `device_settings` (`true` default): calls `esphome.<node>_latter_factory_reset` (wipes NVS settings and restarts while keeping Wi-Fi and API pairing).
+### `latter.reset_device`
+Admin-only action that resets `target_device` (**required**; never falls back to a default device):
+- `device_settings` (`true` default): calls `esphome.<node>_latter_factory_reset` (erases saved on-device NVS preferences and restarts while keeping compiled Wi-Fi and API pairing; requires firmware SDK rev `2026112007+`).
 - `latter_options` (`true` default): resets Studio per-device settings back to onboarding defaults while preserving the bound ESPHome device, MAC, slug, and Music Assistant player link.
 
-### `latter.device_hello` & `latter.timer_alarm_state` *(device-reported RPCs)*
-- **`latter.device_hello`** (`contract`, `boot_id`, `manifest`, `prefs_seq`, `dirty_prefs`): handshake emitted by firmware on API connect and `latter_ping` to register Hardware Manifest v2, check boot health, reconcile offline NVS preference edits, and push fresh Protocol v3 domains.
-- **`latter.timer_alarm_state`** (`timer_running`, `timer_paused`, `remaining_sec`, `ringing`): event-driven update emitted by firmware on timer/alarm transitions to drive `timer_active`, `timer_remaining` (1 Hz local tick), and `alarm_ringing` without background polling.
+---
+
+## Private Bound-Device Wire RPCs (`LatterRpcDispatcher`)
+
+Bound ESPHome displays emit compact chunked frames on `sensor.<node>_system_rpc_outbox` (`ALL_RPC_METHODS` in [`const.py`](../../custom_components/latter/const.py), dispatched in [`services/rpc_dispatcher.py`](../../custom_components/latter/services/rpc_dispatcher.py) strictly against the calling `LatterCoordinator`):
+
+| Category | Wire RPC Method | Summary |
+| :--- | :--- | :--- |
+| **Lifecycle & Telemetry** | `device_hello` | Registers `contract=3`, `boot_id`, Hardware Manifest v2, `prefs_seq`, and `dirty_prefs`, mints a per-boot HMAC PIN session key, and pushes fresh Protocol v3 domains. |
+| | `device_telemetry` | Streams on-demand internal SRAM, PSRAM low-water, BLE radio state, profiler state, and `[PROF:LINK]` metrics into Studio's `live.telemetry`. |
+| | `display_state` | Reports live `power_state`, `brightness_pct`, and `screensaver_active` for `light.<slug>_screen` and `switch.<slug>_screensaver`. |
+| | `timer_alarm_state` | Reports `timer_running`, `timer_paused`, `remaining_sec`, `ringing`, and stopwatch state for Tier 2 timer/alarm entities and Studio Overview. |
+| **Preferences & Appearance** | `set_device_prefs` | Reconciles on-device typed preference edits (`base_seq`, `changes`), detaching `device_group` to `custom` if an enforced baseline diverges. |
+| | `save_custom_color` | Saves `#RRGGBB` into the 24-swatch System color library and switches the calling Device's `color_profile` to `Custom`. |
+| **Media & Remotes** | `music_browse` | Paginates local Music Assistant library categories, speakers, active queues, track info, and local Music Assistant lyrics (`lyrics` / `lyrics_fetch` -> `latter_set_music_lyrics`, 100% Zero-WAN). |
+| | `media_command` | Executes `play`, `pause`, `toggle`, `next`, `previous`, `stop`, `seek`, `clear_queue`, `play_media`, `join`, `unjoin`, and queue reordering (auto-healing cold Sendspin queues). |
+| | `media_volume` | Adjusts `set` \| `up` \| `down` \| `mute` volume, routing through any configured Studio **Speaker volume override**. |
+| | `set_active_speaker` | Bound-device counterpart of `latter.set_active_speaker`. |
+| | `remote_action` | Dispatches TV/AV slot selection, power toggle, transport, volume, and D-pad commands (including press-and-hold `hold_secs`). |
+| **Areas, Home Hub & Shortcuts** | `area_browse` | Pushes paginated Area lists (`mode: areas`) or controllable Area/Home entities (`mode: entities` \| `home`) via `latter_set_slots`. |
+| | `area_action` | Executes Area or Home Hub (`home_hub.alarm`, `home_hub.thermostat`, `home_hub.lock`, `home_hub.garage`, `home_hub.vacuum`) control actions. |
+| | `set_active_area` | Bound-device counterpart of `latter.set_active_area`. |
+| | `shortcut_action` | Executes an `(entity_id, action)` pair strictly allowlisted on the calling Device's `dock_items` or `pinned_items`. |
+| **Calendar & Intercom** | `calendar_fetch` | Fetches and deduplicates up to 64 structured events across configured Site calendars (`[start_date .. end_date]`, up to 60 days) and pushes chunks via `latter_set_calendar_view`. |
+| | `calendar_create_event` | Creates a timed, all-day, or RFC 5545 recurring (`rrule`) event on a writable configured Site calendar. |
+| | `calendar_delete_event` | Deletes an event (or recurring instance) on a writable configured Site calendar. |
+| | `intercom_broadcast` | Bound-device counterpart of `latter.intercom_broadcast` from the Home Hub **Broadcast** tab. |
+| | `doorbell_intercom` | Controls live camera audio (`listen_start` \| `listen_stop` \| `listen_toggle`), TTS `talk_message` / `quick_reply`, `set_noise_reduction`, and `select_camera`. |
+
+### Session-Key PIN Unwrapping & Perimeter Security (`services/rpc_security.py`)
+
+- **Authenticated `v1:` PIN Envelopes & Lockout:** PINs entered on the touch keypad (`4–12` digits) are wrapped with the Device's per-boot session key (`v1:<nonce>:<cipher>:<hmac>`) before crossing `System: RPC Outbox`, unwrapped in constant time by `unwrap_rpc_pin_code`, and guarded by `PinLockoutTracker` (`5` consecutive failures trigger `60 s` exponential backoff).
+- **Home Assistant Alarm Panels with a Code (`alarm_caps`):** when the target `alarm_control_panel` defines `code_format`, `disarm` (and `arm_*` when `code_arm_required` is true) validates `code` and passes it straight through to Home Assistant's alarm service. Arming is never blocked by `security_pin_policy: block`.
+- **Locks, Garage/Gate Covers & Code-Less Alarms:** opening actions (`unlock`/`open`, opening garage/gate/door covers, and `disarm` on code-less alarms) enforce the calling Device's Studio **Perimeter security policy** (`allow`, `require_pin`, or `block`; `auto` resolves to `require_pin` on stationary panels or when an HA alarm code exists), verifying `code` in constant time against the PBKDF2-HMAC-SHA256 Device security PIN (falling back to the System security PIN).

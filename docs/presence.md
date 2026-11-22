@@ -99,7 +99,7 @@ All filtering, trilateration, hysteresis, and sensor-fusion parameters live in [
    - No Area wins while its effective score is below **`−88 dBm`**.
 5. **Away.**
    - With no matched packets for **Away Timeout** (default **180 s**, configurable `30–900 s`), BLE tags and offline Devices are marked `Away` (and `current_floor` transitions to `Away`).
-   - Display Devices with a live Wi-Fi connection, intentional screen-off BLE sleep (`ble_radio_active == off`), or latched battery hibernation retain their last Area instead of flipping `Away`.
+   - Display Devices with a live Wi-Fi connection, intentional screen-off BLE sleep (`ble_active == false` in `device_telemetry`), or latched battery hibernation retain their last Area instead of flipping `Away`.
 
 ## Calibrating & capturing signatures
 
@@ -120,7 +120,7 @@ Walls, foil-backed insulation, and receiver antenna designs mean raw RSSI varies
 
 ## Area occupancy and sensor fusion
 
-Latter creates one occupancy binary sensor and one occupants sensor per mapped Area: `binary_sensor.<area>_ble_occupancy` and `sensor.<area>_occupants`. Each Area can fuse BLE presence with existing sensors assigned to that Area:
+Latter creates one occupancy binary sensor and one occupants sensor per mapped Area: `binary_sensor.<area>_occupancy` and `sensor.<area>_occupants`. Each Area can fuse BLE presence with existing physical sensors assigned to that Area:
 
 | Input | Effect on the Area's confidence score |
 | :--- | :--- |
@@ -137,11 +137,11 @@ Presence modes, set per Area in Studio (**System → BLE & Area Presence → Are
 | `weighted` (default) | Occupied when the weighted confidence score passes the Area's threshold (default `50%`, adjustable `20–95%`) |
 | `any_or` | Occupied if BLE **or** any selected sensor is active |
 | `ble_only` | BLE presence only |
-| `ble_and_sensor` | Requires BLE **and** an active sensor (where the Area has sensors) |
+| `ble_and_sensor` | Requires BLE **and** an active physical sensor (where the Area has sensors; fails closed to `off` if configured physical sensors are `unavailable` or `unknown`) |
 
 > The weighted score is a transparent additive rule—not an opaque Bayesian network—so every transition can be inspected directly from entity attributes.
 
-Sensors are discovered automatically by device class (`occupancy`, `presence`, `motion`, `moving`, `door`, `opening`) across both entity Areas and device Areas.
+Sensors are discovered automatically by device class (`occupancy`, `presence`, `motion`, `moving`, `door`, `opening`) across both entity Areas and device Areas (excluding Latter's own `latter` domain entities so `binary_sensor.<area>_occupancy` never feeds back into itself).
 
 ## What Latter does with the Area
 
@@ -170,7 +170,7 @@ Sensors are discovered automatically by device class (`occupancy`, `presence`, `
 | Calibration & RF physics tuning | Per-scanner offsets, per-device ref power, global attenuation, max radius, max velocity | ✓ Per-scanner offsets (`±25 dB`), auto/manual per-Device 1 m reference power, configurable attenuation, max radius, max velocity, and away timeout |
 | Proxy-less Areas & boundary zones | Requires local scanner or manual radius tricks | ✓ **Multi-Scanner Area Signatures** resolve proxy-less Areas via multi-scanner vector matching |
 | Per-scanner distance entities (`N × M`) | ✓ (`sensor.<dev>_distance_to_<scanner>`) | **No.** Exposes one closest-distance sensor per Device/Person (`ble_distance`) and streams per-scanner distances live in Studio to keep the state machine lean |
-| Same entity IDs for drop-in automations | — | **No.** Automations should point to Latter's `current_area`, `current_floor`, or `ble_occupancy` entities |
+| Same entity IDs for drop-in automations | — | **No.** Automations should point to Latter's `current_area`, `current_floor`, or `occupancy` entities |
 
 **What Latter adds natively on top of BLE positioning:** `6.0 dB` cross-floor vertical attenuation, per-Area occupancy fused with mmWave/PIR/door sensors, automatic Home Assistant Device Area sync for Assist (*Voice Follows Me*), media handoff, occupied-Area notification/intercom routing, and zero-reflash sleep-safe Studio calibration.
 
@@ -180,7 +180,7 @@ Sensors are discovered automatically by device class (`occupancy`, `presence`, `
 2. Open **Studio → Devices → Discovered**, adopt your Latter Devices, Android phones (`HA Companion App`), iPhones/watches (`Private BLE Device`), and local BLE tags, and set **Assigned Person** on personal Devices.
 3. Attach `device_tracker.<slug>` to each person in **Settings → People** if you want BLE Home/Away zone tracking.
 4. Walk your Site with **Studio → System → BLE & Area Presence → Walk-Around BLE Calibration** (**Live Stream On**): select your **Carried Device**, click **Calibrate Area** in any proxy-less Area or tight doorway boundary, and expand **Antenna Trim** inside any proxy row whose hardware needs gain normalization.
-5. Point your automations at `sensor.<person>_current_area`, `sensor.<person>_current_floor`, or `binary_sensor.<area>_ble_occupancy`.
+5. Point your automations at `sensor.<person>_current_area`, `sensor.<person>_current_floor`, or `binary_sensor.<area>_occupancy`.
 
 ---
 

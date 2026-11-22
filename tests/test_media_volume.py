@@ -5,6 +5,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import SupportsResponse
+from homeassistant.helpers import device_registry as dr
+
 from custom_components.latter.const import (
     CONF_VOLUME_OVERRIDES,
     DATA_GLOBAL_CONFIG,
@@ -27,6 +31,12 @@ from custom_components.latter.media.state_payload import (
 )
 from custom_components.latter.protocol_codec import FIELD_SEP
 from custom_components.latter.protocol_specs import PROTOCOL_V3_DATA
+from tests.helpers import (
+    add_mock_entry,
+    mock_service,
+    register_device,
+    register_entity,
+)
 
 
 def _seed_music_assistant(
@@ -43,16 +53,16 @@ def _seed_music_assistant(
     ),
 ) -> tuple[Any, SimpleNamespace | None]:
     """Register a loaded Music Assistant config entry, linked entity, and optional `mass` runtime client."""
-    from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-    from homeassistant.helpers import device_registry as dr, entity_registry as er
-
-    ma_entry = ConfigEntry(
-        entry_id="entry_ma_test",
+    ma_entry = add_mock_entry(
+        hass,
         domain="music_assistant",
         title="Music Assistant",
+        entry_id="entry_ma_test",
         data={},
-        state=ConfigEntryState.LOADED,
     )
+    if hasattr(ma_entry, "mock_state"):
+        ma_entry.mock_state(hass, ConfigEntryState.LOADED)
+
     mass_client: SimpleNamespace | None = None
     if with_runtime_mass:
         q_list = list(queue_items or [])
@@ -81,7 +91,9 @@ def _seed_music_assistant(
         async def _add_item_to_favorites(item: Any) -> None:
             fav_add_calls.append(item)
 
-        async def _remove_item_from_favorites(media_type: Any, library_item_id: Any) -> None:
+        async def _remove_item_from_favorites(
+            media_type: Any, library_item_id: Any
+        ) -> None:
             fav_remove_calls.append((str(media_type), library_item_id))
 
         async def _get_item_by_uri(uri: str) -> dict[str, Any]:
@@ -99,7 +111,9 @@ def _seed_music_assistant(
             current_index=1,
             shuffle_enabled=False,
             repeat_mode=SimpleNamespace(value="off"),
-            current_item=(q_list[1] if len(q_list) > 1 else (q_list[0] if q_list else None)),
+            current_item=(
+                q_list[1] if len(q_list) > 1 else (q_list[0] if q_list else None)
+            ),
         )
         player_queues = SimpleNamespace(
             fetch_player_queue_items=_fetch_player_queue_items,
@@ -127,25 +141,23 @@ def _seed_music_assistant(
         )
         ma_entry.runtime_data = SimpleNamespace(mass=mass_client)
 
-    hass.config_entries.add_entry(ma_entry)
-
-    dev_reg = dr.async_get(hass)
-    ma_dev = dev_reg.async_get_or_create(
+    ma_dev = register_device(
+        hass,
         config_entry_id=ma_entry.entry_id,
+        entry_domain="music_assistant",
         connections={(dr.CONNECTION_NETWORK_MAC, mac)},
         identifiers={("music_assistant", queue_id)},
         name="Pocket Assistant MA",
+        manufacturer="Latter",
     )
-    ent_reg = er.async_get(hass)
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id=ma_entity,
-            platform="music_assistant",
-            device_id=ma_dev.id,
-            config_entry_id=ma_entry.entry_id,
-            unique_id=queue_id,
-            original_name="Pocket Assistant MA",
-        )
+    register_entity(
+        hass,
+        ma_entity,
+        platform="music_assistant",
+        device_id=ma_dev.id,
+        config_entry=ma_entry,
+        unique_id=queue_id,
+        original_name="Pocket Assistant MA",
     )
     hass.states.async_set(
         ma_entity,
@@ -176,7 +188,7 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify `active_media` 21-field sync (`shuffle`, `repeat`, `muted`, `favorite`, `queue_count`, `media_caps`) and toggles."""
-    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+    entry, sys_obj, coord = await setup_latter_hub(hass)
     assert coord is not None
     hass.data.setdefault(DOMAIN, {}).setdefault(DATA_GLOBAL_CONFIG, {})[
         CONF_VOLUME_OVERRIDES
@@ -214,14 +226,23 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     mute_calls: list[dict[str, Any]] = []
     shuffle_calls: list[dict[str, Any]] = []
     repeat_calls: list[dict[str, Any]] = []
-    hass.services.async_register(
-        "media_player", "volume_mute", lambda call: mute_calls.append(dict(call.data))
+    mock_service(
+        hass,
+        "media_player",
+        "volume_mute",
+        lambda call: mute_calls.append(dict(call.data)),
     )
-    hass.services.async_register(
-        "media_player", "shuffle_set", lambda call: shuffle_calls.append(dict(call.data))
+    mock_service(
+        hass,
+        "media_player",
+        "shuffle_set",
+        lambda call: shuffle_calls.append(dict(call.data)),
     )
-    hass.services.async_register(
-        "media_player", "repeat_set", lambda call: repeat_calls.append(dict(call.data))
+    mock_service(
+        hass,
+        "media_player",
+        "repeat_set",
+        lambda call: repeat_calls.append(dict(call.data)),
     )
 
     await hass.async_block_till_done()
@@ -249,7 +270,11 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     assert attrs["media_caps"] == expected_caps
 
     wire_fields = attrs["payload"].split(FIELD_SEP)
-    assert len(wire_fields) == 3 + len(PROTOCOL_V3_DATA["domains"]["active_media"]["fields"]) == 23
+    assert (
+        len(wire_fields)
+        == 3 + len(PROTOCOL_V3_DATA["domains"]["active_media"]["fields"])
+        == 23
+    )
     assert wire_fields[17] == "0"  # shuffle
     assert wire_fields[18] == "off"  # repeat
     assert wire_fields[19] == "1"  # muted (from volume_override AVR!)
@@ -258,7 +283,7 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     assert wire_fields[22] == str(expected_caps)  # media_caps
 
     # 1. mute_toggle targets the configured volume_override entity (living_room_avr)
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {"command": "mute_toggle"},
@@ -268,7 +293,7 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     ]
 
     # 2. shuffle_toggle toggles False -> True on MA player
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {"command": "shuffle_toggle"},
@@ -282,9 +307,12 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
         hass.states.async_set(
             "media_player.ma_pocket",
             "playing",
-            {**dict(hass.states.get("media_player.ma_pocket").attributes), "repeat": cur_rep},
+            {
+                **dict(hass.states.get("media_player.ma_pocket").attributes),
+                "repeat": cur_rep,
+            },
         )
-        await _sys_obj.rpc_dispatcher.async_dispatch(
+        await sys_obj.rpc_dispatcher.async_dispatch(
             coord,
             RPC_MEDIA_COMMAND,
             {"command": "repeat_cycle"},
@@ -304,12 +332,12 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     assert dyn_attrs["media_caps"] == (
         expected_caps & ~(MEDIA_CAP_SHUFFLE_SET | MEDIA_CAP_REPEAT_SET)
     )
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {"command": "shuffle_toggle"},
     )
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {"command": "repeat_cycle"},
@@ -323,7 +351,7 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     assert restored_attrs["media_caps"] == expected_caps
 
     # 4. favorite_toggle with media_id="" and plain non-URI media_id="Track Title" resolves real URI
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {"command": "favorite_toggle", "media_id": ""},
@@ -334,7 +362,7 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     assert attrs2["favorite"] is True
 
     # Passing a plain track title (non-URI without "://") must NOT pass raw title to add/remove_item_to_favorites
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {
@@ -361,7 +389,8 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
             "active_queue": "ma_queue_pocket",
         },
     )
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "get_library",
         lambda _call: {
@@ -373,8 +402,9 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
                 }
             ]
         },
+        supports_response=SupportsResponse.ONLY,
     )
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {
@@ -383,3 +413,5 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
         },
     )
     assert mass.music.fav_add_calls == ["library://track/901"]
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

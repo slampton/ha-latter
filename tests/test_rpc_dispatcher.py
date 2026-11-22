@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry, ConfigSubentry
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import (
-    device_registry as dr,
-    entity_registry as er,
-    issue_registry as ir,
-)
+from homeassistant.helpers import device_registry as dr, issue_registry as ir
 import pytest
 
 from custom_components.latter.const import (
@@ -19,10 +17,8 @@ from custom_components.latter.const import (
     CONF_DEVICE_SLUG,
     CONF_ESPHOME_DEVICE_ID,
     CONF_MA_PLAYER_ENTITY,
-    DOMAIN,
     SUBENTRY_DEVICE,
 )
-from custom_components.latter.coordinator import LatterCoordinator
 from custom_components.latter.media.linking import (
     async_set_ma_player_link,
     clear_ma_counterpart_cache,
@@ -41,53 +37,46 @@ from custom_components.latter.services.rpc_receiver import (
     parse_rpc_frame,
 )
 from custom_components.latter.studio.payload import build_studio_state_payload
+from tests.helpers import (
+    add_mock_entry,
+    get_service_calls,
+    make_subentry,
+    mock_service,
+    register_device,
+    register_entity,
+)
 
 
 async def test_rpc_outbox_single_and_multipart_dispatch_and_target_pinning(
     hass: Any, setup_latter_hub: Any, make_esphome_device: Any, caplog: Any
 ) -> None:
     """Verify `System: RPC Outbox` state changes reassemble chunks, deduplicate replays, and pin target_device."""
-    entry, sys_obj, coord_a = await setup_latter_hub(hass)
+    entry, _sys_obj_init, _coord_a_init = await setup_latter_hub(hass)
 
     # Add a second device B so we can prove Device A cannot spoof target_device="panel_b"
     dev_b, mac_b = make_esphome_device(
         hass, slug="panel_b", mac="aa:bb:cc:dd:ee:99", name="Panel B", area_id="bedroom", stationary=1
     )
-    sub_b = ConfigSubentry(
-        data={
-            CONF_ESPHOME_DEVICE_ID: dev_b.id,
-            "mac": mac_b,
-            CONF_DEVICE_SLUG: "panel_b",
-            CONF_DEFAULT_AREA: "bedroom",
-        },
+    sub_b = make_subentry(
+        {CONF_ESPHOME_DEVICE_ID: dev_b.id, "mac": mac_b, CONF_DEVICE_SLUG: "panel_b", CONF_DEFAULT_AREA: "bedroom"},
         subentry_type=SUBENTRY_DEVICE,
         title="Panel B",
         unique_id=mac_b,
         subentry_id="sub_panel_b",
     )
     hass.config_entries.async_add_subentry(entry, sub_b)
+    await hass.async_block_till_done()
 
-    coord_b = LatterCoordinator(
-        hass=hass,
-        entry=entry,
-        hmac_secret=sys_obj.hmac_secret,
-        subentry=sub_b,
-    )
-    await coord_b.async_setup()
-    sys_obj.coordinators["sub_panel_b"] = coord_b
-    hass.data[DOMAIN]["sub_panel_b"] = coord_b
+    sys_obj = entry.runtime_data
+    coord_a = sys_obj.coordinators["sub_pocket"]
+    coord_b = sys_obj.coordinators["sub_panel_b"]
 
     # Register a light in kitchen so area_action can run
-    ent_reg = er.async_get(hass)
-    ent_reg.async_register(
-        er.RegistryEntry(entity_id="light.kitchen_ceiling", platform="hue", area_id="kitchen")
-    )
+    register_entity(hass, "light.kitchen_ceiling", platform="hue", area_id="kitchen")
     hass.states.async_set("light.kitchen_ceiling", "off", {"friendly_name": "Kitchen Ceiling"})
 
     # 1. Single-frame RPC attempting to spoof target_device="panel_b" while setting active area to kitchen
-    spoof_envelope = json.dumps(
-        {"s": "set_active_area", "d": {"target_device": "panel_b", "area_id": "kitchen"}}
-    )
+    spoof_envelope = json.dumps({"s": "set_active_area", "d": {"target_device": "panel_b", "area_id": "kitchen"}})
     hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", f"a1b2:1:1/1|{spoof_envelope}")
     await hass.async_block_till_done()
 
@@ -103,25 +92,17 @@ async def test_rpc_outbox_single_and_multipart_dispatch_and_target_pinning(
     assert coord_a.active_area_id == "living_room"
 
     # 3. Multi-chunk (3-part) RPC frame reassembles and executes area_action
-    full_env = json.dumps(
-        {
-            "s": "latter.area_action",
-            "d": {"action": "turn_on", "entity_id": "light.kitchen_ceiling"},
-        }
-    )
+    calls = get_service_calls(hass)
+    full_env = json.dumps({"s": "latter.area_action", "d": {"action": "turn_on", "entity_id": "light.kitchen_ceiling"}})
     c1, c2, c3 = full_env[:25], full_env[25:55], full_env[55:]
     hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", f"a1b2:2:1/3|{c1}")
     hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", f"a1b2:2:2/3|{c2}")
     hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", f"a1b2:2:3/3|{c3}")
     await hass.async_block_till_done()
-    assert any(c.domain == "light" and c.service == "turn_on" for c in hass.services.calls)
+    assert any(c.domain == "light" and c.service == "turn_on" for c in calls)
 
     # 4. Disconnect (`unavailable`) -> reconnect (`unknown`) clears push cache and republishes all 5 v3 domains
-    push_calls = [
-        c for c in hass.services.calls
-        if c.domain == "esphome" and c.service == "pocket_assistant_latter_push_v3"
-    ]
-    before_reconnect_count = len(push_calls)
+    before_reconnect_idx = len(calls)
     hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", "unavailable")
     await hass.async_block_till_done()
     assert coord_a._last_pushed_v3 == {}
@@ -134,18 +115,22 @@ async def test_rpc_outbox_single_and_multipart_dispatch_and_target_pinning(
     await hass.async_block_till_done()
     reconnected_domains = {
         c.data.get("domain")
-        for c in hass.services.calls[before_reconnect_count:]
+        for c in calls[before_reconnect_idx:]
         if c.domain == "esphome" and c.service == "pocket_assistant_latter_push_v3"
     }
-    assert {"active_media", "weather_forecast", "area_context", "calendar_agenda", "remote_config"} <= reconnected_domains
+    assert {
+        "active_media",
+        "weather_forecast",
+        "area_context",
+        "calendar_agenda",
+        "remote_config",
+    } <= reconnected_domains
 
     # 5. Transient ESPHome service failure (e.g., ConnectionNotEstablishedAPIError) never poisons _last_pushed_v3
-    from homeassistant.exceptions import HomeAssistantError
-
     async def _failing_push(_call: Any) -> None:
         raise HomeAssistantError("Not connected to panel_b")
 
-    hass.services.async_register("esphome", "panel_b_latter_push_v3", _failing_push)
+    mock_service(hass, "esphome", "panel_b_latter_push_v3", _failing_push)
     coord_b._last_pushed_v3.clear()
     await coord_b.async_push_dirty_v3_domains()
     assert coord_b._last_pushed_v3 == {}
@@ -162,38 +147,36 @@ async def test_rpc_outbox_single_and_multipart_dispatch_and_target_pinning(
     await async_dispatch_bound_rpc(hass, coord_a, "reset_device", {})
     assert "Rejected unsupported RPC 'reset_device'" in caplog.text
 
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
 
 async def test_remote_speaker_queue_transfer_spinup_hold_pause_and_empty_queue_recovery(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify queue transfer holds playing state during MA spin-up, honors immediate pause, and recovers empty queues."""
-    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+    entry, _sys_obj, coord = await setup_latter_hub(hass)
 
     # Local Sendspin speaker is playing while track metadata lives on its linked MA counterpart
-    ma_entry = hass.config_entries.add_entry(
-        ConfigEntry(
-            entry_id="ma_entry_1",
-            domain="music_assistant",
-            title="Music Assistant",
-            data={},
-        )
+    ma_entry = add_mock_entry(
+        hass,
+        domain="music_assistant",
+        title="Music Assistant",
+        entry_id="ma_entry_1",
+        data={},
     )
-    ent_reg = er.async_get(hass)
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.pocket_assistant",
-            platform="music_assistant",
-            unique_id="ma_pocket_assistant",
-            config_entry_id=ma_entry.entry_id,
-        )
+    register_entity(
+        hass,
+        "media_player.pocket_assistant",
+        platform="music_assistant",
+        unique_id="ma_pocket_assistant",
+        config_entry=ma_entry,
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.garage_hifi",
-            platform="music_assistant",
-            unique_id="ma_garage_hifi",
-            config_entry_id=ma_entry.entry_id,
-        )
+    register_entity(
+        hass,
+        "media_player.garage_hifi",
+        platform="music_assistant",
+        unique_id="ma_garage_hifi",
+        config_entry=ma_entry,
     )
     async_set_ma_player_link(hass, coord, "media_player.pocket_assistant")
     hass.states.async_set(
@@ -223,7 +206,9 @@ async def test_remote_speaker_queue_transfer_spinup_hold_pause_and_empty_queue_r
         {"friendly_name": "Garage HiFi", "volume_level": 0.50},
     )
 
-    set_coordinator_active_speaker(coord, "media_player.garage_hifi", transfer_queue=True)
+    set_coordinator_active_speaker(
+        coord, "media_player.garage_hifi", transfer_queue=True
+    )
     await hass.async_block_till_done()
 
     coord.cached_media_payload = None
@@ -239,7 +224,7 @@ async def test_remote_speaker_queue_transfer_spinup_hold_pause_and_empty_queue_r
         c.domain == "media_player"
         and c.service == "media_pause"
         and c.data.get("entity_id") == "media_player.garage_hifi"
-        for c in hass.services.calls
+        for c in get_service_calls(hass)
     )
 
     # Empty MA queue on media_play is caught cleanly (never raises uncaught HomeAssistantError) and falls back to play_media
@@ -247,27 +232,24 @@ async def test_remote_speaker_queue_transfer_spinup_hold_pause_and_empty_queue_r
     coord.last_media_uri = "library://album/4"
     coord.last_media_type = "album"
 
-    orig_async_call = hass.services.async_call
     play_media_calls: list[dict[str, Any]] = []
 
-    async def _mock_service_call(
-        domain: str, service: str, service_data: dict[str, Any] | None = None, **kwargs: Any
-    ) -> Any:
-        if domain == "media_player" and service == "media_play":
-            raise HomeAssistantError("The queue is empty")
-        if domain == "media_player" and service == "play_media":
-            play_media_calls.append(dict(service_data or {}))
-            return None
-        return await orig_async_call(domain, service, service_data, **kwargs)
+    def _fail_media_play(_call: Any) -> None:
+        raise HomeAssistantError("The queue is empty")
 
-    hass.services.async_call = _mock_service_call
-    try:
-        await execute_coordinator_media_command(coord, "play")
-    finally:
-        hass.services.async_call = orig_async_call
+    mock_service(hass, "media_player", "media_play", _fail_media_play)
+    mock_service(
+        hass,
+        "media_player",
+        "play_media",
+        lambda call: play_media_calls.append(dict(call.data)),
+    )
+    await execute_coordinator_media_command(coord, "play")
 
     assert len(play_media_calls) >= 1
     assert play_media_calls[0]["media_content_id"] == "library://album/4"
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_orphaned_unavailable_ma_link_self_heals_and_guards_ambiguous_twins(
@@ -278,62 +260,75 @@ async def test_orphaned_unavailable_ma_link_self_heals_and_guards_ambiguous_twin
         hass,
         extra_device_data={CONF_MA_PLAYER_ENTITY: "media_player.pocket_assistant"},
     )
-    ma_entry = hass.config_entries.add_entry(
-        ConfigEntry(
-            entry_id="ma_entry_heal",
-            domain="music_assistant",
-            title="Music Assistant",
-            data={},
-        )
+    ma_entry = add_mock_entry(
+        hass,
+        domain="music_assistant",
+        title="Music Assistant",
+        entry_id="ma_entry_heal",
+        data={},
     )
-    dev_reg = dr.async_get(hass)
-    ent_reg = er.async_get(hass)
 
-    ghost_dev = dev_reg.async_get_or_create(
+    ghost_dev = register_device(
+        hass,
         config_entry_id=ma_entry.entry_id,
+        entry_domain="music_assistant",
         identifiers={("music_assistant", "ghost_up1")},
         name="Pocket Assistant",
-        manufacturer="slampton",
+        manufacturer="Latter",
         model="pocket_assistant-board",
     )
-    live_dev = dev_reg.async_get_or_create(
+    live_dev = register_device(
+        hass,
         config_entry_id=ma_entry.entry_id,
+        entry_domain="music_assistant",
         identifiers={("music_assistant", "live_up2")},
         name="Pocket Assistant",
-        manufacturer="slampton",
+        manufacturer="Latter",
         model="pocket_assistant-board",
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.pocket_assistant",
-            platform="music_assistant",
-            unique_id="ghost_up1",
-            device_id=ghost_dev.id,
-            config_entry_id=ma_entry.entry_id,
-        )
+    register_entity(
+        hass,
+        "media_player.pocket_assistant",
+        platform="music_assistant",
+        unique_id="ghost_up1",
+        device_id=ghost_dev.id,
+        config_entry=ma_entry,
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.pocket_assistant_2",
-            platform="music_assistant",
-            unique_id="live_up2",
-            device_id=live_dev.id,
-            config_entry_id=ma_entry.entry_id,
-        )
+    register_entity(
+        hass,
+        "media_player.pocket_assistant_2",
+        platform="music_assistant",
+        unique_id="live_up2",
+        device_id=live_dev.id,
+        config_entry=ma_entry,
     )
-    hass.states.async_set(coord.local_speaker, "idle", {"friendly_name": "Pocket Assistant Music"})
-    hass.states.async_set("media_player.pocket_assistant", "unavailable", {"friendly_name": "Pocket Assistant"})
+    hass.states.async_set(
+        coord.local_speaker, "idle", {"friendly_name": "Pocket Assistant Music"}
+    )
+    hass.states.async_set(
+        "media_player.pocket_assistant",
+        "unavailable",
+        {"friendly_name": "Pocket Assistant"},
+    )
     # Transitioning the recreated `_2` entity online triggers live cache invalidation + subentry self-healing
-    hass.states.async_set("media_player.pocket_assistant_2", "idle", {"friendly_name": "Pocket Assistant"})
+    hass.states.async_set(
+        "media_player.pocket_assistant_2",
+        "idle",
+        {"friendly_name": "Pocket Assistant"},
+    )
     await hass.async_block_till_done()
 
-    assert resolve_ma_counterpart_entity(hass, coord.local_speaker) == "media_player.pocket_assistant_2"
+    assert (
+        resolve_ma_counterpart_entity(hass, coord.local_speaker)
+        == "media_player.pocket_assistant_2"
+    )
     assert coord.get_opt(CONF_MA_PLAYER_ENTITY) == "media_player.pocket_assistant_2"
     assert coord.tracked_ma_counterpart == "media_player.pocket_assistant_2"
     assert suggest_ma_player_for(hass, coord) == "media_player.pocket_assistant_2"
 
     ma_play_calls: list[dict[str, Any]] = []
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "play_media",
         lambda call: ma_play_calls.append(dict(call.data)),
@@ -351,39 +346,40 @@ async def test_orphaned_unavailable_ma_link_self_heals_and_guards_ambiguous_twin
     assert ma_play_calls[0]["media_id"] == "library://album/2"
 
     studio_payload = build_studio_state_payload(hass, coord)
-    ma_catalog = {item["id"]: item["name"] for item in studio_payload["catalog"]["ma_players"]}
+    ma_catalog = {
+        item["id"]: item["name"] for item in studio_payload["catalog"]["ma_players"]
+    }
     assert ma_catalog["media_player.pocket_assistant"].endswith("(unavailable)")
     assert not ma_catalog["media_player.pocket_assistant_2"].endswith("(unavailable)")
 
     # Ambiguity guard: if a second ESPHome device of the exact same (manufacturer, model) exists,
     # unlinked resolution refuses to guess and raises `link_ma_player` repair instead.
-    esp_twin_entry = hass.config_entries.add_entry(
-        ConfigEntry(
-            entry_id="esp_twin_2",
-            domain="esphome",
-            title="Pocket Twin",
-            data={"device_name": "pocket_twin"},
-        )
+    esp_twin_entry = add_mock_entry(
+        hass,
+        domain="esphome",
+        title="Pocket Twin",
+        entry_id="esp_twin_2",
+        data={"device_name": "pocket_twin"},
     )
-    esp_twin_dev = dev_reg.async_get_or_create(
+    esp_twin_dev = register_device(
+        hass,
         config_entry_id=esp_twin_entry.entry_id,
         connections={(dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:77")},
         identifiers={("esphome", "aa:bb:cc:dd:ee:77")},
         name="Pocket Twin",
-        manufacturer="slampton",
+        manufacturer="Latter",
         model="pocket_assistant-board",
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.pocket_twin_music",
-            platform="esphome",
-            device_id=esp_twin_dev.id,
-            config_entry_id=esp_twin_entry.entry_id,
-        )
+    register_entity(
+        hass,
+        "media_player.pocket_twin_music",
+        platform="esphome",
+        device_id=esp_twin_dev.id,
+        config_entry=esp_twin_entry,
     )
     hass.states.async_set("media_player.pocket_twin_music", "idle", {})
-    sub_twin = ConfigSubentry(
-        data={
+    sub_twin = make_subentry(
+        {
             CONF_ESPHOME_DEVICE_ID: esp_twin_dev.id,
             "mac": "aa:bb:cc:dd:ee:77",
             CONF_DEVICE_SLUG: "pocket_twin",
@@ -395,43 +391,42 @@ async def test_orphaned_unavailable_ma_link_self_heals_and_guards_ambiguous_twin
         unique_id="aa:bb:cc:dd:ee:77",
         subentry_id="sub_twin",
     )
-    entry.subentries[sub_twin.subentry_id] = sub_twin
-    coord_twin = LatterCoordinator(hass=hass, entry=entry, hmac_secret="00" * 32, subentry=sub_twin)
-    await coord_twin.async_setup()
-    hass.data[DOMAIN][coord_twin.subentry_id] = coord_twin
-    _sys_obj.coordinators[coord_twin.subentry_id] = coord_twin
-    entry.runtime_data.coordinators[coord_twin.subentry_id] = coord_twin
+    hass.config_entries.async_add_subentry(entry, sub_twin)
+    await hass.async_block_till_done()
     clear_ma_counterpart_cache(hass)
 
     assert resolve_ma_counterpart_entity(hass, "media_player.pocket_twin_music") is None
     issue_reg = ir.async_get(hass)
     assert any("link_ma_player_sub_twin" in k[1] for k in issue_reg.issues)
 
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
 
 async def test_idle_play_resumes_displayed_track_via_ma_library_when_uri_missing(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify tapping Play on an idle speaker with empty MA queue and empty last_media_uri resumes by title + artist."""
-    _entry, _sys_obj, coord = await setup_latter_hub(hass)
-    ma_entry = hass.config_entries.add_entry(
-        ConfigEntry(
-            entry_id="ma_entry_lib",
-            domain="music_assistant",
-            title="Music Assistant",
-            data={},
-        )
+    entry, _sys_obj, coord = await setup_latter_hub(hass)
+    ma_entry = add_mock_entry(
+        hass,
+        domain="music_assistant",
+        title="Music Assistant",
+        entry_id="ma_entry_lib",
+        data={},
     )
-    ent_reg = er.async_get(hass)
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.pocket_assistant_2",
-            platform="music_assistant",
-            unique_id="live_ma_2",
-            config_entry_id=ma_entry.entry_id,
-        )
+    register_entity(
+        hass,
+        "media_player.pocket_assistant_2",
+        platform="music_assistant",
+        unique_id="live_ma_2",
+        config_entry=ma_entry,
     )
-    hass.states.async_set(coord.local_speaker, "idle", {"friendly_name": "Pocket Assistant Music"})
-    hass.states.async_set("media_player.pocket_assistant_2", "idle", {"friendly_name": "Pocket Assistant"})
+    hass.states.async_set(
+        coord.local_speaker, "idle", {"friendly_name": "Pocket Assistant Music"}
+    )
+    hass.states.async_set(
+        "media_player.pocket_assistant_2", "idle", {"friendly_name": "Pocket Assistant"}
+    )
     async_set_ma_player_link(hass, coord, "media_player.pocket_assistant_2")
 
     coord.local_needs_cold_resume = False
@@ -442,13 +437,15 @@ async def test_idle_play_resumes_displayed_track_via_ma_library_when_uri_missing
     coord.last_media_type = "track"
 
     ma_play_calls: list[dict[str, Any]] = []
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "get_queue",
         lambda _call: {"media_player.pocket_assistant_2": {"current_item": None}},
-        supports_response=True,
+        supports_response=SupportsResponse.ONLY,
     )
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "get_library",
         lambda _call: {
@@ -460,58 +457,49 @@ async def test_idle_play_resumes_displayed_track_via_ma_library_when_uri_missing
                 }
             ]
         },
-        supports_response=True,
+        supports_response=SupportsResponse.ONLY,
     )
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "play_media",
         lambda call: ma_play_calls.append(dict(call.data)),
     )
 
-    orig_async_call = hass.services.async_call
+    def _fail_media_play(_call: Any) -> None:
+        raise HomeAssistantError("Queue is empty")
 
-    async def _mock_service_call(
-        domain: str, service: str, service_data: dict[str, Any] | None = None, **kwargs: Any
-    ) -> Any:
-        if domain == "media_player" and service == "media_play":
-            raise HomeAssistantError("Queue is empty")
-        return await orig_async_call(domain, service, service_data, **kwargs)
-
-    hass.services.async_call = _mock_service_call
-    try:
-        await execute_coordinator_media_command(coord, "play")
-    finally:
-        hass.services.async_call = orig_async_call
+    mock_service(hass, "media_player", "media_play", _fail_media_play)
+    await execute_coordinator_media_command(coord, "play")
 
     assert len(ma_play_calls) == 1
     assert ma_play_calls[0]["entity_id"] == "media_player.pocket_assistant_2"
     assert ma_play_calls[0]["media_id"] == "library://track/99"
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_and_ignore_tts(
     hass: Any, setup_latter_hub: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Verify cold-boot Play preserves remaining album tracks, album track drilldown queues the album tail, and TTS never pollutes last_media_uri."""
-    from homeassistant.config_entries import ConfigEntryState
-
-    _entry, _sys_obj, coord = await setup_latter_hub(hass)
-    ma_entry = hass.config_entries.add_entry(
-        ConfigEntry(
-            entry_id="ma_entry_album_tail",
-            domain="music_assistant",
-            title="Music Assistant",
-            data={},
-        )
+    _ = monkeypatch
+    entry, sys_obj, coord = await setup_latter_hub(hass)
+    ma_entry = add_mock_entry(
+        hass,
+        domain="music_assistant",
+        title="Music Assistant",
+        entry_id="ma_entry_album_tail",
+        data={},
     )
-    ma_entry._state = ConfigEntryState.LOADED
-    ent_reg = er.async_get(hass)
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.pocket_assistant_ma",
-            platform="music_assistant",
-            unique_id="live_ma_tail",
-            config_entry_id=ma_entry.entry_id,
-        )
+    if hasattr(ma_entry, "mock_state"):
+        ma_entry.mock_state(hass, ConfigEntryState.LOADED)
+    register_entity(
+        hass,
+        "media_player.pocket_assistant_ma",
+        platform="music_assistant",
+        unique_id="live_ma_tail",
+        config_entry=ma_entry,
     )
     hass.states.async_set(
         coord.local_speaker, "idle", {"friendly_name": "Pocket Assistant Music"}
@@ -557,13 +545,30 @@ async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_an
     await hass.async_block_till_done()
 
     album_children = [
-        {"title": "99th Dream", "media_content_id": "library://track/41", "media_content_type": "track"},
-        {"title": "Up From The Sea", "media_content_id": "library://track/42", "media_content_type": "track"},
-        {"title": "She Weaves A Tender Trap", "media_content_id": "library://track/43", "media_content_type": "track"},
-        {"title": "These Times", "media_content_id": "library://track/44", "media_content_type": "track"},
+        {
+            "title": "99th Dream",
+            "media_content_id": "library://track/41",
+            "media_content_type": "track",
+        },
+        {
+            "title": "Up From The Sea",
+            "media_content_id": "library://track/42",
+            "media_content_type": "track",
+        },
+        {
+            "title": "She Weaves A Tender Trap",
+            "media_content_id": "library://track/43",
+            "media_content_type": "track",
+        },
+        {
+            "title": "These Times",
+            "media_content_id": "library://track/44",
+            "media_content_type": "track",
+        },
     ]
     ma_play_calls: list[dict[str, Any]] = []
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "get_queue",
         lambda _call: {
@@ -578,15 +583,17 @@ async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_an
                 "elapsed_time": 0.0,
             }
         },
-        supports_response=True,
+        supports_response=SupportsResponse.ONLY,
     )
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "get_library",
         lambda _call: {"items": [{"name": "99th Dream", "uri": "library://album/4"}]},
-        supports_response=True,
+        supports_response=SupportsResponse.ONLY,
     )
-    hass.services.async_register(
+    mock_service(
+        hass,
         "media_player",
         "browse_media",
         lambda _call: {
@@ -595,9 +602,10 @@ async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_an
                 "children": album_children,
             }
         },
-        supports_response=True,
+        supports_response=SupportsResponse.ONLY,
     )
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "play_media",
         lambda call: ma_play_calls.append(dict(call.data)),
@@ -605,8 +613,6 @@ async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_an
 
     # 2. Cold-boot Play where Sendspin Noise handshake flips local speaker to playing on event bus:
     # must NOT invoke play_media or clobber the existing Music Assistant queue.
-    import asyncio
-
     async def _flip_playing_shortly() -> None:
         await asyncio.sleep(0)
         hass.states.async_set(coord.local_speaker, "playing", {})
@@ -623,20 +629,12 @@ async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_an
     hass.states.async_set(coord.local_speaker, "idle", {})
     coord.local_needs_cold_resume = True
     coord.resuming_guard_until = 0.0
-    orig_async_call = hass.services.async_call
 
-    async def _fail_media_play(
-        domain: str, service: str, service_data: dict[str, Any] | None = None, **kwargs: Any
-    ) -> Any:
-        if domain == "media_player" and service == "media_play":
-            raise HomeAssistantError("Queue is empty")
-        return await orig_async_call(domain, service, service_data, **kwargs)
+    def _fail_media_play(_call: Any) -> None:
+        raise HomeAssistantError("Queue is empty")
 
-    hass.services.async_call = _fail_media_play
-    try:
-        await execute_coordinator_media_command(coord, "play")
-    finally:
-        hass.services.async_call = orig_async_call
+    mock_service(hass, "media_player", "media_play", _fail_media_play)
+    await execute_coordinator_media_command(coord, "play")
 
     assert len(ma_play_calls) == 1
     assert ma_play_calls[0]["media_id"] == [
@@ -644,13 +642,12 @@ async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_an
         "library://track/43",
         "library://track/44",
     ]
-
     assert ma_play_calls[0]["media_type"] == "track"
     assert ma_play_calls[0]["enqueue"] == "replace"
 
     # 4. Drilling into album_tracks via music_browse and tapping track 2 queues [42, 43, 44]
     ma_play_calls.clear()
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         "music_browse",
         {
@@ -676,3 +673,5 @@ async def test_cold_boot_resume_and_album_drilldown_preserve_remaining_tracks_an
         "library://track/43",
         "library://track/44",
     ]
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

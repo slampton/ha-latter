@@ -8,11 +8,26 @@ from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import SupportsResponse
+from homeassistant.helpers import (
+    aiohttp_client as ha_aiohttp_client,
+    device_registry as dr,
+)
 from PIL import Image
+import pytest
 
 from custom_components.latter.const import RPC_MEDIA_COMMAND
+from custom_components.latter.http import proxy_views
 from custom_components.latter.http.proxy_views import LatterArtworkTranscoderView
 from custom_components.latter.media.state_payload import build_active_media_payload
+from tests.helpers import (
+    add_mock_entry,
+    mock_clientsession_get,
+    mock_service,
+    register_device,
+    register_entity,
+)
 
 
 def _seed_music_assistant(
@@ -29,16 +44,16 @@ def _seed_music_assistant(
     ),
 ) -> tuple[Any, SimpleNamespace | None]:
     """Register a loaded Music Assistant config entry, linked entity, and optional `mass` runtime client."""
-    from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-    from homeassistant.helpers import device_registry as dr, entity_registry as er
-
-    ma_entry = ConfigEntry(
-        entry_id="entry_ma_test",
+    ma_entry = add_mock_entry(
+        hass,
         domain="music_assistant",
         title="Music Assistant",
+        entry_id="entry_ma_test",
         data={},
-        state=ConfigEntryState.LOADED,
     )
+    if hasattr(ma_entry, "mock_state"):
+        ma_entry.mock_state(hass, ConfigEntryState.LOADED)
+
     mass_client: SimpleNamespace | None = None
     if with_runtime_mass:
         q_list = list(queue_items or [])
@@ -67,7 +82,9 @@ def _seed_music_assistant(
         async def _add_item_to_favorites(item: Any) -> None:
             fav_add_calls.append(item)
 
-        async def _remove_item_from_favorites(media_type: Any, library_item_id: Any) -> None:
+        async def _remove_item_from_favorites(
+            media_type: Any, library_item_id: Any
+        ) -> None:
             fav_remove_calls.append((str(media_type), library_item_id))
 
         async def _get_item_by_uri(uri: str) -> dict[str, Any]:
@@ -85,7 +102,9 @@ def _seed_music_assistant(
             current_index=1,
             shuffle_enabled=False,
             repeat_mode=SimpleNamespace(value="off"),
-            current_item=(q_list[1] if len(q_list) > 1 else (q_list[0] if q_list else None)),
+            current_item=(
+                q_list[1] if len(q_list) > 1 else (q_list[0] if q_list else None)
+            ),
         )
         player_queues = SimpleNamespace(
             fetch_player_queue_items=_fetch_player_queue_items,
@@ -113,25 +132,23 @@ def _seed_music_assistant(
         )
         ma_entry.runtime_data = SimpleNamespace(mass=mass_client)
 
-    hass.config_entries.add_entry(ma_entry)
-
-    dev_reg = dr.async_get(hass)
-    ma_dev = dev_reg.async_get_or_create(
+    ma_dev = register_device(
+        hass,
         config_entry_id=ma_entry.entry_id,
+        entry_domain="music_assistant",
         connections={(dr.CONNECTION_NETWORK_MAC, mac)},
         identifiers={("music_assistant", queue_id)},
         name="Pocket Assistant MA",
+        manufacturer="Latter",
     )
-    ent_reg = er.async_get(hass)
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id=ma_entity,
-            platform="music_assistant",
-            device_id=ma_dev.id,
-            config_entry_id=ma_entry.entry_id,
-            unique_id=queue_id,
-            original_name="Pocket Assistant MA",
-        )
+    register_entity(
+        hass,
+        ma_entity,
+        platform="music_assistant",
+        device_id=ma_dev.id,
+        config_entry=ma_entry,
+        unique_id=queue_id,
+        original_name="Pocket Assistant MA",
     )
     hass.states.async_set(
         ma_entity,
@@ -162,15 +179,30 @@ async def test_enqueue_modes_radio_mode_and_queue_manipulation_commands(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify MA `enqueue` (`play|next|add|replace`), `radio_mode`, and `queue_play` / `queue_move` / `queue_delete`."""
-    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+    entry, sys_obj, coord = await setup_latter_hub(hass)
     assert coord is not None
 
     q_items = [
-        {"queue_item_id": "qi_0", "media_item": {"name": "Them Bones", "uri": "library://track/1"}},
-        {"queue_item_id": "qi_1", "media_item": {"name": "Dam That River", "uri": "library://track/2"}},
-        {"queue_item_id": "qi_2", "media_item": {"name": "Rain When I Die", "uri": "library://track/3"}},
-        {"queue_item_id": "qi_3", "media_item": {"name": "Down in a Hole", "uri": "library://track/4"}},
-        {"queue_item_id": "qi_4", "media_item": {"name": "Would?", "uri": "library://track/5"}},
+        {
+            "queue_item_id": "qi_0",
+            "media_item": {"name": "Them Bones", "uri": "library://track/1"},
+        },
+        {
+            "queue_item_id": "qi_1",
+            "media_item": {"name": "Dam That River", "uri": "library://track/2"},
+        },
+        {
+            "queue_item_id": "qi_2",
+            "media_item": {"name": "Rain When I Die", "uri": "library://track/3"},
+        },
+        {
+            "queue_item_id": "qi_3",
+            "media_item": {"name": "Down in a Hole", "uri": "library://track/4"},
+        },
+        {
+            "queue_item_id": "qi_4",
+            "media_item": {"name": "Would?", "uri": "library://track/5"},
+        },
     ]
     _ma_entry, mass = _seed_music_assistant(hass, queue_items=q_items)
     assert mass is not None
@@ -178,12 +210,14 @@ async def test_enqueue_modes_radio_mode_and_queue_manipulation_commands(
     mass.player_queues.queue_state_obj.current_index = 1
 
     ma_play_calls: list[dict[str, Any]] = []
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "play_media",
         lambda call: ma_play_calls.append(dict(call.data)),
     )
-    hass.services.async_register(
+    mock_service(
+        hass,
         "music_assistant",
         "get_queue",
         lambda _call: {
@@ -194,10 +228,11 @@ async def test_enqueue_modes_radio_mode_and_queue_manipulation_commands(
                 "current_item": q_items[1],
             }
         },
+        supports_response=SupportsResponse.ONLY,
     )
 
     for enq in ("play", "next", "add", "replace"):
-        await _sys_obj.rpc_dispatcher.async_dispatch(
+        await sys_obj.rpc_dispatcher.async_dispatch(
             coord,
             RPC_MEDIA_COMMAND,
             {
@@ -213,7 +248,7 @@ async def test_enqueue_modes_radio_mode_and_queue_manipulation_commands(
     assert ma_play_calls[3]["radio_mode"] is True
 
     # queue_play jumps in-place via mass.player_queues.play_index
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {
@@ -224,7 +259,7 @@ async def test_enqueue_modes_radio_mode_and_queue_manipulation_commands(
     assert mass.player_queues.play_index_calls == [("ma_queue_pocket", "qi_4")]
 
     # queue_move supports Move Up (-1), Move Down (+1), and Play Next ("next" -> current_index + 1 - item_index)
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {
@@ -233,7 +268,7 @@ async def test_enqueue_modes_radio_mode_and_queue_manipulation_commands(
             "pos_shift": -1,
         },
     )
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {
@@ -243,7 +278,7 @@ async def test_enqueue_modes_radio_mode_and_queue_manipulation_commands(
         },
     )
     # Item qi_4 is at index 4; current_index is 1 -> Play Next target index is 2 -> shift = (1 + 1) - 4 = -2
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {
@@ -259,7 +294,7 @@ async def test_enqueue_modes_radio_mode_and_queue_manipulation_commands(
     ]
 
     # queue_delete removes item via mass.player_queues.delete_item(queue_id, item_id_or_index=...)
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MEDIA_COMMAND,
         {
@@ -269,12 +304,14 @@ async def test_enqueue_modes_radio_mode_and_queue_manipulation_commands(
     )
     assert mass.player_queues.delete_item_calls == [("ma_queue_pocket", "qi_3")]
 
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
 
 async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
-    hass: Any, setup_latter_hub: Any
+    hass: Any, setup_latter_hub: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """720x720 Desk panels get native 720x720 `art_dimensions` and 1:1 720x720 baseline JPEGs from `http.py`."""
-    _entry, _sys_obj, coord = await setup_latter_hub(hass, stationary=1)
+    """720x720 Desk panels get native 720x720 `art_dimensions` and 1:1 720x720 baseline JPEGs from `proxy_views`."""
+    entry, _sys_obj, coord = await setup_latter_hub(hass, stationary=1)
     assert coord is not None
 
     hass.states.async_set(
@@ -283,7 +320,7 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
             {
                 "v": 2,
                 "contract": 3,
-                "board": "waveshare_p4_desk",
+                "board": "desk_p4_board",
                 "w": 720,
                 "h": 720,
                 "shape": "square",
@@ -296,14 +333,32 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
     # Oversized 1200x1200 manifest still clamps cleanly to 720x720
     hass.states.async_set(
         f"sensor.{coord.device_slug}_system_hardware_manifest",
-        json.dumps({"v": 2, "contract": 3, "w": 1200, "h": 1200, "shape": "square", "display": 1}),
+        json.dumps(
+            {
+                "v": 2,
+                "contract": 3,
+                "w": 1200,
+                "h": 1200,
+                "shape": "square",
+                "display": 1,
+            }
+        ),
     )
     assert coord.art_dimensions == (720, 720)
 
     # Restore 720x720 Desk manifest and verify signed art_url + HTTP baseline JPEG output
     hass.states.async_set(
         f"sensor.{coord.device_slug}_system_hardware_manifest",
-        json.dumps({"v": 2, "contract": 3, "w": 720, "h": 720, "shape": "square", "display": 1}),
+        json.dumps(
+            {
+                "v": 2,
+                "contract": 3,
+                "w": 720,
+                "h": 720,
+                "shape": "square",
+                "display": 1,
+            }
+        ),
     )
     hass.states.async_set(
         "media_player.pocket_assistant_music",
@@ -341,7 +396,12 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
         async def __aexit__(self, *_exc: Any) -> None:
             return None
 
-    hass.data["_mock_http_get"] = lambda _url, **_kw: _ImgResp()
+    mock_clientsession_get(monkeypatch, lambda _url, **_kw: _ImgResp())
+    monkeypatch.setattr(
+        proxy_views,
+        "async_get_clientsession",
+        ha_aiohttp_client.async_get_clientsession,
+    )
 
     parsed = urlsplit(art_url)
     query_dict = {k: v[0] for k, v in parse_qs(parsed.query).items()}
@@ -354,3 +414,5 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
         assert out_img.size == (720, 720)
         if hasattr(out_img, "info"):
             assert out_img.info.get("progressive", 0) == 0
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

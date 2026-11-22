@@ -296,7 +296,7 @@ class LatterRpcReceiver:
 
     @callback
     def _async_on_entity_registry_updated(
-        self, event: Event[dict[str, object]]
+        self, event: Event[er.EventEntityRegistryUpdatedData]
     ) -> None:
         action = event.data.get("action")
         if action not in ("create", "update", "remove"):

@@ -11,9 +11,13 @@
     "build": "node --no-warnings build.mjs",
     "typecheck": "node --no-warnings build.mjs --typecheck",
     "check": "node --no-warnings build.mjs --check",
-    "test": "node --no-warnings --import ./src/lib/node-ts-loader.mjs --test"
+    "test:unit": "node --no-warnings --import ./src/lib/node-ts-loader.mjs --test test/unit/*.test.ts",
+    "test:e2e": "playwright test",
+    "test": "npm run test:unit && npm run test:e2e"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.65.1",
     "lit-html": "3.3.3",
     "typescript": "5.9.3"
   },

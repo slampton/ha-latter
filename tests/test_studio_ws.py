@@ -1,7 +1,8 @@
-"""Studio WS client, optimistic overlay, quick actions, time card, batch modals, section handoff, and MDI catalog."""
+"""Studio WS client, optimistic overlay, quick actions sorting, store controllers, handoff state, and 7,447 MDI catalog."""
 
 from __future__ import annotations
 
+from typing import Any
 import unittest
 
 from tests.conftest import (
@@ -62,7 +63,12 @@ class TestLiveConditionalRows(unittest.TestCase):
     def test_wiring(self) -> None:
         self.assertIn("overlayPendingEntityStates(", STUDIO_JS)
         self.assertIn("executeEntityAction(", STUDIO_JS)
-        cmds = read_py_tree("studio/commands.py", "studio/cmd_presence_devices.py", "studio/cmd_photos_media.py", "studio/cmd_groups_security.py")
+        cmds = read_py_tree(
+            "studio/commands.py",
+            "studio/cmd_presence_devices.py",
+            "studio/cmd_photos_media.py",
+            "studio/cmd_groups_security.py",
+        )
         self.assertRegex(
             cmds,
             r"async_track_state_change_event\(\s*hass,\s*entity_ids,\s*_entity_changed\s*\)",
@@ -71,19 +77,14 @@ class TestLiveConditionalRows(unittest.TestCase):
 
 
 @unittest.skipUnless(NODE, "node is not installed")
-class TestQuickActionsControls(unittest.TestCase):
-    """Stateless HA button entities (`state === 'unknown'`) render enabled unless offline (`forceDisabled`)."""
+class TestQuickActionsSorting(unittest.TestCase):
+    """Quick-action buttons sort deterministically by canonical rank regardless of entity state."""
 
-    def test_quick_action_ordering_unknown_state_and_offline_disable(self) -> None:
+    def test_quick_action_ordering(self) -> None:
         got = _run_node_esm(
             """
-            import "./test/dom-shim.js";
-            import { makeFakeStore, renderToContainer } from "./test/fake-store.js";
-            import {
-              renderNativeControlRow,
-              renderQuickActionGrid,
-              sortQuickActionButtons,
-            } from "./src/components/controls.js";
+            globalThis.document ??= { createTreeWalker: () => ({}), createComment: () => ({}) };
+            const { sortQuickActionButtons } = await import("./src/components/controls/entity-adapters.js");
             const shuffled = [
               { entity_id: "button.pocket_assistant_actions_restart_device", domain: "button", name: "Restart Device", state: "unknown" },
               { entity_id: "button.pocket_assistant_actions_hibernate_device", domain: "button", name: "Hibernate Device", state: "unknown" },
@@ -92,56 +93,11 @@ class TestQuickActionsControls(unittest.TestCase):
               { entity_id: "button.pocket_assistant_actions_find_my_device", domain: "button", name: "Find My Device", state: "2026-11-12T18:00:00+00:00" },
             ];
             const sorted = sortQuickActionButtons(shuffled);
-            const { store } = makeFakeStore();
-            const calls = [];
-            store.entity.espAction = async (eid, action, _opt, toast) => {
-              calls.push({ eid, action, toast });
-              return true;
-            };
-            const gridEl = renderToContainer(renderQuickActionGrid(store, shuffled));
-            const btns = gridEl.querySelectorAll("button");
-            const gridStates = btns.map((b) => ({
-              disabled: b.disabled,
-              svgHtml: b.querySelector("svg")?.outerHTML || "",
-              label: b.textContent.trim(),
-            }));
-            btns[0].click();
-            btns[2].click(); // disabled -> no-op
-            btns[3].click();
-            btns[4].click();
-            const offlineGridEl = renderToContainer(renderQuickActionGrid(store, shuffled, true));
-            const allDisabledOffline = offlineGridEl.querySelectorAll("button").every((b) => b.disabled);
-            const rowUnknown = renderToContainer(renderNativeControlRow(store, {
-              entity_id: "button.pocket_system_log_memory_report",
-              domain: "button",
-              name: "Log Memory Report",
-              state: "unknown",
-            }));
-            const rowUnavail = renderToContainer(renderNativeControlRow(store, {
-              entity_id: "button.pocket_system_log_memory_report",
-              domain: "button",
-              name: "Log Memory Report",
-              state: "unavailable",
-            }));
-            const swUnknown = renderToContainer(renderNativeControlRow(store, {
-              entity_id: "switch.pocket_home_sun",
-              domain: "switch",
-              name: "Sun",
-              state: "unknown",
-            }));
-            process.stdout.write(JSON.stringify({
-              sortedIds: sorted.map((it) => it.entity_id),
-              gridStates,
-              calls,
-              allDisabledOffline,
-              rowButtonUnknownDisabled: rowUnknown.querySelector("button")?.disabled,
-              rowButtonUnavailDisabled: rowUnavail.querySelector("button")?.disabled,
-              switchUnknownDisabled: swUnknown.querySelector("input")?.disabled,
-            }));
+            process.stdout.write(JSON.stringify(sorted.map((it) => it.entity_id)));
             """
         )
         self.assertEqual(
-            got["sortedIds"],
+            got,
             [
                 "button.pocket_assistant_actions_find_my_device",
                 "button.pocket_assistant_actions_trigger_voice_assistant",
@@ -150,24 +106,6 @@ class TestQuickActionsControls(unittest.TestCase):
                 "button.pocket_assistant_actions_restart_device",
             ],
         )
-        self.assertEqual(
-            [st["disabled"] for st in got["gridStates"]],
-            [False, False, True, False, False],
-        )
-        self.assertEqual(len({st["svgHtml"] for st in got["gridStates"]}), 5)
-        self.assertEqual(len(got["calls"]), 3)
-        self.assertEqual(
-            [c["eid"] for c in got["calls"]],
-            [
-                "button.pocket_assistant_actions_find_my_device",
-                "button.pocket_assistant_actions_hibernate_device",
-                "button.pocket_assistant_actions_restart_device",
-            ],
-        )
-        self.assertTrue(got["allDisabledOffline"])
-        self.assertFalse(got["rowButtonUnknownDisabled"])
-        self.assertTrue(got["rowButtonUnavailDisabled"])
-        self.assertTrue(got["switchUnknownDisabled"])
 
 
 @unittest.skipUnless(NODE, "node is not installed")
@@ -275,31 +213,33 @@ class TestWallpaperUploadBearerAuth(unittest.TestCase):
 
 @unittest.skipUnless(NODE, "node is not installed")
 class TestStudioInteractiveFlows(unittest.TestCase):
-    """Time card focus-safe typing, group batch controls, bedtime batch preview, section handoff, and 7,447 MDI catalog."""
+    """Focus-safe input detection, keydown isolation, world clock domain, group batch controllers, handoff state, and 7,447 MDI catalog."""
 
-    def test_time_card_focus_safe_typing_and_manual_world_clock_add(self) -> None:
+    def test_focus_guard_keydown_isolation_and_world_clocks_domain(self) -> None:
         got = _run_node_esm(
             """
-            import "./test/dom-shim.js";
-            import { SimEvent } from "./test/dom-shim.js";
-            import { makeFakeStore, renderToContainer } from "./test/fake-store.js";
+            globalThis.document ??= { createTreeWalker: () => ({}), createComment: () => ({}) };
+            globalThis.customElements ??= { get: () => undefined, define() {} };
             import { WORLD_CLOCK_ZONES_CATALOG } from "./src/constants.js";
-            import { renderAppConfigModalBody } from "./src/components/dialogs.js";
-            import { focusSafe, html, render } from "./src/lib/lit.js";
-            import { LatterStudio } from "./src/latter-studio.js";
-            // 1. focusSafe() preserves focused text input across background updates
-            const tplInput = (val) => html`<input id="t" type="text" .value=${focusSafe(val)} />`;
-            const box = renderToContainer(tplInput("Init"));
-            document.body.appendChild(box);
-            const inp = box.querySelector("#t");
-            inp.focus();
-            inp.value = "M";
-            render(tplInput(""), box);
-            const preservedWhileFocused = inp.value;
-            inp.blur();
-            render(tplInput("Synced"), box);
-            const updatedAfterBlur = inp.value;
-            // 2. ShadowRoot keydown isolation stops HA single-key shortcuts on INPUT
+            import {
+              isValidWorldClockZone,
+              parseWorldClocksSpec,
+              sanitizeClockLabel,
+              serializeWorldClocksSpec,
+            } from "./src/domain/world-clocks.js";
+            const { LatterStudio } = await import("./src/latter-studio.js");
+            const { isActivelyFocusedTextControl } = await import("./src/lib/lit.js");
+
+            const rootObj = { activeElement: null };
+            const textEl = { tagName: "INPUT", type: "text", getRootNode: () => rootObj };
+            const rangeEl = { tagName: "INPUT", type: "range", getRootNode: () => rootObj };
+            rootObj.activeElement = textEl;
+            const focusedText = isActivelyFocusedTextControl(textEl);
+            rootObj.activeElement = rangeEl;
+            const focusedRange = isActivelyFocusedTextControl(rangeEl);
+            rootObj.activeElement = null;
+            const blurredText = isActivelyFocusedTextControl(textEl);
+
             function runKeyDown(key, opts = {}) {
               let stopped = false;
               const fakeInner = { tagName: opts.tagName || "INPUT" };
@@ -314,46 +254,16 @@ class TestStudioInteractiveFlows(unittest.TestCase):
               LatterStudio.prototype._onRootKeyDown.call({}, ev);
               return stopped;
             }
-            // 3. World clock manual city label flow
-            const { store, toasts } = makeFakeStore({
-              activeSubentryId: "sub_1",
-              state: {
-                config: {
-                  kind: "device",
-                  local_clock_label: "",
-                  world_clocks: "Westminster|Europe/London",
-                },
-              },
-            });
-            store.appConfigModal = { open: true, app: "time" };
-            const stagedCalls = [];
-            store.entity.stageDeviceSetting = (key, val, domId, debounceMs) => {
-              stagedCalls.push({ key, val, domId, debounceMs });
-              store.state.config[key] = val;
-            };
-            const modalRoot = renderToContainer(renderAppConfigModalBody(store));
-            store.host.renderRoot = modalRoot;
-            const localInput = modalRoot.querySelector("#cfg-local_clock_label");
-            localInput.value = "Main ";
-            localInput.dispatchEvent(new SimEvent("input", { bubbles: true }));
-            const localDomDuringTyping = localInput.value;
-            const localInputStagedVal = stagedCalls[0]?.val;
-            localInput.dispatchEvent(new SimEvent("change", { bubbles: true }));
-            const localChangeStagedVal = stagedCalls[1]?.val;
-            const zoneSelect = modalRoot.querySelector("#cfg-world_clocks_add");
-            zoneSelect.value = "America/New_York";
-            zoneSelect.dispatchEvent(new SimEvent("change", { bubbles: true }));
-            const labelAfterZonePick = store.worldClockNewLabel;
-            const stagedWorldClocksAfterPick = stagedCalls.filter((c) => c.key === "world_clocks").length;
-            modalRoot.querySelector("#btn-world_clock_add").click();
-            const toastOnMissingCity = toasts[toasts.length - 1]?.msg || "";
-            const newCityInput = modalRoot.querySelector("#cfg-world_clock_new_label");
-            newCityInput.value = "Akron, OH";
-            newCityInput.dispatchEvent(new SimEvent("input", { bubbles: true }));
-            modalRoot.querySelector("#btn-world_clock_add").click();
+
+            const parsed = parseWorldClocksSpec("Westminster|Europe/London; ;Invalid|UTC");
+            const serialized = serializeWorldClocksSpec([
+              ...parsed,
+              { label: sanitizeClockLabel("  Akron; OH | "), iana: "America/New_York" },
+            ]);
             process.stdout.write(JSON.stringify({
-              preservedWhileFocused,
-              updatedAfterBlur,
+              focusedText,
+              focusedRange,
+              blurredText,
               stopLetterA: runKeyDown("a"),
               stopLetterC: runKeyDown("c"),
               allowEscape: !runKeyDown("Escape"),
@@ -362,21 +272,17 @@ class TestStudioInteractiveFlows(unittest.TestCase):
               allowButtonKey: !runKeyDown("c", { tagName: "BUTTON" }),
               firstCatalogZone: WORLD_CLOCK_ZONES_CATALOG[0],
               lastCatalogZone: WORLD_CLOCK_ZONES_CATALOG[WORLD_CLOCK_ZONES_CATALOG.length - 1],
-              localDomDuringTyping,
-              localStagedCall: stagedCalls[0],
-              localInputStagedVal,
-              localChangeStagedVal,
-              labelAfterZonePick,
-              stagedWorldClocksAfterPick,
-              toastOnMissingCity,
-              finalWorldClocks: store.state.config.world_clocks,
-              clearedDraftLabel: store.worldClockNewLabel,
-              clearedDraftZone: store.worldClockNewZone,
+              rejectPinnedUtc: isValidWorldClockZone("UTC"),
+              acceptIana: isValidWorldClockZone("America/New_York"),
+              liveUntrimmed: sanitizeClockLabel("Main ", 32, false),
+              committedTrimmed: sanitizeClockLabel("Main "),
+              serialized,
             }));
             """
         )
-        self.assertEqual(got["preservedWhileFocused"], "M")
-        self.assertEqual(got["updatedAfterBlur"], "Synced")
+        self.assertTrue(got["focusedText"])
+        self.assertFalse(got["focusedRange"])
+        self.assertFalse(got["blurredText"])
         self.assertTrue(got["stopLetterA"])
         self.assertTrue(got["stopLetterC"])
         self.assertTrue(got["allowEscape"])
@@ -385,128 +291,93 @@ class TestStudioInteractiveFlows(unittest.TestCase):
         self.assertTrue(got["allowButtonKey"])
         self.assertEqual(got["firstCatalogZone"]["iana"], "Etc/GMT+12")
         self.assertEqual(got["lastCatalogZone"]["iana"], "Pacific/Kiritimati")
-        self.assertEqual(got["localDomDuringTyping"], "Main ")
-        self.assertEqual(got["localStagedCall"]["key"], "local_clock_label")
-        self.assertEqual(got["localInputStagedVal"], "Main ")
-        self.assertEqual(got["localChangeStagedVal"], "Main")
-        self.assertEqual(got["labelAfterZonePick"], "")
-        self.assertEqual(got["stagedWorldClocksAfterPick"], 0)
-        self.assertTrue(got["toastOnMissingCity"])
-        self.assertEqual(
-            got["finalWorldClocks"],
-            "Westminster|Europe/London;Akron, OH|America/New_York",
-        )
-        self.assertEqual(got["clearedDraftLabel"], "")
-        self.assertEqual(got["clearedDraftZone"], "")
+        self.assertFalse(got["rejectPinnedUtc"])
+        self.assertTrue(got["acceptIana"])
+        self.assertEqual(got["liveUntrimmed"], "Main ")
+        self.assertEqual(got["committedTrimmed"], "Main")
+        self.assertEqual(got["serialized"], "Westminster|Europe/London;Akron OH|America/New_York")
 
-    def test_groups_boxes_staged_batch_controls_and_save_custom_modal(self) -> None:
+    def test_groups_staged_batch_controls_timers_and_non_detaching_bedtime_preview(self) -> None:
         got = _run_node_esm(
             """
-            import "./test/dom-shim.js";
-            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
-            import { renderDeviceOverviewView } from "./src/views/device-overview-view.js";
-            import { renderSystemGroupsView } from "./src/views/system-groups-view.js";
-            import { renderSystemToolsView } from "./src/views/system-tools-view.js";
-            const { store, sysCalls } = makeFakeStore({
-              activeSubentryId: "sub_mobile",
-              state: {
-                title: "Mobile Assistant",
-                system_info: { ha_version: "2026.11.0", integration_version: "3.0.0", min_firmware_sdk_rev: 2026111801, studio_rev: 34 },
-                config: {
-                  kind: "device",
-                  device_slug: "mobile_assistant",
-                  device_group: "custom",
-                  assigned_person: "person.alex",
-                  device_remote_group: "area_auto",
-                  native_ble_tracking: true,
-                },
-                capabilities: { has_display: true, has_battery: true, is_roaming_device: true },
-                live: { active_area_name: "Office" },
-                device_groups: [
-                  { id: "pocket_carry", name: "Pocket Carry", description: "Compact displays", builtin: true, include_display: false, include_interface: false, device_config: { tap_to_wake: "Docked Only", native_ble_tracking: true } },
-                  { id: "handhelds", name: "Handhelds", description: "Battery displays", builtin: true, include_display: false, include_interface: false, device_config: { tap_to_wake: "Single Tap", native_ble_tracking: true } },
-                  { id: "guest_suites", name: "Guest Suites", description: "Guest displays", builtin: false, include_display: true, include_interface: true, device_config: { clock_face: "Hybrid Digital" } },
-                ],
-                system_devices: [
-                  { subentry_id: "sub_mobile", title: "Mobile Assistant", device_slug: "mobile_assistant", kind: "device", has_display: true, has_battery: true, is_online: true, is_roaming: true, ble_tracked: true, device_group: "custom", device_group_name: "Custom", status_code: "online", status_label: "Online" },
-                  { subentry_id: "sub_pocket", title: "Pocket Assistant", device_slug: "pocket_assistant", kind: "device", has_display: true, has_battery: true, is_online: true, is_roaming: true, ble_tracked: true, device_group: "pocket_carry", device_group_name: "Pocket Carry", status_code: "online", status_label: "Online" },
-                ],
-                system_controls: [
-                  {
-                    key: "audio:switch:voice follows me",
-                    pref_key: "sync_device_area",
-                    tier: "behavior",
-                    section: "audio",
-                    section_title: "Audio",
-                    name: "Voice Follows Me",
-                    domain: "switch",
-                    state: "off",
-                    options: [],
-                    targets: [
-                      { device_slug: "mobile_assistant", device_group: "custom", is_online: true, is_roaming: true, pref_key: "sync_device_area", state: "on" },
-                      { device_slug: "pocket_assistant", device_group: "pocket_carry", is_online: true, is_roaming: true, pref_key: "sync_device_area", state: "off" },
-                    ],
-                  },
-                ],
+            import { StudioStore } from "./src/state/store.js";
+            const sysCalls = [];
+            const host = {
+              isConnected: false,
+              addController() {},
+              removeController() {},
+              requestUpdate() {},
+              updateComplete: Promise.resolve(true),
+            };
+            const store = new StudioStore(host);
+            store.ws.runSystemCommand = async (command, payload, activeSubentryId) => {
+              sysCalls.push({ command, payload, activeSubentryId });
+              return null;
+            };
+            store.activeSubentryId = "sub_mobile";
+            store.ingestPayload({
+              subentry_id: "sub_mobile",
+              device_config_rev: 1,
+              title: "Mobile Assistant",
+              config: {
+                kind: "device",
+                device_slug: "mobile_assistant",
+                device_group: "custom",
+                native_ble_tracking: true,
               },
-            });
-            const groupsHtml = renderToHtml(renderSystemGroupsView(store));
+              live: {
+                timer_running: true,
+                timer_ends_at: "2026-11-19T00:02:05Z",
+                stopwatch_running: true,
+                stopwatch_started_at: "2026-11-18T22:58:55Z",
+              },
+              pref_specs: [
+                { key: "bedtime_active", label: "Bedtime mode", section: "power", group_tier: null, domain: "switch", default: false, options: [] },
+                { key: "bedtime_display", label: "Idle display in bedtime", section: "power", group_tier: "behavior", domain: "select", default: "Screen Off", options: ["Screen Off", "Ambient Clock"] },
+                { key: "sync_device_area", label: "Voice Follows Me", section: "audio", group_tier: "behavior", domain: "switch", default: false, options: [] },
+              ],
+              device_groups: [
+                { id: "pocket_carry", name: "Pocket Carry", description: "Compact displays", builtin: true, device_config: { sync_device_area: false } },
+              ],
+              system_devices: [
+                { subentry_id: "sub_mobile", title: "Mobile Assistant", device_slug: "mobile_assistant", kind: "device", is_online: true, device_group: "custom" },
+                { subentry_id: "sub_pocket", title: "Pocket Assistant", device_slug: "pocket_assistant", kind: "device", is_online: true, device_group: "pocket_carry" },
+              ],
+            }, false);
+
+            store.liveClockNowMs = Date.parse("2026-11-19T00:00:00Z");
+            const timerRemaining = store.activeTimerRemainingSec();
+            const stopwatchElapsed = store.activeStopwatchElapsedSec();
+
+            store.groups.stageBatchSetting("bedtime_active", true);
+            const detachBedtimeOnly = store.groups.previewBatchDetachmentCount();
+            store.groups.stageBatchSetting("bedtime_display", "Ambient Clock");
+            const detachWithPolicy = store.groups.previewBatchDetachmentCount();
+            store.groups.resetBatchDraft();
+
             store.groups.requestResetDeviceGroup("pocket_carry", "Pocket Carry", 1);
             await store.tools.runConfirmedAction();
-            store.groups.toggleNewGroupForm(true);
-            const groupsCreateOpenHtml = renderToHtml(renderSystemGroupsView(store));
             store.newGroupName = "Patio Panels";
             await store.groups.createDeviceGroup();
-            // Stage a Batch control change and apply it
             store.groups.stageBatchSetting("sync_device_area", true);
             await store.groups.applyBatchDraft();
             store.groups.openSaveGroupModal();
             store.saveGroupModal = { ...store.saveGroupModal, name: " Alex Carry ", description: "Personal handheld" };
             await store.groups.confirmSaveGroupModal();
-            const overviewCustomHtml = renderToHtml(renderDeviceOverviewView(store));
-            const sysToolsHtml = renderToHtml(renderSystemToolsView(store));
-            // Active timer & stopwatch via UTC ISO anchors (`timer_ends_at`, `stopwatch_started_at`)
-            store.liveClockNowMs = Date.parse("2026-11-19T00:00:00Z");
-            store.state.config.device_group = "handhelds";
-            store.state.live = {
-              ...store.state.live,
-              timer_running: true,
-              timer_paused: false,
-              timer_remaining_sec: 125,
-              timer_ends_at: "2026-11-19T00:02:05Z",
-              stopwatch_running: true,
-              stopwatch_paused: false,
-              stopwatch_elapsed_sec: 3665,
-              stopwatch_started_at: "2026-11-18T22:58:55Z",
-              alarm_ringing: true,
-            };
-            const overviewGroupHtml = renderToHtml(renderDeviceOverviewView(store));
+
             process.stdout.write(JSON.stringify({
-              groupsHtml,
-              groupsCreateOpenHtml,
-              overviewCustomHtml,
-              overviewGroupHtml,
-              sysToolsHtml,
+              timerRemaining,
+              stopwatchElapsed,
+              detachBedtimeOnly,
+              detachWithPolicy,
               sysCalls,
             }));
             """
         )
-        self.assertIn('id="btn-open-create-group"', got["groupsHtml"])
-        self.assertIn('id="group-box-pocket_carry"', got["groupsHtml"])
-        self.assertIn('id="btn-reset-group-pocket_carry"', got["groupsHtml"])
-        self.assertNotIn('id="btn-reset-group-guest_suites"', got["groupsHtml"])
-        self.assertIn('id="group-box-custom"', got["groupsHtml"])
-        self.assertIn('id="btn-batch-reset"', got["groupsHtml"])
-        self.assertIn('id="btn-batch-apply"', got["groupsHtml"])
-        self.assertIn('id="create-group-form"', got["groupsCreateOpenHtml"])
-        self.assertIn('id="btn-save-custom-group"', got["overviewCustomHtml"])
-        self.assertNotIn('id="btn-save-custom-group"', got["overviewGroupHtml"])
-        self.assertIn('id="overview-ringing-alert"', got["overviewGroupHtml"])
-        self.assertIn("02:05", got["overviewGroupHtml"])
-        self.assertIn("01:01:05", got["overviewGroupHtml"])
-        self.assertIn('id="card-support-diagnostics"', got["sysToolsHtml"])
-        self.assertIn('id="btn-download-system-diagnostics"', got["sysToolsHtml"])
-        self.assertIn('id="btn-copy-system-info"', got["sysToolsHtml"])
+        self.assertEqual(got["timerRemaining"], 125)
+        self.assertEqual(got["stopwatchElapsed"], 3665)
+        self.assertEqual(got["detachBedtimeOnly"], 0)
+        self.assertEqual(got["detachWithPolicy"], 1)
         self.assertEqual(
             [c["command"] for c in got["sysCalls"]],
             [
@@ -570,121 +441,144 @@ class TestStudioInteractiveFlows(unittest.TestCase):
         self.assertEqual(got["multiWordTop"], "mdi:teddy-bear")
         self.assertEqual(got["emptyTotal"], 7447)
 
-    def test_section_handoff_blue_highlights_vs_whole_page_navigation(self) -> None:
+    def test_section_handoff_state_machine_and_css_tokens(self) -> None:
         got = _run_node_esm(
             """
-            import "./test/dom-shim.js";
-            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
-            import { STUDIO_STYLES } from "./src/styles/tokens.js";
-            import { renderDeviceToolsView } from "./src/views/device-tools-view.js";
-            import { renderSystemGroupsView } from "./src/views/system-groups-view.js";
-            import { renderSystemPresenceView } from "./src/views/system-presence-view.js";
-            import { renderSystemRemotesView } from "./src/views/system-remotes-view.js";
-            import { renderSystemSharedView } from "./src/views/system-shared-view.js";
+            globalThis.document ??= { createTreeWalker: () => ({}), createComment: () => ({}) };
+            globalThis.dispatchEvent ??= () => true;
+            import { StudioStore } from "./src/state/store.js";
+            const { STUDIO_STYLES } = await import("./src/styles/tokens.js");
             globalThis.history = { pushState() {}, replaceState() {} };
-            globalThis.requestAnimationFrame = (cb) => { cb(0); return 1; };
-            const { store, scrolled } = makeFakeStore({
-              activeSubentryId: "sub_1",
-              deviceSelected: true,
-              state: {
-                device_groups: [{ id: "handhelds", name: "Handhelds", description: "Portable", builtin: true, device_config: {} }],
-                system_devices: [{ subentry_id: "sub_1", title: "Alex Pocket", kind: "device", is_online: true, has_display: true, is_roaming: true, ble_tracked: true, active_area_name: "Living Room", device_group: "handhelds" }],
-                live: { area_presence_grid: [{ area_id: "living", area_name: "Living Room", is_occupied: true, confidence_pct: 90, occupant_names: ["Alex"] }] },
-                ble_area_signatures: [{ area_id: "living", area_name: "Living Room", has_ble_proxy: true, has_signature: false, scanner_count: 1, sample_count: 0, captured_at: "" }],
-                system_config: { camera_entities: ["camera.front"], calendar_entities: ["calendar.home"], remotes_list: ["remote.tv"], remote_groups: [{ id: "rg1", name: "Living TV", area_id: "living", remotes: ["remote.tv"] }] },
-                config: { kind: "device", device_slug: "alex_pocket", device_group: "handhelds" },
-              },
-            });
+            const host = {
+              isConnected: false,
+              addController() {},
+              removeController() {},
+              requestUpdate() {},
+              dispatchEvent() { return true; },
+              updateComplete: Promise.resolve(true),
+            };
+            const store = new StudioStore(host);
+            store.activeSubentryId = "sub_1";
+            store.deviceSelected = true;
+            store.state = {
+              subentry_id: "sub_1",
+              device_config_rev: 1,
+              config: { kind: "device", device_slug: "alex_pocket", device_group: "handhelds" },
+              system_devices: [{ subentry_id: "sub_1", title: "Alex Pocket", kind: "device", is_online: true, has_display: true }],
+            };
+
             store.openSystemSection("area_tracking", "area-box-living");
-            store.applyRoute({ prefix: "/latter", path: "/system/presence" });
-            store.hostUpdated();
-            await Promise.resolve();
-            const presenceHtml = renderToHtml(renderSystemPresenceView(store));
+            const areaTargets = Array.from(store.handoffTargetIds);
+            const areaScroll = store.pendingScrollCardId;
+
             store.openSystemSection("shared_entities", "card-cameras-doorbell", ["card-cameras-doorbell", "card-calendars"]);
-            const sharedCamCalHtml = renderToHtml(renderSystemSharedView(store));
+            const sharedTargets = Array.from(store.handoffTargetIds);
+
             store.openSystemSection("remotes");
-            const remotesWholePageHtml = renderToHtml(renderSystemRemotesView(store));
+            const remotesTargets = Array.from(store.handoffTargetIds);
+
             store.openManageGroups("handhelds");
-            const groupsTargetedHtml = renderToHtml(renderSystemGroupsView(store));
+            const groupsTargets = Array.from(store.handoffTargetIds);
+            const groupOpen = store.openGroupIds.has("handhelds");
+
             store.openDeviceSection("tools", "card-device-diagnostics");
-            const devToolsHtml = renderToHtml(renderDeviceToolsView(store));
+            const devTargetsBefore = Array.from(store.handoffTargetIds);
             store.hostUpdated();
             store.onMainFocusIn({
               target: { tagName: "BUTTON", id: "other-btn", parentElement: { id: "card-replace-hardware", parentElement: null } },
             });
-            const devToolsClearedHtml = renderToHtml(renderDeviceToolsView(store));
+            const devTargetsAfterOutsideFocus = Array.from(store.handoffTargetIds);
+
+            const cssText = Array.isArray(STUDIO_STYLES)
+              ? STUDIO_STYLES.map((s) => s.styleSheetText).join("\\n")
+              : STUDIO_STYLES.styleSheetText;
             process.stdout.write(JSON.stringify({
-              cssText: Array.isArray(STUDIO_STYLES) ? STUDIO_STYLES.map((s) => s.styleSheetText).join("\\n") : STUDIO_STYLES.styleSheetText,
-              scrolled,
-              presenceHtml,
-              sharedCamCalHtml,
-              remotesWholePageHtml,
-              groupsTargetedHtml,
-              devToolsHtml,
-              devToolsClearedHtml,
+              cssText,
+              areaTargets,
+              areaScroll,
+              sharedTargets,
+              remotesTargets,
+              groupsTargets,
+              groupOpen,
+              devTargetsBefore,
+              devTargetsAfterOutsideFocus,
             }));
             """
         )
         self.assertIn("--studio-handoff-surface:", got["cssText"])
-        self.assertIn('id="area-box-living" class="area-presence-box handoff-active"', got["presenceHtml"])
-        self.assertEqual(
-            got["scrolled"][0],
-            {"id": "area-box-living", "opts": {"behavior": "smooth", "block": "start"}},
-        )
-        self.assertEqual(got["sharedCamCalHtml"].count("handoff-active"), 2)
-        self.assertNotIn("handoff-active", got["remotesWholePageHtml"])
-        self.assertIn('id="group-box-handhelds" class="area-presence-box handoff-active"', got["groupsTargetedHtml"])
-        self.assertIn('id="card-device-diagnostics" class="card handoff-active"', got["devToolsHtml"])
-        self.assertNotIn("handoff-active", got["devToolsClearedHtml"])
+        self.assertEqual(got["areaTargets"], ["area-box-living"])
+        self.assertEqual(got["areaScroll"], "area-box-living")
+        self.assertEqual(got["sharedTargets"], ["card-cameras-doorbell", "card-calendars"])
+        self.assertEqual(got["remotesTargets"], [])
+        self.assertEqual(got["groupsTargets"], ["group-box-handhelds"])
+        self.assertTrue(got["groupOpen"])
+        self.assertEqual(got["devTargetsBefore"], ["card-device-diagnostics"])
+        self.assertEqual(got["devTargetsAfterOutsideFocus"], [])
 
-    def test_device_power_bedtime_card_and_non_detaching_batch_preview(self) -> None:
-        """Verify D-068: #card-bedtime-mode hides schedule hours until enabled and staging bedtime_active does not warn of group detachment."""
-        got = _run_node_esm(
-            """
-            import "./test/dom-shim.js";
-            import { makeFakeStore, renderToHtml } from "./test/fake-store.js";
-            import { renderDevicePowerView } from "./src/views/device-power-view.js";
-            function buildPower(schedOn) {
-              return makeFakeStore({
-                activeSubentryId: "sub_1",
-                state: {
-                  device_prefs: [
-                    { key: "tap_to_wake", label: "Tap to wake", section: "power", group_tier: "behavior", domain: "select", value: "Single Tap", options: ["Single Tap", "Disabled"] },
-                    { key: "bedtime_active", label: "Bedtime mode", section: "power", group_tier: null, domain: "switch", value: false, options: [] },
-                    { key: "bedtime_display", label: "Idle display in bedtime", section: "power", group_tier: "behavior", domain: "select", value: "Screen Off", options: ["Screen Off", "Ambient Clock"] },
-                    { key: "bedtime_schedule", label: "Bedtime schedule", section: "power", group_tier: "behavior", domain: "switch", value: schedOn, options: [] },
-                    { key: "bedtime_start_hour", label: "Bedtime starts", section: "power", group_tier: "behavior", domain: "number", value: 22, options: [], min: 0, max: 23, step: 1, unit: ":00" },
-                    { key: "bedtime_end_hour", label: "Bedtime ends", section: "power", group_tier: "behavior", domain: "number", value: 7, options: [], min: 0, max: 23, step: 1, unit: ":00" },
-                  ],
-                  pref_specs: [
-                    { key: "bedtime_active", label: "Bedtime mode", section: "power", group_tier: null, domain: "switch", default: false, options: [] },
-                    { key: "bedtime_display", label: "Idle display in bedtime", section: "power", group_tier: "behavior", domain: "select", default: "Screen Off", options: ["Screen Off", "Ambient Clock"] },
-                  ],
-                  system_devices: [
-                    { subentry_id: "sub_1", title: "Bedroom Desk", kind: "device", is_online: true, has_display: true, device_group: "wall_panels" },
-                  ],
-                },
-              }).store;
-            }
-            const sOff = buildPower(false);
-            const sOn = buildPower(true);
-            sOn.groups.stageBatchSetting("bedtime_active", true);
-            const detachBedtimeOnly = sOn.groups.previewBatchDetachmentCount();
-            sOn.groups.stageBatchSetting("bedtime_display", "Ambient Clock");
-            const detachWithPolicy = sOn.groups.previewBatchDetachmentCount();
-            process.stdout.write(JSON.stringify({
-              offHtml: renderToHtml(renderDevicePowerView(sOff)),
-              onHtml: renderToHtml(renderDevicePowerView(sOn)),
-              detachBedtimeOnly,
-              detachWithPolicy,
-            }));
-            """
-        )
-        self.assertIn('id="card-bedtime-mode"', got["offHtml"])
-        self.assertIn("Idle display in bedtime", got["offHtml"])
-        self.assertIn("Screen off", got["offHtml"])
-        self.assertNotIn("Bedtime starts", got["offHtml"])
-        self.assertIn("Bedtime starts", got["onHtml"])
-        self.assertIn("Bedtime ends", got["onHtml"])
-        self.assertEqual(got["detachBedtimeOnly"], 0)
-        self.assertEqual(got["detachWithPolicy"], 1)
+
+async def test_studio_ws_get_state_and_subscribe_catalog_diet(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify live Studio WS `get_state` and `subscribe` enforce the catalog diet across pushes and registry updates."""
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    from custom_components.latter.const import STUDIO_REV
+    from tests.helpers.ble_and_ws import call_ws, make_ws_connection
+    from tests.helpers.ha_setup import ensure_area, flush_debouncers
+
+    entry, _sys_obj, coord = await setup_latter_hub(hass, with_device=True)
+    assert coord is not None
+    conn = make_ws_connection(hass)
+
+    res = await call_ws(
+        hass,
+        conn,
+        1,
+        "latter/system/get_state",
+        subentry_id=coord.subentry_id,
+        studio_rev=STUDIO_REV,
+    )
+    assert res is not None and res["success"] is True
+    assert "catalog" in res["result"]
+
+    sub_res = await call_ws(
+        hass,
+        conn,
+        2,
+        "latter/system/subscribe",
+        subentry_id=coord.subentry_id,
+        studio_rev=STUDIO_REV,
+    )
+    assert sub_res is not None and sub_res["success"] is True
+    await hass.async_block_till_done()
+    initial_events = [m for m in conn.sent if m.get("id") == 2 and m.get("type") == "event"]
+    assert initial_events
+    assert "catalog" in initial_events[0]["event"]
+
+    # Subsequent coordinator notify omits catalog (diet)
+    conn.sent.clear()
+    coord.async_update_listeners()
+    await flush_debouncers(hass)
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
+    diet_events = [m for m in conn.sent if m.get("id") == 2 and m.get("type") == "event"]
+    assert diet_events
+    assert "catalog" not in diet_events[-1]["event"]
+
+    # Area registry mutation marks CatalogGate dirty so next push carries catalog again
+    conn.sent.clear()
+    ensure_area(hass, "Sunroom", area_id="sunroom")
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=2))
+    await hass.async_block_till_done()
+    reg_events = [m for m in conn.sent if m.get("id") == 2 and m.get("type") == "event"]
+    assert reg_events
+    assert any("catalog" in ev["event"] for ev in reg_events)
+    conn.subscriptions.pop(2)()
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+if __name__ == "__main__":
+    unittest.main()

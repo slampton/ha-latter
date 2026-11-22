@@ -44,7 +44,7 @@ def _make_jpeg(w: int = 120, h: int = 80, color: tuple[int, int, int] = (220, 14
     return buf.getvalue()
 
 
-def _make_fake_hass(config_dir: str) -> SimpleNamespace:
+def _make_storage_ctx(config_dir: str) -> SimpleNamespace:
     return SimpleNamespace(
         config=SimpleNamespace(config_dir=config_dir),
         async_add_executor_job=lambda fn, *a: fn(*a),
@@ -194,21 +194,21 @@ class TestPhotoLibraryAndCrop(unittest.TestCase):
     def test_upload_downscales_exif_collections_crud_pools_and_backup_roundtrip(self) -> None:
         """Full Photo Library lifecycle: upload <=1600px, collections CRUD, metadata edit, bulk ops, pools, backup."""
         with tempfile.TemporaryDirectory() as tmp:
-            fake_hass = _make_fake_hass(tmp)
-            wp._load_photo_library_sync(wp.get_wallpaper_root(fake_hass))
+            ctx = _make_storage_ctx(tmp)
+            wp._load_photo_library_sync(wp.get_wallpaper_root(ctx))
 
             # 1) Collection CRUD
-            col_family = wp.create_collection(fake_hass, "Family")
-            col_travel = wp.create_collection(fake_hass, "Travel")
+            col_family = wp.create_collection(ctx, "Family")
+            col_travel = wp.create_collection(ctx, "Travel")
             with self.assertRaises(ValueError):
-                wp.create_collection(fake_hass, "family")
-            renamed = wp.rename_collection(fake_hass, col_travel["id"], "Trips")
+                wp.create_collection(ctx, "family")
+            renamed = wp.rename_collection(ctx, col_travel["id"], "Trips")
             self.assertEqual(renamed["name"], "Trips")
 
             # 2) Upload oversized 2400x1200 image -> downscaled to 1600x800 preserving aspect ratio
             big_raw = _make_jpeg(2400, 1200, (190, 120, 80))
             rec1 = wp.save_uploaded_photo_bytes(
-                fake_hass,
+                ctx,
                 "beach_panorama.jpg",
                 big_raw,
                 crop_x=0.25,
@@ -223,12 +223,12 @@ class TestPhotoLibraryAndCrop(unittest.TestCase):
             self.assertEqual(rec1["collections"], [col_family["id"]])
 
             rec2 = wp.save_uploaded_photo_bytes(
-                fake_hass, "mountain.jpg", _make_jpeg(400, 300, (80, 160, 210))
+                ctx, "mountain.jpg", _make_jpeg(400, 300, (80, 160, 210))
             )
 
             # 3) Update metadata & preset collection tagging
             upd = wp.update_photo_metadata(
-                fake_hass,
+                ctx,
                 rec1["id"],
                 name="Sunset Coast",
                 crop={"x": 0.6, "y": 0.4, "zoom": 2.0},
@@ -239,12 +239,12 @@ class TestPhotoLibraryAndCrop(unittest.TestCase):
             self.assertTrue(upd["crop_changed"])
 
             wp.update_photo_metadata(
-                fake_hass,
+                ctx,
                 "preset:forest_mountains",
                 collections=[col_travel["id"]],
             )
             with self.assertRaises(ValueError):
-                wp.update_photo_metadata(fake_hass, "preset:forest_mountains", name="Renamed")
+                wp.update_photo_metadata(ctx, "preset:forest_mountains", name="Renamed")
 
             # 4) Pure pool resolver (include_dynamic=True vs False)
             self.assertEqual(
@@ -289,9 +289,9 @@ class TestPhotoLibraryAndCrop(unittest.TestCase):
             self.assertEqual(exported["preset_collections"]["preset:forest_mountains"], [col_travel["id"]])
 
             # Mutate then restore
-            wp.update_photo_metadata(fake_hass, rec1["id"], name="Temp Name")
+            wp.update_photo_metadata(ctx, rec1["id"], name="Temp Name")
             wp.restore_photo_library_metadata(
-                fake_hass,
+                ctx,
                 exported["photo_collections"],
                 exported["photo_metadata"],
                 exported["preset_collections"],
@@ -300,21 +300,21 @@ class TestPhotoLibraryAndCrop(unittest.TestCase):
 
             # 6) Bulk update & delete collection / photos
             bulk_add = wp.bulk_update_photos(
-                fake_hass, [rec2["id"]], add_collection=col_family["id"]
+                ctx, [rec2["id"]], add_collection=col_family["id"]
             )
             self.assertEqual(bulk_add["updated"], 1)
-            self.assertTrue(wp.delete_collection(fake_hass, col_family["id"]))
+            self.assertTrue(wp.delete_collection(ctx, col_family["id"]))
             self.assertNotIn(
                 col_family["id"], wp.get_photo_library_snapshot().photos[rec2["id"]].collections
             )
             bulk_del = wp.bulk_update_photos(
-                fake_hass, [rec1["id"], rec2["id"], "preset:ocean_waves"], delete=True
+                ctx, [rec1["id"], rec2["id"], "preset:ocean_waves"], delete=True
             )
             self.assertEqual(set(bulk_del["deleted_ids"]), {rec1["id"], rec2["id"]})
-            self.assertFalse(wp.delete_photo(fake_hass, "preset:ocean_waves"))
+            self.assertFalse(wp.delete_photo(ctx, "preset:ocean_waves"))
 
             # Reload from disk confirms clean empty custom library
-            reloaded = wp._load_photo_library_sync(wp.get_wallpaper_root(fake_hass))
+            reloaded = wp._load_photo_library_sync(wp.get_wallpaper_root(ctx))
             self.assertEqual(len(reloaded.photos), 0)
 
     def test_media_folder_browse_import_dedup_and_confinement(self) -> None:
@@ -345,8 +345,8 @@ class TestPhotoLibraryAndCrop(unittest.TestCase):
                 pass
 
             media_dirs = {"local": str(media_root)}
-            fake_hass = _make_fake_hass(str(cfg_dir))
-            wp._load_photo_library_sync(wp.get_wallpaper_root(fake_hass))
+            ctx = _make_storage_ctx(str(cfg_dir))
+            wp._load_photo_library_sync(wp.get_wallpaper_root(ctx))
 
             # Root listing shows subfolder, skips dotfiles
             top = wp.list_media_folder_sync(media_dirs, "local", "")
@@ -369,9 +369,9 @@ class TestPhotoLibraryAndCrop(unittest.TestCase):
                 self.assertIsNone(wp.resolve_media_path(media_dirs, "local", "vacation/escape_link.jpg"))
 
             # Batch import with SHA-256 deduplication and collection tagging
-            col = wp.create_collection(fake_hass, "Vacation")
+            col = wp.create_collection(ctx, "Vacation")
             res = wp.import_media_photos_sync(
-                fake_hass,
+                ctx,
                 media_dirs,
                 "local",
                 [
@@ -393,7 +393,7 @@ class TestPhotoLibraryAndCrop(unittest.TestCase):
             # Batch > 100 rejected
             with self.assertRaises(ValueError):
                 wp.import_media_photos_sync(
-                    fake_hass, media_dirs, "local", [f"vacation/p{i}.jpg" for i in range(101)]
+                    ctx, media_dirs, "local", [f"vacation/p{i}.jpg" for i in range(101)]
                 )
 
 

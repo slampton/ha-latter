@@ -254,7 +254,8 @@ async def _gather_calendar_events(
             _LOGGER.debug("calendar.get_events failed for %s: %s", cal_id, resp)
             continue
         cal_data = resp.get(cal_id) if isinstance(resp, dict) else None
-        events_list = cal_data.get("events", []) if isinstance(cal_data, dict) else []
+        raw_ev_list = cal_data.get("events") if isinstance(cal_data, dict) else None
+        events_list = raw_ev_list if isinstance(raw_ev_list, list) else []
         raw_events.extend(
             parsed
             for ev in events_list
@@ -425,8 +426,11 @@ async def async_fetch_weather_snapshot(
     except Exception as err:  # noqa: BLE001
         _LOGGER.debug("weather.get_forecasts failed for %s: %s", weather_entity, err)
     else:
-        if isinstance(resp, dict) and isinstance(resp.get(weather_entity), dict):
-            forecasts = [f for f in resp[weather_entity].get("forecast") or [] if isinstance(f, dict)]
+        if isinstance(resp, dict):
+            entry_data = resp.get(weather_entity)
+            raw_fc = entry_data.get("forecast") if isinstance(entry_data, dict) else None
+            if isinstance(raw_fc, list):
+                forecasts = [f for f in raw_fc if isinstance(f, dict)]
 
     days = _parse_forecast_days(forecasts)
     today = days[0] if days else {}

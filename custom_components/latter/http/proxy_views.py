@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import TypedDict, Unpack
 
 from aiohttp import ClientTimeout, web
-from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.http import HomeAssistantView
 from homeassistant.helpers.network import get_url
 
 from ..const import API_ARTWORK_PROXY_PATH, API_BRAND_ICON_PATH

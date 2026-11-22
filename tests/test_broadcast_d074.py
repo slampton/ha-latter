@@ -1,12 +1,10 @@
-"""Tests for Home Hub Broadcast speakers, phrases, caller exclusion, and Bedtime Mode quietness (D-074)."""
+"""Tests for Site Broadcast speakers, phrases, caller exclusion, and Bedtime Mode quietness (D-074)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components import websocket_api
-from homeassistant.config_entries import ConfigSubentry
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import entity_registry as er
 import pytest
 
 from custom_components.latter.const import (
@@ -23,26 +21,22 @@ from custom_components.latter.const import (
     STUDIO_REV,
     SUBENTRY_DEVICE,
 )
+from custom_components.latter.presence.ble_fabric import get_ble_fabric
 from custom_components.latter.studio.settings_cleaners import (
     SettingsScopeError,
     clean_device_settings,
     clean_system_settings,
     system_settings_view,
 )
-
-
-async def _call_ws(
-    hass: Any,
-    conn: websocket_api.ActiveConnection,
-    msg_id: int,
-    msg_type: str,
-    **kwargs: Any,
-) -> None:
-    handler = hass._ws_commands[msg_type]
-    schema = getattr(handler, "_ws_schema", None)
-    raw_msg = {"id": msg_id, "type": msg_type, **kwargs}
-    validated = schema(raw_msg) if schema is not None else raw_msg
-    await handler(hass, conn, validated)
+from tests.helpers import (
+    call_ws,
+    ensure_area,
+    make_subentry,
+    make_ws_connection,
+    mock_service,
+    register_device,
+    register_entity,
+)
 
 
 def test_broadcast_settings_validation_and_defaults() -> None:
@@ -87,7 +81,7 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
     hass: Any, setup_latter_hub: Any, make_esphome_device: Any
 ) -> None:
     """Verify configured speaker routing, per-Device override, caller exclusion, and Bedtime Mode skip."""
-    entry, sys_obj, caller = await setup_latter_hub(hass)
+    entry, _sys_obj_init, _caller_init = await setup_latter_hub(hass)
 
     # Add a 2nd Latter display in the Bedroom that is currently in Bedtime Mode
     esp_dev_2, mac_2 = make_esphome_device(
@@ -98,8 +92,8 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
         area_id="bedroom",
         stationary=1,
     )
-    entry.subentries["sub_bedroom"] = ConfigSubentry(
-        data={
+    sub_bedroom = make_subentry(
+        {
             CONF_ESPHOME_DEVICE_ID: esp_dev_2.id,
             "mac": mac_2,
             CONF_DEVICE_SLUG: "bedroom_panel",
@@ -110,44 +104,47 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
         unique_id=mac_2,
         subentry_id="sub_bedroom",
     )
-    from custom_components.latter.coordinator import LatterCoordinator
+    hass.config_entries.async_add_subentry(entry, sub_bedroom)
+    await hass.async_block_till_done()
 
-    bed_coord = LatterCoordinator(
-        hass, entry, sys_obj.hmac_secret, entry.subentries["sub_bedroom"]
-    )
-    sys_obj.coordinators["sub_bedroom"] = bed_coord
+    sys_obj = entry.runtime_data
+    caller = sys_obj.coordinators["sub_pocket"]
+    bed_coord = sys_obj.coordinators["sub_bedroom"]
 
     # Register speakers: caller's local speaker, bedroom display's local speaker, kitchen MA speaker, unconfigured TV
-    ent_reg = er.async_get(hass)
-    dev_reg = dr.async_get(hass)
-    ma_dev = dev_reg.async_get_or_create(
-        config_entry_id=entry.entry_id,
+    ma_dev = register_device(
+        hass,
+        config_entry_id="ma_entry_sonos",
+        entry_domain="music_assistant",
         identifiers={("music_assistant", "kitchen_sonos")},
         name="Kitchen Sonos",
+        manufacturer="Latter",
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.kitchen_sonos",
-            platform="music_assistant",
-            device_id=ma_dev.id,
-            config_entry_id=entry.entry_id,
-            original_name="Kitchen Sonos",
-            unique_id="kitchen_sonos_uid",
-        )
+    register_entity(
+        hass,
+        "media_player.kitchen_sonos",
+        platform="music_assistant",
+        device_id=ma_dev.id,
+        config_entry_id="ma_entry_sonos",
+        original_name="Kitchen Sonos",
+        unique_id="kitchen_sonos_uid",
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.bedroom_panel_media_player",
-            platform="esphome",
-            device_id=esp_dev_2.id,
-            config_entry_id=entry.entry_id,
-            original_name="Bedroom Speaker",
-            unique_id="bedroom_panel_spk_uid",
-        )
+    register_entity(
+        hass,
+        "media_player.bedroom_panel_media_player",
+        platform="esphome",
+        device_id=esp_dev_2.id,
+        config_entry_id="esp_entry_bedroom_panel",
+        original_name="Bedroom Speaker",
+        unique_id="bedroom_panel_spk_uid",
     )
-    hass.states.async_set(caller.local_speaker, "idle", {"friendly_name": "Desk Speaker"})
     hass.states.async_set(
-        "media_player.bedroom_panel_media_player", "idle", {"friendly_name": "Bedroom Speaker"}
+        caller.local_speaker, "idle", {"friendly_name": "Desk Speaker"}
+    )
+    hass.states.async_set(
+        "media_player.bedroom_panel_media_player",
+        "idle",
+        {"friendly_name": "Bedroom Speaker"},
     )
     hass.states.async_set(
         "media_player.kitchen_sonos",
@@ -162,7 +159,8 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
     hass.states.async_set("tts.piper", "unknown", {})
 
     tts_calls: list[dict[str, Any]] = []
-    hass.services.async_register(
+    mock_service(
+        hass,
         "tts",
         "speak",
         lambda call: tts_calls.append(dict(call.data)),
@@ -194,7 +192,9 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
     assert res["targets"] == ["media_player.kitchen_sonos"]
 
     # 2. Turning off Bedtime Mode on Bedroom Panel includes it while still excluding caller
-    bed_coord.update_device_config({**bed_coord.device_data, CONF_BEDTIME_ACTIVE: False})
+    bed_coord.update_device_config(
+        {**bed_coord.device_data, CONF_BEDTIME_ACTIVE: False}
+    )
     res_awake = await hass.services.async_call(
         DOMAIN,
         SERVICE_INTERCOM_BROADCAST,
@@ -209,8 +209,8 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
     ]
 
     # 3. Studio WS save_device_config enforces System membership for broadcast_speaker_entities
-    conn = websocket_api.ActiveConnection()
-    await _call_ws(
+    conn = make_ws_connection(hass)
+    await call_ws(
         hass,
         conn,
         1,
@@ -218,12 +218,16 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
         studio_rev=STUDIO_REV,
         subentry_id=caller.subentry_id,
         command="save_device_config",
-        payload={"config": {CONF_BROADCAST_SPEAKER_ENTITIES: ["media_player.unconfigured_avr"]}},
+        payload={
+            "config": {
+                CONF_BROADCAST_SPEAKER_ENTITIES: ["media_player.unconfigured_avr"]
+            }
+        },
     )
     assert conn.errors and conn.errors[-1][1] == "not_found"
     conn.errors.clear()
 
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         2,
@@ -231,7 +235,9 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
         studio_rev=STUDIO_REV,
         subentry_id=caller.subentry_id,
         command="save_device_config",
-        payload={"config": {CONF_BROADCAST_SPEAKER_ENTITIES: ["media_player.kitchen_sonos"]}},
+        payload={
+            "config": {CONF_BROADCAST_SPEAKER_ENTITIES: ["media_player.kitchen_sonos"]}
+        },
     )
     assert conn.errors == []
     assert caller.effective_broadcast_speakers == ["media_player.kitchen_sonos"]
@@ -246,11 +252,13 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
     assert res_subset["targets"] == ["media_player.kitchen_sonos"]
 
     # 4. System-wide target_device="all" uses System broadcast_speakers and skips unconfigured AVR + Bedtime displays
-    bed_coord.update_device_config({**bed_coord.device_data, CONF_BEDTIME_ACTIVE: True})
+    bed_coord.update_device_config(
+        {**bed_coord.device_data, CONF_BEDTIME_ACTIVE: True}
+    )
     res_all = await hass.services.async_call(
         DOMAIN,
         SERVICE_INTERCOM_BROADCAST,
-        {"target_device": "all", "message": "Whole-home notice"},
+        {"target_device": "all", "message": "Site-wide notice"},
         blocking=True,
         return_response=True,
     )
@@ -260,16 +268,18 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
     assert "media_player.unconfigured_avr" not in res_all["targets"]
 
     # 5. target_device="occupied_areas" intersects System broadcast_speakers with occupied areas
-    from homeassistant.helpers import area_registry as ar
+    ensure_area(hass, "Kitchen", area_id="kitchen")
+    er.async_get(hass).async_update_entity(
+        "media_player.kitchen_sonos", area_id="kitchen", name="Kitchen Sonos"
+    )
+    await hass.async_block_till_done()
 
-    from custom_components.latter.presence.ble_fabric import get_ble_fabric
-
-    area_reg = ar.async_get(hass)
-    area_reg.areas["kitchen"] = ar.AreaEntry("kitchen", "Kitchen")
-    ent_reg.entities["media_player.kitchen_sonos"].area_id = "kitchen"
     fabric = get_ble_fabric(hass)
     orig_occ = fabric.get_area_occupancy
-    fabric.get_area_occupancy = lambda area_id: {"is_occupied": area_id == "kitchen", "persons": []}
+    fabric.get_area_occupancy = lambda area_id: {
+        "is_occupied": area_id == "kitchen",
+        "persons": [],
+    }
     try:
         res_occ = await hass.services.async_call(
             DOMAIN,
@@ -282,3 +292,5 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
         fabric.get_area_occupancy = orig_occ
     assert res_occ["delivered"] is True
     assert res_occ["targets"] == ["media_player.kitchen_sonos"]
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

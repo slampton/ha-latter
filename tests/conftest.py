@@ -1,100 +1,43 @@
-"""Shared pytest fixtures for `ha-latter` backed by `tests.harness`."""
+"""Shared pytest fixtures for `ha-latter` backed by real `pytest-homeassistant-custom-component`."""
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Callable, Mapping
-import json
-from pathlib import Path
-import shutil
-import subprocess
-import sys
+from collections.abc import AsyncGenerator, Callable, Mapping
 from typing import Any
 
 import pytest
 
-from tests.harness import REPO_ROOT, USING_HA_STUBS, DeterministicEventLoop
-
-LATTER_DIR = REPO_ROOT / "custom_components" / "latter"
-FRONTEND_DIR = REPO_ROOT / "frontend_src"
-FRONTEND_SRC = FRONTEND_DIR / "src"
-NODE_BIN = shutil.which("node")
-
-
-def read_py_tree(*rel_paths: str) -> str:
-    """Concatenate UTF-8 Python source across files or subdirectories under `custom_components/latter`."""
-    chunks: list[str] = []
-    for rel in rel_paths:
-        target = LATTER_DIR / rel
-        if target.is_dir():
-            chunks.extend(
-                path.read_text(encoding="utf-8") for path in sorted(target.rglob("*.py"))
-            )
-        elif target.is_file():
-            chunks.append(target.read_text(encoding="utf-8"))
-    return "\n".join(chunks)
-
-
-def read_ts_tree(*rel_paths: str) -> str:
-    """Concatenate UTF-8 TypeScript source across files or subdirectories under `frontend_src/src`."""
-    chunks: list[str] = []
-    for rel in rel_paths:
-        target = FRONTEND_SRC / rel
-        if target.is_dir():
-            chunks.extend(
-                path.read_text(encoding="utf-8") for path in sorted(target.rglob("*.ts"))
-            )
-        elif target.is_file():
-            chunks.append(target.read_text(encoding="utf-8"))
-    return "\n".join(chunks)
-
-
-def run_studio_node_esm(module_js: str) -> Any:
-    """Execute an ESM snippet against real TypeScript Studio modules via `node-ts-loader.mjs`."""
-    if not NODE_BIN:
-        raise RuntimeError("node is not installed")
-    out = subprocess.run(  # noqa: S603
-        [
-            NODE_BIN,
-            "--no-warnings",
-            "--import",
-            "./src/lib/node-ts-loader.mjs",
-            "--input-type=module",
-            "-",
-        ],
-        cwd=FRONTEND_DIR,
-        input=module_js,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=30,
-    )
-    if out.returncode != 0:
-        raise RuntimeError(f"Node ESM execution failed ({out.returncode}):\n{out.stderr}\n{out.stdout}")
-    return json.loads(out.stdout)
-
-if USING_HA_STUBS and sys.platform == "win32":
-
-    def pytest_asyncio_loop_factories(config: Any, item: Any) -> dict[str, Callable[[], asyncio.AbstractEventLoop]]:
-        """Provide socket-free deterministic event loop factory on Windows offline test runs."""
-        _ = (config, item)
-        return {"deterministic": DeterministicEventLoop}
+from tests.helpers.paths import (
+    FRONTEND_DIR,
+    FRONTEND_SRC,
+    LATTER_DIR,
+    NODE_BIN,
+    REPO_ROOT,
+    read_py_tree,
+    read_ts_tree,
+    run_studio_node_esm,
+)
 
 
 @pytest.fixture
-def hass(tmp_path: Path) -> Any:
-    """Provide a fresh, isolated HomeAssistant instance backed by `tmp_path`."""
-    from homeassistant.core import HomeAssistant
+async def hass(hass: Any) -> AsyncGenerator[Any]:
+    """Enable custom integrations on real `hass` and clean up test BLE scanners before stop."""
+    from homeassistant import loader
 
-    return HomeAssistant(config_dir=tmp_path)
+    hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+    yield hass
+    unsubs = hass.data.pop("_latter_test_bt_unsubs", None)
+    if unsubs:
+        while unsubs:
+            cb = unsubs.pop()
+            cb()
 
 
 @pytest.fixture
 def make_esphome_device() -> Callable[..., tuple[Any, str]]:
-    """Seed a realistic ESPHome device and entities in Device/Entity/State registries."""
-    from homeassistant.helpers import device_registry as dr, entity_registry as er
-
+    """Seed a realistic ESPHome device and entities in real Device/Entity/State registries."""
     from custom_components.latter.const import MIN_FIRMWARE_SDK_REV
+    from tests.helpers.ha_setup import seed_esphome_device
 
     def _factory(
         hass: Any,
@@ -112,124 +55,30 @@ def make_esphome_device() -> Callable[..., tuple[Any, str]]:
         sdk: int = MIN_FIRMWARE_SDK_REV,
         with_speaker: bool = True,
     ) -> tuple[Any, str]:
-        esp_entry = hass.config_entries.add_entry(
-            sys.modules["homeassistant.config_entries"].ConfigEntry(
-                entry_id=f"esp_entry_{slug}",
-                domain="esphome",
-                title=name,
-                data={"device_name": slug},
-            )
-        )
-        dev_reg = dr.async_get(hass)
-        dev = dev_reg.async_get_or_create(
-            config_entry_id=esp_entry.entry_id,
-            connections={(dr.CONNECTION_NETWORK_MAC, mac)},
-            identifiers={("esphome", mac)},
+        return seed_esphome_device(
+            hass,
+            slug=slug,
+            mac=mac,
             name=name,
-            manufacturer="slampton",
-            model=f"{slug}-board",
             area_id=area_id,
+            stationary=stationary,
+            wearable=wearable,
+            display=display,
+            w=w,
+            h=h,
+            shape=shape,
+            sdk=sdk,
+            with_speaker=with_speaker,
         )
-        ent_reg = er.async_get(hass)
-        manifest_json = json.dumps(
-            {
-                "v": 2,
-                "contract": 3,
-                "board": f"{slug}_board",
-                "w": w,
-                "h": h,
-                "shape": shape,
-                "display": display,
-                "touch": 1,
-                "audio": 1,
-                "mic": 1,
-                "spk": 1,
-                "imu": 1,
-                "battery": 1 - stationary,
-                "stationary": stationary,
-                "wearable": wearable,
-                "ips": 1,
-                "minor": 1,
-                "sdk": sdk,
-            },
-            separators=(",", ":"),
-        )
-        hw_eid = f"sensor.{slug}_system_hardware_manifest"
-        ent_reg.async_register(
-            er.RegistryEntry(
-                entity_id=hw_eid,
-                platform="esphome",
-                device_id=dev.id,
-                config_entry_id=esp_entry.entry_id,
-                original_name="System: Hardware Manifest",
-                unique_id=f"{mac.upper()}/0/text_sensor/System: Hardware Manifest",
-            )
-        )
-        hass.states.async_set(hw_eid, manifest_json)
-
-        rpc_eid = f"sensor.{slug}_system_rpc_outbox"
-        ent_reg.async_register(
-            er.RegistryEntry(
-                entity_id=rpc_eid,
-                platform="esphome",
-                device_id=dev.id,
-                config_entry_id=esp_entry.entry_id,
-                original_name="System: RPC Outbox",
-                unique_id=f"{mac.upper()}/0/text_sensor/System: RPC Outbox",
-            )
-        )
-        hass.states.async_set(rpc_eid, "")
-
-        beacon_eid = f"binary_sensor.{slug}_ble_radio_active"
-        ent_reg.async_register(
-            er.RegistryEntry(
-                entity_id=beacon_eid,
-                platform="esphome",
-                device_id=dev.id,
-                config_entry_id=esp_entry.entry_id,
-                original_name="BLE Radio Active",
-            )
-        )
-        hass.states.async_set(beacon_eid, "off")
-
-        if with_speaker:
-            spk_eid = f"media_player.{slug}_music"
-            ent_reg.async_register(
-                er.RegistryEntry(
-                    entity_id=spk_eid,
-                    platform="esphome",
-                    device_id=dev.id,
-                    config_entry_id=esp_entry.entry_id,
-                    original_name="Music",
-                )
-            )
-            hass.states.async_set(spk_eid, "idle", {"volume_level": 0.5, "friendly_name": f"{name} Speaker"})
-
-        for svc_suffix in (
-            "latter_ping",
-            "latter_push_v3",
-            "latter_set_beacon_uuid",
-            "latter_device_command",
-            "latter_set_slots",
-            "latter_set_music_lyrics",
-            "latter_set_calendar_view",
-            "latter_show_notification",
-            "latter_factory_reset",
-        ):
-            hass.services.async_register("esphome", f"{slug}_{svc_suffix}", lambda _call: None)
-
-        return dev, mac
 
     return _factory
 
 
 @pytest.fixture
-def setup_latter_hub(make_esphome_device: Callable[..., tuple[Any, str]]) -> Callable[..., Any]:
-    """Set up a complete Latter System hub entry with Areas, Person, Display Device, and optional BLE Tag."""
-    from homeassistant.config_entries import ConfigEntry, ConfigSubentry
-    from homeassistant.helpers import area_registry as ar
-
-    from custom_components.latter import async_setup, async_setup_entry
+def setup_latter_hub(
+    make_esphome_device: Callable[..., tuple[Any, str]],
+) -> Callable[..., Any]:
+    """Set up a complete Latter System hub entry on real Home Assistant Core."""
     from custom_components.latter.const import (
         CONF_ASSIGNED_PERSON,
         CONF_BLE_AUTO_SWITCH,
@@ -245,23 +94,40 @@ def setup_latter_hub(make_esphome_device: Callable[..., tuple[Any, str]]) -> Cal
         SUBENTRY_BLE_TAG,
         SUBENTRY_DEVICE,
     )
+    from tests.helpers.ble_and_ws import ensure_bluetooth_manager
+    from tests.helpers.ha_setup import (
+        add_mock_entry,
+        ensure_area,
+        ensure_floor,
+        flush_debouncers,
+        make_subentry_dict,
+        prepare_latter_dependencies,
+    )
 
     async def _setup(
         hass: Any,
         *,
         with_device: bool = True,
         with_ble_tag: bool = False,
+        with_floors: bool = True,
         stationary: int = 0,
         sync_device_area: bool = True,
         extra_device_data: Mapping[str, Any] | None = None,
     ) -> tuple[Any, Any, Any]:
-        area_reg = ar.async_get(hass)
-        if not area_reg.async_get_area("living_room"):
-            area_reg.async_create("Living Room", area_id="living_room", floor_id="floor_1")
-        if not area_reg.async_get_area("kitchen"):
-            area_reg.async_create("Kitchen", area_id="kitchen", floor_id="floor_1")
-        if not area_reg.async_get_area("bedroom"):
-            area_reg.async_create("Bedroom", area_id="bedroom", floor_id="floor_2")
+        await prepare_latter_dependencies(hass)
+        await ensure_bluetooth_manager(hass)
+
+        f1_id: str | None = None
+        f2_id: str | None = None
+        if with_floors:
+            f1 = ensure_floor(hass, "Ground Level", floor_id="floor_1", level=1)
+            f2 = ensure_floor(hass, "Upper Level", floor_id="floor_2", level=2)
+            f1_id = f1.floor_id
+            f2_id = f2.floor_id
+
+        ensure_area(hass, "Living Room", area_id="living_room", floor_id=f1_id)
+        ensure_area(hass, "Kitchen", area_id="kitchen", floor_id=f1_id)
+        ensure_area(hass, "Bedroom", area_id="bedroom", floor_id=f2_id)
 
         hass.states.async_set(
             "person.alex",
@@ -271,12 +137,20 @@ def setup_latter_hub(make_esphome_device: Callable[..., tuple[Any, str]]) -> Cal
         hass.states.async_set(
             "weather.home",
             "sunny",
-            {"temperature": 72, "humidity": 48, "wind_speed": 8, "friendly_name": "Home Weather"},
+            {
+                "temperature": 72,
+                "humidity": 48,
+                "wind_speed": 8,
+                "friendly_name": "Home Weather",
+            },
         )
-        hass.states.async_set("sun.sun", "above_horizon", {"next_setting": "2026-11-11T01:00:00Z"})
+        hass.states.async_set(
+            "sun.sun",
+            "above_horizon",
+            {"next_setting": "2026-11-11T01:00:00Z"},
+        )
 
-        subentries: list[ConfigSubentry] = []
-        esp_dev = None
+        subentries_data: list[dict[str, Any]] = []
         if with_device:
             esp_dev, mac = make_esphome_device(
                 hass,
@@ -299,9 +173,9 @@ def setup_latter_hub(make_esphome_device: Callable[..., tuple[Any, str]]) -> Cal
             }
             if extra_device_data:
                 dev_data.update(extra_device_data)
-            subentries.append(
-                ConfigSubentry(
-                    data=dev_data,
+            subentries_data.append(
+                make_subentry_dict(
+                    dev_data,
                     subentry_type=SUBENTRY_DEVICE,
                     title="Pocket Assistant",
                     unique_id=mac,
@@ -310,9 +184,9 @@ def setup_latter_hub(make_esphome_device: Callable[..., tuple[Any, str]]) -> Cal
             )
 
         if with_ble_tag:
-            subentries.append(
-                ConfigSubentry(
-                    data={
+            subentries_data.append(
+                make_subentry_dict(
+                    {
                         CONF_DEVICE_SLUG: "keys_tag",
                         CONF_BLE_TARGET_ADDRESS: "11:22:33:44:55:66",
                         CONF_BLE_BEACON_UUID: "E2C56DB5-DFFB-48D2-B060-D0F5A71096E1",
@@ -326,21 +200,35 @@ def setup_latter_hub(make_esphome_device: Callable[..., tuple[Any, str]]) -> Cal
                 )
             )
 
-        await async_setup(hass, {})
-        entry = hass.config_entries.add_entry(
-            ConfigEntry(
-                entry_id="entry_latter_hub",
-                domain=DOMAIN,
-                title="Latter",
-                data={},
-                subentries_data=subentries,
-                unique_id=DOMAIN,
-            )
+        entry = add_mock_entry(
+            hass,
+            entry_id="entry_latter_hub",
+            domain=DOMAIN,
+            title="Latter",
+            data={},
+            subentries_data=subentries_data,
+            unique_id=DOMAIN,
         )
-        assert await async_setup_entry(hass, entry) is True
+        assert await hass.config_entries.async_setup(entry.entry_id) is True
         await hass.async_block_till_done()
+        await flush_debouncers(hass)
         sys_obj = entry.runtime_data
         coord = sys_obj.coordinators.get("sub_pocket")
         return entry, sys_obj, coord
 
     return _setup
+
+
+__all__ = [
+    "FRONTEND_DIR",
+    "FRONTEND_SRC",
+    "LATTER_DIR",
+    "NODE_BIN",
+    "REPO_ROOT",
+    "hass",
+    "make_esphome_device",
+    "read_py_tree",
+    "read_ts_tree",
+    "run_studio_node_esm",
+    "setup_latter_hub",
+]

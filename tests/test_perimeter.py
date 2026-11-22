@@ -589,3 +589,4 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
         )
     assert ("vacuum", "turn_on", {"entity_id": "vacuum.robo_vac"}) in svc_calls
     assert ("vacuum", "turn_off", {"entity_id": "vacuum.robo_vac"}) in svc_calls
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

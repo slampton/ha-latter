@@ -276,15 +276,17 @@ class CoordinatorTraitsMixin(CoordinatorStateBase):
         esp_dev_id = self.esphome_device_id
         mac = self.device_mac
         ident_key = dr.format_mac(mac) if mac else self.subentry_id
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, ident_key)},
             name=self.device_title,
             manufacturer="Latter",
             model="Latter ESPHome Companion Middleware",
             sw_version=INTEGRATION_VERSION,
             configuration_url=f"homeassistant://latter/devices/{self.subentry_id}",
-            **({"via_device_id": esp_dev_id} if esp_dev_id else {}),
         )
+        if esp_dev_id:
+            info["via_device_id"] = esp_dev_id
+        return info
 
     @property
     def local_speaker(self) -> str:

@@ -91,17 +91,17 @@ actions:
       area_id: office
 ```
 
-The `area_changed` event carries `device_slug`, `previous_area_id`, `area_id`, and `assigned_person`. Payloads for both event types are listed in the [entities reference](reference/entities.md#latter_event).
+The `area_changed` event carries `device_slug`, `previous_area_id`, `area_id`, and `assigned_person`. Payloads for all three event types are listed in the [entities reference](reference/entities.md#latter_event).
 
 ## Occupancy-driven automations
 
-The per-area occupancy sensors are ordinary binary sensors:
+The per-area occupancy sensors are ordinary binary sensors (`binary_sensor.<area>_occupancy`):
 
 ```yaml
 alias: Bedroom empty, lights off
 triggers:
   - trigger: state
-    entity_id: binary_sensor.bedroom_ble_occupancy
+    entity_id: binary_sensor.bedroom_occupancy
     to: "off"
     for: "00:05:00"
 actions:
@@ -141,9 +141,9 @@ actions:
       transition: 30
 ```
 
-## Switch Device Group or wake-word mode on a schedule (even while sleeping)
+## Switch Do Not Disturb, Bedtime Mode, or wake-word mode on a schedule (even while sleeping)
 
-Because `select.<slug>_device_group`, `select.<slug>_wake_word_mode`, and `number.<slug>_alert_volume` write to the Device's sleep-safe subentry (`device_prefs`), automations succeed even if a battery handheld is currently hibernating:
+Because `switch.<slug>_do_not_disturb`, `switch.<slug>_bedtime_mode`, `select.<slug>_device_group`, `select.<slug>_wake_word_mode`, and `number.<slug>_alert_volume` write to the Device's sleep-safe subentry (`device_prefs`), automations succeed even if a battery handheld is currently hibernating (while live `light.<slug>_screen`, `switch.<slug>_screensaver`, and `button.<slug>_dismiss_alert` control awake displays directly):
 
 ```yaml
 alias: Quiet bedside alert volume at night
@@ -151,6 +151,9 @@ triggers:
   - trigger: time
     at: "22:30:00"
 actions:
+  - action: switch.turn_on
+    target:
+      entity_id: switch.pocket_assistant_do_not_disturb
   - action: number.set_value
     target:
       entity_id: number.pocket_assistant_alert_volume

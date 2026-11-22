@@ -575,9 +575,11 @@ class LatterNativeBleTracker(BleTargetMatcherMixin):
         if rssi_int is None or not source or rssi_int <= _MIN_VALID_RSSI_DBM:
             return
         adv_ts = getattr(service_info, "time", None)
-        self._ingest_proxy_observation(
-            source, rssi_int, float(adv_ts) if adv_ts is not None else time.monotonic(), source
-        )
+        now_mono = time.monotonic()
+        obs_mono = float(adv_ts) if adv_ts is not None else now_mono
+        if adv_ts is not None and (now_mono - obs_mono) > SURVEY_RETENTION_SECONDS:
+            return
+        self._ingest_proxy_observation(source, rssi_int, obs_mono, source)
 
     def _resolve_cached_scanner_area(self, norm_source: str) -> str | None:
         cached_area = self._scanner_area_cache.get(norm_source)

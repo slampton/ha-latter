@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any
 
-from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
+from homeassistant.components.light import LightEntity
+from homeassistant.components.light.const import ATTR_BRIGHTNESS, ColorMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -48,11 +49,11 @@ class LatterScreenLight(LightEntity):
     _attr_should_poll = False
     _attr_translation_key = "screen"
     _attr_color_mode = ColorMode.BRIGHTNESS
-    _attr_supported_color_modes: ClassVar[set[ColorMode]] = {ColorMode.BRIGHTNESS}
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize the Screen light entity."""
         self.coordinator = coordinator
+        self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
         self._attr_unique_id = f"{coordinator.subentry_id}_screen"
         self.entity_id = build_device_entity_id(
             coordinator.device_slug, "screen", "light"

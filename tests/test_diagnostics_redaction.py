@@ -66,7 +66,15 @@ async def test_diagnostics_redacts_secrets_pins_ble_uuids_macs_and_signed_urls(
     assert "aa:bb:cc:dd:ee:01" not in dev_serialized
     assert dev_diag["runtime"]["has_security_pin"] is True
 
-    sys_dev = dev_reg.async_get_device({(DOMAIN, "system")})
+    sys_dev = next(
+        (
+            d
+            for d in dr.async_entries_for_config_entry(dev_reg, entry.entry_id)
+            if (DOMAIN, "system") in d.identifiers
+        ),
+        None,
+    )
     assert sys_dev is not None
     sys_diag = await async_get_device_diagnostics(hass, entry, sys_dev)
     assert "devices" in sys_diag
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

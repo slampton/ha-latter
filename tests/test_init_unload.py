@@ -5,17 +5,25 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
+from homeassistant.setup import async_setup_component
 
 from custom_components.latter import (
     async_remove_config_entry_device,
-    async_remove_entry,
     async_setup,
-    async_unload_entry,
 )
 from custom_components.latter.backup import async_post_backup, async_pre_backup
 from custom_components.latter.cameras.stream_hub import _CameraIngest, get_camera_stream_hub
-from custom_components.latter.const import CONF_DEFAULT_AREA, CONF_DEVICE_SLUG, DOMAIN
+from custom_components.latter.const import (
+    CONF_DEFAULT_AREA,
+    CONF_DEFAULT_SPEAKER,
+    CONF_DEVICE_SLUG,
+    CONF_ESPHOME_DEVICE_ID,
+    DOMAIN,
+    SUBENTRY_DEVICE,
+)
+from custom_components.latter.media.state_payload import build_active_media_payload
 from custom_components.latter.repairs import (
     LinkMaPlayerRepairFlow,
     async_audit_coordinator_health,
@@ -25,6 +33,26 @@ from custom_components.latter.sensor import (
     LatterAreaOccupantsSensor,
     format_bounded_occupant_names,
 )
+from custom_components.latter.studio.payload import build_studio_state_payload
+from tests.helpers.ha_setup import (
+    add_mock_entry,
+    ensure_area,
+    ensure_floor,
+    flush_debouncers,
+    get_extra_js_urls,
+    get_platform_entities,
+    get_registered_panels,
+    get_static_paths,
+    make_subentry_dict,
+    prepare_latter_dependencies,
+    register_entity,
+)
+
+
+def _panel_attr(panel: Any, attr: str) -> Any:
+    if isinstance(panel, dict):
+        return panel.get(attr)
+    return getattr(panel, attr, None)
 
 
 async def test_setup_platforms_occupants_cap_and_clean_unload(
@@ -35,11 +63,13 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     assert coord is not None
     assert "sub_tag" in sys_obj.coordinators
     assert "_registered_panel_url" in hass.data[DOMAIN]
-    assert "latter" in hass._panels
-    assert hass._panels["latter"]["config_panel_domain"] == DOMAIN
-    assert hass.http.static_paths
-    assert all(sp.cache_headers is True for sp in hass.http.static_paths)
-    assert len(hass._extra_js_urls) == 1
+    panels = get_registered_panels(hass)
+    assert "latter" in panels
+    assert _panel_attr(panels["latter"], "config_panel_domain") == DOMAIN
+    static_paths = get_static_paths(hass)
+    assert static_paths
+    assert all(sp.cache_headers is True for sp in static_paths)
+    assert len(get_extra_js_urls(hass)) == 1
 
     # Verify all entity platforms populated states and enforce _attr_has_entity_name = True
     assert coord.get_device_info()["manufacturer"] == "Latter"
@@ -53,7 +83,7 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
         "switch",
         "light",
     ):
-        entities = hass.data["_test_entities"][p_name]
+        entities = get_platform_entities(hass, p_name)
         assert entities, f"Expected entities for {p_name}"
         for ent in entities:
             assert ent.has_entity_name is True
@@ -64,21 +94,15 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     # Dynamic Area Registry create / update / remove syncs both sensor & binary_sensor
     area_reg = ar.async_get(hass)
     ent_reg = er.async_get(hass)
-    area_reg.async_create("Office", area_id="office", floor_id="floor_1")
+    ensure_floor(hass, "Floor 1", floor_id="floor_1")
+    ensure_area(hass, "Office", area_id="office", floor_id="floor_1")
     await hass.async_block_till_done()
     assert hass.states.get("sensor.office_occupants") is not None or any(
-        e.entity_id == "sensor.office_occupants" for e in hass.data["_test_entities"]["sensor"]
+        e.entity_id == "sensor.office_occupants" for e in get_platform_entities(hass, "sensor")
     )
     assert hass.states.get("binary_sensor.office_occupancy") is not None or any(
         e.entity_id == "binary_sensor.office_occupancy"
-        for e in hass.data["_test_entities"]["binary_sensor"]
-    )
-    # Register in entity registry so remove exercises ent_reg.async_remove too
-    ent_reg.async_register(
-        er.RegistryEntry(entity_id="sensor.office_occupants", platform=DOMAIN)
-    )
-    ent_reg.async_register(
-        er.RegistryEntry(entity_id="binary_sensor.office_occupancy", platform=DOMAIN)
+        for e in get_platform_entities(hass, "binary_sensor")
     )
     area_reg.async_update("office", name="Home Office")
     area_reg.async_delete("office")
@@ -116,26 +140,43 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
         entity_id="camera.front_door", _task=dummy_task
     )
 
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
     await hass.async_block_till_done()
     assert dummy_task.cancelled() or dummy_task.done()
     assert "_registered_panel_url" not in hass.data.get(DOMAIN, {})
-    assert "latter" not in hass._panels
+    assert "latter" not in get_registered_panels(hass)
     # Keep latter-icons.js registered across config-entry reloads; remove only when the entry is deleted.
-    assert len(hass._extra_js_urls) == 1
+    assert len(get_extra_js_urls(hass)) == 1
 
-    await async_remove_entry(hass, entry)
-    assert len(hass._extra_js_urls) == 0
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert len(get_extra_js_urls(hass)) == 0
 
 
 async def test_device_removal_guards_and_update_listener(
-    hass: Any, setup_latter_hub: Any
+    hass: Any, setup_latter_hub: Any, monkeypatch: Any
 ) -> None:
     """Verify active subentries & System service device cannot be removed, while orphans can."""
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     dev_reg = dr.async_get(hass)
 
-    sys_dev = dev_reg.async_get_device({(DOMAIN, "system")})
+    reloaded_entries: list[str] = []
+    orig_schedule_reload = hass.config_entries.async_schedule_reload
+
+    def _spy_reload(entry_id: str) -> None:
+        reloaded_entries.append(entry_id)
+        orig_schedule_reload(entry_id)
+
+    monkeypatch.setattr(hass.config_entries, "async_schedule_reload", _spy_reload)
+
+    sys_dev = next(
+        (
+            d
+            for d in dr.async_entries_for_config_entry(dev_reg, entry.entry_id)
+            if (DOMAIN, "system") in d.identifiers
+        ),
+        None,
+    )
     assert sys_dev is not None
     assert await async_remove_config_entry_device(hass, entry, sys_dev) is False
 
@@ -154,6 +195,7 @@ async def test_device_removal_guards_and_update_listener(
     assert await async_remove_config_entry_device(hass, entry, orphan_dev) is True
 
     # In-place option update via _async_update_listener
+    ensure_area(hass, "Kitchen", area_id="kitchen")
     sub = entry.subentries["sub_pocket"]
     new_data = dict(sub.data)
     new_data[CONF_DEFAULT_AREA] = "kitchen"
@@ -166,23 +208,22 @@ async def test_device_removal_guards_and_update_listener(
     structural = dict(new_data)
     structural[CONF_DEVICE_SLUG] = "renamed_pocket"
     hass.config_entries.async_update_subentry(entry, entry.subentries["sub_pocket"], data=structural)
-    hass.config_entries.async_update_entry(entry, options={"structural": True})
     await hass.async_block_till_done()
-    assert entry.entry_id in hass.config_entries.reloaded_entries
+    assert entry.entry_id in reloaded_entries
 
     # Removing a subentry triggers reload and deletes its Repair issues
-    hass.config_entries.reloaded_entries.clear()
-    await hass.config_entries.async_remove_subentry(entry.entry_id, "sub_pocket")
-    hass.config_entries.async_update_entry(entry, options={"removed": True})
+    reloaded_entries.clear()
+    hass.config_entries.async_remove_subentry(entry, "sub_pocket")
     await hass.async_block_till_done()
-    assert entry.entry_id in hass.config_entries.reloaded_entries
+    assert entry.entry_id in reloaded_entries
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_repairs_audit_and_fix_flow(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Exercise health repair audits and LinkMaPlayerRepairFlow / ConfirmRepairFlow."""
-    _entry, _sys_obj, coord = await setup_latter_hub(
+    entry, _sys_obj, coord = await setup_latter_hub(
         hass,
         extra_device_data={"default_speaker": "media_player.missing_ghost_speaker"},
     )
@@ -190,19 +231,15 @@ async def test_repairs_audit_and_fix_flow(
     assert any(w["code"] == "missing_entity" for w in warnings)
 
     # Register a Music Assistant player entity and run LinkMaPlayerRepairFlow
-    from homeassistant.config_entries import ConfigEntry
-
-    ma_entry = hass.config_entries.add_entry(
-        ConfigEntry(entry_id="ma_entry_1", domain="music_assistant", title="Music Assistant")
+    ma_entry = add_mock_entry(
+        hass, entry_id="ma_entry_1", domain="music_assistant", title="Music Assistant"
     )
-    ent_reg = er.async_get(hass)
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="media_player.ma_pocket",
-            platform="music_assistant",
-            config_entry_id=ma_entry.entry_id,
-            original_name="MA Pocket",
-        )
+    register_entity(
+        hass,
+        "media_player.ma_pocket",
+        platform="music_assistant",
+        config_entry=ma_entry,
+        original_name="MA Pocket",
     )
     hass.states.async_set("media_player.ma_pocket", "idle", {"friendly_name": "MA Pocket"})
 
@@ -221,43 +258,48 @@ async def test_repairs_audit_and_fix_flow(
     # Generic confirm repair flow
     confirm = await async_create_fix_flow(hass, "ble_no_proxies", None)
     confirm.hass = hass
+    confirm.handler = DOMAIN
+    confirm.issue_id = "ble_no_proxies"
     assert (await confirm.async_step_init())["type"] == "form"
-    assert (await confirm.async_step_init({}))["type"] == "create_entry"
+    assert (await confirm.async_step_confirm({}))["type"] == "create_entry"
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_discovery_scan_when_unconfigured(
     hass: Any, make_esphome_device: Any
 ) -> None:
     """Verify async_setup proposes discovery flow for unconfigured Latter ESPHome devices and aborts stale flows."""
-    dev, _mac = make_esphome_device(hass, slug="desk_panel", mac="aa:bb:cc:11:22:33", stationary=1)
-    hass.config_entries._in_progress_flows.append(
-        {"flow_id": "crashed_1", "handler": DOMAIN, "step_id": None, "context": {}}
+    await prepare_latter_dependencies(hass)
+
+    # Create a temporary ESPHome device to start a real discovery flow, then remove the device so it becomes stale
+    stale_dev, _ = make_esphome_device(
+        hass, slug="retired_panel", mac="ff:ff:ff:00:00:00", name="Retired Panel", stationary=1
     )
-    hass.config_entries._in_progress_flows.append(
-        {
-            "flow_id": "stale_disc_1",
-            "handler": DOMAIN,
-            "step_id": "user",
-            "context": {"source": "integration_discovery", "unique_id": "latter_ff:ff:ff:00:00:00"},
-        }
+    stale_flow = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_INTEGRATION_DISCOVERY},
+        data={CONF_ESPHOME_DEVICE_ID: stale_dev.id},
+    )
+    stale_flow_id = stale_flow["flow_id"]
+    dr.async_get(hass).async_remove_device(stale_dev.id)
+
+    _dev, mac = make_esphome_device(
+        hass, slug="desk_panel", mac="aa:bb:cc:11:22:33", name="Desk Panel", stationary=1
     )
     assert await async_setup(hass, {}) is True
-    assert "crashed_1" in hass.config_entries.aborted_flow_ids
-    assert "stale_disc_1" in hass.config_entries.aborted_flow_ids
-    assert any(
-        f.get("data", {}).get("esphome_device_id") == dev.id
-        for f in hass.config_entries._in_progress_flows
-    )
+    await hass.async_block_till_done()
+
+    in_progress = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    active_ids = {f["flow_id"] for f in in_progress}
+    assert stale_flow_id not in active_ids
+    expected_uid = f"latter_{dr.format_mac(mac)}"
+    assert any(f.get("context", {}).get("unique_id") == expected_uid for f in in_progress)
 
 
 async def test_esphome_device_and_entity_rename_sync_and_heal(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Renaming a bound ESPHome device & its entities syncs title, subentry, child device, speaker & Studio payload."""
-    from custom_components.latter.const import CONF_DEFAULT_SPEAKER
-    from custom_components.latter.media.state_payload import build_active_media_payload
-    from custom_components.latter.studio.payload import build_studio_state_payload
-
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     assert coord.device_title == "Pocket Assistant"
     assert coord.get_opt(CONF_DEFAULT_SPEAKER) == "media_player.pocket_assistant_music"
@@ -277,18 +319,16 @@ async def test_esphome_device_and_entity_rename_sync_and_heal(
 
     # 1. Rename the bound ESPHome device and its music / outbox entities live
     esp_ce = next(
-        ce for ce in hass.config_entries.async_entries("esphome")
+        ce
+        for ce in hass.config_entries.async_entries("esphome")
         if any(d.id == esp_dev_id for d in dr.async_entries_for_config_entry(dev_reg, ce.entry_id))
     )
-    esp_ce.data["device_name"] = "living-room-assistant"
+    hass.config_entries.async_update_entry(
+        esp_ce, data={**esp_ce.data, "device_name": "living-room-assistant"}
+    )
     dev_reg.async_update_device(esp_dev_id, name="Living Room Assistant")
 
-    hass.states.async_set(
-        "media_player.living_room_assistant_music",
-        "idle",
-        {"friendly_name": "Living Room Assistant Music", "volume_level": 0.5},
-    )
-    hass.states._states.pop("media_player.pocket_assistant_music", None)
+    hass.states.async_remove("media_player.pocket_assistant_music")
     ent_reg.async_update_entity(
         "media_player.pocket_assistant_music",
         new_entity_id="media_player.living_room_assistant_music",
@@ -297,7 +337,12 @@ async def test_esphome_device_and_entity_rename_sync_and_heal(
         "sensor.pocket_assistant_system_rpc_outbox",
         new_entity_id="sensor.living_room_assistant_system_rpc_outbox",
     )
-    await hass.async_block_till_done()
+    hass.states.async_set(
+        "media_player.living_room_assistant_music",
+        "idle",
+        {"friendly_name": "Living Room Assistant Music", "volume_level": 0.5},
+    )
+    await flush_debouncers(hass)
 
     # Subentry title, child Latter Device name, coordinator.device_title, Studio payload & Media speaker_name all match
     assert coord.device_title == "Living Room Assistant"
@@ -319,28 +364,22 @@ async def test_esphome_device_and_entity_rename_sync_and_heal(
     assert not any(
         w["code"] == "missing_entity" for w in async_audit_coordinator_health(hass, coord)
     )
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_startup_heals_preexisting_stale_renamed_local_speaker(
     hass: Any, make_esphome_device: Any
 ) -> None:
     """When a device was renamed before reload, startup heals stale built-in default/active/last speaker refs."""
-    from homeassistant.config_entries import ConfigEntry, ConfigSubentry
-
-    from custom_components.latter import async_setup_entry
-    from custom_components.latter.const import (
-        CONF_DEFAULT_SPEAKER,
-        CONF_DEVICE_SLUG,
-        CONF_ESPHOME_DEVICE_ID,
-        SUBENTRY_DEVICE,
+    await prepare_latter_dependencies(hass)
+    dev, mac = make_esphome_device(
+        hass, slug="living_room_assistant", mac="aa:bb:cc:dd:ee:11", stationary=1
     )
-
-    dev, mac = make_esphome_device(hass, slug="living_room_assistant", mac="aa:bb:cc:dd:ee:11", stationary=1)
     dev_reg = dr.async_get(hass)
     dev_reg.async_update_device(dev.id, name="Living Room Assistant")
 
-    sub = ConfigSubentry(
-        data={
+    sub_dict = make_subentry_dict(
+        {
             CONF_DEVICE_SLUG: "garage_assistant",
             CONF_ESPHOME_DEVICE_ID: dev.id,
             "mac": mac,
@@ -351,57 +390,59 @@ async def test_startup_heals_preexisting_stale_renamed_local_speaker(
         unique_id=f"latter_{mac}",
         subentry_id="sub_renamed_lr",
     )
-    entry = ConfigEntry(
+    entry = add_mock_entry(
+        hass,
         entry_id="entry_renamed_lr",
         domain=DOMAIN,
         title="Latter",
-        subentries_data=[sub],
+        subentries_data=[sub_dict],
+        unique_id=DOMAIN,
     )
-    hass.config_entries.add_entry(entry)
-    assert await async_setup(hass, {}) is True
-    assert await async_setup_entry(hass, entry) is True
+    assert await hass.config_entries.async_setup(entry.entry_id) is True
     await hass.async_block_till_done()
 
-    coord = entry.runtime_data.coordinators[sub.subentry_id]
+    coord = entry.runtime_data.coordinators["sub_renamed_lr"]
     assert coord.device_title == "Living Room Assistant"
-    assert entry.subentries[sub.subentry_id].title == "Living Room Assistant"
+    assert entry.subentries["sub_renamed_lr"].title == "Living Room Assistant"
     assert coord.get_opt(CONF_DEFAULT_SPEAKER) == "media_player.living_room_assistant_music"
     assert coord.active_speaker == "media_player.living_room_assistant_music"
     assert coord.last_speaker == "media_player.living_room_assistant_music"
     assert not any(
         w["code"] == "missing_entity" for w in async_audit_coordinator_health(hass, coord)
     )
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_sidebar_icon_module_registered_early_and_persists_across_reload(
     hass: Any,
 ) -> None:
     """`latter-icons.js` registers at the start of `async_setup`, survives entry reload without churn, and unregisters on removal."""
-    from homeassistant.config_entries import ConfigEntry
-
-    from custom_components.latter import async_setup_entry
-
-    assert await async_setup(hass, {}) is True
-    assert len(hass._extra_js_urls) == 1
-    icon_url = next(iter(hass._extra_js_urls))
+    await prepare_latter_dependencies(hass)
+    assert await async_setup_component(hass, DOMAIN, {}) is True
+    extra_urls = get_extra_js_urls(hass)
+    assert len(extra_urls) == 1
+    icon_url = next(iter(extra_urls))
     assert "latter-icons.js?v=" in icon_url
-    assert len(hass.http.static_paths) == 1
+    assert len(get_static_paths(hass)) == 1
 
-    entry = hass.config_entries.add_entry(
-        ConfigEntry(entry_id="entry_icon_reload", domain=DOMAIN, title="Latter", data={})
+    entry = add_mock_entry(
+        hass, entry_id="entry_icon_reload", domain=DOMAIN, title="Latter", data={}, unique_id=DOMAIN
     )
-    assert await async_setup_entry(hass, entry) is True
-    assert hass._extra_js_urls == {icon_url}
-    assert hass._panels["latter"]["sidebar_icon"] == "latter:logo"
+    assert await hass.config_entries.async_setup(entry.entry_id) is True
+    await hass.async_block_till_done()
+    assert get_extra_js_urls(hass) == {icon_url}
+    assert _panel_attr(get_registered_panels(hass)["latter"], "sidebar_icon") == "latter:logo"
 
-    assert await async_unload_entry(hass, entry) is True
-    assert "latter" not in hass._panels
-    assert hass._extra_js_urls == {icon_url}
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+    await hass.async_block_till_done()
+    assert "latter" not in get_registered_panels(hass)
+    assert get_extra_js_urls(hass) == {icon_url}
 
-    assert await async_setup_entry(hass, entry) is True
-    assert hass._extra_js_urls == {icon_url}
-    assert hass._panels["latter"]["sidebar_icon"] == "latter:logo"
+    assert await hass.config_entries.async_setup(entry.entry_id) is True
+    await hass.async_block_till_done()
+    assert get_extra_js_urls(hass) == {icon_url}
+    assert _panel_attr(get_registered_panels(hass)["latter"], "sidebar_icon") == "latter:logo"
 
-    assert await async_unload_entry(hass, entry) is True
-    await async_remove_entry(hass, entry)
-    assert len(hass._extra_js_urls) == 0
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert len(get_extra_js_urls(hass)) == 0

@@ -5,39 +5,21 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import SupportsResponse
+from homeassistant.helpers import device_registry as dr
 import pytest
 
 from custom_components.latter.const import RPC_MUSIC_BROWSE
 from custom_components.latter.media import browse as ma_browse, lyrics as ma_lyrics
 from custom_components.latter.protocol_codec import FIELD_SEP, RECORD_SEP
 from custom_components.latter.services.rpc_slots import async_push_browse_slots
-
-
-class _FakeResponse:
-    def __init__(self, status: int, payload: Any) -> None:
-        self.status = status
-        self._payload = payload
-
-    async def __aenter__(self) -> _FakeResponse:
-        return self
-
-    async def __aexit__(self, *_exc: Any) -> None:
-        return None
-
-    async def json(self) -> Any:
-        return self._payload
-
-
-class _FakeHttpSession:
-    def __init__(self, responses: list[_FakeResponse]) -> None:
-        self._responses = list(responses)
-        self.calls: list[tuple[str, dict[str, Any]]] = []
-
-    def get(self, url: str, params: dict[str, Any] | None = None, **_kw: Any) -> _FakeResponse:
-        self.calls.append((url, dict(params or {})))
-        if self._responses:
-            return self._responses.pop(0)
-        return _FakeResponse(404, [])
+from tests.helpers import (
+    add_mock_entry,
+    mock_service,
+    register_device,
+    register_entity,
+)
 
 
 def _seed_music_assistant(
@@ -54,16 +36,16 @@ def _seed_music_assistant(
     ),
 ) -> tuple[Any, SimpleNamespace | None]:
     """Register a loaded Music Assistant config entry, linked entity, and optional `mass` runtime client."""
-    from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-    from homeassistant.helpers import device_registry as dr, entity_registry as er
-
-    ma_entry = ConfigEntry(
-        entry_id="entry_ma_test",
+    ma_entry = add_mock_entry(
+        hass,
         domain="music_assistant",
         title="Music Assistant",
+        entry_id="entry_ma_test",
         data={},
-        state=ConfigEntryState.LOADED,
     )
+    if hasattr(ma_entry, "mock_state"):
+        ma_entry.mock_state(hass, ConfigEntryState.LOADED)
+
     mass_client: SimpleNamespace | None = None
     if with_runtime_mass:
         q_list = list(queue_items or [])
@@ -92,7 +74,9 @@ def _seed_music_assistant(
         async def _add_item_to_favorites(item: Any) -> None:
             fav_add_calls.append(item)
 
-        async def _remove_item_from_favorites(media_type: Any, library_item_id: Any) -> None:
+        async def _remove_item_from_favorites(
+            media_type: Any, library_item_id: Any
+        ) -> None:
             fav_remove_calls.append((str(media_type), library_item_id))
 
         async def _get_item_by_uri(uri: str) -> dict[str, Any]:
@@ -110,7 +94,9 @@ def _seed_music_assistant(
             current_index=1,
             shuffle_enabled=False,
             repeat_mode=SimpleNamespace(value="off"),
-            current_item=(q_list[1] if len(q_list) > 1 else (q_list[0] if q_list else None)),
+            current_item=(
+                q_list[1] if len(q_list) > 1 else (q_list[0] if q_list else None)
+            ),
         )
         player_queues = SimpleNamespace(
             fetch_player_queue_items=_fetch_player_queue_items,
@@ -138,25 +124,23 @@ def _seed_music_assistant(
         )
         ma_entry.runtime_data = SimpleNamespace(mass=mass_client)
 
-    hass.config_entries.add_entry(ma_entry)
-
-    dev_reg = dr.async_get(hass)
-    ma_dev = dev_reg.async_get_or_create(
+    ma_dev = register_device(
+        hass,
         config_entry_id=ma_entry.entry_id,
+        entry_domain="music_assistant",
         connections={(dr.CONNECTION_NETWORK_MAC, mac)},
         identifiers={("music_assistant", queue_id)},
         name="Pocket Assistant MA",
+        manufacturer="Latter",
     )
-    ent_reg = er.async_get(hass)
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id=ma_entity,
-            platform="music_assistant",
-            device_id=ma_dev.id,
-            config_entry_id=ma_entry.entry_id,
-            unique_id=queue_id,
-            original_name="Pocket Assistant MA",
-        )
+    register_entity(
+        hass,
+        ma_entity,
+        platform="music_assistant",
+        device_id=ma_dev.id,
+        config_entry=ma_entry,
+        unique_id=queue_id,
+        original_name="Pocket Assistant MA",
     )
     hass.states.async_set(
         ma_entity,
@@ -204,17 +188,19 @@ def test_parse_lrc_lyrics_synced_multi_tag_and_plain_unwrapped() -> None:
     ]
 
     # Cap at 128 lines
-    many_lrc = "\n".join(f"[{i // 60:02d}:{i % 60:02d}.00]Line {i}" for i in range(160))
+    many_lrc = "\n".join(
+        f"[{i // 60:02d}:{i % 60:02d}.00]Line {i}" for i in range(160)
+    )
     synced_many, lines_many = ma_lyrics.parse_lrc_lyrics(many_lrc)
     assert synced_many is True
     assert len(lines_many) == 128
     assert lines_many[-1] == {"t_ms": 127000, "text": "Line 127"}
 
     # Plain lyrics: synced=False, t_ms=-1, NO width=32 hard wrapping!
-    long_line = (
-        "So I made a big mistake, try to see once my way — this line is well over thirty-two characters wide"
+    long_line = "So I made a big mistake, try to see once my way — this line is well over thirty-two characters wide"
+    plain_synced, plain_lines = ma_lyrics.parse_lrc_lyrics(
+        f"{long_line}\nSecond logical line"
     )
-    plain_synced, plain_lines = ma_lyrics.parse_lrc_lyrics(f"{long_line}\nSecond logical line")
     assert plain_synced is False
     assert plain_lines == [
         {"t_ms": -1, "text": long_line},
@@ -222,7 +208,10 @@ def test_parse_lrc_lyrics_synced_multi_tag_and_plain_unwrapped() -> None:
     ]
 
     # _extract_meta_strings prefers lrc_lyrics over plain lyrics
-    extracted_lyrics, extracted_bio = (vars(ma_lyrics).get('extract_meta_strings') or ma_lyrics._extract_meta_strings)(
+    extract_fn = (
+        vars(ma_lyrics).get("extract_meta_strings") or ma_lyrics._extract_meta_strings
+    )
+    extracted_lyrics, extracted_bio = extract_fn(
         {
             "metadata": {
                 "lyrics": "Plain lyrics without timestamps",
@@ -242,18 +231,20 @@ async def test_lyrics_fetch_local_ma_synced_preference_chunk_push_cache_and_unwr
     """`lyrics_fetch` resolves local MA synced LRC over plain lyrics (Zero-WAN), caches in LRU, and auto-pushes on track change."""
     ma_browse.clear_browse_cache()
     ma_lyrics.clear_lyrics_cache()
-    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+    entry, sys_obj, coord = await setup_latter_hub(hass)
     assert coord is not None
     _seed_music_assistant(hass)
 
     pushed_lyrics: list[dict[str, Any]] = []
     pushed_slots: list[dict[str, Any]] = []
-    hass.services.async_register(
+    mock_service(
+        hass,
         "esphome",
         f"{coord.device_slug}_latter_set_music_lyrics",
         lambda call: pushed_lyrics.append(dict(call.data)),
     )
-    hass.services.async_register(
+    mock_service(
+        hass,
         "esphome",
         f"{coord.device_slug}_latter_set_slots",
         lambda call: pushed_slots.append(dict(call.data)),
@@ -316,9 +307,15 @@ async def test_lyrics_fetch_local_ma_synced_preference_chunk_push_cache_and_unwr
             }
         return {"items": []}
 
-    hass.services.async_register("music_assistant", "get_library", _mock_get_library)
+    mock_service(
+        hass,
+        "music_assistant",
+        "get_library",
+        _mock_get_library,
+        supports_response=SupportsResponse.ONLY,
+    )
 
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MUSIC_BROWSE,
         {
@@ -346,7 +343,7 @@ async def test_lyrics_fetch_local_ma_synced_preference_chunk_push_cache_and_unwr
 
     # Second fetch hits the 64-entry LRU cache without calling get_library(track) again
     pushed_lyrics.clear()
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MUSIC_BROWSE,
         {
@@ -359,7 +356,7 @@ async def test_lyrics_fetch_local_ma_synced_preference_chunk_push_cache_and_unwr
     assert pushed_lyrics[0]["req_id"] == 8
     assert len(lib_track_calls) == 1  # Cached!
 
-    # Track change while _lyrics_watch_active is True auto-pushes new lyrics (req_id=0)
+    # Track change while lyrics_watch_active is True auto-pushes new lyrics (req_id=0)
     pushed_lyrics.clear()
     hass.states.async_set(
         "media_player.ma_pocket",
@@ -383,7 +380,7 @@ async def test_lyrics_fetch_local_ma_synced_preference_chunk_push_cache_and_unwr
 
     # Bio / track_info emits unwrapped logical metadata + full unwrapped paragraphs (>64 chars preserved!)
     pushed_slots.clear()
-    await _sys_obj.rpc_dispatcher.async_dispatch(
+    await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         RPC_MUSIC_BROWSE,
         {
@@ -395,30 +392,33 @@ async def test_lyrics_fetch_local_ma_synced_preference_chunk_push_cache_and_unwr
         },
     )
     assert len(pushed_slots) == 1
-    bio_rows = [r.split(FIELD_SEP)[0] for r in pushed_slots[0]["slots"].split(RECORD_SEP)]
+    bio_rows = [
+        r.split(FIELD_SEP)[0] for r in pushed_slots[0]["slots"].split(RECORD_SEP)
+    ]
     assert "Artist: Alice In Chains" in bio_rows
     assert "Album: Dirt" in bio_rows
     assert "Release: 1992" in bio_rows
-    assert long_album_bio in bio_rows  # Unwrapped (>130 chars, NOT truncated at 64 or wrapped at 32!)
+    assert long_album_bio in bio_rows
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_push_browse_slots_preserves_long_album_and_artist_names_up_to_120_chars(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """`async_push_browse_slots` preserves >64-char album/artist/queue names up to 120 chars (512 for bio/lyrics)."""
-    _entry, _sys_obj, coord = await setup_latter_hub(hass)
+    entry, _sys_obj, coord = await setup_latter_hub(hass)
     assert coord is not None
 
     pushed_slots: list[dict[str, Any]] = []
-    hass.services.async_register(
+    mock_service(
+        hass,
         "esphome",
         f"{coord.device_slug}_latter_set_slots",
         lambda call: pushed_slots.append(dict(call.data)),
     )
 
-    long_album_name = (
-        "Jar of Flies / Sap (30th Anniversary Remastered Super Deluxe Edition) — Alice In Chains (1994)"
-    )
+    long_album_name = "Jar of Flies / Sap (30th Anniversary Remastered Super Deluxe Edition) — Alice In Chains (1994)"
     assert 64 < len(long_album_name) <= 120
     exact_120_artist_name = (
         "King Gizzard & The Lizard Wizard with Mild High Club & The Melbourne Symphony Orchestra Live! [120]"
@@ -435,7 +435,11 @@ async def test_push_browse_slots_preserves_long_album_and_artist_names_up_to_120
         page_size=5,
         items=[
             {"name": long_album_name, "id": "library://album/301", "type": "album"},
-            {"name": exact_120_artist_name, "id": "library://artist/302", "type": "artist"},
+            {
+                "name": exact_120_artist_name,
+                "id": "library://artist/302",
+                "type": "artist",
+            },
             {"name": over_120_name, "id": "library://album/303", "type": "album"},
         ],
         req_id=55,
@@ -460,3 +464,5 @@ async def test_push_browse_slots_preserves_long_album_and_artist_names_up_to_120
     )
     assert len(pushed_slots) == 1
     assert pushed_slots[0]["slots"].split(RECORD_SEP)[0].split(FIELD_SEP)[0] == long_bio
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

@@ -71,32 +71,16 @@ _TRAILING_ROTATING_HEX4_RE = TRAILING_ROTATING_HEX4_RE
 
 
 def iter_devices(dev_reg: dr.DeviceRegistry) -> list[dr.DeviceEntry]:
-    """Return `DeviceEntry` objects across Home Assistant versions and test doubles."""
-    out: list[dr.DeviceEntry] = []
-    for item in dev_reg.devices:
-        if isinstance(item, str):
-            dev = dev_reg.async_get(item)
-            if dev is not None:
-                out.append(dev)
-        else:
-            out.append(item)
-    return out
+    """Return active `DeviceEntry` objects in the Home Assistant `DeviceRegistry`."""
+    return list(dev_reg.devices)
 
 
 _iter_devices = iter_devices
 
 
 def iter_entities(ent_reg: er.EntityRegistry) -> list[er.RegistryEntry]:
-    """Return `RegistryEntry` objects across Home Assistant versions and test doubles."""
-    out: list[er.RegistryEntry] = []
-    for item in ent_reg.entities:
-        if isinstance(item, str):
-            ent = ent_reg.async_get(item)
-            if ent is not None:
-                out.append(ent)
-        else:
-            out.append(item)
-    return out
+    """Return active `RegistryEntry` objects in the Home Assistant `EntityRegistry`."""
+    return list(ent_reg.entities.values())
 
 
 _iter_entities = iter_entities

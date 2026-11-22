@@ -186,7 +186,8 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
     def test_device_tracker_platform_is_registered(self) -> None:
         self.assertIn("device_tracker", [str(p) for p in targets.PLATFORMS])
         dt_src = (LATTER_DIR / "device_tracker.py").read_text(encoding="utf-8")
-        self.assertIn("from homeassistant.components.device_tracker import SourceType, TrackerEntity", dt_src)
+        self.assertIn("from homeassistant.components.device_tracker.const import SourceType", dt_src)
+        self.assertIn("from homeassistant.components.device_tracker.entity import TrackerEntity", dt_src)
         self.assertNotIn("device_tracker.config_entry", dt_src)
         self.assertIn("class LatterBleDeviceTracker(TrackerEntity):", dt_src)
         self.assertIn("SourceType.BLUETOOTH_LE", dt_src)

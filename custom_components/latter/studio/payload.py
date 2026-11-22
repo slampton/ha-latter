@@ -236,7 +236,8 @@ def _build_system_device_item(
         if (c_ip_st and c_ip_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""))
         else ""
     )
-    c_dev_entry = dev_reg.async_get(c_dev_id) if c_dev_id else None
+    got_dev = dev_reg.async_get(c_dev_id) if c_dev_id else None
+    c_dev_entry = got_dev if isinstance(got_dev, dr.DeviceEntry) else None
     raw_model = str((c_dev_entry.model if c_dev_entry else "") or "").strip()
     c_model_label = (
         describe_ble_target_model(hass, coord.ble_target_address)

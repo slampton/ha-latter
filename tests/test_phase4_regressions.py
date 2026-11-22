@@ -6,12 +6,10 @@ import json
 import threading
 from typing import Any
 
-from homeassistant.config_entries import ConfigSubentry
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import entity_registry as er
 import pytest
 
-from custom_components.latter import async_unload_entry
 from custom_components.latter.const import (
     CONF_AREA_FUSION_CONFIG,
     CONF_BROADCAST_SPEAKERS,
@@ -32,7 +30,6 @@ from custom_components.latter.const import (
     SERVICE_NOTIFY,
     SUBENTRY_DEVICE,
 )
-from custom_components.latter.coordinator import LatterCoordinator
 from custom_components.latter.doorbell import bind_coordinator_doorbell_listener
 from custom_components.latter.media_cache import (
     _ARTWORK_LRU_CACHE,
@@ -63,9 +60,15 @@ from custom_components.latter.protocol_policy import (
 from custom_components.latter.services.rpc_slots import (
     async_execute_intercom_broadcast as _async_execute_intercom_broadcast,
 )
+from tests.helpers import (
+    get_service_calls,
+    make_subentry,
+    mock_service,
+    register_device,
+    register_entity,
+)
 
 
-@pytest.mark.asyncio
 async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
     hass: Any, setup_latter_hub: Any
 ) -> None:
@@ -153,13 +156,15 @@ async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
     entry, sys_obj, coord = await setup_latter_hub(hass, stationary=1)
     hass.states.async_set("lock.front_door", "locked", {"friendly_name": "Front Door"})
     unlocked_calls: list[dict[str, Any]] = []
-    hass.services.async_register(
-        "lock", "unlock", lambda call: unlocked_calls.append(dict(call.data))
+    mock_service(
+        hass, "lock", "unlock", lambda call: unlocked_calls.append(dict(call.data))
     )
     hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_SECURITY_PIN_HASH] = hash_security_pin(
         "135790123456"
     )
-    coord.update_device_config({**coord.device_data, CONF_SECURITY_PIN_POLICY: "require_pin"})
+    coord.update_device_config(
+        {**coord.device_data, CONF_SECURITY_PIN_POLICY: "require_pin"}
+    )
 
     clock_val = 5000.0
     coord.pin_lockout._clock = lambda: clock_val
@@ -170,7 +175,11 @@ async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
         await sys_obj.rpc_dispatcher.async_dispatch(
             coord,
             RPC_AREA_ACTION,
-            {"entity_id": "lock.front_door", "action": "unlock", "code": "135790123456"},
+            {
+                "entity_id": "lock.front_door",
+                "action": "unlock",
+                "code": "135790123456",
+            },
         )
     assert exc_plain.value.translation_key == "security_pin_invalid"
 
@@ -188,19 +197,32 @@ async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
             await sys_obj.rpc_dispatcher.async_dispatch(
                 coord,
                 RPC_AREA_ACTION,
-                {"entity_id": "lock.front_door", "action": "unlock", "code": bad_wrapped},
+                {
+                    "entity_id": "lock.front_door",
+                    "action": "unlock",
+                    "code": bad_wrapped,
+                },
             )
         assert exc_bad.value.translation_key == "security_pin_invalid"
 
     # 5th failure triggers security_pin_locked_out
     bad_wrapped_5 = wrap_pin_code(
-        coord.pin_session_key_id, coord.pin_session_key_bytes, 4, "lock.front_door", "unlock", "1111"
+        coord.pin_session_key_id,
+        coord.pin_session_key_bytes,
+        4,
+        "lock.front_door",
+        "unlock",
+        "1111",
     )
     with pytest.raises(ServiceValidationError) as exc_lock5:
         await sys_obj.rpc_dispatcher.async_dispatch(
             coord,
             RPC_AREA_ACTION,
-            {"entity_id": "lock.front_door", "action": "unlock", "code": bad_wrapped_5},
+            {
+                "entity_id": "lock.front_door",
+                "action": "unlock",
+                "code": bad_wrapped_5,
+            },
         )
     assert exc_lock5.value.translation_key == "security_pin_locked_out"
 
@@ -247,10 +269,9 @@ async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
     )
     assert unlocked_calls == [{"entity_id": "lock.front_door"}]
     assert coord.pin_lockout.failure_count(coord.subentry_id) == 0
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
-@pytest.mark.asyncio
 async def test_m_p0_02_rpc_receiver_rebind_silent_seed_no_replay_and_hidden_outbox(
     hass: Any, setup_latter_hub: Any
 ) -> None:
@@ -264,17 +285,16 @@ async def test_m_p0_02_rpc_receiver_rebind_silent_seed_no_replay_and_hidden_outb
     assert reg_entry is not None
     assert reg_entry.hidden_by == er.RegistryEntryHider.INTEGRATION
 
-    light_calls: list[tuple[str, dict[str, Any]]] = []
-    for l_svc in ("turn_on", "turn_off", "toggle"):
-        hass.services.async_register(
-            "light", l_svc, lambda call, sv=l_svc: light_calls.append((sv, dict(call.data)))
-        )
-    hass.states.async_set("light.living_lamp", "off", {"friendly_name": "Living Lamp"})
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="light.living_lamp", platform="hue", area_id="living_room"
-        )
+    register_entity(
+        hass,
+        "light.living_lamp",
+        platform="hue",
+        config_entry_id="entry_hue_bridge",
+        area_id="living_room",
     )
+    hass.states.async_set("light.living_lamp", "off", {"friendly_name": "Living Lamp"})
+    calls = get_service_calls(hass)
+    calls.clear()
 
     # Simulate receiver stop + stale frame sitting in state machine across HA/ESPHome reconnect
     coord._rpc_receiver.stop()
@@ -293,21 +313,23 @@ async def test_m_p0_02_rpc_receiver_rebind_silent_seed_no_replay_and_hidden_outb
     coord._rpc_receiver.rebind()
     await hass.async_block_till_done()
     assert ent_reg.async_get(rpc_eid).hidden_by == er.RegistryEntryHider.INTEGRATION
-    assert light_calls == []
+    assert [c for c in calls if c.domain == "light"] == []
 
     # Re-emitting seq 17 on same boot_id is still ignored (already seeded in _completed)
     hass.states.async_set(rpc_eid, "")
     hass.states.async_set(rpc_eid, stale_frame)
     await hass.async_block_till_done()
-    assert light_calls == []
+    assert [c for c in calls if c.domain == "light"] == []
 
     # Emitting (b00742, seq=18) dispatches normally!
     next_frame = f"b00742:18:1/1|{env_json}"
     hass.states.async_set(rpc_eid, next_frame)
     await hass.async_block_till_done()
+    light_calls = [c for c in calls if c.domain == "light"]
     assert len(light_calls) == 1
-    assert light_calls[0][1] == {"entity_id": "light.living_lamp"}
-    assert await async_unload_entry(hass, entry) is True
+    assert light_calls[0].service == "toggle"
+    assert light_calls[0].data == {"entity_id": "light.living_lamp"}
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 def test_m_p0_03_multithreaded_lru_cache_and_mask_concurrency_stress() -> None:
@@ -327,7 +349,9 @@ def test_m_p0_03_multithreaded_lru_cache_and_mask_concurrency_stress() -> None:
                 if i % 7 == 0:
                     evict_wallpaper_lru_cache(f"upload:photo_{i % 48}.jpg")
                 if i % 19 == 0:
-                    _ = get_circular_mask_surfaces(64 + (tid % 3) * 16, 64 + (tid % 3) * 16)
+                    _ = get_circular_mask_surfaces(
+                        64 + (tid % 3) * 16, 64 + (tid % 3) * 16
+                    )
         except BaseException as exc:  # noqa: BLE001
             errors.append(exc)
 
@@ -340,7 +364,6 @@ def test_m_p0_03_multithreaded_lru_cache_and_mask_concurrency_stress() -> None:
     assert errors == []
 
 
-@pytest.mark.asyncio
 async def test_m_p0_04_and_m_p0_05_own_occupancy_exclusion_and_ble_and_sensor_fail_closed(
     hass: Any, setup_latter_hub: Any
 ) -> None:
@@ -352,15 +375,8 @@ async def test_m_p0_04_and_m_p0_05_own_occupancy_exclusion_and_ble_and_sensor_fa
     # 1. M-P0-04: binary_sensor.living_room_occupancy exists and is NEVER discovered or accepted as physical input
     own_occ_eid = "binary_sensor.living_room_occupancy"
     assert hass.states.get(own_occ_eid) is not None
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id=own_occ_eid,
-            platform=DOMAIN,
-            unique_id="latter_area_occupancy_living_room",
-            area_id="living_room",
-            original_device_class="occupancy",
-        )
-    )
+    assert ent_reg.async_get(own_occ_eid) is not None
+    ent_reg.async_update_entity(own_occ_eid, area_id="living_room")
 
     # Even if forced "on" in state machine and explicitly listed in fusion config, own sensor is ignored
     hass.states.async_set(
@@ -386,13 +402,13 @@ async def test_m_p0_04_and_m_p0_05_own_occupancy_exclusion_and_ble_and_sensor_fa
 
     # 2. M-P0-05: ble_and_sensor fails closed when configured physical sensor is unavailable or unknown
     mmwave_eid = "binary_sensor.living_room_mmwave"
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id=mmwave_eid,
-            platform="esphome",
-            area_id="living_room",
-            original_device_class="occupancy",
-        )
+    register_entity(
+        hass,
+        mmwave_eid,
+        platform="esphome",
+        config_entry_id="esp_entry_pocket_assistant",
+        area_id="living_room",
+        original_device_class="occupancy",
     )
     hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_AREA_FUSION_CONFIG] = {
         "living_room": {
@@ -406,7 +422,9 @@ async def test_m_p0_04_and_m_p0_05_own_occupancy_exclusion_and_ble_and_sensor_fa
 
     # Physical sensor ON + BLE present -> occupied
     hass.states.async_set(
-        mmwave_eid, "on", {"device_class": "occupancy", "friendly_name": "Living mmWave"}
+        mmwave_eid,
+        "on",
+        {"device_class": "occupancy", "friendly_name": "Living mmWave"},
     )
     fabric.notify_occupancy_listeners()
     res_on = evaluate_area_sensor_fusion(
@@ -436,17 +454,16 @@ async def test_m_p0_04_and_m_p0_05_own_occupancy_exclusion_and_ble_and_sensor_fa
         }
         assert summary_map["living_room"]["is_occupied"] is False
 
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
-@pytest.mark.asyncio
 async def test_m_p0_07_and_m_p1_22_broadcast_caller_exclusion_empty_pool_and_dnd_behavior(
     hass: Any, setup_latter_hub: Any, make_esphome_device: Any
 ) -> None:
     """Verify M-P0-07 caller_subentry_id & empty broadcast_speakers error, plus M-P1-22 DND suppression & silent doorbell."""
-    entry, sys_obj, coord_pocket = await setup_latter_hub(hass)
+    entry, _initial_sys, _initial_pocket = await setup_latter_hub(hass)
 
-    # Add a second display Device in Kitchen (`desk_panel`)
+    # Add a second display Device in Kitchen (`desk_panel`) via real ConfigSubentry + reload
     esp_desk, mac_desk = make_esphome_device(
         hass,
         slug="desk_panel",
@@ -455,8 +472,8 @@ async def test_m_p0_07_and_m_p1_22_broadcast_caller_exclusion_empty_pool_and_dnd
         area_id="kitchen",
         stationary=1,
     )
-    sub_desk = ConfigSubentry(
-        data={
+    sub_desk = make_subentry(
+        {
             CONF_ESPHOME_DEVICE_ID: esp_desk.id,
             "mac": mac_desk,
             CONF_DEVICE_SLUG: "desk_panel",
@@ -470,30 +487,30 @@ async def test_m_p0_07_and_m_p1_22_broadcast_caller_exclusion_empty_pool_and_dnd
         subentry_id="sub_desk",
     )
     hass.config_entries.async_add_subentry(entry, sub_desk)
-    coord_desk = LatterCoordinator(
-        hass=hass,
-        entry=entry,
-        hmac_secret=sys_obj.hmac_secret,
-        subentry=sub_desk,
-    )
-    sys_obj.coordinators["sub_desk"] = coord_desk
-    hass.data[DOMAIN]["sub_desk"] = coord_desk
-    await coord_desk.async_setup()
+    await hass.async_block_till_done()
+    if "sub_desk" not in entry.runtime_data.coordinators:
+        assert await hass.config_entries.async_reload(entry.entry_id) is True
+        await hass.async_block_till_done()
+    sys_obj = entry.runtime_data
+    coord_pocket = sys_obj.coordinators["sub_pocket"]
+    coord_desk = sys_obj.coordinators["sub_desk"]
 
     tts_calls: list[dict[str, Any]] = []
     hass.states.async_set("tts.piper", "unknown", {})
-    hass.services.async_register(
-        "tts", "speak", lambda call: tts_calls.append(dict(call.data))
+    mock_service(
+        hass, "tts", "speak", lambda call: tts_calls.append(dict(call.data))
     )
 
     pocket_notifies: list[dict[str, Any]] = []
     desk_notifies: list[dict[str, Any]] = []
-    hass.services.async_register(
+    mock_service(
+        hass,
         "esphome",
         "pocket_assistant_latter_show_notification",
         lambda call: pocket_notifies.append(dict(call.data)),
     )
-    hass.services.async_register(
+    mock_service(
+        hass,
         "esphome",
         "desk_panel_latter_show_notification",
         lambda call: desk_notifies.append(dict(call.data)),
@@ -539,7 +556,9 @@ async def test_m_p0_07_and_m_p1_22_broadcast_caller_exclusion_empty_pool_and_dnd
 
     # 2. M-P1-22: Enable Do Not Disturb on desk_panel -> suppresses normal/warning notify & intercom_broadcast,
     # critical notify breaks through, and doorbell ring dispatches silent visual popup (chime=False)!
-    coord_desk.update_device_config({**coord_desk.device_data, CONF_DO_NOT_DISTURB: True})
+    coord_desk.update_device_config(
+        {**coord_desk.device_data, CONF_DO_NOT_DISTURB: True}
+    )
     assert coord_desk.do_not_disturb is True
 
     pocket_notifies.clear()
@@ -591,30 +610,31 @@ async def test_m_p0_07_and_m_p1_22_broadcast_caller_exclusion_empty_pool_and_dnd
     assert desk_notifies[0]["priority"] == "critical"
 
     # Doorbell ring on configured camera: Desk (in DND) gets visual popup with chime=False; Pocket gets chime=True!
-    dev_reg = dr.async_get(hass)
-    ent_reg = er.async_get(hass)
-    door_dev = dev_reg.async_get_or_create(
-        config_entry_id=entry.entry_id,
-        identifiers={("reolink", "front_doorbell")},
+    door_dev = register_device(
+        hass,
+        config_entry_id="entry_doorbell_cam",
+        entry_domain="doorbell_cam",
+        identifiers={("doorbell_cam", "front_doorbell")},
         name="Front Doorbell",
+        manufacturer="Latter",
         area_id="living_room",
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="camera.front_doorbell",
-            platform="reolink",
-            device_id=door_dev.id,
-            area_id="living_room",
-        )
+    register_entity(
+        hass,
+        "camera.front_doorbell",
+        platform="doorbell_cam",
+        config_entry_id="entry_doorbell_cam",
+        device_id=door_dev.id,
+        area_id="living_room",
     )
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="binary_sensor.front_doorbell_visitor",
-            platform="reolink",
-            device_id=door_dev.id,
-            area_id="living_room",
-            original_name="Visitor",
-        )
+    register_entity(
+        hass,
+        "binary_sensor.front_doorbell_visitor",
+        platform="doorbell_cam",
+        config_entry_id="entry_doorbell_cam",
+        device_id=door_dev.id,
+        area_id="living_room",
+        original_name="Visitor",
     )
     hass.states.async_set(
         "camera.front_doorbell", "streaming", {"friendly_name": "Front Doorbell"}
@@ -643,4 +663,4 @@ async def test_m_p0_07_and_m_p1_22_broadcast_caller_exclusion_empty_pool_and_dnd
     assert desk_notifies[0]["camera_entity"] == "camera.front_doorbell"
     assert desk_notifies[0]["chime"] is False
 
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

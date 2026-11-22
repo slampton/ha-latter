@@ -23,7 +23,7 @@ from homeassistant.helpers import (
     entity_registry as er,
     selector,
 )
-import voluptuous as vol
+import probatio as vol
 
 from .config_defaults import (
     ble_tag_option_defaults,
@@ -435,7 +435,7 @@ def _migrate_replaced_hardware_registry(
     async_delete_device_issues(hass, subentry_id)
 
 
-class LatterConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
+class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the single System hub config flow and initial ESPHome device discovery for Latter."""
 
     VERSION = 2

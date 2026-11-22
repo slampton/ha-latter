@@ -15,12 +15,12 @@ You can also create the Latter System hub by hand (**Settings → Devices & Serv
 
 Latter communicates over Zero-Privilege RPC—you do **not** need *"Allow the device to perform Home Assistant actions"*. Instead, check:
 1. **The bound ESPHome device is online** in **Settings → Devices & Services → ESPHome**.
-2. **The diagnostic `System: RPC Outbox` entity is enabled** on the ESPHome device (`sensor.<node>_system_rpc_outbox`). Latter listens to that entity for every tap and browse request from the device.
+2. **The `System: RPC Outbox` entity is enabled** on the ESPHome device (`sensor.<node>_system_rpc_outbox`, enabled by default and auto-hidden from dashboards). Latter listens to that entity for every tap and browse request from the device.
 3. **Both `ha-latter` and `esphome-latter-core` are on `v3.0.0` or newer**, so `esphome.<node>_latter_push_v3` is registered under **Developer Tools → Actions**.
 
 **Studio shows "Device is offline or hibernating" and Quick actions are disabled**
 
-Battery handhelds and wearables enter deep-sleep hibernation after their **Battery hibernate timeout** to conserve power. While offline or hibernating, Studio disables live **Quick actions** (such as Find My Device or Restart Device), **but every setting you edit in Studio saves immediately in Home Assistant and pushes automatically the moment the Device wakes or reconnects**. To inspect the underlying Home Assistant device entry or raw ESPHome entities, click **Open in Home Assistant** or **Open in ESPHome** in the **Overview → Quick actions** or **Tools → Diagnostics** footer.
+Battery handhelds and wearables enter deep-sleep hibernation after their **Battery hibernate timeout** to conserve power. While offline or hibernating, Studio disables live **Quick actions** (such as Find My Device or Restart Device), **but every setting you edit in Studio saves immediately in Home Assistant and pushes automatically the moment the Device wakes or reconnects**. To inspect the underlying Home Assistant device entry or raw ESPHome entities, click **Open in Home Assistant** in the **Overview → Quick actions** or **Tools → Diagnostics** footer.
 
 **I renamed the device or replaced physical hardware**
 
@@ -43,7 +43,7 @@ Latter serves images from Home Assistant's numeric LAN IP, because ESP32 firmwar
 **A roaming device never changes areas**
 - **Proxies lack an Area.** Every Bluetooth proxy must be assigned to an Area in Home Assistant. Home Assistant raises a repair issue, **"No Area-assigned Bluetooth proxies found"**, when Latter can't map any scanner to an area.
 - **Bluetooth area tracking is off.** Check that **Track the Area with BLE Proxies** is enabled in **Studio → Devices → your device → Presence → Track the Area with BLE Proxies** (or via **Reconfigure or Replace Hardware** under **Settings → Devices & Services → Latter**).
-- **The device's beacon is paused on battery.** On battery boards, check **BLE Beacon Mode** under **Studio → Devices → your device → Presence** (*Handheld Only* pauses advertising when the screen turns off on battery; choose *Handheld + Screen Off* or *Always* to advertise while the screen is off, and check the diagnostic **BLE Radio Active** binary sensor on the ESPHome device).
+- **The device's beacon is paused on battery.** On battery boards, check **BLE Beacon Mode** under **Studio → Devices → your device → Presence** (*Handheld Only* pauses advertising when the screen turns off on battery; choose *Handheld + Screen Off* or *Always* to advertise while the screen is off, and check **BLE radio** inside **Studio → Devices → your device → Tools → Developer & telemetry**).
 - **Look at the live readings.** Open **Studio → System → BLE & Area Presence** and click **Live Stream On**. If an Area never shows a reading, its proxy isn't hearing the device.
 
 **The device keeps choosing the neighboring area**

@@ -6,7 +6,7 @@ import re
 from typing import Any, Final
 
 from homeassistant.core import HomeAssistant
-import voluptuous as vol
+import probatio as vol
 
 from ..const import (
     CONF_ACTIVITY_SOURCES,

@@ -88,7 +88,7 @@ export const BASE_STYLES = css`
 
     --studio-danger-tonal-bg: var(--ha-color-fill-danger-normal-resting, #fbe4e2);
     --studio-danger-tonal-text: var(--ha-color-on-danger-normal, #9e1c13);
-    --studio-danger-loud-bg: var(--ha-color-fill-danger-loud-resting, var(--error-color, #c62828));
+    --studio-danger-loud-bg: var(--ha-color-fill-danger-loud-resting, #c62828);
     --studio-danger-loud-text: var(--ha-color-on-danger-loud, #ffffff);
 
     /* Switch, status, shadows, & scroll masks */
@@ -164,6 +164,9 @@ export const BASE_STYLES = css`
     --studio-primary: var(--primary-color, #38bdf8);
     --studio-hover: rgba(var(--rgb-primary-text-color, 225, 225, 225), 0.06);
 
+    --studio-btn-accent-bg: var(--ha-color-fill-primary-loud-resting, #006a8e);
+    --studio-btn-accent-bg-hover: var(--ha-color-fill-primary-loud-hover, #007da3);
+    --studio-btn-accent-text: var(--ha-color-on-primary-loud, #ffffff);
     --studio-btn-tonal-bg: var(--ha-color-fill-primary-normal-resting, #0b3545);
     --studio-btn-tonal-bg-hover: var(--ha-color-fill-primary-normal-hover, #104559);
     --studio-btn-tonal-text: var(--ha-color-on-primary-normal, #7bd6f5);
@@ -181,7 +184,7 @@ export const BASE_STYLES = css`
 
     --studio-danger-tonal-bg: var(--ha-color-fill-danger-normal-resting, #3d1614);
     --studio-danger-tonal-text: var(--ha-color-on-danger-normal, #ff9b93);
-    --studio-danger-loud-bg: var(--ha-color-fill-danger-loud-resting, var(--error-color, #db4437));
+    --studio-danger-loud-bg: var(--ha-color-fill-danger-loud-resting, #c62828);
     --studio-danger-loud-text: var(--ha-color-on-danger-loud, #ffffff);
 
     --studio-switch-track: var(--ha-switch-background-color, var(--ha-color-fill-disabled-quiet-resting, #202020));
@@ -229,7 +232,8 @@ export const BASE_STYLES = css`
     color: var(--studio-chip-warning-text);
     z-index: 40;
   }
-  .offline-banner {
+  .offline-banner,
+  .alert.offline-banner {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;

@@ -2,36 +2,16 @@
 
 from __future__ import annotations
 
-import io
 from pathlib import Path
 from typing import Any
 
-from homeassistant.components import websocket_api
-from PIL import Image
-
-from custom_components.latter import async_unload_entry
 from custom_components.latter.const import (
     DAY_NIGHT_SKY_NATIVE_URL,
     DAY_NIGHT_SKY_PRESET_ID,
     STUDIO_REV,
 )
 from custom_components.latter.wallpapers.store import save_uploaded_photo_bytes
-
-
-def _make_jpeg_bytes() -> bytes:
-    buf = io.BytesIO()
-    Image.new("RGB", (64, 64), (80, 120, 200)).save(buf, format="JPEG", progressive=False)
-    return buf.getvalue()
-
-
-async def _call_ws(
-    hass: Any, conn: Any, msg_id: int, ws_type: str, **payload: Any
-) -> None:
-    handler = hass._ws_commands[ws_type]
-    schema = getattr(handler, "_ws_schema", None)
-    raw_msg = {"id": msg_id, "type": ws_type, **payload}
-    validated = schema(raw_msg) if schema is not None else raw_msg
-    await handler(hass, conn, validated)
+from tests.helpers import call_ws, ensure_area, make_jpeg_bytes, make_ws_connection
 
 
 async def test_studio_commands_photo_library_pools_and_media_import(
@@ -39,16 +19,16 @@ async def test_studio_commands_photo_library_pools_and_media_import(
 ) -> None:
     """Exercise Studio Photo Library collections, wallpaper/screensaver pools, and /media import."""
     entry, _sys_obj, coord = await setup_latter_hub(hass)
-    from homeassistant.helpers import area_registry as ar
-
-    ar.async_get(hass).areas["living_room"] = ar.AreaEntry("living_room", "Living Room")
-    conn = websocket_api.ActiveConnection()
+    ensure_area(hass, "Living Room", area_id="living_room")
+    conn = make_ws_connection(hass)
     msg_seq = 100
 
-    async def _sys_cmd(command: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def _sys_cmd(
+        command: str, payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         nonlocal msg_seq
         msg_seq += 1
-        await _call_ws(
+        await call_ws(
             hass,
             conn,
             msg_seq,
@@ -61,10 +41,12 @@ async def test_studio_commands_photo_library_pools_and_media_import(
         assert not conn.errors, f"{command} failed: {conn.errors}"
         return conn.results[-1][1]
 
-    async def _dev_cmd(command: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def _dev_cmd(
+        command: str, payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         nonlocal msg_seq
         msg_seq += 1
-        await _call_ws(
+        await call_ws(
             hass,
             conn,
             msg_seq,
@@ -85,7 +67,7 @@ async def test_studio_commands_photo_library_pools_and_media_import(
         ("system", "delete_wallpaper"),
     ):
         msg_seq += 1
-        await _call_ws(
+        await call_ws(
             hass,
             conn,
             msg_seq,
@@ -98,17 +80,23 @@ async def test_studio_commands_photo_library_pools_and_media_import(
         assert conn.errors[-1][1] == "unknown_command"
         conn.errors.clear()
 
-    # Photo Library Collections + Metadata + Bulk + Device Photo Pool (`STUDIO_REV = 39`)
+    # Photo Library Collections + Metadata + Bulk + Device Photo Pool (`STUDIO_REV = 44`)
     col_created = await _sys_cmd("create_photo_collection", {"name": "Family"})
     col_id = col_created["collection"]["id"]
-    assert any(c["id"] == col_id and c["name"] == "Family" for c in col_created["photo_collections"])
+    assert any(
+        c["id"] == col_id and c["name"] == "Family"
+        for c in col_created["photo_collections"]
+    )
     col_renamed = await _sys_cmd(
         "rename_photo_collection", {"collection_id": col_id, "name": "Favorites"}
     )
     assert col_renamed["collection"]["name"] == "Favorites"
 
-    dev_photo_rec = save_uploaded_photo_bytes(
-        hass, "dev_bg.jpg", _make_jpeg_bytes(), collection_id=col_id
+    sample_jpg = make_jpeg_bytes(64, 64, (80, 120, 200))
+    dev_photo_rec = await hass.async_add_executor_job(
+        lambda: save_uploaded_photo_bytes(
+            hass, "dev_bg.jpg", sample_jpg, collection_id=col_id
+        )
     )
     dev_wp_id = dev_photo_rec["id"]
     assert dev_wp_id.startswith("photo:")
@@ -177,11 +165,14 @@ async def test_studio_commands_photo_library_pools_and_media_import(
     assert ss_pool_state["live"]["screensaver_pool_count"] == 2
     _, area_attrs_ss = coord.get_area_context_payload()
     assert "mode=screensaver" in area_attrs_ss["screensaver_photo_url"]
-    assert area_attrs_ss["payload"].split("\x1f")[41] == area_attrs_ss["screensaver_photo_url"]
+    assert (
+        area_attrs_ss["payload"].split("\x1f")[41]
+        == area_attrs_ss["screensaver_photo_url"]
+    )
 
     # Dynamic preset rejected on screensaver pool
     msg_seq += 1
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         msg_seq,
@@ -200,7 +191,7 @@ async def test_studio_commands_photo_library_pools_and_media_import(
 
     # `delete_photo` is canonical on System scope; calling it on Device scope fails with `wrong_scope`
     msg_seq += 1
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         msg_seq,
@@ -235,7 +226,10 @@ async def test_studio_commands_photo_library_pools_and_media_import(
 
     await _sys_cmd(
         "bulk_update_photos",
-        {"photo_ids": ["preset:forest_mountains", "preset:wheat_field"], "add_collection": col_id},
+        {
+            "photo_ids": ["preset:forest_mountains", "preset:wheat_field"],
+            "add_collection": col_id,
+        },
     )
     await _dev_cmd(
         "set_device_photo_pool",
@@ -257,13 +251,17 @@ async def test_studio_commands_photo_library_pools_and_media_import(
     assert coord.wallpaper_source == ""
 
     # HA `/media` browse & import WS commands
-    media_dir = Path(hass.config.config_dir) / "ws_media"
-    (media_dir / "trip").mkdir(parents=True, exist_ok=True)
-    (media_dir / "trip" / "a.jpg").write_bytes(_make_jpeg_bytes())
+    def _seed_media_file() -> Path:
+        m_dir = Path(hass.config.config_dir) / "ws_media"
+        (m_dir / "trip").mkdir(parents=True, exist_ok=True)
+        (m_dir / "trip" / "a.jpg").write_bytes(sample_jpg)
+        return m_dir
+
+    media_dir = await hass.async_add_executor_job(_seed_media_file)
     hass.config.media_dirs = {"local": str(media_dir)}
 
     msg_seq += 1
-    await _call_ws(
+    await call_ws(
         hass,
         conn,
         msg_seq,
@@ -276,7 +274,9 @@ async def test_studio_commands_photo_library_pools_and_media_import(
     browse_res = conn.results[-1][1]
     assert browse_res["root"] == "local"
     assert len(browse_res["images"]) == 1
-    assert browse_res["images"][0]["thumb_url"].startswith("/api/latter/wallpaper/system?")
+    assert browse_res["images"][0]["thumb_url"].startswith(
+        "/api/latter/wallpaper/system?"
+    )
 
     import_res = await _sys_cmd(
         "import_media_photos",
@@ -310,5 +310,4 @@ async def test_studio_commands_photo_library_pools_and_media_import(
     assert coord._unsub_wallpaper_timer is None
     assert final_off["config"]["wallpaper_cycle_minutes"] == 0
 
-
-    assert await async_unload_entry(hass, entry) is True
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

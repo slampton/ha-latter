@@ -54,7 +54,7 @@ def sync_esphome_device_area(
     record: dict[str, Any] | None = None
 
     esp_mac: str | None = None
-    if dev is not None:
+    if isinstance(dev, dr.DeviceEntry):
         for ctype, cval in dev.connections:
             if ctype == dr.CONNECTION_NETWORK_MAC and cval:
                 esp_mac = dr.format_mac(str(cval))

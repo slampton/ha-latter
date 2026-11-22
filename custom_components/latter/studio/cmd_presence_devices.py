@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import timedelta
 import logging
 import math
@@ -298,15 +298,15 @@ def _collect_illuminance_targets(
 
 async def _async_fetch_illuminance_stats(
     hass: HomeAssistant, statistic_ids: list[str]
-) -> dict[str, list[Mapping[str, Any]]]:
+) -> Mapping[str, Sequence[Mapping[str, Any]]]:
     try:
-        from homeassistant.components.recorder import get_instance
         from homeassistant.components.recorder.statistics import statistics_during_period
+        from homeassistant.helpers.recorder import get_instance
 
         end_dt = dt_util.utcnow()
         start_dt = end_dt - timedelta(days=_RECORDER_CALIBRATION_DAYS)
         rec = get_instance(hass)
-        res: dict[str, list[Mapping[str, Any]]] = await rec.async_add_executor_job(
+        return await rec.async_add_executor_job(
             statistics_during_period,
             hass,
             start_dt,
@@ -316,7 +316,6 @@ async def _async_fetch_illuminance_stats(
             None,
             {"min", "mean"},
         )
-        return res
     except Exception as err:
         _LOGGER.debug("Recorder statistics unavailable for illuminance calibration: %s", err)
         raise StudioCommandError(

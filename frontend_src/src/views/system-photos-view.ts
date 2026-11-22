@@ -436,7 +436,17 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
                     }
                   };
 
-                  return html`<div
+                    const badgeLabel = isDynamic
+                      ? store.t("photos.badge_dynamic")
+                      : !isUploaded
+                        ? store.t("photos.badge_default")
+                        : photo.source_kind === "media_import"
+                          ? store.t("photos.badge_media")
+                          : "";
+                    const tileBaseAria = store.photosSelectMode
+                      ? store.t("photos.select_photo_aria", { name: photo.name || photo.id })
+                      : store.t("photos.edit_photo_aria", { name: photo.name || photo.id });
+                    return html`<div
                     data-photo-id=${photo.id}
                     class="photo-tile ${isSelected ? "selected" : ""}"
                   >
@@ -453,9 +463,7 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
                       : nothing}
                     <button
                       type="button"
-                      aria-label=${store.photosSelectMode
-                        ? store.t("photos.select_photo_aria", { name: photo.name || photo.id })
-                        : store.t("photos.edit_photo_aria", { name: photo.name || photo.id })}
+                      aria-label=${badgeLabel ? `${tileBaseAria}, ${badgeLabel}` : tileBaseAria}
                       @click=${onTileClick}
                       class="photo-tile-thumb-btn"
                     >
@@ -467,19 +475,9 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
                             class="photo-tile-img"
                           />`
                         : nothing}
-                      ${isDynamic
-                        ? html`<span class="photo-tile-badge">
-                            ${store.t("photos.badge_dynamic")}
-                          </span>`
-                        : !isUploaded
-                          ? html`<span class="photo-tile-badge">
-                              ${store.t("photos.badge_default")}
-                            </span>`
-                          : photo.source_kind === "media_import"
-                            ? html`<span class="photo-tile-badge">
-                                ${store.t("photos.badge_media")}
-                              </span>`
-                            : nothing}
+                      ${badgeLabel
+                        ? html`<span class="photo-tile-badge">${badgeLabel}</span>`
+                        : nothing}
                     </button>
                     <div class="photo-tile-meta">
                       <span class="photo-tile-name">${photo.name || photo.id}</span>

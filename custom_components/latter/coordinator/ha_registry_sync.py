@@ -44,7 +44,7 @@ def match_coordinator_target_generic[CoordT: CoordinatorAreaFollowMixin](
             or (coord.esphome_device_id and coord.esphome_device_id == raw)
         ):
             return coord
-        if target_dev is not None:
+        if isinstance(target_dev, dr.DeviceEntry):
             mac = coord.device_mac
             if (DOMAIN, coord.subentry_id) in target_dev.identifiers or (
                 mac and (DOMAIN, dr.format_mac(mac)) in target_dev.identifiers

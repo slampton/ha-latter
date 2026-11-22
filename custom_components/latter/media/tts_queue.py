@@ -123,7 +123,7 @@ async def _async_query_ma_queue_for_resume(
         and (ma_st is None or ma_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN))
     )
     pos = last_media_position
-    if not ma_usable or not hass.services.has_service("music_assistant", "get_queue"):
+    if not ma_entity or not ma_usable or not hass.services.has_service("music_assistant", "get_queue"):
         return [], "", "", "", pos
 
     try:

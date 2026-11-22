@@ -4,22 +4,29 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry, ConfigSubentry
+from homeassistant.config_entries import (
+    SOURCE_INTEGRATION_DISCOVERY,
+    SOURCE_RECONFIGURE,
+    SOURCE_USER,
+)
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr
 
 from custom_components.latter.config_defaults import ble_tag_option_defaults
 from custom_components.latter.config_flow import (
-    LatterBleTagSubentryFlow,
     LatterConfigFlow,
-    LatterDeviceSubentryFlow,
+    _apply_onboarding_profile_and_defaults,
 )
 from custom_components.latter.const import (
     CONF_ASSIGNED_PERSON,
+    CONF_BLE_AUTO_SWITCH,
     CONF_BLE_TARGET_ADDRESS,
+    CONF_DEFAULT_AREA,
     CONF_DEVICE_GROUP,
     CONF_DEVICE_SLUG,
     CONF_ESPHOME_DEVICE_ID,
     CONF_NATIVE_BLE_TRACKING,
+    CONF_SYNC_DEVICE_AREA,
     DOMAIN,
     SUBENTRY_BLE_TAG,
     SUBENTRY_DEVICE,
@@ -28,118 +35,125 @@ from custom_components.latter.groups.device_groups import (
     detect_hardware_defaults as _detect_hardware_defaults,
     device_option_defaults,
 )
+from tests.helpers.ha_setup import (
+    add_mock_entry,
+    make_subentry,
+    prepare_latter_dependencies,
+    register_device,
+)
 
 
 async def test_zero_display_standalone_hub_onboarding(hass: Any) -> None:
     """Verify D-060 0-display standalone hub creation (`async_step_user({})` -> `subentries=[]`) and retired hub OptionsFlow/Reconfigure."""
+    await prepare_latter_dependencies(hass)
     hass.states.async_set("weather.home", "sunny", {})
     hass.states.async_set("alarm_control_panel.home_alarm", "armed_home", {})
 
-    flow = LatterConfigFlow()
-    flow.hass = hass
-    form = await flow.async_step_user()
-    assert form["type"] == "form"
+    form = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    assert form["type"] == FlowResultType.FORM
     assert form["step_id"] == "user"
 
-    hub_only = await flow.async_step_user({})
-    assert hub_only["type"] == "create_entry"
+    hub_only = await hass.config_entries.flow.async_configure(form["flow_id"], {})
+    await hass.async_block_till_done()
+    assert hub_only["type"] == FlowResultType.CREATE_ENTRY
     assert hub_only["title"] == "Latter"
     assert hub_only["data"] == {}
-    assert hub_only["subentries"] == []
+    entry = hub_only["result"]
+    assert list(entry.subentries) == []
 
     # D-060: Duplicate 2-field OptionsFlow & hub Reconfigure are retired in favor of `config_panel_domain=DOMAIN`
     assert not hasattr(LatterConfigFlow, "async_step_reconfigure")
     assert "async_get_options_flow" not in LatterConfigFlow.__dict__
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_hub_config_flow_user_discovery_and_single_instance(
     hass: Any, make_esphome_device: Any
 ) -> None:
     """Test initial hub onboarding, non-Latter rejection, discovery, and single-instance enforcement."""
+    await prepare_latter_dependencies(hass)
     hass.states.async_set("weather.home", "sunny", {})
     hass.states.async_set("alarm_control_panel.home_alarm", "armed_home", {})
 
     dev, mac = make_esphome_device(hass, slug="wall_panel", mac="aa:bb:cc:00:11:22", stationary=1)
-    # Also create a plain non-Latter ESPHome device (no manifest or contract services)
-    esp_plain = hass.config_entries.add_entry(
-        ConfigEntry(entry_id="esp_plain", domain="esphome", title="Plain Plug")
-    )
-    plain_dev = dr.async_get(hass).async_get_or_create(
+    # Plain non-Latter ESPHome device (no manifest or contract services)
+    esp_plain = add_mock_entry(hass, entry_id="esp_plain", domain="esphome", title="Plain Plug")
+    plain_dev = register_device(
+        hass,
         config_entry_id=esp_plain.entry_id,
         identifiers={("esphome", "plain_1")},
         name="Plain Plug",
     )
 
     # Discovery flow shows user form pre-populated with discovered device
-    disc_flow = LatterConfigFlow()
-    disc_flow.hass = hass
-    disc_res = await disc_flow.async_step_integration_discovery({CONF_ESPHOME_DEVICE_ID: dev.id})
-    assert disc_res["type"] == "form"
+    disc_res = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_INTEGRATION_DISCOVERY},
+        data={CONF_ESPHOME_DEVICE_ID: dev.id},
+    )
+    assert disc_res["type"] == FlowResultType.FORM
     assert disc_res["step_id"] == "user"
 
     # Invalid discovery device aborts cleanly
-    bad_disc = LatterConfigFlow()
-    bad_disc.hass = hass
-    assert (await bad_disc.async_step_integration_discovery({CONF_ESPHOME_DEVICE_ID: "missing"}))["reason"] == "not_supported"
+    bad_disc = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_INTEGRATION_DISCOVERY},
+        data={CONF_ESPHOME_DEVICE_ID: "missing"},
+    )
+    assert bad_disc["type"] == FlowResultType.ABORT
+    assert bad_disc["reason"] == "not_supported"
 
     # User flow rejects non-Latter ESPHome device
-    flow = LatterConfigFlow()
-    flow.hass = hass
-    form = await flow.async_step_user()
-    assert form["type"] == "form"
+    form = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    assert form["type"] == FlowResultType.FORM
 
-    bad = await flow.async_step_user(
+    bad = await hass.config_entries.flow.async_configure(
+        form["flow_id"],
         {
             CONF_ESPHOME_DEVICE_ID: plain_dev.id,
             CONF_DEVICE_GROUP: "auto",
             CONF_NATIVE_BLE_TRACKING: False,
-        }
+        },
     )
+    assert bad["type"] == FlowResultType.FORM
     assert bad["errors"][CONF_ESPHOME_DEVICE_ID] == "not_latter_device"
 
-    # Valid submission creates Latter hub + first device subentry
-    ok = await flow.async_step_user(
+    # Valid submission creates Latter hub + first device subentry and aborts competing discovery flow
+    ok = await hass.config_entries.flow.async_configure(
+        bad["flow_id"],
         {
             CONF_ESPHOME_DEVICE_ID: dev.id,
             CONF_DEVICE_GROUP: "auto",
             CONF_NATIVE_BLE_TRACKING: False,
-        }
+        },
     )
-    assert ok["type"] == "create_entry"
+    await hass.async_block_till_done()
+    assert ok["type"] == FlowResultType.CREATE_ENTRY
     assert ok["title"] == "Latter"
-    assert len(ok["subentries"]) == 1
-    assert ok["subentries"][0]["data"][CONF_ESPHOME_DEVICE_ID] == dev.id
-    assert ok["subentries"][0]["data"]["mac"] == mac
-    assert ok["subentries"][0]["data"][CONF_DEVICE_GROUP] == "wall_panels"
+    entry = ok["result"]
+    subs = list(entry.subentries.values())
+    assert len(subs) == 1
+    assert subs[0].data[CONF_ESPHOME_DEVICE_ID] == dev.id
+    assert subs[0].data["mac"] == mac
+    assert subs[0].data[CONF_DEVICE_GROUP] == "wall_panels"
 
     # Once hub entry exists, second user flow and discovery flow abort
-    entry = hass.config_entries.add_entry(
-        ConfigEntry(
-            entry_id="entry_latter_hub",
-            domain=DOMAIN,
-            title="Latter",
-            unique_id=DOMAIN,
-            subentries_data=[
-                ConfigSubentry(
-                    data=ok["subentries"][0]["data"],
-                    subentry_type=SUBENTRY_DEVICE,
-                    title="Wall Panel",
-                    unique_id=ok["subentries"][0]["unique_id"],
-                    subentry_id="sub_wall",
-                )
-            ],
-        )
+    second = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    assert second["type"] == FlowResultType.ABORT
+    assert second["reason"] == "single_instance_allowed"
+
+    second_disc = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_INTEGRATION_DISCOVERY},
+        data={CONF_ESPHOME_DEVICE_ID: dev.id},
     )
-    second = LatterConfigFlow()
-    second.hass = hass
-    assert (await second.async_step_user())["reason"] == "single_instance_allowed"
-    assert (
-        await second.async_step_integration_discovery({CONF_ESPHOME_DEVICE_ID: dev.id})
-    )["reason"] == "already_configured"
+    assert second_disc["type"] == FlowResultType.ABORT
+    assert second_disc["reason"] == "single_instance_allowed"
     assert set(LatterConfigFlow.async_get_supported_subentry_types(entry)) == {
         SUBENTRY_DEVICE,
         SUBENTRY_BLE_TAG,
     }
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_device_and_ble_tag_subentry_flows_and_hardware_replacement(
@@ -148,7 +162,9 @@ async def test_device_and_ble_tag_subentry_flows_and_hardware_replacement(
     """Exercise adding a second display, duplicate prevention, in-place hardware MAC swap, and BLE tag flows."""
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     dev_reg = dr.async_get(hass)
-    # Ensure Latter device exists in registry with old MAC identifier
+    hass.states.async_set("person.alex", "home", {"friendly_name": "Alex"})
+    hass.states.async_set("person.sam", "home", {"friendly_name": "Sam"})
+
     latter_dev = dev_reg.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers=coord.get_device_info()["identifiers"],
@@ -159,143 +175,170 @@ async def test_device_and_ble_tag_subentry_flows_and_hardware_replacement(
         hass, slug="watch_assistant", mac="aa:bb:cc:dd:ee:02", name="Watch Assistant", wearable=1
     )
 
-    # Add second device via LatterDeviceSubentryFlow
-    sub_flow = LatterDeviceSubentryFlow()
-    sub_flow.hass = hass
-    sub_flow._entry = entry
-    assert (await sub_flow.async_step_user())["type"] == "form"
-
     # Reject already-bound first device
-    dup = await sub_flow.async_step_user(
+    dup_form = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_DEVICE), context={"source": SOURCE_USER}
+    )
+    assert dup_form["type"] == FlowResultType.FORM
+    dup = await hass.config_entries.subentries.async_configure(
+        dup_form["flow_id"],
         {
             CONF_ESPHOME_DEVICE_ID: coord.esphome_device_id,
             CONF_DEVICE_GROUP: "auto",
             CONF_NATIVE_BLE_TRACKING: True,
-        }
+        },
     )
+    assert dup["type"] == FlowResultType.ABORT
     assert dup["reason"] == "already_configured"
 
     # Onboard second wearable device
-    created = await sub_flow.async_step_user(
+    add_form = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_DEVICE), context={"source": SOURCE_USER}
+    )
+    created = await hass.config_entries.subentries.async_configure(
+        add_form["flow_id"],
         {
             CONF_ESPHOME_DEVICE_ID: dev2.id,
             CONF_DEVICE_GROUP: "auto",
             CONF_NATIVE_BLE_TRACKING: True,
-        }
+        },
     )
-    assert created["type"] == "create_entry"
+    await hass.async_block_till_done()
+    assert created["type"] == FlowResultType.CREATE_ENTRY
     assert created["data"][CONF_DEVICE_GROUP] == "wearables"
 
     # Reconfigure sub_pocket with replacement hardware dev3 -> migrates Latter DeviceEntry MAC identifier in-place
     dev3, mac3 = make_esphome_device(
         hass, slug="pocket_v2", mac="aa:bb:cc:dd:ee:03", name="Pocket Assistant V2"
     )
-    reconf_sub = LatterDeviceSubentryFlow()
-    reconf_sub.hass = hass
-    reconf_sub._entry = entry
-    reconf_sub._subentry = entry.subentries["sub_pocket"]
-    assert (await reconf_sub.async_step_reconfigure())["type"] == "form"
-    replaced = await reconf_sub.async_step_reconfigure(
+    reconf_form = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_DEVICE),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": "sub_pocket"},
+    )
+    assert reconf_form["type"] == FlowResultType.FORM
+    replaced = await hass.config_entries.subentries.async_configure(
+        reconf_form["flow_id"],
         {
             CONF_ESPHOME_DEVICE_ID: dev3.id,
             CONF_DEVICE_GROUP: "handhelds",
             CONF_NATIVE_BLE_TRACKING: True,
-        }
+        },
     )
+    await hass.async_block_till_done()
+    assert replaced["type"] == FlowResultType.ABORT
     assert replaced["reason"] == "reconfigure_successful"
-    assert (DOMAIN, dr.format_mac(mac3)) in latter_dev.identifiers
+    updated_latter_dev = dev_reg.async_get(latter_dev.id)
+    assert updated_latter_dev is not None
+    assert (DOMAIN, dr.format_mac(mac3)) in updated_latter_dev.identifiers
     assert entry.subentries["sub_pocket"].data[CONF_ESPHOME_DEVICE_ID] == dev3.id
 
     # BLE Tag Subentry Flow: validation + creation + duplicate guard
-    tag_flow = LatterBleTagSubentryFlow()
-    tag_flow.hass = hass
-    tag_flow._entry = entry
-    assert (await tag_flow.async_step_user())["type"] == "form"
-    inc = await tag_flow.async_step_user({"name": "Keys", CONF_BLE_TARGET_ADDRESS: ""})
+    tag_form = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_BLE_TAG), context={"source": SOURCE_USER}
+    )
+    assert tag_form["type"] == FlowResultType.FORM
+    inc = await hass.config_entries.subentries.async_configure(
+        tag_form["flow_id"], {"name": "Keys", CONF_BLE_TARGET_ADDRESS: ""}
+    )
+    assert inc["type"] == FlowResultType.FORM
     assert inc["errors"]["base"] == "ble_tag_incomplete"
 
-    tag_ok = await tag_flow.async_step_user(
-        {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: "AA:11:22:33:44:55", "assigned_person": "person.sam"}
+    tag_ok = await hass.config_entries.subentries.async_configure(
+        inc["flow_id"],
+        {
+            "name": "Backpack Tag",
+            CONF_BLE_TARGET_ADDRESS: "AA:11:22:33:44:55",
+            CONF_ASSIGNED_PERSON: "person.sam",
+        },
     )
-    assert tag_ok["type"] == "create_entry"
-    hass.config_entries.async_add_subentry(
-        entry,
-        ConfigSubentry(
-            data=tag_ok["data"],
-            subentry_type=SUBENTRY_BLE_TAG,
-            title=tag_ok["title"],
-            unique_id=tag_ok["unique_id"],
-            subentry_id="sub_backpack",
-        ),
+    await hass.async_block_till_done()
+    assert tag_ok["type"] == FlowResultType.CREATE_ENTRY
+    backpack_sub = next(
+        sub for sub in entry.subentries.values() if sub.title == "Backpack Tag"
     )
-    dup_tag = await tag_flow.async_step_user(
-        {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: "AA:11:22:33:44:55"}
+
+    dup_tag_form = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_BLE_TAG), context={"source": SOURCE_USER}
     )
+    dup_tag = await hass.config_entries.subentries.async_configure(
+        dup_tag_form["flow_id"],
+        {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: "AA:11:22:33:44:55"},
+    )
+    assert dup_tag["type"] == FlowResultType.ABORT
     assert dup_tag["reason"] == "already_configured"
 
     # Add second BLE tag so duplicate check during BLE tag reconfigure can be verified
     hass.config_entries.async_add_subentry(
         entry,
-        ConfigSubentry(
-            data=ble_tag_option_defaults("Keys Tag", "BB:22:33:44:55:66"),
+        make_subentry(
+            ble_tag_option_defaults("Keys Tag", "BB:22:33:44:55:66"),
             subentry_type=SUBENTRY_BLE_TAG,
             title="Keys Tag",
             unique_id="latter_ble_keys_tag",
             subentry_id="sub_keys",
         ),
     )
+    await hass.async_block_till_done()
 
     # BLE Tag Subentry Reconfigure (`D-060`): preserves `device_slug` while updating title, target address & person
-    reconf_tag = LatterBleTagSubentryFlow()
-    reconf_tag.hass = hass
-    reconf_tag._entry = entry
-    reconf_tag._subentry = entry.subentries["sub_backpack"]
-    reconf_tag_form = await reconf_tag.async_step_reconfigure()
-    assert reconf_tag_form["type"] == "form"
+    reconf_tag_form = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_BLE_TAG),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": backpack_sub.subentry_id},
+    )
+    assert reconf_tag_form["type"] == FlowResultType.FORM
     assert reconf_tag_form["step_id"] == "reconfigure"
 
-    inc_reconf = await reconf_tag.async_step_reconfigure(
-        {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: ""}
+    inc_reconf = await hass.config_entries.subentries.async_configure(
+        reconf_tag_form["flow_id"],
+        {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: ""},
     )
+    assert inc_reconf["type"] == FlowResultType.FORM
     assert inc_reconf["errors"]["base"] == "ble_tag_incomplete"
 
-    dup_reconf = await reconf_tag.async_step_reconfigure(
-        {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: "BB:22:33:44:55:66"}
+    dup_reconf = await hass.config_entries.subentries.async_configure(
+        inc_reconf["flow_id"],
+        {"name": "Backpack Tag", CONF_BLE_TARGET_ADDRESS: "BB:22:33:44:55:66"},
     )
+    assert dup_reconf["type"] == FlowResultType.ABORT
     assert dup_reconf["reason"] == "already_configured"
 
-    ok_reconf = await reconf_tag.async_step_reconfigure(
+    reconf_tag_form2 = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_BLE_TAG),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": backpack_sub.subentry_id},
+    )
+    ok_reconf = await hass.config_entries.subentries.async_configure(
+        reconf_tag_form2["flow_id"],
         {
             "name": "Travel Backpack",
             CONF_BLE_TARGET_ADDRESS: "CC:33:44:55:66:77",
             CONF_ASSIGNED_PERSON: "person.alex",
-        }
+        },
     )
+    await hass.async_block_till_done()
+    assert ok_reconf["type"] == FlowResultType.ABORT
     assert ok_reconf["reason"] == "reconfigure_successful"
-    updated_tag_sub = entry.subentries["sub_backpack"]
+    updated_tag_sub = entry.subentries[backpack_sub.subentry_id]
     assert updated_tag_sub.title == "Travel Backpack"
     assert updated_tag_sub.data[CONF_DEVICE_SLUG] == "backpack_tag"
     assert updated_tag_sub.data[CONF_BLE_TARGET_ADDRESS] == "CC:33:44:55:66:77"
     assert updated_tag_sub.data[CONF_ASSIGNED_PERSON] == "person.alex"
 
     # Pure option default helpers
-    assert device_option_defaults(hass, dev2, {"w": 466, "h": 466, "wearable": 1})[CONF_DEVICE_GROUP] == "wearables"
-    assert ble_tag_option_defaults("Wallet", "11:22:33:44:55:99")[CONF_BLE_TARGET_ADDRESS] == "11:22:33:44:55:99"
+    assert (
+        device_option_defaults(hass, dev2, {"w": 466, "h": 466, "wearable": 1})[CONF_DEVICE_GROUP]
+        == "wearables"
+    )
+    assert (
+        ble_tag_option_defaults("Wallet", "11:22:33:44:55:99")[CONF_BLE_TARGET_ADDRESS]
+        == "11:22:33:44:55:99"
+    )
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
 async def test_onboarding_smart_area_and_roaming_defaults(
     hass: Any, make_esphome_device: Any
 ) -> None:
     """Verify D-032 trait + Area onboarding smart defaults and explicit user overrides."""
-    from custom_components.latter.config_flow import (
-        _apply_onboarding_profile_and_defaults,
-    )
-    from custom_components.latter.const import (
-        CONF_BLE_AUTO_SWITCH,
-        CONF_DEFAULT_AREA,
-        CONF_SYNC_DEVICE_AREA,
-    )
-
     # 1) Stationary device WITH an assigned ESPHome Area -> defaults to Static pinned to that Area
     desk_assigned, _ = make_esphome_device(
         hass,

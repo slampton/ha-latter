@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
-from homeassistant.components import websocket_api
-from homeassistant.helpers import area_registry as ar, entity_registry as er
+from homeassistant.util import dt as dt_util
 import pytest
 
 from custom_components.latter.areas.registry import (
@@ -28,20 +28,8 @@ from custom_components.latter.studio.settings_cleaners import (
     SettingsScopeError,
     clean_area_illuminance,
 )
-
-
-async def _call_ws(
-    hass: Any,
-    conn: websocket_api.ActiveConnection,
-    msg_id: int,
-    msg_type: str,
-    **kwargs: Any,
-) -> None:
-    handler = hass._ws_commands[msg_type]
-    schema = getattr(handler, "_ws_schema", None)
-    raw_msg = {"id": msg_id, "type": msg_type, **kwargs}
-    validated = schema(raw_msg) if schema is not None else raw_msg
-    await handler(hass, conn, validated)
+from tests.helpers.ble_and_ws import call_ws, make_ws_connection
+from tests.helpers.ha_setup import ensure_area, register_entity
 
 
 def test_normalize_and_format_ambient_lux_real_sensor_ranges() -> None:
@@ -155,30 +143,21 @@ def test_clean_area_illuminance_validation() -> None:
         {"dark_lux": 1.0, "bright_lux": False},
         {"dark_lux": float("nan"), "bright_lux": 35.0},
         {"dark_lux": 1.0, "bright_lux": float("inf")},
-        {"entity_id": "sensor.other_room_lux"},
+        {"entity_id": "sensor.other_area_lux"},
     ):
         with pytest.raises(SettingsScopeError):
             clean_area_illuminance({}, bad_update, allowed)
 
 
-@pytest.mark.asyncio
 async def test_area_ambient_light_wire_packing_and_studio_command(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify Area illuminance discovery, wire field 42 packing, and set_area_illuminance WS command."""
-    _entry, _sys_obj, coord = await setup_latter_hub(hass)
-    area_reg = ar.async_get(hass)
-    ent_reg = er.async_get(hass)
-    area_reg.async_create("Living Room", area_id="living_room")
+    entry, _sys_obj, coord = await setup_latter_hub(hass)
+    ensure_area(hass, "Living Room", area_id="living_room")
 
     e1_id = "sensor.living_room_ep1_illuminance"
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id=e1_id,
-            platform="esphome",
-            area_id="living_room",
-        )
-    )
+    register_entity(hass, e1_id, platform="esphome", area_id="living_room")
     hass.states.async_set(
         e1_id,
         "5.6",
@@ -190,13 +169,7 @@ async def test_area_ambient_light_wire_packing_and_studio_command(
     )
 
     e_unavail_id = "sensor.a_tablet_illuminance"
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id=e_unavail_id,
-            platform="esphome",
-            area_id="living_room",
-        )
-    )
+    register_entity(hass, e_unavail_id, platform="esphome", area_id="living_room")
     hass.states.async_set(
         e_unavail_id,
         "unavailable",
@@ -208,12 +181,11 @@ async def test_area_ambient_light_wire_packing_and_studio_command(
     )
 
     # Latter's own platform entities never leak into Area illuminance choices
-    ent_reg.async_register(
-        er.RegistryEntry(
-            entity_id="sensor.living_room_latter_own_lux",
-            platform=DOMAIN,
-            area_id="living_room",
-        )
+    register_entity(
+        hass,
+        "sensor.living_room_latter_own_lux",
+        platform=DOMAIN,
+        area_id="living_room",
     )
     hass.states.async_set(
         "sensor.living_room_latter_own_lux",
@@ -238,8 +210,8 @@ async def test_area_ambient_light_wire_packing_and_studio_command(
     assert wire[42] == f"{amb['ambient_pct']}|5.6"
 
     # Update per-Area calibration via Studio WebSocket command and confirm immediate refresh
-    conn = websocket_api.ActiveConnection()
-    await _call_ws(
+    conn = make_ws_connection(hass)
+    res1 = await call_ws(
         hass,
         conn,
         1,
@@ -253,7 +225,7 @@ async def test_area_ambient_light_wire_packing_and_studio_command(
         },
         studio_rev=STUDIO_REV,
     )
-    assert not conn.errors
+    assert res1["success"] is True
 
     saved_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_AREA_ILLUMINANCE_CONFIG]
     assert saved_cfg["living_room"]["bright_lux"] == 35.0
@@ -262,7 +234,7 @@ async def test_area_ambient_light_wire_packing_and_studio_command(
     assert wire2[42] == f"{normalize_ambient_lux(5.6, 0.0, 35.0)}|5.6"
 
     # Disabling the Area sensor clears wire field 42 cleanly (empty string, zero placeholders)
-    await _call_ws(
+    res2 = await call_ws(
         hass,
         conn,
         2,
@@ -271,6 +243,94 @@ async def test_area_ambient_light_wire_packing_and_studio_command(
         payload={"area_id": "living_room", "entity_id": "disabled"},
         studio_rev=STUDIO_REV,
     )
-    assert not conn.errors
+    assert res2["success"] is True
     _state3, area_attrs3 = coord.get_area_context_payload()
     assert area_attrs3["payload"].split("\x1f")[42] == ""
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_calibrate_area_illuminance_with_real_recorder(
+    recorder_mock: Any, hass: Any, setup_latter_hub: Any
+) -> None:
+    """Exercise `calibrate_area_illuminance` end-to-end against real Home Assistant SQLite recorder statistics."""
+    from homeassistant.components.recorder.models import (
+        StatisticData,
+        StatisticMeanType,
+        StatisticMetaData,
+    )
+    from homeassistant.components.recorder.statistics import async_import_statistics
+    from homeassistant.helpers.recorder import get_instance
+
+    _ = recorder_mock
+    entry, _sys_obj, _coord = await setup_latter_hub(hass)
+    ensure_area(hass, "Living Room", area_id="living_room")
+
+    e1_id = "sensor.living_room_ep1_illuminance"
+    register_entity(hass, e1_id, platform="esphome", area_id="living_room")
+    hass.states.async_set(
+        e1_id,
+        "5.6",
+        {
+            "device_class": "illuminance",
+            "unit_of_measurement": "lx",
+            "friendly_name": "Living Room EP1 Illuminance",
+        },
+    )
+
+    base_hour = (dt_util.utcnow() - timedelta(hours=25)).replace(
+        minute=0, second=0, microsecond=0
+    )
+    hourly_samples = [
+        *[(0.9, 0.95, 1.1)] * 10,
+        (2.0, 6.0, 10.0),
+        (5.0, 12.0, 18.0),
+        (10.0, 18.0, 24.0),
+        (14.0, 22.0, 28.0),
+        (18.0, 26.0, 32.0),
+        (22.0, 30.0, 36.0),
+        (25.0, 34.0, 40.0),
+        (28.0, 38.0, 45.0),
+        (30.0, 41.0, 48.0),
+        (32.0, 44.0, 50.0),
+        (34.0, 46.0, 54.0),
+        (35.0, 48.0, 56.0),
+        (20.0, 35.0, 42.0),
+        (17.0, 950.0, 1100.0),
+    ]
+    metadata = StatisticMetaData(
+        has_mean=True,
+        has_sum=False,
+        mean_type=StatisticMeanType.ARITHMETIC,
+        name="Living Room EP1 Illuminance",
+        source="recorder",
+        statistic_id=e1_id,
+        unit_class=None,
+        unit_of_measurement="lx",
+    )
+    stats = [
+        StatisticData(
+            start=base_hour + timedelta(hours=idx),
+            min=mn,
+            mean=mean,
+            max=mx,
+        )
+        for idx, (mn, mean, mx) in enumerate(hourly_samples)
+    ]
+    async_import_statistics(hass, metadata, stats)
+    await get_instance(hass).async_block_till_done()
+
+    conn = make_ws_connection(hass)
+    res = await call_ws(
+        hass,
+        conn,
+        10,
+        "latter/system/command",
+        command="calibrate_area_illuminance",
+        payload={"area_id": "living_room"},
+        studio_rev=STUDIO_REV,
+    )
+    assert res["success"] is True
+    saved_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_AREA_ILLUMINANCE_CONFIG]
+    assert 0.8 <= saved_cfg["living_room"]["dark_lux"] <= 1.2
+    assert 25.0 <= saved_cfg["living_room"]["bright_lux"] <= 65.0
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

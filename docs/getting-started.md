@@ -12,8 +12,6 @@ This guide takes one Device from the box to fully working in about 20 minutes—
 
 > **Standalone BLE presence (no display yet)?** Skip Steps 1–2, install Latter in Step 3, then go to **Settings → Devices & Services → Add Integration → Latter** and leave **Initial ESPHome Device (optional)** blank. Click **Configure** to open **Latter Studio**, where you can adopt phones/tags under **Devices → Discovered** and tune **System → BLE & Area presence**. → [Existing ESPHome devices](existing-esphome.md)
 
-<!-- MEDIA: docs/media/getting-started-video — link to an unboxing → working walkthrough video (YouTube), not embedded. -->
-
 ---
 
 ## 1. Flash the Firmware
@@ -50,10 +48,10 @@ Under **Settings → Devices & Services**, click **Add** on **Discovered: Latter
 
 Click **Latter** in the Home Assistant sidebar—or click **Configure** on the **Latter** integration card under **Settings → Devices & Services** (admin users only):
 
-1. **System → Shared entities:** select your weather entity, plus any security alarm, thermostat zones, door locks, garage doors, robot vacuums, cameras, calendars, custom colors, and wallpapers.
+1. **System → Shared entities & Photos:** select your weather entity, plus any security alarm, thermostat zones, door locks, garage doors, robot vacuums, cameras, calendars, and custom colors, and upload or import photos in **System → Photos**.
 2. **System → Media & remotes:** add TVs, streaming boxes, or AV receivers as remote slots, and map any AV-receiver speaker volumes under **Speaker volume overrides**.
 3. **Devices → your Device → Overview:** set its **Device group** and **Assigned person** under **Assignments**, and configure recurring 2-way **Alarms** under **Timers & alarms**.
-4. **Devices → your Device → Display & Interface:** choose your colors & wallpaper (**Home screen appearance**, **Colors**, **Wallpapers**, **Music appearance**), reorder or toggle apps on the **App Dock**, and click **Configure** on **Time** (to add custom-labeled **World clocks**), **Home hub**, or **Area control**.
+4. **Devices → your Device → Display & Interface:** choose your **Screensaver**, **Brightness** (including per-Area *Ambient light*), **Colors**, and **Wallpapers** on **Display**, then reorder or toggle apps on the **App Dock** and click **Configure** on **Cameras**, **Time** (to add custom-labeled **World clocks**), **Music**, **Home hub**, or **Area control** on **Interface**.
 5. **Devices → your Device → Audio:** pick the Device's default speaker and Assist wake word.
 6. **Devices → your Device → Tools → Perimeter security** *(optional)*: set the policy (`Auto`, `Allow`, `Require PIN`, or `Block`) and PIN for locks, garage covers, and code-less alarms (Home Assistant alarm panels with their own code prompt automatically).
 
@@ -77,5 +75,5 @@ With **Track the Area with BLE Proxies** enabled and one Area-assigned ESPHome B
 ## Quick Checks If Needed
 
 - **"Discovered: Latter" never appears:** confirm the device is online in the ESPHome integration (Latter rescans 5 seconds after device-registry updates, or reload ESPHome to trigger a scan). If the Latter hub is already set up, look under **Studio → Devices → Discovered** (and check any collapsed **Ignored** list).
-- **Screens stay empty or taps do nothing:** confirm the bound ESPHome device is online, its **System: RPC Outbox** sensor is enabled, and both `esphome-latter-core` and `ha-latter` are on `v3.0.0+` (`esphome.<node>_latter_push_v3` and `esphome.<node>_latter_set_slots` appear in **Developer Tools → Actions**). → [Troubleshooting](troubleshooting.md)
+- **Screens stay empty or taps do nothing:** confirm the bound ESPHome device is online, its **System: RPC Outbox** sensor (`sensor.<node>_system_rpc_outbox`, enabled by default and auto-hidden from dashboards) was not manually disabled, and both `esphome-latter-core` and `ha-latter` are on `v3.0.0+` (`esphome.<node>_latter_push_v3` and `esphome.<node>_latter_set_slots` appear in **Developer Tools → Actions**). → [Troubleshooting](troubleshooting.md)
 - **Replacing physical hardware:** if you swap in a new ESP32 board for an existing Device, open **Settings → Devices & Services → Latter**, click **⋮ → Reconfigure** (**Reconfigure or Replace Hardware**) on that Device subentry, and pick the replacement ESPHome device to rebind it in place while keeping all Studio shortcuts, settings, and Area rules.

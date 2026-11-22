@@ -11,15 +11,18 @@ on:
   schedule:
     - cron: "0 6 * * *"
 
+permissions:
+  contents: read
+
 jobs:
   validate_marketplace:
     name: Marketplace (HACS) Validation
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Run Marketplace validation
-        uses: hacs/action@main
+        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main
         with:
           category: integration
 
@@ -28,40 +31,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Run Hassfest
-        uses: home-assistant/actions/hassfest@master
+        uses: home-assistant/actions/hassfest@07f46fd2e19967768b5fd3000f91f857452b767c # master
 
   lint_and_test:
-    name: Ruff Lint, Studio Bundle Parity & Pytest Suite
+    name: Ruff Lint, Strict Mypy, Studio Playwright & Real-HA Pytest Suite
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
           package-manager-cache: false
-      - name: Install lint and test dependencies
-        run: pip install --upgrade pip ruff mypy pytest pytest-asyncio pytest-cov voluptuous Pillow aiohttp
+      - name: Install native media and TurboJPEG system libraries
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libturbojpeg0-dev
+      - name: Install pinned test and stub dependencies
+        run: pip install --upgrade pip && pip install -e ".[test]"
       - name: Install Studio frontend toolchain
         run: npm --prefix frontend_src ci --no-audit --no-fund
+      - name: Install Playwright headless Chromium
+        run: npx --prefix frontend_src playwright install --with-deps chromium
       - name: Verify static architecture, security, and Studio guardrails
         run: python tools/verify_ha.py
-      - name: Verify Studio TypeScript bundle parity & DOM unit tests
+      - name: Verify Studio TypeScript bundle parity & Playwright + axe-core E2E
         run: |
           npm --prefix frontend_src run check
           npm --prefix frontend_src test
       - name: Run ruff static analysis
         run: ruff check custom_components/latter tests tools
-      - name: Run strict mypy type checking (HA Platinum strict-typing)
+      - name: Run strict mypy type checking against homeassistant-stubs
         run: mypy custom_components/latter
-      - name: Run pytest integration suite with coverage gate
+      - name: Run real Home Assistant pytest suite with coverage gate
         run: pytest tests --cov=custom_components.latter --cov-fail-under=75 -q
 
   promote:
@@ -73,7 +80,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Fast-forward main (refuses anything that is not a fast-forward)

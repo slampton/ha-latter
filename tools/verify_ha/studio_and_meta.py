@@ -20,6 +20,7 @@ SKIP_DIRS: Final[frozenset[str]] = frozenset(
         ".pytest_cache",
         ".mypy_cache",
         ".ruff_cache",
+        ".hypothesis",
         ".esphome",
         "node_modules",
         ".coverage",
@@ -44,11 +45,14 @@ LOC_EXEMPT_REL_PATHS: Final[frozenset[str]] = frozenset(
         "custom_components/latter/studio/locales/en.json",
         "frontend_src/src/protocol-schema.ts",
         "frontend_src/package-lock.json",
-        # Phase 6 Zero-Legacy deletion shims (dag_split_map.md §5.1)
-        "tests/harness/fake_ha_core.py",
-        "frontend_src/test/dom-shim.ts",
-        "frontend_src/test/fake-store.ts",
     }
+)
+
+BANNED_MOCK_SHIMS: Final[tuple[str, ...]] = (
+    "tests/harness",
+    "tests/harness/fake_ha_core.py",
+    "frontend_src/test/dom-shim.ts",
+    "frontend_src/test/fake-store.ts",
 )
 
 XHR_ALLOWED_REL_PATHS: Final[frozenset[str]] = frozenset(
@@ -564,6 +568,11 @@ def _check_studio_artifacts(root: Path, failures: list[str]) -> None:
 
 
 def _check_tests_and_frontend_build(root: Path, failures: list[str]) -> None:
+    failures.extend(
+        f"[ZERO MOCK SHIMS] Retired mock shim must never return: {shim}"
+        for shim in BANNED_MOCK_SHIMS
+        if (root / shim).exists()
+    )
     tests_dir = root / "tests"
     if tests_dir.is_dir():
         for tf in sorted(tests_dir.rglob("*.py")):

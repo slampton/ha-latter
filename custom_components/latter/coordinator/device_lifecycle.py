@@ -246,7 +246,6 @@ class CoordinatorLifecycleMixin(CoordinatorRegistrySyncMixin):
                     "time": reported_at,
                     **extra,
                 },
-                config_entry_id=self.entry.entry_id,
             )
 
     async def _async_finish_reconnect_post_delay(self) -> None:
