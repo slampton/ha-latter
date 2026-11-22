@@ -730,7 +730,25 @@ def main() -> int:
             if re.search(r"#[0-9a-fA-F]{3,8}\b|\brgba?\s*\(", body_css):
                 failures.append(f"[STUDIO TOKENS] {rel} uses color literal outside :host")
 
-    # 8. Full-mode Studio bundle check & frontend DOM/unit tests (skipped when LATTER_VERIFY_FAST=1)
+    # 8. Test suite clock safety: forbid rewinding global time.monotonic to a fixed constant
+    # (which stalls Linux SelectorEventLoop.select() when VM uptime exceeds the constant).
+    tests_dir = ROOT / "tests"
+    if tests_dir.is_dir():
+        for tf in sorted(tests_dir.rglob("*.py")):
+            ttxt = tf.read_text(encoding="utf-8")
+            trel = tf.relative_to(ROOT).as_posix()
+            if re.search(r"monkeypatch\.setattr\(\s*['\"][^'\"]*\.time\.monotonic['\"]", ttxt):
+                failures.append(
+                    f"[TEST CLOCK SAFETY] {trel} patches module.time.monotonic (mutating global sys.modules['time']); "
+                    "inject a per-instance clock instead"
+                )
+            if re.search(r"anchor\s*=\s*\d+(?:\.\d+)?\s*\n\s*monkeypatch\.setattr\(\s*time\s*,\s*['\"]monotonic['\"]", ttxt):
+                failures.append(
+                    f"[TEST CLOCK SAFETY] {trel} rewinds time.monotonic to a fixed literal; "
+                    "anchor from real time.monotonic() so SelectorEventLoop timers never stall"
+                )
+
+    # 9. Full-mode Studio bundle check & frontend DOM/unit tests (skipped when LATTER_VERIFY_FAST=1)
     if os.environ.get("LATTER_VERIFY_FAST") != "1" and (frontend_src_dir / "build.mjs").is_file():
         node_bin = shutil.which("node")
         npm_bin = shutil.which("npm")

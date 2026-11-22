@@ -63,7 +63,7 @@ from custom_components.latter.services import _async_execute_intercom_broadcast
 
 @pytest.mark.asyncio
 async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
-    hass: Any, setup_latter_hub: Any, monkeypatch: pytest.MonkeyPatch
+    hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify M-P0-01 v1 session-key PIN wrap/unwrap, 4..12 digit bounds, anti-replay, and 5-try lockout."""
     assert (MIN_PIN_LEN, MAX_PIN_LEN) == (4, 12)
@@ -158,7 +158,6 @@ async def test_m_p0_01_pin_session_key_crypto_bounds_and_exponential_lockout(
     coord.update_device_config({**coord.device_data, CONF_SECURITY_PIN_POLICY: "require_pin"})
 
     clock_val = 5000.0
-    monkeypatch.setattr("custom_components.latter.services.time.monotonic", lambda: clock_val)
     coord.pin_lockout._clock = lambda: clock_val
     sys_obj.pin_lockout._clock = lambda: clock_val
 

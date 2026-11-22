@@ -193,7 +193,7 @@ async def test_timer_alarm_state_event_driven_and_boot_reset(
     assert hass.states.get(f"binary_sensor.{slug}_alarm_ringing").state == "off"
     assert int(hass.states.get(f"sensor.{slug}_timer_remaining").state) == 0
 
-    anchor = 1000.0
+    anchor = time.monotonic()
     monkeypatch.setattr(time, "monotonic", lambda: anchor)
 
     await async_dispatch_bound_rpc(
@@ -609,7 +609,7 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     assert coord.device_group == "arcade_stations"
 
     # 2) Stopwatch + Timer + Ringing live telemetry & 1 Hz local monotonic elapsed counter
-    anchor = 5000.0
+    anchor = time.monotonic()
     monkeypatch.setattr(time, "monotonic", lambda: anchor)
 
     await sys_obj.rpc_dispatcher.async_dispatch(

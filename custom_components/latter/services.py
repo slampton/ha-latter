@@ -243,11 +243,10 @@ def _check_pin_not_locked_out(
     hass: HomeAssistant, coord: LatterCoordinator
 ) -> None:
     """Raise `security_pin_locked_out` when either the Device or System lockout cooldown is active."""
-    now_m = time.monotonic()
     sys_lockout = _get_system_pin_lockout(hass)
     if coord.pin_lockout.is_locked_out(
-        coord.subentry_id, now=now_m
-    ) or sys_lockout.is_locked_out("system", now=now_m):
+        coord.subentry_id
+    ) or sys_lockout.is_locked_out("system"):
         raise ServiceValidationError(
             "Too many failed security PIN attempts; temporarily locked out.",
             translation_domain=DOMAIN,
@@ -262,9 +261,8 @@ def _record_pin_failure_and_raise(
     detail: str,
 ) -> NoReturn:
     """Record a failed PIN attempt on Device + System trackers and raise the appropriate validation error."""
-    now_m = time.monotonic()
-    dev_rem = coord.pin_lockout.record_failure(coord.subentry_id, now=now_m)
-    sys_rem = _get_system_pin_lockout(hass).record_failure("system", now=now_m)
+    dev_rem = coord.pin_lockout.record_failure(coord.subentry_id)
+    sys_rem = _get_system_pin_lockout(hass).record_failure("system")
     final_key = (
         "security_pin_locked_out"
         if (dev_rem > 0.0 or sys_rem > 0.0)
