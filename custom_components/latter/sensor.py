@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfLength, UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfLength, UnitOfTime
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -398,6 +398,7 @@ class LatterCurrentFloorSensor(_BaseLatterSensor):
 class LatterBleDistanceSensor(_BaseLatterSensor):
     """Exposes `sensor.<device_slug>_ble_distance` in canonical Home Assistant meters."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
     _attr_native_unit_of_measurement = UnitOfLength.METERS
     _attr_device_class = SensorDeviceClass.DISTANCE
@@ -533,6 +534,7 @@ class LatterPersonCurrentFloorSensor(_BaseLatterPersonSensor):
 class LatterPersonBleDistanceSensor(_BaseLatterPersonSensor):
     """Exposes `sensor.latter_system_<person>_ble_distance` under the Latter System service device."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "person_ble_distance"
     _attr_native_unit_of_measurement = UnitOfLength.METERS

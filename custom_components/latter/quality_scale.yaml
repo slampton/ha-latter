@@ -60,7 +60,9 @@ rules:
   docs-troubleshooting: done
   docs-use-cases: done
   dynamic-devices: done
-  entity-category: done
+  entity-category:
+    status: done
+    comment: Screen backlight light, device behavior switches (bedtime_mode, do_not_disturb, screensaver), config selects/number, and identify button use EntityCategory.CONFIG (excluded from Area/Lights dashboards, Assist exposure, and Area turn-off); BLE distance telemetry sensors use EntityCategory.DIAGNOSTIC.
   entity-device-class: done
   entity-disabled-by-default:
     status: done

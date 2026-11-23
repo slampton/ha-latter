@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.components.light import LightEntity
 from homeassistant.components.light.const import ATTR_BRIGHTNESS, ColorMode
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -46,6 +47,7 @@ class LatterScreenLight(LightEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_translation_key = "screen"
     _attr_color_mode = ColorMode.BRIGHTNESS
 

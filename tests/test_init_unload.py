@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
+from homeassistant.const import EntityCategory
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 from homeassistant.setup import async_setup_component
 
@@ -92,11 +93,28 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
             _ = ent.device_info
             ent.async_write_ha_state()
 
-    # BLE distance sensors are disabled by default (Gold `entity-disabled-by-default`)
+    # BLE distance sensors are disabled by default & diagnostic; screen light and config controls use CONFIG
     ent_reg = er.async_get(hass)
     ble_dist_entry = ent_reg.async_get("sensor.pocket_assistant_ble_distance")
     assert ble_dist_entry is not None
     assert ble_dist_entry.disabled_by == er.RegistryEntryDisabler.INTEGRATION
+    assert ble_dist_entry.entity_category == EntityCategory.DIAGNOSTIC
+    for cfg_eid in (
+        "light.pocket_assistant_screen",
+        "switch.pocket_assistant_bedtime_mode",
+        "switch.pocket_assistant_do_not_disturb",
+        "switch.pocket_assistant_screensaver",
+        "select.pocket_assistant_device_group",
+        "select.pocket_assistant_wake_word_mode",
+        "number.pocket_assistant_alert_volume",
+        "button.pocket_assistant_find_my_device",
+    ):
+        cfg_ent = ent_reg.async_get(cfg_eid)
+        assert cfg_ent is not None, f"Missing expected entity {cfg_eid}"
+        assert cfg_ent.entity_category == EntityCategory.CONFIG, cfg_eid
+    dismiss_ent = ent_reg.async_get("button.pocket_assistant_dismiss_alert")
+    assert dismiss_ent is not None
+    assert dismiss_ent.entity_category is None
 
     # Dynamic Area Registry create / update / remove syncs both sensor & binary_sensor
     area_reg = ar.async_get(hass)

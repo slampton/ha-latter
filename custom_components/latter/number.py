@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -45,6 +45,7 @@ class LatterAlertVolumeNumber(NumberEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_translation_key = "alert_volume"
     _attr_native_min_value = float(_MIN_ALERT_VOL)
     _attr_native_max_value = float(_MAX_ALERT_VOL)

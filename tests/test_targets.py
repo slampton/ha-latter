@@ -6,6 +6,8 @@ import inspect
 import re
 import unittest
 
+from homeassistant.const import EntityCategory
+
 from custom_components.latter import (
     backup,
     binary_sensor,
@@ -16,6 +18,9 @@ from custom_components.latter import (
     hub_registry as hub,
     hub_sync as _hub_sync,
     light,
+    number,
+    select,
+    sensor,
     switch,
 )
 from custom_components.latter.http import camera_views, wallpaper_views
@@ -101,6 +106,30 @@ class CuratedSensorAndPlatformTests(unittest.TestCase):
         self.assertTrue(hasattr(switch, "LatterDoNotDisturbSwitch"))
         self.assertTrue(hasattr(button, "LatterDismissAlertButton"))
         self.assertFalse(hasattr(button, "LatterActivateScreensaverButton"))
+        # Gold entity-category: screen light, device switches, config selects/number, and identify button are CONFIG
+        for cfg_cls in (
+            light.LatterScreenLight,
+            switch.LatterBedtimeModeSwitch,
+            switch.LatterDoNotDisturbSwitch,
+            switch.LatterScreensaverSwitch,
+            select.LatterDeviceGroupSelect,
+            select.LatterWakeWordModeSelect,
+            number.LatterAlertVolumeNumber,
+            button.LatterFindMyDeviceButton,
+        ):
+            self.assertEqual(
+                object.__new__(cfg_cls).entity_category, EntityCategory.CONFIG, cfg_cls.__name__
+            )
+        for diag_cls in (
+            sensor.LatterBleDistanceSensor,
+            sensor.LatterPersonBleDistanceSensor,
+        ):
+            diag_inst = object.__new__(diag_cls)
+            self.assertEqual(
+                diag_inst.entity_category, EntityCategory.DIAGNOSTIC, diag_cls.__name__
+            )
+            self.assertFalse(diag_inst.entity_registry_enabled_default, diag_cls.__name__)
+        self.assertIsNone(object.__new__(button.LatterDismissAlertButton).entity_category)
         bs_src = inspect.getsource(binary_sensor)
         self.assertIn('_attr_translation_key = "area_occupancy"', bs_src)
         self.assertNotIn("self.entity_id =", bs_src)

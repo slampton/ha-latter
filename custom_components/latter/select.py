@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -52,6 +53,7 @@ class _BaseLatterSelect(SelectEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -97,6 +99,7 @@ class LatterDeviceGroupSelect(SelectEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_translation_key = "device_group"
 
     def __init__(self, coordinator: LatterCoordinator) -> None:

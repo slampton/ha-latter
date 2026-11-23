@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.components.button import ButtonEntity
 from homeassistant.components.button.const import ButtonDeviceClass
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -86,6 +87,7 @@ class LatterFindMyDeviceButton(_BaseLatterButton):
     """Exposes `button.<device_slug>_find_my_device`."""
 
     _attr_device_class = ButtonDeviceClass.IDENTIFY
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize Find My Device button."""
