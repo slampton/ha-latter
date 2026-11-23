@@ -187,7 +187,11 @@ def _spawn_coordinator_task(
 
 def _cancel_pending_reply(coordinator: Any) -> None:
     prev_task = coordinator.doorbell_reply_task
-    if prev_task is not None and not prev_task.done():
+    if (
+        prev_task is not None
+        and not prev_task.done()
+        and prev_task is not asyncio.current_task()
+    ):
         prev_task.cancel()
     coordinator.doorbell_reply_task = None
     coordinator.doorbell_reply_resume_listen = False

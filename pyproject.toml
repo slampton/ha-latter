@@ -38,7 +38,7 @@ source = ["custom_components.latter"]
 omit = ["custom_components/latter/frontend/*"]
 
 [tool.coverage.report]
-fail_under = 75
+fail_under = 95
 show_missing = true
 exclude_lines = [
     "pragma: no cover",

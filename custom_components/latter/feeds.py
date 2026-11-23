@@ -191,11 +191,24 @@ def _parse_event_dict(
     if not start_raw:
         return None
 
-    parsed_start = dt_util.parse_datetime(str(start_raw))
-    is_all_day = False
-    if parsed_start is None and (parsed_date := dt_util.parse_date(str(start_raw))) is not None:
+    start_str = str(start_raw).strip()
+    parsed_date: date | None = (
+        start_raw
+        if isinstance(start_raw, date) and not isinstance(start_raw, datetime)
+        else (
+            dt_util.parse_date(start_str)
+            if "T" not in start_str and " " not in start_str
+            else None
+        )
+    )
+    if parsed_date is not None:
         is_all_day = True
-        parsed_start = datetime.combine(parsed_date, datetime.min.time(), tzinfo=now_local.tzinfo)
+        parsed_start: datetime | None = datetime.combine(
+            parsed_date, datetime.min.time(), tzinfo=now_local.tzinfo
+        )
+    else:
+        is_all_day = False
+        parsed_start = dt_util.parse_datetime(start_str)
     if parsed_start is None:
         return None
 

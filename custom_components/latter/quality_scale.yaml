@@ -9,7 +9,9 @@ rules:
     status: done
     comment: Functional domain cohesion and zero-cycle Tarjan SCC DAG layout across 3 coarse boundaries (stdlib leaves, domain/registry tier, orchestration/endpoint tier, and root + 8 entity platforms), verified cycle-free by tools/verify_ha.py with bounded McCabe complexity (ruff C901 <= 18).
   config-flow: done
-  config-flow-test-coverage: done
+  config-flow-test-coverage:
+    status: done
+    comment: 100% statement coverage of config_flow.py (hub onboarding, discovery, single-instance guards, Device and BLE Tag subentry add/reconfigure/hardware replacement) verified on real Home Assistant 2026.11 Core.
   dependency-transparency: done
   docs-actions: done
   docs-conditions:
@@ -45,7 +47,9 @@ rules:
   reauthentication-flow:
     status: exempt
     comment: Local push ESPHome middleware; authentication is managed by the ESPHome integration and signed local resource signatures.
-  test-coverage: done
+  test-coverage:
+    status: done
+    comment: Real Home Assistant 2026.11 Core pytest suite exceeds 99% statement coverage across custom_components/latter with a hard --cov-fail-under=95 CI gate in validate.yml and pyproject.toml.
 
   # Gold
   devices: done

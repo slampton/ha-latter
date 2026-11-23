@@ -102,7 +102,7 @@ jobs:
       - name: Run strict mypy type checking against Home Assistant 2026.11
         run: mypy custom_components/latter
       - name: Run real Home Assistant pytest suite with coverage gate
-        run: pytest -n auto tests --cov=custom_components.latter --cov-report=term-missing --cov-fail-under=75 -q
+        run: pytest -n auto tests --cov=custom_components.latter --cov-report=term-missing --cov-fail-under=95 -q
 
   promote:
     name: Fast-forward main to this commit

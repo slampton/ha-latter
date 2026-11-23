@@ -40,5 +40,5 @@ node --no-warnings frontend_src/build.mjs --check --typecheck
 npm --prefix frontend_src test
 ruff check custom_components/latter tests tools
 mypy custom_components/latter
-pytest tests --cov=custom_components.latter --cov-fail-under=75 -q
+pytest tests --cov=custom_components.latter --cov-fail-under=95 -q
 ```
