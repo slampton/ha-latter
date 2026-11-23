@@ -17,6 +17,8 @@ from .protocol_specs import (
     SHORTCUT_LABEL_MAX,
     normalize_activity_sources,
     normalize_mdi_icon,
+    normalize_shortcut_accent,
+    normalize_shortcut_badge_style,
 )
 
 # ---------------------------------------------------------------------------
@@ -147,7 +149,7 @@ def _coerce_shortcut_state(kind: str, raw_state: object) -> int:
 def shortcut_records(
     items: Iterable[Mapping[str, Any]], *, max_records: int = MAX_PINNED_ITEMS
 ) -> V3Records:
-    """Encode resolved shortcut items (`kind|target|action|label|icon|confirm|state`) into `V3Records`."""
+    """Encode resolved shortcut items (`kind|target|action|label|icon|confirm|state|badge_style|accent`) into `V3Records`."""
     rows: list[tuple[object, ...]] = []
     for it in items:
         kind = str(it.get("kind") or "")
@@ -157,10 +159,26 @@ def shortcut_records(
         icon = str(it.get("icon") or "")
         confirm = "1" if (kind == "entity" and bool(it.get("confirm"))) else "0"
         state_val = _coerce_shortcut_state(kind, it.get("state"))
-        rows.append((kind, target, action, label, icon, confirm, str(state_val)))
+        badge_style = normalize_shortcut_badge_style(
+            it.get("badge_style"), strict=False
+        )
+        accent = normalize_shortcut_accent(it.get("accent"), strict=False)
+        rows.append(
+            (
+                kind,
+                target,
+                action,
+                label,
+                icon,
+                confirm,
+                str(state_val),
+                badge_style,
+                accent,
+            )
+        )
     return build_v3_records(
         rows,
-        (None, None, None, SHORTCUT_LABEL_MAX, None, 1, 2),
+        (None, None, None, SHORTCUT_LABEL_MAX, None, 1, 2, 16, 16),
         max_records,
     )
 

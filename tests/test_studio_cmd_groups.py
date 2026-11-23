@@ -116,7 +116,7 @@ async def test_studio_commands_device_groups_and_backup_restore(
         for t in sys_ctrl_by_pref["area_handoff"]["targets"]
     )
 
-    # Appearance batch update preserves group assignment (including tools_items & games_items)
+    # Appearance batch update preserves group assignment (including tools_items, games_items, & shortcut styling)
     await _sys_cmd(
         "apply_batch_device_setting",
         {
@@ -126,7 +126,13 @@ async def test_studio_commands_device_groups_and_backup_restore(
                 "tools_items": "flashlight,calculator,dice",
                 "games_items": "2048,chomp",
                 "pinned_items": [
-                    {"kind": "route", "target": "weather:moon", "label": "Moon"},
+                    {
+                        "kind": "route",
+                        "target": "weather:moon",
+                        "label": "Moon",
+                        "badge_style": "inverted",
+                        "accent": "gold",
+                    },
                 ],
             },
         },
@@ -135,6 +141,8 @@ async def test_studio_commands_device_groups_and_backup_restore(
     assert coord.games_items_csv == "2048,chomp"
     assert len(coord.pinned_items) == 1
     assert coord.pinned_items[0]["target"] == "weather:moon"
+    assert coord.pinned_items[0]["badge_style"] == "inverted"
+    assert coord.pinned_items[0]["accent"] == "gold"
     assert coord.device_group == "guest_suites"
 
     # Operational one-off batch tweak diverges from Guest Suites baseline -> auto-switches to 'custom'
@@ -144,13 +152,14 @@ async def test_studio_commands_device_groups_and_backup_restore(
     )
     assert coord.device_group == "custom"
 
-    # Save Custom Group (source_subentry_id + assign_source=True) creates group & assigns device
+    # Save Custom Group (source_subentry_id + include_interface=True + assign_source=True) preserves shortcut styling
     saved_grp_state = await _sys_cmd(
         "create_device_group",
         {
             "name": "VIP Suites",
             "description": "Saved from custom device",
             "source_subentry_id": coord.subentry_id,
+            "include_interface": True,
             "assign_source": True,
         },
     )
@@ -159,6 +168,8 @@ async def test_studio_commands_device_groups_and_backup_restore(
         g for g in saved_grp_state["device_groups"] if g["id"] == "vip_suites"
     )
     assert vip_grp["device_config"]["alert_volume"] == 40
+    assert vip_grp["device_config"]["pinned_items"][0]["badge_style"] == "inverted"
+    assert vip_grp["device_config"]["pinned_items"][0]["accent"] == "gold"
 
     # Built-in groups cannot be deleted; deleting custom group resets members to 'custom'
     msg_seq += 1
@@ -228,6 +239,11 @@ async def test_studio_commands_device_groups_and_backup_restore(
         == "flashlight,calculator,dice"
     )
     assert dev_bundle["device"]["device_config"]["games_items"] == "2048,chomp"
+    assert (
+        dev_bundle["device"]["device_config"]["pinned_items"][0]["badge_style"]
+        == "inverted"
+    )
+    assert dev_bundle["device"]["device_config"]["pinned_items"][0]["accent"] == "gold"
 
     msg_seq += 1
     await call_ws(
@@ -240,6 +256,8 @@ async def test_studio_commands_device_groups_and_backup_restore(
         studio_rev=STUDIO_REV,
     )
     assert not conn.errors
+    assert coord.pinned_items[0]["badge_style"] == "inverted"
+    assert coord.pinned_items[0]["accent"] == "gold"
 
     msg_seq += 1
     await call_ws(
@@ -452,7 +470,30 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
             "id": "nightstands",
             "name": "Nightstands",
             "builtin": False,
-            "device_config": {"wake_word_mode": "Disabled"},
+            "include_interface": True,
+            "device_config": {
+                "wake_word_mode": "Disabled",
+                "dock_items": [
+                    {
+                        "kind": "route",
+                        "target": "app:music",
+                        "action": "",
+                        "label": "",
+                        "icon": "",
+                        "confirm": False,
+                    }
+                ],
+                "pinned_items": [
+                    {
+                        "kind": "route",
+                        "target": "weather:moon",
+                        "action": "",
+                        "label": "Moon",
+                        "icon": "",
+                        "confirm": False,
+                    }
+                ],
+            },
         },
     ]
     sub = next(iter(entry.subentries.values()))
@@ -483,6 +524,10 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     assert (
         upgraded_groups["nightstands"]["device_config"]["wake_word_mode"] == "Disabled"
     )
+    assert upgraded_groups["nightstands"]["device_config"]["dock_items"][0]["badge_style"] == ""
+    assert upgraded_groups["nightstands"]["device_config"]["dock_items"][0]["accent"] == ""
+    assert upgraded_groups["nightstands"]["device_config"]["pinned_items"][0]["badge_style"] == ""
+    assert upgraded_groups["nightstands"]["device_config"]["pinned_items"][0]["accent"] == ""
     reloaded_coord = entry.runtime_data.coordinators[sub.subentry_id]
     assert reloaded_coord.get_device_pref("wake_word_mode") == "Docked Only"
     assert reloaded_coord.get_device_pref("night_brightness") == 35

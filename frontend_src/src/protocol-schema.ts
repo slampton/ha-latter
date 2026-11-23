@@ -1,7 +1,7 @@
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 
 export const PROTOCOL_CONTRACT_VERSION = 3;
-export const STUDIO_REV = 44;
+export const STUDIO_REV = 45;
 
 export const ALLOWED_DEVICE_ACTIONS: ReadonlyArray<string> = [
   "restart",
@@ -186,6 +186,20 @@ export const GAMES_ITEMS_CATALOG: ReadonlyArray<CatalogItem> = [
   {token: "chomp", label: "Chomp"},
   {token: "2048", label: "2048"},
   {token: "memory", label: "Memory Match"},
+];
+
+export const SHORTCUT_BADGE_STYLES_CATALOG: ReadonlyArray<CatalogItem> = [
+  {token: "glass", label: "Frosted glass"},
+  {token: "inverted", label: "Inverted badge"},
+];
+
+export const SHORTCUT_ACCENTS_CATALOG: ReadonlyArray<CatalogItem> = [
+  {token: "default", label: "Default"},
+  {token: "primary", label: "Theme"},
+  {token: "gold", label: "Amber"},
+  {token: "green", label: "Green"},
+  {token: "red", label: "Red"},
+  {token: "orange", label: "Orange"},
 ];
 
 export interface WorldClockZoneItem {

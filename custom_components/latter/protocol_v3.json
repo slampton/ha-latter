@@ -1152,7 +1152,7 @@
           "name": "dock_items",
           "cpp_enum": "DOCK_ITEMS",
           "type": "records",
-          "description": "0x1E-joined kind|target|action|label|icon|confirm|state App Dock shortcut records (sent on chunk_index == 0, up to 24; empty until configured so device uses defaults.dock_routes; Settings is always appended last)"
+          "description": "0x1E-joined kind|target|action|label|icon|confirm|state|badge_style|accent App Dock shortcut records (sent on chunk_index == 0, up to 24; badge_style is empty/glass or inverted; accent is empty/default or primary|gold|green|red|orange; empty until configured so device uses defaults.dock_routes; Settings is always appended last)"
         },
         {
           "index": 6,
@@ -1166,7 +1166,7 @@
           "name": "pinned_items",
           "cpp_enum": "PINNED_ITEMS",
           "type": "records",
-          "description": "0x1E-joined kind|target|action|label|icon|confirm|state Pinned App shortcut records for this chunk (up to 24 per chunk, rendered 6 per page)"
+          "description": "0x1E-joined kind|target|action|label|icon|confirm|state|badge_style|accent Pinned App shortcut records for this chunk (up to 24 per chunk, rendered 6 per page; badge_style is empty/glass or inverted; accent is empty/default or primary|gold|green|red|orange)"
         }
       ]
     }
@@ -1742,6 +1742,42 @@
       {
         "token": "memory",
         "label": "Memory Match"
+      }
+    ],
+    "shortcut_badge_styles": [
+      {
+        "token": "glass",
+        "label": "Frosted glass"
+      },
+      {
+        "token": "inverted",
+        "label": "Inverted badge"
+      }
+    ],
+    "shortcut_accents": [
+      {
+        "token": "default",
+        "label": "Default"
+      },
+      {
+        "token": "primary",
+        "label": "Theme"
+      },
+      {
+        "token": "gold",
+        "label": "Amber"
+      },
+      {
+        "token": "green",
+        "label": "Green"
+      },
+      {
+        "token": "red",
+        "label": "Red"
+      },
+      {
+        "token": "orange",
+        "label": "Orange"
       }
     ]
   },
@@ -3640,7 +3676,7 @@
     }
   ],
   "studio_contract": {
-    "studio_rev": 44,
+    "studio_rev": 45,
     "allowed_device_actions": [
       "restart",
       "find_my",

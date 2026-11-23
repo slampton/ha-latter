@@ -419,6 +419,33 @@ def test_protocol_specs_world_clocks_alarms_shortcuts_and_prefs() -> None:
     with pytest.raises(ValueError, match="Invalid MDI icon"):
         protocol_specs.normalize_mdi_icon("bad icon!!", strict=True)
 
+    # Shortcut badge_style and accent normalization (strict & non-strict)
+    assert protocol_specs.normalize_shortcut_badge_style(None) == ""
+    assert protocol_specs.normalize_shortcut_badge_style("") == ""
+    assert protocol_specs.normalize_shortcut_badge_style("  GLASS  ") == ""
+    assert protocol_specs.normalize_shortcut_badge_style(" Inverted ") == "inverted"
+    assert protocol_specs.normalize_shortcut_badge_style("solid", strict=False) == ""
+    assert protocol_specs.normalize_shortcut_badge_style(False, strict=False) == ""
+    with pytest.raises(ValueError, match="Unknown shortcut badge style"):
+        protocol_specs.normalize_shortcut_badge_style("solid", strict=True)
+    with pytest.raises(ValueError, match="Unknown shortcut badge style"):
+        protocol_specs.normalize_shortcut_badge_style(False, strict=True)
+
+    assert protocol_specs.normalize_shortcut_accent(None) == ""
+    assert protocol_specs.normalize_shortcut_accent("") == ""
+    assert protocol_specs.normalize_shortcut_accent("  Default ") == ""
+    for accent_tok in ("primary", "gold", "green", "red", "orange"):
+        assert (
+            protocol_specs.normalize_shortcut_accent(f" {accent_tok.upper()} ")
+            == accent_tok
+        )
+    assert protocol_specs.normalize_shortcut_accent("purple", strict=False) == ""
+    assert protocol_specs.normalize_shortcut_accent(0, strict=False) == ""
+    with pytest.raises(ValueError, match="Unknown shortcut accent"):
+        protocol_specs.normalize_shortcut_accent("purple", strict=True)
+    with pytest.raises(ValueError, match="Unknown shortcut accent"):
+        protocol_specs.normalize_shortcut_accent(0, strict=True)
+
     # Non-strict & strict shortcut item normalization branches
     assert (
         protocol_specs.normalize_shortcut_item(
@@ -586,10 +613,30 @@ def test_protocol_policy_icons_states_pin_wrap_lockout_and_verify() -> None:
                 "target": "light.a",
                 "action": "toggle",
                 "state": "bad_state_num",
-            }
+                "badge_style": "glass",
+                "accent": "default",
+            },
+            {
+                "kind": "route",
+                "target": "weather:moon",
+                "label": "Moon",
+                "badge_style": "INVERTED",
+                "accent": "GOLD",
+            },
+            {
+                "kind": "entity",
+                "target": "switch.b",
+                "action": "toggle",
+                "state": 1,
+                "badge_style": "bogus",
+                "accent": "bogus",
+            },
         ]
     )
-    assert recs[0][-1] == "-1"
+    assert len(recs[0]) == 9
+    assert recs[0][6:] == ("-1", "", "")
+    assert recs[1] == ("route", "weather:moon", "", "Moon", "", "0", "-1", "inverted", "gold")
+    assert recs[2][6:] == ("1", "", "")
 
     non_str_pin: Any = 1234
     assert protocol_policy.is_valid_pin_digits(None) is False

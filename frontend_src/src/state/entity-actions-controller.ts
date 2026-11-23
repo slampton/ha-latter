@@ -513,6 +513,8 @@ export class EntityController implements EntityControllerContract {
       label: "",
       icon: "",
       confirm: false,
+      badge_style: "",
+      accent: "",
     });
     this.stageDeviceSetting("dock_items", current);
   }

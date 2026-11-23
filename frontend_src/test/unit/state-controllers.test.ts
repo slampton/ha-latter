@@ -15,6 +15,13 @@ import {
   overlayPendingEntityStates,
 } from "../../src/state/group-overlay.js";
 import { deviceHasView } from "../../src/state/routing.js";
+import {
+  isProtectedNativeDockItem,
+  normalizeShortcutAccent,
+  normalizeShortcutArray,
+  normalizeShortcutBadgeStyle,
+  shortcutBadgeClass,
+} from "../../src/state/shortcuts-ops.js";
 import { StudioStore } from "../../src/state/store.js";
 import type {
   DeviceGroup,
@@ -407,7 +414,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.equal(store.currentViewId, "photos");
   });
 
-  it("constructs STUDIO_REV=44 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
+  it("constructs STUDIO_REV=45 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
     const { store, wsLog } = createHeadlessStore();
     store.applyRoute({ prefix: "/latter", path: "devices/sub_desk/overview" });
 
@@ -425,10 +432,10 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { do_not_disturb: true },
         expected_config_rev: 7,
       },
-      studio_rev: 44,
+      studio_rev: 45,
     });
 
-    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 44`
+    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 45`
     wsLog.length = 0;
     store.applyRoute({ prefix: "/latter", path: "system/presence" });
     store.entity.stageSystemSetting("ble_away_timeout_s", 240, undefined, 60_000);
@@ -442,7 +449,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { ble_away_timeout_s: 240 },
         expected_config_rev: 3,
       },
-      studio_rev: 44,
+      studio_rev: 45,
     });
 
     // `version_mismatch` sets `studioRevMismatch = true`
@@ -513,5 +520,156 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.deepEqual(wsLog[1]?.payload, {
       config: { area_categories: "light,climate,media" },
     });
+  });
+
+  it("normalizes per-shortcut badge_style & accent, protects native dock apps, and persists shortcut modal edits", async () => {
+    assert.equal(normalizeShortcutBadgeStyle(""), "");
+    assert.equal(normalizeShortcutBadgeStyle("glass"), "");
+    assert.equal(normalizeShortcutBadgeStyle("INVERTED"), "inverted");
+    assert.equal(normalizeShortcutBadgeStyle("unknown"), "");
+
+    assert.equal(normalizeShortcutAccent(""), "");
+    assert.equal(normalizeShortcutAccent("default"), "");
+    assert.equal(normalizeShortcutAccent("primary"), "primary");
+    assert.equal(normalizeShortcutAccent("GOLD"), "gold");
+    assert.equal(normalizeShortcutAccent("green"), "green");
+    assert.equal(normalizeShortcutAccent("red"), "red");
+    assert.equal(normalizeShortcutAccent("orange"), "orange");
+    assert.equal(normalizeShortcutAccent("purple"), "");
+
+    assert.equal(shortcutBadgeClass("", ""), "shortcut-icon-badge");
+    assert.equal(shortcutBadgeClass("inverted", ""), "shortcut-icon-badge badge-inverted");
+    assert.equal(
+      shortcutBadgeClass("inverted", "gold"),
+      "shortcut-icon-badge badge-inverted accent-gold",
+    );
+    assert.equal(shortcutBadgeClass("", "red"), "shortcut-icon-badge accent-red");
+
+    const normalizedDock = normalizeShortcutArray(
+      [
+        {
+          kind: "route",
+          target: "app:music",
+          label: "Custom Music",
+          icon: "mdi:speaker",
+          badge_style: "inverted",
+          accent: "gold",
+        },
+        {
+          kind: "route",
+          target: "weather:moon",
+          label: "Moon",
+          icon: "mdi:weather-night",
+          badge_style: "inverted",
+          accent: "primary",
+        },
+        {
+          kind: "entity",
+          target: "light.desk_lamp",
+          action: "toggle",
+          label: "Desk Lamp",
+          icon: "mdi:desk-lamp",
+          confirm: false,
+          badge_style: "glass",
+          accent: "orange",
+        },
+      ],
+      true,
+    );
+    assert.equal(normalizedDock.length, 3);
+    // Protected native dock app keeps empty label, icon, badge_style, and accent
+    assert.deepEqual(normalizedDock[0], {
+      kind: "route",
+      target: "app:music",
+      action: "",
+      label: "",
+      icon: "",
+      confirm: false,
+      badge_style: "",
+      accent: "",
+    });
+    assert.equal(isProtectedNativeDockItem(normalizedDock[0]!), true);
+    assert.deepEqual(normalizedDock[1], {
+      kind: "route",
+      target: "weather:moon",
+      action: "",
+      label: "Moon",
+      icon: "mdi:weather-night",
+      confirm: false,
+      badge_style: "inverted",
+      accent: "primary",
+    });
+    assert.deepEqual(normalizedDock[2], {
+      kind: "entity",
+      target: "light.desk_lamp",
+      action: "toggle",
+      label: "Desk Lamp",
+      icon: "mdi:desk-lamp",
+      confirm: false,
+      badge_style: "",
+      accent: "orange",
+    });
+
+    // Modal open -> configure badge_style & accent -> save -> reopen edit round-trip
+    const { store, wsLog } = createHeadlessStore({
+      catalog: {
+        shortcut_entities: [
+          {
+            id: "scene.goodnight",
+            name: "Goodnight",
+            domain: "scene",
+            device_class: "",
+            icon: "mdi:weather-night",
+            area_name: "Harbor Studio",
+          },
+        ],
+      },
+    });
+    store.applyRoute({ prefix: "/latter", path: "devices/sub_desk/interface" });
+
+    store.entity.openShortcutModal("pinned_items", null);
+    assert.equal(store.shortcutModal.open, true);
+    assert.equal(store.shortcutModal.iconStyleFilter, "all");
+    assert.equal(store.shortcutModal.badgeStyle, "");
+    assert.equal(store.shortcutModal.accent, "");
+
+    store.shortcutModal = {
+      ...store.shortcutModal,
+      kind: "entity",
+      entityTarget: "scene.goodnight",
+      action: "turn_on",
+      label: "Goodnight",
+      icon: "mdi:weather-night",
+      iconStyleFilter: "solid",
+      badgeStyle: "inverted",
+      accent: "gold",
+      confirm: false,
+    };
+    store.entity.saveShortcutModal();
+    await store.entity.flushDeviceBucket("sub_desk");
+
+    assert.equal(store.shortcutModal.open, false);
+    assert.equal(wsLog.length, 1);
+    const savedPinned = (
+      (wsLog[0]?.payload as Record<string, unknown>)?.config as Record<string, unknown>
+    )?.pinned_items as Array<Record<string, unknown>>;
+    assert.deepEqual(savedPinned, [
+      {
+        kind: "entity",
+        target: "scene.goodnight",
+        action: "turn_on",
+        label: "Goodnight",
+        icon: "mdi:weather-night",
+        confirm: false,
+        badge_style: "inverted",
+        accent: "gold",
+      },
+    ]);
+
+    // Reopening existing shortcut restores saved badge_style & accent and resets iconStyleFilter
+    store.entity.openShortcutModal("pinned_items", 0);
+    assert.equal(store.shortcutModal.badgeStyle, "inverted");
+    assert.equal(store.shortcutModal.accent, "gold");
+    assert.equal(store.shortcutModal.iconStyleFilter, "all");
   });
 });

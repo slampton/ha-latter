@@ -42,6 +42,8 @@ class ShortcutItemDict(TypedDict):
     label: str
     icon: str
     confirm: bool
+    badge_style: str
+    accent: str
 
 
 _AVAILABLE_IANA_ZONES: frozenset[str] | None = None
@@ -604,6 +606,18 @@ NAVIGATE_ROUTES: Final[frozenset[str]] = (
     frozenset(SHORTCUT_ROUTE_TOKENS) | NAVIGATE_EXTRA_ROUTES
 )
 DEFAULT_DOCK_ROUTES: Final[str] = str(PROTOCOL_V3_DATA["defaults"]["dock_routes"])
+SHORTCUT_BADGE_STYLES_CATALOG: Final[tuple[CatalogItemDict, ...]] = tuple(
+    PROTOCOL_V3_DATA["catalogs"]["shortcut_badge_styles"]
+)
+SHORTCUT_BADGE_STYLE_TOKENS: Final[tuple[str, ...]] = tuple(
+    str(c["token"]) for c in SHORTCUT_BADGE_STYLES_CATALOG
+)
+SHORTCUT_ACCENTS_CATALOG: Final[tuple[CatalogItemDict, ...]] = tuple(
+    PROTOCOL_V3_DATA["catalogs"]["shortcut_accents"]
+)
+SHORTCUT_ACCENT_TOKENS: Final[tuple[str, ...]] = tuple(
+    str(c["token"]) for c in SHORTCUT_ACCENTS_CATALOG
+)
 
 
 def normalize_navigate_route(raw: object) -> str:
@@ -714,6 +728,8 @@ def default_dock_items() -> list[ShortcutItemDict]:
                     "label": "",
                     "icon": "",
                     "confirm": False,
+                    "badge_style": "",
+                    "accent": "",
                 }
             )
     return out
@@ -759,6 +775,34 @@ def normalize_mdi_icon(val: object, *, strict: bool = False) -> str:
     return ""
 
 
+def normalize_shortcut_badge_style(val: object, *, strict: bool = False) -> str:
+    """Validate and normalize a shortcut badge style (`""` for default glass, or `"inverted"`)."""
+    if val is None:
+        return ""
+    raw = str(val).strip().lower()
+    if not raw or raw == "glass":
+        return ""
+    if raw in SHORTCUT_BADGE_STYLE_TOKENS:
+        return raw
+    if strict:
+        raise ValueError(f"Unknown shortcut badge style: {val!r}")
+    return ""
+
+
+def normalize_shortcut_accent(val: object, *, strict: bool = False) -> str:
+    """Validate and normalize a shortcut semantic accent (`""` for default, or a catalog accent token)."""
+    if val is None:
+        return ""
+    raw = str(val).strip().lower()
+    if not raw or raw == "default":
+        return ""
+    if raw in SHORTCUT_ACCENT_TOKENS:
+        return raw
+    if strict:
+        raise ValueError(f"Unknown shortcut accent: {val!r}")
+    return ""
+
+
 def _normalize_route_shortcut(
     raw: Mapping[str, object], *, is_dock: bool, strict: bool
 ) -> ShortcutItemDict | None:
@@ -781,6 +825,10 @@ def _normalize_route_shortcut(
         "label": sanitize_shortcut_label(raw.get("label")),
         "icon": normalize_mdi_icon(raw.get("icon"), strict=strict),
         "confirm": False,
+        "badge_style": normalize_shortcut_badge_style(
+            raw.get("badge_style"), strict=strict
+        ),
+        "accent": normalize_shortcut_accent(raw.get("accent"), strict=strict),
     }
 
 
@@ -823,6 +871,10 @@ def _normalize_entity_shortcut(
         "label": sanitize_shortcut_label(raw.get("label")),
         "icon": normalize_mdi_icon(raw.get("icon"), strict=strict),
         "confirm": _resolve_shortcut_confirm(raw.get("confirm"), is_dock=is_dock),
+        "badge_style": normalize_shortcut_badge_style(
+            raw.get("badge_style"), strict=strict
+        ),
+        "accent": normalize_shortcut_accent(raw.get("accent"), strict=strict),
     }
 
 

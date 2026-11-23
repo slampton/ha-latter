@@ -1,5 +1,5 @@
 /**
- * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 39`).
+ * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 45`).
  */
 
 import type {
@@ -149,6 +149,9 @@ interface AreaChoice {
   name: string;
 }
 
+export type ShortcutBadgeStyle = "" | "inverted";
+export type ShortcutAccent = "" | "primary" | "gold" | "green" | "red" | "orange";
+
 export interface ShortcutItem {
   kind: "route" | "entity";
   target: string;
@@ -156,6 +159,8 @@ export interface ShortcutItem {
   label: string;
   icon: string;
   confirm: boolean;
+  badge_style?: ShortcutBadgeStyle;
+  accent?: ShortcutAccent;
 }
 
 interface ShortcutEntityOption {

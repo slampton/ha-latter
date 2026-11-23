@@ -12,6 +12,8 @@ from homeassistant.helpers import area_registry as ar, device_registry as dr
 from homeassistant.util import dt as dt_util
 
 from custom_components.latter.areas.registry import (
+    _AREA_ARCHETYPE_PATTERNS,
+    DEFAULT_UNMATCHED_AREA_ICON,
     infer_area_icon_from_name,
     resolve_area_icon,
 )
@@ -397,17 +399,17 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
         "Cozy Den": "mdi:sofa",
         "Baby Nursery": "mdi:baby-carriage",
         "Kids Play": "mdi:teddy-bear",
-        "Primary Suite": "mdi:bed-king-outline",
+        "Primary Suite": "mdi:bed-king",
         "Primary Bath": "mdi:shower",
         "Powder Lavatory": "mdi:shower",
         "Home Office": "mdi:desk",
         "HomeTheater": "mdi:television",
-        "Arcade Game": "mdi:gamepad-variant-outline",
+        "Arcade Game": "mdi:gamepad-variant",
         "Yoga Gym": "mdi:dumbbell",
         "Laundry Utility": "mdi:washing-machine",
         "Two-Car Garage": "mdi:garage",
         "Craft Workshop": "mdi:tools",
-        "Walk-In Closet": "mdi:wardrobe-outline",
+        "Walk-In Closet": "mdi:wardrobe",
         "Front Foyer": "mdi:door-open",
         "Upper Hallway": "mdi:transit-connection-horizontal",
         "Main Stairwell": "mdi:stairs",
@@ -417,11 +419,14 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
         "Backyard Pool": "mdi:pool",
         "Front Porch": "mdi:balcony",
         "Sun Terrace": "mdi:balcony",
-        "Herb Garden": "mdi:tree-outline",
+        "Herb Garden": "mdi:tree",
         "Music Studio": "mdi:speaker",
-        "Zone Alpha": "mdi:map-marker-outline",
-        "": "mdi:map-marker-outline",
+        "Zone Alpha": "mdi:map-marker",
+        "": "mdi:map-marker",
     }
+    assert DEFAULT_UNMATCHED_AREA_ICON == "mdi:map-marker"
+    assert not DEFAULT_UNMATCHED_AREA_ICON.endswith("-outline")
+    assert all(not icon.endswith("-outline") for _pat, icon in _AREA_ARCHETYPE_PATTERNS)
     for label, expected_icon in expected_archetypes.items():
         assert infer_area_icon_from_name(label) == expected_icon, label
 

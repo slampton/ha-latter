@@ -4,9 +4,14 @@
  */
 
 
-import { MDI_TOTAL_ICON_COUNT, PACKED_MDI_CHUNKS } from "./mdi-chunks.js";
+import {
+  MDI_SEARCH_SYNONYMS,
+  MDI_TOTAL_ICON_COUNT,
+  PACKED_MDI_CHUNKS,
+} from "./mdi-chunks.js";
 
 export { MDI_TOTAL_ICON_COUNT };
+export type MdiIconStyleFilter = "all" | "solid" | "outline";
 export const SHORTCUT_DOMAIN_ACTIONS: Readonly<
   Record<string, ReadonlyArray<{ action: string; label: string }>>
 > = {
@@ -148,13 +153,13 @@ export const ROUTE_PREVIEW_ICONS: Readonly<Record<string, string>> = {
   "app:pinned": "mdi:pin",
   "app:music": "mdi:music",
   "music:speakers": "mdi:speaker-multiple",
-  "music:library": "mdi:music-box-outline",
+  "music:library": "mdi:music-box",
   "music:favorites": "mdi:heart",
   "music:playlists": "mdi:playlist-music",
   "music:queue": "mdi:playlist-play",
   "music:album_tracks": "mdi:album",
   "music:lyrics": "mdi:script-text",
-  "music:info": "mdi:information-outline",
+  "music:info": "mdi:information",
   "app:home_hub": "mdi:home",
   "home_hub:alarm": "mdi:shield-home",
   "home_hub:intercom": "mdi:bullhorn",
@@ -165,7 +170,7 @@ export const ROUTE_PREVIEW_ICONS: Readonly<Record<string, string>> = {
   "cameras:grid": "mdi:view-grid",
   "cameras:single": "mdi:video",
   "cameras:carousel": "mdi:view-carousel",
-  "cameras:settings": "mdi:cog-outline",
+  "cameras:settings": "mdi:cog",
   "app:area": "mdi:sofa",
   "area:picker": "mdi:floor-plan",
   "area:scene": "mdi:shimmer",
@@ -183,19 +188,19 @@ export const ROUTE_PREVIEW_ICONS: Readonly<Record<string, string>> = {
   "weather:forecast": "mdi:calendar-week",
   "weather:sun": "mdi:white-balance-sunny",
   "weather:moon": "mdi:moon-waning-crescent",
-  "app:time": "mdi:clock-outline",
-  "time:clock": "mdi:clock-outline",
+  "app:time": "mdi:clock",
+  "time:clock": "mdi:clock",
   "time:timers": "mdi:timer-sand",
   "time:alarms": "mdi:alarm",
-  "time:stopwatch": "mdi:timer-outline",
-  "app:clock": "mdi:clock-outline",
+  "time:stopwatch": "mdi:timer",
+  "app:clock": "mdi:clock",
   "app:calendar": "mdi:calendar",
   "calendar:overview": "mdi:calendar-text",
   "calendar:day": "mdi:calendar-today",
   "calendar:week": "mdi:calendar-week",
   "calendar:month": "mdi:calendar-month",
-  "app:tools": "mdi:view-grid-outline",
-  "tools:stopwatch": "mdi:timer-outline",
+  "app:tools": "mdi:view-grid",
+  "tools:stopwatch": "mdi:timer",
   "tools:level": "mdi:spirit-level",
   "tools:flashlight": "mdi:flashlight",
   "tools:calculator": "mdi:calculator-variant",
@@ -213,11 +218,11 @@ export const ROUTE_PREVIEW_ICONS: Readonly<Record<string, string>> = {
   "settings:sleep": "mdi:power-sleep",
   "settings:sound": "mdi:volume-high",
   "settings:voice": "mdi:microphone",
-  "settings:music": "mdi:music-box-outline",
-  "settings:home": "mdi:home-outline",
+  "settings:music": "mdi:music-box",
+  "settings:home": "mdi:home",
   "settings:actions": "mdi:gesture-tap-button",
   "settings:update": "mdi:cellphone-arrow-down",
-  "settings:info": "mdi:information-outline",
+  "settings:info": "mdi:information",
 };
 
 const MDI_SLUG_PATTERN = /^mdi:[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -457,10 +462,27 @@ export const CURATED_MDI_ICONS: ReadonlyArray<string> = [
 const MDI_LAZY_CHUNK_URL = "__LATTER_MDI_CHUNK_URL__";
 
 let activePackedMdiChunks: ReadonlyArray<string> = PACKED_MDI_CHUNKS;
+let activeMdiSynonyms: Readonly<Record<string, ReadonlyArray<string>>> = MDI_SEARCH_SYNONYMS;
 let cachedAllMdiIcons: string[] | null = null;
 let cachedAllMdiSet: Set<string> | null = null;
+let cachedStyleCounts: { solid: number; outline: number } | null = null;
+let cachedOutlinePopular: string[] | null = null;
+let curatedIconSet: Set<string> | null = null;
 let curatedFallbackSet: Set<string> | null = null;
 let mdiLoadPromise: Promise<void> | null = null;
+
+function getCuratedIconSet(): Set<string> {
+  if (curatedIconSet === null) {
+    curatedIconSet = new Set(CURATED_MDI_ICONS);
+  }
+  return curatedIconSet;
+}
+
+function matchesStyleFilter(fullSlug: string, styleFilter: MdiIconStyleFilter): boolean {
+  if (styleFilter === "all") return true;
+  const isOutline = fullSlug.endsWith("-outline");
+  return styleFilter === "outline" ? isOutline : !isOutline;
+}
 
 function unpackMdiChunks(chunks: ReadonlyArray<string>): string[] {
   const out: string[] = [];
@@ -483,11 +505,19 @@ export function isMdiCatalogLoaded(): boolean {
   return activePackedMdiChunks.length > 0;
 }
 
-export function registerPackedMdiChunks(chunks: ReadonlyArray<string>): void {
+export function registerPackedMdiChunks(
+  chunks: ReadonlyArray<string>,
+  synonyms?: Readonly<Record<string, ReadonlyArray<string>>>,
+): void {
   if (!Array.isArray(chunks) || chunks.length === 0) return;
   activePackedMdiChunks = chunks;
+  if (synonyms && typeof synonyms === "object") {
+    activeMdiSynonyms = synonyms;
+  }
   cachedAllMdiIcons = null;
   cachedAllMdiSet = null;
+  cachedStyleCounts = null;
+  cachedOutlinePopular = null;
 }
 
 export function ensureMdiCatalogLoaded(): Promise<void> {
@@ -498,11 +528,16 @@ export function ensureMdiCatalogLoaded(): Promise<void> {
     return mdiLoadPromise;
   }
   mdiLoadPromise = import(MDI_LAZY_CHUNK_URL)
-    .then((mod: { PACKED_MDI_CHUNKS?: ReadonlyArray<string> }) => {
-      if (mod && Array.isArray(mod.PACKED_MDI_CHUNKS)) {
-        registerPackedMdiChunks(mod.PACKED_MDI_CHUNKS);
-      }
-    })
+    .then(
+      (mod: {
+        PACKED_MDI_CHUNKS?: ReadonlyArray<string>;
+        MDI_SEARCH_SYNONYMS?: Readonly<Record<string, ReadonlyArray<string>>>;
+      }) => {
+        if (mod && Array.isArray(mod.PACKED_MDI_CHUNKS)) {
+          registerPackedMdiChunks(mod.PACKED_MDI_CHUNKS, mod.MDI_SEARCH_SYNONYMS);
+        }
+      },
+    )
     .catch((err: unknown) => {
       mdiLoadPromise = null;
       throw err;
@@ -521,6 +556,69 @@ export function getAllMdiIcons(): ReadonlyArray<string> {
   return cachedAllMdiIcons;
 }
 
+function getAllMdiSet(): Set<string> {
+  if (cachedAllMdiSet === null) {
+    cachedAllMdiSet = new Set(getAllMdiIcons());
+  }
+  return cachedAllMdiSet;
+}
+
+function getStyleCounts(): { solid: number; outline: number } {
+  if (cachedStyleCounts !== null) {
+    return cachedStyleCounts;
+  }
+  const icons = getAllMdiIcons();
+  let outline = 0;
+  for (const slug of icons) {
+    if (slug.endsWith("-outline")) outline += 1;
+  }
+  const result = { solid: icons.length - outline, outline };
+  if (activePackedMdiChunks.length > 0) {
+    cachedStyleCounts = result;
+  }
+  return result;
+}
+
+function getPopularOutlineIcons(limit: number): ReadonlyArray<string> {
+  if (cachedOutlinePopular !== null && cachedOutlinePopular.length >= limit) {
+    return cachedOutlinePopular.slice(0, limit);
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const push = (slug: string): void => {
+    if (!seen.has(slug)) {
+      seen.add(slug);
+      out.push(slug);
+    }
+  };
+  for (const slug of CURATED_MDI_ICONS) {
+    if (slug.endsWith("-outline")) {
+      push(slug);
+    }
+  }
+  if (activePackedMdiChunks.length > 0) {
+    const allSet = getAllMdiSet();
+    for (const slug of CURATED_MDI_ICONS) {
+      if (!slug.endsWith("-outline")) {
+        const outlinePair = `${slug}-outline`;
+        if (allSet.has(outlinePair)) {
+          push(outlinePair);
+        }
+      }
+    }
+    if (out.length < limit) {
+      for (const slug of getAllMdiIcons()) {
+        if (slug.endsWith("-outline")) {
+          push(slug);
+          if (out.length >= limit) break;
+        }
+      }
+    }
+    cachedOutlinePopular = out;
+  }
+  return out.slice(0, limit);
+}
+
 export function isKnownMdiIcon(icon: string): boolean {
   const norm = normalizeMdiIconSlug(icon);
   if (!norm) return false;
@@ -533,15 +631,36 @@ export function isKnownMdiIcon(icon: string): boolean {
     }
     return curatedFallbackSet.has(norm);
   }
-  if (cachedAllMdiSet === null) {
-    cachedAllMdiSet = new Set(getAllMdiIcons());
+  return getAllMdiSet().has(norm);
+}
+
+function hasWholeWordToken(name: string, term: string): boolean {
+  if (name === term) return true;
+  if (name.startsWith(`${term}-`)) return true;
+  if (name.endsWith(`-${term}`)) return true;
+  return name.includes(`-${term}-`);
+}
+
+function collectSynonymsForTerm(term: string): ReadonlyArray<string> {
+  const direct = activeMdiSynonyms[term];
+  if (direct && direct.length > 0) return direct;
+  if (term.length > 4 && term.endsWith("es")) {
+    const stem = term.slice(0, -2);
+    const hit = activeMdiSynonyms[stem];
+    if (hit && hit.length > 0) return hit;
   }
-  return cachedAllMdiSet.has(norm);
+  if (term.length > 3 && term.endsWith("s")) {
+    const stem = term.slice(0, -1);
+    const hit = activeMdiSynonyms[stem];
+    if (hit && hit.length > 0) return hit;
+  }
+  return [];
 }
 
 export function searchMdiIcons(
   rawQuery: string,
   limit = 120,
+  styleFilter: MdiIconStyleFilter = "all",
 ): { items: ReadonlyArray<string>; totalMatches: number } {
   const cleaned = String(rawQuery || "")
     .trim()
@@ -550,15 +669,46 @@ export function searchMdiIcons(
     .replace(/[_\s]+/g, "-");
   const tokens = cleaned.split("-").filter(Boolean);
   if (tokens.length === 0) {
+    if (styleFilter === "all") {
+      return {
+        items: CURATED_MDI_ICONS.slice(0, limit),
+        totalMatches: MDI_TOTAL_ICON_COUNT,
+      };
+    }
+    const counts = getStyleCounts();
+    if (styleFilter === "solid") {
+      const solidPopular = CURATED_MDI_ICONS.filter((s) => !s.endsWith("-outline"));
+      return {
+        items: solidPopular.slice(0, limit),
+        totalMatches: counts.solid,
+      };
+    }
     return {
-      items: CURATED_MDI_ICONS.slice(0, limit),
-      totalMatches: MDI_TOTAL_ICON_COUNT,
+      items: getPopularOutlineIcons(limit),
+      totalMatches: counts.outline,
     };
   }
+
   const firstToken = tokens[0] ?? "";
   const exactNeedle = tokens.join("-");
-  const ranked: Array<{ slug: string; rank: number }> = [];
+  const joinedNeedle = tokens.join("");
+  const phraseSynonyms = new Set<string>();
+  for (const syn of collectSynonymsForTerm(exactNeedle)) phraseSynonyms.add(syn);
+  if (joinedNeedle !== exactNeedle) {
+    for (const syn of collectSynonymsForTerm(joinedNeedle)) phraseSynonyms.add(syn);
+  }
+  const tokenSynonymLists: ReadonlyArray<ReadonlyArray<string>> = tokens.map((tok) =>
+    collectSynonymsForTerm(tok),
+  );
+  const hasAnySynonyms =
+    phraseSynonyms.size > 0 || tokenSynonymLists.some((list) => list.length > 0);
+  const isShortSynonymAbbrev =
+    tokens.length === 1 && exactNeedle.length <= 2 && phraseSynonyms.size > 0;
+  const curatedSet = getCuratedIconSet();
+
+  const ranked: Array<{ slug: string; rank: number; subRank: number }> = [];
   for (const fullSlug of getAllMdiIcons()) {
+    if (!matchesStyleFilter(fullSlug, styleFilter)) continue;
     const name = fullSlug.slice(4);
     let allFound = true;
     for (const tok of tokens) {
@@ -567,18 +717,74 @@ export function searchMdiIcons(
         break;
       }
     }
-    if (!allFound) continue;
-    let rank = 3;
-    if (name === exactNeedle) {
-      rank = 0;
-    } else if (name.startsWith(exactNeedle)) {
-      rank = 1;
-    } else if (firstToken && (name.includes(`-${firstToken}`) || name.startsWith(firstToken))) {
-      rank = 2;
+    if (allFound) {
+      let rank = 3;
+      if (name === exactNeedle) {
+        rank = 0;
+      } else if (isShortSynonymAbbrev) {
+        if (name.startsWith(`${exactNeedle}-`)) {
+          rank = 1;
+        } else if (hasWholeWordToken(name, exactNeedle)) {
+          rank = 2;
+        } else {
+          // Demote accidental 2-letter partial-word matches (e.g. `account` for `"ac"`)
+          // below curated synonym matches (`mdi:air-conditioner`) so short abbreviations work.
+          rank = 5;
+        }
+      } else if (name.startsWith(exactNeedle)) {
+        rank = 1;
+      } else if (firstToken && (name.includes(`-${firstToken}`) || name.startsWith(firstToken))) {
+        rank = 2;
+      }
+      ranked.push({ slug: fullSlug, rank, subRank: 0 });
+      continue;
     }
-    ranked.push({ slug: fullSlug, rank });
+
+    if (!hasAnySynonyms) continue;
+
+    let matchedSynonym = false;
+    let exactSynonymHit = false;
+    if (phraseSynonyms.size > 0) {
+      for (const syn of phraseSynonyms) {
+        if (hasWholeWordToken(name, syn)) {
+          matchedSynonym = true;
+          if (name === syn || name === `${syn}-outline`) {
+            exactSynonymHit = true;
+            break;
+          }
+        }
+      }
+    }
+    if (!matchedSynonym && tokens.length > 1) {
+      let allTokensSatisfied = true;
+      let usedAnySynonym = false;
+      for (let i = 0; i < tokens.length; i += 1) {
+        const tok = tokens[i] ?? "";
+        if (name.includes(tok)) continue;
+        const syns = tokenSynonymLists[i] ?? [];
+        const hit = syns.find((syn) => hasWholeWordToken(name, syn));
+        if (!hit) {
+          allTokensSatisfied = false;
+          break;
+        }
+        usedAnySynonym = true;
+        if (name === hit || name === `${hit}-outline`) {
+          exactSynonymHit = true;
+        }
+      }
+      if (allTokensSatisfied && usedAnySynonym) {
+        matchedSynonym = true;
+      }
+    }
+
+    if (matchedSynonym) {
+      const subRank = (exactSynonymHit ? 0 : 2) + (curatedSet.has(fullSlug) ? 0 : 1);
+      ranked.push({ slug: fullSlug, rank: 4, subRank });
+    }
   }
-  ranked.sort((a, b) => a.rank - b.rank || a.slug.localeCompare(b.slug));
+  ranked.sort(
+    (a, b) => a.rank - b.rank || a.subRank - b.subRank || a.slug.localeCompare(b.slug),
+  );
   return {
     items: ranked.slice(0, limit).map((r) => r.slug),
     totalMatches: ranked.length,

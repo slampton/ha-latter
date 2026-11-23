@@ -437,6 +437,14 @@ def _same_control_val(a: Any, b: Any) -> bool:
         return False
 
 
+def _normalize_group_config_value(key: str, val: Any) -> Any:
+    if key == CONF_DOCK_ITEMS:
+        return normalize_dock_items(val, strict=False)
+    if key == CONF_PINNED_ITEMS:
+        return normalize_pinned_items(val, strict=False)
+    return val
+
+
 def _normalize_group_entry(raw: Mapping[str, Any] | dict[str, Any]) -> dict[str, Any]:
     """Normalize a single Device Group entry onto a complete baseline dictionary."""
     gid = str(raw.get("id") or "").strip()
@@ -455,7 +463,7 @@ def _normalize_group_entry(raw: Mapping[str, Any] | dict[str, Any]) -> dict[str,
     if isinstance(raw.get("device_config"), dict):
         for k, v in raw["device_config"].items():
             if k in GROUP_ALL_DEVICE_KEYS and v is not None:
-                base_dev[k] = v
+                base_dev[k] = _normalize_group_config_value(k, v)
     out_entry: dict[str, Any] = {
         "id": gid,
         "name": str((builtin_def["name"] if builtin_def else raw.get("name")) or gid),
@@ -657,7 +665,7 @@ def seed_group_baseline_from_coordinator(
     if isinstance(existing_cfg := group.get("device_config"), dict):
         for k, v in existing_cfg.items():
             if k in GROUP_ALL_DEVICE_KEYS and v is not None:
-                dev_cfg[k] = v
+                dev_cfg[k] = _normalize_group_config_value(k, v)
     dev_data = getattr(coordinator, "device_data", {}) or {}
     keys_to_copy = (
         tuple(k for k in only_keys if k in GROUP_ALL_DEVICE_KEYS)

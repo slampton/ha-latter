@@ -333,9 +333,142 @@ export const DIALOG_STYLES = css`
     inline-size: var(--studio-control-height-compact);
     block-size: var(--studio-control-height-compact);
     border-radius: var(--studio-radius-pill);
-    background: var(--studio-chip-primary-bg);
-    color: var(--studio-chip-primary-text);
+    border: 1px solid var(--studio-badge-glass-border);
+    background: var(--studio-badge-glass-bg);
+    color: var(--studio-badge-glass-fg);
     flex-shrink: 0;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .shortcut-icon-badge.accent-primary {
+    background: var(--studio-badge-glass-primary-bg);
+    color: var(--studio-badge-glass-primary-fg);
+    border-color: var(--studio-badge-glass-primary-border);
+  }
+  .shortcut-icon-badge.accent-gold {
+    background: var(--studio-badge-glass-gold-bg);
+    color: var(--studio-badge-glass-gold-fg);
+    border-color: var(--studio-badge-glass-gold-border);
+  }
+  .shortcut-icon-badge.accent-green {
+    background: var(--studio-badge-glass-green-bg);
+    color: var(--studio-badge-glass-green-fg);
+    border-color: var(--studio-badge-glass-green-border);
+  }
+  .shortcut-icon-badge.accent-red {
+    background: var(--studio-badge-glass-red-bg);
+    color: var(--studio-badge-glass-red-fg);
+    border-color: var(--studio-badge-glass-red-border);
+  }
+  .shortcut-icon-badge.accent-orange {
+    background: var(--studio-badge-glass-orange-bg);
+    color: var(--studio-badge-glass-orange-fg);
+    border-color: var(--studio-badge-glass-orange-border);
+  }
+  .shortcut-icon-badge.badge-inverted {
+    background: var(--studio-badge-inv-bg);
+    color: var(--studio-badge-inv-fg);
+    border-color: transparent;
+  }
+  .shortcut-icon-badge.badge-inverted.accent-primary {
+    background: var(--studio-badge-inv-primary-bg);
+    color: var(--studio-badge-inv-primary-fg);
+    border-color: transparent;
+  }
+  .shortcut-icon-badge.badge-inverted.accent-gold {
+    background: var(--studio-badge-inv-gold-bg);
+    color: var(--studio-badge-inv-gold-fg);
+    border-color: transparent;
+  }
+  .shortcut-icon-badge.badge-inverted.accent-green {
+    background: var(--studio-badge-inv-green-bg);
+    color: var(--studio-badge-inv-green-fg);
+    border-color: transparent;
+  }
+  .shortcut-icon-badge.badge-inverted.accent-red {
+    background: var(--studio-badge-inv-red-bg);
+    color: var(--studio-badge-inv-red-fg);
+    border-color: transparent;
+  }
+  .shortcut-icon-badge.badge-inverted.accent-orange {
+    background: var(--studio-badge-inv-orange-bg);
+    color: var(--studio-badge-inv-orange-fg);
+    border-color: transparent;
+  }
+  .shortcut-picker-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--studio-space-2);
+  }
+  .shortcut-picker-status {
+    flex: 1 1 200px;
+    min-inline-size: 0;
+  }
+  .shortcut-style-filter {
+    flex-shrink: 0;
+  }
+  .shortcut-badge-style {
+    align-self: flex-start;
+  }
+  .shortcut-accent-pills {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--studio-space-1);
+  }
+  .accent-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--studio-space-1);
+    min-height: var(--studio-control-height-compact);
+    padding-block: 0;
+    padding-inline: var(--studio-space-2);
+    border: 1px solid var(--studio-divider);
+    border-radius: var(--studio-radius-pill);
+    background: var(--studio-input-bg);
+    color: var(--studio-text);
+    font: inherit;
+    font-size:var(--studio-font-caption);
+    font-weight: var(--studio-weight-medium);
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .accent-pill-btn:hover {
+    background: var(--studio-hover);
+    border-color: var(--studio-primary);
+  }
+  .accent-pill-btn[aria-checked="true"] {
+    background: var(--studio-btn-tonal-bg);
+    color: var(--studio-btn-tonal-text);
+    border-color: var(--studio-primary);
+    box-shadow: var(--studio-handoff-ring);
+  }
+  .accent-swatch-dot {
+    inline-size: var(--studio-swatch-dot-size);
+    block-size: var(--studio-swatch-dot-size);
+    border-radius: var(--studio-radius-pill);
+    border: 1px solid transparent;
+    flex-shrink: 0;
+  }
+  .accent-swatch-dot.swatch-default {
+    background: var(--studio-badge-glass-bg);
+    border-color: var(--studio-text-secondary);
+  }
+  .accent-swatch-dot.swatch-primary {
+    background: var(--studio-accent-dot-primary);
+  }
+  .accent-swatch-dot.swatch-gold {
+    background: var(--studio-accent-dot-gold);
+  }
+  .accent-swatch-dot.swatch-green {
+    background: var(--studio-accent-dot-green);
+  }
+  .accent-swatch-dot.swatch-red {
+    background: var(--studio-accent-dot-red);
+  }
+  .accent-swatch-dot.swatch-orange {
+    background: var(--studio-accent-dot-orange);
   }
   .shortcut-item-info {
     display: flex;

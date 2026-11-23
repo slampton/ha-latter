@@ -23,7 +23,11 @@ import {
 } from "../../i18n/index.js";
 import { html, nothing, type TemplateResult } from "../../lib/lit.js";
 import { ROUTE_PREVIEW_ICONS, shortcutActionLabel } from "../../mdi-catalog.js";
-import { isCatalogItemSupported, type StudioStore } from "../../state/store.js";
+import {
+  isCatalogItemSupported,
+  shortcutBadgeClass,
+  type StudioStore,
+} from "../../state/store.js";
 import type { ConfigurableAppId, DeviceCapabilities, ShortcutItem } from "../../types.js";
 import { defaultLocaleTimeFormat, entityLabel } from "../../utils/format.js";
 import {
@@ -206,7 +210,7 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
               const info = resolvePinnedMeta(item);
               const pageNum = Math.floor(idx / 6) + 1;
               return html`<div class="shortcut-icon-row">
-                <span class="shortcut-icon-badge" aria-hidden="true">
+                <span class=${shortcutBadgeClass(item.badge_style, item.accent)} aria-hidden="true">
                   <ha-icon .icon=${info.iconSlug}></ha-icon>
                 </span>
                 <div class="shortcut-item-info">

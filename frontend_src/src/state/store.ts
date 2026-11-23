@@ -15,6 +15,7 @@ import {
   VIEW_TITLE_KEYS,
 } from "../i18n/index.js";
 import type { ReactiveController, ReactiveControllerHost } from "../lib/lit.js";
+import type { MdiIconStyleFilter } from "../mdi-catalog.js";
 import type {
   BleSurveyDeltaEvent,
   BleSurveyRow,
@@ -23,6 +24,8 @@ import type {
   DiscoveredBleCandidate,
   HassRoute,
   HomeAssistant,
+  ShortcutAccent,
+  ShortcutBadgeStyle,
   StudioScope,
   StudioStatePayload,
   StudioViewId,
@@ -54,7 +57,12 @@ import {
   switchViewOp,
   syncUrlOp,
 } from "./routing.js";
-import { isProtectedNativeDockItem } from "./shortcuts-ops.js";
+import {
+  isProtectedNativeDockItem,
+  normalizeShortcutAccent,
+  normalizeShortcutBadgeStyle,
+  shortcutBadgeClass,
+} from "./shortcuts-ops.js";
 import {
   type BatchPillState,
   type ConfirmModalState,
@@ -89,6 +97,9 @@ export {
   GroupsController,
   isCatalogItemSupported,
   isProtectedNativeDockItem,
+  normalizeShortcutAccent,
+  normalizeShortcutBadgeStyle,
+  shortcutBadgeClass,
   type MediaImportModalState,
   type OpenConfirmOptions,
   overlayDevicePrefsOnSections,
@@ -273,6 +284,9 @@ export class StudioStore implements ReactiveController, StudioStoreContext {
     label: "",
     icon: "",
     iconSearch: "",
+    iconStyleFilter: "all" as MdiIconStyleFilter,
+    badgeStyle: "" as ShortcutBadgeStyle,
+    accent: "" as ShortcutAccent,
     confirm: false,
   };
   appConfigModal: { open: boolean; app: ConfigurableAppId | null } = { open: false, app: null };

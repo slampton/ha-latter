@@ -35,7 +35,12 @@ import {
 import type { StudioTranslationKey } from "../i18n/index.js";
 import { html, live, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import { ROUTE_PREVIEW_ICONS, shortcutActionLabel } from "../mdi-catalog.js";
-import { isCatalogItemSupported, type StudioStore } from "../state/store.js";
+import {
+  isCatalogItemSupported,
+  isProtectedNativeDockItem,
+  shortcutBadgeClass,
+  type StudioStore,
+} from "../state/store.js";
 import type { ShortcutItem } from "../types.js";
 import {
   defaultLocaleTimeFormat,
@@ -77,12 +82,7 @@ function countConfiguredWorldClocks(raw: unknown): number {
 }
 
 function isNativeDockRouteItem(item: ShortcutItem): boolean {
-  return (
-    item.kind === "route" &&
-    NATIVE_DOCK_APP_TOKENS.includes(item.target) &&
-    !item.label &&
-    !item.icon
-  );
+  return isProtectedNativeDockItem(item);
 }
 
 function activitySourceLabel(store: StudioStore, token: string, fallback: string): string {
@@ -736,7 +736,10 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                     renderContent: (item) => {
                       const info = resolveDockItemPresentation(item);
                       return html`<div class="input-action-row">
-                        <span class="shortcut-icon-badge" aria-hidden="true">
+                        <span
+                          class=${shortcutBadgeClass(item.badge_style, item.accent)}
+                          aria-hidden="true"
+                        >
                           <ha-icon .icon=${info.icon}></ha-icon>
                         </span>
                         <div class="shortcut-item-info">

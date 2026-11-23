@@ -1,30 +1,39 @@
 /**
- * Add / Edit Shortcut Modal (`#latter-shortcut-modal`, `D-047`, `D-062`).
+ * Add / Edit Shortcut Modal (`#latter-shortcut-modal`, `D-047`, `D-062`, `D-080`).
  * - Short-circuits closed `<dialog>` body
  * - Roving-arrow `tablist` + `tabpanel` for Shortcut type
  * - WAI-ARIA `renderEntityCombobox` replacing unbounded entity `<select>` menus
- * - Accessible MDI icon picker (`role="group"` of `aria-pressed` buttons + humanized labels + cached `searchMdiIcons`)
+ * - Accessible MDI icon picker with weight filter (`All` | `Solid` | `Outline`),
+ *   smart-home synonym search, and live-styled badge style + semantic accent controls
  * - `focusSafe` text inputs
  */
 
 import {
   NATIVE_DOCK_APP_TOKENS,
+  SHORTCUT_ACCENTS_CATALOG,
+  SHORTCUT_BADGE_STYLES_CATALOG,
   SHORTCUT_LABEL_MAX,
   SHORTCUT_ROUTES_CATALOG,
 } from "../../constants.js";
-import { formatHaEntityState } from "../../i18n/index.js";
+import { formatHaEntityState, type StudioTranslationKey } from "../../i18n/index.js";
 import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import {
   isKnownMdiIcon,
   isMdiCatalogLoaded,
   MDI_TOTAL_ICON_COUNT,
+  type MdiIconStyleFilter,
   normalizeMdiIconSlug,
   ROUTE_PREVIEW_ICONS,
   searchMdiIcons,
   SHORTCUT_DOMAIN_ACTIONS,
   SHORTCUT_DOMAIN_LABELS,
 } from "../../mdi-catalog.js";
-import { isCatalogItemSupported, type StudioStore } from "../../state/store.js";
+import {
+  isCatalogItemSupported,
+  shortcutBadgeClass,
+  type StudioStore,
+} from "../../state/store.js";
+import type { ShortcutAccent, ShortcutBadgeStyle } from "../../types.js";
 import { fmtNumber } from "../../utils/format.js";
 import {
   type ComboboxOptionItem,
@@ -32,8 +41,32 @@ import {
   renderSwitchRow,
 } from "../controls.js";
 
+const ICON_STYLE_OPTIONS: ReadonlyArray<{
+  value: MdiIconStyleFilter;
+  labelKey: StudioTranslationKey;
+}> = [
+  { value: "all", labelKey: "dialogs.sc_icon_style_all" },
+  { value: "solid", labelKey: "dialogs.sc_icon_style_solid" },
+  { value: "outline", labelKey: "dialogs.sc_icon_style_outline" },
+];
+
+const BADGE_STYLE_LABEL_KEYS: Readonly<Record<string, StudioTranslationKey>> = {
+  glass: "dialogs.sc_badge_style_glass",
+  inverted: "dialogs.sc_badge_style_inverted",
+};
+
+const ACCENT_LABEL_KEYS: Readonly<Record<string, StudioTranslationKey>> = {
+  default: "dialogs.sc_accent_default",
+  primary: "dialogs.sc_accent_primary",
+  gold: "dialogs.sc_accent_gold",
+  green: "dialogs.sc_accent_green",
+  red: "dialogs.sc_accent_red",
+  orange: "dialogs.sc_accent_orange",
+};
+
 interface CachedMdiSearch {
   queryKey: string;
+  styleFilter: MdiIconStyleFilter;
   loaded: boolean;
   items: readonly string[];
   totalMatches: number;
@@ -41,24 +74,69 @@ interface CachedMdiSearch {
 
 let mdiSearchCache: CachedMdiSearch | null = null;
 
-function getCachedMdiSearch(rawQuery: string): { items: readonly string[]; totalMatches: number } {
+function getCachedMdiSearch(
+  rawQuery: string,
+  styleFilter: MdiIconStyleFilter,
+): { items: readonly string[]; totalMatches: number } {
   const queryKey = String(rawQuery || "").trim().toLowerCase();
   const loaded = isMdiCatalogLoaded();
   if (
     mdiSearchCache &&
     mdiSearchCache.queryKey === queryKey &&
+    mdiSearchCache.styleFilter === styleFilter &&
     mdiSearchCache.loaded === loaded
   ) {
     return { items: mdiSearchCache.items, totalMatches: mdiSearchCache.totalMatches };
   }
-  const result = searchMdiIcons(rawQuery, 120);
+  const result = searchMdiIcons(rawQuery, 120, styleFilter);
   mdiSearchCache = {
     queryKey,
+    styleFilter,
     loaded,
     items: result.items,
     totalMatches: result.totalMatches,
   };
   return result;
+}
+
+function handleRadioGroupKeyDown<T extends string>(
+  ev: KeyboardEvent,
+  values: ReadonlyArray<T>,
+  current: T,
+  onSelect: (nextVal: T) => void,
+  idPrefix: string,
+): void {
+  if (
+    ev.key !== "ArrowLeft" &&
+    ev.key !== "ArrowRight" &&
+    ev.key !== "ArrowUp" &&
+    ev.key !== "ArrowDown" &&
+    ev.key !== "Home" &&
+    ev.key !== "End"
+  ) {
+    return;
+  }
+  ev.preventDefault();
+  const curIdx = Math.max(0, values.indexOf(current));
+  let nextIdx = curIdx;
+  if (ev.key === "Home") {
+    nextIdx = 0;
+  } else if (ev.key === "End") {
+    nextIdx = values.length - 1;
+  } else if (ev.key === "ArrowLeft" || ev.key === "ArrowUp") {
+    nextIdx = (curIdx - 1 + values.length) % values.length;
+  } else {
+    nextIdx = (curIdx + 1) % values.length;
+  }
+  const nextVal = values[nextIdx];
+  if (nextVal === undefined) return;
+  onSelect(nextVal);
+  const groupEl = (ev.currentTarget as HTMLElement).parentElement;
+  const targetId = `#${idPrefix}${nextVal || "default"}`;
+  requestAnimationFrame(() => {
+    const nextBtn = groupEl?.querySelector(targetId) as HTMLElement | null;
+    nextBtn?.focus();
+  });
 }
 
 function humanizeMdiIconLabel(slug: string): string {
@@ -173,8 +251,33 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
   const hasIconQuery = scModal.iconSearch.trim().length > 0;
   const { items: filteredMdiIcons, totalMatches: mdiMatchCount } = getCachedMdiSearch(
     scModal.iconSearch,
+    scModal.iconStyleFilter,
   );
   const totalIconsText = fmtNumber(MDI_TOTAL_ICON_COUNT, store.hass, 0);
+  const previewBadgeClass = shortcutBadgeClass(scModal.badgeStyle, scModal.accent);
+  const iconStyleValues = ICON_STYLE_OPTIONS.map((o) => o.value);
+  const badgeStyleTokens = SHORTCUT_BADGE_STYLES_CATALOG.map((o) => o.token);
+  const activeBadgeStyleToken = scModal.badgeStyle === "inverted" ? "inverted" : "glass";
+  const accentTokens = SHORTCUT_ACCENTS_CATALOG.map((o) => o.token);
+  const activeAccentToken = scModal.accent || "default";
+
+  const setIconStyleFilter = (nextFilter: MdiIconStyleFilter): void => {
+    store.shortcutModal = { ...store.shortcutModal, iconStyleFilter: nextFilter };
+    store.host.requestUpdate();
+  };
+
+  const setBadgeStyleToken = (token: string): void => {
+    const nextStyle: ShortcutBadgeStyle = token === "inverted" ? "inverted" : "";
+    store.shortcutModal = { ...store.shortcutModal, badgeStyle: nextStyle };
+    store.host.requestUpdate();
+  };
+
+  const setAccentToken = (token: string): void => {
+    const nextAccent: ShortcutAccent =
+      token === "default" ? "" : (token as ShortcutAccent);
+    store.shortcutModal = { ...store.shortcutModal, accent: nextAccent };
+    store.host.requestUpdate();
+  };
 
   const setShortcutKind = (nextKind: "route" | "entity", focusTabEl?: HTMLElement | null): void => {
     store.shortcutModal = { ...store.shortcutModal, kind: nextKind };
@@ -414,7 +517,7 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
       <div class="stacked-field">
         <label for="shortcut-icon-input">${store.t("dialogs.sc_icon_label")}</label>
         <div class="shortcut-icon-row">
-          <span class="shortcut-icon-badge" aria-hidden="true">
+          <span id="shortcut-icon-preview" class=${previewBadgeClass} aria-hidden="true">
             <ha-icon .icon=${previewIcon}></ha-icon>
           </span>
           <input
@@ -450,26 +553,64 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
               </button>`
             : nothing}
         </div>
-        <p class="row-description">
-          ${selectedCustomIcon
-            ? store.t("dialogs.sc_icon_selected", { icon: selectedCustomIcon })
-            : store.t("dialogs.sc_icon_default", { icon: autoDefaultIcon })}
-          •
-          ${hasIconQuery
-            ? mdiMatchCount === 0
-              ? store.t("dialogs.sc_icon_no_matches")
-              : mdiMatchCount > filteredMdiIcons.length
-                ? store.t("dialogs.sc_icon_showing_subset", {
-                    shown: fmtNumber(filteredMdiIcons.length, store.hass, 0),
-                    total: fmtNumber(mdiMatchCount, store.hass, 0),
-                  })
-                : mdiMatchCount === 1
-                  ? store.t("dialogs.sc_icon_matches_one")
-                  : store.t("dialogs.sc_icon_matches_many", {
-                      count: fmtNumber(mdiMatchCount, store.hass, 0),
+        <div class="shortcut-picker-bar">
+          <p class="row-description shortcut-picker-status">
+            ${selectedCustomIcon
+              ? store.t("dialogs.sc_icon_selected", { icon: selectedCustomIcon })
+              : store.t("dialogs.sc_icon_default", { icon: autoDefaultIcon })}
+            •
+            ${hasIconQuery
+              ? mdiMatchCount === 0
+                ? store.t("dialogs.sc_icon_no_matches")
+                : mdiMatchCount > filteredMdiIcons.length
+                  ? store.t("dialogs.sc_icon_showing_subset", {
+                      shown: fmtNumber(filteredMdiIcons.length, store.hass, 0),
+                      total: fmtNumber(mdiMatchCount, store.hass, 0),
                     })
-            : store.t("dialogs.sc_icon_popular", { total: totalIconsText })}
-        </p>
+                  : mdiMatchCount === 1
+                    ? store.t("dialogs.sc_icon_matches_one")
+                    : store.t("dialogs.sc_icon_matches_many", {
+                        count: fmtNumber(mdiMatchCount, store.hass, 0),
+                      })
+              : scModal.iconStyleFilter === "all"
+                ? store.t("dialogs.sc_icon_popular", { total: totalIconsText })
+                : store.t("dialogs.sc_icon_popular_filtered", {
+                    style:
+                      scModal.iconStyleFilter === "solid"
+                        ? store.t("dialogs.sc_icon_style_solid").toLowerCase()
+                        : store.t("dialogs.sc_icon_style_outline").toLowerCase(),
+                    total: fmtNumber(mdiMatchCount, store.hass, 0),
+                  })}
+          </p>
+          <div
+            id="shortcut-icon-style-filter"
+            role="radiogroup"
+            aria-label=${store.t("dialogs.sc_icon_style_aria")}
+            class="segmented shortcut-style-filter"
+          >
+            ${ICON_STYLE_OPTIONS.map((opt) => {
+              const checked = scModal.iconStyleFilter === opt.value;
+              return html`<button
+                type="button"
+                id=${`shortcut-icon-style-${opt.value}`}
+                role="radio"
+                aria-checked=${checked ? "true" : "false"}
+                tabindex=${checked ? "0" : "-1"}
+                @click=${() => setIconStyleFilter(opt.value)}
+                @keydown=${(ev: KeyboardEvent) =>
+                  handleRadioGroupKeyDown(
+                    ev,
+                    iconStyleValues,
+                    scModal.iconStyleFilter,
+                    setIconStyleFilter,
+                    "shortcut-icon-style-",
+                  )}
+              >
+                ${store.t(opt.labelKey)}
+              </button>`;
+            })}
+          </div>
+        </div>
         <div
           role="group"
           aria-label=${store.t("dialogs.sc_mdi_group_aria")}
@@ -492,6 +633,81 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
               class="mdi-picker-btn ${isSelected ? "selected" : ""}"
             >
               <ha-icon .icon=${slug}></ha-icon>
+            </button>`;
+          })}
+        </div>
+      </div>
+
+      <div class="stacked-field">
+        <span id="shortcut-badge-style-label" class="field-label">
+          ${store.t("dialogs.sc_badge_style_label")}
+        </span>
+        <div
+          id="shortcut-badge-style-group"
+          role="radiogroup"
+          aria-labelledby="shortcut-badge-style-label"
+          class="segmented shortcut-badge-style"
+        >
+          ${SHORTCUT_BADGE_STYLES_CATALOG.map((item) => {
+            const checked = activeBadgeStyleToken === item.token;
+            const lblKey = BADGE_STYLE_LABEL_KEYS[item.token];
+            return html`<button
+              type="button"
+              id=${`shortcut-badge-style-${item.token}`}
+              role="radio"
+              aria-checked=${checked ? "true" : "false"}
+              tabindex=${checked ? "0" : "-1"}
+              @click=${() => setBadgeStyleToken(item.token)}
+              @keydown=${(ev: KeyboardEvent) =>
+                handleRadioGroupKeyDown(
+                  ev,
+                  badgeStyleTokens,
+                  activeBadgeStyleToken,
+                  setBadgeStyleToken,
+                  "shortcut-badge-style-",
+                )}
+            >
+              ${lblKey ? store.t(lblKey) : item.label}
+            </button>`;
+          })}
+        </div>
+      </div>
+
+      <div class="stacked-field">
+        <span id="shortcut-accent-label" class="field-label">
+          ${store.t("dialogs.sc_accent_label")}
+        </span>
+        <div
+          id="shortcut-accent-group"
+          role="radiogroup"
+          aria-labelledby="shortcut-accent-label"
+          class="shortcut-accent-pills"
+        >
+          ${SHORTCUT_ACCENTS_CATALOG.map((item) => {
+            const checked = activeAccentToken === item.token;
+            const lblKey = ACCENT_LABEL_KEYS[item.token];
+            return html`<button
+              type="button"
+              id=${`shortcut-accent-${item.token}`}
+              role="radio"
+              aria-checked=${checked ? "true" : "false"}
+              tabindex=${checked ? "0" : "-1"}
+              @click=${() => setAccentToken(item.token)}
+              @keydown=${(ev: KeyboardEvent) =>
+                handleRadioGroupKeyDown(
+                  ev,
+                  accentTokens,
+                  activeAccentToken,
+                  setAccentToken,
+                  "shortcut-accent-",
+                )}
+              class="accent-pill-btn"
+            >
+              <span
+                class=${`accent-swatch-dot swatch-${item.token}`}
+                aria-hidden="true"
+              ></span>
+              <span>${lblKey ? store.t(lblKey) : item.label}</span>
             </button>`;
           })}
         </div>

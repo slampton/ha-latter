@@ -157,17 +157,31 @@ async def test_studio_commands_security_pin_secrecy_and_presence_calibration(
                             "action": "turn_on",
                             "label": "Movie",
                             "confirm": True,
+                            "badge_style": "inverted",
+                            "accent": "gold",
                         },
                     ],
                     "pinned_items": [
-                        {"kind": "route", "target": "weather:moon", "label": "Moon"},
-                        {"kind": "route", "target": "music:lyrics"},
+                        {
+                            "kind": "route",
+                            "target": "weather:moon",
+                            "label": "Moon",
+                            "badge_style": "inverted",
+                            "accent": "primary",
+                        },
+                        {
+                            "kind": "route",
+                            "target": "music:lyrics",
+                            "badge_style": "glass",
+                            "accent": "default",
+                        },
                         {
                             "kind": "entity",
                             "target": "script.baby_help",
                             "action": "turn_on",
                             "label": "Baby Help",
                             "confirm": False,
+                            "accent": "red",
                         },
                     ],
                 }
@@ -184,6 +198,52 @@ async def test_studio_commands_security_pin_secrecy_and_presence_calibration(
         assert state_after_pin["config"]["security_pin_policy"] == "require_pin"
         assert len(state_after_pin["config"]["dock_items"]) == 3
         assert len(state_after_pin["config"]["pinned_items"]) == 3
+        assert state_after_pin["config"]["dock_items"][2]["badge_style"] == "inverted"
+        assert state_after_pin["config"]["dock_items"][2]["accent"] == "gold"
+        assert state_after_pin["config"]["pinned_items"][0]["badge_style"] == "inverted"
+        assert state_after_pin["config"]["pinned_items"][0]["accent"] == "primary"
+        assert state_after_pin["config"]["pinned_items"][1]["badge_style"] == ""
+        assert state_after_pin["config"]["pinned_items"][1]["accent"] == ""
+        assert state_after_pin["config"]["pinned_items"][2]["badge_style"] == ""
+        assert state_after_pin["config"]["pinned_items"][2]["accent"] == "red"
+
+        # Coordinator Protocol v3 shortcuts frame emits 9-column wire records with badge_style & accent
+        _sc_rev, sc_frames = coord.get_shortcuts_payload()
+        sc_parts = sc_frames[0].split("\x1f")
+        dock_wire = sc_parts[5].split("\x1e")
+        pinned_wire = sc_parts[7].split("\x1e")
+        assert all(len(row.split("|")) == 9 for row in dock_wire)
+        assert all(len(row.split("|")) == 9 for row in pinned_wire)
+        assert dock_wire[0] == "route|app:pinned||||0|-1||"
+        assert (
+            dock_wire[2]
+            == "entity|scene.movie_night|turn_on|Movie|mdi:palette|1|2|inverted|gold"
+        )
+        assert pinned_wire[0] == "route|weather:moon||Moon||0|-1|inverted|primary"
+        assert pinned_wire[1] == "route|music:lyrics||||0|-1||"
+        assert (
+            pinned_wire[2]
+            == "entity|script.baby_help|turn_on|Baby Help|mdi:script-text-play|0|2||red"
+        )
+
+        # Invalid badge_style or accent is rejected via WS `invalid_format`
+        for bad_sc in (
+            {"dock_items": [{"kind": "route", "target": "weather:moon", "badge_style": "neon"}]},
+            {"pinned_items": [{"kind": "route", "target": "weather:moon", "accent": "cyan"}]},
+        ):
+            msg_seq += 1
+            await call_ws(
+                hass,
+                conn,
+                msg_seq,
+                "latter/device/command",
+                command="save_device_config",
+                subentry_id=coord.subentry_id,
+                payload={"config": bad_sc},
+                studio_rev=STUDIO_REV,
+            )
+            assert conn.errors[-1][1] == "invalid_format"
+            conn.errors.clear()
         for retired_music_key in ("show_speaker_shortcut", "show_library_shortcut"):
             assert retired_music_key not in state_after_pin["config"]
             msg_seq += 1

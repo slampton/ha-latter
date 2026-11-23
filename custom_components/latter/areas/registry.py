@@ -36,7 +36,7 @@ from ..hub_registry import (
 )
 from ..identity import resolve_bound_esphome_device_id
 
-DEFAULT_UNMATCHED_AREA_ICON: Final = "mdi:map-marker-outline"
+DEFAULT_UNMATCHED_AREA_ICON: Final = "mdi:map-marker"
 
 _NON_AREA_LOOKUP_TOKENS: Final[frozenset[str]] = frozenset(
     {"unknown", "unavailable", "not_home", "away", "none", ""}
@@ -59,14 +59,14 @@ _AREA_ARCHETYPE_PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = tuple
         (r"\b(?:laundry|utility|mud\w*)\b", "mdi:washing-machine"),
         (r"\b(?:office|study|library|desk\w*)\b", "mdi:desk"),
         (r"\b(?:media|theat(?:er|re)|cinema|tv)\b", "mdi:television"),
-        (r"\b(?:gam(?:e|es|ing)|arcade)\b", "mdi:gamepad-variant-outline"),
+        (r"\b(?:gam(?:e|es|ing)|arcade)\b", "mdi:gamepad-variant"),
         (r"\b(?:gym\w*|fitness|workout|yoga|exercise)\b", "mdi:dumbbell"),
         (r"\b(?:garage|carport)\b", "mdi:garage"),
         (r"\b(?:workshop|tools?|craft\w*)\b", "mdi:tools"),
-        (r"\b(?:closet|wardrobe|dressing)\b", "mdi:wardrobe-outline"),
+        (r"\b(?:closet|wardrobe|dressing)\b", "mdi:wardrobe"),
         (r"\b(?:pool\w*|spa|hot\s*tub|jacuzzi)\b", "mdi:pool"),
         (r"\b(?:patio|deck|porch|balcony|terrace|lanai|veranda)\b", "mdi:balcony"),
-        (r"\b(?:garden\w*|yard|lawn|outdoor\w*|backyard|courtyard)\b", "mdi:tree-outline"),
+        (r"\b(?:garden\w*|yard|lawn|outdoor\w*|backyard|courtyard)\b", "mdi:tree"),
         (r"\b(?:attic|loft)\b", "mdi:home-roof"),
         (r"\b(?:basement|cellar)\b", "mdi:stairs-down"),
         (r"\b(?:stairs?|stairwell|staircase)\b", "mdi:stairs"),
@@ -74,7 +74,7 @@ _AREA_ARCHETYPE_PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = tuple
         (r"\b(?:entry\w*|entrance|foyer|vestibule|front)\b", "mdi:door-open"),
         (r"\b(?:studio|music)\b", "mdi:speaker"),
         (r"\b(?:living|family|great|den|lounge|parlor|sitting)\b", "mdi:sofa"),
-        (r"\b(?:primary|master|guest|bed\w*|bunk|dorm\w*)\b", "mdi:bed-king-outline"),
+        (r"\b(?:primary|master|guest|bed\w*|bunk|dorm\w*)\b", "mdi:bed-king"),
     )
 )
 

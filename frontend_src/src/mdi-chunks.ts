@@ -585,3 +585,359 @@ export const PACKED_MDI_CHUNKS: ReadonlyArray<string> = [
   "7-outline|4disk|1odiac-aquarius|8ries|7cancer|9pricorn|7gemini|7leo|8ibra|7pisces|7sagittarius|8corpio",
   "7taurus|7virgo",
 ];
+
+/**
+ * Bidirectional smart-home and everyday semantic concept/synonym table for MDI search.
+ * Lives strictly inside `mdi-chunks.ts` so it ships exclusively in the lazy
+ * `latter-studio-mdi.js` chunk (zero bytes added to eager `latter-studio.js`).
+ */
+const BIDIRECTIONAL_CONCEPT_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
+  // Lighting & fixtures
+  [
+    "lamp",
+    "lightbulb",
+    "chandelier",
+    "wall-sconce",
+    "sconce",
+    "ceiling-light",
+    "floor-lamp",
+    "desk-lamp",
+    "coach-lamp",
+    "outdoor-lamp",
+    "track-light",
+    "string-lights",
+    "led-strip",
+    "lava-lamp",
+    "candle",
+    "flashlight",
+  ],
+  // Climate & HVAC
+  [
+    "air-conditioner",
+    "hvac",
+    "thermostat",
+    "thermometer",
+    "radiator",
+    "snowflake",
+    "fire",
+    "fireplace",
+    "fan",
+    "ceiling-fan",
+    "air-humidifier",
+    "air-purifier",
+  ],
+  // Waste & recycling
+  ["trash-can", "delete", "recycle", "compost"],
+  // Pets
+  ["dog", "cat", "paw", "fish", "bird", "bone"],
+  // Blinds, shades, & windows
+  ["blinds", "curtains", "roller-shade", "window-shutter", "window", "awning"],
+  // Entry, doors, gates, & locks
+  ["door", "gate", "garage", "lock", "key", "doorbell", "door-open", "garage-open", "gate-open"],
+  // Media, TV, cinema, & gaming
+  ["movie", "television", "remote-tv", "remote", "sofa", "play", "popcorn", "projector", "theater", "controller", "gamepad"],
+  // Bedtime, night, & sleep
+  ["weather-night", "moon", "sleep", "bed", "power-sleep", "shield-moon", "alarm-snooze"],
+  // Morning, sunrise, & routine
+  ["weather-sunny", "white-balance-sunny", "weather-sunset", "coffee", "coffee-maker", "alarm"],
+  // Away, leave, & travel
+  ["airplane", "shield-airplane", "home-export", "bag-suitcase", "car", "lock"],
+  // Arrive & welcome
+  ["home-import", "door-open", "lock-open", "garage-open", "hand-wave", "home"],
+  // Emergency, SOS, & safety
+  [
+    "lifebuoy",
+    "alert",
+    "alarm-light",
+    "bell-alert",
+    "medical-bag",
+    "phone-in-talk",
+    "shield-alert",
+    "ambulance",
+    "smoke-detector",
+  ],
+  // Baby, nursery, & kids
+  ["baby", "baby-carriage", "baby-bottle", "baby-face", "cradle", "teddy-bear", "human-male-female-child"],
+  // Kitchen, cooking, & dining
+  [
+    "countertop",
+    "stove",
+    "fridge",
+    "coffee",
+    "coffee-maker",
+    "kettle",
+    "dishwasher",
+    "silverware",
+    "grill",
+    "microwave",
+    "oven",
+    "toaster",
+    "blender",
+    "pot",
+  ],
+  // Bath, shower, & plumbing
+  ["shower", "shower-head", "bathtub", "faucet", "water", "water-boiler", "water-pump", "pipe-valve", "toilet"],
+  // Laundry
+  ["washing-machine", "tumble-dryer", "iron", "hanger"],
+  // Cleaning & chores
+  ["robot-vacuum", "broom", "shimmer", "spray-bottle"],
+  // Yard, garden, patio, & outdoor
+  [
+    "sprinkler",
+    "robot-mower",
+    "mower",
+    "flower",
+    "tree",
+    "pine-tree",
+    "pool",
+    "grill",
+    "balcony",
+    "watering-can",
+    "fence",
+  ],
+  // Music, audio, & announcements
+  [
+    "music",
+    "speaker",
+    "playlist",
+    "headphones",
+    "radio",
+    "podcast",
+    "volume",
+    "cast-audio",
+    "album",
+    "microphone",
+    "bullhorn",
+  ],
+  // Office, work, & study
+  ["desk", "laptop", "briefcase", "webcam", "microphone", "calendar", "monitor", "book"],
+  // Security, cameras, & sensors
+  [
+    "shield",
+    "shield-home",
+    "shield-lock",
+    "shield-check",
+    "cctv",
+    "video",
+    "doorbell-video",
+    "motion-sensor",
+    "smoke-detector",
+    "lock",
+    "security",
+  ],
+  // Power, plugs, energy, solar, & EV
+  [
+    "power",
+    "power-plug",
+    "power-socket",
+    "flash",
+    "lightning-bolt",
+    "battery",
+    "solar-power",
+    "ev-station",
+    "car-electric",
+    "meter-electric",
+  ],
+  // Settings & tools
+  ["cog", "tools", "wrench", "hammer", "screwdriver", "tune"],
+  // Time, clock, timers, & calendar
+  ["clock", "alarm", "timer", "timer-sand", "calendar"],
+  // Weather & sky
+  ["weather", "white-balance-sunny", "moon", "snowflake", "water", "umbrella", "thermometer"],
+  // Scenes, party, wellness, & fitness
+  ["shimmer", "creation", "palette", "star", "party-popper", "meditation", "spa", "dumbbell", "yoga"],
+  // Connectivity & automations
+  ["wifi", "router", "bluetooth", "zigbee", "z-wave", "robot", "script-text", "toggle-switch", "light-switch", "bell"],
+];
+
+const QUERY_SYNONYM_ALIASES: Readonly<Record<string, ReadonlyArray<string>>> = {
+  light: ["lightbulb", "lamp", "desk-lamp", "floor-lamp", "ceiling-light", "chandelier", "wall-sconce", "candle", "led-strip", "string-lights", "track-light", "brightness", "flashlight"],
+  lights: ["lightbulb", "lamp", "desk-lamp", "floor-lamp", "ceiling-light", "chandelier", "wall-sconce", "string-lights", "led-strip", "track-light"],
+  lighting: ["lightbulb", "lamp", "ceiling-light", "chandelier", "wall-sconce", "floor-lamp", "desk-lamp", "track-light", "led-strip"],
+  bulb: ["lightbulb", "lamp", "ceiling-light"],
+  dimmer: ["brightness", "lightbulb", "lamp"],
+  nightlight: ["lamp", "lightbulb", "candle", "weather-night", "moon"],
+  ac: ["air-conditioner", "hvac", "thermostat", "thermometer", "snowflake", "fan", "radiator", "fire"],
+  aircon: ["air-conditioner", "hvac", "thermostat", "snowflake", "fan"],
+  temp: ["thermometer", "thermostat", "air-conditioner", "hvac", "radiator", "snowflake", "fire"],
+  temperature: ["thermometer", "thermostat", "air-conditioner", "hvac", "radiator", "snowflake", "fire"],
+  heat: ["fire", "fireplace", "radiator", "thermostat", "thermometer", "hvac", "water-boiler"],
+  heater: ["radiator", "fire", "fireplace", "thermostat", "hvac", "water-boiler"],
+  heating: ["radiator", "fire", "fireplace", "thermostat", "hvac"],
+  cool: ["snowflake", "air-conditioner", "fan", "ceiling-fan", "thermostat", "hvac"],
+  cooling: ["snowflake", "air-conditioner", "fan", "ceiling-fan", "thermostat", "hvac"],
+  humidity: ["air-humidifier", "water-percent", "water", "hvac"],
+  humidifier: ["air-humidifier", "water-percent", "water"],
+  purifier: ["air-purifier", "fan", "air-filter"],
+  trash: ["trash-can", "delete", "recycle", "compost"],
+  garbage: ["trash-can", "delete", "recycle"],
+  bin: ["trash-can", "delete", "recycle"],
+  waste: ["trash-can", "delete", "recycle", "compost"],
+  pet: ["dog", "cat", "paw", "fish", "bird", "bone"],
+  pets: ["dog", "cat", "paw", "fish", "bird"],
+  puppy: ["dog", "paw", "bone"],
+  kitty: ["cat", "paw"],
+  kitten: ["cat", "paw"],
+  blind: ["blinds", "curtains", "roller-shade", "window-shutter", "awning", "window"],
+  shade: ["roller-shade", "blinds", "curtains", "window-shutter", "awning", "window"],
+  shades: ["roller-shade", "blinds", "curtains", "window-shutter", "awning"],
+  drapes: ["curtains", "blinds", "roller-shade", "window-shutter"],
+  curtain: ["curtains", "blinds", "roller-shade", "window-shutter"],
+  shutter: ["window-shutter", "blinds", "curtains", "roller-shade"],
+  entry: ["door", "door-open", "gate", "garage", "lock", "key", "doorbell"],
+  front: ["door", "door-open", "doorbell", "doorbell-video", "lock", "gate", "home"],
+  unlock: ["lock-open", "lock", "key", "door-open"],
+  cinema: ["movie", "television", "remote-tv", "sofa", "play", "popcorn", "projector", "theater"],
+  film: ["movie", "television", "play", "video", "projector"],
+  tv: ["television", "remote-tv", "television-speaker", "movie", "sofa", "play"],
+  couch: ["sofa", "television", "movie"],
+  gaming: ["controller", "gamepad", "television"],
+  game: ["controller", "gamepad", "dice", "cards"],
+  bedtime: ["weather-night", "moon", "sleep", "bed", "power-sleep", "shield-moon"],
+  night: ["weather-night", "moon", "sleep", "bed", "power-sleep", "shield-moon"],
+  goodnight: ["weather-night", "moon", "sleep", "bed", "power-sleep", "shield-moon"],
+  "good-night": ["weather-night", "moon", "sleep", "bed", "power-sleep", "shield-moon"],
+  nap: ["sleep", "bed", "power-sleep", "sofa"],
+  morning: ["weather-sunny", "white-balance-sunny", "coffee", "coffee-maker", "alarm", "weather-sunset"],
+  goodmorning: ["weather-sunny", "white-balance-sunny", "coffee", "alarm"],
+  "good-morning": ["weather-sunny", "white-balance-sunny", "coffee", "alarm"],
+  wake: ["alarm", "weather-sunny", "white-balance-sunny", "coffee", "bell-ring"],
+  wakeup: ["alarm", "weather-sunny", "white-balance-sunny", "coffee"],
+  sunrise: ["weather-sunset", "weather-sunny", "white-balance-sunny"],
+  away: ["airplane", "shield-airplane", "home-export", "car", "lock", "bag-suitcase"],
+  leave: ["home-export", "airplane", "shield-airplane", "car", "lock", "door-closed"],
+  leaving: ["home-export", "airplane", "shield-airplane", "car", "lock"],
+  goodbye: ["home-export", "hand-wave", "door-closed", "lock", "shield-lock"],
+  vacation: ["airplane", "shield-airplane", "bag-suitcase", "beach", "palm-tree", "home-export"],
+  holiday: ["airplane", "bag-suitcase", "beach", "party-popper", "calendar"],
+  travel: ["airplane", "bag-suitcase", "car", "train", "compass", "map-marker"],
+  arrive: ["home-import", "door-open", "lock-open", "garage-open", "hand-wave", "home"],
+  welcome: ["home-import", "door-open", "lock-open", "garage-open", "hand-wave", "home"],
+  emergency: ["lifebuoy", "alert", "alarm-light", "bell-alert", "medical-bag", "phone-in-talk", "shield-alert", "ambulance", "smoke-detector"],
+  help: ["lifebuoy", "alert", "alarm-light", "bell-alert", "medical-bag", "phone-in-talk", "shield-alert", "help-circle"],
+  sos: ["lifebuoy", "alert", "alarm-light", "bell-alert", "medical-bag", "phone-in-talk", "shield-alert"],
+  panic: ["alarm-light", "alert", "bell-alert", "lifebuoy", "shield-alert", "phone-in-talk"],
+  siren: ["alarm-light", "bell-alert", "alert", "bullhorn", "shield-alert"],
+  medical: ["medical-bag", "ambulance", "heart", "pill", "hospital"],
+  nursery: ["baby", "baby-carriage", "baby-bottle", "baby-face", "cradle", "teddy-bear"],
+  kid: ["baby", "cradle", "teddy-bear", "human-male-female-child"],
+  kids: ["baby", "cradle", "teddy-bear", "human-male-female-child"],
+  child: ["baby", "cradle", "teddy-bear", "human-male-female-child"],
+  children: ["baby", "cradle", "teddy-bear", "human-male-female-child"],
+  stroller: ["baby-carriage", "baby-buggy", "baby"],
+  kitchen: ["countertop", "stove", "fridge", "coffee", "coffee-maker", "kettle", "dishwasher", "silverware", "microwave", "oven", "toaster", "grill"],
+  cook: ["stove", "oven", "pot", "grill", "countertop", "silverware", "microwave", "chef-hat"],
+  cooking: ["stove", "oven", "pot", "grill", "countertop", "silverware", "chef-hat"],
+  dinner: ["silverware", "stove", "oven", "grill", "pot", "food", "table-furniture"],
+  food: ["silverware", "food", "fridge", "stove", "coffee", "grill", "pizza"],
+  meal: ["silverware", "food", "stove", "table-furniture"],
+  dining: ["silverware", "table-furniture", "food", "candle"],
+  refrigerator: ["fridge", "snowflake"],
+  bath: ["bathtub", "shower", "shower-head", "faucet", "water", "toilet"],
+  bathroom: ["shower", "shower-head", "bathtub", "faucet", "water", "toilet"],
+  tub: ["bathtub", "shower", "water"],
+  sink: ["faucet", "water", "countertop"],
+  laundry: ["washing-machine", "tumble-dryer", "iron", "hanger", "tshirt-crew"],
+  wash: ["washing-machine", "dishwasher", "shower", "faucet", "water", "car-wash"],
+  washer: ["washing-machine", "dishwasher"],
+  dryer: ["tumble-dryer", "washing-machine", "hair-dryer"],
+  clean: ["robot-vacuum", "broom", "shimmer", "spray-bottle", "dishwasher", "washing-machine"],
+  cleaning: ["robot-vacuum", "broom", "shimmer", "spray-bottle"],
+  vacuum: ["robot-vacuum", "broom", "shimmer"],
+  mop: ["broom", "robot-vacuum", "water", "spray-bottle", "shimmer"],
+  yard: ["sprinkler", "robot-mower", "mower", "flower", "tree", "pine-tree", "pool", "grill", "balcony", "watering-can", "fence"],
+  garden: ["flower", "sprinkler", "watering-can", "tree", "pine-tree", "robot-mower", "shovel", "sprout"],
+  lawn: ["robot-mower", "mower", "sprinkler", "grass", "tree"],
+  patio: ["grill", "balcony", "pool", "outdoor-lamp", "table-chair", "umbrella"],
+  outdoor: ["outdoor-lamp", "coach-lamp", "patio", "balcony", "tree", "flower", "sprinkler", "grill", "pool", "gate", "fence"],
+  bbq: ["grill", "fire", "silverware"],
+  plant: ["flower", "sprout", "watering-can", "tree", "leaf"],
+  audio: ["music", "speaker", "playlist", "headphones", "radio", "podcast", "volume", "cast-audio", "album", "microphone"],
+  song: ["music", "playlist", "album", "headphones", "speaker", "radio"],
+  sound: ["volume", "speaker", "music", "headphones", "bell", "bullhorn"],
+  intercom: ["bullhorn", "microphone", "speaker", "phone-in-talk", "broadcast"],
+  broadcast: ["bullhorn", "broadcast", "speaker", "cast-audio", "radio"],
+  announce: ["bullhorn", "bell-ring", "message-alert", "speaker"],
+  mute: ["volume-mute", "volume-off", "microphone-off", "bell-off"],
+  quiet: ["volume-mute", "bell-off", "bell-sleep", "power-sleep", "moon"],
+  dnd: ["bell-off", "bell-sleep", "minus-circle", "moon", "power-sleep"],
+  office: ["desk", "laptop", "briefcase", "webcam", "microphone", "calendar", "monitor", "printer"],
+  work: ["briefcase", "laptop", "desk", "monitor", "webcam", "calendar", "coffee"],
+  meeting: ["webcam", "microphone", "calendar", "video", "account-group", "briefcase"],
+  study: ["book", "desk", "laptop", "lamp", "desk-lamp", "school"],
+  camera: ["cctv", "video", "doorbell-video", "webcam", "camera"],
+  cam: ["cctv", "video", "doorbell-video", "webcam", "camera"],
+  alarm: ["alarm", "alarm-light", "shield-home", "shield-lock", "shield-alert", "bell-alert", "bell-ring", "security"],
+  sensor: ["motion-sensor", "smoke-detector", "thermometer", "water-percent", "leak", "access-point"],
+  plug: ["power-plug", "power-socket", "power", "ev-station"],
+  outlet: ["power-socket", "power-plug", "power", "flash"],
+  energy: ["flash", "lightning-bolt", "solar-power", "battery", "meter-electric", "power"],
+  solar: ["solar-power", "solar-panel", "white-balance-sunny", "flash", "battery"],
+  ev: ["ev-station", "car-electric", "battery-charging", "power-plug", "flash", "lightning-bolt"],
+  charge: ["battery-charging", "ev-station", "car-electric", "power-plug", "flash", "lightning-bolt"],
+  charger: ["battery-charging", "ev-station", "power-plug", "usb"],
+  settings: ["cog", "tools", "wrench", "tune", "sliders"],
+  gear: ["cog", "tools", "wrench"],
+  config: ["cog", "tools", "wrench", "tune"],
+  time: ["clock", "alarm", "timer", "timer-sand", "calendar"],
+  stopwatch: ["timer", "clock", "timer-sand"],
+  hourglass: ["timer-sand", "timer", "clock"],
+  schedule: ["calendar", "clock", "alarm", "timer"],
+  rain: ["weather-rainy", "weather-pouring", "umbrella", "water", "weather-lightning"],
+  snow: ["weather-snowy", "snowflake", "weather-snowy-heavy"],
+  wind: ["weather-windy", "wind-turbine", "fan"],
+  sun: ["white-balance-sunny", "weather-sunny", "weather-partly-cloudy", "solar-power"],
+  cloud: ["weather-cloudy", "weather-partly-cloudy", "cloud"],
+  storm: ["weather-lightning", "weather-pouring", "weather-tornado", "weather-hurricane"],
+  party: ["party-popper", "music", "shimmer", "balloon", "cake"],
+  relax: ["meditation", "spa", "sofa", "candle", "music", "book"],
+  workout: ["dumbbell", "run", "yoga", "bicycle", "heart"],
+  gym: ["dumbbell", "weight-lifter", "run", "yoga"],
+  fitness: ["dumbbell", "run", "yoga", "bicycle", "heart"],
+  reading: ["book", "desk-lamp", "lamp", "glasses"],
+  bedroom: ["bed", "lamp", "weather-night", "alarm", "moon"],
+  living: ["sofa", "television", "lamp", "floor-lamp", "fireplace", "speaker"],
+  hallway: ["door", "lightbulb", "motion-sensor", "stairs"],
+  automation: ["robot", "script-text", "cog-play", "autorenew", "flash", "shimmer"],
+  scene: ["shimmer", "creation", "palette", "star", "magic-staff"],
+  routine: ["autorenew", "robot", "script-text", "calendar", "clock"],
+  notify: ["bell", "bell-ring", "bell-alert", "message-alert", "bullhorn"],
+  ble: ["bluetooth", "access-point", "radar", "map-marker"],
+  "wi-fi": ["wifi", "router", "access-point"],
+};
+
+function buildMdiSearchSynonyms(): Readonly<Record<string, ReadonlyArray<string>>> {
+  const map = new Map<string, Set<string>>();
+  const addLink = (key: string, target: string): void => {
+    if (!key || !target || key === target) return;
+    let bucket = map.get(key);
+    if (!bucket) {
+      bucket = new Set<string>();
+      map.set(key, bucket);
+    }
+    bucket.add(target);
+  };
+
+  for (const group of BIDIRECTIONAL_CONCEPT_GROUPS) {
+    for (const term of group) {
+      for (const peer of group) {
+        addLink(term, peer);
+      }
+    }
+  }
+
+  for (const [alias, targets] of Object.entries(QUERY_SYNONYM_ALIASES)) {
+    for (const target of targets) {
+      addLink(alias, target);
+    }
+  }
+
+  const out: Record<string, ReadonlyArray<string>> = {};
+  for (const [key, set] of map.entries()) {
+    out[key] = Array.from(set);
+  }
+  return out;
+}
+
+export const MDI_SEARCH_SYNONYMS: Readonly<Record<string, ReadonlyArray<string>>> =
+  buildMdiSearchSynonyms();

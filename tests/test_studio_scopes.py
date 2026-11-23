@@ -31,15 +31,30 @@ class TestShortcutPolicy(unittest.TestCase):
         dock_out = settings.normalize_dock_items(
             [
                 {"kind": "route", "target": "app:pinned"},
-                {"kind": "route", "target": "weather:moon", "label": "Moon Phase"},
+                {
+                    "kind": "route",
+                    "target": "weather:moon",
+                    "label": "Moon Phase",
+                    "badge_style": "inverted",
+                    "accent": "primary",
+                },
                 {"kind": "route", "target": "settings:root"},
-                {"kind": "entity", "target": "scene.evening", "action": "turn_on"},
+                {
+                    "kind": "entity",
+                    "target": "scene.evening",
+                    "action": "turn_on",
+                    "badge_style": "glass",
+                    "accent": "gold",
+                },
             ]
         )
         self.assertEqual(
             [it["target"] for it in dock_out],
             ["app:pinned", "weather:moon", "scene.evening"],
         )
+        self.assertEqual((dock_out[0]["badge_style"], dock_out[0]["accent"]), ("", ""))
+        self.assertEqual((dock_out[1]["badge_style"], dock_out[1]["accent"]), ("inverted", "primary"))
+        self.assertEqual((dock_out[2]["badge_style"], dock_out[2]["accent"]), ("", "gold"))
         self.assertTrue(dock_out[2]["confirm"])
 
         pinned_out = settings.normalize_pinned_items(
@@ -53,6 +68,8 @@ class TestShortcutPolicy(unittest.TestCase):
                     "target": "script.baby_help",
                     "action": "turn_on",
                     "label": "Baby Help",
+                    "badge_style": "inverted",
+                    "accent": "red",
                 },
             ]
         )
@@ -67,14 +84,19 @@ class TestShortcutPolicy(unittest.TestCase):
             ],
         )
         self.assertFalse(pinned_out[-1]["confirm"])
+        self.assertEqual((pinned_out[-1]["badge_style"], pinned_out[-1]["accent"]), ("inverted", "red"))
 
         for bad_pinned in (
             [{"kind": "route", "target": "app:pinned"}],
             [{"kind": "route", "target": "not:a_route"}],
             [{"kind": "entity", "target": "lock.front", "action": "toggle"}],
+            [{"kind": "route", "target": "weather:moon", "badge_style": "solid"}],
+            [{"kind": "entity", "target": "light.desk", "action": "toggle", "accent": "magenta"}],
         ):
             with self.assertRaises(ValueError):
                 settings.normalize_pinned_items(bad_pinned, strict=True)
+            with self.assertRaises(settings.SettingsScopeError):
+                settings.clean_device_settings({"pinned_items": bad_pinned})
 
     def test_one_default_and_route_catalog_in_both_repos(self) -> None:
         protocol_json = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
@@ -87,6 +109,12 @@ class TestShortcutPolicy(unittest.TestCase):
         for route in protocol_json["catalogs"]["shortcut_routes"]:
             self.assertIn(f'token: "{route["token"]}"', protocol_ts)
             self.assertIn(f'"{route["token"]}"', bundle_js)
+        for style_item in protocol_json["catalogs"]["shortcut_badge_styles"]:
+            self.assertIn(style_item["token"], settings.SHORTCUT_BADGE_STYLE_TOKENS)
+            self.assertIn(f'token: "{style_item["token"]}"', protocol_ts)
+        for accent_item in protocol_json["catalogs"]["shortcut_accents"]:
+            self.assertIn(accent_item["token"], settings.SHORTCUT_ACCENT_TOKENS)
+            self.assertIn(f'token: "{accent_item["token"]}"', protocol_ts)
         for music_tok, music_lbl in (
             ("music:album_tracks", "Album Tracks"),
             ("music:lyrics", "Music Lyrics"),

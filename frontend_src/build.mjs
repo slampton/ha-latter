@@ -147,7 +147,7 @@ async function buildBundles(frontendDir) {
       build.onLoad({ filter: /mdi-chunks\.ts$/ }, (args) => {
         if (normalizeFsPath(args.path) !== mdiChunksNorm) return null;
         return {
-          contents: `export const MDI_TOTAL_ICON_COUNT = ${mdiTotalIconCount};\nexport const PACKED_MDI_CHUNKS = [];\n`,
+          contents: `export const MDI_TOTAL_ICON_COUNT = ${mdiTotalIconCount};\nexport const PACKED_MDI_CHUNKS = [];\nexport const MDI_SEARCH_SYNONYMS = {};\n`,
           loader: "ts",
         };
       });

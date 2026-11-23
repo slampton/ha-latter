@@ -10,6 +10,8 @@ import {
   HOME_CATEGORIES_CATALOG,
   NATIVE_DOCK_APP_TOKENS,
   NATIVE_DOCK_CONFIG_APP_MAP,
+  SHORTCUT_ACCENTS_CATALOG,
+  SHORTCUT_BADGE_STYLES_CATALOG,
   START_SCREEN_CONFIG_APP_MAP,
   STUDIO_REV,
   SYSTEM_VIEW_SLUGS,
@@ -38,7 +40,7 @@ import {
   searchMdiIcons,
   shortcutActionLabel,
 } from "../../src/mdi-catalog.js";
-import { PACKED_MDI_CHUNKS } from "../../src/mdi-chunks.js";
+import { MDI_SEARCH_SYNONYMS, PACKED_MDI_CHUNKS } from "../../src/mdi-chunks.js";
 import {
   applyCanvasPanDelta,
   clampNum,
@@ -155,8 +157,8 @@ describe("crop-math, alarms, world-clocks, MDI catalog & combobox ranking", () =
     );
   });
 
-  it("maintains 7,447-icon MDI firmware parity, protocol route maps, and STUDIO_REV = 44", () => {
-    assert.equal(STUDIO_REV, 44);
+  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 45", () => {
+    assert.equal(STUDIO_REV, 45);
     assert.equal(SYSTEM_VIEW_SLUGS.photos, "photos");
     assert.ok(NATIVE_DOCK_APP_TOKENS.includes("app:cameras"));
     assert.ok(NATIVE_DOCK_APP_TOKENS.includes("app:calendar"));
@@ -164,6 +166,15 @@ describe("crop-math, alarms, world-clocks, MDI catalog & combobox ranking", () =
     assert.equal(NATIVE_DOCK_CONFIG_APP_MAP["app:weather"], "weather");
     assert.equal(START_SCREEN_CONFIG_APP_MAP.Cameras, "cameras");
     assert.equal(START_SCREEN_CONFIG_APP_MAP.Weather, "weather");
+
+    assert.deepEqual(
+      SHORTCUT_BADGE_STYLES_CATALOG.map((c) => c.token),
+      ["glass", "inverted"],
+    );
+    assert.deepEqual(
+      SHORTCUT_ACCENTS_CATALOG.map((c) => c.token),
+      ["default", "primary", "gold", "green", "red", "orange"],
+    );
 
     assert.deepEqual(
       HOME_CATEGORIES_CATALOG.map((c) => c.token),
@@ -175,7 +186,29 @@ describe("crop-math, alarms, world-clocks, MDI catalog & combobox ranking", () =
     assert.equal(ROUTE_PREVIEW_ICONS["home_hub:cameras"], undefined);
     assert.equal(ROUTE_PREVIEW_ICONS["app:cameras"], "mdi:cctv");
 
+    // Item 1: 1:1 solid route preview parity with firmware `draw_route_icon()` (zero `-outline`)
+    assert.equal(ROUTE_PREVIEW_ICONS["music:library"], "mdi:music-box");
+    assert.equal(ROUTE_PREVIEW_ICONS["music:info"], "mdi:information");
+    assert.equal(ROUTE_PREVIEW_ICONS["cameras:settings"], "mdi:cog");
+    assert.equal(ROUTE_PREVIEW_ICONS["app:time"], "mdi:clock");
+    assert.equal(ROUTE_PREVIEW_ICONS["time:clock"], "mdi:clock");
+    assert.equal(ROUTE_PREVIEW_ICONS["app:clock"], "mdi:clock");
+    assert.equal(ROUTE_PREVIEW_ICONS["time:stopwatch"], "mdi:timer");
+    assert.equal(ROUTE_PREVIEW_ICONS["tools:stopwatch"], "mdi:timer");
+    assert.equal(ROUTE_PREVIEW_ICONS["app:tools"], "mdi:view-grid");
+    assert.equal(ROUTE_PREVIEW_ICONS["settings:music"], "mdi:music-box");
+    assert.equal(ROUTE_PREVIEW_ICONS["settings:home"], "mdi:home");
+    assert.equal(ROUTE_PREVIEW_ICONS["settings:info"], "mdi:information");
+    for (const [route, icon] of Object.entries(ROUTE_PREVIEW_ICONS)) {
+      assert.equal(
+        icon.endsWith("-outline"),
+        false,
+        `Route ${route} preview icon must be solid, found ${icon}`,
+      );
+    }
+
     assert.ok(PACKED_MDI_CHUNKS.length > 0);
+    assert.ok(Object.keys(MDI_SEARCH_SYNONYMS).length >= 80);
     assert.equal(isMdiCatalogLoaded(), true);
     assert.equal(MDI_TOTAL_ICON_COUNT, 7447);
     const allIcons = getAllMdiIcons();
@@ -193,12 +226,69 @@ describe("crop-math, alarms, world-clocks, MDI catalog & combobox ranking", () =
     assert.equal(normalizeMdiIconSlug("not valid!!"), "");
     assert.equal(shortcutActionLabel("lock", "unlock"), "Unlock");
 
-    const emptySearch = searchMdiIcons("", 50);
-    assert.equal(emptySearch.items.length, 50);
-    assert.equal(emptySearch.totalMatches, MDI_TOTAL_ICON_COUNT);
+    // Item 3: Style filters (`all` | `solid` | `outline`) with accurate counts on empty and queried searches
+    const emptyAll = searchMdiIcons("", 50, "all");
+    const emptySolid = searchMdiIcons("", 50, "solid");
+    const emptyOutline = searchMdiIcons("", 50, "outline");
+    assert.equal(emptyAll.items.length, 50);
+    assert.equal(emptyAll.totalMatches, MDI_TOTAL_ICON_COUNT);
+    assert.equal(emptySolid.items.length, 50);
+    assert.equal(emptyOutline.items.length, 50);
+    assert.equal(emptySolid.totalMatches + emptyOutline.totalMatches, MDI_TOTAL_ICON_COUNT);
+    assert.ok(emptySolid.items.every((slug) => !slug.endsWith("-outline")));
+    assert.ok(emptyOutline.items.every((slug) => slug.endsWith("-outline")));
+
+    const bulbSolid = searchMdiIcons("lightbulb", 60, "solid");
+    const bulbOutline = searchMdiIcons("lightbulb", 60, "outline");
+    assert.ok(bulbSolid.items.includes("mdi:lightbulb"));
+    assert.ok(bulbSolid.items.every((slug) => !slug.endsWith("-outline")));
+    assert.ok(bulbOutline.items.includes("mdi:lightbulb-outline"));
+    assert.ok(bulbOutline.items.every((slug) => slug.endsWith("-outline")));
 
     const bullhornSearch = searchMdiIcons("bullhorn", 20);
     assert.equal(bullhornSearch.items[0], "mdi:bullhorn");
     assert.ok(bullhornSearch.totalMatches >= 2);
+
+    // Item 3: Bidirectional synonym search with direct slug hits strictly above synonym hits
+    const lampSearch = searchMdiIcons("lamp", 120, "all");
+    assert.equal(lampSearch.items[0], "mdi:lamp");
+    assert.ok(lampSearch.items.includes("mdi:desk-lamp"));
+    assert.ok(lampSearch.items.includes("mdi:lightbulb"));
+    assert.ok(lampSearch.items.includes("mdi:chandelier"));
+    assert.ok(
+      lampSearch.items.indexOf("mdi:desk-lamp") < lampSearch.items.indexOf("mdi:lightbulb"),
+      "Direct slug hits must rank strictly above synonym matches",
+    );
+
+    const acSearch = searchMdiIcons("ac", 40, "all");
+    assert.ok(acSearch.items.includes("mdi:air-conditioner"));
+    assert.ok(acSearch.items.includes("mdi:thermostat"));
+
+    const trashSearch = searchMdiIcons("trash", 40, "all");
+    assert.equal(trashSearch.items[0], "mdi:trash-can");
+    assert.ok(trashSearch.items.includes("mdi:delete"));
+    assert.ok(trashSearch.items.includes("mdi:recycle"));
+    assert.ok(trashSearch.items.indexOf("mdi:trash-can") < trashSearch.items.indexOf("mdi:delete"));
+
+    const petSearch = searchMdiIcons("pet", 30, "all");
+    assert.ok(petSearch.items.includes("mdi:dog"));
+    assert.ok(petSearch.items.includes("mdi:cat"));
+    assert.ok(petSearch.items.includes("mdi:paw"));
+
+    const nightSearch = searchMdiIcons("goodnight", 30, "all");
+    assert.ok(nightSearch.items.includes("mdi:weather-night"));
+    assert.ok(nightSearch.items.includes("mdi:bed"));
+    assert.ok(nightSearch.items.includes("mdi:sleep"));
+
+    const sosSearch = searchMdiIcons("emergency", 30, "all");
+    assert.ok(sosSearch.items.includes("mdi:lifebuoy"));
+    assert.ok(sosSearch.items.includes("mdi:alarm-light"));
+    assert.ok(sosSearch.items.includes("mdi:medical-bag"));
+
+    // Bidirectional synonym: `lightbulb` surfaces `lamp` after direct `lightbulb*` matches
+    const reverseLamp = searchMdiIcons("lightbulb", 120, "all");
+    assert.equal(reverseLamp.items[0], "mdi:lightbulb");
+    assert.ok(reverseLamp.items.includes("mdi:lamp"));
+    assert.ok(reverseLamp.items.indexOf("mdi:lightbulb") < reverseLamp.items.indexOf("mdi:lamp"));
   });
 });

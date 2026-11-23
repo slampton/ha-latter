@@ -6,7 +6,7 @@ import json
 from typing import Any
 import unittest
 
-from custom_components.latter import protocol_codec as _PAYLOADS_MOD
+from custom_components.latter import protocol_codec as _PAYLOADS_MOD, protocol_policy
 from tests.conftest import LATTER_DIR, REPO_ROOT, read_py_tree
 
 HA_PROTO_JSON = LATTER_DIR / "protocol_v3.json"
@@ -413,6 +413,51 @@ class TestRecordsFields(unittest.TestCase):
         self.assertEqual(fields[11], "above_horizon")
         self.assertEqual(fields[16], "waxing_gibbous")
         self.assertEqual(fields[17], "F")
+
+    def test_shortcuts(self) -> None:
+        expected_layout = [
+            "kind",
+            "target",
+            "action",
+            "label",
+            "icon",
+            "confirm",
+            "state",
+            "badge_style",
+            "accent",
+        ]
+        self.assertEqual(self.layout("shortcuts", "dock_items"), expected_layout)
+        self.assertEqual(self.layout("shortcuts", "pinned_items"), expected_layout)
+        recs = protocol_policy.shortcut_records(
+            [
+                {
+                    "kind": "route",
+                    "target": "weather:moon",
+                    "label": "Moon",
+                    "icon": "mdi:moon-waning-crescent",
+                    "badge_style": "inverted",
+                    "accent": "primary",
+                },
+                {
+                    "kind": "entity",
+                    "target": "light.desk",
+                    "action": "toggle",
+                    "label": "Desk",
+                    "icon": "mdi:lamp",
+                    "confirm": True,
+                    "state": 1,
+                    "badge_style": "glass",
+                    "accent": "orange",
+                },
+            ]
+        )
+        self.assertEqual(
+            list(recs),
+            [
+                ("route", "weather:moon", "", "Moon", "mdi:moon-waning-crescent", "0", "-1", "inverted", "primary"),
+                ("entity", "light.desk", "toggle", "Desk", "mdi:lamp", "1", "1", "", "orange"),
+            ],
+        )
 
     def test_records_revs_are_content_hashed(self) -> None:
         packer = DomainPayloadPacker(epoch=9)

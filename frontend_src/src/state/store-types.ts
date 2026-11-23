@@ -12,6 +12,7 @@ import {
 } from "../constants.js";
 import type { StudioTranslationKey } from "../i18n/index.js";
 import type { ReactiveControllerHost } from "../lib/lit.js";
+import type { MdiIconStyleFilter } from "../mdi-catalog.js";
 import type {
   BleSurveyDeltaEvent,
   BleSurveyRow,
@@ -27,6 +28,8 @@ import type {
   MediaBrowseRoot,
   PhotoCrop,
   PhotoPoolTarget,
+  ShortcutAccent,
+  ShortcutBadgeStyle,
   ShortcutItem,
   StudioScope,
   StudioStatePayload,
@@ -575,6 +578,9 @@ export interface StudioStoreContext {
     label: string;
     icon: string;
     iconSearch: string;
+    iconStyleFilter: MdiIconStyleFilter;
+    badgeStyle: ShortcutBadgeStyle;
+    accent: ShortcutAccent;
     confirm: boolean;
   };
   appConfigModal: { open: boolean; app: ConfigurableAppId | null };

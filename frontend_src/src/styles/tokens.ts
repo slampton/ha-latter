@@ -96,6 +96,46 @@ export const TOKEN_STYLES = css`
     --studio-danger-loud-bg: var(--ha-color-fill-danger-loud-resting, #c62828);
     --studio-danger-loud-text: var(--ha-color-on-danger-loud, #ffffff);
 
+    /* Per-shortcut badge style & semantic accent tokens (WCAG 2.2 AA >= 4.5:1) */
+    --studio-swatch-dot-size: 12px;
+    --studio-badge-glass-bg: #e8ecf0;
+    --studio-badge-glass-fg: #212121;
+    --studio-badge-glass-border: rgba(0, 0, 0, 0.14);
+    --studio-badge-glass-primary-bg: var(--ha-color-fill-primary-normal-resting, #d8eff7);
+    --studio-badge-glass-primary-fg: var(--ha-color-on-primary-normal, #005b78);
+    --studio-badge-glass-primary-border: rgba(0, 114, 153, 0.28);
+    --studio-badge-glass-gold-bg: #fef3c7;
+    --studio-badge-glass-gold-fg: #78350f;
+    --studio-badge-glass-gold-border: rgba(217, 119, 6, 0.32);
+    --studio-badge-glass-green-bg: #dcfce7;
+    --studio-badge-glass-green-fg: #14532d;
+    --studio-badge-glass-green-border: rgba(22, 163, 74, 0.3);
+    --studio-badge-glass-red-bg: #fee2e2;
+    --studio-badge-glass-red-fg: #991b1b;
+    --studio-badge-glass-red-border: rgba(220, 38, 38, 0.3);
+    --studio-badge-glass-orange-bg: #ffedd5;
+    --studio-badge-glass-orange-fg: #9a3412;
+    --studio-badge-glass-orange-border: rgba(234, 88, 12, 0.32);
+
+    --studio-badge-inv-bg: #1f2937;
+    --studio-badge-inv-fg: #ffffff;
+    --studio-badge-inv-primary-bg: var(--ha-color-fill-primary-loud-resting, #007299);
+    --studio-badge-inv-primary-fg: var(--ha-color-on-primary-loud, #ffffff);
+    --studio-badge-inv-gold-bg: #f59e0b;
+    --studio-badge-inv-gold-fg: #1c1917;
+    --studio-badge-inv-green-bg: #15803d;
+    --studio-badge-inv-green-fg: #ffffff;
+    --studio-badge-inv-red-bg: #c62828;
+    --studio-badge-inv-red-fg: #ffffff;
+    --studio-badge-inv-orange-bg: #c2410c;
+    --studio-badge-inv-orange-fg: #ffffff;
+
+    --studio-accent-dot-primary: var(--primary-color, #007299);
+    --studio-accent-dot-gold: #d97706;
+    --studio-accent-dot-green: #16a34a;
+    --studio-accent-dot-red: #dc2626;
+    --studio-accent-dot-orange: #ea580c;
+
     /* Switch, status, shadows, & scroll masks */
     --studio-switch-track: var(--ha-switch-background-color, var(--ha-color-fill-disabled-quiet-resting, #e0e0e0));
     --studio-switch-border: var(--ha-switch-border-color, var(--ha-color-border-neutral-normal, #7a7a7a));
@@ -191,6 +231,44 @@ export const TOKEN_STYLES = css`
     --studio-danger-tonal-text: var(--ha-color-on-danger-normal, #ff9b93);
     --studio-danger-loud-bg: var(--ha-color-fill-danger-loud-resting, #c62828);
     --studio-danger-loud-text: var(--ha-color-on-danger-loud, #ffffff);
+
+    --studio-badge-glass-bg: #2c3138;
+    --studio-badge-glass-fg: #f1f5f9;
+    --studio-badge-glass-border: rgba(255, 255, 255, 0.16);
+    --studio-badge-glass-primary-bg: var(--ha-color-fill-primary-normal-resting, #0b3545);
+    --studio-badge-glass-primary-fg: var(--ha-color-on-primary-normal, #7bd6f5);
+    --studio-badge-glass-primary-border: rgba(56, 189, 248, 0.34);
+    --studio-badge-glass-gold-bg: #3d2b08;
+    --studio-badge-glass-gold-fg: #fcd34d;
+    --studio-badge-glass-gold-border: rgba(251, 191, 36, 0.34);
+    --studio-badge-glass-green-bg: #10331e;
+    --studio-badge-glass-green-fg: #6ee7b7;
+    --studio-badge-glass-green-border: rgba(74, 222, 128, 0.32);
+    --studio-badge-glass-red-bg: #3f1515;
+    --studio-badge-glass-red-fg: #fca5a5;
+    --studio-badge-glass-red-border: rgba(248, 113, 113, 0.34);
+    --studio-badge-glass-orange-bg: #411e09;
+    --studio-badge-glass-orange-fg: #fdba74;
+    --studio-badge-glass-orange-border: rgba(251, 146, 60, 0.34);
+
+    --studio-badge-inv-bg: #f1f5f9;
+    --studio-badge-inv-fg: #111827;
+    --studio-badge-inv-primary-bg: #38bdf8;
+    --studio-badge-inv-primary-fg: #082f49;
+    --studio-badge-inv-gold-bg: #fbbf24;
+    --studio-badge-inv-gold-fg: #1c1917;
+    --studio-badge-inv-green-bg: #4ade80;
+    --studio-badge-inv-green-fg: #052e16;
+    --studio-badge-inv-red-bg: #f87171;
+    --studio-badge-inv-red-fg: #450a0a;
+    --studio-badge-inv-orange-bg: #fb923c;
+    --studio-badge-inv-orange-fg: #431407;
+
+    --studio-accent-dot-primary: var(--primary-color, #38bdf8);
+    --studio-accent-dot-gold: #fbbf24;
+    --studio-accent-dot-green: #4ade80;
+    --studio-accent-dot-red: #f87171;
+    --studio-accent-dot-orange: #fb923c;
 
     --studio-switch-track: var(--ha-switch-background-color, var(--ha-color-fill-disabled-quiet-resting, #202020));
     --studio-switch-border: var(--ha-switch-border-color, var(--ha-color-border-neutral-normal, #7a7a7a));

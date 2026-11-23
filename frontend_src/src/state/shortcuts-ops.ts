@@ -28,7 +28,7 @@ import {
   normalizeMdiIconSlug,
   SHORTCUT_DOMAIN_ACTIONS,
 } from "../mdi-catalog.js";
-import type { ShortcutItem } from "../types.js";
+import type { ShortcutAccent, ShortcutBadgeStyle, ShortcutItem } from "../types.js";
 import {
   isCatalogItemSupported,
   type StudioStoreContext,
@@ -241,12 +241,50 @@ export function sanitizeShortcutLabel(raw: unknown): string {
     : trimmed;
 }
 
+const VALID_SHORTCUT_ACCENTS = new Set<ShortcutAccent>([
+  "primary",
+  "gold",
+  "green",
+  "red",
+  "orange",
+]);
+
+export function normalizeShortcutBadgeStyle(raw: unknown): ShortcutBadgeStyle {
+  const clean = String(raw ?? "").trim().toLowerCase();
+  return clean === "inverted" ? "inverted" : "";
+}
+
+export function normalizeShortcutAccent(raw: unknown): ShortcutAccent {
+  const clean = String(raw ?? "").trim().toLowerCase();
+  if (!clean || clean === "default") return "";
+  return VALID_SHORTCUT_ACCENTS.has(clean as ShortcutAccent)
+    ? (clean as ShortcutAccent)
+    : "";
+}
+
+export function shortcutBadgeClass(
+  badgeStyle?: ShortcutBadgeStyle,
+  accent?: ShortcutAccent,
+): string {
+  const classes = ["shortcut-icon-badge"];
+  if (normalizeShortcutBadgeStyle(badgeStyle) === "inverted") {
+    classes.push("badge-inverted");
+  }
+  const cleanAccent = normalizeShortcutAccent(accent);
+  if (cleanAccent) {
+    classes.push(`accent-${cleanAccent}`);
+  }
+  return classes.join(" ");
+}
+
 export function isProtectedNativeDockItem(item: ShortcutItem): boolean {
   return (
     item.kind === "route" &&
     NATIVE_DOCK_APP_TOKENS.includes(item.target) &&
     !item.label &&
-    !item.icon
+    !item.icon &&
+    !normalizeShortcutBadgeStyle(item.badge_style) &&
+    !normalizeShortcutAccent(item.accent)
   );
 }
 
@@ -258,6 +296,8 @@ export function defaultDockShortcutItems(): ShortcutItem[] {
     label: "",
     icon: "",
     confirm: false,
+    badge_style: "",
+    accent: "",
   }));
 }
 
@@ -291,6 +331,8 @@ export function normalizeShortcutArray(raw: unknown, isDock: boolean): ShortcutI
         label: isNativeDockApp ? "" : sanitizeShortcutLabel(rec.label),
         icon: isNativeDockApp ? "" : normalizeMdiIconSlug(rec.icon),
         confirm: false,
+        badge_style: isNativeDockApp ? "" : normalizeShortcutBadgeStyle(rec.badge_style),
+        accent: isNativeDockApp ? "" : normalizeShortcutAccent(rec.accent),
       });
     } else if (kind === "entity") {
       const target = String(rec.target || "").trim().toLowerCase();
@@ -314,6 +356,8 @@ export function normalizeShortcutArray(raw: unknown, isDock: boolean): ShortcutI
         label: sanitizeShortcutLabel(rec.label),
         icon: normalizeMdiIconSlug(rec.icon),
         confirm: rec.confirm === undefined ? isDock : Boolean(rec.confirm),
+        badge_style: normalizeShortcutBadgeStyle(rec.badge_style),
+        accent: normalizeShortcutAccent(rec.accent),
       });
     }
     if (out.length >= maxItems) break;
@@ -357,6 +401,8 @@ export function openShortcutModalOp(
       ? current[editIndex]
       : undefined;
   if (existing && editIndex !== null) {
+    const existingBadgeStyle = normalizeShortcutBadgeStyle(existing.badge_style);
+    const existingAccent = normalizeShortcutAccent(existing.accent);
     if (existing.kind === "entity") {
       const dom = existing.target.split(".", 1)[0] || firstDomain;
       store.shortcutModal = {
@@ -372,6 +418,9 @@ export function openShortcutModalOp(
         label: existing.label,
         icon: existing.icon,
         iconSearch: "",
+        iconStyleFilter: "all",
+        badgeStyle: existingBadgeStyle,
+        accent: existingAccent,
         confirm: Boolean(existing.confirm),
       };
     } else {
@@ -388,6 +437,9 @@ export function openShortcutModalOp(
         label: existing.label,
         icon: existing.icon,
         iconSearch: "",
+        iconStyleFilter: "all",
+        badgeStyle: existingBadgeStyle,
+        accent: existingAccent,
         confirm: isDock,
       };
     }
@@ -405,6 +457,9 @@ export function openShortcutModalOp(
       label: "",
       icon: "",
       iconSearch: "",
+      iconStyleFilter: "all",
+      badgeStyle: "",
+      accent: "",
       confirm: isDock,
     };
   }
@@ -456,6 +511,8 @@ export function saveShortcutModalOp(store: StudioStoreContext): void {
     }
   }
   const cleanLabel = sanitizeShortcutLabel(modal.label);
+  const cleanBadgeStyle = normalizeShortcutBadgeStyle(modal.badgeStyle);
+  const cleanAccent = normalizeShortcutAccent(modal.accent);
 
   let built: ShortcutItem;
   if (modal.kind === "route") {
@@ -477,6 +534,8 @@ export function saveShortcutModalOp(store: StudioStoreContext): void {
       label: cleanLabel,
       icon: cleanIcon,
       confirm: false,
+      badge_style: cleanBadgeStyle,
+      accent: cleanAccent,
     };
   } else {
     const entId = modal.entityTarget.trim().toLowerCase();
@@ -501,6 +560,8 @@ export function saveShortcutModalOp(store: StudioStoreContext): void {
       label: cleanLabel,
       icon: cleanIcon,
       confirm: Boolean(modal.confirm),
+      badge_style: cleanBadgeStyle,
+      accent: cleanAccent,
     };
   }
 

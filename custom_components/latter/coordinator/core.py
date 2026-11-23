@@ -3553,6 +3553,8 @@ class LatterCoordinator:
                         "icon": item.get("icon") or "",
                         "confirm": False,
                         "state": -1,
+                        "badge_style": str(item.get("badge_style") or ""),
+                        "accent": str(item.get("accent") or ""),
                     }
                 )
                 continue
@@ -3586,6 +3588,8 @@ class LatterCoordinator:
                     "icon": eff_icon,
                     "confirm": bool(item.get("confirm", False)),
                     "state": live_state,
+                    "badge_style": str(item.get("badge_style") or ""),
+                    "accent": str(item.get("accent") or ""),
                 }
             )
         return resolved

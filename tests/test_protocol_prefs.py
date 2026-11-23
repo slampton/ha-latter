@@ -493,9 +493,31 @@ class TestShortcutsProtocolAndPolicy(unittest.TestCase):
     """Universal Shortcut Engine: normalization, confirm defaults, explicit security verbs, live state, and multi-chunk packing."""
 
     def test_shortcut_item_normalization_and_confirm_defaults(self) -> None:
+        # Badge style & accent catalogs stay in 1:1 parity with protocol_v3.json
+        spec = json.loads(HA_PROTO_JSON.read_text(encoding="utf-8"))
+        self.assertEqual(
+            protocol_specs.SHORTCUT_BADGE_STYLE_TOKENS,
+            tuple(item["token"] for item in spec["catalogs"]["shortcut_badge_styles"]),
+        )
+        self.assertEqual(
+            protocol_specs.SHORTCUT_ACCENT_TOKENS,
+            tuple(item["token"] for item in spec["catalogs"]["shortcut_accents"]),
+        )
+        for d_item in studio_scope.default_dock_items():
+            self.assertEqual(d_item["badge_style"], "")
+            self.assertEqual(d_item["accent"], "")
+
         # Entity on App Dock defaults confirm=True; entity in Pinned defaults confirm=False
         dock_ent = studio_scope.normalize_shortcut_item(
-            {"kind": "entity", "target": "Script.Baby_Help", "action": "turn_on", "label": "  Baby | Help  ", "icon": "baby_face_outline"},
+            {
+                "kind": "entity",
+                "target": "Script.Baby_Help",
+                "action": "turn_on",
+                "label": "  Baby | Help  ",
+                "icon": "baby_face_outline",
+                "badge_style": "inverted",
+                "accent": "gold",
+            },
             is_dock=True,
         )
         assert dock_ent is not None
@@ -503,13 +525,51 @@ class TestShortcutsProtocolAndPolicy(unittest.TestCase):
         self.assertEqual(dock_ent["label"], "Baby Help")
         self.assertEqual(dock_ent["icon"], "mdi:baby-face-outline")
         self.assertTrue(dock_ent["confirm"])
+        self.assertEqual(dock_ent["badge_style"], "inverted")
+        self.assertEqual(dock_ent["accent"], "gold")
 
         pinned_ent = studio_scope.normalize_shortcut_item(
-            {"kind": "entity", "target": "light.nursery_lamp", "action": "toggle"},
+            {
+                "kind": "entity",
+                "target": "light.nursery_lamp",
+                "action": "toggle",
+                "badge_style": "glass",
+                "accent": "default",
+            },
             is_dock=False,
         )
         assert pinned_ent is not None
         self.assertFalse(pinned_ent["confirm"])
+        self.assertEqual(pinned_ent["badge_style"], "")
+        self.assertEqual(pinned_ent["accent"], "")
+
+        styled_route = studio_scope.normalize_shortcut_item(
+            {
+                "kind": "route",
+                "target": "weather:moon",
+                "label": "Moon",
+                "badge_style": "inverted",
+                "accent": "primary",
+            },
+            is_dock=False,
+        )
+        assert styled_route is not None
+        self.assertEqual(styled_route["badge_style"], "inverted")
+        self.assertEqual(styled_route["accent"], "primary")
+
+        # Strict mode rejects unknown badge_style or accent on both route and entity items
+        for bad_item in (
+            {"kind": "route", "target": "weather:moon", "badge_style": "solid"},
+            {"kind": "route", "target": "weather:moon", "accent": "purple"},
+            {"kind": "entity", "target": "light.desk", "action": "toggle", "badge_style": "flat"},
+            {"kind": "entity", "target": "light.desk", "action": "toggle", "accent": "teal"},
+        ):
+            with self.assertRaises(ValueError):
+                studio_scope.normalize_shortcut_item(bad_item, is_dock=False, strict=True)
+            lenient = studio_scope.normalize_shortcut_item(bad_item, is_dock=False, strict=False)
+            assert lenient is not None
+            self.assertEqual(lenient["badge_style"], "")
+            self.assertEqual(lenient["accent"], "")
 
         # Settings route is stripped on dock (always rendered last by firmware)
         self.assertIsNone(
@@ -550,7 +610,17 @@ class TestShortcutsProtocolAndPolicy(unittest.TestCase):
         dock_recs = _PAYLOADS_MOD.shortcut_records(
             [
                 {"kind": "route", "target": "app:pinned", "action": "", "label": "", "icon": "", "confirm": False, "state": -1},
-                {"kind": "entity", "target": "scene.movie_night", "action": "turn_on", "label": "Movie", "icon": "mdi:movie-open", "confirm": True, "state": -1},
+                {
+                    "kind": "entity",
+                    "target": "scene.movie_night",
+                    "action": "turn_on",
+                    "label": "Movie",
+                    "icon": "mdi:movie-open",
+                    "confirm": True,
+                    "state": -1,
+                    "badge_style": "inverted",
+                    "accent": "gold",
+                },
             ],
             max_records=studio_scope.MAX_DOCK_ITEMS,
         )
@@ -563,6 +633,8 @@ class TestShortcutsProtocolAndPolicy(unittest.TestCase):
                 "icon": "mdi:toggle-switch",
                 "confirm": False,
                 "state": idx % 2,
+                "badge_style": "inverted" if idx == 0 else "",
+                "accent": "red" if idx == 0 else "",
             }
             for idx in range(25)
         ]
@@ -576,14 +648,24 @@ class TestShortcutsProtocolAndPolicy(unittest.TestCase):
         parts1 = frames1[1].split("\x1f")
         self.assertEqual(parts0[:5], ["v3", "777", "1", "0", "2"])
         self.assertEqual(parts1[:5], ["v3", "777", "1", "1", "2"])
-        self.assertIn("app:pinned", parts0[5])
+        dock_wire_rows = parts0[5].split("\x1e")
+        self.assertEqual(dock_wire_rows[0], "route|app:pinned||||0|-1||")
+        self.assertEqual(
+            dock_wire_rows[1],
+            "entity|scene.movie_night|turn_on|Movie|mdi:movie-open|1|-1|inverted|gold",
+        )
         self.assertEqual(parts1[5], "")
         self.assertEqual(parts0[6], "25")
         self.assertEqual(parts1[6], "25")
-        self.assertEqual(len(parts0[7].split("\x1e")), 18)
+        pinned_wire_rows0 = parts0[7].split("\x1e")
+        self.assertEqual(len(pinned_wire_rows0), 18)
+        self.assertEqual(
+            pinned_wire_rows0[0],
+            "entity|switch.zone_0|toggle|Zone 0|mdi:toggle-switch|0|0|inverted|red",
+        )
         self.assertEqual(len(parts1[7].split("\x1e")), 7)
 
-        # Identical snapshot preserves rev; mutated state increments rev across all chunks
+        # Identical snapshot preserves rev; mutated state or accent/badge_style increments rev across all chunks
         rev_same, _ = packer.pack_shortcuts(dock_recs, pinned_recs)
         self.assertEqual(rev_same, 1)
         pinned_items[0]["state"] = 1
@@ -593,3 +675,11 @@ class TestShortcutsProtocolAndPolicy(unittest.TestCase):
         )
         self.assertEqual(rev2, 2)
         self.assertTrue(all(f.startswith("v3\x1f777\x1f2\x1f") for f in frames2))
+
+        pinned_items[0]["accent"] = "green"
+        rev3, frames3 = packer.pack_shortcuts(
+            dock_recs,
+            _PAYLOADS_MOD.shortcut_records(pinned_items, max_records=studio_scope.MAX_PINNED_ITEMS),
+        )
+        self.assertEqual(rev3, 3)
+        self.assertIn("|inverted|green", frames3[0])

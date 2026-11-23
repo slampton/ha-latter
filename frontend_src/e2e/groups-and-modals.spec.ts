@@ -4,7 +4,11 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { mountStudio } from "./studio-harness.js";
+import {
+  expectZeroAxeViolations,
+  expectZeroHorizontalOverflow,
+  mountStudio,
+} from "./studio-harness.js";
 
 test.describe("Device Groups, Non-Detaching DND & WAI-ARIA Modals E2E", () => {
   test("gates Group Baseline Drawer capabilities and preserves Device Group when toggling Do Not Disturb", async ({
@@ -117,5 +121,132 @@ test.describe("Device Groups, Non-Detaching DND & WAI-ARIA Modals E2E", () => {
     await expect
       .poll(() => ctrl.wsCalls.some((m) => m.command === "save_device_config"))
       .toBe(true);
+  });
+
+  test("filters MDI icons by weight, searches smart-home synonyms, styles shortcut badges, and passes axe WCAG 2.2 AA in light and dark themes", async ({
+    page,
+  }) => {
+    for (const darkMode of [false, true]) {
+      const themeLabel = darkMode ? "dark" : "light";
+      const ctrl = await mountStudio(page, {
+        path: "/latter/devices/sub_desk/interface",
+        darkMode,
+      });
+
+      // Open Add custom dock shortcut modal
+      await page.locator("#btn-add-dock-item").click();
+      const scModal = page.locator("#latter-shortcut-modal");
+      await expect(scModal).toBeVisible();
+
+      // 1. Style filter (`All` | `Solid` | `Outline`) updates picker grid & counts
+      const styleFilter = scModal.locator("#shortcut-icon-style-filter");
+      await expect(styleFilter).toHaveAttribute("role", "radiogroup");
+      await expect(scModal.locator("#shortcut-icon-style-all")).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+
+      // Wait for lazy MDI chunk so outline + synonym search operate across full 7,447 catalog
+      const iconInput = scModal.locator("#shortcut-icon-input");
+      await iconInput.fill("goodnight");
+      await expect(
+        scModal.locator(".mdi-picker-btn[title='mdi:weather-night']"),
+      ).toBeVisible();
+
+      // Switch to Outline filter -> every rendered icon button must end in `-outline`
+      await scModal.locator("#shortcut-icon-style-outline").click();
+      await expect(scModal.locator("#shortcut-icon-style-outline")).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+      const outlineTitles = await scModal
+        .locator(".mdi-picker-btn")
+        .evaluateAll((els) => els.map((el) => el.getAttribute("title") || ""));
+      expect(outlineTitles.length).toBeGreaterThan(0);
+      expect(outlineTitles.every((t) => t.endsWith("-outline"))).toBe(true);
+
+      // Switch to Solid filter -> zero `-outline` icons and `ac` synonym surfaces `mdi:air-conditioner`
+      await scModal.locator("#shortcut-icon-style-solid").click();
+      await iconInput.fill("ac");
+      await expect(
+        scModal.locator(".mdi-picker-btn[title='mdi:air-conditioner']"),
+      ).toBeVisible();
+      const solidAcTitles = await scModal
+        .locator(".mdi-picker-btn")
+        .evaluateAll((els) => els.map((el) => el.getAttribute("title") || ""));
+      expect(solidAcTitles.every((t) => !t.endsWith("-outline"))).toBe(true);
+
+      // Search `lamp` -> direct `mdi:lamp` comes first AND synonym `mdi:lightbulb` appears
+      await iconInput.fill("lamp");
+      await expect(scModal.locator(".mdi-picker-btn").first()).toHaveAttribute(
+        "title",
+        "mdi:lamp",
+      );
+      const lightbulbBtn = scModal.locator(".mdi-picker-btn[title='mdi:lightbulb']");
+      await expect(lightbulbBtn).toBeVisible();
+      await lightbulbBtn.click();
+      await expect(lightbulbBtn).toHaveAttribute("aria-pressed", "true");
+
+      // 2. Icon style (`Frosted glass` | `Inverted badge`) & Accent color live-update preview badge
+      const previewBadge = scModal.locator("#shortcut-icon-preview");
+      await expect(previewBadge).toHaveClass(/shortcut-icon-badge/);
+      await expect(previewBadge).not.toHaveClass(/badge-inverted/);
+
+      await scModal.locator("#shortcut-badge-style-inverted").click();
+      await expect(scModal.locator("#shortcut-badge-style-inverted")).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+      await scModal.locator("#shortcut-accent-gold").click();
+      await expect(scModal.locator("#shortcut-accent-gold")).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+      await expect(previewBadge).toHaveClass(/shortcut-icon-badge/);
+      await expect(previewBadge).toHaveClass(/badge-inverted/);
+      await expect(previewBadge).toHaveClass(/accent-gold/);
+      expect(await previewBadge.getAttribute("style")).toBeNull();
+
+      // Audit active Shortcut Modal with style filter, inverted badge, and accent under axe-core
+      await expectZeroAxeViolations(
+        page,
+        `Upgraded Shortcut modal (${themeLabel}, inverted + gold)`,
+      );
+      await expectZeroHorizontalOverflow(page, `Upgraded Shortcut modal (${themeLabel})`);
+
+      // 3. Save custom shortcut and verify WS payload + live styled badge in App Dock
+      await scModal.locator("#shortcut-label-input").fill("Warm Glow");
+      await scModal.locator("#shortcut-save-btn").click();
+      await expect(scModal).toBeHidden();
+
+      const customDockRow = page
+        .locator("#dock-shortcuts-container .dock-row")
+        .filter({ hasText: "Warm Glow" });
+      await expect(customDockRow).toBeVisible();
+      await expect(customDockRow.locator(".shortcut-icon-badge")).toHaveClass(
+        /badge-inverted.*accent-gold|accent-gold.*badge-inverted/,
+      );
+
+      await expect
+        .poll(() =>
+          ctrl.wsCalls.some((m) => {
+            if (m.command !== "save_device_config") return false;
+            const cfg = (m.payload as Record<string, unknown>)?.config as
+              | Record<string, unknown>
+              | undefined;
+            const items = cfg?.dock_items as Array<Record<string, unknown>> | undefined;
+            return Boolean(
+              items?.some(
+                (it) =>
+                  it.label === "Warm Glow" &&
+                  it.icon === "mdi:lightbulb" &&
+                  it.badge_style === "inverted" &&
+                  it.accent === "gold",
+              ),
+            );
+          }),
+        )
+        .toBe(true);
+    }
   });
 });
