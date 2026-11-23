@@ -64,21 +64,23 @@ def _ibeacon_event_matches_tracker(
     adv_int: int | None,
     ev_major: int | None,
     ev_minor: int | None,
+    *,
+    allow_ibeacon_fallback: bool = True,
 ) -> bool:
     if not (uuid_raw and uuid_raw == tracker._target_uuid_hex):
         return False
     expected_major, expected_minor = tracker._resolve_beacon_major_minor()
     if tracker._explicit_major is not None or tracker._explicit_minor is not None:
+        if not allow_ibeacon_fallback:
+            return False
         maj_ok = tracker._explicit_major is None or ev_major == expected_major
         min_ok = tracker._explicit_minor is None or ev_minor == expected_minor
         return maj_ok and min_ok
 
-    if (
-        tracker._target_mac_ints
-        and adv_int is not None
-        and adv_int in tracker._target_mac_ints
-    ):
+    if tracker.owns_bound_mac_int(adv_int):
         return True
+    if not allow_ibeacon_fallback:
+        return False
     if expected_major is not None and expected_major >= 0 and ev_major != expected_major:
         return False
     return (
@@ -535,6 +537,23 @@ class LatterBleFabric:
             self._unsub_sensor_events = None
         self._maybe_stop_registry_listeners()
 
+    def _bound_mac_owner_ids(self, adv_int: int | None) -> set[int]:
+        """Return object IDs of registered trackers owning `adv_int` via static or dynamic MAC."""
+        if adv_int is None:
+            return set()
+        return {id(t) for t in self._trackers if t.owns_bound_mac_int(adv_int)}
+
+    @staticmethod
+    def _allow_fallback_for_tracker(
+        tracker: Any, adv_int: int | None, owner_ids: set[int]
+    ) -> bool:
+        """Allow `(UUID, major, minor)` fallback unless another tracker explicitly owns `adv_int`."""
+        return (
+            not owner_ids
+            or id(tracker) in owner_ids
+            or bool(tracker.owns_bound_mac_int(adv_int))
+        )
+
     @callback
     def _async_on_esphome_ibeacon_event(self, event: Any) -> None:
         """Ingest custom `esphome.ibeacon_seen` bus events emitted by ESPHome BLE proxies."""
@@ -549,9 +568,16 @@ class LatterBleFabric:
         ev_major = coerce_uint16(data.get("major"))
         ev_minor = coerce_uint16(data.get("minor"))
         now_mono = time.monotonic()
+        owner_ids = self._bound_mac_owner_ids(adv_int)
         for tracker in list(self._trackers):
+            allow_fallback = self._allow_fallback_for_tracker(tracker, adv_int, owner_ids)
             if _ibeacon_event_matches_tracker(
-                tracker, uuid_raw, adv_int, ev_major, ev_minor
+                tracker,
+                uuid_raw,
+                adv_int,
+                ev_major,
+                ev_minor,
+                allow_ibeacon_fallback=allow_fallback,
             ):
                 tracker._ingest_proxy_observation(source, rssi_int, now_mono, source)
 
@@ -563,8 +589,18 @@ class LatterBleFabric:
     def _async_on_shared_ble_advertisement(
         self, service_info: object, change: object
     ) -> None:
+        adv_addr = str(getattr(service_info, "address", "") or "").strip().upper()
+        adv_int = mac_to_int(adv_addr) if adv_addr else None
+        owner_ids = self._bound_mac_owner_ids(adv_int)
+        ambiguous_mac = len(owner_ids) > 1
         for tracker in list(self._trackers):
-            tracker._async_on_ble_advertisement(service_info, change)
+            allow_fallback = self._allow_fallback_for_tracker(tracker, adv_int, owner_ids)
+            tracker._async_on_ble_advertisement(
+                service_info,
+                change,
+                allow_ibeacon_fallback=allow_fallback,
+                ambiguous_bound_mac=ambiguous_mac,
+            )
 
     @callback
     def _async_check_away_timeouts(self, _now_dt: datetime) -> None:
@@ -614,7 +650,18 @@ class LatterBleFabric:
                 ble_dev, adv_data = pair
                 mfg_data = getattr(adv_data, "manufacturer_data", {}) or {}
                 svc_data = getattr(adv_data, "service_data", {}) or {}
-                if not tracker._matches_raw_adv(addr_str, mfg_data, svc_data):
+                adv_int = mac_to_int(addr_str)
+                owner_ids = self._bound_mac_owner_ids(adv_int)
+                allow_fallback = self._allow_fallback_for_tracker(
+                    tracker, adv_int, owner_ids
+                )
+                if not tracker._matches_raw_adv(
+                    addr_str,
+                    mfg_data,
+                    svc_data,
+                    allow_ibeacon_fallback=allow_fallback,
+                    ambiguous_bound_mac=len(owner_ids) > 1,
+                ):
                     continue
                 tracker._record_matched_ble_address(addr_str, seed_scanners=False)
                 det_rp = extract_adv_ref_power_dbm(adv_data, mfg_data, svc_data)

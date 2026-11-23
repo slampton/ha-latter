@@ -152,6 +152,7 @@ from ..const import (
     INTEGRATION_VERSION,
     SUBENTRY_BLE_TAG,
     WALLPAPER_MAX_DIM,
+    derive_device_beacon_uuid,
     normalize_device_slug,
     normalize_noise_reduction,
 )
@@ -199,6 +200,7 @@ from ..presence.ble_math import TX_POWER_1M_DBM
 from ..presence.ble_registry import (
     get_ble_proxy_area_ids,
     get_ble_signature_area_ids,
+    normalize_uuid_hex,
     resolve_floor_info,
 )
 from ..presence.ble_tracker import LatterNativeBleTracker
@@ -1458,12 +1460,24 @@ class LatterCoordinator:
         return bool(self.get_opt(CONF_NATIVE_BLE_TRACKING, DEFAULT_NATIVE_BLE_TRACKING))
 
     @property
-    def ble_beacon_uuid(self) -> str:
-        sub_raw = str(self._live_subentry().data.get(CONF_BLE_BEACON_UUID) or "").strip()
-        if sub_raw and sub_raw.upper() != DEFAULT_BLE_BEACON_UUID:
-            return sub_raw.upper()
+    def derived_ble_beacon_uuid(self) -> str:
+        """Return the auto-derived per-Device UUIDv5 from `CONF_SYSTEM_BLE_UUID` (or fallback)."""
+        sub = self._live_subentry()
         sys_raw = str(self.get_opt(CONF_SYSTEM_BLE_UUID) or "").strip()
-        return (sys_raw or sub_raw or DEFAULT_BLE_BEACON_UUID).upper()
+        if sys_raw and not self.is_ble_tag:
+            seed = str(sub.unique_id or sub.subentry_id or self.device_slug).strip()
+            return derive_device_beacon_uuid(sys_raw, seed)
+        return (sys_raw or DEFAULT_BLE_BEACON_UUID).upper()
+
+    @property
+    def ble_beacon_uuid(self) -> str:
+        sub = self._live_subentry()
+        sub_raw = str(sub.data.get(CONF_BLE_BEACON_UUID) or "").strip()
+        if sub_raw and normalize_uuid_hex(sub_raw) != normalize_uuid_hex(
+            DEFAULT_BLE_BEACON_UUID
+        ):
+            return sub_raw.upper()
+        return self.derived_ble_beacon_uuid
 
     @property
     def configured_security_pin_policy(self) -> str:
@@ -4011,7 +4025,11 @@ class LatterCoordinator:
         self, changed_keys: set[str] | None = None
     ) -> None:
         """Refresh BLE spatial engine, listeners, and shared feeds after a System config save."""
-        if self._ble_tracker is not None:
+        if (
+            changed_keys is None or CONF_SYSTEM_BLE_UUID in changed_keys
+        ) and not self.is_ble_tag:
+            self.sync_ble_tracker()
+        elif self._ble_tracker is not None:
             self._ble_tracker.configure_spatial_engine(
                 scanner_offsets=self.ble_scanner_offsets,
                 area_signatures=self.ble_area_signatures,

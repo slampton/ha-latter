@@ -105,7 +105,7 @@ _MIN_PAIR_SCANNERS: Final = 2
 _SIG_MISSING_MIN_MU_DBM: Final = -78.0
 _SIG_UNEXPECTED_MIN_DBM: Final = -75.0
 _SCORE_ROUND_DIGITS: Final = 6
-_ESP_MAC_OFFSETS: Final[tuple[int, ...]] = (-2, -1, 0, 1, 2)
+_ESP_MAC_OFFSETS: Final[tuple[int, ...]] = (-1, 0, 1, 2)
 _RECENT_WAKE_PACKET_S: Final = 6.0
 _ESP_ADJACENT_MAC_DELTA: Final = 2
 _MISSING_RSSI_SENTINEL: Final = -999
@@ -171,7 +171,7 @@ def get_active_ble_fabric(
 def discover_target_device_macs(
     hass: HomeAssistant, esphome_device_id: str | None
 ) -> set[int]:
-    """Find known Wi-Fi/BLE MAC address integers (`+/-2`) for the bound ESPHome device."""
+    """Find known Wi-Fi/BLE MAC address integers (`-1..+2` across Espressif's 4-MAC block)."""
     dev = get_bound_esphome_device(hass, esphome_device_id)
     if dev is None:
         return set()
@@ -580,6 +580,15 @@ class LatterNativeBleTracker:
             macs.add(int_to_mac(self._dynamic_target_mac_int))
         return sorted(macs)
 
+    def owns_bound_mac_int(self, mac_int: int | None) -> bool:
+        """Return True if `mac_int` matches this tracker's bound static or dynamic target MAC."""
+        if mac_int is None:
+            return False
+        return (
+            mac_int == self._dynamic_target_mac_int
+            or mac_int in self._target_mac_ints
+        )
+
     def _get_scanner_offset(self, scanner_source: str) -> float:
         return float(self._scanner_offsets.get(scanner_source.strip().upper(), 0.0))
 
@@ -830,7 +839,10 @@ class LatterNativeBleTracker:
         if (
             len(norm_u) == _UUID_HEX_LEN
             and not self._target_address
-            and (not self._target_uuid_hex or norm_u != default_u)
+            and (
+                not self._target_uuid_hex
+                or (self._target_uuid_hex == default_u and norm_u != default_u)
+            )
         ):
             self._target_uuid_hex = norm_u
         if (
@@ -918,15 +930,13 @@ class LatterNativeBleTracker:
         address: str,
         mfg_data: Mapping[int, bytes],
         service_data: Mapping[str, bytes] | None = None,
+        *,
+        allow_ibeacon_fallback: bool = True,
+        ambiguous_bound_mac: bool = False,
     ) -> bool:
         """Return True if advertisement matches static/dynamic MAC, framed iBeacon, or Eddystone-UID."""
         norm_addr = str(address or "").strip().upper()
         adv_int = mac_to_int(norm_addr) if norm_addr else None
-
-        if self._dynamic_target_mac_int is not None and adv_int == self._dynamic_target_mac_int:
-            return True
-        if self._target_mac_ints and adv_int is not None and adv_int in self._target_mac_ints:
-            return True
 
         apple_bytes = mfg_data.get(APPLE_COMPANY_ID)
         has_ibeacon_frame = bool(
@@ -934,6 +944,19 @@ class LatterNativeBleTracker:
             and len(apple_bytes) >= _IBEACON_MIN_BYTES
             and apple_bytes[:2] == IBEACON_PREFIX
         )
+
+        if self.owns_bound_mac_int(adv_int):
+            if (
+                ambiguous_bound_mac
+                and has_ibeacon_frame
+                and apple_bytes is not None
+                and self._target_uuid_hex
+            ):
+                return self._matches_ibeacon_payload(apple_bytes)
+            return True
+        if not allow_ibeacon_fallback:
+            return False
+
         if (
             norm_addr
             and norm_addr in self._matched_ble_addresses
@@ -952,7 +975,13 @@ class LatterNativeBleTracker:
 
         return bool(service_data and self._matches_eddystone_service_data(service_data))
 
-    def _matches_target_device(self, service_info: object) -> bool:
+    def _matches_target_device(
+        self,
+        service_info: object,
+        *,
+        allow_ibeacon_fallback: bool = True,
+        ambiguous_bound_mac: bool = False,
+    ) -> bool:
         """Return True if a `BluetoothServiceInfoBleak` object matches this tracker and extract ref power."""
         mfg_data: Mapping[int, bytes] = getattr(
             service_info, "manufacturer_data", {}
@@ -961,7 +990,13 @@ class LatterNativeBleTracker:
             service_info, "service_data", {}
         ) or {}
         adv_address = str(getattr(service_info, "address", "") or "")
-        matched = self._matches_raw_adv(adv_address, mfg_data, service_data)
+        matched = self._matches_raw_adv(
+            adv_address,
+            mfg_data,
+            service_data,
+            allow_ibeacon_fallback=allow_ibeacon_fallback,
+            ambiguous_bound_mac=ambiguous_bound_mac,
+        )
         if matched:
             if adv_address:
                 self._record_matched_ble_address(adv_address)
@@ -1299,9 +1334,20 @@ class LatterNativeBleTracker:
         return captured
 
     @callback
-    def _async_on_ble_advertisement(self, service_info: object, _change: object) -> None:
+    def _async_on_ble_advertisement(
+        self,
+        service_info: object,
+        _change: object,
+        *,
+        allow_ibeacon_fallback: bool = True,
+        ambiguous_bound_mac: bool = False,
+    ) -> None:
         """Process incoming BLE advertisement callback from an ESPHome BLE proxy."""
-        if not self._matches_target_device(service_info):
+        if not self._matches_target_device(
+            service_info,
+            allow_ibeacon_fallback=allow_ibeacon_fallback,
+            ambiguous_bound_mac=ambiguous_bound_mac,
+        ):
             return
         rssi_int = safe_rssi_int(getattr(service_info, "rssi", None))
         source = str(getattr(service_info, "source", "") or "")

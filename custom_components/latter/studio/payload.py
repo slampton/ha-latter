@@ -60,12 +60,14 @@ from ..const import (
     CONF_SECURITY_PIN_HASH,
     CONF_SECURITY_PIN_POLICY,
     CONF_SYNC_DEVICE_AREA,
+    CONF_SYSTEM_BLE_UUID,
     CONF_TOOLS_ITEMS,
     CONF_WALLPAPER_COLLECTION,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
+    DEFAULT_BLE_BEACON_UUID,
     DEFAULT_DEVICE_GROUP,
     DOMAIN,
     INTEGRATION_VERSION,
@@ -1845,10 +1847,21 @@ def build_system_section(
     if "ble_area_signatures" not in skip_sections:
         section["ble_area_signatures"] = get_area_signatures_summary(hass)
     if "discovered_ble_devices" not in skip_sections:
+        onboarded_ble_addrs = (
+            {c.ble_target_address for c in coords if c.ble_target_address}
+            | {
+                c.ble_beacon_uuid
+                for c in coords
+                if not c.is_ble_tag and c.ble_beacon_uuid
+            }
+            | {DEFAULT_BLE_BEACON_UUID}
+        )
+        if sys_ble_uuid := str(raw_global_cfg.get(CONF_SYSTEM_BLE_UUID) or "").strip():
+            onboarded_ble_addrs.add(sys_ble_uuid)
         section["discovered_ble_devices"] = get_discovered_ble_candidates(
             hass,
             onboarded_slugs,
-            {c.ble_target_address for c in coords if c.ble_target_address},
+            onboarded_ble_addrs,
         )
     if "photo_collections" not in skip_sections:
         section["photo_collections"] = list_photo_collections()

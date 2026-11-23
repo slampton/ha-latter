@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 from typing import Any, Final, Literal
+import uuid
 
 _PROTOCOL_SCHEMA: Final[dict[str, Any]] = json.loads(
     (Path(__file__).resolve().parent / "protocol_v3.json").read_text(encoding="utf-8")
@@ -350,6 +351,23 @@ TARGET_OCCUPIED_AREAS: Final = "occupied_areas"
 PERSON_PREFIX: Final = "person."
 
 TargetKind = Literal["none", "all", "occupied_areas", "person", "device"]
+
+
+def derive_device_beacon_uuid(system_uuid: str, device_seed: str) -> str:
+    """Derive a deterministic per-Device UUIDv5 from the System BLE UUID and a Device seed."""
+    clean_sys = str(system_uuid or "").strip()
+    clean_seed = str(device_seed or "").strip().lower()
+    if not clean_sys:
+        return DEFAULT_BLE_BEACON_UUID
+    if clean_sys.upper() == DEFAULT_BLE_BEACON_UUID or not clean_seed:
+        return clean_sys.upper()
+    try:
+        namespace = uuid.UUID(clean_sys)
+    except ValueError:
+        return clean_sys.upper()
+    if str(namespace).upper() == DEFAULT_BLE_BEACON_UUID:
+        return DEFAULT_BLE_BEACON_UUID
+    return str(uuid.uuid5(namespace, f"latter-device:{clean_seed}")).upper()
 
 
 def normalize_device_slug(raw_slug: str) -> str:

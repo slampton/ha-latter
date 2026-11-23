@@ -22,7 +22,7 @@ Prefer compiling locally? See the [Flashing guide](https://github.com/slampton/e
 
 ## 2. Add It to Home Assistant Through ESPHome
 
-Once on Wi-Fi, Home Assistant shows **Discovered: ESPHome**. Click **Add**, and assign the device to the Area where it lives (or usually docks).
+Once on Wi-Fi, Home Assistant shows **Discovered: ESPHome**. Web Installer firmware automatically appends a 6-character MAC suffix (`<name>-<mac6>`) so multiple identical Devices can be added side-by-side without mDNS or entity-name collisions. Click **Add**, and assign the device to the Area where it lives (or usually docks).
 
 > **Leave extra permissions off:** Latter communicates over a bound Zero-Privilege RPC channel (**System: RPC Outbox** + `esphome.<node>_latter_push_v3`). Leave *"Allow the device to perform Home Assistant actions"* **unchecked**.
 
@@ -68,7 +68,7 @@ Every change reaches online Devices within a second or two—nothing needs to be
 
 ## 7. Optional: Calibrate BLE Area Presence
 
-With **Track the Area with BLE Proxies** enabled and one Area-assigned ESPHome Bluetooth proxy per Area, Latter provisions your System's private 128-bit BLE UUID and enables the Device's beacon automatically (`device_prefs.ble_beacon_enabled`). Open **System → BLE & Area presence** in Studio, keep **Live stream on** active, walk between Areas, and click **Calibrate Area** anywhere a neighboring proxy wins or in proxy-less interior Areas. → [Presence guide](presence.md)
+With **Track the Area with BLE Proxies** enabled and one Area-assigned ESPHome Bluetooth proxy per Area, Latter provisions a unique per-Device 128-bit BLE UUID derived from your System's private CSPRNG secret and enables the Device's beacon automatically (`device_prefs.ble_beacon_enabled`). Open **System → BLE & Area presence** in Studio, keep **Live stream on** active, walk between Areas, and click **Calibrate Area** anywhere a neighboring proxy wins or in proxy-less interior Areas. → [Presence guide](presence.md)
 
 ---
 

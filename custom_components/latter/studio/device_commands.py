@@ -13,6 +13,7 @@ import probatio as vol
 from ..areas.actions import async_execute_area_action
 from ..const import (
     CONF_ACTIVITY_SOURCES,
+    CONF_BLE_BEACON_UUID,
     CONF_BROADCAST_SPEAKER_ENTITIES,
     CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_CAMERA_VISIBLE_ENTITIES,
@@ -32,6 +33,7 @@ from ..const import (
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
+    DEFAULT_BLE_BEACON_UUID,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_DEVICE_REMOTE_GROUP,
     GLOBAL_CONFIG_KEYS,
@@ -45,6 +47,7 @@ from ..hub_registry import get_latter_system
 from ..hub_sync import async_evaluate_hub_bedtime_schedules
 from ..identity import device_entities
 from ..media.linking import async_refresh_ma_link
+from ..presence.ble_registry import normalize_uuid_hex
 from ..protocol_specs import normalize_activity_sources
 from ..wallpapers.models import VIRTUAL_COLLECTION_IDS
 from ..wallpapers.pools import known_collection_ids, known_wallpaper_ids
@@ -132,6 +135,20 @@ def _strip_global_keys_from_device_cfg(merged: dict[str, Any]) -> None:
         merged.pop(gk, None)
 
 
+def _normalize_device_beacon_uuid_update(
+    coordinator: LatterCoordinator, updates: dict[str, Any]
+) -> None:
+    """Keep auto-derived or default BLE UUIDs unpinned so System UUID rotation stays automatic."""
+    if CONF_BLE_BEACON_UUID not in updates or coordinator.is_ble_tag:
+        return
+    norm_submitted = normalize_uuid_hex(str(updates[CONF_BLE_BEACON_UUID] or ""))
+    if norm_submitted in {
+        normalize_uuid_hex(DEFAULT_BLE_BEACON_UUID),
+        normalize_uuid_hex(coordinator.derived_ble_beacon_uuid),
+    }:
+        updates[CONF_BLE_BEACON_UUID] = ""
+
+
 def _resolve_device_group_transition(
     hass: HomeAssistant,
     coordinator: LatterCoordinator,
@@ -188,6 +205,7 @@ async def _cmd_save_device_config(
         )
         validate_remote_group_choice(updates, global_cfg)
         validate_device_camera_lists(updates, global_cfg)
+        _normalize_device_beacon_uuid_update(coordinator, updates)
 
         try:
             if CONF_ACTIVITY_SOURCES in updates:

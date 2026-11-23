@@ -18,6 +18,7 @@ from custom_components.latter.const import (
     DOMAIN,
     MIN_FIRMWARE_SDK_REV,
     SUBENTRY_DEVICE,
+    derive_device_beacon_uuid,
 )
 from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.presence.ble_fabric import get_ble_fabric
@@ -184,19 +185,21 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     await coord.async_on_global_config_updated({CONF_SYSTEM_BLE_UUID})
     coord.sync_ble_tracker()
 
+    expected_dev_uuid = derive_device_beacon_uuid(custom_uuid, "aa:bb:cc:dd:ee:01")
     fabric = get_ble_fabric(hass)
     tracker = coord.ble_tracker
     assert tracker is not None
-    assert tracker.beacon_uuid == custom_uuid
+    assert tracker.beacon_uuid == expected_dev_uuid
+    assert tracker.beacon_uuid != custom_uuid
 
-    # 1) device_hello with compile-time DEFAULT_BLE_BEACON_UUID MUST NOT clobber custom system_ble_uuid
+    # 1) device_hello with compile-time DEFAULT_BLE_BEACON_UUID MUST NOT clobber derived per-device UUID
     await coord.async_handle_device_hello(
         "42",
         '{"v":2,"contract":3,"board":"waveshare_s3_175c","w":466,"h":466,"shape":"circle",'
         '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":1,"battery":1,"stationary":0,"wearable":0,'
         f'"beacon":{{"uuid":"{DEFAULT_BLE_BEACON_UUID}","major":1,"minor":1}},"sdk":{MIN_FIRMWARE_SDK_REV}}}',
     )
-    assert tracker._target_uuid_hex == custom_uuid.replace("-", "").lower()
+    assert tracker._target_uuid_hex == expected_dev_uuid.replace("-", "").lower()
 
     # 2) Raw per-address advertisement callback registered for ESP32 BLE MAC (Wi-Fi MAC + 2 = AA:BB:CC:DD:EE:03)
     assert "AA:BB:CC:DD:EE:03" in fabric._adv_unsubs
@@ -206,7 +209,7 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     inject_ble_adv(
         hass,
         make_ibeacon_service_info(
-            custom_uuid,
+            expected_dev_uuid,
             rssi=-58,
             source="AA:BB:CC:00:00:11",
             obs_time=t0,
@@ -223,7 +226,7 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
         inject_ble_adv(
             hass,
             make_ibeacon_service_info(
-                custom_uuid,
+                expected_dev_uuid,
                 rssi=-44,
                 source="AA:BB:CC:00:00:22",
                 obs_time=t0 + 1.0 + step * 0.3,
@@ -245,7 +248,7 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     inject_ble_adv(
         hass,
         make_ibeacon_service_info(
-            custom_uuid,
+            expected_dev_uuid,
             rssi=-86,
             source="AA:BB:CC:00:00:33",
             obs_time=t_wake + WAKE_GAP_SECONDS + 0.5,
@@ -260,7 +263,7 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     inject_ble_adv(
         hass,
         make_ibeacon_service_info(
-            custom_uuid,
+            expected_dev_uuid,
             rssi=-78,
             source="AA:BB:CC:00:00:33",
             obs_time=t_wake2 + WAKE_GAP_SECONDS + 1.0,
@@ -337,12 +340,13 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
     custom_uuid = "49BDD15E-2D6F-417C-B0C2-4E39EB0AF1DF"
     c6_ble_mac = "E8:3D:C1:D2:46:AA"
     p4_host_mac = "e8:f6:0a:e8:a4:a9"
+    expected_dev_uuid = derive_device_beacon_uuid(custom_uuid, p4_host_mac)
     t0 = time.monotonic()
     stale_ts = t0 - SURVEY_RETENTION_SECONDS - 120.0
     inject_ble_adv(
         hass,
         make_ibeacon_service_info(
-            custom_uuid,
+            expected_dev_uuid,
             rssi=-53,
             source="A8:42:E3:21:AF:E2",
             obs_time=stale_ts,
@@ -455,7 +459,7 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
     inject_ble_adv(
         hass,
         make_ibeacon_service_info(
-            custom_uuid,
+            expected_dev_uuid,
             rssi=-53,
             source="A8:42:E3:21:AF:E2",
             obs_time=time.monotonic() + 1.0,
