@@ -19,7 +19,7 @@ STUDIO_REV: Final[int] = 44
 if int(_PROTOCOL_SCHEMA["studio_contract"]["studio_rev"]) != STUDIO_REV:
     raise RuntimeError("const.py STUDIO_REV is out of sync with protocol_v3.json")
 
-MIN_FIRMWARE_SDK_REV: Final = 2026112007
+MIN_FIRMWARE_SDK_REV: Final = 2026112201
 PLATFORMS: Final[tuple[str, ...]] = (
     "sensor",
     "binary_sensor",
@@ -225,12 +225,14 @@ SERVICE_INTERCOM_BROADCAST: Final = "intercom_broadcast"
 SERVICE_SET_ACTIVE_AREA: Final = "set_active_area"
 SERVICE_SET_ACTIVE_SPEAKER: Final = "set_active_speaker"
 SERVICE_RESET_DEVICE: Final = "reset_device"
+SERVICE_NAVIGATE: Final = "navigate"
 PUBLIC_SERVICES: Final[tuple[str, ...]] = (
     SERVICE_NOTIFY,
     SERVICE_INTERCOM_BROADCAST,
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
     SERVICE_RESET_DEVICE,
+    SERVICE_NAVIGATE,
 )
 
 # Private Bound Firmware Outbox RPC Methods (`latter_rpc_outbox` -> LatterRpcDispatcher)
@@ -342,7 +344,7 @@ GLOBAL_CONFIG_KEYS: Final[tuple[str, ...]] = (
     CONF_IGNORED_DISCOVERED_DEVICES,
 )
 
-# Special values for `target_device` in `latter.notify` and `latter.intercom_broadcast`
+# Special values for `target_device` in `latter.notify`, `latter.intercom_broadcast`, and `latter.navigate`
 TARGET_ALL: Final = "all"
 TARGET_OCCUPIED_AREAS: Final = "occupied_areas"
 PERSON_PREFIX: Final = "person."

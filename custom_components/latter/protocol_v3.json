@@ -1194,7 +1194,7 @@
       "variables": {}
     },
     "latter_device_command": {
-      "description": "Execute a typed Device lifecycle, display, telemetry, security, or UI command (restart|find_my|activate_screensaver|deactivate_screensaver|wake_screen|screen_off|set_screen_bri:<1..100>|set_profiler_on|set_profiler_off|request_telemetry|set_pin_key:<key_id>:<hex_key>|trigger_va|dismiss_ringing|cancel_timer|reset_stopwatch)",
+      "description": "Execute a typed Device lifecycle, display, telemetry, security, remote navigation, or volatile showcase command (restart|find_my|activate_screensaver|deactivate_screensaver|wake_screen|screen_off|set_screen_bri:<1..100>|set_profiler_on|set_profiler_off|request_telemetry|set_pin_key:<key_id>:<hex_key>|trigger_va|dismiss_ringing|cancel_timer|reset_stopwatch|nav:<route>|nav_silent:<route>|showcase:<on[:sec]|off|va:<stage>[:profile]|screensaver:<style>|weather:<cond>|clock:<style>|theme:<preset|#RRGGBB>|brightness:<0..100>|timer:<sec|off>|stopwatch:<start|stop|reset>|roll|find_my:<on|off>|alarm:<on|off>|reel[:sec]>)",
       "variables": {
         "command": "string"
       }
@@ -1984,6 +1984,14 @@
         "target_device",
         "device_settings",
         "latter_options"
+      ]
+    },
+    "navigate": {
+      "description": "Navigate one or more Latter displays to a canonical UI page or subpage, optionally keeping sleeping displays dark (and always switching silently during Bedtime Mode).",
+      "fields": [
+        "target_device",
+        "route",
+        "wake"
       ]
     }
   },

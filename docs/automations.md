@@ -122,6 +122,23 @@ actions:
       area_id: kitchen       # the speaker follows if the device's "Media Follows This Device" setting is on
 ```
 
+## Navigate displays to a page on a schedule or event
+
+Switch a specific display, displays in occupied Areas (`occupied_areas`), a person's displays (`person.<id>`), or every awake display (`all`) to any canonical route. Displays in **Bedtime Mode** switch silently without lighting up, and hibernating battery displays are skipped cleanly on multi-target calls:
+
+```yaml
+alias: Show morning weather forecast on occupied displays
+triggers:
+  - trigger: time
+    at: "07:30:00"
+actions:
+  - action: latter.navigate
+    data:
+      target_device: occupied_areas
+      route: weather:forecast
+      wake: true              # set false to switch silently without waking sleeping screens
+```
+
 ## Wake bedroom lights when an on-device alarm rings
 
 Every display exposes sleep-safe **Alarm Ringing**, **Timer Active**, and **Timer Remaining** entities on its Latter device:

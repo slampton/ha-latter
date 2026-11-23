@@ -1,4 +1,4 @@
-"""Registration and flattened handlers for the 5 public Latter user actions."""
+"""Registration and flattened handlers for the 6 public Latter user actions."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from homeassistant.core import (
     SupportsResponse,
     callback,
 )
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util.json import JsonObjectType
 import probatio as vol
@@ -20,10 +21,12 @@ from ..const import (
     DOMAIN,
     PUBLIC_SERVICES,
     SERVICE_INTERCOM_BROADCAST,
+    SERVICE_NAVIGATE,
     SERVICE_NOTIFY,
     SERVICE_RESET_DEVICE,
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
+    TargetKind,
     target_kind,
 )
 from ..coordinator import LatterCoordinator
@@ -32,6 +35,7 @@ from ..hub_registry import iter_coordinators
 from ..identity import esphome_service
 from ..media.tts_queue import async_announce_on_targets, resolve_assist_satellite_entity
 from ..protocol_codec import utf8_safe_truncate
+from ..protocol_specs import normalize_navigate_route
 from .rpc_slots import (
     BASE_TARGET_FIELDS,
     async_execute_intercom_broadcast,
@@ -64,10 +68,10 @@ class _NotifyEnvelope:
     cam_ent: str | None
 
 
-def _resolve_notify_targets(
+def _resolve_display_targets(
     hass: HomeAssistant, call: ServiceCall
-) -> list[LatterCoordinator]:
-    """Resolve display `LatterCoordinator` targets for `latter.notify`."""
+) -> tuple[list[LatterCoordinator], TargetKind]:
+    """Resolve display `LatterCoordinator` targets and target kind for display actions."""
     raw_target = str(call.data.get("target_device") or "").strip()
     target_low = raw_target.lower()
     kind = target_kind(raw_target)
@@ -76,7 +80,7 @@ def _resolve_notify_targets(
         c for c in iter_coordinators(hass) if not c.is_ble_tag and c.has_display
     ]
     if kind == "all":
-        return list(all_coords)
+        return list(all_coords), kind
     if kind in ("occupied_areas", "person"):
         occupied_areas = resolve_occupied_area_ids(hass, kind, target_low)
         return [
@@ -88,8 +92,8 @@ def _resolve_notify_targets(
                 and not c.is_device_away()
             )
             or (c.active_area_id and c.active_area_id in occupied_areas)
-        ]
-    return [resolve_coordinator_from_call(hass, call)]
+        ], kind
+    return [resolve_coordinator_from_call(hass, call)], kind
 
 
 async def _async_deliver_notify_to_coord(
@@ -160,7 +164,7 @@ async def _async_deliver_notify_to_coord(
 async def _async_handle_notify(call: ServiceCall) -> None:
     """Dispatch a toast notification, chime, and optional camera snapshot to displays."""
     hass = call.hass
-    target_coords = _resolve_notify_targets(hass, call)
+    target_coords, _kind = _resolve_display_targets(hass, call)
     if not target_coords:
         return
 
@@ -228,8 +232,45 @@ async def _async_handle_reset_device(call: ServiceCall) -> None:
     )
 
 
+async def _async_handle_navigate(call: ServiceCall) -> None:
+    """Navigate one or more Latter displays to a canonical UI page or subpage."""
+    raw_route = call.data.get("route")
+    try:
+        route = normalize_navigate_route(raw_route)
+    except ValueError as err:
+        bad_route = str(raw_route or "").strip() or "(empty)"
+        raise ServiceValidationError(
+            str(err),
+            translation_domain=DOMAIN,
+            translation_key="invalid_navigate_route",
+            translation_placeholders={"route": bad_route},
+        ) from err
+
+    hass = call.hass
+    target_coords, kind = _resolve_display_targets(hass, call)
+    if not target_coords:
+        return
+
+    wake = parse_bool(call.data.get("wake"), default=True)
+    is_multi_target = kind in ("all", "occupied_areas", "person")
+    for coord in target_coords:
+        if not is_multi_target and not coord.is_ble_tag and not coord.has_display:
+            raise ServiceValidationError(
+                f"Target Latter device {coord.device_slug} does not have a display.",
+                translation_domain=DOMAIN,
+                translation_key="not_supported",
+            )
+        in_bedtime = bool(
+            not coord.is_ble_tag
+            and coord.has_display
+            and coord.get_device_pref("bedtime_active")
+        )
+        cmd = f"nav_silent:{route}" if (not wake or in_bedtime) else f"nav:{route}"
+        await coord.async_send_device_command(cmd, raise_if_offline=not is_multi_target)
+
+
 async def async_setup_services(hass: HomeAssistant) -> None:
-    """Register ONLY the 5 public Latter user actions on `hass.services`."""
+    """Register ONLY the 6 public Latter user actions on `hass.services`."""
     if hass.services.has_service(DOMAIN, SERVICE_NOTIFY):
         return
 
@@ -304,6 +345,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             }
         ),
     )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_NAVIGATE,
+        _async_handle_navigate,
+        schema=vol.Schema(
+            {
+                **BASE_TARGET_FIELDS,
+                vol.Required("route"): cv.string,
+                vol.Optional("wake", default=True): vol.Any(bool, cv.string),
+            }
+        ),
+    )
 
 
 @callback
@@ -323,6 +376,6 @@ def _remove_service_if_present(hass: HomeAssistant, service: str) -> None:
 
 
 async def async_unload_services(hass: HomeAssistant) -> None:
-    """Unregister all 5 public Latter user actions from `hass.services`."""
+    """Unregister all 6 public Latter user actions from `hass.services`."""
     for svc in PUBLIC_SERVICES:
         _remove_service_if_present(hass, svc)

@@ -116,6 +116,9 @@
     "intercom_broadcast": {
       "service": "mdi:bullhorn-outline"
     },
+    "navigate": {
+      "service": "mdi:compass-outline"
+    },
     "notify": {
       "service": "mdi:message-alert-outline"
     },

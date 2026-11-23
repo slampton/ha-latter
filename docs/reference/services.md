@@ -2,7 +2,7 @@
 
 Latter separates its service surface cleanly into two layers ([`services/`](../../custom_components/latter/services/), [`services.yaml`](../../custom_components/latter/services.yaml)):
 
-1. **5 Public Home Assistant Actions (`hass.services` under `latter.*`):** `latter.notify`, `latter.intercom_broadcast`, `latter.set_active_area`, `latter.set_active_speaker`, and `latter.reset_device`—registered for Home Assistant automations, scripts, and Developer Tools.
+1. **6 Public Home Assistant Actions (`hass.services` under `latter.*`):** `latter.notify`, `latter.intercom_broadcast`, `latter.set_active_area`, `latter.set_active_speaker`, `latter.reset_device`, and `latter.navigate`—registered for Home Assistant automations, scripts, and Developer Tools.
 2. **20 Private Bound-Device Wire RPCs (`LatterRpcDispatcher`):** invoked strictly by bound ESPHome displays over their Zero-Privilege **System: RPC Outbox** (`LatterRpcReceiver` in `services/rpc_receiver.py` -> private `LatterRpcDispatcher` in `services/rpc_dispatcher.py`, authenticated by bound `esphome_device_id` so `allow_service_calls` is never required and internal wire RPCs never pollute `hass.services`).
 
 ---
@@ -13,7 +13,7 @@ Latter separates its service surface cleanly into two layers ([`services/`](../.
 
 Actions that target a device accept `target_device` (a device slug such as `pocket_assistant`, a subentry ID, a Home Assistant device ID, or a special target below). When only one Latter device is configured, `target_device` is optional (except on `latter.reset_device`, which always requires an explicit target).
 
-| Special Target | `latter.notify` | `latter.intercom_broadcast` |
+| Special Target | `latter.notify` & `latter.navigate` | `latter.intercom_broadcast` |
 | :--- | :--- | :--- |
 | `all` | Every display device | Configured System broadcast speakers *(same as omitting target)* |
 | `occupied_areas` | Display devices whose current Area is occupied | Configured broadcast speakers in occupied Areas |
@@ -47,6 +47,15 @@ Selects `entity_id` (`media_player.*`, required) as the device's active speaker.
 Admin-only action that resets `target_device` (**required**; never falls back to a default device):
 - `device_settings` (`true` default): calls `esphome.<node>_latter_factory_reset` (erases saved on-device NVS preferences and restarts while keeping compiled Wi-Fi and API pairing; requires firmware SDK rev `2026112007+`).
 - `latter_options` (`true` default): resets Studio per-device settings back to onboarding defaults while preserving the bound ESPHome device, MAC, slug, and Music Assistant player link.
+
+### `latter.navigate`
+Switches one or more Latter displays to any canonical Protocol v3 page or subpage route (`home`, `app:home`, `app:settings`, `quick_actions`, or any route token from `catalogs.shortcut_routes` such as `cameras:grid`, `weather:forecast`, `music:lyrics`, `home_hub:thermostat`, `area:light`, or `time:timers`; requires firmware SDK rev `2026112201+`).
+
+| Field | Type | Default | Notes |
+| :--- | :--- | :--- | :--- |
+| `route` | string | **required** | Canonical Latter route token (validated against `protocol_v3.json`; unknown routes raise `ServiceValidationError`) |
+| `wake` | bool | `true` | Sends `nav:<route>` when `true` or `nav_silent:<route>` when `false`; **Bedtime Mode** (`bedtime_active`) always forces `nav_silent:<route>` so bedroom displays stay dark |
+| `target_device` | string | — | Device slug, device ID, `all`, `occupied_areas`, or `person.<id>`. Multi-target calls skip sleeping/offline displays without aborting; explicit single-device calls raise an error if offline |
 
 ---
 

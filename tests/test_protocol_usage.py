@@ -1,6 +1,6 @@
 """Protocol v3 usage: ha-latter's side of the device <-> Home Assistant contract matches protocol_v3.json.
 
-- `SCHEMA["ha_services"]` (5 public user actions) matches `services.yaml`, `PUBLIC_SERVICES`, and `hass.services`.
+- `SCHEMA["ha_services"]` (6 public user actions) matches `services.yaml`, `PUBLIC_SERVICES`, and `hass.services`.
 - `SCHEMA["rpc_methods"]` (20 private bound-device RPC methods) matches `ALL_RPC_METHODS` and `LatterRpcDispatcher`.
 - Every esphome device-action call built from a literal dict sends exactly the protocol's variables
   (Home Assistant's ESPHome integration requires all of a user-defined action's arguments).
@@ -25,6 +25,7 @@ EXPECTED_PUBLIC_SERVICES = {
     "set_active_area",
     "set_active_speaker",
     "reset_device",
+    "navigate",
 }
 
 
@@ -204,7 +205,7 @@ def _rpc_dispatcher_dispatched_methods_and_fields() -> tuple[set[str], set[str]]
 
 
 class TestProtocolUsage(unittest.TestCase):
-    def test_public_ha_services_exact_five_parity(self) -> None:
+    def test_public_ha_services_exact_six_parity(self) -> None:
         svc_consts = _const_string_map("SERVICE_")
         public_tuple = _const_tuple_values("PUBLIC_SERVICES", svc_consts)
         registered = _registered_schema_keys()
@@ -250,10 +251,10 @@ class TestProtocolUsage(unittest.TestCase):
                 self.assertEqual(keys, want, f"{where}: esphome {action} args differ from the protocol")
 
 
-async def test_live_hub_registers_only_five_public_services_and_private_rpc_dispatcher(
+async def test_live_hub_registers_only_six_public_services_and_private_rpc_dispatcher(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify runtime `hass.services` exposes ONLY the 5 public actions while `hub.rpc_dispatcher` handles all 20 RPCs."""
+    """Verify runtime `hass.services` exposes ONLY the 6 public actions while `hub.rpc_dispatcher` handles all 20 RPCs."""
     from custom_components.latter.const import ALL_RPC_METHODS, DOMAIN, PUBLIC_SERVICES
     from custom_components.latter.services.rpc_dispatcher import LatterRpcDispatcher
 

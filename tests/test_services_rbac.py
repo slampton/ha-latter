@@ -85,7 +85,7 @@ async def test_services_rbac_and_validation_errors(
     non_admin_ctx = Context(user_id=regular_user.id)
     admin_ctx = Context(user_id=admin_user.id)
 
-    # Only the 5 public actions are registered on hass.services
+    # Only the 6 public actions are registered on hass.services
     assert set(hass.services.async_services_for_domain(DOMAIN).keys()) == set(
         PUBLIC_SERVICES
     )

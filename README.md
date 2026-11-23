@@ -11,7 +11,7 @@ Most ESPHome display projects hardcode entity IDs into YAML—a renamed light, a
 
 | Repository | Runs on | Responsibility |
 | :--- | :--- | :--- |
-| **ha-latter** *(this repo)* | Home Assistant | Integration and **Latter Studio**: live entity mapping, BLE Area presence & sensor fusion, signed ESP32 media proxy, and 5 public `latter.*` services. |
+| **ha-latter** *(this repo)* | Home Assistant | Integration and **Latter Studio**: live entity mapping, BLE Area presence & sensor fusion, signed ESP32 media proxy, and 6 public `latter.*` services. |
 | **[esphome-latter-core](https://github.com/slampton/esphome-latter-core)** | ESP32-S3 / ESP32-P4 | Compiled C++20 firmware for five Waveshare touch displays, [Web Installer](https://slampton.github.io/esphome-latter-core/), and the Latter Core SDK. |
 
 You need both repos for the touch displays. If you only want BLE Area presence and occupancy fusion from the Bluetooth proxies, phones, watches, and beacons you already own, `ha-latter` works standalone with zero displays configured.
@@ -97,7 +97,7 @@ flowchart LR
 
 | Reference | Covers |
 | :--- | :--- |
-| **[Services](docs/reference/services.md)** | All 5 public `latter.*` services, parameters, security PIN rules, and special targets (`all`, `occupied_areas`, `person.<id>`) |
+| **[Services](docs/reference/services.md)** | All 6 public `latter.*` services, parameters, security PIN rules, and special targets (`all`, `occupied_areas`, `person.<id>`) |
 | **[Entities](docs/reference/entities.md)** | The 3-tier entity architecture across all 8 Home Assistant platforms, occupancy attributes, and `latter_event` payloads |
 | **[HTTP API](docs/reference/http-api.md)** | Signed baseline-JPEG & PCM/FLAC endpoints, Bearer wallpaper upload, and Studio WebSocket architecture |
 | **[Device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md)** | Discovery, Manifest v2, 7-domain Protocol v3 push, and `System: RPC Outbox` framing |

@@ -171,3 +171,60 @@ reset_device:
       default: true
       selector:
         boolean:
+
+navigate:
+  name: Navigate display
+  description: Navigate one or more Latter displays to a canonical UI page or subpage, optionally keeping sleeping displays dark. Always switches silently during Bedtime Mode.
+  fields:
+    target_device:
+      name: Target device or routing mode
+      description: ESPHome device slug, Home Assistant device ID, 'occupied_areas' (occupied Areas only), 'all' (all displays), or a 'person.*' entity ID. Optional when only one Latter device is configured.
+      required: false
+      selector:
+        text:
+    route:
+      name: Target route
+      description: Canonical Latter page or subpage route token (pick a common route or enter any supported Protocol v3 shortcut route).
+      required: true
+      selector:
+        select:
+          custom_value: true
+          options:
+            - "home"
+            - "app:clock"
+            - "app:music"
+            - "music:lyrics"
+            - "music:library"
+            - "app:cameras"
+            - "cameras:grid"
+            - "cameras:single"
+            - "cameras:carousel"
+            - "app:area"
+            - "area:light"
+            - "area:climate"
+            - "app:home_hub"
+            - "home_hub:thermostat"
+            - "home_hub:entry"
+            - "home_hub:alarm"
+            - "home_hub:intercom"
+            - "home_hub:vacuum"
+            - "app:remote"
+            - "app:weather"
+            - "weather:forecast"
+            - "weather:moon"
+            - "app:calendar"
+            - "calendar:month"
+            - "app:time"
+            - "time:timers"
+            - "app:pinned"
+            - "app:tools"
+            - "app:games"
+            - "app:settings"
+            - "quick_actions"
+    wake:
+      name: Wake sleeping display
+      description: Wake a sleeping or screensaver display when switching pages (default true). Set to false to switch silently in the background; Bedtime Mode always forces silent navigation.
+      required: false
+      default: true
+      selector:
+        boolean:

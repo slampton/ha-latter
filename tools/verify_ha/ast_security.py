@@ -16,6 +16,7 @@ EXPECTED_PUBLIC_SERVICES: Final[frozenset[str]] = frozenset(
         "set_active_area",
         "set_active_speaker",
         "reset_device",
+        "navigate",
     }
 )
 
@@ -246,7 +247,7 @@ def _check_service_schema_parity(latter_dir: Path, failures: list[str]) -> None:
         if yaml_services != EXPECTED_PUBLIC_SERVICES:
             failures.append(
                 f"[PUBLIC SERVICES] services.yaml keys ({sorted(yaml_services)}) != "
-                f"canonical 5 PUBLIC_SERVICES ({sorted(EXPECTED_PUBLIC_SERVICES)})"
+                f"canonical 6 PUBLIC_SERVICES ({sorted(EXPECTED_PUBLIC_SERVICES)})"
             )
 
     const_txt = const_path.read_text(encoding="utf-8") if const_path.is_file() else ""
@@ -265,7 +266,7 @@ def _check_service_schema_parity(latter_dir: Path, failures: list[str]) -> None:
     if const_svcs != EXPECTED_PUBLIC_SERVICES:
         failures.append(
             f"[PUBLIC SERVICES] const.py SERVICE_* values ({sorted(const_svcs)}) != "
-            f"canonical 5 PUBLIC_SERVICES ({sorted(EXPECTED_PUBLIC_SERVICES)})"
+            f"canonical 6 PUBLIC_SERVICES ({sorted(EXPECTED_PUBLIC_SERVICES)})"
         )
 
     if proto_path.is_file():
@@ -289,7 +290,7 @@ def _check_services_and_rpc_split(
     parsed_trees: dict[str, ast.Module],
     failures: list[str],
 ) -> None:
-    """Enforce exact 5 public services vs private 20-method LatterRpcDispatcher."""
+    """Enforce exact 6 public services vs private 20-method LatterRpcDispatcher."""
     _check_service_schema_parity(latter_dir, failures)
     pub_rel = "custom_components/latter/services/public_actions.py"
     disp_rel = "custom_components/latter/services/rpc_dispatcher.py"

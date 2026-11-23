@@ -597,7 +597,21 @@ SHORTCUT_ROUTE_MAP: Final[dict[str, CatalogItemDict]] = {
     str(r["token"]): r for r in SHORTCUT_ROUTES_CATALOG
 }
 SHORTCUT_ROUTE_TOKENS: Final[tuple[str, ...]] = tuple(SHORTCUT_ROUTE_MAP.keys())
+NAVIGATE_EXTRA_ROUTES: Final[frozenset[str]] = frozenset(
+    {"home", "app:home", "app:settings", "quick_actions"}
+)
+NAVIGATE_ROUTES: Final[frozenset[str]] = (
+    frozenset(SHORTCUT_ROUTE_TOKENS) | NAVIGATE_EXTRA_ROUTES
+)
 DEFAULT_DOCK_ROUTES: Final[str] = str(PROTOCOL_V3_DATA["defaults"]["dock_routes"])
+
+
+def normalize_navigate_route(raw: object) -> str:
+    """Return a canonical `latter.navigate` route token, or raise `ValueError`."""
+    token = str(raw or "").strip().lower()
+    if token not in NAVIGATE_ROUTES:
+        raise ValueError(f"Unknown navigate route: {token or '(empty)'}")
+    return token
 
 MAX_DOCK_ITEMS: Final = 24
 MAX_PINNED_ITEMS: Final = 96

@@ -34,7 +34,7 @@ TEXT_EXTS: Final[frozenset[str]] = frozenset(
     {".py", ".json", ".yaml", ".yml", ".js", ".ts", ".mjs", ".md", ".toml"}
 )
 
-MIN_SDK_REV_FLOOR: Final = 2026112007
+MIN_SDK_REV_FLOOR: Final = 2026112201
 MIN_OPEN_ARGS: Final = 2
 
 BANNED_MOCK_SHIMS: Final[tuple[str, ...]] = (
@@ -173,10 +173,11 @@ def _check_icons_json(icons_path: Path, failures: list[str]) -> None:
             "set_active_area",
             "set_active_speaker",
             "reset_device",
+            "navigate",
         }
         if not isinstance(svc_icons, dict) or not expected_svcs.issubset(svc_icons.keys()):
             failures.append(
-                "[HASSFEST ICONS] icons.json['services'] must declare icons for all 5 public services"
+                "[HASSFEST ICONS] icons.json['services'] must declare icons for all 6 public services"
             )
 
 
