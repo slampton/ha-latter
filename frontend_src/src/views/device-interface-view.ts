@@ -21,6 +21,7 @@ import {
 } from "../components/controls.js";
 import {
   ACTIVITY_SOURCES_CATALOG,
+  GAMES_ITEMS_CATALOG,
   HOME_CLOCK_TAP_OPTIONS,
   HOME_DATE_TAP_OPTIONS,
   MAX_DOCK_ITEMS,
@@ -193,6 +194,11 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     return spec ? isCatalogItemSupported(spec, caps) : true;
   }).length;
   const enabledGames = store.entity.getEnabledGamesItems();
+  const gameSpecMap = new Map(GAMES_ITEMS_CATALOG.map((g) => [g.token, g]));
+  const visibleGamesCount = enabledGames.filter((tok) => {
+    const spec = gameSpecMap.get(tok);
+    return spec ? isCatalogItemSupported(spec, caps) : true;
+  }).length;
 
   const curDevEntry = (data?.system_devices || []).find(
     (d) => d.subentry_id === store.activeSubentryId,
@@ -441,10 +447,10 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
               count: fmtNumber(visibleToolsCount, store.hass, 0),
             });
       case "app:games":
-        return enabledGames.length === 1
+        return visibleGamesCount === 1
           ? store.t("dev_interface.games_enabled_one")
           : store.t("dev_interface.games_enabled_many", {
-              count: fmtNumber(enabledGames.length, store.hass, 0),
+              count: fmtNumber(visibleGamesCount, store.hass, 0),
             });
       default:
         return routeToken;

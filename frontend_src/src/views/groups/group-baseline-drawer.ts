@@ -79,7 +79,14 @@ interface BaselineSectionHelpers {
   requestCopyKeys(copyKeys: string[], listLabel: string): void;
 }
 
-function deriveGroupCapabilities(
+function deriveMembersHasImu(members: readonly SystemDeviceEntry[]): boolean | undefined {
+  if (members.length === 0) return undefined;
+  const hasImu = members.some((m) => m.has_imu === true);
+  const noImu = members.some((m) => m.has_imu === false);
+  return hasImu && !noImu ? true : !hasImu && noImu ? false : undefined;
+}
+
+export function deriveGroupCapabilities(
   group: DeviceGroup,
   members: readonly SystemDeviceEntry[],
 ): DeviceCapabilities {
@@ -100,7 +107,7 @@ function deriveGroupCapabilities(
     return {
       has_display: true,
       is_round: false,
-      has_imu: true,
+      has_imu: deriveMembersHasImu(members),
       has_battery: true,
       has_ble_beacon: true,
       has_voice: true,
@@ -138,6 +145,7 @@ function deriveGroupCapabilities(
   if (members.length > 0) {
     return {
       has_display: members.some((m) => m.has_display !== false),
+      has_imu: deriveMembersHasImu(members),
       has_battery: members.some((m) => m.has_battery !== false),
       has_ble_beacon: members.some((m) => m.has_ble !== false),
       is_roaming_device: members.some((m) => m.is_roaming !== false),
@@ -314,6 +322,7 @@ function renderBaselinePills(
   caps: DeviceCapabilities,
 ): TemplateResult {
   const supportedCatalog = catalog.filter((c) => isCatalogItemSupported(c, caps));
+  const supportedTokens = new Set(supportedCatalog.map((c) => c.token));
   const csvStr = typeof currentVal === "string" ? currentVal : defaultCsv;
   const activeSet = new Set(
     csvStr
@@ -326,7 +335,13 @@ function renderBaselinePills(
   const toggleTok = (tok: string): void => {
     const next = new Set(activeSet);
     if (next.has(tok)) {
-      if (next.size <= minRequired) {
+      const visibleActiveCount = Array.from(activeSet).filter((t) =>
+        supportedTokens.has(t),
+      ).length;
+      if (
+        next.size <= minRequired ||
+        (supportedTokens.has(tok) && visibleActiveCount <= minRequired)
+      ) {
         const noun =
           key === "tools_items"
             ? "tool"

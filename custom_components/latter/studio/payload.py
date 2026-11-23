@@ -376,6 +376,7 @@ class StudioSystemDeviceItem(TypedDict):
     ble_category: str
     has_display: bool
     has_battery: bool
+    has_imu: bool
     is_roaming: bool
     hw_jpeg: bool
     device_group: str
@@ -1743,6 +1744,7 @@ def _build_system_device_item(
         "ble_category": c_ble_cat,
         "has_display": coord.has_display,
         "has_battery": coord.has_battery,
+        "has_imu": coord.has_imu,
         "is_roaming": coord.is_roaming_device,
         "hw_jpeg": coord.supports_hw_jpeg,
         "device_group": c_grp,

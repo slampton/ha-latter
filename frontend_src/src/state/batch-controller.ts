@@ -7,9 +7,28 @@
  */
 
 import { formatWsError, isConflictError } from "../api/ws-client.js";
-import type { SharedControlItem, SharedControlTarget, SystemDeviceEntry } from "../types.js";
+import {
+  type CatalogItem,
+  GAMES_ITEMS_CATALOG,
+  TOOLS_ITEMS_CATALOG,
+} from "../constants.js";
+import type {
+  DeviceCapabilities,
+  SharedControlItem,
+  SharedControlTarget,
+  SystemDeviceEntry,
+} from "../types.js";
 import { isValidHexColor } from "../utils/format.js";
-import type { BatchPillState, StudioStoreContext } from "./store-types.js";
+import {
+  type BatchPillState,
+  isCatalogItemSupported,
+  type StudioStoreContext,
+} from "./store-types.js";
+
+const PILL_CATALOG_BY_PREF: Readonly<Record<string, ReadonlyArray<CatalogItem>>> = {
+  games_items: GAMES_ITEMS_CATALOG,
+  tools_items: TOOLS_ITEMS_CATALOG,
+};
 
 function parseCsvTokens(raw: string | undefined | null): string[] {
   return String(raw || "")
@@ -128,6 +147,29 @@ export class BatchController {
     return [...preserved, ...appended, ...extras].join(",");
   }
 
+  private targetDeviceCaps(target: SharedControlTarget): DeviceCapabilities | undefined {
+    const devs = this.store.state?.system_devices || [];
+    const dev = devs.find(
+      (d) =>
+        (target.subentry_id && d.subentry_id === target.subentry_id) ||
+        (target.device_slug && d.device_slug === target.device_slug),
+    );
+    if (!dev) return undefined;
+    return {
+      has_display: dev.has_display,
+      has_imu: dev.has_imu,
+      has_battery: dev.has_battery,
+      has_ble_beacon: dev.has_ble,
+      is_roaming_device: dev.is_roaming,
+      hw_jpeg: dev.hw_jpeg,
+    };
+  }
+
+  private pillCatalogMap(prefKey: string): Map<string, CatalogItem> | null {
+    const catalog = PILL_CATALOG_BY_PREF[prefKey];
+    return catalog ? new Map(catalog.map((c) => [c.token, c])) : null;
+  }
+
   getEffectiveBatchPillStates(ctrl: SharedControlItem): BatchPillState[] {
     const prefKey = ctrl.pref_key || "";
     const options = ctrl.options || [];
@@ -138,39 +180,58 @@ export class BatchController {
       prefKey && this.store.batchDraft.has(prefKey)
         ? String(this.store.batchDraft.get(prefKey) ?? "")
         : null;
+    const capByToken = this.pillCatalogMap(prefKey);
+    const targetEntries = capByToken
+      ? targets.map((target) => ({ target, caps: this.targetDeviceCaps(target) }))
+      : null;
 
-    return options.map((token) => {
+    const out: BatchPillState[] = [];
+    for (const token of options) {
+      const catItem = capByToken?.get(token);
+      let capableTargets = targets;
+      if (catItem?.capability && targetEntries && targetEntries.length > 0) {
+        capableTargets = targetEntries
+          .filter((e) => isCatalogItemSupported(catItem, e.caps))
+          .map((e) => e.target);
+        if (capableTargets.length === 0) {
+          continue;
+        }
+      }
       const label = labels[token] || token;
       if (explicitCsv !== null) {
         const set = new Set(parseCsvTokens(explicitCsv));
-        return {
+        out.push({
           token,
           label,
           state: set.has(token) ? "on" : "off",
           staged: true,
-        };
+        });
+        continue;
       }
       if (token in deltas) {
-        return {
+        out.push({
           token,
           label,
           state: deltas[token] ? "on" : "off",
           staged: true,
-        };
+        });
+        continue;
       }
-      if (targets.length === 0) {
-        return { token, label, state: "off", staged: false };
+      if (capableTargets.length === 0) {
+        out.push({ token, label, state: "off", staged: false });
+        continue;
       }
       let onCount = 0;
-      for (const t of targets) {
+      for (const t of capableTargets) {
         if (parseCsvTokens(t.state).includes(token)) {
           onCount += 1;
         }
       }
       const state: "on" | "off" | "mixed" =
-        onCount === 0 ? "off" : onCount === targets.length ? "on" : "mixed";
-      return { token, label, state, staged: false };
-    });
+        onCount === 0 ? "off" : onCount === capableTargets.length ? "on" : "mixed";
+      out.push({ token, label, state, staged: false });
+    }
+    return out;
   }
 
   stageBatchSetting(key: string, value: unknown): void {
@@ -220,11 +281,26 @@ export class BatchController {
       [token]: wantOn,
     };
 
+    const capByToken = this.pillCatalogMap(prefKey);
+    const clickedItem = capByToken?.get(token);
+
     const minRequired = ctrl.min ?? 0;
     if (!wantOn && minRequired > 0 && targets.length > 0) {
       const violatesMin = targets.some((t) => {
-        const nextCsv = this.applyTokenDeltasToCsv(t.state, candidateDeltas, order);
-        return parseCsvTokens(nextCsv).length < minRequired;
+        const nextTokens = parseCsvTokens(
+          this.applyTokenDeltasToCsv(t.state, candidateDeltas, order),
+        );
+        if (nextTokens.length < minRequired) return true;
+        if (!capByToken) return false;
+        const tCaps = this.targetDeviceCaps(t);
+        if (clickedItem && !isCatalogItemSupported(clickedItem, tCaps)) {
+          return false;
+        }
+        const supportedNext = nextTokens.filter((tok) => {
+          const item = capByToken.get(tok);
+          return item ? isCatalogItemSupported(item, tCaps) : true;
+        });
+        return supportedNext.length < minRequired;
       });
       if (violatesMin) {
         const noun =
@@ -238,9 +314,13 @@ export class BatchController {
       }
     }
 
+    const relevantTargets =
+      clickedItem?.capability && targets.length > 0
+        ? targets.filter((t) => isCatalogItemSupported(clickedItem, this.targetDeviceCaps(t)))
+        : targets;
     if (
-      targets.length > 0 &&
-      targets.every((t) => parseCsvTokens(t.state).includes(token) === wantOn)
+      relevantTargets.length > 0 &&
+      relevantTargets.every((t) => parseCsvTokens(t.state).includes(token) === wantOn)
     ) {
       delete candidateDeltas[token];
     }

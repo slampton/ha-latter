@@ -7,6 +7,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  DEFAULT_GAMES_ITEMS,
+  GAMES_ITEMS_CATALOG,
   HOME_CATEGORIES_CATALOG,
   NATIVE_DOCK_APP_TOKENS,
   NATIVE_DOCK_CONFIG_APP_MAP,
@@ -157,8 +159,26 @@ describe("crop-math, alarms, world-clocks, MDI catalog & combobox ranking", () =
     );
   });
 
-  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 46", () => {
-    assert.equal(STUDIO_REV, 46);
+  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 47", () => {
+    assert.equal(STUDIO_REV, 47);
+    assert.equal(DEFAULT_GAMES_ITEMS, "blocks,snake,drop_four,marbles,archery,bricks,chomp");
+    assert.deepEqual(
+      GAMES_ITEMS_CATALOG.map((g) => [g.token, g.capability ?? null]),
+      [
+        ["blocks", "no_imu"],
+        ["snake", "no_imu"],
+        ["drop_four", "no_imu"],
+        ["marbles", null],
+        ["archery", "imu"],
+        ["bricks", "imu"],
+        ["chomp", "imu"],
+      ],
+    );
+    assert.equal(ROUTE_PREVIEW_ICONS["games:blocks"], "mdi:toy-brick");
+    assert.equal(ROUTE_PREVIEW_ICONS["games:snake"], "mdi:snake");
+    assert.equal(ROUTE_PREVIEW_ICONS["games:drop_four"], "mdi:dots-grid");
+    assert.equal(ROUTE_PREVIEW_ICONS["games:2048"], undefined);
+    assert.equal(ROUTE_PREVIEW_ICONS["games:memory"], undefined);
     assert.equal(SYSTEM_VIEW_SLUGS.photos, "photos");
     assert.ok(NATIVE_DOCK_APP_TOKENS.includes("app:cameras"));
     assert.ok(NATIVE_DOCK_APP_TOKENS.includes("app:calendar"));

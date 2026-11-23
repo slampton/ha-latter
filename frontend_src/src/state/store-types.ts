@@ -54,6 +54,8 @@ export function isCatalogItemSupported(
       return caps.is_round !== false;
     case "imu":
       return caps.has_imu !== false;
+    case "no_imu":
+      return caps.has_imu !== true;
     case "display_imu":
       return caps.has_display !== false && caps.has_imu !== false;
     case "display":

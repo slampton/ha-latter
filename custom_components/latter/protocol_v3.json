@@ -10,7 +10,7 @@
     "area_categories": "scene,light,cover,fan,switch,climate,media",
     "home_categories": "alarm,intercom,thermostat,entry,vacuum",
     "tools_items": "stopwatch,level,flashlight,calculator,dice,coin_flip",
-    "games_items": "marbles,archery,bricks,chomp,2048,memory"
+    "games_items": "blocks,snake,drop_four,marbles,archery,bricks,chomp"
   },
   "header": [
     {
@@ -1012,7 +1012,7 @@
           "name": "games_items",
           "cpp_enum": "GAMES_ITEMS",
           "type": "csv",
-          "description": "Comma-separated enabled and ordered Games launcher items (marbles,archery,bricks,chomp,2048,memory)"
+          "description": "Comma-separated enabled and ordered Games launcher items (blocks,snake,drop_four,marbles,archery,bricks,chomp)"
         },
         {
           "index": 54,
@@ -1558,27 +1558,38 @@
       {
         "token": "games:archery",
         "label": "Archery",
-        "group": "Games"
+        "group": "Games",
+        "capability": "imu"
       },
       {
         "token": "games:bricks",
         "label": "Bricks",
-        "group": "Games"
+        "group": "Games",
+        "capability": "imu"
       },
       {
         "token": "games:chomp",
         "label": "Chomp",
-        "group": "Games"
+        "group": "Games",
+        "capability": "imu"
       },
       {
-        "token": "games:2048",
-        "label": "2048",
-        "group": "Games"
+        "token": "games:blocks",
+        "label": "Blocks",
+        "group": "Games",
+        "capability": "no_imu"
       },
       {
-        "token": "games:memory",
-        "label": "Memory Match",
-        "group": "Games"
+        "token": "games:snake",
+        "label": "Snake",
+        "group": "Games",
+        "capability": "no_imu"
+      },
+      {
+        "token": "games:drop_four",
+        "label": "Drop Four",
+        "group": "Games",
+        "capability": "no_imu"
       },
       {
         "token": "settings:display",
@@ -1734,28 +1745,38 @@
     ],
     "games_items": [
       {
+        "token": "blocks",
+        "label": "Blocks",
+        "capability": "no_imu"
+      },
+      {
+        "token": "snake",
+        "label": "Snake",
+        "capability": "no_imu"
+      },
+      {
+        "token": "drop_four",
+        "label": "Drop Four",
+        "capability": "no_imu"
+      },
+      {
         "token": "marbles",
         "label": "Marbles"
       },
       {
         "token": "archery",
-        "label": "Archery"
+        "label": "Archery",
+        "capability": "imu"
       },
       {
         "token": "bricks",
-        "label": "Bricks"
+        "label": "Bricks",
+        "capability": "imu"
       },
       {
         "token": "chomp",
-        "label": "Chomp"
-      },
-      {
-        "token": "2048",
-        "label": "2048"
-      },
-      {
-        "token": "memory",
-        "label": "Memory Match"
+        "label": "Chomp",
+        "capability": "imu"
       }
     ],
     "shortcut_badge_styles": [
@@ -3708,7 +3729,7 @@
     }
   ],
   "studio_contract": {
-    "studio_rev": 46,
+    "studio_rev": 47,
     "allowed_device_actions": [
       "restart",
       "find_my",

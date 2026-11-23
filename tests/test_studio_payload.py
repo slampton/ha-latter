@@ -301,15 +301,21 @@ class TestStudioTimeAndCatalogLogic(unittest.TestCase):
     def test_capability_catalog_filtering_and_pref_section_overlay(self) -> None:
         got = _run_node_esm(
             """
-            import { TOOLS_ITEMS_CATALOG } from "./src/constants.js";
+            import { GAMES_ITEMS_CATALOG, SHORTCUT_ROUTES_CATALOG, TOOLS_ITEMS_CATALOG } from "./src/constants.js";
             import {
               isCatalogItemSupported,
               overlayDevicePrefsOnSections,
             } from "./src/state/group-overlay.js";
             const roundImuCaps = { has_display: true, is_round: true, has_imu: true };
             const rectWallCaps = { has_display: true, is_round: false, has_imu: false };
+            const unknownImuCaps = { has_display: true };
             const roundTools = TOOLS_ITEMS_CATALOG.filter((it) => isCatalogItemSupported(it, roundImuCaps)).map((it) => it.token);
             const rectTools = TOOLS_ITEMS_CATALOG.filter((it) => isCatalogItemSupported(it, rectWallCaps)).map((it) => it.token);
+            const imuGames = GAMES_ITEMS_CATALOG.filter((it) => isCatalogItemSupported(it, roundImuCaps)).map((it) => it.token);
+            const noImuGames = GAMES_ITEMS_CATALOG.filter((it) => isCatalogItemSupported(it, rectWallCaps)).map((it) => it.token);
+            const unknownGames = GAMES_ITEMS_CATALOG.filter((it) => isCatalogItemSupported(it, unknownImuCaps)).map((it) => it.token);
+            const imuGameRoutes = SHORTCUT_ROUTES_CATALOG.filter((it) => it.group === "Games" && isCatalogItemSupported(it, roundImuCaps)).map((it) => it.token);
+            const noImuGameRoutes = SHORTCUT_ROUTES_CATALOG.filter((it) => it.group === "Games" && isCatalogItemSupported(it, rectWallCaps)).map((it) => it.token);
             const payload = {
               subentry_id: "sub_1",
               config: {
@@ -345,6 +351,11 @@ class TestStudioTimeAndCatalogLogic(unittest.TestCase):
             process.stdout.write(JSON.stringify({
               roundTools,
               rectTools,
+              imuGames,
+              noImuGames,
+              unknownGames,
+              imuGameRoutes,
+              noImuGameRoutes,
               startAfterSingleApp,
               bedtimeSectionState,
               detachedGroup,
@@ -354,6 +365,20 @@ class TestStudioTimeAndCatalogLogic(unittest.TestCase):
         self.assertIn("level", got["roundTools"])
         self.assertNotIn("level", got["rectTools"])
         self.assertIn("flashlight", got["rectTools"])
+        self.assertEqual(got["imuGames"], ["marbles", "archery", "bricks", "chomp"])
+        self.assertEqual(got["noImuGames"], ["blocks", "snake", "drop_four", "marbles"])
+        self.assertEqual(
+            got["unknownGames"],
+            ["blocks", "snake", "drop_four", "marbles", "archery", "bricks", "chomp"],
+        )
+        self.assertEqual(
+            got["imuGameRoutes"],
+            ["games:marbles", "games:archery", "games:bricks", "games:chomp"],
+        )
+        self.assertEqual(
+            got["noImuGameRoutes"],
+            ["games:marbles", "games:blocks", "games:snake", "games:drop_four"],
+        )
         self.assertEqual(got["startAfterSingleApp"], "Time App")
         self.assertEqual(got["bedtimeSectionState"], "25")
         self.assertEqual(got["detachedGroup"], "custom")
@@ -392,6 +417,9 @@ async def test_build_studio_state_payload_device_ble_tag_and_system_scopes(
     assert dev_payload["config"]["kind"] == "device"
     assert "catalog" in dev_payload
     assert dev_payload["capabilities"]["has_display"] is True
+    sys_dev_map = {d["subentry_id"]: d for d in dev_payload["system_devices"]}
+    assert sys_dev_map[coord.subentry_id]["has_imu"] is coord.has_imu
+    assert sys_dev_map[tag_coord.subentry_id]["has_imu"] is False
     assert any(p["key"] == "time_format" for p in dev_payload["device_prefs"])
     sec_by_id = {s["id"]: s["items"] for s in dev_payload["esphome"]["sections"]}
     assert any(it["entity_id"] == "select.pocket_assistant_wake_word" for it in sec_by_id["voice"])

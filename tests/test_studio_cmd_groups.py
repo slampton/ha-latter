@@ -124,7 +124,7 @@ async def test_studio_commands_device_groups_and_backup_restore(
             "config": {
                 "area_categories": "light,scene,all",
                 "tools_items": "flashlight,calculator,dice",
-                "games_items": "2048,chomp",
+                "games_items": "blocks,chomp",
                 "pinned_items": [
                     {
                         "kind": "route",
@@ -138,7 +138,7 @@ async def test_studio_commands_device_groups_and_backup_restore(
         },
     )
     assert coord.tools_items_csv == "flashlight,calculator,dice"
-    assert coord.games_items_csv == "2048,chomp"
+    assert coord.games_items_csv == "blocks,chomp"
     assert len(coord.pinned_items) == 1
     assert coord.pinned_items[0]["target"] == "weather:moon"
     assert coord.pinned_items[0]["badge_style"] == "inverted"
@@ -238,7 +238,7 @@ async def test_studio_commands_device_groups_and_backup_restore(
         dev_bundle["device"]["device_config"]["tools_items"]
         == "flashlight,calculator,dice"
     )
-    assert dev_bundle["device"]["device_config"]["games_items"] == "2048,chomp"
+    assert dev_bundle["device"]["device_config"]["games_items"] == "blocks,chomp"
     assert (
         dev_bundle["device"]["device_config"]["pinned_items"][0]["badge_style"]
         == "inverted"

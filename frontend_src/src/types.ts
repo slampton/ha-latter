@@ -232,6 +232,7 @@ export interface SystemDeviceEntry {
   ble_category?: "phone" | "ble_tag" | "" | string;
   has_display: boolean;
   has_battery: boolean;
+  has_imu?: boolean;
   hw_jpeg?: boolean;
   is_roaming: boolean;
   device_group: string;

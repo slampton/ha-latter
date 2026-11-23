@@ -129,7 +129,24 @@ test.describe("Devices List & Per-Device Views E2E", () => {
     await expect(page.locator("#cfg-camera_doorbell_popup")).toBeVisible();
     await appModal.getByRole("button", { name: "Done" }).click();
 
-    // 3. Configure Home hub per-Device Broadcast speakers subset pills
+    // 3. Configure Games filters by `has_imu` (`sub_desk` has_imu=false -> 4 games: Blocks/Snake/Drop Four/Marbles)
+    await expect(page.locator("#card-app-dock")).toContainText("4 games enabled");
+    await page
+      .locator("#dock-shortcuts-container")
+      .getByRole("button", { name: "Configure Games" })
+      .click();
+    const gamesPills = page.locator("#games-items-pills");
+    await expect(gamesPills).toBeVisible();
+    await expect(gamesPills).toContainText("Blocks");
+    await expect(gamesPills).toContainText("Snake");
+    await expect(gamesPills).toContainText("Drop Four");
+    await expect(gamesPills).toContainText("Marbles");
+    await expect(gamesPills).not.toContainText("Archery");
+    await expect(gamesPills).not.toContainText("Bricks");
+    await expect(gamesPills).not.toContainText("Chomp");
+    await appModal.getByRole("button", { name: "Done" }).click();
+
+    // 4. Configure Home hub per-Device Broadcast speakers subset pills
     await page
       .locator("#dock-shortcuts-container")
       .getByRole("button", { name: "Configure Home hub" })

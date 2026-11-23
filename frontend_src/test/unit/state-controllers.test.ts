@@ -5,8 +5,14 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { buildOrderedPillItems } from "../../src/components/dialogs/app-config.js";
+import { GAMES_ITEMS_CATALOG } from "../../src/constants.js";
 import type { ReactiveController, ReactiveControllerHost } from "../../src/lib/lit.js";
-import { DEVICE_PREF_SPECS_CATALOG, STUDIO_REV } from "../../src/protocol-schema.js";
+import {
+  DEFAULT_GAMES_ITEMS,
+  DEVICE_PREF_SPECS_CATALOG,
+  STUDIO_REV,
+} from "../../src/protocol-schema.js";
 import {
   isCatalogItemSupported,
   mergePersistedWithBlankSlots,
@@ -28,7 +34,9 @@ import type {
   HomeAssistant,
   SharedControlItem,
   StudioStatePayload,
+  SystemDeviceEntry,
 } from "../../src/types.js";
+import { deriveGroupCapabilities } from "../../src/views/groups/group-baseline-drawer.js";
 
 interface HeadlessStoreHarness {
   store: StudioStore;
@@ -138,6 +146,7 @@ function createHeadlessStore(initialPayload?: Partial<StudioStatePayload>): Head
         kind: "device",
         has_display: true,
         has_battery: false,
+        has_imu: false,
         hw_jpeg: true,
         is_roaming: false,
         device_group: "wall_panels",
@@ -171,6 +180,7 @@ function createHeadlessStore(initialPayload?: Partial<StudioStatePayload>): Head
         kind: "device",
         has_display: true,
         has_battery: true,
+        has_imu: true,
         hw_jpeg: false,
         is_roaming: true,
         device_group: "pocket_carry",
@@ -347,6 +357,14 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.equal(isCatalogItemSupported({ capability: "hw_jpeg" }, { hw_jpeg: true }), true);
     assert.equal(isCatalogItemSupported({ capability: "round" }, { is_round: false }), false);
     assert.equal(isCatalogItemSupported({ capability: "round" }, undefined), true);
+    assert.equal(isCatalogItemSupported({ capability: "imu" }, { has_imu: true }), true);
+    assert.equal(isCatalogItemSupported({ capability: "imu" }, { has_imu: false }), false);
+    assert.equal(isCatalogItemSupported({ capability: "imu" }, { has_imu: undefined }), true);
+    assert.equal(isCatalogItemSupported({ capability: "imu" }, undefined), true);
+    assert.equal(isCatalogItemSupported({ capability: "no_imu" }, { has_imu: true }), false);
+    assert.equal(isCatalogItemSupported({ capability: "no_imu" }, { has_imu: false }), true);
+    assert.equal(isCatalogItemSupported({ capability: "no_imu" }, { has_imu: undefined }), true);
+    assert.equal(isCatalogItemSupported({ capability: "no_imu" }, undefined), true);
 
     const merged = mergePersistedWithBlankSlots(
       ["camera.front_entry"],
@@ -414,7 +432,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.equal(store.currentViewId, "photos");
   });
 
-  it("constructs STUDIO_REV=46 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
+  it("constructs STUDIO_REV=47 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
     const { store, wsLog } = createHeadlessStore();
     store.applyRoute({ prefix: "/latter", path: "devices/sub_desk/overview" });
 
@@ -432,10 +450,10 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { do_not_disturb: true },
         expected_config_rev: 7,
       },
-      studio_rev: 46,
+      studio_rev: 47,
     });
 
-    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 46`
+    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 47`
     wsLog.length = 0;
     store.applyRoute({ prefix: "/latter", path: "system/presence" });
     store.entity.stageSystemSetting("ble_away_timeout_s", 240, undefined, 60_000);
@@ -449,7 +467,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { ble_away_timeout_s: 240 },
         expected_config_rev: 3,
       },
-      studio_rev: 46,
+      studio_rev: 47,
     });
 
     // `version_mismatch` sets `studioRevMismatch = true`
@@ -671,5 +689,175 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.equal(store.shortcutModal.badgeStyle, "inverted");
     assert.equal(store.shortcutModal.accent, "gold");
     assert.equal(store.shortcutModal.iconStyleFilter, "all");
+  });
+
+  it("filters Configure Games pills by has_imu, guards last supported game, and derives Handhelds/custom group capabilities", () => {
+    const defaultTokens = DEFAULT_GAMES_ITEMS.split(",");
+    assert.deepEqual(
+      buildOrderedPillItems(GAMES_ITEMS_CATALOG, defaultTokens, { has_imu: false }).map((p) => p.token),
+      ["blocks", "snake", "drop_four", "marbles"],
+    );
+    assert.deepEqual(
+      buildOrderedPillItems(GAMES_ITEMS_CATALOG, defaultTokens, { has_imu: true }).map((p) => p.token),
+      ["marbles", "archery", "bricks", "chomp"],
+    );
+    assert.deepEqual(
+      buildOrderedPillItems(GAMES_ITEMS_CATALOG, defaultTokens, { has_imu: undefined }).map((p) => p.token),
+      ["blocks", "snake", "drop_four", "marbles", "archery", "bricks", "chomp"],
+    );
+
+    // On a non-IMU device with all 7 default games stored, turning off the 4th visible game is blocked
+    const { store: noImuStore } = createHeadlessStore({
+      subentry_id: "sub_desk",
+      capabilities: { has_display: true, has_imu: false, is_round: false },
+      config: {
+        device_slug: "desk_assistant",
+        kind: "device",
+        games_items: DEFAULT_GAMES_ITEMS,
+      },
+    });
+    noImuStore.applyRoute({ prefix: "/latter", path: "devices/sub_desk/interface" });
+    noImuStore.entity.toggleGameItemToken("blocks", false);
+    noImuStore.entity.toggleGameItemToken("snake", false);
+    noImuStore.entity.toggleGameItemToken("drop_four", false);
+    assert.deepEqual(noImuStore.entity.getEnabledGamesItems(), [
+      "marbles",
+      "archery",
+      "bricks",
+      "chomp",
+    ]);
+    noImuStore.entity.toggleGameItemToken("marbles", false);
+    assert.equal(noImuStore.toastIsError, true);
+    assert.ok(noImuStore.entity.getEnabledGamesItems().includes("marbles"));
+    noImuStore.entity.discardDeviceBucket("sub_desk");
+
+    // Symmetric guard on an IMU device: turning off the last IMU-supported game is blocked
+    const { store: imuStore } = createHeadlessStore({
+      subentry_id: "sub_pocket",
+      capabilities: { has_display: true, has_imu: true, is_round: true },
+      config: {
+        device_slug: "pocket_assistant",
+        kind: "device",
+        games_items: DEFAULT_GAMES_ITEMS,
+      },
+    });
+    imuStore.applyRoute({ prefix: "/latter", path: "devices/sub_pocket/interface" });
+    imuStore.entity.toggleGameItemToken("archery", false);
+    imuStore.entity.toggleGameItemToken("bricks", false);
+    imuStore.entity.toggleGameItemToken("chomp", false);
+    assert.deepEqual(imuStore.entity.getEnabledGamesItems(), [
+      "blocks",
+      "snake",
+      "drop_four",
+      "marbles",
+    ]);
+    imuStore.entity.toggleGameItemToken("marbles", false);
+    assert.equal(imuStore.toastIsError, true);
+    assert.ok(imuStore.entity.getEnabledGamesItems().includes("marbles"));
+    imuStore.entity.discardDeviceBucket("sub_pocket");
+
+    // Group baseline capability derivation across built-in archetypes, Handhelds, and custom groups
+    const imuMember = imuStore.state!.system_devices.find((d) => d.subentry_id === "sub_pocket")!;
+    const noImuMember = imuStore.state!.system_devices.find((d) => d.subentry_id === "sub_desk")!;
+    const makeGroup = (id: string): DeviceGroup => ({
+      id,
+      name: id,
+      description: "",
+      builtin: id !== "custom_mix",
+      include_display: false,
+      include_interface: true,
+    });
+    const unknownMember: SystemDeviceEntry = { ...noImuMember, has_imu: undefined };
+
+    assert.equal(deriveGroupCapabilities(makeGroup("pocket_carry"), []).has_imu, true);
+    assert.equal(deriveGroupCapabilities(makeGroup("wearables"), []).has_imu, true);
+    assert.equal(deriveGroupCapabilities(makeGroup("wall_panels"), []).has_imu, false);
+
+    // Handhelds spans IMU Mobile Assistant & non-IMU Remote Assistant
+    assert.equal(deriveGroupCapabilities(makeGroup("handhelds"), []).has_imu, undefined);
+    assert.equal(deriveGroupCapabilities(makeGroup("handhelds"), [imuMember]).has_imu, true);
+    assert.equal(deriveGroupCapabilities(makeGroup("handhelds"), [noImuMember]).has_imu, false);
+    assert.equal(
+      deriveGroupCapabilities(makeGroup("handhelds"), [imuMember, noImuMember]).has_imu,
+      undefined,
+    );
+    assert.equal(deriveGroupCapabilities(makeGroup("handhelds"), [unknownMember]).has_imu, undefined);
+
+    // Custom groups match homogeneous IMU / non-IMU and open all games for mixed-IMU groups
+    assert.equal(deriveGroupCapabilities(makeGroup("custom_mix"), []).has_imu, undefined);
+    assert.equal(deriveGroupCapabilities(makeGroup("custom_mix"), [imuMember]).has_imu, true);
+    assert.equal(deriveGroupCapabilities(makeGroup("custom_mix"), [noImuMember]).has_imu, false);
+    assert.equal(
+      deriveGroupCapabilities(makeGroup("custom_mix"), [imuMember, noImuMember]).has_imu,
+      undefined,
+    );
+
+    // BatchController games_items pill lists filter cleanly for homogeneous targets and protect mixed targets
+    const gamesCtrl: SharedControlItem = {
+      key: "interface:pills:games",
+      pref_key: "games_items",
+      tier: "interface",
+      section: "interface",
+      section_title: "Interface",
+      name: "Games",
+      domain: "pills",
+      state: "",
+      options: GAMES_ITEMS_CATALOG.map((g) => g.token),
+      option_labels: Object.fromEntries(GAMES_ITEMS_CATALOG.map((g) => [g.token, g.label])),
+      min: 1,
+      targets: [
+        {
+          subentry_id: "sub_desk",
+          device_slug: "desk_assistant",
+          device_group: "wall_panels",
+          is_online: true,
+          is_roaming: false,
+          pref_key: "games_items",
+          state: DEFAULT_GAMES_ITEMS,
+        },
+        {
+          subentry_id: "sub_pocket",
+          device_slug: "pocket_assistant",
+          device_group: "pocket_carry",
+          is_online: false,
+          is_roaming: true,
+          pref_key: "games_items",
+          state: DEFAULT_GAMES_ITEMS,
+        },
+      ],
+    };
+    const { store: batchStore } = createHeadlessStore({ system_controls: [gamesCtrl] });
+
+    // Mixed target ("all") exposes all 7 games
+    assert.deepEqual(
+      batchStore.groups.getEffectiveBatchPillStates(gamesCtrl).map((p) => p.token),
+      ["blocks", "snake", "drop_four", "marbles", "archery", "bricks", "chomp"],
+    );
+    // Toggling off blocks/snake/drop_four is allowed, then toggling off marbles is blocked to protect non-IMU sub_desk
+    batchStore.groups.stageBatchPillToggle(gamesCtrl, "blocks", false);
+    batchStore.groups.stageBatchPillToggle(gamesCtrl, "snake", false);
+    batchStore.groups.stageBatchPillToggle(gamesCtrl, "drop_four", false);
+    batchStore.toastIsError = false;
+    batchStore.groups.stageBatchPillToggle(gamesCtrl, "marbles", false);
+    assert.equal(batchStore.toastIsError, true);
+    assert.equal(
+      batchStore.groups.getEffectiveBatchPillStates(gamesCtrl).find((p) => p.token === "marbles")
+        ?.state,
+      "on",
+    );
+
+    // Homogeneous non-IMU target ("group:wall_panels") shows only non-IMU + universal games
+    batchStore.groups.setBatchTargetFilter("group:wall_panels");
+    assert.deepEqual(
+      batchStore.groups.getEffectiveBatchPillStates(gamesCtrl).map((p) => p.token),
+      ["blocks", "snake", "drop_four", "marbles"],
+    );
+
+    // Homogeneous IMU target ("group:pocket_carry") shows only IMU + universal games
+    batchStore.groups.setBatchTargetFilter("group:pocket_carry");
+    assert.deepEqual(
+      batchStore.groups.getEffectiveBatchPillStates(gamesCtrl).map((p) => p.token),
+      ["marbles", "archery", "bricks", "chomp"],
+    );
   });
 });

@@ -1,7 +1,7 @@
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 
 export const PROTOCOL_CONTRACT_VERSION = 3;
-export const STUDIO_REV = 46;
+export const STUDIO_REV = 47;
 
 export const ALLOWED_DEVICE_ACTIONS: ReadonlyArray<string> = [
   "restart",
@@ -127,11 +127,12 @@ export const SHORTCUT_ROUTES_CATALOG: ReadonlyArray<CatalogItem> = [
   {token: "tools:dice", label: "Dice Roll", group: "Tools"},
   {token: "tools:coin_flip", label: "Coin Flip", group: "Tools"},
   {token: "games:marbles", label: "Marbles", group: "Games"},
-  {token: "games:archery", label: "Archery", group: "Games"},
-  {token: "games:bricks", label: "Bricks", group: "Games"},
-  {token: "games:chomp", label: "Chomp", group: "Games"},
-  {token: "games:2048", label: "2048", group: "Games"},
-  {token: "games:memory", label: "Memory Match", group: "Games"},
+  {token: "games:archery", label: "Archery", group: "Games", capability: "imu"},
+  {token: "games:bricks", label: "Bricks", group: "Games", capability: "imu"},
+  {token: "games:chomp", label: "Chomp", group: "Games", capability: "imu"},
+  {token: "games:blocks", label: "Blocks", group: "Games", capability: "no_imu"},
+  {token: "games:snake", label: "Snake", group: "Games", capability: "no_imu"},
+  {token: "games:drop_four", label: "Drop Four", group: "Games", capability: "no_imu"},
   {token: "settings:display", label: "Display Settings", group: "Settings"},
   {token: "settings:sleep", label: "Sleep & Wake", group: "Settings"},
   {token: "settings:sound", label: "Sound Settings", group: "Settings"},
@@ -180,12 +181,13 @@ export const TOOLS_ITEMS_CATALOG: ReadonlyArray<CatalogItem> = [
 ];
 
 export const GAMES_ITEMS_CATALOG: ReadonlyArray<CatalogItem> = [
+  {token: "blocks", label: "Blocks", capability: "no_imu"},
+  {token: "snake", label: "Snake", capability: "no_imu"},
+  {token: "drop_four", label: "Drop Four", capability: "no_imu"},
   {token: "marbles", label: "Marbles"},
-  {token: "archery", label: "Archery"},
-  {token: "bricks", label: "Bricks"},
-  {token: "chomp", label: "Chomp"},
-  {token: "2048", label: "2048"},
-  {token: "memory", label: "Memory Match"},
+  {token: "archery", label: "Archery", capability: "imu"},
+  {token: "bricks", label: "Bricks", capability: "imu"},
+  {token: "chomp", label: "Chomp", capability: "imu"},
 ];
 
 export const SHORTCUT_BADGE_STYLES_CATALOG: ReadonlyArray<CatalogItem> = [
@@ -406,12 +408,13 @@ export const DEFAULT_TOOLS_ITEMS_TOKENS: ReadonlyArray<string> = [
   "coin_flip",
 ];
 
-export const DEFAULT_GAMES_ITEMS = "marbles,archery,bricks,chomp,2048,memory";
+export const DEFAULT_GAMES_ITEMS = "blocks,snake,drop_four,marbles,archery,bricks,chomp";
 export const DEFAULT_GAMES_ITEMS_TOKENS: ReadonlyArray<string> = [
+  "blocks",
+  "snake",
+  "drop_four",
   "marbles",
   "archery",
   "bricks",
   "chomp",
-  "2048",
-  "memory",
 ];

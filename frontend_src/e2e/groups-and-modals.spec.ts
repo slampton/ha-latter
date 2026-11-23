@@ -44,12 +44,22 @@ test.describe("Device Groups, Non-Detaching DND & WAI-ARIA Modals E2E", () => {
     await wallBox.locator("details.sub-collapsible > summary").first().click();
     await wallBox.getByRole("switch", { name: /Include interface & shortcuts/ }).click();
     await expect(wallBox).toContainText("Doorbell ring popup");
+    await expect(wallBox).toContainText("Blocks");
+    await expect(wallBox).not.toContainText("Archery");
 
     const pocketBox = page.locator("#group-box-pocket_carry");
     await pocketBox.locator("details.sub-collapsible > summary").first().click();
     await pocketBox.getByRole("switch", { name: /Include interface & shortcuts/ }).click();
     await expect(pocketBox).toContainText("Interface & shortcuts");
     await expect(pocketBox).not.toContainText("Doorbell ring popup");
+    await expect(pocketBox).toContainText("Archery");
+    await expect(pocketBox).not.toContainText("Blocks");
+
+    const handheldBox = page.locator("#group-box-handhelds");
+    await handheldBox.locator("details.sub-collapsible > summary").first().click();
+    await handheldBox.getByRole("switch", { name: /Include interface & shortcuts/ }).click();
+    await expect(handheldBox).toContainText("Blocks");
+    await expect(handheldBox).toContainText("Archery");
 
     // 3. Staged Batch controls: staging `Do not disturb` across All Devices shows confirmation dialog
     //    with blast radius ("3 Devices") and applies WITHOUT detaching any Device to `Custom`!

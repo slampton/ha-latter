@@ -673,19 +673,22 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
         payload={
             "config": {
                 "tools_items": "dice,flashlight,coin_flip",
-                "games_items": "2048,memory",
+                "games_items": "blocks,snake",
             }
         },
     )
     assert conn.errors == []
     st_after_save = conn.results[-1][1]
     assert st_after_save["config"]["tools_items"] == "dice,flashlight,coin_flip"
-    assert st_after_save["config"]["games_items"] == "2048,memory"
+    assert st_after_save["config"]["games_items"] == "blocks,snake"
+    sys_dev_by_id = {d["subentry_id"]: d for d in st_after_save["system_devices"]}
+    assert sys_dev_by_id[coord.subentry_id]["has_imu"] is coord.has_imu
+    assert sys_dev_by_id[ble_coord.subentry_id]["has_imu"] is False
     assert coord.prefs_seq > seq_before
     _eff_seq, prefs_payload = coord.get_device_prefs_payload()
     wire_tokens = prefs_payload["payload"].split("\x1f")
     assert wire_tokens[52] == "dice,flashlight,coin_flip"
-    assert wire_tokens[53] == "2048,memory"
+    assert wire_tokens[53] == "blocks,snake"
 
     # Reject empty tools_items or games_items
     await call_ws(
@@ -744,13 +747,13 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
             "group_id": "arcade_stations",
             "config": {
                 "tools_items": "flashlight,dice",
-                "games_items": "archery,bricks,2048",
+                "games_items": "archery,bricks,drop_four",
             },
         },
     )
     assert conn.errors == []
     assert coord.tools_items_csv == "flashlight,dice"
-    assert coord.games_items_csv == "archery,bricks,2048"
+    assert coord.games_items_csv == "archery,bricks,drop_four"
     assert coord.device_group == "arcade_stations"
 
     # 2) Stopwatch + Timer + Ringing live telemetry & 1 Hz local monotonic elapsed counter

@@ -170,7 +170,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
                 "world_clocks=London|Europe/London;Kyoto|Asia/Tokyo",
                 "alarms_summary=06:47|1|1;08:30|0|2;09:15|1|3",
                 "tools_items=dice,flashlight,dice",
-                "games_items=2048,chomp",
+                "games_items=blocks,chomp",
                 "invalid_empty_tools=",
             ]
         )
@@ -191,7 +191,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
                 "world_clocks": "London|Europe/London;Kyoto|Asia/Tokyo",
                 "alarms_summary": "06:47|1|1;08:30|0|2;09:15|1|3",
                 "tools_items": "dice,flashlight",
-                "games_items": "2048,chomp",
+                "games_items": "blocks,chomp",
             },
         )
         bad_raw = "\x1e".join(["tools_items=", "games_items=not_a_game"])
@@ -364,22 +364,26 @@ class TestDevicePrefsProtocol(unittest.TestCase):
         self.assertEqual(_PAYLOADS_MOD.parse_games_items(None), [])
         self.assertEqual(
             _PAYLOADS_MOD.parse_games_items(_PAYLOADS_MOD.DEFAULT_GAMES_ITEMS),
-            ["marbles", "archery", "bricks", "chomp", "2048", "memory"],
+            ["blocks", "snake", "drop_four", "marbles", "archery", "bricks", "chomp"],
         )
         self.assertEqual(
-            _PAYLOADS_MOD.normalize_games_items(" 2048 , chomp , 2048 , MEMORY "),
-            "2048,chomp,memory",
+            _PAYLOADS_MOD.normalize_games_items(" blocks , chomp , blocks , DROP_FOUR "),
+            "blocks,chomp,drop_four",
         )
         with self.assertRaisesRegex(ValueError, "Keep at least one Game enabled"):
             _PAYLOADS_MOD.normalize_games_items("")
         with self.assertRaisesRegex(ValueError, "Unknown Game: tetris"):
-            _PAYLOADS_MOD.normalize_games_items("2048,tetris")
+            _PAYLOADS_MOD.normalize_games_items("blocks,tetris")
+        with self.assertRaisesRegex(ValueError, "Unknown Game: 2048"):
+            _PAYLOADS_MOD.normalize_games_items("2048")
+        with self.assertRaisesRegex(ValueError, "Unknown Game: memory"):
+            _PAYLOADS_MOD.normalize_games_items("memory")
 
         cleaned_tg = studio_scope.clean_device_settings(
-            {"tools_items": " dice , calculator ", "games_items": ["memory", "2048"]}
+            {"tools_items": " dice , calculator ", "games_items": ["drop_four", "blocks"]}
         )
         self.assertEqual(cleaned_tg["tools_items"], "dice,calculator")
-        self.assertEqual(cleaned_tg["games_items"], "memory,2048")
+        self.assertEqual(cleaned_tg["games_items"], "drop_four,blocks")
         with self.assertRaisesRegex(studio_scope.SettingsScopeError, "Keep at least one Tool enabled"):
             studio_scope.clean_device_settings({"tools_items": ""})
         with self.assertRaisesRegex(studio_scope.SettingsScopeError, "Keep at least one Game enabled"):

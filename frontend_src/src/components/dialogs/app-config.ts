@@ -56,7 +56,7 @@ const APP_MODAL_TITLE_KEYS: Readonly<Record<ConfigurableAppId, StudioTranslation
   games: "dialogs.app_games",
 };
 
-function buildOrderedPillItems(
+export function buildOrderedPillItems(
   catalog: ReadonlyArray<CatalogItem>,
   enabledTokens: readonly string[],
   caps?: DeviceCapabilities,
