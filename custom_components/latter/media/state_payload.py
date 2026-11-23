@@ -17,7 +17,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
-from ..const import DOMAIN
+from ..hub_registry import peek_domain_data
 from ..protocol_codec import pack_active_media_fields
 from .linking import resolve_ma_counterpart_entity, safe_float
 from .playback import (
@@ -338,10 +338,11 @@ def _resolve_queue_item_count(
                 return max(0, min(_MAX_QUEUE_U16, q_val))
             if isinstance(q_val, list):
                 return max(0, min(_MAX_QUEUE_U16, len(q_val)))
-    if snap.ma_counterpart:
-        cached_q_counts = hass.data.get(DOMAIN, {}).get("_ma_queue_counts")
-        if isinstance(cached_q_counts, dict):
-            return max(0, min(_MAX_QUEUE_U16, int(cached_q_counts.get(snap.ma_counterpart, 0))))
+    if snap.ma_counterpart and (domain_data := peek_domain_data(hass)) is not None:
+        return max(
+            0,
+            min(_MAX_QUEUE_U16, int(domain_data.ma_queue_counts.get(snap.ma_counterpart, 0))),
+        )
     return 0
 
 

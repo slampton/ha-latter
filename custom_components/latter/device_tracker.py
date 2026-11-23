@@ -51,9 +51,7 @@ class LatterBleDeviceTracker(TrackerEntity):
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize the BLE device tracker under its Latter `DeviceEntry`."""
         self.coordinator = coordinator
-        slug = coordinator.device_slug
         self._attr_unique_id = f"{coordinator.subentry_id}_ble_tracker"
-        self.entity_id = f"device_tracker.{slug}"
 
     @property
     def device_info(self) -> DeviceInfo:

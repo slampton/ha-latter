@@ -66,7 +66,6 @@ from ..const import (
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
-    DATA_GLOBAL_CONFIG,
     DEFAULT_DEVICE_GROUP,
     DOMAIN,
     INTEGRATION_VERSION,
@@ -86,9 +85,12 @@ from ..groups.esphome_inspector import (
 )
 from ..hub_registry import (
     get_area_state_index,
+    get_domain_data,
     get_latter_system,
     get_system_config_rev,
     iter_coordinators,
+    peek_domain_data,
+    peek_global_config,
 )
 from ..identity import esphome_service, get_discovered_latter_devices
 from ..media.linking import is_music_assistant_player, ma_player_entities
@@ -535,8 +537,7 @@ def log_studio_event(
     hass: HomeAssistant, level: str, source: str, message: str
 ) -> None:
     """Append a diagnostic event (UTC ISO timestamp; Studio formats it for the user) to the Studio ring buffer."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    logs: list[dict[str, str]] = domain_data.setdefault("internal_logs", [])
+    logs = get_domain_data(hass).internal_logs
     ts = dt_util.utcnow().isoformat(timespec="seconds")
     logs.insert(
         0,
@@ -577,8 +578,9 @@ def _extract_system_log_entry(rec: Any) -> dict[str, str] | None:
 
 def get_combined_system_and_studio_logs(hass: HomeAssistant) -> list[dict[str, str]]:
     """Combine Latter Studio events with live entries from Home Assistant's native `system_log` handler."""
-    combined: list[dict[str, str]] = list(
-        hass.data.get(DOMAIN, {}).get("internal_logs", [])
+    domain_data = peek_domain_data(hass)
+    combined: list[dict[str, str]] = (
+        list(domain_data.internal_logs) if domain_data is not None else []
     )
     try:
         sys_log = hass.data.get("system_log")
@@ -1243,7 +1245,7 @@ def _append_interface_shared_controls(
         coord_meta, CONF_DEVICE_REMOTE_GROUP, lambda c: c.device_remote_group, display_only=True
     )
     if rem_targets:
-        raw_global_cfg = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
+        raw_global_cfg = peek_global_config(hass)
         rem_groups = system_settings_view(raw_global_cfg).get("remote_groups") or []
         rem_opts: list[str] = ["area_auto"]
         rem_labels: dict[str, str] = {"area_auto": "Match Active Area"}
@@ -1319,7 +1321,7 @@ def _enrich_hub_catalog_item(
 
 def _extract_volume_overrides_map(hass: HomeAssistant) -> dict[str, str]:
     """Read System `volume_overrides` into a `{speaker_entity: target_entity}` map."""
-    global_cfg = (hass.data.get(DOMAIN, {}) or {}).get(DATA_GLOBAL_CONFIG) or {}
+    global_cfg = peek_global_config(hass)
     raw_vol_ov = global_cfg.get("volume_overrides")
     vol_overrides_map: dict[str, str] = {}
     if isinstance(raw_vol_ov, list):
@@ -1784,7 +1786,7 @@ def build_system_section(
         )
         for c in coords
     ]
-    raw_global_cfg = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
+    raw_global_cfg = peek_global_config(hass)
     onboarded_slugs = {c.device_slug for c in coords}
     sys_obj = get_latter_system(hass)
     sign_fn = (

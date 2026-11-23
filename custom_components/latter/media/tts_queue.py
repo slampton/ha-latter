@@ -22,7 +22,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 
 from ..const import DOMAIN
-from ..hub_registry import get_area_state_index, iter_coordinators
+from ..hub_registry import get_area_state_index, iter_coordinators, peek_domain_data
 from .browse import async_browse_media_items, async_lookup_ma_track_uri, extract_item_dict
 from .linking import (
     get_ma_mass_client,
@@ -786,9 +786,10 @@ async def async_handle_queue_mutation_command(
         notified = True
     elif cmd == "queue_delete":
         await pqs.delete_item(queue_id, item_id_or_index=clean_qid)
-        q_counts = hass.data.get(DOMAIN, {}).get("_ma_queue_counts")
-        if isinstance(q_counts, dict) and q_counts.get(ma_target, 0) > 0:
-            q_counts[ma_target] = q_counts[ma_target] - 1
+        if (domain_data := peek_domain_data(hass)) is not None:
+            q_counts = domain_data.ma_queue_counts
+            if q_counts.get(ma_target, 0) > 0:
+                q_counts[ma_target] = q_counts[ma_target] - 1
         notified = True
     elif pos_shift is not None:
         raw_shift_str = str(pos_shift).strip().lower()

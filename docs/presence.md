@@ -23,7 +23,7 @@ Latter tracks which Area each Device is in using the Bluetooth proxies across yo
 
 Latter firmware ships with its BLE presence beacon inactive out of the box so a new or reset Device does not advertise until presence is configured. When **Track the Area with BLE Proxies** is enabled, Latter provisions the System's random 128-bit BLE UUID (`latter_set_beacon_uuid`) and enables advertising via Protocol v3 (`device_prefs.ble_beacon_enabled`), with battery duty tuned in **Studio → Devices → Presence → BLE Beacon Mode** (*Handheld Only*, *Handheld + Screen Off*, or *Always*). Roaming Latter Devices also pause `latter_beacon` automatically whenever Wi-Fi is disconnected (`!wifi_connected`), preventing off-site public BLE tracking and saving battery.
 
-To link a tracked Device to a person, set **Assigned Person** during adoption or on the Device's **Overview** page. Latter creates `sensor.<person>_current_area`, `sensor.<person>_ble_distance`, and (whenever Floors exist in Home Assistant) `sensor.<person>_current_floor`, following whichever of that person's Devices was heard most recently, alongside `device_tracker.<slug>` (`home` / `not_home`) for Home Assistant `person` zone tracking (**Settings → People**).
+To link a tracked Device to a person, set **Assigned Person** during adoption or on the Device's **Overview** page. Latter creates `sensor.latter_system_<person>_current_area`, `sensor.latter_system_<person>_ble_distance` *(disabled by default)*, and (whenever Floors exist in Home Assistant) `sensor.latter_system_<person>_current_floor`, following whichever of that person's Devices was heard most recently, alongside `device_tracker.<slug>` (`home` / `not_home`) for Home Assistant `person` zone tracking (**Settings → People**).
 
 ---
 
@@ -120,7 +120,7 @@ Walls, foil-backed insulation, and receiver antenna designs mean raw RSSI varies
 
 ## Area occupancy and sensor fusion
 
-Latter creates one occupancy binary sensor and one occupants sensor per mapped Area: `binary_sensor.<area>_occupancy` and `sensor.<area>_occupants`. Each Area can fuse BLE presence with existing physical sensors assigned to that Area:
+Latter creates one occupancy binary sensor and one occupants sensor per mapped Area: `binary_sensor.latter_system_<area>_occupancy` and `sensor.latter_system_<area>_occupants`. Each Area can fuse BLE presence with existing physical sensors assigned to that Area:
 
 | Input | Effect on the Area's confidence score |
 | :--- | :--- |
@@ -141,7 +141,7 @@ Presence modes, set per Area in Studio (**System → BLE & Area Presence → Are
 
 > The weighted score is a transparent additive rule—not an opaque Bayesian network—so every transition can be inspected directly from entity attributes.
 
-Sensors are discovered automatically by device class (`occupancy`, `presence`, `motion`, `moving`, `door`, `opening`) across both entity Areas and device Areas (excluding Latter's own `latter` domain entities so `binary_sensor.<area>_occupancy` never feeds back into itself).
+Sensors are discovered automatically by device class (`occupancy`, `presence`, `motion`, `moving`, `door`, `opening`) across both entity Areas and device Areas (excluding Latter's own `latter` domain entities so `binary_sensor.latter_system_<area>_occupancy` never feeds back into itself).
 
 ## What Latter does with the Area
 
@@ -180,7 +180,7 @@ Sensors are discovered automatically by device class (`occupancy`, `presence`, `
 2. Open **Studio → Devices → Discovered**, adopt your Latter Devices, Android phones (`HA Companion App`), iPhones/watches (`Private BLE Device`), and local BLE tags, and set **Assigned Person** on personal Devices.
 3. Attach `device_tracker.<slug>` to each person in **Settings → People** if you want BLE Home/Away zone tracking.
 4. Walk your Site with **Studio → System → BLE & Area Presence → Walk-Around BLE Calibration** (**Live Stream On**): select your **Carried Device**, click **Calibrate Area** in any proxy-less Area or tight doorway boundary, and expand **Antenna Trim** inside any proxy row whose hardware needs gain normalization.
-5. Point your automations at `sensor.<person>_current_area`, `sensor.<person>_current_floor`, or `binary_sensor.<area>_occupancy`.
+5. Point your automations at `sensor.latter_system_<person>_current_area`, `sensor.latter_system_<person>_current_floor`, or `binary_sensor.latter_system_<area>_occupancy`.
 
 ---
 

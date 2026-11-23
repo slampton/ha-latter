@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import build_device_entity_id
 from .coordinator import LatterCoordinator
 from .hub_registry import LatterSystemHub, get_latter_system
 
@@ -55,9 +54,6 @@ class LatterScreenLight(LightEntity):
         self.coordinator = coordinator
         self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
         self._attr_unique_id = f"{coordinator.subentry_id}_screen"
-        self.entity_id = build_device_entity_id(
-            coordinator.device_slug, "screen", "light"
-        )
 
     @property
     def device_info(self) -> DeviceInfo:

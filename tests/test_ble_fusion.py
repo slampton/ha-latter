@@ -24,7 +24,6 @@ from custom_components.latter.const import (
     CONF_ESPHOME_DEVICE_ID,
     CONF_NATIVE_BLE_TRACKING,
     CONF_SYNC_DEVICE_AREA,
-    DATA_GLOBAL_CONFIG,
     DOMAIN,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
@@ -32,6 +31,7 @@ from custom_components.latter.const import (
     SUBENTRY_DEVICE,
 )
 from custom_components.latter.groups.device_groups import coordinator_supports_pref
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.presence.ble_fabric import (
     get_all_areas_presence_summary,
     get_ble_fabric,
@@ -90,7 +90,7 @@ async def test_sensor_fusion_modes_and_voice_follows_me_invariant(
     dev_reg = dr.async_get(hass)
 
     # Configure weighted fusion on kitchen
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_AREA_FUSION_CONFIG] = {
+    get_global_config(hass)[CONF_AREA_FUSION_CONFIG] = {
         "kitchen": {
             "mode": "weighted",
             "threshold_pct": 55,
@@ -126,7 +126,7 @@ async def test_sensor_fusion_modes_and_voice_follows_me_invariant(
         ("ble_only", False),
         ("ble_and_sensor", False),
     ):
-        hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_AREA_FUSION_CONFIG]["kitchen"]["mode"] = mode
+        get_global_config(hass)[CONF_AREA_FUSION_CONFIG]["kitchen"]["mode"] = mode
         res = fabric.get_area_occupancy("kitchen")
         assert res["fusion_mode"] == mode
         assert res["is_occupied"] is expected_occ
@@ -151,15 +151,16 @@ async def test_sensor_fusion_modes_and_voice_follows_me_invariant(
         assert occ_closed["confidence_pct"] == 0
         assert "binary_sensor.kitchen_pir" in occ_closed["unavailable_sensors"]
 
-    # Area occupancy entity uses canonical `binary_sensor.<area>_occupancy` and never self-feeds back into fusion
-    assert hass.states.get("binary_sensor.kitchen_occupancy") is not None
+    # Area occupancy entity uses HA native `binary_sensor.latter_system_<area>_occupancy` and never self-feeds back into fusion
+    kitchen_occ_eid = "binary_sensor.latter_system_kitchen_occupancy"
+    assert hass.states.get(kitchen_occ_eid) is not None
     assert hass.states.get("binary_sensor.kitchen_ble_occupancy") is None
-    if ent_reg.async_get("binary_sensor.kitchen_occupancy") is not None:
-        ent_reg.async_update_entity("binary_sensor.kitchen_occupancy", area_id="kitchen")
+    if ent_reg.async_get(kitchen_occ_eid) is not None:
+        ent_reg.async_update_entity(kitchen_occ_eid, area_id="kitchen")
     else:
         register_entity(
             hass,
-            "binary_sensor.kitchen_occupancy",
+            kitchen_occ_eid,
             platform=DOMAIN,
             config_entry=entry,
             area_id="kitchen",
@@ -167,14 +168,14 @@ async def test_sensor_fusion_modes_and_voice_follows_me_invariant(
             original_device_class="occupancy",
         )
     hass.states.async_set(
-        "binary_sensor.kitchen_occupancy",
+        kitchen_occ_eid,
         "on",
         {"device_class": "occupancy"},
     )
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_AREA_FUSION_CONFIG]["kitchen"] = {
+    get_global_config(hass)[CONF_AREA_FUSION_CONFIG]["kitchen"] = {
         "mode": "any_or",
         "threshold_pct": 50,
-        "sensors": ["binary_sensor.kitchen_occupancy"],
+        "sensors": [kitchen_occ_eid],
     }
     fabric._invalidate_caches()
     coord.ble_tracker._ingest_proxy_observation(
@@ -189,11 +190,17 @@ async def test_sensor_fusion_modes_and_voice_follows_me_invariant(
     assert coord.ble_tracker.current_area_id == "living_room"
     assert fabric.get_area_occupancy("kitchen")["sensor_occupied"] is False
 
-    # BLE distance sensor uses canonical meters (`m`, `distance_m`) with legacy `_ft` stripped
-    dist_st = hass.states.get("sensor.pocket_assistant_ble_distance")
-    assert dist_st is not None
-    assert "distance_m" in dist_st.attributes
-    assert "distance_ft" not in dist_st.attributes
+    # BLE distance sensor is disabled by default (Gold `entity-disabled-by-default`) and uses canonical meters (`m`, `distance_m`)
+    dist_entry = ent_reg.async_get("sensor.pocket_assistant_ble_distance")
+    assert dist_entry is not None
+    assert dist_entry.disabled_by == er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get("sensor.pocket_assistant_ble_distance") is None
+    from custom_components.latter.sensor import LatterBleDistanceSensor
+
+    dist_sensor = LatterBleDistanceSensor(coord)
+    dist_attrs = dist_sensor.extra_state_attributes
+    assert "distance_m" in dist_attrs
+    assert "distance_ft" not in dist_attrs
 
     summary_rows = get_all_areas_presence_summary(hass)
     assert any(r["area_id"] == "kitchen" for r in summary_rows)
@@ -587,7 +594,7 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
     assert hass.states.get("sensor.pocket_assistant_current_area") is not None
     assert hass.states.get("sensor.pocket_assistant_current_floor") is None
     assert hass.states.get("sensor.alex_watch_current_floor") is None
-    assert hass.states.get("sensor.alex_current_floor") is None
+    assert hass.states.get("sensor.latter_system_alex_current_floor") is None
 
     # 2) Dynamically create Floors in FloorRegistry & map Areas -> floor sensors auto-create live!
     f1 = ensure_floor(hass, "Ground Level", floor_id="floor_1", level=1)
@@ -599,7 +606,7 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
     assert has_configured_floors(hass) is True
     pocket_floor = hass.states.get("sensor.pocket_assistant_current_floor")
     watch_floor = hass.states.get("sensor.alex_watch_current_floor")
-    person_floor = hass.states.get("sensor.alex_current_floor")
+    person_floor = hass.states.get("sensor.latter_system_alex_current_floor")
     assert pocket_floor is not None and pocket_floor.state == "Ground Level"
     assert pocket_floor.attributes["floor_id"] == f1.floor_id
     assert watch_floor is not None and watch_floor.state == "Unassigned"
@@ -615,7 +622,7 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
         )
     await flush_debouncers(hass)
     assert hass.states.get("sensor.alex_watch_current_floor").state == "Upper Level"
-    assert hass.states.get("sensor.alex_current_floor").state == "Upper Level"
+    assert hass.states.get("sensor.latter_system_alex_current_floor").state == "Upper Level"
     watch_dt = hass.states.get("device_tracker.alex_watch_ble_tracker") or hass.states.get(
         "device_tracker.alex_watch"
     )
@@ -633,6 +640,6 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
 
     assert hass.states.get("sensor.pocket_assistant_current_floor").state == "Away"
     assert hass.states.get("sensor.alex_watch_current_floor").state == "Away"
-    assert hass.states.get("sensor.alex_current_floor").state == "Away"
+    assert hass.states.get("sensor.latter_system_alex_current_floor").state == "Away"
 
     assert await hass.config_entries.async_unload(entry.entry_id) is True

@@ -18,10 +18,11 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .areas.registry import resolve_person_area_and_distance
-from .const import DOMAIN, build_device_entity_id, normalize_device_slug
+from .const import DOMAIN, normalize_device_slug
 from .coordinator import LatterCoordinator
 from .hub_registry import (
     LatterSystemHub,
+    get_domain_data,
     get_latter_system,
     get_system_device_info,
     iter_coordinators,
@@ -34,7 +35,6 @@ from .presence.ble_registry import (
 )
 
 PARALLEL_UPDATES = 0
-DATA_CREATED_AREA_OCCUPANT_IDS = "created_area_occupant_ids"
 EVENT_FLOOR_REGISTRY_UPDATED = "floor_registry_updated"
 MAX_OCCUPANTS_STATE_CHARS = 250
 _REMOVED_DIAGNOSTIC_SENSOR_SUFFIXES: tuple[str, ...] = (
@@ -222,18 +222,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up Latter sensors for all device subentries and System-level Area/Person entities."""
     coordinators = _entry_coordinators(hass, entry)
-    domain_data = hass.data.setdefault(DOMAIN, {})
+    domain_data = get_domain_data(hass)
     tracking = _EntrySensorTracking(
-        registered_persons=domain_data.setdefault("registered_person_sensors", set()),
-        registered_subentry_floors=domain_data.setdefault(
-            "registered_subentry_floor_sensors", set()
-        ),
-        registered_person_floors=domain_data.setdefault(
-            "registered_person_floor_sensors", set()
-        ),
-        created_area_occupants=domain_data.setdefault(
-            DATA_CREATED_AREA_OCCUPANT_IDS, set()
-        ),
+        registered_persons=domain_data.registered_person_sensors,
+        registered_subentry_floors=domain_data.registered_subentry_floors,
+        registered_person_floors=domain_data.registered_person_floors,
+        created_area_occupants=domain_data.created_area_occupants_ids,
     )
 
     _setup_device_sensors(
@@ -307,12 +301,10 @@ class _BaseLatterSensor(SensorEntity):
     _attr_should_poll = False
 
     def __init__(self, coordinator: LatterCoordinator, suffix: str) -> None:
-        """Initialize base sensor with a device-scoped `entity_id` under its Latter `DeviceEntry`."""
+        """Initialize base sensor under its Latter `DeviceEntry`."""
         self.coordinator = coordinator
-        slug = coordinator.device_slug
         self._attr_translation_key = suffix
         self._attr_unique_id = f"{coordinator.subentry_id}_{suffix}"
-        self.entity_id = build_device_entity_id(slug, suffix)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -406,6 +398,7 @@ class LatterCurrentFloorSensor(_BaseLatterSensor):
 class LatterBleDistanceSensor(_BaseLatterSensor):
     """Exposes `sensor.<device_slug>_ble_distance` in canonical Home Assistant meters."""
 
+    _attr_entity_registry_enabled_default = False
     _attr_native_unit_of_measurement = UnitOfLength.METERS
     _attr_device_class = SensorDeviceClass.DISTANCE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -492,7 +485,7 @@ class _BaseLatterPersonSensor(SensorEntity):
 
 
 class LatterPersonCurrentAreaSensor(_BaseLatterPersonSensor):
-    """Exposes `sensor.<person_slug>_current_area` under the Latter System service device."""
+    """Exposes `sensor.latter_system_<person>_current_area` under the Latter System service device."""
 
     _attr_translation_key = "person_current_area"
 
@@ -500,7 +493,6 @@ class LatterPersonCurrentAreaSensor(_BaseLatterPersonSensor):
         """Initialize person current area sensor."""
         super().__init__(hass, person_entity)
         self._attr_unique_id = f"{DOMAIN}_person_{self._person_slug}_current_area"
-        self.entity_id = f"sensor.{self._person_slug}_current_area"
 
     @property
     def native_value(self) -> str:
@@ -516,7 +508,7 @@ class LatterPersonCurrentAreaSensor(_BaseLatterPersonSensor):
 
 
 class LatterPersonCurrentFloorSensor(_BaseLatterPersonSensor):
-    """Exposes `sensor.<person_slug>_current_floor` under the Latter System service device."""
+    """Exposes `sensor.latter_system_<person>_current_floor` under the Latter System service device."""
 
     _attr_translation_key = "person_current_floor"
 
@@ -524,7 +516,6 @@ class LatterPersonCurrentFloorSensor(_BaseLatterPersonSensor):
         """Initialize person current floor sensor."""
         super().__init__(hass, person_entity)
         self._attr_unique_id = f"{DOMAIN}_person_{self._person_slug}_current_floor"
-        self.entity_id = f"sensor.{self._person_slug}_current_floor"
 
     @property
     def native_value(self) -> str:
@@ -540,8 +531,9 @@ class LatterPersonCurrentFloorSensor(_BaseLatterPersonSensor):
 
 
 class LatterPersonBleDistanceSensor(_BaseLatterPersonSensor):
-    """Exposes `sensor.<person_slug>_ble_distance` under the Latter System service device."""
+    """Exposes `sensor.latter_system_<person>_ble_distance` under the Latter System service device."""
 
+    _attr_entity_registry_enabled_default = False
     _attr_translation_key = "person_ble_distance"
     _attr_native_unit_of_measurement = UnitOfLength.METERS
     _attr_device_class = SensorDeviceClass.DISTANCE
@@ -552,7 +544,6 @@ class LatterPersonBleDistanceSensor(_BaseLatterPersonSensor):
         """Initialize person BLE distance sensor."""
         super().__init__(hass, person_entity)
         self._attr_unique_id = f"{DOMAIN}_person_{self._person_slug}_ble_distance"
-        self.entity_id = f"sensor.{self._person_slug}_ble_distance"
 
     @property
     def native_value(self) -> float | None:
@@ -597,7 +588,7 @@ def format_bounded_occupant_names(
 
 
 class LatterAreaOccupantsSensor(SensorEntity):
-    """Exposes `sensor.<area_slug>_occupants` with bounded state (`<255` chars) and full `occupant_names` attribute."""
+    """Exposes `sensor.latter_system_<area>_occupants` with bounded state (`<255` chars) and full `occupant_names` attribute."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -613,11 +604,9 @@ class LatterAreaOccupantsSensor(SensorEntity):
         self.hass = hass
         self._area_id = area_id
         self._area_name = area_name
-        a_slug = normalize_device_slug(area_id or area_name)
         self._attr_unique_id = f"latter_area_occupants_{area_id}"
         self._attr_suggested_area = area_name
         self._attr_translation_placeholders = {"area_name": area_name}
-        self.entity_id = f"sensor.{a_slug}_occupants"
         self._cached_occ: dict[str, Any] | None = None
 
     @callback

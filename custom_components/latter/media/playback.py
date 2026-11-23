@@ -23,8 +23,8 @@ from homeassistant.core import Event, EventStateChangedData, HomeAssistant, Stat
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_state_change_event
 
-from ..const import DOMAIN, TRANSFER_HOLD_WINDOW_SECONDS
-from ..hub_registry import is_media_position_only_tick
+from ..const import TRANSFER_HOLD_WINDOW_SECONDS
+from ..hub_registry import is_media_position_only_tick, peek_domain_data
 from .browse import async_lookup_ma_track_uri, extract_item_dict
 from .linking import (
     get_ma_mass_client,
@@ -935,8 +935,8 @@ async def _async_handle_group_or_transport_tail(
         await hass.services.async_call("media_player", svc_name, {ATTR_ENTITY_ID: cmd_target}, blocking=False)
     elif cmd == "clear_queue":
         coordinator.transfer_hold_spinup_until = 0.0
-        if ma_target and isinstance(q_counts := hass.data.get(DOMAIN, {}).get("_ma_queue_counts"), dict):
-            q_counts[ma_target] = 0
+        if ma_target and (domain_data := peek_domain_data(hass)) is not None:
+            domain_data.ma_queue_counts[ma_target] = 0
         await hass.services.async_call("media_player", "clear_playlist", {ATTR_ENTITY_ID: cmd_target}, blocking=False)
     elif cmd == "seek" and seek_position is not None:
         safe_seek = safe_opt_float(seek_position)

@@ -1,4 +1,4 @@
-"""Real Home Assistant 2026.10+ registry, config-entry, entity, and service test helpers."""
+"""Real Home Assistant 2026.11+ registry, config-entry, entity, and service test helpers."""
 
 from __future__ import annotations
 
@@ -120,7 +120,7 @@ def add_mock_entry(
     """Create a `MockConfigEntry`, normalize `subentries_data`, add it to `hass`, and return it."""
     from unittest.mock import AsyncMock
 
-    from pytest_homeassistant_custom_component.common import (
+    from pytest_homeassistant.common import (
         MockConfigEntry,
         MockModule,
         mock_integration,

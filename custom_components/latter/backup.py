@@ -53,19 +53,19 @@ from .const import (
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
-    DATA_GLOBAL_CONFIG,
-    DATA_GLOBAL_STORE,
     DEFAULT_DEVICE_GROUP,
     DEFAULT_SITE_ID,
-    DOMAIN,
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
 )
 from .hub_registry import (
+    get_domain_data,
     get_latter_system,
     get_system_config_lock,
     get_system_config_rev,
     iter_coordinators,
+    peek_domain_data,
+    peek_global_config,
 )
 from .studio.settings_cleaners import (
     DEVICE_PREF_SPECS,
@@ -136,28 +136,16 @@ DEVICE_CONFIG_EXPORT_KEYS: Final[tuple[str, ...]] = (
 
 async def async_pre_backup(hass: HomeAssistant) -> None:
     """Flush in-memory Site configuration and per-device runtime stores to disk before HA creates a backup."""
-    domain_data: dict[str, Any] = hass.data.get(DOMAIN, {})
-    if not isinstance(domain_data, dict):
+    domain_data = peek_domain_data(hass)
+    if domain_data is None:
         return
 
     async with get_system_config_lock(hass):
-        global_store = domain_data.get(DATA_GLOBAL_STORE)
-        global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
-        if global_store is not None and isinstance(global_cfg, dict):
-            await global_store.async_save(global_cfg)
+        if domain_data.global_store is not None:
+            await domain_data.global_store.async_save(domain_data.global_config)
 
-    seen_ids: set[int] = set()
     for coord in iter_coordinators(hass):
-        seen_ids.add(id(coord))
         flush_fn = getattr(coord, "async_flush_runtime_state", None)
-        if callable(flush_fn):
-            await flush_fn()
-
-    for item in domain_data.values():
-        if id(item) in seen_ids:
-            continue
-        seen_ids.add(id(item))
-        flush_fn = getattr(item, "async_flush_runtime_state", None)
         if callable(flush_fn):
             await flush_fn()
 
@@ -206,8 +194,7 @@ def build_backup_bundle(
     clean_scope = "system" if scope == "system" else "device"
     backup_id = f"bkp_{int(now.timestamp())}_{secrets.token_hex(3)}"
 
-    domain_data = hass.data.get(DOMAIN, {})
-    raw_global = dict(domain_data.get(DATA_GLOBAL_CONFIG) or {})
+    raw_global = dict(peek_global_config(hass))
     global_export = {
         k: raw_global[k]
         for k in GLOBAL_CONFIG_KEYS
@@ -335,8 +322,8 @@ async def _async_restore_system_global_config(
         raise ValueError(str(err)) from err
 
     async with get_system_config_lock(hass):
-        domain_data = hass.data.setdefault(DOMAIN, {})
-        global_cfg: dict[str, Any] = domain_data.setdefault(DATA_GLOBAL_CONFIG, {})
+        domain_data = get_domain_data(hass)
+        global_cfg = domain_data.global_config
         for k in GLOBAL_CONFIG_KEYS:
             if k != CONF_SECURITY_PIN_HASH and k in sanitized_sys:
                 global_cfg[k] = sanitized_sys[k]
@@ -350,8 +337,8 @@ async def _async_restore_system_global_config(
         global_cfg[CONF_SYSTEM_CONFIG_REV] = get_system_config_rev(hass) + 1
         if (sys_obj := get_latter_system(hass)) is not None:
             sys_obj.config = global_cfg
-        if (store := domain_data.get(DATA_GLOBAL_STORE)) is not None:
-            await store.async_save(global_cfg)
+        if domain_data.global_store is not None:
+            await domain_data.global_store.async_save(global_cfg)
 
 
 async def async_restore_backup_bundle(

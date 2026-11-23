@@ -36,10 +36,6 @@ from .config_defaults import (
 from .const import (
     CONF_ESPHOME_DEVICE_ID,
     CONF_SYSTEM_BLE_UUID,
-    DATA_DISCOVERY_UNSUB,
-    DATA_GLOBAL_CONFIG,
-    DATA_GLOBAL_STORE,
-    DATA_HMAC_SECRET,
     DEFAULT_BLE_BEACON_UUID,
     DEVICE_SUBENTRY_TYPES,
     DOMAIN,
@@ -61,16 +57,19 @@ from .http.camera_views import (
     async_shutdown_camera_feeds,
     async_shutdown_doorbell_streams,
 )
-from .http.proxy_views import LatterArtworkTranscoderView, LatterBrandIconView
+from .http.proxy_views import LatterArtworkTranscoderView
 from .http.signing import register_crop_hash_resolver
 from .http.wallpaper_views import LatterWallpaperProxyView, LatterWallpaperUploadView
 from .hub_registry import (
+    LatterDomainData,
     LatterSystemHub,
     async_stop_area_state_index,
     get_area_state_index,
+    get_domain_data,
     get_latter_system,
     get_system_config_lock,
     iter_coordinators,
+    peek_domain_data,
     register_hub_hooks,
 )
 from .hub_sync import attach_hub_sync_methods
@@ -116,11 +115,11 @@ register_rpc_receiver_factory(LatterRpcReceiver)
 
 @callback
 def async_register_http_views(hass: HomeAssistant) -> None:
-    """Register all 8 local-only signed/admin HTTP views once on `hass.http`."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    if domain_data.get("views_registered"):
+    """Register all 7 local-only signed/admin HTTP views once on `hass.http`."""
+    domain_data = get_domain_data(hass)
+    if domain_data.views_registered:
         return
-    domain_data["views_registered"] = True
+    domain_data.views_registered = True
     hass.http.register_view(LatterArtworkTranscoderView(hass))
     hass.http.register_view(LatterWallpaperProxyView(hass))
     hass.http.register_view(LatterWallpaperUploadView(hass))
@@ -128,7 +127,6 @@ def async_register_http_views(hass: HomeAssistant) -> None:
     hass.http.register_view(LatterCameraStreamView(hass))
     hass.http.register_view(LatterCameraGridView(hass))
     hass.http.register_view(LatterCameraAudioStreamView(hass))
-    hass.http.register_view(LatterBrandIconView(hass))
 
 
 async def async_ping_bound_devices(
@@ -160,27 +158,27 @@ async def async_ping_bound_devices(
 async def _async_ensure_global_store(hass: HomeAssistant) -> dict[str, Any]:
     """Load or initialize the shared Site configuration store (`.storage/latter.site`)."""
     async with get_system_config_lock(hass):
-        domain_data = hass.data.setdefault(DOMAIN, {})
+        domain_data = get_domain_data(hass)
         had_existing_store = bool(
-            DATA_GLOBAL_STORE in domain_data and domain_data.get(DATA_GLOBAL_CONFIG)
+            domain_data.global_store is not None and domain_data.global_config
         )
-        if DATA_GLOBAL_STORE not in domain_data:
+        if domain_data.global_store is None:
             store: Store[dict[str, Any]] = Store(
                 hass, STORAGE_VERSION, GLOBAL_STORAGE_KEY
             )
-            domain_data[DATA_GLOBAL_STORE] = store
+            domain_data.global_store = store
             loaded = await store.async_load()
             had_existing_store = isinstance(loaded, dict) and bool(loaded)
-            domain_data[DATA_GLOBAL_CONFIG] = (
-                dict(loaded) if isinstance(loaded, dict) else {}
-            )
+            domain_data.global_config.clear()
+            if isinstance(loaded, dict):
+                domain_data.global_config.update(loaded)
 
-        global_cfg: dict[str, Any] = domain_data[DATA_GLOBAL_CONFIG]
+        global_cfg = domain_data.global_config
         changed = False
         if global_cfg.get(CONF_BUILTIN_GROUP_PRESET_VERSION) != BUILTIN_GROUP_PRESET_VERSION:
             if had_existing_store:
                 upgrade_stored_builtin_groups(global_cfg)
-                domain_data["_pending_builtin_group_preset_upgrade"] = True
+                domain_data.pending_builtin_group_preset_upgrade = True
             else:
                 global_cfg[CONF_BUILTIN_GROUP_PRESET_VERSION] = BUILTIN_GROUP_PRESET_VERSION
             changed = True
@@ -190,11 +188,11 @@ async def _async_ensure_global_store(hass: HomeAssistant) -> dict[str, Any]:
             global_cfg["hmac_secret_hex"] = secret_hex
             changed = True
         try:
-            domain_data[DATA_HMAC_SECRET] = bytes.fromhex(secret_hex)
+            domain_data.hmac_secret = bytes.fromhex(secret_hex)
         except ValueError:
             secret_hex = secrets.token_hex(32)
             global_cfg["hmac_secret_hex"] = secret_hex
-            domain_data[DATA_HMAC_SECRET] = bytes.fromhex(secret_hex)
+            domain_data.hmac_secret = bytes.fromhex(secret_hex)
             changed = True
 
         sys_ble_uuid = str(global_cfg.get(CONF_SYSTEM_BLE_UUID) or "").strip().upper()
@@ -207,8 +205,8 @@ async def _async_ensure_global_store(hass: HomeAssistant) -> dict[str, Any]:
             global_cfg[CONF_SYSTEM_BLE_UUID] = sys_ble_uuid
             changed = True
 
-        if changed:
-            await domain_data[DATA_GLOBAL_STORE].async_save(global_cfg)
+        if changed and domain_data.global_store is not None:
+            await domain_data.global_store.async_save(global_cfg)
 
     sys_obj = get_latter_system(hass)
     if sys_obj is not None:
@@ -295,10 +293,10 @@ def _handle_device_registry_update_for_coordinators(
 @callback
 def _register_domain_bus_listeners(
     hass: HomeAssistant,
-    domain_data: dict[str, Any],
+    domain_data: LatterDomainData,
     schedule_scan: Callable[[float], None],
 ) -> None:
-    if DATA_DISCOVERY_UNSUB in domain_data:
+    if domain_data.discovery_unsubs is not None:
         return
 
     @callback
@@ -309,8 +307,8 @@ def _register_domain_bus_listeners(
             return
         got_dev = dr.async_get(hass).async_get(dev_id)
         dev = got_dev if isinstance(got_dev, dr.DeviceEntry) else None
-        own_writes = domain_data.get("_own_area_writes")
-        if isinstance(own_writes, dict) and dev_id in own_writes:
+        own_writes = domain_data.own_area_writes
+        if dev_id in own_writes:
             expected_area, write_ts = own_writes[dev_id]
             cur_area = str(dev.area_id or "").strip() if dev is not None else ""
             if (
@@ -350,7 +348,7 @@ def _register_domain_bus_listeners(
         if any(svc.endswith(sfx) for sfx in LATTER_CONTRACT_ACTION_SUFFIXES):
             schedule_scan(1.0)
 
-    domain_data[DATA_DISCOVERY_UNSUB] = (
+    domain_data.discovery_unsubs = (
         hass.bus.async_listen(
             dr.EVENT_DEVICE_REGISTRY_UPDATED, _on_device_registry_updated
         ),
@@ -362,9 +360,10 @@ def _register_domain_bus_listeners(
 
 
 @callback
-def _cancel_delayed_discovery_scan(domain_data: dict[str, Any]) -> None:
+def _cancel_delayed_discovery_scan(domain_data: LatterDomainData) -> None:
     """Cancel any pending debounced ESPHome discovery scan timer."""
-    prev_timer = domain_data.pop("_unsub_delayed_scan", None)
+    prev_timer = domain_data.unsub_delayed_scan
+    domain_data.unsub_delayed_scan = None
     if callable(prev_timer):
         prev_timer()
 
@@ -372,7 +371,7 @@ def _cancel_delayed_discovery_scan(domain_data: dict[str, Any]) -> None:
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Latter domain, register services, and scan for Latter-compatible ESPHome devices."""
     _ = config
-    domain_data = hass.data.setdefault(DOMAIN, {})
+    domain_data = get_domain_data(hass)
     await async_register_studio_icon_module(hass)
     await hass.async_add_executor_job(
         warm_timezone_cache,
@@ -390,11 +389,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
         @callback
         def _delayed_scan(_now: Any) -> None:
-            domain_data.pop("_unsub_delayed_scan", None)
+            domain_data.unsub_delayed_scan = None
             if not hass.is_stopping:
                 _async_scan_all_esphome_devices_for_discovery(hass)
 
-        domain_data["_unsub_delayed_scan"] = async_call_later(
+        domain_data.unsub_delayed_scan = async_call_later(
             hass, delay_s, _delayed_scan
         )
 
@@ -402,36 +401,37 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         hass, domain_data, _schedule_debounced_discovery_scan
     )
 
-    if "_unsub_stop_cleanup" not in domain_data:
+    if domain_data.unsub_stop_cleanup is None:
 
         @callback
         def _on_ha_stop(_ev: Event[Any]) -> None:
-            domain_data.pop("_unsub_stop_cleanup", None)
-            started_unsub = domain_data.pop("_unsub_started_scan", None)
+            domain_data.unsub_stop_cleanup = None
+            started_unsub = domain_data.unsub_started_scan
+            domain_data.unsub_started_scan = None
             if callable(started_unsub):
                 started_unsub()
             _cancel_delayed_discovery_scan(domain_data)
-            unsubs = domain_data.pop(DATA_DISCOVERY_UNSUB, ())
-            if isinstance(unsubs, tuple):
+            unsubs = domain_data.discovery_unsubs
+            domain_data.discovery_unsubs = None
+            if unsubs is not None:
                 for unsub in unsubs:
-                    if callable(unsub):
-                        unsub()
+                    unsub()
             clear_ma_counterpart_cache(hass)
             async_stop_area_state_index(hass)
 
-        domain_data["_unsub_stop_cleanup"] = hass.bus.async_listen_once(
+        domain_data.unsub_stop_cleanup = hass.bus.async_listen_once(
             EVENT_HOMEASSISTANT_STOP, _on_ha_stop
         )
 
     @callback
     def _on_ha_started(_ev: Event[Any]) -> None:
-        domain_data.pop("_unsub_started_scan", None)
+        domain_data.unsub_started_scan = None
         _async_scan_all_esphome_devices_for_discovery(hass)
 
     if hass.is_running:
         _async_scan_all_esphome_devices_for_discovery(hass)
-    elif "_unsub_started_scan" not in domain_data:
-        domain_data["_unsub_started_scan"] = hass.bus.async_listen_once(
+    elif domain_data.unsub_started_scan is None:
+        domain_data.unsub_started_scan = hass.bus.async_listen_once(
             EVENT_HOMEASSISTANT_STARTED, _on_ha_started
         )
     return True
@@ -487,7 +487,7 @@ async def _async_init_entry_coordinators(
 
 async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:
     """Set up the Latter System hub entry and all configured Device subentries."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
+    domain_data = get_domain_data(hass)
     await hass.async_add_executor_job(
         warm_timezone_cache,
         [str(getattr(getattr(hass, "config", None), "time_zone", "") or "")],
@@ -521,10 +521,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     sys_obj.bind_feed_listeners()
 
     await _async_init_entry_coordinators(
-        hass, entry, sys_obj, domain_data[DATA_HMAC_SECRET]
+        hass, entry, sys_obj, domain_data.hmac_secret
     )
 
-    if domain_data.pop("_pending_builtin_group_preset_upgrade", False):
+    if domain_data.pending_builtin_group_preset_upgrade:
+        domain_data.pending_builtin_group_preset_upgrade = False
         await async_sync_coordinators_to_builtin_presets(
             hass, list(sys_obj.coordinators.values())
         )
@@ -599,8 +600,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
         await async_shutdown_doorbell_streams(hass)
         clear_browse_cache()
         clear_ma_counterpart_cache(hass)
-        domain_data = hass.data.get(DOMAIN, {})
-        if isinstance(domain_data, dict):
+        domain_data = peek_domain_data(hass)
+        if domain_data is not None:
             _cancel_delayed_discovery_scan(domain_data)
         runtime = getattr(entry, "runtime_data", None)
         sys_obj = runtime if isinstance(runtime, LatterSystemHub) else get_latter_system(hass)
@@ -609,8 +610,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
             for sub_id, coord in list(sys_obj.coordinators.items()):
                 if coord.entry.entry_id == entry.entry_id:
                     sys_obj.coordinators.pop(sub_id, None)
-                    if isinstance(domain_data, dict):
-                        domain_data.pop(sub_id, None)
                     coord.async_cleanup()
         async_stop_area_state_index(hass)
         async_unregister_studio_panel(hass)

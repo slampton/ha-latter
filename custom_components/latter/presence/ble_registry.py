@@ -14,7 +14,8 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 
-from ..const import CONF_BLE_AREA_SIGNATURES, DATA_GLOBAL_CONFIG, DOMAIN
+from ..const import CONF_BLE_AREA_SIGNATURES
+from ..hub_registry import get_domain_data, peek_domain_data, peek_global_config
 from .ble_math import EDDYSTONE_UUID_PREFIX
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,8 +34,6 @@ AWAY_TIMEOUT_SECONDS: Final = 180.0
 MATCHED_BLE_ADDRESS_TTL_SECONDS: Final = 900.0
 
 _UNMAPPED: Final = "__unmapped__"
-_SCANNER_CACHE_KEY: Final = "_scanner_area_cache"
-_SCANNER_CACHE_ACTIVE_KEY: Final = "_ble_scanner_cache_active"
 _UUID_HEX_LEN: Final = 32
 _UUID16_HEX_LEN: Final = 4
 _UUID32_PREFIX_LEN: Final = 8
@@ -600,28 +599,26 @@ def _resolve_scanner_area_id_uncached(
 
 def set_scanner_area_cache_active(hass: HomeAssistant, active: bool) -> None:
     """Enable or disable domain-scoped scanner-to-Area caching while `LatterBleFabric` is active."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    domain_data[_SCANNER_CACHE_ACTIVE_KEY] = bool(active)
+    domain_data = get_domain_data(hass)
+    domain_data.ble_scanner_cache_active = bool(active)
     if not active:
-        domain_data.pop(_SCANNER_CACHE_KEY, None)
+        domain_data.ble_scanner_cache.clear()
 
 
 def clear_scanner_area_cache(hass: HomeAssistant) -> None:
     """Clear the cached scanner-source -> `area_id` map on registry updates or wake resets."""
-    domain_data = hass.data.get(DOMAIN)
-    if isinstance(domain_data, dict):
-        cache = domain_data.get(_SCANNER_CACHE_KEY)
-        if isinstance(cache, dict):
-            cache.clear()
+    domain_data = peek_domain_data(hass)
+    if domain_data is not None:
+        domain_data.ble_scanner_cache.clear()
 
 
 def resolve_scanner_area_id(hass: HomeAssistant, scanner_source: str) -> str | None:
     """Resolve an ESPHome BLE Proxy source to its Home Assistant `area_id` (cached when active)."""
     if not scanner_source:
         return None
-    domain_data = hass.data.get(DOMAIN)
-    if isinstance(domain_data, dict) and domain_data.get(_SCANNER_CACHE_ACTIVE_KEY):
-        cache: dict[str, str] = domain_data.setdefault(_SCANNER_CACHE_KEY, {})
+    domain_data = peek_domain_data(hass)
+    if domain_data is not None and domain_data.ble_scanner_cache_active:
+        cache = domain_data.ble_scanner_cache
         cached = cache.get(scanner_source)
         if cached is not None:
             return None if cached == _UNMAPPED else cached
@@ -670,15 +667,7 @@ def get_all_scanners_diagnostic_map(hass: HomeAssistant) -> dict[str, str]:
 
 def get_ble_signature_area_ids(hass: HomeAssistant) -> set[str]:
     """Return Home Assistant `area_ids` that have a learned multi-scanner BLE signature."""
-    domain_data = hass.data.get(DOMAIN, {})
-    global_cfg = (
-        domain_data.get(DATA_GLOBAL_CONFIG, {}) if isinstance(domain_data, dict) else {}
-    )
-    raw_sigs = (
-        global_cfg.get(CONF_BLE_AREA_SIGNATURES, {})
-        if isinstance(global_cfg, dict)
-        else {}
-    )
+    raw_sigs = peek_global_config(hass).get(CONF_BLE_AREA_SIGNATURES, {})
     if not isinstance(raw_sigs, dict):
         return set()
     return {
@@ -695,15 +684,7 @@ def get_area_signatures_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
     """Return learned BLE signature status for every Area in Home Assistant sorted by Area name."""
     area_reg = ar.async_get(hass)
     proxy_areas = get_ble_proxy_area_ids(hass)
-    domain_data = hass.data.get(DOMAIN, {})
-    global_cfg = (
-        domain_data.get(DATA_GLOBAL_CONFIG, {}) if isinstance(domain_data, dict) else {}
-    )
-    raw_sigs = (
-        global_cfg.get(CONF_BLE_AREA_SIGNATURES, {})
-        if isinstance(global_cfg, dict)
-        else {}
-    )
+    raw_sigs = peek_global_config(hass).get(CONF_BLE_AREA_SIGNATURES, {})
     sig_map = raw_sigs if isinstance(raw_sigs, dict) else {}
 
     rows: list[dict[str, Any]] = []

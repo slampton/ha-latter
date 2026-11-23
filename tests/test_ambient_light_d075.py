@@ -17,10 +17,10 @@ from custom_components.latter.areas.registry import (
 )
 from custom_components.latter.const import (
     CONF_AREA_ILLUMINANCE_CONFIG,
-    DATA_GLOBAL_CONFIG,
     DOMAIN,
     STUDIO_REV,
 )
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.studio.settings_cleaners import (
     SettingsScopeError,
     clean_area_illuminance,
@@ -227,7 +227,7 @@ async def test_area_ambient_light_wire_packing_and_studio_command(
     )
     assert res1["success"] is True
 
-    saved_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_AREA_ILLUMINANCE_CONFIG]
+    saved_cfg = get_global_config(hass)[CONF_AREA_ILLUMINANCE_CONFIG]
     assert saved_cfg["living_room"]["bright_lux"] == 35.0
     _state2, area_attrs2 = coord.get_area_context_payload()
     wire2 = area_attrs2["payload"].split("\x1f")
@@ -330,7 +330,7 @@ async def test_calibrate_area_illuminance_with_real_recorder(
         studio_rev=STUDIO_REV,
     )
     assert res["success"] is True
-    saved_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_AREA_ILLUMINANCE_CONFIG]
+    saved_cfg = get_global_config(hass)[CONF_AREA_ILLUMINANCE_CONFIG]
     assert 0.8 <= saved_cfg["living_room"]["dark_lux"] <= 1.2
     assert 25.0 <= saved_cfg["living_room"]["bright_lux"] <= 65.0
     assert await hass.config_entries.async_unload(entry.entry_id) is True

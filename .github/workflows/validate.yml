@@ -1,7 +1,7 @@
 name: Validate Marketplace & Hassfest
 
 # dev is the integration branch: a push to dev that passes every job fast-forwards main, the branch
-# HACS installs from. main is never ahead of a green run.
+# Home Assistant Marketplace installs from. main is never ahead of a green run.
 
 on:
   push:
@@ -85,16 +85,16 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: Install native media and TurboJPEG system libraries
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libturbojpeg0-dev
-      - name: Install pinned test and stub dependencies
+      - name: Install Home Assistant 2026.11 and test dependencies
         run: pip install --upgrade pip && pip install --group test
       - name: Verify static architecture, security, and Studio guardrails
         run: python tools/verify_ha.py --fast
       - name: Run ruff static analysis
         run: ruff check custom_components/latter tests tools
-      - name: Run strict mypy type checking against homeassistant-stubs
+      - name: Run strict mypy type checking against Home Assistant 2026.11
         run: mypy custom_components/latter
       - name: Run real Home Assistant pytest suite with coverage gate
-        run: pytest -n auto tests --cov=custom_components.latter --cov-fail-under=75 -q
+        run: pytest -n auto tests --cov=custom_components.latter --cov-report=term-missing --cov-fail-under=75 -q
 
   promote:
     name: Fast-forward main to this commit

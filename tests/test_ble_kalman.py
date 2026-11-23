@@ -15,12 +15,12 @@ from custom_components.latter.const import (
     CONF_DEVICE_SLUG,
     CONF_ESPHOME_DEVICE_ID,
     CONF_NATIVE_BLE_TRACKING,
-    DATA_GLOBAL_CONFIG,
     DOMAIN,
     STUDIO_REV,
     SUBENTRY_BLE_TAG,
     SUBENTRY_DEVICE,
 )
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.presence.ble_discovery import (
     classify_ble_target_category,
     inspect_companion_ble_transmitter,
@@ -420,7 +420,7 @@ async def test_companion_app_ultralow_phone_nonconnectable_matcher_and_phone_cat
 
     # Configure a multi-scanner Area signature on Garage (where secondary scanners would be missing at ultraLow TX power)
     phone_coord = entry.runtime_data.coordinators["sub_pixel_phone"]
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_BLE_AREA_SIGNATURES] = {
+    get_global_config(hass)[CONF_BLE_AREA_SIGNATURES] = {
         "garage": {
             "scanners": {
                 "A8:42:E3:21:AF:E2": {"mean": -69.5, "std": 3.5, "n": 10},

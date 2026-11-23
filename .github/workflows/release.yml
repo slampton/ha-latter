@@ -1,4 +1,4 @@
-name: Build & Attach HACS Release Asset (latter.zip)
+name: Build & Attach Marketplace Release Asset (latter.zip)
 
 on:
   release:

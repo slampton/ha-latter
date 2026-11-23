@@ -8,8 +8,6 @@ from typing import Any
 from custom_components.latter.const import (
     CONF_DEVICE_GROUP,
     CONF_DEVICE_GROUPS,
-    DATA_GLOBAL_CONFIG,
-    DOMAIN,
     STUDIO_REV,
 )
 from custom_components.latter.groups.device_groups import (
@@ -17,6 +15,7 @@ from custom_components.latter.groups.device_groups import (
     CONF_BUILTIN_GROUP_PRESET_VERSION,
     get_device_groups,
 )
+from custom_components.latter.hub_registry import get_global_config
 from tests.helpers import call_ws, ensure_area, make_ws_connection
 
 
@@ -440,7 +439,7 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
     # Simulate an existing pre-v2 `.storage/latter.site` reload where `handhelds` had stale `wake_word_mode = "Always On"`
-    global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
+    global_cfg = get_global_config(hass)
     global_cfg.pop(CONF_BUILTIN_GROUP_PRESET_VERSION, None)
     global_cfg[CONF_DEVICE_GROUPS] = [
         {

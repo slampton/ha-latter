@@ -27,10 +27,6 @@ from .const import (
     CONF_CALENDAR_ENTITIES,
     CONF_SYSTEM_CONFIG_REV,
     CONF_WEATHER_ENTITY,
-    DATA_GLOBAL_CONFIG,
-    DATA_GLOBAL_STORE,
-    DATA_HMAC_SECRET,
-    DOMAIN,
     FORECAST_REFRESH_INTERVAL_MINUTES,
 )
 from .feeds import (
@@ -41,9 +37,11 @@ from .feeds import (
 from .http.signing import UrlSigner
 from .hub_registry import (
     LatterSystemHub,
+    get_domain_data,
     get_system_config_lock,
     get_system_config_rev,
     iter_coordinators,
+    peek_domain_data,
     register_hub_hooks,
 )
 from .protocol_codec import V3Records
@@ -70,10 +68,9 @@ def _safe_hour(val: Any, default: int) -> int:
 
 def _live_global_config(sys_obj: LatterSystemHub) -> dict[str, Any]:
     """Return the live System-Wide configuration dict."""
-    domain_data = sys_obj.hass.data.get(DOMAIN, {})
-    global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
-    if isinstance(global_cfg, dict):
-        sys_obj.config = global_cfg
+    domain_data = peek_domain_data(sys_obj.hass)
+    if domain_data is not None:
+        sys_obj.config = domain_data.global_config
     return sys_obj.config
 
 
@@ -152,8 +149,7 @@ async def async_rotate_hub_hmac_secret(sys_obj: LatterSystemHub) -> None:
         signer = UrlSigner(sys_obj.hass, "system", new_secret)
         sys_obj.url_signer = signer
         await signer.async_prime_lan_base_url()
-        domain_data = sys_obj.hass.data.setdefault(DOMAIN, {})
-        domain_data[DATA_HMAC_SECRET] = new_secret
+        get_domain_data(sys_obj.hass).hmac_secret = new_secret
         global_cfg = _live_global_config(sys_obj)
         global_cfg["hmac_secret_hex"] = new_hex
         await sys_obj.store.async_save(global_cfg)
@@ -488,8 +484,8 @@ async def async_save_and_broadcast_global_config(
     hass: HomeAssistant, updates: dict[str, Any]
 ) -> dict[str, Any]:
     """Persist updates to `.storage/latter.site` and broadcast to all loaded device coordinators."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    global_cfg: dict[str, Any] = domain_data.setdefault(DATA_GLOBAL_CONFIG, {})
+    domain_data = get_domain_data(hass)
+    global_cfg = domain_data.global_config
     if not updates:
         return global_cfg
     changed_keys = {k for k, v in updates.items() if global_cfg.get(k) != v}
@@ -497,7 +493,7 @@ async def async_save_and_broadcast_global_config(
     if changed_keys:
         cur_rev = get_system_config_rev(hass)
         global_cfg[CONF_SYSTEM_CONFIG_REV] = cur_rev + 1
-    store = domain_data.get(DATA_GLOBAL_STORE)
+    store = domain_data.global_store
     if store is not None:
         await store.async_save(global_cfg)
     for coord in iter_coordinators(hass):

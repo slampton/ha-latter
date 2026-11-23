@@ -22,10 +22,10 @@ from ..const import (
     CONF_ALARM_ENTITY,
     CONF_BROADCAST_SPEAKERS,
     CONF_WORLD_CLOCKS,
-    DATA_GLOBAL_CONFIG,
     DEFAULT_BROADCAST_PHRASES,
     DOMAIN,
 )
+from ..hub_registry import peek_global_config
 from ..protocol_codec import (
     AREA_CLIMATES_MAX_RECORDS,
     CAMERAS_MAX_RECORDS,
@@ -281,16 +281,12 @@ def _is_intercom_available(
     hass_obj = hass or (
         getattr(coordinator, "hass", None) if coordinator is not None else None
     )
-    if hass_obj is not None:
-        domain_data = getattr(hass_obj, "data", {}).get(DOMAIN)
-        if isinstance(domain_data, Mapping):
-            global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
-            if isinstance(global_cfg, Mapping):
-                raw_spks = global_cfg.get(CONF_BROADCAST_SPEAKERS)
-                if isinstance(raw_spks, (list, tuple)) and any(
-                    str(s or "").strip().startswith("media_player.") for s in raw_spks
-                ):
-                    return True
+    if hass_obj is not None and hasattr(hass_obj, "data"):
+        raw_spks = peek_global_config(hass_obj).get(CONF_BROADCAST_SPEAKERS)
+        if isinstance(raw_spks, (list, tuple)) and any(
+            str(s or "").strip().startswith("media_player.") for s in raw_spks
+        ):
+            return True
     return False
 
 

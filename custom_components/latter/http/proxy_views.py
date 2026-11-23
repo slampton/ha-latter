@@ -1,4 +1,4 @@
-"""Local-only signed artwork transcoder and brand icon HTTP views."""
+"""Local-only signed artwork transcoder HTTP view."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import hashlib
 from http import HTTPStatus
 import ipaddress
 import logging
-from pathlib import Path
 from typing import TypedDict, Unpack
 
 from aiohttp import ClientTimeout, web
@@ -15,7 +14,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.http import HomeAssistantView
 from homeassistant.helpers.network import get_url
 
-from ..const import API_ARTWORK_PROXY_PATH, API_BRAND_ICON_PATH
+from ..const import API_ARTWORK_PROXY_PATH
 from ..coordinator import LatterCoordinator, resolve_coordinator
 from ..media.linking import resolve_ma_counterpart_entity
 from ..media_cache import (
@@ -342,33 +341,3 @@ class LatterArtworkTranscoderView(HomeAssistantView):
                 status=HTTPStatus.NOT_FOUND, text="Unknown target device"
             )
         return await _async_serve_speaker_artwork(self.hass, request, coordinator)
-
-
-class LatterBrandIconView(HomeAssistantView):
-    """Serve the Latter brand icon PNG for Studio and HACS."""
-
-    url = API_BRAND_ICON_PATH
-    name = "api:latter:brand_icon"
-    requires_auth = False
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the brand icon view."""
-        self.hass = hass
-        self._icon_path = Path(__file__).resolve().parent.parent / "brand" / "icon.png"
-        self._cached_bytes: bytes | None = None
-
-    async def get(self, _request: web.Request) -> web.Response:
-        """Return the PNG icon bytes."""
-        if self._cached_bytes is None:
-            if not self._icon_path.is_file():
-                return web.Response(
-                    status=HTTPStatus.NOT_FOUND, text="Icon not found"
-                )
-            self._cached_bytes = await self.hass.async_add_executor_job(
-                self._icon_path.read_bytes
-            )
-        return web.Response(
-            body=self._cached_bytes,
-            content_type="image/png",
-            headers={"Cache-Control": "public, max-age=86400"},
-        )

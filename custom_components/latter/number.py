@@ -9,7 +9,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import build_device_entity_id
 from .coordinator import LatterCoordinator
 from .hub_registry import LatterSystemHub, get_latter_system
 
@@ -57,9 +56,6 @@ class LatterAlertVolumeNumber(NumberEntity):
         """Initialize Alert Volume number control."""
         self.coordinator = coordinator
         self._attr_unique_id = f"{coordinator.subentry_id}_alert_volume"
-        self.entity_id = build_device_entity_id(
-            coordinator.device_slug, "alert_volume", "number"
-        )
 
     @property
     def device_info(self) -> DeviceInfo:

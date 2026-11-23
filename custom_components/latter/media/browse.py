@@ -12,8 +12,7 @@ from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
-from ..const import DOMAIN
-from ..hub_registry import get_area_state_index
+from ..hub_registry import get_area_state_index, get_domain_data
 from .linking import (
     get_ma_mass_client,
     resolve_ma_counterpart_entity,
@@ -562,7 +561,7 @@ async def _browse_active_queue(
         raw_queue_items = _fallback_queue_items_from_get_queue(q_data)
 
     raw_count = q_data.get("items")
-    q_counts: dict[str, int] = hass.data.setdefault(DOMAIN, {}).setdefault("_ma_queue_counts", {})
+    q_counts = get_domain_data(hass).ma_queue_counts
     if isinstance(raw_count, int) and not isinstance(raw_count, bool):
         q_counts[ma_target] = max(0, raw_count)
     elif offset == 0:

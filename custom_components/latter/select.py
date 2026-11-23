@@ -13,7 +13,6 @@ from .const import (
     CONF_DEVICE_GROUP,
     DEFAULT_DEVICE_GROUP,
     DOMAIN,
-    build_device_entity_id,
 )
 from .coordinator import LatterCoordinator
 from .groups.device_groups import (
@@ -66,9 +65,6 @@ class _BaseLatterSelect(SelectEntity):
         self._attr_translation_key = pref_key
         self._attr_options = list(options)
         self._attr_unique_id = f"{coordinator.subentry_id}_{pref_key}"
-        self.entity_id = build_device_entity_id(
-            coordinator.device_slug, pref_key, "select"
-        )
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -107,9 +103,6 @@ class LatterDeviceGroupSelect(SelectEntity):
         """Initialize Device Group select."""
         self.coordinator = coordinator
         self._attr_unique_id = f"{coordinator.subentry_id}_device_group"
-        self.entity_id = build_device_entity_id(
-            coordinator.device_slug, "device_group", "select"
-        )
 
     @property
     def device_info(self) -> DeviceInfo:

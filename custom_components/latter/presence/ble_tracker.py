@@ -23,8 +23,8 @@ from ..const import (
     DEFAULT_BLE_BEACON_UUID,
     DEFAULT_BLE_MAX_RADIUS_M,
     DEFAULT_BLE_MAX_VELOCITY_MPS,
-    DOMAIN,
 )
+from ..hub_registry import peek_domain_data
 from ..identity import get_bound_esphome_device, read_device_hardware_manifest
 from .ble_math import (
     CORROBORATION_BONUS_DB,
@@ -159,12 +159,10 @@ def get_active_ble_fabric(
     hass: HomeAssistant, *, create: bool = False
 ) -> BleFabricPort | None:
     """Return the active `LatterBleFabric` (creating it via registered getter when `create=True`)."""
-    domain_data = hass.data.get(DOMAIN)
-    if isinstance(domain_data, dict):
-        existing = domain_data.get("ble_fabric")
-        if existing is not None:
-            fabric_existing: BleFabricPort = existing
-            return fabric_existing
+    domain_data = peek_domain_data(hass)
+    if domain_data is not None and domain_data.ble_fabric is not None:
+        fabric_existing: BleFabricPort = domain_data.ble_fabric
+        return fabric_existing
     if create and _FABRIC_GETTER is not None:
         return _FABRIC_GETTER(hass)
     return None

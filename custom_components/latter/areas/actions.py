@@ -16,7 +16,8 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
-from ..const import CONF_ALARM_ENTITY, DATA_GLOBAL_CONFIG, DOMAIN
+from ..const import CONF_ALARM_ENTITY, DOMAIN
+from ..hub_registry import peek_global_config
 from ..media.playback import async_execute_volume_action
 from ..protocol_policy import is_valid_pin_digits
 from .curation import get_entity_level, get_home_alarm_summary
@@ -90,7 +91,7 @@ def _resolve_target_state(
         entity_id = "home_hub.alarm"
     state_obj = hass.states.get(entity_id)
     if state_obj is None and entity_id == "home_hub.alarm":
-        global_cfg = (hass.data.get(DOMAIN) or {}).get(DATA_GLOBAL_CONFIG) or {}
+        global_cfg = peek_global_config(hass)
         mapped_id = get_home_alarm_summary(
             hass, global_cfg.get(CONF_ALARM_ENTITY)
         )["entity_id"]
@@ -695,11 +696,19 @@ async def async_execute_area_action(
             )
             return
         if raise_on_missing:
-            raise HomeAssistantError(f"Entity '{entity_id}' was not found")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="entity_not_found",
+                translation_placeholders={"entity_id": entity_id},
+            )
         _LOGGER.debug("Action target entity not found: %s", entity_id)
         return
     if raise_on_missing and state_obj.state == STATE_UNAVAILABLE:
-        raise HomeAssistantError(f"Entity '{entity_id}' is currently unavailable")
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="entity_unavailable",
+            translation_placeholders={"entity_id": entity_id},
+        )
 
     domain = state_obj.domain
     eff_action = _normalize_effective_action(domain, norm_action, level)

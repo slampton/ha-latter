@@ -2,12 +2,12 @@
   "config": {
     "step": {
       "user": {
-        "title": "Set Up Latter System",
+        "title": "Set up Latter System",
         "description": "Create the Latter System hub. Optionally select your first ESPHome Device running Latter firmware, or leave it blank to start with standalone BLE Area presence and sensor fusion and add Devices later in Latter Studio.",
         "data": {
-          "esphome_device_id": "Initial ESPHome Device (optional)",
-          "device_group": "Device Group",
-          "native_ble_tracking": "Track the Area with BLE Proxies"
+          "esphome_device_id": "Initial ESPHome device (optional)",
+          "device_group": "Device group",
+          "native_ble_tracking": "Track area with BLE proxies"
         },
         "data_description": {
           "esphome_device_id": "Optional. Pick an ESPHome device running Latter firmware (or a Latter Core build) to bind now, or leave blank for hub-only BLE presence setup.",
@@ -19,7 +19,7 @@
     "abort": {
       "already_configured": "This ESPHome device is already configured in Latter.",
       "not_supported": "This device is not an ESPHome device that announces Latter companion actions.",
-      "single_instance_allowed": "Latter System is already configured. Open Latter Studio or use Add Device on the Latter integration page.",
+      "single_instance_allowed": "Latter System is already configured. Open Latter Studio or use Add device on the Latter integration page.",
       "unique_id_mismatch": "The selected ESPHome device does not match the existing configuration entry.",
       "wrong_device": "The selected ESPHome device does not match this configuration entry."
     },
@@ -31,17 +31,17 @@
     "device": {
       "entry_type": "Device",
       "initiate_flow": {
-        "user": "Add Device",
-        "reconfigure": "Reconfigure or Replace Hardware"
+        "user": "Add device",
+        "reconfigure": "Reconfigure or replace hardware"
       },
       "step": {
         "user": {
-          "title": "Add ESPHome Device to Latter",
+          "title": "Add ESPHome device to Latter",
           "description": "Connect an ESPHome device running Latter firmware, with or without a screen, to the Latter System.",
           "data": {
-            "esphome_device_id": "ESPHome Device",
-            "device_group": "Device Group",
-            "native_ble_tracking": "Track the Area with BLE Proxies"
+            "esphome_device_id": "ESPHome device",
+            "device_group": "Device group",
+            "native_ble_tracking": "Track area with BLE proxies"
           },
           "data_description": {
             "esphome_device_id": "The ESPHome device running Latter firmware (or a Latter Core build). Latter binds to this device and its MAC address.",
@@ -50,12 +50,12 @@
           }
         },
         "reconfigure": {
-          "title": "Reconfigure or Replace Device Hardware",
+          "title": "Reconfigure or replace device hardware",
           "description": "Update this device's Device Group and Bluetooth area tracking, or pick a different ESPHome device to replace its physical hardware in place while preserving all Studio settings, entities, and Area assignments.",
           "data": {
-            "esphome_device_id": "ESPHome Device",
-            "device_group": "Device Group",
-            "native_ble_tracking": "Track the Area with BLE Proxies"
+            "esphome_device_id": "ESPHome device",
+            "device_group": "Device group",
+            "native_ble_tracking": "Track area with BLE proxies"
           },
           "data_description": {
             "esphome_device_id": "Keep the current device to update settings, or pick a replacement ESPHome device to rebind the hardware in place.",
@@ -73,14 +73,14 @@
       }
     },
     "ble_tag": {
-      "entry_type": "BLE Tag",
+      "entry_type": "BLE tag",
       "initiate_flow": {
-        "user": "Add BLE Tag",
-        "reconfigure": "Reconfigure BLE Tag"
+        "user": "Add BLE tag",
+        "reconfigure": "Reconfigure BLE tag"
       },
       "step": {
         "user": {
-          "title": "Add a BLE Tag",
+          "title": "Add a BLE tag",
           "description": "Track a phone, watch, or Bluetooth tag through your Bluetooth proxies. Latter adds a device_tracker, Area, and distance sensors for it.",
           "data": {
             "name": "Name",
@@ -88,13 +88,13 @@
             "assigned_person": "Person"
           },
           "data_description": {
-            "name": "Used for the entity IDs (for example `Alex's Phone` gives `sensor.alex_s_phone_current_area`).",
+            "name": "Used for the entity IDs (for example, Alex's Phone gives sensor.alex_s_phone_current_area).",
             "ble_target_address": "A static MAC address, an iBeacon UUID, or a `private_ble_device` / iBeacon tracker entity ID.",
             "assigned_person": "Optional. Notifications sent to a person, and occupancy, use it."
           }
         },
         "reconfigure": {
-          "title": "Reconfigure BLE Tag",
+          "title": "Reconfigure BLE tag",
           "description": "Update this BLE tag's display name, Bluetooth target address, or assigned person.",
           "data": {
             "name": "Name",
@@ -120,39 +120,39 @@
   "entity": {
     "sensor": {
       "current_area": {
-        "name": "Current Area"
+        "name": "Current area"
       },
       "current_floor": {
-        "name": "Current Floor"
+        "name": "Current floor"
       },
       "ble_distance": {
-        "name": "BLE Distance"
+        "name": "BLE distance"
       },
       "timer_remaining": {
-        "name": "Timer Remaining"
+        "name": "Timer remaining"
       },
       "person_current_area": {
-        "name": "{person_name} Current Area"
+        "name": "{person_name} current area"
       },
       "person_current_floor": {
-        "name": "{person_name} Current Floor"
+        "name": "{person_name} current floor"
       },
       "person_ble_distance": {
-        "name": "{person_name} BLE Distance"
+        "name": "{person_name} BLE distance"
       },
       "area_occupants": {
-        "name": "{area_name} Occupants"
+        "name": "{area_name} occupants"
       }
     },
     "binary_sensor": {
       "area_occupancy": {
-        "name": "{area_name} Occupancy"
+        "name": "{area_name} occupancy"
       },
       "timer_active": {
-        "name": "Timer Active"
+        "name": "Timer active"
       },
       "alarm_ringing": {
-        "name": "Alarm Ringing"
+        "name": "Alarm ringing"
       }
     },
     "light": {
@@ -162,31 +162,31 @@
     },
     "select": {
       "device_group": {
-        "name": "Device Group"
+        "name": "Device group"
       },
       "wake_word_mode": {
-        "name": "Wake Word Mode"
+        "name": "Wake word mode"
       }
     },
     "number": {
       "alert_volume": {
-        "name": "Alert Volume"
+        "name": "Alert volume"
       }
     },
     "button": {
       "find_my_device": {
-        "name": "Find My Device"
+        "name": "Find my device"
       },
       "dismiss_alert": {
-        "name": "Dismiss Alert"
+        "name": "Dismiss alert"
       }
     },
     "switch": {
       "bedtime_mode": {
-        "name": "Bedtime Mode"
+        "name": "Bedtime mode"
       },
       "do_not_disturb": {
-        "name": "Do Not Disturb"
+        "name": "Do not disturb"
       },
       "screensaver": {
         "name": "Screensaver"
@@ -194,7 +194,7 @@
     },
     "device_tracker": {
       "ble_tracker": {
-        "name": "BLE Tracker"
+        "name": "BLE tracker"
       }
     }
   },
@@ -340,119 +340,134 @@
     },
     "shortcut_not_configured": {
       "message": "Shortcut action {action} on {entity_id} is not configured on this Device."
+    },
+    "entity_not_found": {
+      "message": "Entity {entity_id} was not found."
+    },
+    "entity_unavailable": {
+      "message": "Entity {entity_id} is currently unavailable."
+    },
+    "ble_tag_no_commands": {
+      "message": "BLE tags do not accept device commands."
+    },
+    "device_command_failed": {
+      "message": "Failed to send {command} to {device}: {error}"
+    },
+    "device_offline_or_sleeping": {
+      "message": "{device} is currently offline or sleeping."
     }
   },
   "services": {
     "notify": {
-      "name": "Send Notification",
+      "name": "Send notification",
       "description": "Show an on-screen notification with an optional chime or camera snapshot on a Latter Device, occupied Areas, a person's Devices, or all displays.",
       "fields": {
         "target_device": {
-          "name": "Target Device or Routing Mode",
+          "name": "Target device or routing mode",
           "description": "ESPHome device slug, occupied_areas, all, or a person entity ID."
         },
         "title": {
-          "name": "Alert Title",
+          "name": "Alert title",
           "description": "Short heading for the notification banner."
         },
         "message": {
-          "name": "Alert Message",
+          "name": "Alert message",
           "description": "Body text of the notification."
         },
         "priority": {
-          "name": "Priority Level",
+          "name": "Priority level",
           "description": "Visual urgency of the alert (normal, warning, critical)."
         },
         "duration": {
-          "name": "Display Duration (Seconds)",
+          "name": "Display duration (seconds)",
           "description": "How many seconds to show the alert overlay on screen."
         },
         "chime": {
-          "name": "Play Chime",
+          "name": "Play chime",
           "description": "Play an alert chime on the device speaker when the notification arrives."
         },
         "announce": {
-          "name": "Speak Message",
+          "name": "Speak message",
           "description": "Also speak the message with TTS on the device."
         },
         "camera_entity": {
-          "name": "Camera Entity",
+          "name": "Camera entity",
           "description": "Optional camera entity whose snapshot is shown with the notification."
         }
       }
     },
     "intercom_broadcast": {
-      "name": "Intercom Broadcast",
+      "name": "Intercom broadcast",
       "description": "Broadcast a TTS announcement or local audio clip to explicit target speakers, occupied Areas, a person's Area, or configured broadcast speakers.",
       "fields": {
         "target_device": {
-          "name": "Calling Device or Routing Mode",
+          "name": "Calling device or routing mode",
           "description": "Optional calling Latter device slug, occupied_areas, all, or a person entity ID."
         },
         "message": {
-          "name": "Announcement Message (TTS)",
+          "name": "Announcement message (TTS)",
           "description": "Text message to announce via Home Assistant TTS."
         },
         "media_url": {
-          "name": "Audio Clip URL",
+          "name": "Audio clip URL",
           "description": "Optional Home Assistant media-source:// URI or local /api/latter/ resource."
         },
         "target_speakers": {
-          "name": "Target Speakers",
+          "name": "Target speakers",
           "description": "Specific media_player entities to broadcast to."
         },
         "tts_entity": {
-          "name": "TTS Engine Entity",
+          "name": "TTS engine entity",
           "description": "Optional tts entity (auto-discovered if omitted)."
         }
       }
     },
     "set_active_area": {
-      "name": "Set Active Area",
+      "name": "Set active area",
       "description": "Switch the active Area context by area_id or Area name.",
       "fields": {
         "area_id": {
-          "name": "Area ID or Area Name",
+          "name": "Area ID or area name",
           "description": "Target Home Assistant area_id or friendly Area name."
         },
         "target_device": {
-          "name": "Target Device",
+          "name": "Target device",
           "description": "Optional Latter device."
         }
       }
     },
     "set_active_speaker": {
-      "name": "Set Active Speaker",
+      "name": "Set active speaker",
       "description": "Change the active target media_player for the Latter Device and optionally transfer the active playback queue.",
       "fields": {
         "entity_id": {
-          "name": "Speaker Entity",
+          "name": "Speaker entity",
           "description": "Target media_player entity_id."
         },
         "transfer_queue": {
-          "name": "Transfer Active Queue",
+          "name": "Transfer active queue",
           "description": "Transfer the active Music Assistant queue to the new speaker."
         },
         "target_device": {
-          "name": "Target Device",
+          "name": "Target device",
           "description": "Optional Latter device when running multiple devices."
         }
       }
     },
     "reset_device": {
-      "name": "Reset Device to Defaults",
+      "name": "Reset device to defaults",
       "description": "Reset saved settings on a Latter Device, its Latter Studio options, or both.",
       "fields": {
         "target_device": {
-          "name": "Target Device",
+          "name": "Target device",
           "description": "The Latter device to reset."
         },
         "device_settings": {
-          "name": "Device Settings",
+          "name": "Device settings",
           "description": "Erase settings saved on the device and restart it."
         },
         "latter_options": {
-          "name": "Latter Options",
+          "name": "Latter options",
           "description": "Reset this device's Latter Studio options to their defaults."
         }
       }

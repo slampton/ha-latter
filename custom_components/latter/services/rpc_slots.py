@@ -27,13 +27,12 @@ from ..areas.catalogs import get_area_available_domains, get_area_entities
 from ..areas.registry import resolve_person_area_and_distance
 from ..const import (
     CONF_BROADCAST_SPEAKERS,
-    DATA_GLOBAL_CONFIG,
     DOMAIN,
     target_kind,
 )
 from ..coordinator import LatterCoordinator, resolve_coordinator
 from ..feeds import async_fetch_calendar_window, discover_calendars
-from ..hub_registry import iter_coordinators
+from ..hub_registry import get_domain_data, iter_coordinators, peek_global_config
 from ..identity import esphome_service
 from ..media.linking import resolve_ma_counterpart_entity
 from ..media.tts_queue import async_announce_on_targets
@@ -208,9 +207,9 @@ def _record_slot_push_failure(
     hass: HomeAssistant, coord: LatterCoordinator, esphome_action: str, err: Exception
 ) -> None:
     """Rate-limit slot push warnings and create a Repairs issue after persistent failures."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    fail_counts: dict[str, int] = domain_data.setdefault("_slot_push_failures", {})
-    last_warn_ts: dict[str, float] = domain_data.setdefault("_slot_push_last_warn", {})
+    domain_data = get_domain_data(hass)
+    fail_counts = domain_data.slot_push_failures
+    last_warn_ts = domain_data.slot_push_last_warn
     fail_key = coord.subentry_id
     count = fail_counts.get(fail_key, 0) + 1
     fail_counts[fail_key] = count
@@ -291,9 +290,7 @@ async def async_push_browse_slots(
         "total_pages": total_pages,
         "slots": "\x1e".join(packed_rows),
     }
-    fail_counts: dict[str, int] = hass.data.setdefault(DOMAIN, {}).setdefault(
-        "_slot_push_failures", {}
-    )
+    fail_counts = get_domain_data(hass).slot_push_failures
     fail_key = coord.subentry_id
     try:
         await hass.services.async_call(
@@ -498,8 +495,8 @@ async def _async_execute_intercom_broadcast(
         if caller_coord is None:
             caller_coord = resolved_target_coord
 
-    global_cfg = (hass.data.get(DOMAIN, {}) or {}).get(DATA_GLOBAL_CONFIG) or {}
-    raw_sys_spks = global_cfg.get(CONF_BROADCAST_SPEAKERS) if isinstance(global_cfg, Mapping) else None
+    global_cfg = peek_global_config(hass)
+    raw_sys_spks = global_cfg.get(CONF_BROADCAST_SPEAKERS)
     system_broadcast_speakers = [
         str(s).strip()
         for s in (raw_sys_spks if isinstance(raw_sys_spks, (list, tuple)) else ())

@@ -11,13 +11,13 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 
-from ..const import CONF_AREA_FUSION_CONFIG, DATA_GLOBAL_CONFIG, DOMAIN
+from ..const import CONF_AREA_FUSION_CONFIG, DOMAIN
+from ..hub_registry import get_domain_data, peek_domain_data, peek_global_config
 
 FUSION_DEVICE_CLASSES: Final[frozenset[str]] = frozenset(
     {"occupancy", "presence", "motion", "moving", "door", "opening"}
 )
 
-_FUSION_INDEX_KEY: Final = "_area_fusion_index"
 _UNAVAIL_STATES: Final[frozenset[str]] = frozenset({"unavailable", "unknown"})
 _VALID_FUSION_MODES: Final[frozenset[str]] = frozenset(
     {"weighted", "any_or", "ble_only", "ble_and_sensor"}
@@ -36,9 +36,9 @@ _PERCENT_SCALE: Final = 100
 
 def invalidate_area_fusion_index(hass: HomeAssistant) -> None:
     """Invalidate the cached `area_id -> binary_sensor entity_id` index on registry updates."""
-    domain_data = hass.data.get(DOMAIN)
-    if isinstance(domain_data, dict):
-        domain_data.pop(_FUSION_INDEX_KEY, None)
+    domain_data = peek_domain_data(hass)
+    if domain_data is not None:
+        domain_data.fusion_index.clear()
 
 
 def _is_latter_own_area_sensor(
@@ -72,8 +72,7 @@ def _area_candidate_binary_sensors(hass: HomeAssistant, area_id: str) -> list[st
     """Return cached physical `binary_sensor` `entity_ids` assigned to `area_id`."""
     ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    idx: dict[str, list[str]] = domain_data.setdefault(_FUSION_INDEX_KEY, {})
+    idx = get_domain_data(hass).fusion_index
 
     if area_id not in idx:
         seen_area_eids: list[str] = []
@@ -110,15 +109,8 @@ def get_tracked_fusion_entity_ids(hass: HomeAssistant) -> set[str]:
     ent_reg = er.async_get(hass)
     tracked: set[str] = set()
 
-    domain_data = hass.data.get(DOMAIN, {})
-    global_cfg = (
-        domain_data.get(DATA_GLOBAL_CONFIG, {}) if isinstance(domain_data, dict) else {}
-    )
-    fusion_map = (
-        global_cfg.get(CONF_AREA_FUSION_CONFIG, {})
-        if isinstance(global_cfg, dict)
-        else {}
-    )
+    global_cfg = peek_global_config(hass)
+    fusion_map = global_cfg.get(CONF_AREA_FUSION_CONFIG, {})
 
     if isinstance(fusion_map, dict):
         for cfg in fusion_map.values():
@@ -235,15 +227,8 @@ def area_fusion_sensor_choices(
 
 def area_fusion_settings(hass: HomeAssistant, area_id: str) -> dict[str, Any]:
     """Return one Area's stored fusion settings (`area_fusion_config[<area_id>]`), or `{}`."""
-    domain_data = hass.data.get(DOMAIN, {})
-    global_cfg = (
-        domain_data.get(DATA_GLOBAL_CONFIG, {}) if isinstance(domain_data, dict) else {}
-    )
-    fusion_map = (
-        global_cfg.get(CONF_AREA_FUSION_CONFIG, {})
-        if isinstance(global_cfg, dict)
-        else {}
-    )
+    global_cfg = peek_global_config(hass)
+    fusion_map = global_cfg.get(CONF_AREA_FUSION_CONFIG, {})
     area_cfg = fusion_map.get(area_id, {}) if isinstance(fusion_map, dict) else {}
     return area_cfg if isinstance(area_cfg, dict) else {}
 

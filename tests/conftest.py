@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for `ha-latter` backed by real `pytest-homeassistant-custom-component`."""
+"""Shared pytest fixtures for `ha-latter` backed by official `pytest-homeassistant`."""
 
 from __future__ import annotations
 
@@ -21,10 +21,7 @@ from tests.helpers.paths import (
 
 @pytest.fixture
 async def hass(hass: Any) -> AsyncGenerator[Any]:
-    """Enable custom integrations on real `hass` and clean up test BLE scanners before stop."""
-    from homeassistant import loader
-
-    hass.data.pop(loader.DATA_CUSTOM_COMPONENTS, None)
+    """Clean up test BLE scanners registered on real `hass` before stop."""
     yield hass
     unsubs = hass.data.pop("_latter_test_bt_unsubs", None)
     if unsubs:

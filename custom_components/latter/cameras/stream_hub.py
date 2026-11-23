@@ -13,9 +13,8 @@ from typing import Any, Final
 
 from homeassistant.core import HomeAssistant
 
-from ..const import DOMAIN
+from ..hub_registry import get_domain_data, peek_domain_data
 from .transcode import (
-    DATA_CAMERA_HUB,
     FFMPEG_READ_CHUNK_BYTES,
     FFMPEG_READ_TIMEOUT_SECONDS,
     GRID_GUTTER_PX,
@@ -914,20 +913,21 @@ class LatterCameraStreamHub:
 
 
 def get_camera_stream_hub(hass: HomeAssistant) -> LatterCameraStreamHub:
-    """Return (or lazily create) the singleton `LatterCameraStreamHub` on `hass.data[DOMAIN]`."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    hub = domain_data.get(DATA_CAMERA_HUB)
+    """Return (or lazily create) the singleton `LatterCameraStreamHub` on `LatterDomainData`."""
+    domain_data = get_domain_data(hass)
+    hub = domain_data.camera_hub
     if not isinstance(hub, LatterCameraStreamHub):
         hub = LatterCameraStreamHub(hass)
-        domain_data[DATA_CAMERA_HUB] = hub
+        domain_data.camera_hub = hub
     return hub
 
 
 async def async_shutdown_camera_stream_hub(hass: HomeAssistant) -> None:
     """Shut down and remove the singleton `LatterCameraStreamHub` on integration unload."""
-    domain_data = hass.data.get(DOMAIN)
-    if not isinstance(domain_data, dict):
+    domain_data = peek_domain_data(hass)
+    if domain_data is None:
         return
-    hub = domain_data.pop(DATA_CAMERA_HUB, None)
+    hub = domain_data.camera_hub
+    domain_data.camera_hub = None
     if isinstance(hub, LatterCameraStreamHub):
         await hub.async_shutdown()

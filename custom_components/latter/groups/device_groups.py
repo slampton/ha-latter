@@ -50,7 +50,6 @@ from ..const import (
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
-    DATA_GLOBAL_CONFIG,
     DEFAULT_ACTIVITY_CARD,
     DEFAULT_ACTIVITY_SOURCES,
     DEFAULT_AREA_CATEGORIES,
@@ -69,6 +68,7 @@ from ..const import (
     DOMAIN,
     MIN_FIRMWARE_SDK_REV,
 )
+from ..hub_registry import peek_global_config
 from ..identity import (
     esphome_service,
     find_device_entity_by_suffix,
@@ -521,8 +521,7 @@ async def async_sync_coordinators_to_builtin_presets(
 
 def get_device_groups(hass: HomeAssistant) -> list[dict[str, Any]]:
     """Return the normalized named Device Groups list from Global System Config."""
-    domain_data = hass.data.get(DOMAIN, {})
-    global_cfg = domain_data.get(DATA_GLOBAL_CONFIG) or {}
+    global_cfg = peek_global_config(hass)
     raw_groups = global_cfg.get(CONF_DEVICE_GROUPS)
     if not isinstance(raw_groups, list) or not raw_groups:
         return [_normalize_group_entry(g) for g in DEFAULT_DEVICE_GROUPS]

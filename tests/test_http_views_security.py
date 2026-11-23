@@ -14,12 +14,9 @@ from homeassistant.setup import async_setup_component
 from PIL import Image
 import pytest
 
-from custom_components.latter.cameras.transcode import DATA_CAMERA_HUB
 from custom_components.latter.const import (
     CONF_CAMERA_ENTITIES,
-    DATA_GLOBAL_CONFIG,
     DAY_NIGHT_SKY_PRESET_ID,
-    DOMAIN,
 )
 from custom_components.latter.http import proxy_views
 from custom_components.latter.http.camera_views import (
@@ -29,7 +26,6 @@ from custom_components.latter.http.camera_views import (
 )
 from custom_components.latter.http.proxy_views import (
     LatterArtworkTranscoderView,
-    LatterBrandIconView,
 )
 from custom_components.latter.http.signing import (
     ON_DEMAND_TTL_SECONDS,
@@ -43,6 +39,7 @@ from custom_components.latter.http.wallpaper_views import (
     LatterWallpaperProxyView,
     LatterWallpaperUploadView,
 )
+from custom_components.latter.hub_registry import get_global_config, peek_domain_data
 from custom_components.latter.media_cache import MAX_UPSTREAM_IMAGE_BYTES
 from custom_components.latter.wallpapers.models import MAX_WALLPAPER_UPLOAD_BYTES
 from custom_components.latter.wallpapers.store import (
@@ -550,7 +547,7 @@ async def test_artwork_camera_map_and_brand_icon_views(
 
     # 2) Camera Snapshot View: allow-list check, rotation check, live feed poll, and clean unload
     cam_view = LatterCameraSnapshotView(hass)
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_CAMERA_ENTITIES] = ["camera.porch"]
+    get_global_config(hass)[CONF_CAMERA_ENTITIES] = ["camera.porch"]
     hass.states.async_set("camera.porch", "streaming", {"friendly_name": "Porch"})
 
     unlisted_sig = coord.sign_payload_resource("camera:camera.hidden|466|466|circle")
@@ -596,13 +593,7 @@ async def test_artwork_camera_map_and_brand_icon_views(
     )
     assert r_proto_rel.status == 403
 
-    # 4) Brand Icon View
-    brand_view = LatterBrandIconView(hass)
-    r_icon = await brand_view.get(_make_get_request("/api/latter/brand/icon.png"))
-    assert r_icon.status == 200
-    assert r_icon.content_type == "image/png"
-
-    # 5) Camera Stream & 2x2 Grid Views: signed allow-list, bad sig, unauthorized camera rejection
+    # 4) Camera Stream & 2x2 Grid Views: signed allow-list, bad sig, unauthorized camera rejection
     stream_view = LatterCameraStreamView(hass)
     grid_view = LatterCameraGridView(hass)
     stream_url = coord.build_camera_stream_url()
@@ -651,7 +642,7 @@ async def test_artwork_camera_map_and_brand_icon_views(
 
     # Unload shuts down LatterCameraStreamHub cleanly
     assert await hass.config_entries.async_unload(entry.entry_id) is True
-    assert DATA_CAMERA_HUB not in hass.data.get(DOMAIN, {})
+    assert (dd := peek_domain_data(hass)) is None or dd.camera_hub is None
 
 
 @pytest.mark.asyncio
@@ -663,12 +654,6 @@ async def test_real_aiohttp_client_http_views_end_to_end(
     assert await async_setup_component(hass, "http", {}) is True
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     client = await aiohttp_client(hass.http.app)
-
-    # Brand icon over real HTTP GET
-    resp_icon = await client.get("/api/latter/brand/icon.png")
-    assert resp_icon.status == 200
-    assert resp_icon.content_type == "image/png"
-    assert (await resp_icon.read()).startswith(b"\x89PNG")
 
     # Tampered signature rejected with 403 over real HTTP GET
     resp_forbid = await client.get(

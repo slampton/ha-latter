@@ -23,6 +23,7 @@ from custom_components.latter.const import (
     DOMAIN,
     SUBENTRY_DEVICE,
 )
+from custom_components.latter.hub_registry import get_domain_data
 from custom_components.latter.media.state_payload import build_active_media_payload
 from custom_components.latter.repairs import (
     LinkMaPlayerRepairFlow,
@@ -62,7 +63,7 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     entry, sys_obj, coord = await setup_latter_hub(hass, with_device=True, with_ble_tag=True)
     assert coord is not None
     assert "sub_tag" in sys_obj.coordinators
-    assert "_registered_panel_url" in hass.data[DOMAIN]
+    assert get_domain_data(hass).registered_panel_url is not None
     panels = get_registered_panels(hass)
     assert "latter" in panels
     assert _panel_attr(panels["latter"], "config_panel_domain") == DOMAIN
@@ -91,24 +92,30 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
             _ = ent.device_info
             ent.async_write_ha_state()
 
+    # BLE distance sensors are disabled by default (Gold `entity-disabled-by-default`)
+    ent_reg = er.async_get(hass)
+    ble_dist_entry = ent_reg.async_get("sensor.pocket_assistant_ble_distance")
+    assert ble_dist_entry is not None
+    assert ble_dist_entry.disabled_by == er.RegistryEntryDisabler.INTEGRATION
+
     # Dynamic Area Registry create / update / remove syncs both sensor & binary_sensor
     area_reg = ar.async_get(hass)
-    ent_reg = er.async_get(hass)
     ensure_floor(hass, "Floor 1", floor_id="floor_1")
     ensure_area(hass, "Office", area_id="office", floor_id="floor_1")
     await hass.async_block_till_done()
-    assert hass.states.get("sensor.office_occupants") is not None or any(
-        e.entity_id == "sensor.office_occupants" for e in get_platform_entities(hass, "sensor")
+    assert hass.states.get("sensor.latter_system_office_occupants") is not None or any(
+        e.entity_id == "sensor.latter_system_office_occupants"
+        for e in get_platform_entities(hass, "sensor")
     )
-    assert hass.states.get("binary_sensor.office_occupancy") is not None or any(
-        e.entity_id == "binary_sensor.office_occupancy"
+    assert hass.states.get("binary_sensor.latter_system_office_occupancy") is not None or any(
+        e.entity_id == "binary_sensor.latter_system_office_occupancy"
         for e in get_platform_entities(hass, "binary_sensor")
     )
     area_reg.async_update("office", name="Home Office")
     area_reg.async_delete("office")
     await hass.async_block_till_done()
-    assert ent_reg.async_get("sensor.office_occupants") is None
-    assert ent_reg.async_get("binary_sensor.office_occupancy") is None
+    assert ent_reg.async_get("sensor.latter_system_office_occupants") is None
+    assert ent_reg.async_get("binary_sensor.latter_system_office_occupancy") is None
 
     # Verify <255-char native_value cap on LatterAreaOccupantsSensor while full list stays in occupant_names
     long_names = [f"Occupant Person With Very Long Display Name {idx:02d}" for idx in range(30)]
@@ -143,7 +150,7 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     assert await hass.config_entries.async_unload(entry.entry_id) is True
     await hass.async_block_till_done()
     assert dummy_task.cancelled() or dummy_task.done()
-    assert "_registered_panel_url" not in hass.data.get(DOMAIN, {})
+    assert get_domain_data(hass).registered_panel_url is None
     assert "latter" not in get_registered_panels(hass)
     # Keep latter-icons.js registered across config-entry reloads; remove only when the entry is deleted.
     assert len(get_extra_js_urls(hass)) == 1

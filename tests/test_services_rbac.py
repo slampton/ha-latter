@@ -19,7 +19,6 @@ from custom_components.latter.const import (
     CONF_SECURITY_PIN_HASH,
     CONF_SECURITY_PIN_POLICY,
     CONF_VOLUME_OVERRIDES,
-    DATA_GLOBAL_CONFIG,
     DOMAIN,
     MIN_FIRMWARE_SDK_REV,
     PUBLIC_SERVICES,
@@ -42,6 +41,7 @@ from custom_components.latter.const import (
     SERVICE_SET_ACTIVE_AREA,
     SERVICE_SET_ACTIVE_SPEAKER,
 )
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.media import browse as _browse_mod, lyrics as _lyrics_mod
 from custom_components.latter.media.browse import (
     MAX_BROWSE_CACHE_ENTRIES,
@@ -473,7 +473,7 @@ async def test_all_domain_services_ma_link_and_browse_lru(
     await hass.async_block_till_done()
 
     hass.states.async_set("number.avr_volume", "40", {"min": 0, "max": 100, "step": 5})
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_VOLUME_OVERRIDES] = [
+    get_global_config(hass)[CONF_VOLUME_OVERRIDES] = [
         {"speaker": coord.active_speaker, "target": "number.avr_volume"}
     ]
     for vol_act in ("up", "down", "set", "mute"):
@@ -561,7 +561,7 @@ async def test_remote_calendar_notify_intercom_and_doorbell_services(
     hass.states.async_set(
         "media_player.bedroom_fire_tv", "on", {"friendly_name": "Fire TV"}
     )
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_REMOTES_LIST] = [
+    get_global_config(hass)[CONF_REMOTES_LIST] = [
         "remote.shield_tv",
         "remote.lounge_atv",
         "media_player.bedroom_fire_tv",
@@ -749,7 +749,7 @@ async def test_remote_calendar_notify_intercom_and_doorbell_services(
     coord._ble_tracker.is_away = False
     coord.active_area_id = "living_room"
     fabric.notify_occupancy_listeners()
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_BROADCAST_SPEAKERS] = [
+    get_global_config(hass)[CONF_BROADCAST_SPEAKERS] = [
         "media_player.pocket_sendspin"
     ]
     hass.states.async_set("tts.piper", "unknown", {})
@@ -795,7 +795,7 @@ async def test_remote_calendar_notify_intercom_and_doorbell_services(
     assert exc_ic.value.translation_key == "invalid_intercom_media_url"
 
     # 4) doorbell_intercom (listen_start, set_noise_reduction, talk_message, listen_stop)
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_CAMERA_ENTITIES] = ["camera.front"]
+    get_global_config(hass)[CONF_CAMERA_ENTITIES] = ["camera.front"]
     hass.states.async_set("camera.front", "streaming", {"friendly_name": "Front"})
     hass.states.async_set("media_player.front_speaker", "idle", {"volume_level": 0.2})
     for db_act in ("listen_start", "set_noise_reduction", "talk_message", "listen_stop"):
@@ -928,7 +928,7 @@ async def test_volume_supported_features_and_remote_fallback(
     hass.states.async_set(
         "remote.shield_lineout", "on", {"friendly_name": "Living Room Shield"}
     )
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_REMOTES_LIST] = [
+    get_global_config(hass)[CONF_REMOTES_LIST] = [
         "media_player.shield_lineout"
     ]
 

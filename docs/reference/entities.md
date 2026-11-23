@@ -21,7 +21,7 @@ Latter spans **8 Home Assistant platforms** ([`sensor.py`](../../custom_componen
 | ★ `device_tracker.<slug>` *(or `device_tracker.<slug>_ble_tracker`)* | `device_tracker` | Sleep-safe | `home`, `not_home`, `unknown` | `area_id`, `area_name`, `floor_id`, `floor_name`, `closest_proxy`, `distance_m`, `rssi`, `match_method`, `assigned_person` — updates on BLE readings and away timeout |
 | ★ `sensor.<slug>_current_area` | `sensor` | Sleep-safe | Area name, `Away`, `Unassigned` | `area_id`, `floor_id`, `floor_name`, `is_home`, `closest_proxy`, `distance_m`, `rssi`, `raw_rssi`, `ref_power_dbm`, `match_method`, `assigned_person` — updates on Area change or away |
 | ★ `sensor.<slug>_current_floor` | `sensor` | Sleep-safe | Floor name, `Away`, `Unassigned` *(auto-created when Home Assistant Floors exist)* | `floor_id`, `area_id`, `area_name`, `is_home`, `assigned_person` — updates on Floor/Area change or away; omitted when zero Floors exist |
-| ★ `sensor.<slug>_ble_distance` | `sensor` (`distance`, `m`) | Sleep-safe | Meters (`UnitOfLength.METERS`) | Same attributes as `current_area` — Home Assistant converts automatically to `ft` or `m` per user unit preferences |
+| ★ `sensor.<slug>_ble_distance` | `sensor` (`distance`, `m`; *disabled by default*) | Sleep-safe | Meters (`UnitOfLength.METERS`) | Same attributes as `current_area` — enable per device in Home Assistant's entity settings if you want continuous RSSI-derived distance history; Home Assistant converts automatically to `ft` or `m` per user unit preferences |
 | `light.<slug>_screen` | `light` (`brightness`) | Live (`radio_connected`) | `on` / `off`, `1–100%` *(display devices)* | Event-driven via `display_state` RPC; `light.turn_on` / `light.turn_off` wakes the screen, adjusts backlight brightness, or turns the panel off |
 | `switch.<slug>_screensaver` | `switch` | Live (`radio_connected`) | `on` / `off` *(display devices)* | Reflects active ambient screensaver (`display_state` RPC); toggles `activate_screensaver` / `deactivate_screensaver` |
 | `switch.<slug>_do_not_disturb` | `switch` | Sleep-safe | `on` / `off` *(display or speaker devices)* | Silences non-critical notification chimes, banners, and voice announcements across sleep/wake (`do_not_disturb` in `device_prefs`) |
@@ -37,15 +37,15 @@ Latter spans **8 Home Assistant platforms** ([`sensor.py`](../../custom_componen
 
 ---
 
-## Per-Person & Per-Area Entities
+## Per-Person & Per-Area Entities (`Latter System` Service Device)
 
 | Scope | Entity | State | Key Attributes |
 | :--- | :--- | :--- | :--- |
-| **Per Person** *(when a device has `Assigned Person`)* | `sensor.<person>_current_area` | Area of that person's most recently heard device | `area_id`, `floor_id`, `floor_name`, `device_slug`, `distance_m`, `match_method` |
-| **Per Person** *(when Home Assistant Floors exist)* | `sensor.<person>_current_floor` | Floor of that person's most recently heard device, `Away`, or `Unassigned` | `floor_id`, `floor_name`, `area_id`, `device_slug`, `distance_m`, `match_method` |
-| **Per Person** | `sensor.<person>_ble_distance` | Meters (`UnitOfLength.METERS`) | Same as `sensor.<person>_current_area` *(avoid giving a device the exact same slug as a `person` ID)* |
-| **Per Area** *(mapped BLE Areas)* | `binary_sensor.<area>_occupancy` | `on` / `off` (`occupancy`) | `area_id`, `area_name`, `floor_id`, `fusion_mode`, `confidence_pct`, `ble_occupied`, `sensor_occupied`, `active_sensors`, `occupant_names`, `occupied_by`, `persons`, `closest_device`, `winning_rssi`, `closest_distance_m`, `tracker_count` |
-| **Per Area** | `sensor.<area>_occupants` | Occupant summary, `Occupied (Sensor)`, or `Empty` | `area_id`, `area_name`, `is_occupied`, `occupant_count`, `occupant_names`, `occupied_by`, `persons` |
+| **Per Person** *(when a device has `Assigned Person`)* | `sensor.latter_system_<person>_current_area` | Area of that person's most recently heard device | `area_id`, `floor_id`, `floor_name`, `device_slug`, `distance_m`, `match_method` |
+| **Per Person** *(when Home Assistant Floors exist)* | `sensor.latter_system_<person>_current_floor` | Floor of that person's most recently heard device, `Away`, or `Unassigned` | `floor_id`, `floor_name`, `area_id`, `device_slug`, `distance_m`, `match_method` |
+| **Per Person** *(disabled by default)* | `sensor.latter_system_<person>_ble_distance` | Meters (`UnitOfLength.METERS`) | Same as `sensor.latter_system_<person>_current_area` |
+| **Per Area** *(mapped BLE Areas)* | `binary_sensor.latter_system_<area>_occupancy` | `on` / `off` (`occupancy`) | `area_id`, `area_name`, `floor_id`, `fusion_mode`, `confidence_pct`, `ble_occupied`, `sensor_occupied`, `active_sensors`, `occupant_names`, `occupied_by`, `persons`, `closest_device`, `winning_rssi`, `closest_distance_m`, `tracker_count` |
+| **Per Area** | `sensor.latter_system_<area>_occupants` | Occupant summary, `Occupied (Sensor)`, or `Empty` | `area_id`, `area_name`, `is_occupied`, `occupant_count`, `occupant_names`, `occupied_by`, `persons` |
 
 → [How sensor fusion works](../presence.md#area-occupancy-and-sensor-fusion)
 

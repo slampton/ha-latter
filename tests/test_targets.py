@@ -102,7 +102,8 @@ class CuratedSensorAndPlatformTests(unittest.TestCase):
         self.assertTrue(hasattr(button, "LatterDismissAlertButton"))
         self.assertFalse(hasattr(button, "LatterActivateScreensaverButton"))
         bs_src = inspect.getsource(binary_sensor)
-        self.assertIn("f\"binary_sensor.{a_slug}_occupancy\"", bs_src)
+        self.assertIn('_attr_translation_key = "area_occupancy"', bs_src)
+        self.assertNotIn("self.entity_id =", bs_src)
 
 
 class TargetKindTests(unittest.TestCase):

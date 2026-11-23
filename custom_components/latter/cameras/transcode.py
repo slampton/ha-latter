@@ -13,8 +13,6 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from ..media_cache import get_circular_mask_surfaces, validate_pil_image_dimensions
 
-DATA_CAMERA_HUB: Final = "camera_stream_hub"
-
 MAX_CONCURRENT_VIDEO_INGESTS: Final[int] = 6
 VIDEO_INGEST_IDLE_SECONDS: Final[float] = 15.0
 SNAPSHOT_PRIMER_TIMEOUT_SECONDS: Final[float] = 3.0

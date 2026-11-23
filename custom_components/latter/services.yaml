@@ -1,28 +1,28 @@
 notify:
-  name: Send Notification
+  name: Send notification
   description: Show an on-screen notification, with an optional chime and an optional camera snapshot, on a specific device, the devices in occupied Areas ('occupied_areas'), the devices assigned to a person ('person.<slug>'), or all displays ('all').
   fields:
     target_device:
-      name: Target Device or Routing Mode
+      name: Target device or routing mode
       description: ESPHome device slug, 'occupied_areas' (occupied Areas only), 'all' (all displays), or a 'person.*' entity ID. If 'occupied_areas' or a person matches no display, nothing is delivered; an unknown device slug is an error.
       required: false
       selector:
         text:
     title:
-      name: Alert Title
+      name: Alert title
       description: Short heading for the notification banner (e.g., Front Doorbell, Laundry).
       required: false
       default: "Notification"
       selector:
         text:
     message:
-      name: Alert Message
+      name: Alert message
       description: Body text of the notification (e.g., Someone is at the front door).
       required: true
       selector:
         text:
     priority:
-      name: Priority Level
+      name: Priority level
       description: Visual urgency of the alert (normal, warning, critical).
       required: false
       default: "normal"
@@ -33,7 +33,7 @@ notify:
             - "warning"
             - "critical"
     duration:
-      name: Display Duration (Seconds)
+      name: Display duration (seconds)
       description: How many seconds to show the alert overlay on screen.
       required: false
       default: 8
@@ -43,21 +43,21 @@ notify:
           max: 60
           mode: slider
     chime:
-      name: Play Chime
+      name: Play chime
       description: Play an alert chime on the device speaker when the notification arrives.
       required: false
       default: true
       selector:
         boolean:
     announce:
-      name: Speak Message
+      name: Speak message
       description: Also speak the message with TTS on the device (through its Assist satellite or local speaker). The banner chime is skipped when enabled.
       required: false
       default: false
       selector:
         boolean:
     camera_entity:
-      name: Camera Entity
+      name: Camera entity
       description: Optional camera.* entity whose snapshot is shown with the notification.
       required: false
       selector:
@@ -65,29 +65,29 @@ notify:
           domain: camera
 
 intercom_broadcast:
-  name: Intercom Broadcast
+  name: Intercom broadcast
   description: Broadcast a TTS announcement or local audio clip to explicit target speakers, the configured broadcast speakers in occupied Areas ('occupied_areas'), the configured broadcast speakers in a person's current Area ('person.<slug>'), or the System/Device configured broadcast speakers.
   fields:
     target_device:
-      name: Calling Device or Routing Mode
+      name: Calling device or routing mode
       description: Optional calling Latter device slug, 'occupied_areas' (configured broadcast speakers in occupied Areas only), 'all' (configured System broadcast speakers), or a 'person.*' entity ID (configured broadcast speakers in that person's current Area).
       required: false
       selector:
         text:
     message:
-      name: Announcement Message (TTS)
+      name: Announcement message (TTS)
       description: Text message to announce via Home Assistant TTS.
       required: false
       selector:
         text:
     media_url:
-      name: Audio Clip URL
+      name: Audio clip URL
       description: Optional Home Assistant media-source:// URI or local /api/latter/ resource to play with announce=true.
       required: false
       selector:
         text:
     target_speakers:
-      name: Target Speakers
+      name: Target speakers
       description: Specific media_player entities to broadcast to (overrides the configured broadcast speaker pool).
       required: false
       selector:
@@ -95,7 +95,7 @@ intercom_broadcast:
           domain: media_player
           multiple: true
     tts_entity:
-      name: TTS Engine Entity
+      name: TTS engine entity
       description: Optional tts.* entity (auto-discovered if omitted).
       required: false
       selector:
@@ -103,17 +103,17 @@ intercom_broadcast:
           domain: tts
 
 set_active_area:
-  name: Set Active Area
+  name: Set active area
   description: Switch the active area context by area_id or area name. The device's speaker follows to the new area when the device's "Media follows this Device" setting is on. On roaming devices with Voice Follows Me enabled, this also moves the device's Home Assistant Area so area-aware Assist commands target it.
   fields:
     area_id:
-      name: Area ID or Area Name
+      name: Area ID or area name
       description: Target Home Assistant area_id or friendly area name.
       required: true
       selector:
         area:
     target_device:
-      name: Target Device
+      name: Target device
       description: Optional Latter device.
       required: false
       selector:
@@ -121,25 +121,25 @@ set_active_area:
           integration: latter
 
 set_active_speaker:
-  name: Set Active Speaker
+  name: Set active speaker
   description: Change the active target media_player for the ESPHome device and optionally transfer the active playback queue.
   fields:
     entity_id:
-      name: Speaker Entity
+      name: Speaker entity
       description: Target media_player entity_id.
       required: true
       selector:
         entity:
           domain: media_player
     transfer_queue:
-      name: Transfer Active Queue
+      name: Transfer active queue
       description: Transfer the active Music Assistant queue to the new speaker (default true).
       required: false
       default: true
       selector:
         boolean:
     target_device:
-      name: Target Device
+      name: Target device
       description: Optional Latter device when running multiple devices.
       required: false
       selector:
@@ -147,25 +147,25 @@ set_active_speaker:
           integration: latter
 
 reset_device:
-  name: Reset Device to Defaults
+  name: Reset device to defaults
   description: Reset a Latter device. Device settings erases everything saved on the device (its settings and the Wi-Fi driver's cached data) and restarts it; Wi-Fi credentials and the API key are compiled into the firmware, so it rejoins Home Assistant unchanged. Latter options puts this device's Latter options back to the defaults it got when it was added, keeping its ESPHome binding and its Music Assistant player link.
   fields:
     target_device:
-      name: Target Device
+      name: Target device
       description: The Latter device to reset. Required; a reset never falls back to the only device.
       required: true
       selector:
         device:
           integration: latter
     device_settings:
-      name: Device Settings
+      name: Device settings
       description: Erase everything saved on the device and restart it. Needs Latter firmware SDK rev 2026112007 or later. Not available for BLE tags.
       required: false
       default: true
       selector:
         boolean:
     latter_options:
-      name: Latter Options
+      name: Latter options
       description: Reset this device's Latter options (Studio settings) to their defaults.
       required: false
       default: true

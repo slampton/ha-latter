@@ -7,7 +7,7 @@ rules:
   brands: done
   common-modules:
     status: done
-    comment: Functional domain cohesion and strict acyclic L0a-L4 Tarjan zero-cycle DAG layout across focused subpackages (areas/, cameras/, coordinator/, groups/, http/, media/, presence/, services/, studio/{settings_cleaners,state_gates,panel,payload,commands,system_commands,device_commands}.py, wallpapers/), shared root modules (const.py, config_defaults.py, repairs_keys.py, protocol_*.py, media_cache.py, hub_registry.py, hub_sync.py, identity.py, feeds.py, remotes.py, doorbell*.py, backup.py, repairs.py, diagnostics.py), and 8 entity platforms, verified cycle-free by tools/verify_ha.py with bounded function complexity (ruff PLR).
+    comment: Functional domain cohesion and zero-cycle Tarjan SCC DAG layout across 3 coarse boundaries (stdlib leaves, domain/registry tier, orchestration/endpoint tier, and root + 8 entity platforms), verified cycle-free by tools/verify_ha.py with bounded McCabe complexity (ruff C901 <= 18).
   config-flow: done
   config-flow-test-coverage: done
   dependency-transparency: done
@@ -26,7 +26,7 @@ rules:
   has-entity-name: done
   runtime-data:
     status: done
-    comment: Hub and coordinator runtime state stored on typed ConfigEntry.runtime_data (LatterConfigEntry = ConfigEntry[LatterRuntimeData]).
+    comment: Hub and coordinator runtime state stored on typed ConfigEntry.runtime_data (LatterConfigEntry = ConfigEntry[LatterRuntimeData]); domain-level setup state stored under typed HassKey[LatterDomainData] with zero untyped hass.data[DOMAIN] accesses.
   test-before-configure: done
   test-before-setup:
     status: exempt
@@ -62,10 +62,14 @@ rules:
   dynamic-devices: done
   entity-category: done
   entity-device-class: done
-  entity-disabled-by-default: done
+  entity-disabled-by-default:
+    status: done
+    comment: High-churn BLE distance telemetry sensors (ble_distance, person_ble_distance) default to _attr_entity_registry_enabled_default = False to avoid recorder jitter.
   entity-translations: done
   exception-translations: done
-  icon-translations: done
+  icon-translations:
+    status: done
+    comment: All entity platforms and all 5 public services declare icons in icons.json.
   reconfiguration-flow:
     status: done
     comment: Device and BLE Tag subentries implement async_step_reconfigure for in-place hardware rebind and reconfiguration, while config_panel_domain routes hub Configure directly to Latter Studio (/latter).

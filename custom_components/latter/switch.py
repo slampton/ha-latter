@@ -10,7 +10,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import build_device_entity_id
 from .coordinator import LatterCoordinator
 from .hub_registry import LatterSystemHub, get_latter_system
 
@@ -61,9 +60,6 @@ class _BaseLatterSwitch(SwitchEntity):
         self.coordinator = coordinator
         self._attr_translation_key = suffix
         self._attr_unique_id = f"{coordinator.subentry_id}_{suffix}"
-        self.entity_id = build_device_entity_id(
-            coordinator.device_slug, suffix, "switch"
-        )
 
     @property
     def device_info(self) -> DeviceInfo:

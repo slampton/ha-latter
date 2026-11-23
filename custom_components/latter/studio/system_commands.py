@@ -44,7 +44,6 @@ from ..const import (
     CONF_WALLPAPER_FAVORITES,
     CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
-    DATA_GLOBAL_CONFIG,
     DEFAULT_BLE_CATEGORY,
     DEFAULT_DEVICE_GROUP,
     DOMAIN,
@@ -66,6 +65,8 @@ from ..groups.device_groups import (
     seed_group_baseline_from_coordinator,
 )
 from ..hub_registry import (
+    get_domain_data,
+    get_global_config,
     get_latter_system,
     get_system_config_lock,
     get_system_config_rev,
@@ -163,9 +164,7 @@ async def _cmd_save_system_config(
                 "conflict",
                 "Settings changed in another session; refreshed latest state.",
             )
-        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
-            DATA_GLOBAL_CONFIG, {}
-        )
+        live_cfg = get_global_config(hass)
         changed = {k: v for k, v in updates.items() if live_cfg.get(k) != v}
         if changed:
             await async_save_and_broadcast_global_config(hass, changed)
@@ -1111,9 +1110,7 @@ async def _cmd_set_ble_scanner_offset(
         raise StudioCommandError("invalid_format", "offset_db must be a finite number")
 
     async with get_system_config_lock(hass):
-        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
-            DATA_GLOBAL_CONFIG, {}
-        )
+        live_cfg = get_global_config(hass)
         raw_offsets = live_cfg.get(CONF_BLE_SCANNER_OFFSETS)
         offsets: dict[str, float] = {}
         if isinstance(raw_offsets, dict):
@@ -1146,9 +1143,7 @@ async def _cmd_set_area_fusion(
         raise StudioCommandError("not_found", f"Unknown Area '{area_id}'")
     allowed_sensors = {s["entity_id"] for s in area_fusion_sensor_choices(hass, area_id)}
     async with get_system_config_lock(hass):
-        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
-            DATA_GLOBAL_CONFIG, {}
-        )
+        live_cfg = get_global_config(hass)
         raw_fusion = live_cfg.get(CONF_AREA_FUSION_CONFIG) or {}
         fusion_cfg = dict(raw_fusion) if isinstance(raw_fusion, dict) else {}
         current_area = fusion_cfg.get(area_id)
@@ -1234,9 +1229,7 @@ async def _cmd_set_area_illuminance(
         raise StudioCommandError("not_found", f"Unknown Area '{area_id}'")
     allowed_sensors = {str(s["entity_id"]) for s in area_illuminance_sensor_choices(hass, area_id)}
     async with get_system_config_lock(hass):
-        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
-            DATA_GLOBAL_CONFIG, {}
-        )
+        live_cfg = get_global_config(hass)
         raw_lux = live_cfg.get(CONF_AREA_ILLUMINANCE_CONFIG) or {}
         lux_cfg = dict(raw_lux) if isinstance(raw_lux, dict) else {}
         current_area = lux_cfg.get(area_id)
@@ -1330,9 +1323,7 @@ async def _cmd_calibrate_area_illuminance(
 
     calibrated: list[dict[str, Any]] = []
     async with get_system_config_lock(hass):
-        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
-            DATA_GLOBAL_CONFIG, {}
-        )
+        live_cfg = get_global_config(hass)
         raw_lux = live_cfg.get(CONF_AREA_ILLUMINANCE_CONFIG) or {}
         lux_cfg = dict(raw_lux) if isinstance(raw_lux, dict) else {}
         for aid, aname, eid in area_targets:
@@ -1406,9 +1397,7 @@ async def _cmd_capture_ble_area_signature(
         )
 
     async with get_system_config_lock(hass):
-        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
-            DATA_GLOBAL_CONFIG, {}
-        )
+        live_cfg = get_global_config(hass)
         raw_sigs = live_cfg.get(CONF_BLE_AREA_SIGNATURES)
         signatures = dict(raw_sigs) if isinstance(raw_sigs, dict) else {}
         signatures[target_area_id] = {
@@ -1433,9 +1422,7 @@ async def _cmd_clear_ble_area_signature(
     if not target_area_id:
         raise StudioCommandError("invalid_format", "area_id is required")
     async with get_system_config_lock(hass):
-        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
-            DATA_GLOBAL_CONFIG, {}
-        )
+        live_cfg = get_global_config(hass)
         raw_sigs = live_cfg.get(CONF_BLE_AREA_SIGNATURES)
         signatures = dict(raw_sigs) if isinstance(raw_sigs, dict) else {}
         signatures.pop(target_area_id, None)
@@ -1484,7 +1471,7 @@ async def _cmd_clear_internal_logs(
     _global_cfg: dict[str, Any],
     _extra: dict[str, Any],
 ) -> None:
-    hass.data.setdefault(DOMAIN, {})["internal_logs"] = []
+    get_domain_data(hass).internal_logs.clear()
     log_studio_event(hass, "INFO", "studio", "Cleared internal diagnostic log")
 
 
@@ -1502,9 +1489,7 @@ async def _cmd_ignore_discovered_device(
     if dev is None:
         raise StudioCommandError("not_found", f"Unknown ESPHome device '{esp_dev_id}'")
     async with get_system_config_lock(hass):
-        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
-            DATA_GLOBAL_CONFIG, {}
-        )
+        live_cfg = get_global_config(hass)
         raw_ignored = live_cfg.get(CONF_IGNORED_DISCOVERED_DEVICES) or []
         ignored = [
             str(x).strip()
@@ -1530,9 +1515,7 @@ async def _cmd_unignore_discovered_device(
     if not esp_dev_id:
         raise StudioCommandError("invalid_format", "esphome_device_id is required")
     async with get_system_config_lock(hass):
-        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
-            DATA_GLOBAL_CONFIG, {}
-        )
+        live_cfg = get_global_config(hass)
         raw_ignored = live_cfg.get(CONF_IGNORED_DISCOVERED_DEVICES) or []
         ignored = [
             str(x).strip()
@@ -1629,9 +1612,7 @@ async def _cmd_add_latter_device(
         )
         raise StudioCommandError(reason, f"Could not add '{device_title(dev)}' ({reason})")
     async with get_system_config_lock(hass):
-        live_cfg: dict[str, Any] = hass.data.setdefault(DOMAIN, {}).setdefault(
-            DATA_GLOBAL_CONFIG, {}
-        )
+        live_cfg = get_global_config(hass)
         raw_ignored = live_cfg.get(CONF_IGNORED_DISCOVERED_DEVICES) or []
         if isinstance(raw_ignored, list) and dev.id in raw_ignored:
             cleaned_ignored = [

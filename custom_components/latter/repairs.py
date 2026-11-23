@@ -18,7 +18,7 @@ from .const import (
     CONF_WEATHER_ENTITY,
     DOMAIN,
 )
-from .hub_registry import get_latter_system, iter_coordinators
+from .hub_registry import get_latter_system, iter_coordinators, peek_domain_data
 from .media.linking import (
     async_set_ma_player_link,
     ma_player_entities,
@@ -191,12 +191,10 @@ def async_delete_device_issues(hass: HomeAssistant, subentry_id: str) -> None:
     """Delete every repair issue raised for one Device (called when its subentry is removed)."""
     for issue_id in device_issue_ids(subentry_id):
         ir.async_delete_issue(hass, DOMAIN, issue_id)
-    domain_data = hass.data.get(DOMAIN, {})
-    if isinstance(domain_data, dict):
-        for key in ("_slot_push_failures", "_slot_push_last_warn"):
-            bucket = domain_data.get(key)
-            if isinstance(bucket, dict):
-                bucket.pop(subentry_id, None)
+    domain_data = peek_domain_data(hass)
+    if domain_data is not None:
+        domain_data.slot_push_failures.pop(subentry_id, None)
+        domain_data.slot_push_last_warn.pop(subentry_id, None)
 
 
 class LinkMaPlayerRepairFlow(RepairsFlow):

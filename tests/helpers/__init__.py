@@ -1,4 +1,4 @@
-"""Shared real Home Assistant 2026.10+ helpers for `ha-latter` test suites."""
+"""Shared real Home Assistant 2026.11+ helpers for `ha-latter` test suites."""
 
 from __future__ import annotations
 

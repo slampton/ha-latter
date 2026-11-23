@@ -35,14 +35,17 @@ import probatio as vol
 from ..backup import async_restore_backup_bundle, build_backup_bundle
 from ..const import (
     CONF_BLE_AREA_SIGNATURES,
-    DATA_GLOBAL_CONFIG,
-    DOMAIN,
     INTEGRATION_VERSION,
     STUDIO_REV,
 )
 from ..coordinator import LatterCoordinator
 from ..groups.device_groups import async_reset_device
-from ..hub_registry import get_latter_system, iter_coordinators
+from ..hub_registry import (
+    get_domain_data,
+    get_latter_system,
+    iter_coordinators,
+    peek_global_config,
+)
 from ..identity import device_entities
 from ..presence.ble_fabric import get_all_areas_presence_summary, get_ble_fabric
 from ..presence.ble_registry import get_area_signatures_summary
@@ -128,7 +131,7 @@ async def _async_dispatch_scoped_command(
         except vol.Invalid as err:
             raise StudioCommandError("invalid_format", str(err)) from err
     extra: dict[str, Any] = {}
-    global_cfg: dict[str, Any] = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
+    global_cfg = peek_global_config(hass)
     await handler(hass, coordinator, body, global_cfg, extra)
     return extra
 
@@ -246,7 +249,7 @@ def _compute_subscribe_skip_sections(
     cur_sys = get_latter_system(hass)
     cur_wp_tok = wallpaper_snapshot_token()
     cur_hmac = cur_sys.hmac_secret if cur_sys is not None else b""
-    cur_raw_cfg = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
+    cur_raw_cfg = peek_global_config(hass)
     cur_sigs = cur_raw_cfg.get(CONF_BLE_AREA_SIGNATURES)
 
     skip: set[str] = set()
@@ -408,7 +411,7 @@ async def ws_handle_subscribe(
     section_gate = SectionHashGate()
 
     init_sys = get_latter_system(hass)
-    init_raw_cfg = hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG) or {}
+    init_raw_cfg = peek_global_config(hass)
     tokens: list[Any] = [
         wallpaper_snapshot_token(),
         init_sys.hmac_secret if init_sys is not None else b"",
@@ -782,10 +785,10 @@ async def ws_handle_device_reset(
 @callback
 def async_register_studio_ws_commands(hass: HomeAssistant) -> None:
     """Register all Latter Studio WebSocket API commands."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    if domain_data.get("_studio_ws_registered") == INTEGRATION_VERSION:
+    domain_data = get_domain_data(hass)
+    if domain_data.studio_ws_registered_version == INTEGRATION_VERSION:
         return
-    domain_data["_studio_ws_registered"] = INTEGRATION_VERSION
+    domain_data.studio_ws_registered_version = INTEGRATION_VERSION
     for handler in (
         ws_handle_get_state,
         ws_handle_subscribe,

@@ -185,9 +185,8 @@ async def test_studio_telemetry_link_report_and_discovered_devices_payload(
     """Verify link report, firmware update, discovered/ignored Latter devices, and telemetry RPC in Studio payload."""
     from custom_components.latter.const import (
         CONF_IGNORED_DISCOVERED_DEVICES,
-        DATA_GLOBAL_CONFIG,
-        DOMAIN,
     )
+    from custom_components.latter.hub_registry import get_global_config
     from custom_components.latter.studio.payload import build_studio_state_payload
     from tests.helpers.ha_setup import ensure_area, register_entity
 
@@ -242,7 +241,7 @@ async def test_studio_telemetry_link_report_and_discovered_devices_payload(
         area_id=None,
         stationary=0,
     )
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_IGNORED_DISCOVERED_DEVICES] = [ignored_dev.id]
+    get_global_config(hass)[CONF_IGNORED_DISCOVERED_DEVICES] = [ignored_dev.id]
 
     # Dispatch live device_telemetry RPC
     await sys_obj.rpc_dispatcher.async_dispatch(

@@ -6,7 +6,7 @@ Most ESPHome display projects hardcode entity IDs into YAML—a renamed light, a
 
 [![Validate](https://github.com/slampton/ha-latter/actions/workflows/validate.yml/badge.svg)](https://github.com/slampton/ha-latter/actions/workflows/validate.yml)
 [![Release](https://img.shields.io/github/v/release/slampton/ha-latter)](https://github.com/slampton/ha-latter/releases)
-[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5)](https://hacs.xyz)
+[![Home Assistant 2026.11+](https://img.shields.io/badge/Home%20Assistant-2026.11%2B-41BDF5)](https://www.home-assistant.io)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
 | Repository | Runs on | Responsibility |
@@ -23,7 +23,7 @@ You need both repos for the touch displays. If you only want BLE Area presence a
 ### Devices Know Which Area They're In
 Latter reads RSSI from your existing Bluetooth proxies to track Latter displays, phones and watches (via Home Assistant's [Private BLE Device](https://www.home-assistant.io/integrations/private_ble_device/) integration), and iBeacons.
 - **Voice Follows Me:** when a roaming handheld or watch moves to a new Area, Latter updates its Home Assistant Area so *"Turn off the lights"* to Assist targets where you're standing. Fixed panels sync their **Assigned Area** two-way with Home Assistant.
-- **Cross-floor & sensor fusion:** per-Area occupancy binary sensors (`binary_sensor.<area>_occupancy`) fuse BLE with mmWave, PIR, and door sensors, applying a 6 dB cross-floor penalty so upstairs devices don't flap into downstairs Areas.
+- **Cross-floor & sensor fusion:** per-Area occupancy binary sensors (`binary_sensor.latter_system_<area>_occupancy`) fuse BLE with mmWave, PIR, and door sensors, applying a 6 dB cross-floor penalty so upstairs devices don't flap into downstairs Areas.
 
 → [How presence works, and how it compares to Bermuda](docs/presence.md)
 
@@ -67,7 +67,7 @@ An admin-only sidebar control plane where every change pushes live without refla
 
 **2. Flash it in Chrome or Edge** over USB-C with the **[Latter Web Installer](https://slampton.github.io/esphome-latter-core/)**, configure Wi-Fi over the same USB cable, and adopt the discovered ESPHome device in Home Assistant (leave *"Allow the device to perform Home Assistant actions"* **off**). → [Flashing guide](https://github.com/slampton/esphome-latter-core/blob/main/docs/flashing.md)
 
-**3. Install Latter via HACS:** open **HACS → ⋮ → Custom repositories**, add `https://github.com/slampton/ha-latter` as **Integration**, download **Latter**, and restart Home Assistant.
+**3. Install Latter from the Home Assistant Marketplace:** in Home Assistant `2026.11+`, open **Settings → Marketplace → ⋮ → Custom repositories**, add `https://github.com/slampton/ha-latter` as **Integration**, and install **Latter**. (New Marketplace installs load immediately; restart Home Assistant after future updates.)
 
 **4. Accept discovery & open Latter Studio:** click **Add** on **Discovered: Latter** under **Settings → Devices & Services** (or **Add Integration → Latter** with no display selected for standalone BLE presence), then click **Configure** or open **Latter** in the sidebar to map your shared entities, speakers, and colors & wallpapers live. → [Full walkthrough](docs/getting-started.md)
 
@@ -109,7 +109,7 @@ flowchart LR
 
 | Requirement | Version | Notes |
 | :--- | :--- | :--- |
-| **Home Assistant** | `2026.10` or newer | |
+| **Home Assistant** | `2026.11` or newer | Built-in **Settings → Marketplace** |
 | **ESPHome** | `2026.11.0` or newer | Only needed when compiling firmware in ESPHome Device Builder |
 | **Music Assistant** | `2.10.12` or newer *(optional)* | Needed for library browsing, queue transfer, and default intercom speakers |
 | **Bluetooth proxies** | 1 per Area *(optional)* | ESPHome active proxies verified; assign each proxy to its Home Assistant Area |
@@ -120,7 +120,7 @@ flowchart LR
 **Version `3.0.0` Status:**
 - **Stable:** device discovery, Latter Studio, 7-domain Protocol v3 sync, Area control, Home Hub, Time/Alarms, Music Assistant browsing & transfer, BLE Area presence & sensor fusion, doorbell camera popups, and JSON backup/restore.
 - **Experimental / Current Limits:** doorbell listen & push-to-talk TTS reply (no live device-to-door audio or on-device echo cancellation yet); BLE calibration uses per-scanner gain trim + multi-scanner Area signatures rather than `(x, y, z)` floorplan coordinates.
-- **CI Gate:** `dev` fast-forwards `main` only after `hassfest`, HACS validation, `ruff`, `mypy --strict`, `pytest`, and the stock `esbuild` + `lit` Studio build and Playwright / axe-core E2E suites pass (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+- **CI Gate:** `dev` fast-forwards `main` only after `hassfest`, Marketplace validation, `ruff`, `mypy --strict`, `pytest`, and the stock `esbuild` + `lit` Studio build and Playwright / axe-core E2E suites pass (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 Bugs and feature requests: [GitHub Issues](https://github.com/slampton/ha-latter/issues).
 
@@ -138,7 +138,7 @@ Bugs and feature requests: [GitHub Issues](https://github.com/slampton/ha-latter
 | **[Troubleshooting](docs/troubleshooting.md)** | Common setup, image, presence, music, and update fixes |
 | **[Reference](docs/reference/)** | Services, entities, and HTTP API specs |
 
-**Removal:** delete the **Latter** integration entry under **Settings → Devices & Services**, remove **Latter** in HACS, and restart Home Assistant. Optional cleanup on disk: `.storage/latter.site`, `.storage/latter.runtime.*`, `.storage/latter.wallpapers.v1`, and `.storage/latter/wallpapers/`.
+**Removal:** delete the **Latter** integration entry under **Settings → Devices & Services**, remove **Latter** in **Settings → Marketplace**, and restart Home Assistant. Optional cleanup on disk: `.storage/latter.site`, `.storage/latter.runtime.*`, `.storage/latter.wallpapers.v1`, and `.storage/latter/wallpapers/`.
 
 ## Support & License
 

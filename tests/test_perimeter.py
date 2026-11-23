@@ -28,9 +28,8 @@ from custom_components.latter.const import (
     CONF_SECURITY_PIN_POLICY,
     CONF_THERMOSTAT_ENTITIES,
     CONF_VACUUM_ENTITIES,
-    DATA_GLOBAL_CONFIG,
-    DOMAIN,
 )
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.protocol_policy import hash_security_pin, wrap_pin_code
 
 
@@ -88,7 +87,7 @@ async def test_home_hub_rebuild_alarm_caps_separate_pins_climate_cover_and_categ
     )
     await hass.async_block_till_done()
 
-    global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
+    global_cfg = get_global_config(hass)
     global_cfg[CONF_ALARM_ENTITY] = "alarm_control_panel.home_alarm"
     global_cfg[CONF_THERMOSTAT_ENTITIES] = ["climate.main_thermostat"]
     global_cfg[CONF_LOCK_ENTITIES] = ["lock.front_door"]

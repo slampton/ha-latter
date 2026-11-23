@@ -18,8 +18,6 @@ from custom_components.latter.areas.registry import (
 from custom_components.latter.const import (
     CONF_CAMERA_ENTITIES,
     CONF_DEFAULT_AREA,
-    DATA_GLOBAL_CONFIG,
-    DOMAIN,
 )
 from custom_components.latter.doorbell import (
     bind_coordinator_doorbell_listener,
@@ -39,6 +37,7 @@ from custom_components.latter.http.camera_views import (
 )
 from custom_components.latter.hub_registry import (
     get_area_state_index,
+    get_global_config,
     is_media_position_only_tick,
 )
 from tests.helpers import ensure_area, mock_service, register_device, register_entity
@@ -150,7 +149,7 @@ async def test_area_state_index_reactive_lookup_and_media_tick_filtering(
     # Dynamic new Area creation & deletion
     patio = ensure_area(hass, "Patio", area_id="patio")
     await hass.async_block_till_done()
-    assert hass.states.get("binary_sensor.patio_occupancy") is not None
+    assert hass.states.get("binary_sensor.latter_system_patio_occupancy") is not None
     area_reg.async_delete(patio.id)
     await hass.async_block_till_done()
 
@@ -260,7 +259,7 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
         )
         hass.states.async_set(eid, st_val, {"friendly_name": orig_name})
 
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_CAMERA_ENTITIES] = [
+    get_global_config(hass)[CONF_CAMERA_ENTITIES] = [
         "camera.front_door_high"
     ]
     bind_coordinator_doorbell_listener(coord)

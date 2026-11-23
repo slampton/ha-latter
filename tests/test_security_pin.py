@@ -17,10 +17,9 @@ from custom_components.latter.const import (
     CONF_MA_PLAYER_ENTITY,
     CONF_SECURITY_PIN_HASH,
     CONF_SECURITY_PIN_POLICY,
-    DATA_GLOBAL_CONFIG,
-    DOMAIN,
     SUBENTRY_DEVICE,
 )
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.media import (
     linking as linking_mod,
     state_payload as state_payload_mod,
@@ -72,7 +71,7 @@ async def test_three_tier_security_pin_policy_and_pbkdf2_verification(
         hash_security_pin("12")  # <4 digits rejected
 
     # Store system PIN hash in global config
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_SECURITY_PIN_HASH] = pin_hash
+    get_global_config(hass)[CONF_SECURITY_PIN_HASH] = pin_hash
 
     # Stationary hardware manifest with "auto" -> requires PIN on unlock/disarm/open_cover(garage)
     coord._runtime.hello_manifest = {**coord.hardware_manifest, "stationary": 1}

@@ -19,7 +19,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
 from ..const import CONF_ESPHOME_DEVICE_ID, CONF_MA_PLAYER_ENTITY, DOMAIN, SUBENTRY_DEVICE
-from ..hub_registry import iter_coordinators
+from ..hub_registry import get_domain_data, iter_coordinators, peek_domain_data
 from ..identity import device_entities, find_device_entity_by_suffix, get_bound_esphome_device
 from ..repairs_keys import link_ma_player_issue_id
 
@@ -338,9 +338,9 @@ def _candidate_identity(
     macs = _extract_macs_from_device_or_entry(c_dev, c_entry)
     mass_macs, ha_entities, protocol_ids = _extract_mass_player_identity(hass, c_entry)
     macs.update(mass_macs)
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    known_macs: dict[str, set[str]] = domain_data.setdefault("_ma_known_macs", {})
-    known_protos: dict[str, set[str]] = domain_data.setdefault("_ma_known_protocols", {})
+    domain_data = get_domain_data(hass)
+    known_macs = domain_data.ma_known_macs
+    known_protos = domain_data.ma_known_protocols
     if macs:
         known_macs[c_entry.entity_id] = set(macs)
     elif c_entry.entity_id in known_macs:
@@ -371,17 +371,22 @@ def _collect_other_esphome_identities(hass: HomeAssistant, exclude_dev_ids: set[
 @callback
 def clear_ma_counterpart_cache(hass: HomeAssistant) -> None:
     """Clear cached speaker -> Music Assistant counterpart mappings and unsubscribe listeners on unload."""
-    if not isinstance(domain_data := hass.data.get(DOMAIN), dict):
+    domain_data = peek_domain_data(hass)
+    if domain_data is None:
         return
-    for key in ("_ma_counterpart_cache", "_ma_known_macs", "_ma_known_protocols", "_ma_reconnect_until"):
-        if isinstance(bucket := domain_data.get(key), dict):
-            bucket.clear()
-    if callable(reconnect_timer := domain_data.pop("_ma_reconnect_timer", None)):
+    domain_data.ma_counterpart_cache.clear()
+    domain_data.ma_known_macs.clear()
+    domain_data.ma_known_protocols.clear()
+    domain_data.ma_reconnect_until.clear()
+    reconnect_timer = domain_data.ma_reconnect_timer
+    domain_data.ma_reconnect_timer = None
+    if callable(reconnect_timer):
         reconnect_timer()
-    if isinstance(unsubs := domain_data.pop("_ma_cache_unsubs", None), (list, tuple)):
+    unsubs = domain_data.ma_cache_unsubs
+    domain_data.ma_cache_unsubs = None
+    if unsubs is not None:
         for unsub in unsubs:
-            if callable(unsub):
-                unsub()
+            unsub()
 
 
 def _is_entity_live(hass: HomeAssistant, entity_id: str | None) -> bool:
@@ -394,46 +399,46 @@ def _is_entity_live(hass: HomeAssistant, entity_id: str | None) -> bool:
 def _arm_ma_reconnect_grace(hass: HomeAssistant, entity_id: str) -> None:
     if not entity_id:
         return
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    reconnect_until: dict[str, float] = domain_data.setdefault("_ma_reconnect_until", {})
+    domain_data = get_domain_data(hass)
+    reconnect_until = domain_data.ma_reconnect_until
     reconnect_until[entity_id] = time.monotonic() + _MA_RECONNECT_GRACE_SECONDS
-    if callable(prev_timer := domain_data.pop("_ma_reconnect_timer", None)):
+    prev_timer = domain_data.ma_reconnect_timer
+    domain_data.ma_reconnect_timer = None
+    if callable(prev_timer):
         prev_timer()
 
     @callback
     def _on_grace_expired(_now: Any) -> None:
-        domain_data.pop("_ma_reconnect_timer", None)
+        domain_data.ma_reconnect_timer = None
         now_mono = time.monotonic()
         for k in [k for k, ts in reconnect_until.items() if ts <= now_mono]:
             reconnect_until.pop(k, None)
-        if isinstance(cache := domain_data.get("_ma_counterpart_cache"), dict):
-            cache.clear()
+        domain_data.ma_counterpart_cache.clear()
         async_heal_coordinator_ma_links(hass)
 
-    domain_data["_ma_reconnect_timer"] = async_call_later(
+    domain_data.ma_reconnect_timer = async_call_later(
         hass, _MA_RECONNECT_GRACE_SECONDS + 0.5, _on_grace_expired
     )
 
 
 def _in_ma_reconnect_grace(hass: HomeAssistant, *entity_ids: str) -> bool:
-    if not isinstance(domain_data := hass.data.get(DOMAIN), dict):
+    domain_data = peek_domain_data(hass)
+    if domain_data is None or not domain_data.ma_reconnect_until:
         return False
-    if not isinstance(reconnect_until := domain_data.get("_ma_reconnect_until"), dict) or not reconnect_until:
-        return False
+    reconnect_until = domain_data.ma_reconnect_until
     now_mono = time.monotonic()
     return any(bool(eid and now_mono < reconnect_until.get(eid, 0.0)) for eid in entity_ids)
 
 
 @callback
 def _ensure_ma_cache_listeners(hass: HomeAssistant) -> None:
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    if "_ma_cache_unsubs" in domain_data:
+    domain_data = get_domain_data(hass)
+    if domain_data.ma_cache_unsubs is not None:
         return
 
     @callback
     def _on_registry_updated(_event: Event[Any]) -> None:
-        if isinstance(cache := domain_data.get("_ma_counterpart_cache"), dict):
-            cache.clear()
+        domain_data.ma_counterpart_cache.clear()
 
     @callback
     def _on_ma_state_changed(event: Event[Any]) -> None:
@@ -454,13 +459,12 @@ def _ensure_ma_cache_listeners(hass: HomeAssistant) -> None:
         elif ent.platform == "music_assistant":
             if old_live and not new_live:
                 _arm_ma_reconnect_grace(hass, entity_id)
-            elif new_live and isinstance(rec := domain_data.get("_ma_reconnect_until"), dict):
-                rec.pop(entity_id, None)
-        if isinstance(cache := domain_data.get("_ma_counterpart_cache"), dict):
-            cache.clear()
+            elif new_live:
+                domain_data.ma_reconnect_until.pop(entity_id, None)
+        domain_data.ma_counterpart_cache.clear()
         async_heal_coordinator_ma_links(hass)
 
-    domain_data["_ma_cache_unsubs"] = (
+    domain_data.ma_cache_unsubs = (
         hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, _on_registry_updated),
         hass.bus.async_listen(dr.EVENT_DEVICE_REGISTRY_UPDATED, _on_registry_updated),
         hass.bus.async_listen(EVENT_STATE_CHANGED, _on_ma_state_changed),
@@ -699,10 +703,9 @@ def suggest_ma_player_for(hass: HomeAssistant, coordinator: Any) -> str | None:
 @callback
 def async_refresh_ma_link(hass: HomeAssistant, coordinator: Any) -> str:
     """Drop cached counterparts, re-resolve this Device's link, and rebind its speaker listener."""
-    if isinstance(domain_data := hass.data.get(DOMAIN), dict) and isinstance(
-        cache := domain_data.get("_ma_counterpart_cache"), dict
-    ):
-        cache.clear()
+    domain_data = peek_domain_data(hass)
+    if domain_data is not None:
+        domain_data.ma_counterpart_cache.clear()
     local_spk = str(getattr(coordinator, "local_speaker", "") or "")
     resolved = (resolve_ma_counterpart_entity(hass, local_spk) or "") if local_spk else ""
     if (
@@ -777,13 +780,12 @@ def _heal_single_coordinator_ma_link(
 @callback
 def async_heal_coordinator_ma_links(hass: HomeAssistant) -> None:
     """Auto-persist newly discovered Sendspin/MAC-matched MA links and heal stale/cross-linked subentry links."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    if domain_data.get("_healing_ma_links"):
+    domain_data = get_domain_data(hass)
+    if domain_data.healing_ma_links:
         return
-    domain_data["_healing_ma_links"] = True
+    domain_data.healing_ma_links = True
     try:
-        if isinstance(cache := domain_data.get("_ma_counterpart_cache"), dict):
-            cache.clear()
+        domain_data.ma_counterpart_cache.clear()
         live_candidates, offline_candidates = _build_ma_candidates(hass)
         cand_ident_by_id = {
             c_entry.entity_id: (c_macs, c_protos)
@@ -792,7 +794,7 @@ def async_heal_coordinator_ma_links(hass: HomeAssistant) -> None:
         for coord in list(iter_coordinators(hass)):
             _heal_single_coordinator_ma_link(hass, coord, live_candidates, offline_candidates, cand_ident_by_id)
     finally:
-        domain_data.pop("_healing_ma_links", None)
+        domain_data.healing_ma_links = False
 
 
 def _lookup_counterpart_cache(
@@ -877,8 +879,7 @@ def resolve_ma_counterpart_entity(hass: HomeAssistant, speaker_entity_id: str) -
         return speaker_entity_id
 
     _ensure_ma_cache_listeners(hass)
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    cache: dict[str, tuple[str | None, bool, float]] = domain_data.setdefault("_ma_counterpart_cache", {})
+    cache = get_domain_data(hass).ma_counterpart_cache
     if speaker_entity_id in cache:
         hit, cached_ent = _lookup_counterpart_cache(hass, ent_reg, cache, speaker_entity_id)
         if hit:

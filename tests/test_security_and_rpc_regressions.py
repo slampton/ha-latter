@@ -22,7 +22,6 @@ from custom_components.latter.const import (
     CONF_NATIVE_BLE_TRACKING,
     CONF_SECURITY_PIN_HASH,
     CONF_SECURITY_PIN_POLICY,
-    DATA_GLOBAL_CONFIG,
     DOMAIN,
     RPC_AREA_ACTION,
     RPC_INTERCOM_BROADCAST,
@@ -31,6 +30,7 @@ from custom_components.latter.const import (
     SUBENTRY_DEVICE,
 )
 from custom_components.latter.doorbell import bind_coordinator_doorbell_listener
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.media_cache import (
     _ARTWORK_LRU_CACHE,
     _THUMB_LRU_CACHE,
@@ -159,7 +159,7 @@ async def test_pin_session_key_crypto_bounds_and_exponential_lockout(
     mock_service(
         hass, "lock", "unlock", lambda call: unlocked_calls.append(dict(call.data))
     )
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_SECURITY_PIN_HASH] = hash_security_pin(
+    get_global_config(hass)[CONF_SECURITY_PIN_HASH] = hash_security_pin(
         "135790123456"
     )
     coord.update_device_config(
@@ -372,8 +372,8 @@ async def test_own_occupancy_exclusion_and_ble_and_sensor_fail_closed(
     ent_reg = er.async_get(hass)
     fabric = get_ble_fabric(hass)
 
-    # 1. Self-feedback exclusion: binary_sensor.living_room_occupancy exists and is NEVER discovered or accepted as physical input
-    own_occ_eid = "binary_sensor.living_room_occupancy"
+    # 1. Self-feedback exclusion: binary_sensor.latter_system_living_room_occupancy exists and is NEVER discovered or accepted as physical input
+    own_occ_eid = "binary_sensor.latter_system_living_room_occupancy"
     assert hass.states.get(own_occ_eid) is not None
     assert ent_reg.async_get(own_occ_eid) is not None
     ent_reg.async_update_entity(own_occ_eid, area_id="living_room")
@@ -410,7 +410,7 @@ async def test_own_occupancy_exclusion_and_ble_and_sensor_fail_closed(
         area_id="living_room",
         original_device_class="occupancy",
     )
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_AREA_FUSION_CONFIG] = {
+    get_global_config(hass)[CONF_AREA_FUSION_CONFIG] = {
         "living_room": {
             "mode": "ble_and_sensor",
             "sensors": [mmwave_eid],
@@ -517,7 +517,7 @@ async def test_broadcast_caller_exclusion_empty_pool_and_dnd_behavior(
     )
 
     # 1. Empty broadcast_speakers raises ServiceValidationError(translation_key="no_broadcast_speakers")
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_BROADCAST_SPEAKERS] = []
+    get_global_config(hass)[CONF_BROADCAST_SPEAKERS] = []
     with pytest.raises(ServiceValidationError) as exc_empty:
         await hass.services.async_call(
             DOMAIN,
@@ -529,7 +529,7 @@ async def test_broadcast_caller_exclusion_empty_pool_and_dnd_behavior(
     assert tts_calls == []
 
     # Configure both speakers in broadcast_speakers
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_BROADCAST_SPEAKERS] = [
+    get_global_config(hass)[CONF_BROADCAST_SPEAKERS] = [
         "media_player.pocket_assistant_music",
         "media_player.desk_panel_music",
     ]
@@ -642,7 +642,7 @@ async def test_broadcast_caller_exclusion_empty_pool_and_dnd_behavior(
     hass.states.async_set(
         "binary_sensor.front_doorbell_visitor", "off", {"friendly_name": "Visitor"}
     )
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_CAMERA_ENTITIES] = [
+    get_global_config(hass)[CONF_CAMERA_ENTITIES] = [
         "camera.front_doorbell"
     ]
     bind_coordinator_doorbell_listener(coord_pocket)

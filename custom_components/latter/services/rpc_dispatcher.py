@@ -24,7 +24,6 @@ from ..const import (
     CONF_CUSTOM_PALETTES,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_CUSTOM_COLOR,
-    DATA_GLOBAL_CONFIG,
     DOMAIN,
     RPC_AREA_ACTION,
     RPC_AREA_BROWSE,
@@ -49,7 +48,13 @@ from ..const import (
 )
 from ..coordinator import LatterCoordinator
 from ..doorbell import async_execute_doorbell_intercom
-from ..hub_registry import get_latter_system, get_system_config_lock
+from ..hub_registry import (
+    get_domain_data,
+    get_global_config,
+    get_latter_system,
+    get_system_config_lock,
+    peek_domain_data,
+)
 from ..hub_sync import async_refresh_hub_calendar, async_save_and_broadcast_global_config
 from ..media.browse import async_browse_media_items
 from ..media.linking import resolve_ma_counterpart_entity
@@ -114,12 +119,10 @@ def _get_system_pin_lockout(hass: HomeAssistant) -> PinLockoutTracker:
     sys_obj = get_latter_system(hass)
     if sys_obj is not None:
         return sys_obj.pin_lockout
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    tracker = domain_data.get("_pin_lockout")
-    if not isinstance(tracker, PinLockoutTracker):
-        tracker = PinLockoutTracker()
-        domain_data["_pin_lockout"] = tracker
-    return tracker
+    domain_data = get_domain_data(hass)
+    if domain_data.pin_lockout is None:
+        domain_data.pin_lockout = PinLockoutTracker()
+    return domain_data.pin_lockout
 
 
 def _check_pin_not_locked_out(
@@ -592,8 +595,12 @@ class LatterRpcDispatcher:
         )
         if not ma_target or not items:
             return None
-        q_counts = self.hass.data.get(DOMAIN, {}).get("_ma_queue_counts", {})
-        raw_q_total = q_counts.get(ma_target) if isinstance(q_counts, Mapping) else None
+        domain_data = peek_domain_data(self.hass)
+        raw_q_total = (
+            domain_data.ma_queue_counts.get(ma_target)
+            if domain_data is not None
+            else None
+        )
         if (
             isinstance(raw_q_total, int)
             and raw_q_total > 0
@@ -908,10 +915,7 @@ class LatterRpcDispatcher:
             }
         )
         async with get_system_config_lock(self.hass):
-            domain_data = self.hass.data.setdefault(DOMAIN, {})
-            global_cfg: dict[str, object] = domain_data.setdefault(
-                DATA_GLOBAL_CONFIG, {}
-            )
+            global_cfg = get_global_config(self.hass)
             raw_palettes = global_cfg.get(CONF_CUSTOM_PALETTES)
             palettes: list[dict[str, str]] = [
                 {str(k): str(v) for k, v in p.items()}
@@ -992,11 +996,11 @@ def get_rpc_dispatcher(hass: HomeAssistant) -> LatterRpcDispatcher:
         created = LatterRpcDispatcher(hass)
         sys_obj.rpc_dispatcher = created
         return created
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    dispatcher = domain_data.get("_rpc_dispatcher")
+    domain_data = get_domain_data(hass)
+    dispatcher = domain_data.rpc_dispatcher
     if not isinstance(dispatcher, LatterRpcDispatcher):
         dispatcher = LatterRpcDispatcher(hass)
-        domain_data["_rpc_dispatcher"] = dispatcher
+        domain_data.rpc_dispatcher = dispatcher
     return dispatcher
 
 

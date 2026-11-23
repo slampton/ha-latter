@@ -30,8 +30,6 @@ from custom_components.latter.const import (
     CONF_CAMERA_CAROUSEL_ENTITIES,
     CONF_CAMERA_ENTITIES,
     CONF_CAMERA_VISIBLE_ENTITIES,
-    DATA_GLOBAL_CONFIG,
-    DOMAIN,
     STUDIO_REV,
 )
 from custom_components.latter.http import camera_views as http_mod
@@ -40,6 +38,7 @@ from custom_components.latter.http.camera_views import (
     LatterCameraSnapshotView,
     LatterCameraStreamView,
 )
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.studio.device_commands import _cmd_save_device_config
 from custom_components.latter.studio.payload import (
     StudioCommandError,
@@ -226,7 +225,7 @@ async def test_stage2_manifest_video_caps_studio_and_http_streaming(
         assert coord.video_grid_fps == 8
 
         # Configure two System cameras
-        global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
+        global_cfg = get_global_config(hass)
         global_cfg[CONF_CAMERA_ENTITIES] = ["camera.front_door", "camera.backyard"]
         hass.states.async_set(
             "camera.front_door",

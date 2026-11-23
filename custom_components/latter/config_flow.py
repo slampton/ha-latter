@@ -45,8 +45,6 @@ from .const import (
     CONF_NATIVE_BLE_TRACKING,
     CONF_SYNC_DEVICE_AREA,
     CONF_WEATHER_ENTITY,
-    DATA_GLOBAL_CONFIG,
-    DATA_GLOBAL_STORE,
     DEFAULT_BLE_CATEGORY,
     DEFAULT_DEVICE_GROUP,
     DOMAIN,
@@ -58,7 +56,11 @@ from .groups.device_groups import (
     device_option_defaults,
     get_device_groups,
 )
-from .hub_registry import get_area_state_index, get_system_config_lock
+from .hub_registry import (
+    get_area_state_index,
+    get_system_config_lock,
+    peek_domain_data,
+)
 from .identity import (
     ble_unique_id,
     bound_elsewhere,
@@ -286,9 +288,9 @@ def _apply_onboarding_profile_and_defaults(
 
 def _seed_global_defaults(hass: HomeAssistant) -> None:
     """Seed the System weather and alarm entities if none are configured yet."""
-    domain_data = hass.data.get(DOMAIN, {})
-    global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
-    if isinstance(global_cfg, dict):
+    domain_data = peek_domain_data(hass)
+    if domain_data is not None:
+        global_cfg = domain_data.global_config
         if CONF_WEATHER_ENTITY not in global_cfg:
             def_w = _discover_default_weather(hass)
             if def_w:
@@ -489,11 +491,9 @@ class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
             if not raw_dev_id:
                 async with get_system_config_lock(self.hass):
                     _seed_global_defaults(self.hass)
-                    domain_data = self.hass.data.get(DOMAIN, {})
-                    store = domain_data.get(DATA_GLOBAL_STORE)
-                    global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
-                    if store is not None and isinstance(global_cfg, dict):
-                        await store.async_save(global_cfg)
+                    domain_data = peek_domain_data(self.hass)
+                    if domain_data is not None and domain_data.global_store is not None:
+                        await domain_data.global_store.async_save(domain_data.global_config)
                 _abort_competing_flows(self.hass, "", keep_flow_id=self.flow_id)
                 await self.async_set_unique_id(DOMAIN)
                 self._abort_if_unique_id_configured()

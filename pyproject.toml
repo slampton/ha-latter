@@ -3,7 +3,7 @@ name = "ha-latter"
 version = "3.0.0"
 description = "Home Assistant middleware and Studio panel for Latter displays and BLE presence fabric."
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.14.2"
 license = { text = "Apache-2.0" }
 
 [dependency-groups]
@@ -13,13 +13,13 @@ test = [
     "aiousbwatcher>=1.1",
     "av>=19.0",
     "ha-ffmpeg>=3.2",
-    "homeassistant-stubs==2026.10.0",
+    "homeassistant>=2026.11.1",
     "hypothesis>=6.170",
     "mypy>=2.4",
     "pillow>=12.0",
     "probatio>=0.13",
     "pytest-cov>=7.0",
-    "pytest-homeassistant-custom-component==0.13.375",
+    "pytest-homeassistant[bluetooth]>=2026.11.1",
     "pytest-xdist>=3.8",
     "ruff>=0.17",
     "serialx>=1.11",
@@ -29,6 +29,7 @@ test = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+addopts = "-p no:respx"
 pythonpath = ["."]
 testpaths = ["tests"]
 

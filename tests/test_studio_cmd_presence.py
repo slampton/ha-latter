@@ -8,7 +8,7 @@ import time
 from typing import Any
 
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
+from pytest_homeassistant.common import async_fire_time_changed
 
 from custom_components.latter.const import CONF_SECURITY_PIN_HASH, STUDIO_REV
 from custom_components.latter.presence.ble_fabric import get_ble_fabric

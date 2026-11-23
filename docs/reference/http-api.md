@@ -1,6 +1,6 @@
 # HTTP API Reference
 
-Latter registers **8 local-only `HomeAssistantView` endpoints** under `/api/latter/` ([`http/`](../../custom_components/latter/http/), [`cameras/`](../../custom_components/latter/cameras/), [`wallpapers/`](../../custom_components/latter/wallpapers/)).
+Latter registers **7 local-only `HomeAssistantView` endpoints** under `/api/latter/` ([`http/`](../../custom_components/latter/http/), [`cameras/`](../../custom_components/latter/cameras/), [`wallpapers/`](../../custom_components/latter/wallpapers/)).
 
 Device media, MJPEG stream, and audio endpoints allow an ESP32 on the local LAN to fetch baseline JPEGs, live MJPEG frames, and camera audio streams without carrying a long-lived Home Assistant bearer token; Studio multipart photo uploads use Home Assistant's authenticated administrator session. Every endpoint operates **100% locally on your LAN (Zero-WAN)** with private/loopback/link-local client IP enforcement.
 
@@ -19,7 +19,6 @@ Latter stores a 256-bit HMAC secret in `.storage/latter.site` (rotatable anytime
 | **Camera live MJPEG grid** (2×2) | Day-bucketed HMAC | 48 h | `camera_grid:<allowlist_hash>\|<w>\|<h>` |
 | **Doorbell camera audio** | Exact-expiry HMAC | 10 minutes | `camera_audio:<entity_id>\|<nr>\|<fmt>` |
 | **Studio photo upload** | HA Admin `Bearer` | Current admin session | `requires_auth = True` + `hass_user.is_admin` |
-| **Brand icon** | Static LAN asset | — | Integration icon PNG (`GET /api/latter/brand/icon.png`) |
 
 Day-bucketed signatures stay identical throughout a UTC day so Protocol v3 content hashes remain stable and devices avoid redundant image downloads. LAN IPv4 addresses are resolved asynchronously via `homeassistant.components.network.async_get_source_ip` (zero blocking sockets on the event loop) so ESP32 clients never hit `.local` mDNS names.
 
@@ -65,5 +64,5 @@ Streams a server-composited `2×2` baseline-JPEG quad view (`multipart/x-mixed-r
 Streams a camera's RTSP/HTTP audio through `ffmpeg` (`-protocol_whitelist`, `-t 120`, `-rw_timeout 5000000`) at the device manifest's sample rate (`48 kHz` mono FLAC/WAV on current boards), minted on demand by `doorbell.py` and dispatched to `media_player.play_media` (at most 2 concurrent streams system-wide; `429` when full).
 - **Query params:** `sig` (**required**, binding `entity_id`, `nr`, `fmt`), `entity_id`, `nr` (`strong` \| `light` \| `off`), `fmt` (`flac` \| `wav`).
 
-### 8. `GET /api/latter/brand/icon.png` & Studio Static Mount
-Serves the integration brand icon, alongside the content-hashed admin `panel_custom` bundle (`latter-studio.js` + lazy `latter-studio-mdi.js` + precompressed `.gz`/`.br` siblings). Aside from `POST /api/latter/wallpaper/upload`, Studio communicates exclusively over admin-gated WebSocket commands (`latter/system/*` and `latter/device/*`, version-locked via `STUDIO_REV = 44`).
+### Studio Static Mount
+Latter Studio serves its content-hashed admin `panel_custom` bundle (`latter-studio.js` + lazy `latter-studio-mdi.js` + precompressed `.gz` siblings) from a versioned static mount (`/latter_ui_<ver>`). Aside from `POST /api/latter/wallpaper/upload`, Studio communicates exclusively over admin-gated WebSocket commands (`latter/system/*` and `latter/device/*`, version-locked via `STUDIO_REV = 44`). Integration brand icons live in `custom_components/latter/brand/` and are served natively by Home Assistant.

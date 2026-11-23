@@ -20,12 +20,12 @@ from .const import (
     CONF_DEVICE_GROUP,
     CONF_ESPHOME_DEVICE_ID,
     CONF_IGNORED_DISCOVERED_DEVICES,
-    DATA_GLOBAL_CONFIG,
     DEFAULT_DEVICE_GROUP,
     DOMAIN,
     SUBENTRY_DEVICE,
     normalize_device_slug,
 )
+from .hub_registry import peek_global_config
 from .protocol_specs import humanize_device_model_label
 
 _DEFAULT_DISPLAY_DIM: Final = 466
@@ -463,10 +463,7 @@ def read_device_hardware_manifest(
 
 def get_ignored_discovered_device_ids(hass: HomeAssistant) -> set[str]:
     """Return the set of `esphome_device_id` values marked ignored in System config."""
-    raw_cfg = (hass.data.get(DOMAIN) or {}).get(DATA_GLOBAL_CONFIG)
-    if not isinstance(raw_cfg, dict):
-        return set()
-    raw_list = raw_cfg.get(CONF_IGNORED_DISCOVERED_DEVICES)
+    raw_list = peek_global_config(hass).get(CONF_IGNORED_DISCOVERED_DEVICES)
     if not isinstance(raw_list, (list, tuple)):
         return set()
     return {str(x).strip() for x in raw_list if str(x or "").strip()}

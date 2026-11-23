@@ -95,13 +95,13 @@ The `area_changed` event carries `device_slug`, `previous_area_id`, `area_id`, a
 
 ## Occupancy-driven automations
 
-The per-area occupancy sensors are ordinary binary sensors (`binary_sensor.<area>_occupancy`):
+The per-area occupancy sensors are ordinary binary sensors (`binary_sensor.latter_system_<area>_occupancy`):
 
 ```yaml
 alias: Bedroom empty, lights off
 triggers:
   - trigger: state
-    entity_id: binary_sensor.bedroom_occupancy
+    entity_id: binary_sensor.latter_system_bedroom_occupancy
     to: "off"
     for: "00:05:00"
 actions:

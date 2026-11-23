@@ -14,13 +14,13 @@ from custom_components.latter.const import (
     CONF_BROADCAST_SPEAKERS,
     CONF_DEVICE_SLUG,
     CONF_ESPHOME_DEVICE_ID,
-    DATA_GLOBAL_CONFIG,
     DEFAULT_BROADCAST_PHRASES,
     DOMAIN,
     SERVICE_INTERCOM_BROADCAST,
     STUDIO_REV,
     SUBENTRY_DEVICE,
 )
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.presence.ble_fabric import get_ble_fabric
 from custom_components.latter.studio.settings_cleaners import (
     SettingsScopeError,
@@ -166,7 +166,7 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
         lambda call: tts_calls.append(dict(call.data)),
     )
 
-    global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
+    global_cfg = get_global_config(hass)
     global_cfg[CONF_BROADCAST_SPEAKERS] = [
         caller.local_speaker,
         "media_player.bedroom_panel_media_player",

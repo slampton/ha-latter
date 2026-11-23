@@ -111,7 +111,6 @@ from ..const import (
     CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
     CONF_WEATHER_ENTITY,
-    DATA_GLOBAL_CONFIG,
     DAY_NIGHT_SKY_NATIVE_URL,
     DAY_NIGHT_SKY_PRESET_ID,
     DEFAULT_ACTIVITY_CARD,
@@ -167,7 +166,7 @@ from ..feeds import (
 )
 from ..groups.device_groups import resolve_effective_device_group
 from ..http.signing import UrlSigner
-from ..hub_registry import get_latter_system, iter_coordinators
+from ..hub_registry import get_latter_system, iter_coordinators, peek_global_config
 from ..identity import (
     esphome_service,
     find_device_entity_by_suffix,
@@ -977,14 +976,9 @@ class LatterCoordinator:
 
     def get_opt(self, key: str, default: Any = None) -> Any:
         """Read a System-scoped (`GLOBAL_CONFIG_KEYS`) or Device-scoped option value."""
-        domain_data = self.hass.data.get(DOMAIN, {})
-        global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
         if key in GLOBAL_CONFIG_KEYS:
-            if (
-                isinstance(global_cfg, dict)
-                and key in global_cfg
-                and global_cfg[key] is not None
-            ):
+            global_cfg = peek_global_config(self.hass)
+            if key in global_cfg and global_cfg[key] is not None:
                 return global_cfg[key]
             return default
         sub_data = self._live_subentry().data
@@ -1410,13 +1404,8 @@ class LatterCoordinator:
 
     @property
     def broadcast_phrases(self) -> list[str]:
-        domain_data = self.hass.data.get(DOMAIN) if self.hass is not None else None
-        global_cfg = (
-            domain_data.get(DATA_GLOBAL_CONFIG)
-            if isinstance(domain_data, dict)
-            else None
-        )
-        if not isinstance(global_cfg, dict) or CONF_BROADCAST_PHRASES not in global_cfg:
+        global_cfg = peek_global_config(self.hass) if self.hass is not None else {}
+        if CONF_BROADCAST_PHRASES not in global_cfg:
             return list(DEFAULT_BROADCAST_PHRASES)
         raw = global_cfg.get(CONF_BROADCAST_PHRASES)
         if not isinstance(raw, (list, tuple)):
@@ -1504,10 +1493,8 @@ class LatterCoordinator:
     def security_pin_hash(self) -> str | None:
         if self.device_security_pin_hash:
             return self.device_security_pin_hash
-        global_cfg = self.hass.data.get(DOMAIN, {}).get(DATA_GLOBAL_CONFIG)
-        if isinstance(global_cfg, dict):
-            return str(global_cfg.get(CONF_SECURITY_PIN_HASH) or "").strip() or None
-        return None
+        global_cfg = peek_global_config(self.hass)
+        return str(global_cfg.get(CONF_SECURITY_PIN_HASH) or "").strip() or None
 
     @property
     def has_security_pin(self) -> bool:
@@ -3248,7 +3235,10 @@ class LatterCoordinator:
         safe_cmd_label = "set_pin_key" if cmd.startswith("set_pin_key:") else cmd
         if self.is_ble_tag:
             if raise_if_offline:
-                raise HomeAssistantError("BLE tags do not accept device commands")
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="ble_tag_no_commands",
+                )
             return False
 
         wifi_ent_id = find_device_entity_by_suffix(
@@ -3274,7 +3264,13 @@ class LatterCoordinator:
                 except Exception as err:
                     if raise_if_offline:
                         raise HomeAssistantError(
-                            f"Failed to send '{safe_cmd_label}' to {self.device_title}: {err}"
+                            translation_domain=DOMAIN,
+                            translation_key="device_command_failed",
+                            translation_placeholders={
+                                "command": safe_cmd_label,
+                                "device": self.device_title,
+                                "error": str(err),
+                            },
                         ) from err
                     return False
             if cmd == "restart" and (
@@ -3294,7 +3290,9 @@ class LatterCoordinator:
 
         if raise_if_offline:
             raise HomeAssistantError(
-                f"{self.device_title} is currently offline or sleeping"
+                translation_domain=DOMAIN,
+                translation_key="device_offline_or_sleeping",
+                translation_placeholders={"device": self.device_title},
             )
         return False
 

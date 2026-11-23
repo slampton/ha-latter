@@ -1,6 +1,6 @@
 # `ha-latter` Agent & Contributor Guide (`v3.0.0`)
 
-`ha-latter` (`Apache-2.0`, Home Assistant 2026.10+) is the local-push Home Assistant middleware and **Latter Studio** control plane for Latter ESPHome Devices and the Bluetooth Area presence fabric.
+`ha-latter` (`Apache-2.0`, Home Assistant 2026.11+) is the local-push Home Assistant middleware and **Latter Studio** control plane for Latter ESPHome Devices and the Bluetooth Area presence fabric.
 
 ---
 
@@ -11,7 +11,7 @@ Do **not** create backward-compatibility shims, `try/except ImportError` wrapper
 - **Pure Stdlib Leaves (Zero `homeassistant`/`voluptuous`/`aiohttp`/`PIL`)**:
   - `const.py` (domain constants, 5 `PUBLIC_SERVICES`, 20 `ALL_RPC_METHODS`, `INTEGRATION_VERSION = "3.0.0"`, `MIN_FIRMWARE_SDK_REV = 2026112007`), `config_defaults.py`, `repairs_keys.py`, `protocol_specs.py` (loads `protocol_v3.json` once), `protocol_codec.py` (`\x1f` Protocol v3 packers & UTF-8 truncation), `protocol_policy.py` (`v1:` HMAC-SHA256 PIN wrapping, `PinLockoutTracker`, PBKDF2), `presence/ble_math.py`, and `studio/settings_cleaners.py`.
 - **Domain & Registry Tier (Never imports Coordinator, Services, HTTP views, Studio WS/panel, Repairs, or Diagnostics)**:
-  - `media_cache.py`, `hub_registry.py` (`LatterSystemHub`, `AreaStateIndex`, `get_system_config_lock`, `iter_coordinators`), `http/signing.py` (`UrlSigner`), `studio/state_gates.py`, `identity.py`, `feeds.py`, `remotes.py`, `doorbell.py`, `backup.py`.
+  - `media_cache.py`, `hub_registry.py` (`LatterSystemHub`, `LatterDomainData`, `DOMAIN_DATA_KEY: HassKey[LatterDomainData]`, `AreaStateIndex`, `get_system_config_lock`, `iter_coordinators`), `http/signing.py` (`UrlSigner`), `studio/state_gates.py`, `identity.py`, `feeds.py`, `remotes.py`, `doorbell.py`, `backup.py`.
   - Subpackages: `areas/{registry,sync,telemetry,curation,actions,catalogs}.py` (`sync.py:sync_esphome_device_area` is the sole device-area mutation boundary), `cameras/{capabilities,transcode,stream_hub}.py`, `groups/{esphome_inspector,device_groups}.py`, `media/{linking,lyrics,browse,tts_queue,playback,state_payload}.py`, `presence/{ble_registry,area_fusion,ble_discovery,ble_tracker,ble_fabric}.py`, `wallpapers/{models,store,media_import,pools}.py`.
 - **Orchestration & Endpoint Tier**:
   - `coordinator/{__init__,runtime,area_follow,core}.py` (unified `LatterCoordinator`, `LatterDeviceRuntime`, `LatterAreaFollowController` — zero fake mixins, clean static re-exports, zero external `coord._*` accesses), `hub_sync.py`, `services/{rpc_slots,rpc_receiver,rpc_dispatcher,public_actions}.py` + `services.yaml` (5 public actions vs private 20-method `LatterRpcDispatcher`; `rpc_receiver.py` auto-hides `latter_rpc_outbox` via `RegistryEntryHider.INTEGRATION`), `http/{proxy_views,wallpaper_views,camera_views}.py`, `repairs.py`, `diagnostics.py`, `studio/{panel,payload,commands,system_commands,device_commands}.py`.

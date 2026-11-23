@@ -36,13 +36,12 @@ from custom_components.latter.const import (
     CONF_SECURITY_PIN_POLICY,
     CONF_THERMOSTAT_ENTITIES,
     CONF_VACUUM_ENTITIES,
-    DATA_GLOBAL_CONFIG,
-    DOMAIN,
     SUBENTRY_DEVICE,
 )
 from custom_components.latter.groups.esphome_inspector import (
     get_esphome_device_entities,
 )
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.protocol_policy import hash_security_pin, wrap_pin_code
 from custom_components.latter.remotes import build_remote_config_payload
 from tests.helpers import (
@@ -193,7 +192,7 @@ async def test_context_builder_curated_entities_and_area_actions(
     assert get_home_alarm_summary(hass)["entity_id"] == ""
     assert get_home_hub_summary(hass)["thermostats"] == []
 
-    global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
+    global_cfg = get_global_config(hass)
     global_cfg[CONF_ALARM_ENTITY] = "alarm_control_panel.home_alarm"
     global_cfg[CONF_THERMOSTAT_ENTITIES] = ["climate.lr_hvac"]
     global_cfg[CONF_LOCK_ENTITIES] = ["lock.front_door"]
@@ -248,7 +247,7 @@ async def test_context_builder_curated_entities_and_area_actions(
 
     rem_empty_state, rem_empty_attrs = build_remote_config_payload(coord)
     assert rem_empty_state is None and "payload" in rem_empty_attrs
-    hass.data[DOMAIN]["global_config"]["remotes_list"] = ["remote.lr_tv"]
+    get_global_config(hass)["remotes_list"] = ["remote.lr_tv"]
     coord.cached_remote_payload = None
     rem_state, rem_attrs = build_remote_config_payload(coord)
     assert rem_state == "Living TV" and "payload" in rem_attrs
@@ -435,7 +434,7 @@ async def test_home_hub_strict_shared_entities_no_auto_discovery(
     assert dispatched == []
 
     # 2. Explicitly assigning each Shared Entity immediately enables only its corresponding category
-    global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
+    global_cfg = get_global_config(hass)
 
     global_cfg[CONF_ALARM_ENTITY] = "alarm_control_panel.unassigned_alarm"
     coord.cached_area_payload = None

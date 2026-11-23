@@ -280,7 +280,7 @@ ALL_RPC_METHODS: Final[tuple[str, ...]] = (
 if set(ALL_RPC_METHODS) != set(_PROTOCOL_SCHEMA["rpc_methods"].keys()):
     raise RuntimeError("const.py ALL_RPC_METHODS is out of sync with protocol_v3.json rpc_methods")
 
-# HTTP Endpoints (Artwork, Wallpaper, Wallpaper Upload, Camera Snapshot, Camera Stream/Grid/Audio & Brand)
+# HTTP Endpoints (Artwork, Wallpaper, Wallpaper Upload, Camera Snapshot, Camera Stream/Grid/Audio)
 API_ARTWORK_PROXY_PATH: Final = "/api/latter/artwork/{target_device}"
 API_WALLPAPER_PROXY_PATH: Final = "/api/latter/wallpaper/{target_device}"
 API_WALLPAPER_UPLOAD_PATH: Final = "/api/latter/wallpaper/upload"
@@ -289,17 +289,12 @@ API_CAMERA_STREAM_PATH: Final = "/api/latter/camera_stream/{target_device}"
 API_CAMERA_GRID_PATH: Final = "/api/latter/camera_grid/{target_device}"
 API_CAMERA_AUDIO_STREAM_PATH: Final = "/api/latter/camera_audio/{target_device}"
 API_MAP_PROXY_PATH: Final = "/api/latter/map/{target_device}"
-API_BRAND_ICON_PATH: Final = "/api/latter/brand/icon.png"
-DATA_HMAC_SECRET: Final = "hmac_secret"  # noqa: S105
-DATA_DISCOVERY_UNSUB: Final = "discovery_unsub"
 
 # Feed refresh intervals
 FORECAST_REFRESH_INTERVAL_MINUTES: Final = 30
 CALENDAR_REFRESH_INTERVAL_MINUTES: Final = 15
 
 GLOBAL_STORAGE_KEY: Final = "latter.site"
-DATA_GLOBAL_CONFIG: Final = "global_config"
-DATA_GLOBAL_STORE: Final = "global_store"
 
 # Multi-Site & Device Groups
 CONF_SITE_ID: Final = "site_id"
@@ -365,14 +360,6 @@ def normalize_noise_reduction(level: str | None) -> str:
     """Return a valid doorbell noise-reduction level (`strong`, `light`, `off`), else the default."""
     val = str(level or "").strip().lower()
     return val if val in DOORBELL_NOISE_REDUCTION_LEVELS else DEFAULT_DOORBELL_NOISE_REDUCTION
-
-
-def build_device_entity_id(
-    device_slug: str, suffix: str, domain: str = "sensor"
-) -> str:
-    """Build a device-scoped entity_id (`<domain>.<device_slug>_<suffix>`)."""
-    norm = normalize_device_slug(device_slug)
-    return f"{domain}.{norm}_{suffix}"
 
 
 def target_kind(value: object) -> TargetKind:

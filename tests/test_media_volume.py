@@ -11,10 +11,9 @@ from homeassistant.helpers import device_registry as dr
 
 from custom_components.latter.const import (
     CONF_VOLUME_OVERRIDES,
-    DATA_GLOBAL_CONFIG,
-    DOMAIN,
     RPC_MEDIA_COMMAND,
 )
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.media.state_payload import (
     MEDIA_CAP_FAVORITE,
     MEDIA_CAP_GROUPING,
@@ -190,7 +189,7 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     """Verify `active_media` 21-field sync (`shuffle`, `repeat`, `muted`, `favorite`, `queue_count`, `media_caps`) and toggles."""
     entry, sys_obj, coord = await setup_latter_hub(hass)
     assert coord is not None
-    hass.data.setdefault(DOMAIN, {}).setdefault(DATA_GLOBAL_CONFIG, {})[
+    get_global_config(hass)[
         CONF_VOLUME_OVERRIDES
     ] = [
         {

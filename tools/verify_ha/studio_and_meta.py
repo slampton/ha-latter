@@ -166,6 +166,18 @@ def _check_icons_json(icons_path: Path, failures: list[str]) -> None:
         _check_hassfest_keys(
             icons_data, "custom_components/latter/icons.json", "", failures
         )
+        svc_icons = icons_data.get("services")
+        expected_svcs = {
+            "notify",
+            "intercom_broadcast",
+            "set_active_area",
+            "set_active_speaker",
+            "reset_device",
+        }
+        if not isinstance(svc_icons, dict) or not expected_svcs.issubset(svc_icons.keys()):
+            failures.append(
+                "[HASSFEST ICONS] icons.json['services'] must declare icons for all 5 public services"
+            )
 
 
 def _check_strings_and_icons(latter_dir: Path, failures: list[str]) -> set[str]:
@@ -249,6 +261,21 @@ def check_translations_and_quality(
         )
     if not (latter_dir / "py.typed").is_file():
         failures.append("[HA QUALITY] custom_components/latter/py.typed marker is missing")
+    hacs_path = root / "hacs.json"
+    if not hacs_path.is_file():
+        failures.append("[MARKETPLACE] hacs.json is missing")
+    else:
+        try:
+            hacs_meta = json.loads(hacs_path.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            failures.append(f"[MARKETPLACE] hacs.json failed JSON parse: {exc}")
+        else:
+            ha_floor = str(hacs_meta.get("homeassistant") or "")
+            m_ver = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", ha_floor)
+            if not m_ver or tuple(int(p) for p in m_ver.groups()) < (2026, 11, 0):
+                failures.append(
+                    f"[MARKETPLACE] hacs.json homeassistant floor ({ha_floor!r}) must be >= 2026.11.0"
+                )
     return exception_keys, manifest
 
 

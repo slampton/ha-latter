@@ -15,7 +15,7 @@ git commit -s -m "Short summary of your change"
 ## Branching & CI Gate (`dev` -> `main`)
 
 - Target all pull requests against the **`dev`** branch (never directly against `main`).
-- `main` is the branch HACS installs from, and moves **only** by automated fast-forward after HACS validation, Home Assistant `hassfest`, static DAG/security guardrails, `ruff`, `mypy --strict` against `homeassistant-stubs`, Playwright Chromium + `@axe-core/playwright` E2E, and the real `pytest-homeassistant-custom-component` suite pass on `dev`.
+- `main` is the branch Home Assistant Marketplace installs from, and moves **only** by automated fast-forward after Marketplace validation, Home Assistant `hassfest`, static DAG/security guardrails, `ruff`, `mypy --strict` against Home Assistant 2026.11, Playwright Chromium + `@axe-core/playwright` E2E, and the official `pytest-homeassistant` suite pass on `dev`.
 
 ## Architectural Ground Rules
 

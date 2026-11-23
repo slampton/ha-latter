@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 import secrets
 from typing import Any, Final
@@ -18,21 +18,18 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.storage import Store
+from homeassistant.util.hass_dict import HassKey
 
 from .const import (
     CONF_CALENDAR_ENTITIES,
     CONF_SYSTEM_CONFIG_REV,
     CONF_WEATHER_ENTITY,
-    DATA_GLOBAL_CONFIG,
-    DATA_GLOBAL_STORE,
-    DATA_HMAC_SECRET,
     DOMAIN,
     INTEGRATION_VERSION,
 )
 from .protocol_codec import V3Records
 from .protocol_policy import PinLockoutTracker
 
-DATA_SYSTEM: Final = "system"
 _HOURS_PER_DAY: Final = 24
 
 # ---------------------------------------------------------------------------
@@ -390,22 +387,21 @@ class AreaStateIndex:
 
 def get_area_state_index(hass: HomeAssistant) -> AreaStateIndex:
     """Return or create the domain-level `AreaStateIndex` singleton."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    idx = domain_data.get("area_state_index")
-    if not isinstance(idx, AreaStateIndex):
-        idx = AreaStateIndex(hass)
-        domain_data["area_state_index"] = idx
-    return idx
+    domain_data = get_domain_data(hass)
+    if domain_data.area_state_index is None:
+        domain_data.area_state_index = AreaStateIndex(hass)
+    return domain_data.area_state_index
 
 
 @callback
 def async_stop_area_state_index(hass: HomeAssistant) -> None:
     """Stop and remove the domain-level `AreaStateIndex` singleton on unload."""
-    domain_data = hass.data.get(DOMAIN)
-    if not isinstance(domain_data, dict):
+    domain_data = peek_domain_data(hass)
+    if domain_data is None:
         return
-    idx = domain_data.pop("area_state_index", None)
-    if isinstance(idx, AreaStateIndex):
+    idx = domain_data.area_state_index
+    domain_data.area_state_index = None
+    if idx is not None:
         idx.stop()
 
 
@@ -548,11 +544,9 @@ class LatterSystemHub:
 
     def live_global_config(self) -> dict[str, Any]:
         """Return the live System-Wide configuration dict."""
-        domain_data = self.hass.data.get(DOMAIN, {})
-        if isinstance(domain_data, dict):
-            global_cfg = domain_data.get(DATA_GLOBAL_CONFIG)
-            if isinstance(global_cfg, dict):
-                self.config = global_cfg
+        domain_data = peek_domain_data(self.hass)
+        if domain_data is not None:
+            self.config = domain_data.global_config
         return self.config
 
     _live_global_config = live_global_config
@@ -585,8 +579,7 @@ class LatterSystemHub:
                 )
             if self._url_signer is not None:
                 await self._url_signer.async_prime_lan_base_url()
-            domain_data = self.hass.data.setdefault(DOMAIN, {})
-            domain_data[DATA_HMAC_SECRET] = new_secret
+            get_domain_data(self.hass).hmac_secret = new_secret
             global_cfg = self.live_global_config()
             global_cfg["hmac_secret_hex"] = new_hex
             await self.store.async_save(global_cfg)
@@ -648,8 +641,98 @@ class LatterSystemHub:
         return self.calendar_records, self.calendar_raw_rows
 
 
+@dataclass(slots=True)
+class LatterDomainData:
+    """Strongly typed domain-level state stored on `hass.data[DOMAIN_DATA_KEY]`."""
+
+    global_store: Store[dict[str, Any]] | None = None
+    global_config: dict[str, Any] = field(default_factory=dict)
+    hmac_secret: bytes = b""
+    system_config_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    pending_builtin_group_preset_upgrade: bool = False
+    system_hub: LatterSystemHub | None = None
+
+    views_registered: bool = False
+    discovery_unsubs: tuple[Callable[[], None], ...] | None = None
+    unsub_delayed_scan: Callable[[], None] | None = None
+    unsub_stop_cleanup: Callable[[], None] | None = None
+    unsub_started_scan: Callable[[], None] | None = None
+    own_area_writes: dict[str, tuple[str, float]] = field(default_factory=dict)
+
+    area_state_index: AreaStateIndex | None = None
+    camera_hub: Any = None
+    ble_fabric: Any = None
+    pin_lockout: PinLockoutTracker | None = None
+    rpc_dispatcher: Any = None
+    probed_lan_ip: str = ""
+
+    studio_ws_registered_version: str = ""
+    studio_static_prefixes: set[str] = field(default_factory=set)
+    studio_icon_js_url: str | None = None
+    registered_panel_url: str | None = None
+    internal_logs: list[dict[str, str]] = field(default_factory=list)
+
+    created_area_occupancy_ids: set[str] = field(default_factory=set)
+    created_area_occupants_ids: set[str] = field(default_factory=set)
+    registered_person_sensors: set[str] = field(default_factory=set)
+    registered_subentry_floors: set[str] = field(default_factory=set)
+    registered_person_floors: set[str] = field(default_factory=set)
+
+    ma_queue_counts: dict[str, int] = field(default_factory=dict)
+    ma_known_macs: dict[str, set[str]] = field(default_factory=dict)
+    ma_known_protocols: dict[str, set[str]] = field(default_factory=dict)
+    ma_reconnect_until: dict[str, float] = field(default_factory=dict)
+    ma_reconnect_timer: Callable[[], None] | None = None
+    ma_cache_unsubs: tuple[Callable[[], None], ...] | None = None
+    ma_counterpart_cache: dict[str, tuple[str | None, bool, float]] = field(
+        default_factory=dict
+    )
+    healing_ma_links: bool = False
+
+    fusion_index: dict[str, list[str]] = field(default_factory=dict)
+    ble_scanner_cache_active: bool = False
+    ble_scanner_cache: dict[str, str] = field(default_factory=dict)
+
+    slot_push_failures: dict[str, int] = field(default_factory=dict)
+    slot_push_last_warn: dict[str, float] = field(default_factory=dict)
+
+
+DOMAIN_DATA_KEY: Final[HassKey[LatterDomainData]] = HassKey(DOMAIN)
+
+
+def get_domain_data(hass: HomeAssistant) -> LatterDomainData:
+    """Return (or lazily create) the strongly typed `LatterDomainData` for `DOMAIN`."""
+    existing = hass.data.get(DOMAIN_DATA_KEY)
+    if existing is None:
+        existing = LatterDomainData()
+        hass.data[DOMAIN_DATA_KEY] = existing
+    return existing
+
+
+def peek_domain_data(hass: HomeAssistant) -> LatterDomainData | None:
+    """Return `LatterDomainData` if initialized for `DOMAIN`, else `None`."""
+    return hass.data.get(DOMAIN_DATA_KEY)
+
+
+def get_global_config(hass: HomeAssistant) -> dict[str, Any]:
+    """Return the live mutable System-Wide configuration dict."""
+    sys_obj = get_latter_system(hass)
+    if sys_obj is not None:
+        return sys_obj.config
+    return get_domain_data(hass).global_config
+
+
+def peek_global_config(hass: HomeAssistant) -> dict[str, Any]:
+    """Return the live System-Wide configuration dict, or `{}` if not initialized."""
+    sys_obj = get_latter_system(hass)
+    if sys_obj is not None:
+        return sys_obj.config
+    domain_data = peek_domain_data(hass)
+    return domain_data.global_config if domain_data is not None else {}
+
+
 def get_latter_system(hass: HomeAssistant) -> LatterSystemHub | None:
-    """Return the initialized `LatterSystemHub` instance from `entry.runtime_data` or `hass.data`."""
+    """Return the initialized `LatterSystemHub` from `entry.runtime_data` or `DOMAIN_DATA_KEY`."""
     entries_fn = getattr(getattr(hass, "config_entries", None), "async_entries", None)
     if callable(entries_fn):
         for entry in entries_fn(DOMAIN):
@@ -657,18 +740,19 @@ def get_latter_system(hass: HomeAssistant) -> LatterSystemHub | None:
             if isinstance(runtime, LatterSystemHub):
                 return runtime
 
-    domain_data = hass.data.get(DOMAIN)
-    if not isinstance(domain_data, dict):
+    domain_data = peek_domain_data(hass)
+    if domain_data is None:
         return None
-    sys_obj = domain_data.get(DATA_SYSTEM)
-    if isinstance(sys_obj, LatterSystemHub):
-        return sys_obj
-    store = domain_data.get(DATA_GLOBAL_STORE)
-    cfg = domain_data.get(DATA_GLOBAL_CONFIG)
-    secret = domain_data.get(DATA_HMAC_SECRET)
-    if isinstance(store, Store) and isinstance(cfg, dict) and isinstance(secret, bytes):
-        sys_obj = LatterSystemHub(hass, store, cfg, secret)
-        domain_data[DATA_SYSTEM] = sys_obj
+    if domain_data.system_hub is not None:
+        return domain_data.system_hub
+    if domain_data.global_store is not None and domain_data.hmac_secret:
+        sys_obj = LatterSystemHub(
+            hass,
+            domain_data.global_store,
+            domain_data.global_config,
+            domain_data.hmac_secret,
+        )
+        domain_data.system_hub = sys_obj
         return sys_obj
     return None
 
@@ -686,42 +770,25 @@ def _is_coordinator_instance(val: object) -> bool:
 
 def iter_coordinators(hass: HomeAssistant) -> list[Any]:
     """Return all active `LatterCoordinator` instances sorted deterministically by `device_slug`."""
-    seen_ids: set[int] = set()
-    coords: list[Any] = []
-
     sys_obj = get_latter_system(hass)
-    if sys_obj is not None:
-        for coord in sys_obj.coordinators.values():
-            if _is_coordinator_instance(coord) and id(coord) not in seen_ids:
-                seen_ids.add(id(coord))
-                coords.append(coord)
-
-    domain_data = hass.data.get(DOMAIN)
-    if isinstance(domain_data, dict):
-        for val in domain_data.values():
-            if _is_coordinator_instance(val) and id(val) not in seen_ids:
-                seen_ids.add(id(val))
-                coords.append(val)
-
+    if sys_obj is None:
+        return []
+    coords = [
+        coord
+        for coord in sys_obj.coordinators.values()
+        if _is_coordinator_instance(coord)
+    ]
     return sorted(coords, key=lambda c: str(c.device_slug))
 
 
 def get_system_config_lock(hass: HomeAssistant) -> asyncio.Lock:
     """Return the domain-level `asyncio.Lock` guarding System config read-modify-write."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    lock = domain_data.get("_system_config_lock")
-    if not isinstance(lock, asyncio.Lock):
-        lock = asyncio.Lock()
-        domain_data["_system_config_lock"] = lock
-    return lock
+    return get_domain_data(hass).system_config_lock
 
 
 def get_system_config_rev(hass: HomeAssistant) -> int:
     """Return the monotonic System config revision (`>= 1`)."""
-    raw_cfg = (hass.data.get(DOMAIN) or {}).get(DATA_GLOBAL_CONFIG)
-    if not isinstance(raw_cfg, dict):
-        return 1
-    raw_rev = raw_cfg.get(CONF_SYSTEM_CONFIG_REV)
+    raw_rev = peek_global_config(hass).get(CONF_SYSTEM_CONFIG_REV)
     if isinstance(raw_rev, bool) or not isinstance(raw_rev, (int, float, str)):
         return 1
     try:

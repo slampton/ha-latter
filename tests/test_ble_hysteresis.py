@@ -14,12 +14,12 @@ from custom_components.latter.const import (
     CONF_ESPHOME_DEVICE_ID,
     CONF_NATIVE_BLE_TRACKING,
     CONF_SYSTEM_BLE_UUID,
-    DATA_GLOBAL_CONFIG,
     DEFAULT_BLE_BEACON_UUID,
     DOMAIN,
     MIN_FIRMWARE_SDK_REV,
     SUBENTRY_DEVICE,
 )
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.presence.ble_fabric import get_ble_fabric
 from custom_components.latter.presence.ble_math import (
     CROSS_FLOOR_ATTENUATION_DB,
@@ -180,7 +180,7 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
             "default_area": "",
         },
     )
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_SYSTEM_BLE_UUID] = custom_uuid
+    get_global_config(hass)[CONF_SYSTEM_BLE_UUID] = custom_uuid
     await coord.async_on_global_config_updated({CONF_SYSTEM_BLE_UUID})
     coord.sync_ble_tracker()
 
@@ -406,7 +406,7 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
     assert await hass.config_entries.async_setup(entry.entry_id) is True
     await hass.async_block_till_done()
     coord = entry.runtime_data.coordinators["sub_remote_p4"]
-    hass.data[DOMAIN][DATA_GLOBAL_CONFIG][CONF_SYSTEM_BLE_UUID] = custom_uuid
+    get_global_config(hass)[CONF_SYSTEM_BLE_UUID] = custom_uuid
     await coord.async_on_global_config_updated({CONF_SYSTEM_BLE_UUID})
     assert coord.ble_tracker is not None
     coord.ble_tracker.async_stop()

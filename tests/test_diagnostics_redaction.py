@@ -10,13 +10,13 @@ from homeassistant.helpers import device_registry as dr
 from custom_components.latter.const import (
     CONF_SECURITY_PIN_HASH,
     CONF_SYSTEM_BLE_UUID,
-    DATA_GLOBAL_CONFIG,
     DOMAIN,
 )
 from custom_components.latter.diagnostics import (
     async_get_config_entry_diagnostics,
     async_get_device_diagnostics,
 )
+from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.protocol_policy import hash_security_pin
 
 
@@ -31,7 +31,7 @@ async def test_diagnostics_redacts_secrets_pins_ble_uuids_macs_and_signed_urls(
         with_ble_tag=True,
         extra_device_data={CONF_SECURITY_PIN_HASH: pin_hash},
     )
-    global_cfg = hass.data[DOMAIN][DATA_GLOBAL_CONFIG]
+    global_cfg = get_global_config(hass)
     secret_hex = global_cfg["hmac_secret_hex"]
     ble_uuid = global_cfg[CONF_SYSTEM_BLE_UUID]
     global_cfg[CONF_SECURITY_PIN_HASH] = pin_hash

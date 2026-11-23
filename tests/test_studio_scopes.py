@@ -165,7 +165,7 @@ class TestPanelCacheBuster(unittest.TestCase):
         self.assertIn("def content_digest(", panel_src)
         self.assertIn("cache_headers=True,", panel_src)
         self.assertIn("config_panel_domain=DOMAIN,", panel_src)
-        self.assertIn('domain_data.pop("_registered_panel_url", None)', panel_src)
+        self.assertIn("domain_data.registered_panel_url = None", panel_src)
         self.assertNotIn("_studio_js_digest", panel_src)
 
 

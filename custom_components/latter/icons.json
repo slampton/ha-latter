@@ -111,5 +111,22 @@
         }
       }
     }
+  },
+  "services": {
+    "intercom_broadcast": {
+      "service": "mdi:bullhorn-outline"
+    },
+    "notify": {
+      "service": "mdi:message-alert-outline"
+    },
+    "reset_device": {
+      "service": "mdi:restore"
+    },
+    "set_active_area": {
+      "service": "mdi:map-marker-radius-outline"
+    },
+    "set_active_speaker": {
+      "service": "mdi:speaker-wireless"
+    }
   }
 }

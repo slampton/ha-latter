@@ -63,16 +63,22 @@ def _check_call_node(
     func_tail = chain.rsplit(".", 1)[-1]
 
     if func_tail in {"ServiceValidationError", "HomeAssistantError"}:
-        failures.extend(
-            f"[EXCEPTION TRANSLATIONS] {rel}:{node.lineno} passes unknown "
-            f"translation_key={kw.value.value!r} to {func_tail}() "
-            "(missing from strings.json['exceptions'])"
-            for kw in node.keywords
-            if kw.arg == "translation_key"
-            and isinstance(kw.value, ast.Constant)
-            and isinstance(kw.value.value, str)
-            and kw.value.value not in exception_keys
-        )
+        tk_kw = next((kw for kw in node.keywords if kw.arg == "translation_key"), None)
+        if tk_kw is None:
+            failures.append(
+                f"[EXCEPTION TRANSLATIONS] {rel}:{node.lineno} calls {func_tail}() "
+                "without translation_key= (must translate via strings.json['exceptions'])"
+            )
+        elif (
+            isinstance(tk_kw.value, ast.Constant)
+            and isinstance(tk_kw.value.value, str)
+            and tk_kw.value.value not in exception_keys
+        ):
+            failures.append(
+                f"[EXCEPTION TRANSLATIONS] {rel}:{node.lineno} passes unknown "
+                f"translation_key={tk_kw.value.value!r} to {func_tail}() "
+                "(missing from strings.json['exceptions'])"
+            )
 
     if func_tail in {"async_call", "has_service"} and len(node.args) >= MIN_SERVICE_CALL_ARGS:
         dom_arg, svc_arg = node.args[0], node.args[1]
@@ -364,6 +370,70 @@ def _check_http_and_runtime_sources(
             )
 
 
+_PLATFORM_RELS: Final[frozenset[str]] = frozenset(
+    {
+        "custom_components/latter/binary_sensor.py",
+        "custom_components/latter/button.py",
+        "custom_components/latter/device_tracker.py",
+        "custom_components/latter/light.py",
+        "custom_components/latter/number.py",
+        "custom_components/latter/select.py",
+        "custom_components/latter/sensor.py",
+        "custom_components/latter/switch.py",
+    }
+)
+
+
+def _is_raw_domain_key(node: ast.AST) -> bool:
+    return (isinstance(node, ast.Name) and node.id == "DOMAIN") or (
+        isinstance(node, ast.Constant) and node.value == "latter"
+    )
+
+
+def _check_hass_data_and_entity_naming(
+    parsed_trees: dict[str, ast.Module],
+    failures: list[str],
+) -> None:
+    """Enforce typed `HassKey` / `entry.runtime_data` and native HA 2026.11 entity naming."""
+    for rel, tree in sorted(parsed_trees.items()):
+        is_platform = rel in _PLATFORM_RELS
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Subscript)
+                and isinstance(node.value, ast.Attribute)
+                and node.value.attr == "data"
+                and _is_raw_domain_key(node.slice)
+            ):
+                failures.append(
+                    f"[NO UNTYPED HASS DATA] {rel}:{node.lineno} indexes untyped "
+                    "hass.data[DOMAIN] (use entry.runtime_data or get_domain_data())"
+                )
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"get", "setdefault", "pop"}
+                and isinstance(node.func.value, ast.Attribute)
+                and node.func.value.attr == "data"
+                and node.args
+                and _is_raw_domain_key(node.args[0])
+            ):
+                failures.append(
+                    f"[NO UNTYPED HASS DATA] {rel}:{node.lineno} calls untyped "
+                    f"hass.data.{node.func.attr}(DOMAIN) (use entry.runtime_data or get_domain_data())"
+                )
+            elif is_platform and isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                failures.extend(
+                    f"[NO MANUAL ENTITY ID] {rel}:{node.lineno} assigns self.entity_id "
+                    "(rely on _attr_has_entity_name + translation_key)"
+                    for target in targets
+                    if isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and target.value.id == "self"
+                    and target.attr == "entity_id"
+                )
+
+
 def check_ast_and_runtime_invariants(
     root: Path,
     parsed_trees: dict[str, ast.Module],
@@ -399,6 +469,7 @@ def check_ast_and_runtime_invariants(
             elif isinstance(node, ast.Call):
                 _check_call_node(rel, node, exception_keys, failures)
 
+    _check_hass_data_and_entity_naming(parsed_trees, failures)
     _check_area_sync_and_verbs(latter_dir, parsed_trees, failures)
     _check_diagnostics_redaction(parsed_trees, failures)
     _check_services_and_rpc_split(latter_dir, parsed_trees, failures)

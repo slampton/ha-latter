@@ -521,7 +521,7 @@ async def test_studio_ws_get_state_and_subscribe_catalog_diet(
     from datetime import timedelta
 
     from homeassistant.util import dt as dt_util
-    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+    from pytest_homeassistant.common import async_fire_time_changed
 
     from custom_components.latter.const import STUDIO_REV
     from tests.helpers.ble_and_ws import call_ws, make_ws_connection

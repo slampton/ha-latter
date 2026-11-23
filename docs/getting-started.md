@@ -5,7 +5,7 @@ This guide takes one Device from the box to fully working in about 20 minutes—
 ## What You Need
 
 - **A supported Device** *(optional if setting up standalone BLE presence).* See the [device table](../README.md#get-started-in-minutes).
-- **Home Assistant `2026.10` or newer** with [HACS](https://hacs.xyz) installed.
+- **Home Assistant `2026.11` or newer** (includes the built-in **Settings → Marketplace**).
 - **A desktop computer running Chrome or Edge**, plus a **USB-C data cable** (power-only cables won't expose a serial port).
 - **2.4 GHz Wi-Fi.** Neither the ESP32-S3 nor the ESP32-C6 co-processor on the P4 boards joins 5 GHz networks.
 - **Optional:** [Music Assistant](https://music-assistant.io) for library browsing and queue transfer, and one ESPHome Bluetooth proxy per Area for roaming presence.
@@ -26,11 +26,11 @@ Once on Wi-Fi, Home Assistant shows **Discovered: ESPHome**. Click **Add**, and 
 
 > **Leave extra permissions off:** Latter communicates over a bound Zero-Privilege RPC channel (**System: RPC Outbox** + `esphome.<node>_latter_push_v3`). Leave *"Allow the device to perform Home Assistant actions"* **unchecked**.
 
-## 3. Install Latter via HACS
+## 3. Install Latter from the Home Assistant Marketplace
 
-1. Open **HACS → ⋮ → Custom repositories**.
+1. Open **Settings → Marketplace → ⋮ → Custom repositories**.
 2. Add `https://github.com/slampton/ha-latter` with category **Integration**.
-3. Download **Latter**, then restart Home Assistant.
+3. Install **Latter**. On Home Assistant `2026.11+`, new Marketplace installs load immediately without requiring a full restart (restart Home Assistant after future updates).
 
 ## 4. Set Up the Latter Hub & Adopt Devices
 

@@ -13,9 +13,14 @@ from homeassistant.helpers import area_registry as ar, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN, build_device_entity_id, normalize_device_slug
+from .const import DOMAIN
 from .coordinator import LatterCoordinator
-from .hub_registry import LatterSystemHub, get_latter_system, get_system_device_info
+from .hub_registry import (
+    LatterSystemHub,
+    get_domain_data,
+    get_latter_system,
+    get_system_device_info,
+)
 from .presence.ble_fabric import get_ble_fabric
 from .presence.ble_registry import (
     get_ble_proxy_area_ids,
@@ -23,7 +28,6 @@ from .presence.ble_registry import (
 )
 
 PARALLEL_UPDATES = 0
-DATA_CREATED_AREA_OCCUPANCY_IDS = "created_area_occupancy_ids"
 
 
 def _entry_coordinators(
@@ -125,9 +129,9 @@ async def async_setup_entry(
                 config_subentry_id=coordinator.subentry_id,
             )
 
-    domain_data = hass.data.setdefault(DOMAIN, {})
+    domain_data = get_domain_data(hass)
     tracking = _EntryBinaryTracking(
-        created_areas=domain_data.setdefault(DATA_CREATED_AREA_OCCUPANCY_IDS, set())
+        created_areas=domain_data.created_area_occupancy_ids
     )
 
     area_reg = ar.async_get(hass)
@@ -187,11 +191,9 @@ class LatterAreaOccupancyBinarySensor(BinarySensorEntity):
         self.hass = hass
         self._area_id = area_id
         self._area_name = area_name
-        a_slug = normalize_device_slug(area_id or area_name)
         self._attr_unique_id = f"latter_area_occupancy_{area_id}"
         self._attr_suggested_area = area_name
         self._attr_translation_placeholders = {"area_name": area_name}
-        self.entity_id = f"binary_sensor.{a_slug}_occupancy"
         self._cached_occ: dict[str, Any] | None = None
 
     @callback
@@ -272,9 +274,6 @@ class _BaseLatterDeviceBinarySensor(BinarySensorEntity):
         self.coordinator = coordinator
         self._attr_translation_key = suffix
         self._attr_unique_id = f"{coordinator.subentry_id}_{suffix}"
-        self.entity_id = build_device_entity_id(
-            coordinator.device_slug, suffix, "binary_sensor"
-        )
 
     @property
     def device_info(self) -> DeviceInfo:

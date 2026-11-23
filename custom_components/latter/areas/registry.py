@@ -20,7 +20,6 @@ from ..const import (
     CONF_AREA_ILLUMINANCE_CONFIG,
     CONF_DEFAULT_AREA,
     CONF_ESPHOME_DEVICE_ID,
-    DATA_GLOBAL_CONFIG,
     DEFAULT_AREA_BRIGHT_LUX,
     DEFAULT_AREA_DARK_LUX,
     DOMAIN,
@@ -33,6 +32,7 @@ from ..hub_registry import (
     get_area_state_index as get_area_state_index,
     is_media_position_only_tick as is_media_position_only_tick,
     iter_coordinators,
+    peek_global_config,
 )
 from ..identity import resolve_bound_esphome_device_id
 
@@ -241,7 +241,7 @@ def area_illuminance_settings(
     dark_lux = float(DEFAULT_AREA_DARK_LUX)
     bright_lux = float(DEFAULT_AREA_BRIGHT_LUX)
     if area_id:
-        global_cfg = (hass.data.get(DOMAIN) or {}).get(DATA_GLOBAL_CONFIG) or {}
+        global_cfg = peek_global_config(hass)
         raw_map = (
             global_cfg.get(CONF_AREA_ILLUMINANCE_CONFIG)
             if isinstance(global_cfg, Mapping)

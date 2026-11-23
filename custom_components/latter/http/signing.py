@@ -16,16 +16,15 @@ from homeassistant.helpers.network import get_url
 from ..const import (
     DAY_NIGHT_SKY_NATIVE_URL,
     DAY_NIGHT_SKY_PRESET_ID,
-    DOMAIN,
     normalize_noise_reduction,
 )
+from ..hub_registry import get_domain_data, peek_domain_data
 
 SIG_BUCKET_SECONDS: Final[int] = 86400
 PAYLOAD_TTL_DAYS: Final[int] = 2
 ON_DEMAND_TTL_SECONDS: Final[int] = 600
 LAN_BASE_URL_TTL_SECONDS: Final[float] = 300.0
 _MAC_HEX_CHARS: Final[int] = 32
-_PROBED_LAN_IP_KEY: Final = "_probed_lan_ip"
 _HTTP_DEFAULT_PORT: Final = 80
 _HTTPS_DEFAULT_PORT: Final = 443
 _MIN_PREVIEW_DIM: Final = 32
@@ -106,20 +105,20 @@ class UrlSigner:
         """Invalidate the cached numeric LAN base URL when HA network config changes."""
         self._cached_lan_base_url = None
         self._cached_lan_base_url_mono = 0.0
-        domain_data = self.hass.data.get(DOMAIN)
-        if isinstance(domain_data, dict):
-            domain_data.pop(_PROBED_LAN_IP_KEY, None)
+        domain_data = peek_domain_data(self.hass)
+        if domain_data is not None:
+            domain_data.probed_lan_ip = ""
 
     async def async_prime_lan_base_url(self) -> str:
         """Asynchronously resolve and cache the numeric LAN IP via HA's network adapter registry."""
-        domain_data = self.hass.data.setdefault(DOMAIN, {})
-        if not domain_data.get(_PROBED_LAN_IP_KEY):
+        domain_data = get_domain_data(self.hass)
+        if not domain_data.probed_lan_ip:
             try:
                 probed = await ha_network.async_get_source_ip(self.hass)
             except Exception:  # noqa: BLE001
                 probed = ""
             if probed:
-                domain_data[_PROBED_LAN_IP_KEY] = str(probed)
+                domain_data.probed_lan_ip = str(probed)
         self._cached_lan_base_url = None
         self._cached_lan_base_url_mono = 0.0
         return self.get_lan_base_url()
@@ -165,12 +164,8 @@ class UrlSigner:
         scheme = (parsed.scheme or "http") if parsed else "http"
 
         if not host or host.endswith(".local") or host == "localhost":
-            domain_data = self.hass.data.get(DOMAIN, {})
-            cached_ip = (
-                str(domain_data.get(_PROBED_LAN_IP_KEY) or "")
-                if isinstance(domain_data, dict)
-                else ""
-            )
+            domain_data = peek_domain_data(self.hass)
+            cached_ip = domain_data.probed_lan_ip if domain_data is not None else ""
             host = cached_ip or host or "homeassistant.local"
             scheme = "http"
             port = active_port

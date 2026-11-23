@@ -76,7 +76,7 @@ class TestPayloadDiet(unittest.TestCase):
         self.assertIn("_cmd_set_device_photo_pool(", cmds)
         views_src = read_py_tree("http")
         self.assertIn("esphome_inspector", payload_src)
-        self.assertIn("self._cached_bytes", views_src)
+        self.assertNotIn("LatterBrandIconView", views_src)
         studio_bundle = LATTER_DIR / "frontend" / "latter-studio.js"
         self.assertTrue(studio_bundle.is_file())
         self.assertGreater(studio_bundle.stat().st_size, 0)

@@ -11,6 +11,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
 from ..const import DOMAIN
+from ..hub_registry import get_domain_data
 from ..presence.ble_registry import get_ble_proxy_area_ids, get_ble_signature_area_ids
 from .telemetry import bind_coordinator_area_listeners as bind_coordinator_area_listeners
 
@@ -46,10 +47,7 @@ def sync_esphome_device_area(
 
     dev_reg = dr.async_get(hass)
     dev = dev_reg.async_get(esphome_device_id)
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    own_writes: dict[str, tuple[str, float]] = domain_data.setdefault(
-        "_own_area_writes", {}
-    )
+    own_writes = get_domain_data(hass).own_area_writes
     now_mono = time.monotonic()
     record: dict[str, Any] | None = None
 

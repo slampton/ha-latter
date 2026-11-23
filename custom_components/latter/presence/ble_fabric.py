@@ -23,8 +23,7 @@ from ..areas.registry import (
     area_illuminance_sensor_choices,
     resolve_area_ambient_light,
 )
-from ..const import DOMAIN
-from ..hub_registry import iter_coordinators
+from ..hub_registry import get_domain_data, iter_coordinators
 from .area_fusion import (
     area_fusion_sensor_choices,
     area_fusion_settings,
@@ -647,12 +646,12 @@ class LatterBleFabric:
 
 def get_ble_fabric(hass: HomeAssistant) -> LatterBleFabric:
     """Return or initialize the singleton `LatterBleFabric` instance."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    existing = domain_data.get("ble_fabric")
+    domain_data = get_domain_data(hass)
+    existing = domain_data.ble_fabric
     if isinstance(existing, LatterBleFabric):
         return existing
     fabric = LatterBleFabric(hass)
-    domain_data["ble_fabric"] = fabric
+    domain_data.ble_fabric = fabric
     return fabric
 
 
