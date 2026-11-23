@@ -465,6 +465,13 @@ async def test_default_speaker_auto_open_persistence_listener_and_lyrics_push(
     assert is_default_speaker_entity(coord, desk_spk) is True
     assert is_default_speaker_entity(coord, other_spk) is False
     assert is_default_speaker_entity(coord, coord.local_speaker) is False
+    with monkeypatch.context() as mp:
+        mp.setattr(
+            media_playback,
+            "resolve_ma_counterpart_entity",
+            lambda _hass, eid: "media_player.office_sonos_ma" if eid == desk_spk else None,
+        )
+        assert is_default_speaker_entity(coord, "media_player.office_sonos_ma") is True
 
     # 1. Idle external default_speaker MUST NOT be clobbered back to local_speaker on boot/reconnect
     enforce_local_speaker_if_remote_idle(coord, "ha_startup")
@@ -545,6 +552,38 @@ async def test_default_speaker_auto_open_persistence_listener_and_lyrics_push(
     await hass.async_block_till_done()
     assert pushed_lyrics[-1] == "0:Money|Pink Floyd"
 
+    # Same-track state updates do not double-push lyrics (both auto-open & explicit watch)
+    count_same = len(pushed_lyrics)
+    hass.states.async_set(
+        desk_spk,
+        "playing",
+        {
+            "friendly_name": "Office Sonos",
+            "media_title": "Money",
+            "media_artist": "Pink Floyd",
+            "media_content_type": "music",
+            "volume_level": 0.45,
+        },
+    )
+    await hass.async_block_till_done()
+    assert len(pushed_lyrics) == count_same
+
+    coord.lyrics_watch_active = True
+    hass.states.async_set(
+        desk_spk,
+        "playing",
+        {
+            "friendly_name": "Office Sonos",
+            "media_title": "Money",
+            "media_artist": "Pink Floyd",
+            "media_content_type": "music",
+            "volume_level": 0.50,
+        },
+    )
+    await hass.async_block_till_done()
+    assert len(pushed_lyrics) == count_same
+    coord.lyrics_watch_active = False
+
     # Podcast skips proactive lyrics push
     count_before = len(pushed_lyrics)
     hass.states.async_set(
@@ -607,10 +646,22 @@ async def test_default_speaker_auto_open_persistence_listener_and_lyrics_push(
     await hass.async_block_till_done()
     assert coord.active_speaker == other_spk
 
-    # With music_auto_open == "Off", idle other_spk is not switched either
-    await coord.async_update_device_prefs({CONF_MUSIC_AUTO_OPEN: "Off"})
-    hass.states.async_set(desk_spk, "idle", {"friendly_name": "Office Sonos"})
+    # Already-playing default_speaker updating track (playing -> playing) does not steal active_speaker
     hass.states.async_set(other_spk, "idle", {"friendly_name": "Kitchen Speaker"})
+    hass.states.async_set(
+        desk_spk,
+        "playing",
+        {"friendly_name": "Office Sonos", "media_title": "Rock 2", "media_artist": "Band"},
+    )
+    await hass.async_block_till_done()
+    assert coord.active_speaker == other_spk
+
+    # Unrelated device pref updates preserve active_speaker, and music_auto_open == "Off"
+    # prevents idle other_spk from switching when default_speaker starts playing.
+    await coord.async_update_device_prefs({CONF_MUSIC_AUTO_OPEN: "Off"})
+    await hass.async_block_till_done()
+    assert coord.active_speaker == other_spk
+    hass.states.async_set(desk_spk, "idle", {"friendly_name": "Office Sonos"})
     await hass.async_block_till_done()
     hass.states.async_set(
         desk_spk,

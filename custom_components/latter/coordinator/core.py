@@ -491,11 +491,22 @@ class LatterCoordinator:
             self.get_opt(CONF_DEFAULT_AREA, "") or ""
         ).strip()
         self._configured_ble_tracking: bool = self.native_ble_tracking_enabled
+        self._configured_default_speaker: str = (
+            self._resolved_configured_default_speaker()
+        )
         self._last_esp_area: str = ""
         self._last_latter_area: str = ""
         self.current_wallpaper: str = ""
         self.current_screensaver_photo: str = ""
         self._doorbell_talk_lock: asyncio.Lock = asyncio.Lock()
+
+    def _resolved_configured_default_speaker(self) -> str:
+        target = (
+            str(self.get_opt(CONF_DEFAULT_SPEAKER) or "").strip() or self.local_speaker
+        )
+        if self.local_speaker and target and self.is_local_speaker_entity(target):
+            return self.local_speaker
+        return target
 
     def _initial_brightness_pct(self) -> int:
         raw_bri = resolve_device_pref_value(
@@ -2484,6 +2495,9 @@ class LatterCoordinator:
                 {**self.device_data, CONF_DEFAULT_SPEAKER: local_spk},
                 bump_prefs_seq=False,
             )
+            self._configured_default_speaker = (
+                self._resolved_configured_default_speaker()
+            )
             healed = True
 
         runtime_changed = False
@@ -2547,6 +2561,10 @@ class LatterCoordinator:
                 {**self.device_data, **cfg_updates},
                 bump_prefs_seq=False,
             )
+            if CONF_DEFAULT_SPEAKER in cfg_updates:
+                self._configured_default_speaker = (
+                    self._resolved_configured_default_speaker()
+                )
             changed = True
 
         runtime_changed = False
@@ -3824,6 +3842,7 @@ class LatterCoordinator:
 
     def _init_startup_speaker_and_area(self) -> None:
         self.async_heal_renamed_local_speaker()
+        self._configured_default_speaker = self._resolved_configured_default_speaker()
         local_spk = self.local_speaker
         if not (
             local_spk
@@ -3832,7 +3851,7 @@ class LatterCoordinator:
             self.active_speaker = self.last_speaker = ""
         else:
             if not self.active_speaker:
-                self.active_speaker = local_spk
+                self.active_speaker = self._configured_default_speaker
             enforce_local_speaker_if_remote_idle(self, "ha_startup")
             if not self.last_speaker:
                 self.last_speaker = self.active_speaker
@@ -4000,16 +4019,14 @@ class LatterCoordinator:
         self.sync_ble_tracker()
         self._apply_ble_and_area_option_changes()
 
-        target_def_spk = (
-            str(self.get_opt(CONF_DEFAULT_SPEAKER) or "").strip() or self.local_speaker
-        )
+        target_def_spk = self._resolved_configured_default_speaker()
+        def_spk_changed = target_def_spk != self._configured_default_speaker
+        self._configured_default_speaker = target_def_spk
         if (
-            self.local_speaker
-            and target_def_spk
-            and self.is_local_speaker_entity(target_def_spk)
+            target_def_spk
+            and target_def_spk != self.active_speaker
+            and (def_spk_changed or not self.active_speaker)
         ):
-            target_def_spk = self.local_speaker
-        if target_def_spk and target_def_spk != self.active_speaker:
             self.last_speaker, self.active_speaker = self.active_speaker, target_def_spk
             self.schedule_persist_runtime_state()
         self._bind_all_listeners()
