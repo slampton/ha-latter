@@ -312,13 +312,16 @@ async def test_static_assigned_area_startup_healing_live_reassignment_and_two_wa
     coord = entry.runtime_data.coordinators["sub_desk"]
 
     # 1) Startup heals active_area_id, CONF_DEFAULT_AREA, child Latter device, and Current Area from esp_dev.area_id
+    ent_reg = er.async_get(hass)
+    desk_area_eid = ent_reg.async_get_entity_id("sensor", DOMAIN, "sub_desk_current_area")
+    assert desk_area_eid is not None
     assert coord.active_area_id == "living_room"
     assert coord.get_opt(CONF_DEFAULT_AREA) == "living_room"
     child_now = dev_reg.async_get(child_latter_dev.id)
     assert child_now is not None and child_now.area_id == "living_room"
     active_entry = resolve_active_area_entry(coord)
     assert active_entry is not None and active_entry.id == "living_room"
-    assert hass.states.get("sensor.desk_assistant_current_area").state == "Living Area"
+    assert hass.states.get(desk_area_eid).state == "Living Area"
 
     # Non-battery panel hides battery-only ble_beacon_mode preference
     assert (
@@ -333,7 +336,7 @@ async def test_static_assigned_area_startup_healing_live_reassignment_and_two_wa
     assert coord.get_opt(CONF_DEFAULT_AREA) == "kitchen"
     child_now = dev_reg.async_get(child_latter_dev.id)
     assert child_now is not None and child_now.area_id == "kitchen"
-    assert hass.states.get("sensor.desk_assistant_current_area").state == "Kitchen"
+    assert hass.states.get(desk_area_eid).state == "Kitchen"
 
     # Reassigning child Latter Device in HA mirrors back to parent ESPHome Device and active Area
     dev_reg.async_update_device(child_latter_dev.id, area_id="garage")
@@ -360,7 +363,7 @@ async def test_static_assigned_area_startup_healing_live_reassignment_and_two_wa
     assert esp_now is not None and esp_now.area_id == "living_room"
     assert child_now is not None and child_now.area_id == "living_room"
     assert coord.active_area_id == "living_room"
-    assert hass.states.get("sensor.desk_assistant_current_area").state == "Living Area"
+    assert hass.states.get(desk_area_eid).state == "Living Area"
 
     studio_state = build_studio_state_payload(hass, coord)
     dev_row = next(
@@ -379,7 +382,7 @@ async def test_static_assigned_area_startup_healing_live_reassignment_and_two_wa
     assert esp_now is not None and esp_now.area_id is None
     assert child_now is not None and child_now.area_id is None
     assert coord.active_area_id is None
-    assert hass.states.get("sensor.desk_assistant_current_area").state == "Unassigned"
+    assert hass.states.get(desk_area_eid).state == "Unassigned"
 
     # 4) Switching Static -> BLE Roaming auto-enables ble_auto_switch; switching back pins current active Area
     cleaned_roam = clean_device_settings(
@@ -591,10 +594,14 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
     await hass.async_block_till_done()
 
     # Zero Floors -> zero `current_floor` entity bloat!
-    assert hass.states.get("sensor.pocket_assistant_current_area") is not None
-    assert hass.states.get("sensor.pocket_assistant_current_floor") is None
-    assert hass.states.get("sensor.alex_watch_current_floor") is None
-    assert hass.states.get("sensor.latter_system_alex_current_floor") is None
+    ent_reg = er.async_get(hass)
+    assert ent_reg.async_get_entity_id("sensor", DOMAIN, "sub_pocket_current_area") is not None
+    assert ent_reg.async_get_entity_id("sensor", DOMAIN, "sub_pocket_current_floor") is None
+    assert ent_reg.async_get_entity_id("sensor", DOMAIN, "sub_watch_current_floor") is None
+    assert (
+        ent_reg.async_get_entity_id("sensor", DOMAIN, f"{DOMAIN}_person_alex_current_floor")
+        is None
+    )
 
     # 2) Dynamically create Floors in FloorRegistry & map Areas -> floor sensors auto-create live!
     f1 = ensure_floor(hass, "Ground Level", floor_id="floor_1", level=1)
@@ -604,9 +611,17 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
     await hass.async_block_till_done()
 
     assert has_configured_floors(hass) is True
-    pocket_floor = hass.states.get("sensor.pocket_assistant_current_floor")
-    watch_floor = hass.states.get("sensor.alex_watch_current_floor")
-    person_floor = hass.states.get("sensor.latter_system_alex_current_floor")
+    pocket_floor_eid = ent_reg.async_get_entity_id("sensor", DOMAIN, "sub_pocket_current_floor")
+    watch_floor_eid = ent_reg.async_get_entity_id("sensor", DOMAIN, "sub_watch_current_floor")
+    person_floor_eid = ent_reg.async_get_entity_id(
+        "sensor", DOMAIN, f"{DOMAIN}_person_alex_current_floor"
+    )
+    assert pocket_floor_eid is not None
+    assert watch_floor_eid is not None
+    assert person_floor_eid is not None
+    pocket_floor = hass.states.get(pocket_floor_eid)
+    watch_floor = hass.states.get(watch_floor_eid)
+    person_floor = hass.states.get(person_floor_eid)
     assert pocket_floor is not None and pocket_floor.state == "Ground Level"
     assert pocket_floor.attributes["floor_id"] == f1.floor_id
     assert watch_floor is not None and watch_floor.state == "Unassigned"
@@ -621,11 +636,11 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
             "AA:BB:CC:00:00:33", -54, t0 + step * 0.2, "Bedroom Proxy"
         )
     await flush_debouncers(hass)
-    assert hass.states.get("sensor.alex_watch_current_floor").state == "Upper Level"
-    assert hass.states.get("sensor.latter_system_alex_current_floor").state == "Upper Level"
-    watch_dt = hass.states.get("device_tracker.alex_watch_ble_tracker") or hass.states.get(
-        "device_tracker.alex_watch"
-    )
+    assert hass.states.get(watch_floor_eid).state == "Upper Level"
+    assert hass.states.get(person_floor_eid).state == "Upper Level"
+    watch_dt_eid = ent_reg.async_get_entity_id("device_tracker", DOMAIN, "sub_watch_ble_tracker")
+    assert watch_dt_eid is not None
+    watch_dt = hass.states.get(watch_dt_eid)
     assert watch_dt is not None
     assert watch_dt.attributes["floor_id"] == f2.floor_id
     assert watch_dt.attributes["floor_name"] == "Upper Level"
@@ -638,8 +653,8 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
     watch_coord.ble_tracker.check_away_timeout(t0 + AWAY_TIMEOUT_SECONDS + 30.0)
     await flush_debouncers(hass)
 
-    assert hass.states.get("sensor.pocket_assistant_current_floor").state == "Away"
-    assert hass.states.get("sensor.alex_watch_current_floor").state == "Away"
-    assert hass.states.get("sensor.latter_system_alex_current_floor").state == "Away"
+    assert hass.states.get(pocket_floor_eid).state == "Away"
+    assert hass.states.get(watch_floor_eid).state == "Away"
+    assert hass.states.get(person_floor_eid).state == "Away"
 
     assert await hass.config_entries.async_unload(entry.entry_id) is True

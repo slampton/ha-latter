@@ -14,7 +14,7 @@ Latter spans **8 Home Assistant platforms** ([`sensor.py`](../../custom_componen
 
 ## Per-Device Entities (`Latter` Device)
 
-`<slug>` is the normalized device slug (for example `pocket_assistant`). **BLE Tag** entries (phones, watches, and beacons) create only the presence entities marked ★; hardware traits in the device's manifest (`display`, `mic`, `spk`) gate the others.
+`<slug>` is the normalized device slug (for example `pocket_assistant`); on Home Assistant `2026.11+`, newly created entities on a Device that already belongs to an Area may include the Area slug prefix per Home Assistant's default entity naming rules. **BLE Tag** entries (phones, watches, and beacons) create only the presence entities marked ★; hardware traits in the device's manifest (`display`, `mic`, `spk`) gate the others.
 
 | Entity | Platform / Category | Availability | State / Range | Key Attributes & Update Trigger |
 | :--- | :--- | :--- | :--- | :--- |
