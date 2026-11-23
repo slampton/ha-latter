@@ -1453,6 +1453,7 @@ def build_entity_catalog(
     """Build the entity pickers for Studio using `AreaStateIndex` (zero full-state scans)."""
     _ = all_coords
     area_reg = ar.async_get(hass)
+    ent_reg = er.async_get(hass)
     areas_list = [
         {"id": a.id, "name": a.name}
         for a in sorted(area_reg.async_list_areas(), key=lambda x: x.name.lower())
@@ -1535,8 +1536,14 @@ def build_entity_catalog(
             p_slug = re.sub(
                 r"[^a-z0-9]+", "_", ent_id.split(".", 1)[-1].lower()
             ).strip("_")
+            p_area_eid = (
+                ent_reg.async_get_entity_id(
+                    "sensor", DOMAIN, f"{DOMAIN}_person_{p_slug}_current_area"
+                )
+                or f"sensor.latter_system_{p_slug}_current_area"
+            )
             buckets["persons"].append(
-                {"id": ent_id, "name": f"{friendly} (sensor.{p_slug}_current_area)"}
+                {"id": ent_id, "name": f"{friendly} ({p_area_eid})"}
             )
 
     area_name_by_id = {a["id"]: a["name"] for a in areas_list}
@@ -1572,6 +1579,21 @@ def _parse_rounded_sensor_int(state_obj: Any) -> int | None:
         return round(float(state_obj.state))
     except ValueError:
         return None
+
+
+def _select_primary_fw_update_entity(update_items: list[dict[str, Any]]) -> str:
+    """Prefer the Latter Project Firmware `update` entity ahead of co-processor updates (ESP32-P4 C6)."""
+    if not update_items:
+        return ""
+    for item in update_items:
+        eid = str(item.get("entity_id") or "")
+        if eid.endswith("_project_firmware"):
+            return eid
+    for item in update_items:
+        eid = str(item.get("entity_id") or "")
+        if "c6_co_processor" not in eid.lower():
+            return eid
+    return str(update_items[0].get("entity_id") or "")
 
 
 def _has_esphome_firmware_update(
@@ -2003,7 +2025,7 @@ def _build_device_live_payload(
         for it in all_esp_items
         if it.get("domain") == "update" and it.get("entity_id")
     ]
-    fw_update_entity = str(update_items[0]["entity_id"]) if update_items else ""
+    fw_update_entity = _select_primary_fw_update_entity(update_items)
 
     wp_thumb_by_id = {
         str(item.get("id") or ""): str(item.get("thumb_url") or "")

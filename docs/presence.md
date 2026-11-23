@@ -161,7 +161,7 @@ Sensors are discovered automatically by device class (`occupancy`, `presence`, `
 | :--- | :--- | :--- |
 | Area sensor per tracked Device | ✓ | ✓ (`sensor.<slug>_current_area`) |
 | Floor sensor per tracked Device | ✓ | ✓ (`sensor.<slug>_current_floor`, auto-created when Floors exist) |
-| Area & Floor sensors per Person | Through `person` | ✓ (`sensor.<person>_current_area`, `sensor.<person>_current_floor`) |
+| Area & Floor sensors per Person | Through `person` | ✓ (`sensor.latter_system_<person>_current_area`, `sensor.latter_system_<person>_current_floor`) |
 | Android HA Companion App (`ble_transmitter`) | Manual UUID entry or `iBeacon` integration | ✓ **1-click auto-discovery** by phone name (`UUID` + `Major:Minor` isolation + `0 ms` live attribute sync) |
 | Phones & watches via Private BLE Device | ✓ | ✓ (**0 ms** event-driven IRK RPA rotation + live Apple/Samsung/Android device-type fingerprinting) |
 | Beacons, BTHome & connectable BLE | ✓ (iBeacon, Eddystone, BTHome, MACs) | ✓ (Apple iBeacon, Eddystone-UID `0xFEAA`, Shelly BLU / BTHome v2 `0xFCD2`, RuuviTag `0x0499`, Tile `0xFEED`, iTag `0xFFE0`, static MACs; rolling-EID cloud tags excluded) |

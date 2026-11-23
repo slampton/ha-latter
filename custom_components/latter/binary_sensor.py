@@ -13,7 +13,6 @@ from homeassistant.helpers import area_registry as ar, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
 from .coordinator import LatterCoordinator
 from .hub_registry import (
     LatterSystemHub,
@@ -38,17 +37,6 @@ def _entry_coordinators(
         return list(runtime.coordinators.values())
     sys_obj = get_latter_system(hass)
     return list(sys_obj.coordinators.values()) if sys_obj else []
-
-
-@callback
-def _purge_legacy_area_occupancy_entities(
-    ent_reg: er.EntityRegistry, entry_id: str
-) -> None:
-    for reg_entry in list(er.async_entries_for_config_entry(ent_reg, entry_id)):
-        if reg_entry.domain == "binary_sensor" and (
-            reg_entry.unique_id or ""
-        ).startswith("latter_area_ble_occupancy_"):
-            ent_reg.async_remove(reg_entry.entity_id)
 
 
 @dataclass
@@ -116,8 +104,6 @@ async def async_setup_entry(
 ) -> None:
     """Set up per-Device timer/alarm binary sensors and per-Area occupancy binary sensors."""
     coordinators = _entry_coordinators(hass, entry)
-    ent_reg = er.async_get(hass)
-    _purge_legacy_area_occupancy_entities(ent_reg, entry.entry_id)
 
     for coordinator in coordinators:
         if not coordinator.is_ble_tag and coordinator.has_display:
@@ -140,11 +126,6 @@ async def async_setup_entry(
 
     new_entities: list[LatterAreaOccupancyBinarySensor] = []
     for area_id in sorted(candidate_areas):
-        legacy_eid = ent_reg.async_get_entity_id(
-            "binary_sensor", DOMAIN, f"latter_area_ble_occupancy_{area_id}"
-        )
-        if legacy_eid is not None:
-            ent_reg.async_remove(legacy_eid)
         if area_id in tracking.created_areas:
             continue
         area_entry = area_reg.async_get_area(area_id)

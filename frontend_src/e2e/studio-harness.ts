@@ -398,7 +398,7 @@ function buildHostHtml(opts: Required<Pick<MountStudioOptions, "darkMode" | "dir
       config: {
         unit_system: { length: ${JSON.stringify(opts.unitLength)} },
         time_zone: "UTC",
-        version: "2026.10.4",
+        version: "2026.11.2",
       },
       states: {
         "update.desk_assistant_firmware": {

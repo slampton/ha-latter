@@ -49,7 +49,7 @@ function createHeadlessStore(initialPayload?: Partial<StudioStatePayload>): Head
   const store = new StudioStore(host as ReactiveControllerHost & HTMLElement);
   const hass: HomeAssistant = {
     locale: { language: "en", time_format: "am_pm" },
-    config: { unit_system: { length: "km" }, time_zone: "UTC", version: "2026.10.4" },
+    config: { unit_system: { length: "km" }, time_zone: "UTC", version: "2026.11.2" },
     themes: { darkMode: false },
     states: {},
     connection: {

@@ -43,17 +43,14 @@ def invalidate_area_fusion_index(hass: HomeAssistant) -> None:
 
 def _is_latter_own_area_sensor(
     entry: er.RegistryEntry | None,
-    entity_id: str = "",
     state_obj: State | None = None,
 ) -> bool:
-    """Return True when `entry`/`entity_id` belongs to Latter itself (never feed back into Area fusion)."""
+    """Return True when `entry`/`state_obj` belongs to Latter itself (never feed back into Area fusion)."""
     if entry is not None:
         return entry.platform == DOMAIN or bool(
             (entry.unique_id or "").startswith("latter_area_")
         )
-    if state_obj is not None and "fusion_mode" in state_obj.attributes:
-        return True
-    return entity_id.endswith("_ble_occupancy")
+    return bool(state_obj is not None and "fusion_mode" in state_obj.attributes)
 
 
 def _is_eligible_area_binary_sensor(
@@ -122,14 +119,14 @@ def get_tracked_fusion_entity_ids(hass: HomeAssistant) -> set[str]:
                     continue
                 entry = ent_reg.async_get(eid)
                 st = hass.states.get(eid)
-                if not _is_latter_own_area_sensor(entry, eid, st):
+                if not _is_latter_own_area_sensor(entry, st):
                     tracked.add(eid)
 
     for area in area_reg.async_list_areas():
         for eid in _area_candidate_binary_sensors(hass, area.id):
             entry = ent_reg.async_get(eid)
             st = hass.states.get(eid)
-            if _is_latter_own_area_sensor(entry, eid, st):
+            if _is_latter_own_area_sensor(entry, st):
                 continue
             if _resolve_sensor_device_class(entry, st) in FUSION_DEVICE_CLASSES:
                 tracked.add(eid)
@@ -188,7 +185,7 @@ def discover_area_fusion_sensors(
     for eid in candidate_eids:
         entry = ent_reg.async_get(eid)
         st = hass.states.get(eid)
-        if _is_latter_own_area_sensor(entry, eid, st):
+        if _is_latter_own_area_sensor(entry, st):
             continue
         if entry is not None and (entry.disabled_by or entry.domain != "binary_sensor"):
             continue
@@ -244,7 +241,7 @@ def _collect_unavailable_fusion_sensors(
         for eid in explicit_eids:
             entry = ent_reg.async_get(eid)
             st = hass.states.get(eid)
-            if _is_latter_own_area_sensor(entry, eid, st):
+            if _is_latter_own_area_sensor(entry, st):
                 continue
             if (
                 st is None

@@ -122,7 +122,7 @@ export function buildPayloadFromHub(
     system_config_rev: hub.systemConfigRev,
     device_config_rev: rec.deviceConfigRev,
     system_info: {
-      ha_version: "2026.10.4",
+      ha_version: "2026.11.2",
       integration_version: "3.0.0",
       min_firmware_sdk_rev: 2026112007,
       studio_rev: hub.studioRev,

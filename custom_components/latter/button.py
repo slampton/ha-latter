@@ -7,11 +7,9 @@ from homeassistant.components.button.const import ButtonDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
 from .coordinator import LatterCoordinator
 from .hub_registry import LatterSystemHub, get_latter_system
 
@@ -31,13 +29,7 @@ async def async_setup_entry(
         sys_obj = get_latter_system(hass)
         coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
 
-    ent_reg = er.async_get(hass)
     for coordinator in coordinators:
-        legacy_eid = ent_reg.async_get_entity_id(
-            "button", DOMAIN, f"{coordinator.subentry_id}_activate_screensaver"
-        )
-        if legacy_eid is not None:
-            ent_reg.async_remove(legacy_eid)
         if coordinator.is_ble_tag:
             continue
         dev_entities: list[ButtonEntity] = []

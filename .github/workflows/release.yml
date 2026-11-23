@@ -18,6 +18,17 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
 
+      - name: Verify release tag matches manifest.json version
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          TAG_VER="${TAG#v}"
+          MANIFEST_VER=$(python3 -c 'import json; print(json.load(open("custom_components/latter/manifest.json", encoding="utf-8"))["version"])')
+          if [[ "${TAG_VER}" != "${MANIFEST_VER}" ]]; then
+            echo "::error::Release tag ${TAG} (${TAG_VER}) does not match custom_components/latter/manifest.json (${MANIFEST_VER})"
+            exit 1
+          fi
+
       - name: Build latter.zip from custom_components/latter
         run: |
           cd custom_components/latter
@@ -28,4 +39,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.event.release.tag_name }}"
-          gh release upload "$TAG" latter.zip
+          gh release upload "$TAG" latter.zip --clobber

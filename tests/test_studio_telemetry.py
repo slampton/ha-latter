@@ -196,9 +196,11 @@ async def test_studio_telemetry_link_report_and_discovered_devices_payload(
     esp_dev_id = coord.esphome_device_id
     assert esp_dev_id is not None
 
-    # Seed diagnostic & update entities on the bound ESPHome device
+    # Seed diagnostic & update entities on the bound ESPHome device (including a C6 co-processor update
+    # that sorts alphabetically before Project Firmware to verify the ESP32-P4 primary-update tie-breaker)
     for eid, name, state, cat in (
-        ("update.pocket_assistant_firmware", "Firmware", "on", None),
+        ("update.pocket_assistant_aaa_c6_co_processor_firmware", "System: C6 Co-Processor Firmware", "off", "config"),
+        ("update.pocket_assistant_firmware", "Firmware", "on", "config"),
         ("sensor.pocket_assistant_wifi_signal", "Wi-Fi signal", "-54", "diagnostic"),
         ("sensor.pocket_assistant_ip_address", "IP address", "192.168.1.44", "diagnostic"),
         ("sensor.pocket_assistant_battery_level", "Battery Level", "82", "diagnostic"),
@@ -262,6 +264,10 @@ async def test_studio_telemetry_link_report_and_discovered_devices_payload(
     assert payload["live"]["fw_update_available"] is True
     assert payload["live"]["fw_update_entity"] == "update.pocket_assistant_firmware"
     assert payload["live"]["telemetry"]["int_ram_free_kb"] == 64
+    alex_person = next(
+        p for p in payload["catalog"]["persons"] if p["id"] == "person.alex"
+    )
+    assert "(sensor.latter_system_alex_current_area)" in alex_person["name"]
 
     dev_summary = next(
         d for d in payload["system_devices"] if d["subentry_id"] == coord.subentry_id
