@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from typing import Any
+from unittest.mock import patch
 
 from homeassistant.setup import async_setup_component
 
@@ -599,4 +600,65 @@ async def test_wake_and_gap_multi_proxy_tcp_race_coalescing(
     assert area_changes == ["kitchen"]
 
     unsub_ev()
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_apply_device_telemetry_ble_active_rising_edge_only(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify apply_device_telemetry notifies BLE wake only on non-True -> True rising edges."""
+    await seed_ble_proxies(hass)
+    entry, _sys_obj, coord = await setup_latter_hub(
+        hass,
+        extra_device_data={CONF_NATIVE_BLE_TRACKING: True},
+    )
+    tracker = coord.ble_tracker
+    assert tracker is not None
+    assert coord.device_telemetry["ble_active"] is None
+
+    # Seed an initial Area lock so we can verify away-detection is not extended by repeated True snapshots
+    t0 = time.monotonic()
+    inject_ble_adv(
+        hass,
+        make_ibeacon_service_info(
+            tracker.beacon_uuid,
+            rssi=-58,
+            source="AA:BB:CC:00:00:11",
+            obs_time=t0,
+        ),
+    )
+    await hass.async_block_till_done()
+    assert tracker.current_area_id == "living_room"
+
+    with patch.object(
+        tracker, "note_ble_radio_active", wraps=tracker.note_ble_radio_active
+    ) as note_spy:
+        # 1) None -> True rising edge triggers note_ble_radio_active once
+        coord.apply_device_telemetry({"ble_active": True, "int_ram_free_kb": 140})
+        assert coord.device_telemetry["ble_active"] is True
+        assert note_spy.call_count == 1
+        first_wake_mono = tracker._ble_wake_monotonic
+
+        # 2) Repeated True -> True snapshots must NOT re-trigger or extend away detection
+        coord.apply_device_telemetry({"ble_active": True, "int_ram_free_kb": 138})
+        coord.apply_device_telemetry({"ble_active": True, "int_ram_free_kb": 136})
+        assert note_spy.call_count == 1
+        assert tracker._ble_wake_monotonic == first_wake_mono
+
+        # Even after repeated True snapshots, aging past AWAY_TIMEOUT_SECONDS still transitions Away
+        tracker.check_away_timeout(max(t0, first_wake_mono) + AWAY_TIMEOUT_SECONDS + 5.0)
+        assert tracker.is_away is True
+
+        # 3) True -> False and False -> False do not trigger note_ble_radio_active
+        coord.apply_device_telemetry({"ble_active": False, "int_ram_free_kb": 135})
+        assert coord.device_telemetry["ble_active"] is False
+        coord.apply_device_telemetry({"ble_active": False, "int_ram_free_kb": 134})
+        assert note_spy.call_count == 1
+
+        # 4) False -> True rising edge triggers note_ble_radio_active again
+        coord.apply_device_telemetry({"ble_active": True, "int_ram_free_kb": 133})
+        assert coord.device_telemetry["ble_active"] is True
+        assert note_spy.call_count == 2
+        assert tracker.is_away is False
+
     assert await hass.config_entries.async_unload(entry.entry_id) is True

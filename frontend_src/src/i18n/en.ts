@@ -1460,7 +1460,7 @@ export const EN_STRINGS = {
   "dev_tools.telem_uptime": "Session uptime",
   "dev_tools.profiler_label": "Telemetry profiler",
   "dev_tools.profiler_desc":
-    "Streams frame and subsystem timing logs over ESPHome logs for troubleshooting.",
+    "Streams frame, power, and link diagnostics to ESPHome logs. Automatically turns off after 24 hours.",
   "dev_tools.refresh_telemetry_label": "Runtime telemetry",
   "dev_tools.refresh_telemetry_desc":
     "Requests an immediate RAM, PSRAM, and Wi-Fi link snapshot from this Device.",

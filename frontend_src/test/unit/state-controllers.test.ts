@@ -36,6 +36,11 @@ import type {
   StudioStatePayload,
   SystemDeviceEntry,
 } from "../../src/types.js";
+import {
+  DEV_TELEMETRY_REFRESH_DEBOUNCE_MS,
+  handleDeveloperTelemetryDrawerToggle,
+  renderDeviceToolsView,
+} from "../../src/views/device-tools-view.js";
 import { deriveGroupCapabilities } from "../../src/views/groups/group-baseline-drawer.js";
 
 interface HeadlessStoreHarness {
@@ -859,5 +864,115 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
       batchStore.groups.getEffectiveBatchPillStates(gamesCtrl).map((p) => p.token),
       ["marbles", "archery", "bricks", "chomp"],
     );
+  });
+
+  it("auto-refreshes Device runtime telemetry silently when Developer drawer opens with per-Device debounce", async () => {
+    const { store, wsLog } = createHeadlessStore();
+    store.applyRoute({ prefix: "/latter", path: "devices/sub_desk/tools" });
+
+    // Closed toggle is a no-op
+    assert.equal(handleDeveloperTelemetryDrawerToggle(store, false, false, 10_000), false);
+    assert.equal(wsLog.length, 0);
+
+    // Offline Device open is skipped and does NOT prime the debounce window
+    assert.equal(handleDeveloperTelemetryDrawerToggle(store, true, true, 10_000), false);
+    assert.equal(wsLog.length, 0);
+
+    // Online Device open triggers a silent `request_telemetry` device_action (no toast)
+    assert.equal(handleDeveloperTelemetryDrawerToggle(store, true, false, 10_500), true);
+    await new Promise<void>((r) => setTimeout(r, 0));
+    assert.equal(wsLog.length, 1);
+    assert.deepEqual(wsLog[0], {
+      type: "latter/device/command",
+      command: "device_action",
+      subentry_id: "sub_desk",
+      payload: { action: "request_telemetry" },
+      studio_rev: STUDIO_REV,
+    });
+    assert.equal(store.toastMessage, "");
+
+    // Re-opening within the 10s debounce window is skipped
+    assert.equal(
+      handleDeveloperTelemetryDrawerToggle(
+        store,
+        true,
+        false,
+        10_500 + DEV_TELEMETRY_REFRESH_DEBOUNCE_MS - 1,
+      ),
+      false,
+    );
+    assert.equal(wsLog.length, 1);
+
+    // Different subentry_id has its own independent debounce window
+    store.activeSubentryId = "sub_pocket";
+    assert.equal(handleDeveloperTelemetryDrawerToggle(store, true, false, 12_000), true);
+    await new Promise<void>((r) => setTimeout(r, 0));
+    assert.equal(wsLog.length, 2);
+    assert.equal(wsLog[1]?.subentry_id, "sub_pocket");
+    assert.equal(store.toastMessage, "");
+
+    // Once >= 10s has elapsed for `sub_desk`, re-opening triggers again silently
+    store.activeSubentryId = "sub_desk";
+    assert.equal(
+      handleDeveloperTelemetryDrawerToggle(
+        store,
+        true,
+        false,
+        10_500 + DEV_TELEMETRY_REFRESH_DEBOUNCE_MS,
+      ),
+      true,
+    );
+    await new Promise<void>((r) => setTimeout(r, 0));
+    assert.equal(wsLog.length, 3);
+    assert.equal(wsLog[2]?.subentry_id, "sub_desk");
+    assert.equal(store.toastMessage, "");
+
+    // Verify rendered `<details class="sub-collapsible">` wires `@toggle` accurately for online vs offline Devices
+    const findDrawerToggle = (node: unknown): ((ev: Event) => void) | null => {
+      if (!node || typeof node !== "object") return null;
+      if (Array.isArray(node)) {
+        for (const item of node) {
+          const hit = findDrawerToggle(item);
+          if (hit) return hit;
+        }
+        return null;
+      }
+      const tpl = node as { strings?: readonly string[]; values?: readonly unknown[] };
+      if (Array.isArray(tpl.strings) && Array.isArray(tpl.values)) {
+        for (let i = 0; i < tpl.strings.length; i += 1) {
+          const s = tpl.strings[i] ?? "";
+          if (s.includes("<details") && s.includes("@toggle=") && typeof tpl.values[i] === "function") {
+            return tpl.values[i] as (ev: Event) => void;
+          }
+        }
+        for (const v of tpl.values) {
+          const hit = findDrawerToggle(v);
+          if (hit) return hit;
+        }
+      }
+      return null;
+    };
+
+    const { store: renderStore, wsLog: renderWs } = createHeadlessStore();
+    renderStore.applyRoute({ prefix: "/latter", path: "devices/sub_desk/tools" });
+    const onlineToggle = findDrawerToggle(renderDeviceToolsView(renderStore));
+    assert.ok(onlineToggle, "Expected @toggle handler on Developer & telemetry <details>");
+    onlineToggle({ currentTarget: { open: false } } as unknown as Event);
+    assert.equal(renderWs.length, 0);
+    onlineToggle({ currentTarget: { open: true } } as unknown as Event);
+    await new Promise<void>((r) => setTimeout(r, 0));
+    assert.equal(renderWs.length, 1);
+    assert.equal(renderStore.toastMessage, "");
+    // Immediate second open via DOM toggle is debounced
+    onlineToggle({ currentTarget: { open: true } } as unknown as Event);
+    assert.equal(renderWs.length, 1);
+
+    // Offline `sub_pocket` (`is_online: false`) skips auto-refresh when its drawer opens
+    renderStore.applyRoute({ prefix: "/latter", path: "devices/sub_pocket/tools" });
+    const offlineToggle = findDrawerToggle(renderDeviceToolsView(renderStore));
+    assert.ok(offlineToggle);
+    offlineToggle({ currentTarget: { open: true } } as unknown as Event);
+    await new Promise<void>((r) => setTimeout(r, 0));
+    assert.equal(renderWs.length, 1);
   });
 });

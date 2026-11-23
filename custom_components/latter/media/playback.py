@@ -539,7 +539,7 @@ def enforce_local_speaker_if_remote_idle(coordinator: Any, reason: str) -> None:
 
     remote_state = coordinator.hass.states.get(coordinator.active_speaker)
     if not (remote_state and remote_state.state in (STATE_PLAYING, STATE_BUFFERING)):
-        _LOGGER.info(
+        _LOGGER.debug(
             "Resetting active_speaker from idle '%s' (state=%s) to default_speaker '%s' (%s)",
             coordinator.active_speaker,
             remote_state.state if remote_state else "missing",

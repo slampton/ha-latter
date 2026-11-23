@@ -2266,7 +2266,7 @@ class LatterCoordinator:
             self.async_notify_listeners()
             return
         if area_id and area_id != self.active_area_id:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Native BLE Proxy ('%s') detected '%s' in area '%s' (was '%s')",
                 scanner_source,
                 self.device_slug,
@@ -2967,8 +2967,9 @@ class LatterCoordinator:
             self._entered_hibernate = False
             self.schedule_persist_runtime_state()
 
+        prev_ble = self.device_telemetry.get("ble_active")
         ble_active = _parse_opt_bool(payload.get("ble_active"))
-        if ble_active is True and self._ble_tracker is not None:
+        if prev_ble is not True and ble_active is True and self._ble_tracker is not None:
             self._ble_tracker.note_ble_radio_active(time.monotonic())
 
         self.device_telemetry = {

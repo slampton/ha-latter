@@ -415,6 +415,37 @@ export function parseDeviceRuntimeTelemetryRows(
   return rows;
 }
 
+export const DEV_TELEMETRY_REFRESH_DEBOUNCE_MS = 10_000;
+
+const devTelemetryRefreshAtByStore = new WeakMap<StudioStore, Map<string, number>>();
+
+export function handleDeveloperTelemetryDrawerToggle(
+  store: StudioStore,
+  open: boolean,
+  isOffline: boolean,
+  nowMs = Date.now(),
+): boolean {
+  if (!open || isOffline) return false;
+  const subentryId = String(store.activeSubentryId || "").trim();
+  if (!subentryId) return false;
+  let bySubentry = devTelemetryRefreshAtByStore.get(store);
+  if (!bySubentry) {
+    bySubentry = new Map<string, number>();
+    devTelemetryRefreshAtByStore.set(store, bySubentry);
+  }
+  const lastMs = bySubentry.get(subentryId);
+  if (
+    lastMs !== undefined &&
+    nowMs >= lastMs &&
+    nowMs - lastMs < DEV_TELEMETRY_REFRESH_DEBOUNCE_MS
+  ) {
+    return false;
+  }
+  bySubentry.set(subentryId, nowMs);
+  void store.entity.runDeviceAction("request_telemetry");
+  return true;
+}
+
 export function renderDeviceToolsView(store: StudioStore): TemplateResult {
   const data = store.state;
   const cfg = data?.config || {};
@@ -625,7 +656,16 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                 : nothing}
             </div>
             ${hasDeveloperDrawer
-              ? html`<details class="sub-collapsible">
+              ? html`<details
+                  class="sub-collapsible"
+                  @toggle=${(ev: Event) => {
+                    handleDeveloperTelemetryDrawerToggle(
+                      store,
+                      (ev.currentTarget as HTMLDetailsElement).open,
+                      isOffline,
+                    );
+                  }}
+                >
                   <summary>${store.t("card.developer_telemetry")}</summary>
                   <div class="card-content">
                     <div class="settings-list">

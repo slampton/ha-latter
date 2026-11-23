@@ -93,6 +93,10 @@ describe("i18n catalogs, UTF-8 byte bounds, locale formatters & telemetry parser
     };
 
     assert.equal(t("action.cancel"), "Cancel");
+    assert.equal(
+      t("dev_tools.profiler_desc"),
+      "Streams frame, power, and link diagnostics to ESPHome logs. Automatically turns off after 24 hours.",
+    );
     assert.equal(t("action.cancel", undefined, frOverlay), "Annuler");
     assert.equal(
       t("confirm.blast_radius_many", { count: 4 }, frOverlay),

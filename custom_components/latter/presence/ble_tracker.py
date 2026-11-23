@@ -1192,7 +1192,7 @@ class LatterNativeBleTracker:
             )
         if (fabric := get_active_ble_fabric(self.hass, create=True)) is not None:
             fabric.register_tracker(self)
-        _LOGGER.info(
+        _LOGGER.debug(
             "Latter Native BLE Area Tracker registered with shared BLE Fabric (device=%s, UUID=%s, macs=%s)",
             self._raw_slug,
             self._target_uuid_hex,
