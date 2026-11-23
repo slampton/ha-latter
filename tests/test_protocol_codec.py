@@ -35,11 +35,11 @@ class TestProtocolV3Contract(unittest.TestCase):
         """Every v3 domain must have contiguous 3..COUNT-1 indices matching expected counts."""
         expected_counts = {
             "area_context": 40,
-            "active_media": 20,
+            "active_media": 21,
             "remote_config": 3,
             "weather_forecast": 15,
             "calendar_agenda": 4,
-            "device_prefs": 68,
+            "device_prefs": 69,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})

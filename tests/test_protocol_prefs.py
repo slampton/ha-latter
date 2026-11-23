@@ -209,9 +209,14 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             self.assertNotIn(retired_key, studio_scope.DEVICE_SETTING_KEYS)
             with self.assertRaises(studio_scope.SettingsScopeError):
                 studio_scope.clean_device_settings({retired_key: "1"})
-        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 63)
+        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 64)
         dnd_spec = studio_scope.DEVICE_PREF_SPEC_MAP["do_not_disturb"]
         self.assertEqual((dnd_spec.domain, dnd_spec.section, dnd_spec.group_tier), ("switch", "power", None))
+        mao_spec = studio_scope.DEVICE_PREF_SPEC_MAP["music_auto_open"]
+        self.assertEqual(
+            (mao_spec.domain, mao_spec.section, mao_spec.group_tier, mao_spec.default),
+            ("select", "interface", "interface", "Now Playing"),
+        )
         raw_schema = json.loads(HA_PROTO_JSON.read_text(encoding="utf-8"))
         self.assertTrue(all("esphome_section" not in s for s in raw_schema["device_pref_specs"]))
         self.assertEqual(studio_scope.MAX_DOCK_ITEMS, 24)

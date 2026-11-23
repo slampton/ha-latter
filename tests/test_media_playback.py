@@ -420,7 +420,7 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
 
 async def test_default_speaker_auto_open_persistence_listener_and_lyrics_push(
     hass: Any,
-    latter_system: tuple[Any, Any, Any],
+    setup_latter_hub: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """External `default_speaker` survives idle resets, auto-switches on play, sets `is_default_speaker`, and pushes lyrics."""
@@ -440,7 +440,8 @@ async def test_default_speaker_auto_open_persistence_listener_and_lyrics_push(
 
     assert CONF_MUSIC_AUTO_OPEN in GROUP_INTERFACE_DEVICE_KEYS
 
-    entry, _sys_obj, coord = latter_system
+    entry, _sys_obj, coord = await setup_latter_hub(hass, stationary=1)
+    assert coord is not None
     desk_spk = "media_player.office_sonos"
     other_spk = "media_player.kitchen_speaker"
 
