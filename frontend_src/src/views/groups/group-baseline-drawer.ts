@@ -861,6 +861,7 @@ function renderBaselineInterfaceSection(
       ${h.renderSpecSelect("calendar_week_start", cfg.calendar_week_start)}
       ${h.renderSpecSelect("album_art_style", cfg.album_art_style)}
       ${h.renderSpecSelect("music_overlay_style", cfg.music_overlay_style)}
+      ${h.renderSpecSelect("music_auto_open", cfg.music_auto_open)}
       ${h.renderSpecSelect("album_sort_order", cfg.album_sort_order)}
       ${h.renderSpecSelect("artist_album_sort_order", cfg.artist_album_sort_order)}
       ${h.renderSpecSelect("podcast_sort_order", cfg.podcast_sort_order)}

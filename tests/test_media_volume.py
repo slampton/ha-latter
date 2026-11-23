@@ -272,7 +272,7 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     assert (
         len(wire_fields)
         == 3 + len(PROTOCOL_V3_DATA["domains"]["active_media"]["fields"])
-        == 23
+        == 24
     )
     assert wire_fields[17] == "0"  # shuffle
     assert wire_fields[18] == "off"  # repeat
@@ -280,6 +280,7 @@ async def test_active_media_21_fields_and_mute_shuffle_repeat_favorite_commands(
     assert wire_fields[20] == "0"  # favorite
     assert wire_fields[21] == "15"  # queue_count
     assert wire_fields[22] == str(expected_caps)  # media_caps
+    assert wire_fields[23] in ("0", "1")  # is_default_speaker
 
     # 1. mute_toggle targets the configured volume_override entity (living_room_avr)
     await sys_obj.rpc_dispatcher.async_dispatch(

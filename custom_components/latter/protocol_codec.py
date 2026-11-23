@@ -424,14 +424,16 @@ def pack_active_media_fields(
     favorite: bool = False,
     queue_count: int = 0,
     media_caps: int = 0,
+    is_default_speaker: bool = False,
 ) -> tuple[Any, ...]:
-    """Return the 20 ordered body fields (`indices 3..22`) for Protocol v3 `active_media`."""
+    """Return the 21 ordered body fields (`indices 3..23`) for Protocol v3 `active_media`."""
     return (
         ha_value(state), ha_value(title), ha_value(artist), ha_value(album),
         _finite_float_field(duration), _finite_float_field(position), _clamp_volume_field(volume),
         ha_value(media_type), ha_value(art_url), ha_value(active_speaker), ha_value(speaker_name),
         ha_value(last_speaker), ha_value(local_speaker), bool(is_local), bool(shuffle),
         ha_value(repeat), bool(muted), bool(favorite), max(0, int(queue_count or 0)), max(0, int(media_caps or 0)),
+        bool(is_default_speaker),
     )
 
 
@@ -697,7 +699,7 @@ def pack_device_prefs_fields(
     supports_hw_jpeg: bool = True,
     do_not_disturb: bool | None = None,
 ) -> tuple[Any, ...]:
-    """Return the ordered body fields (`indices 3..70`) for Protocol v3 `device_prefs`."""
+    """Return the ordered body fields (`indices 3..71`) for Protocol v3 `device_prefs`."""
     home_enabled = bool(resolve_device_pref_value(cfg, "home_screen_enabled"))
     clean_hex = str(custom_color_hex or "").strip().upper()
     if clean_hex and not _HEX_RGB_RE.fullmatch(clean_hex):

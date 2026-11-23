@@ -1,7 +1,7 @@
 // AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
 
 export const PROTOCOL_CONTRACT_VERSION = 3;
-export const STUDIO_REV = 45;
+export const STUDIO_REV = 46;
 
 export const ALLOWED_DEVICE_ACTIONS: ReadonlyArray<string> = [
   "restart",
@@ -309,6 +309,7 @@ export const DEVICE_PREF_SPECS_CATALOG: ReadonlyArray<DevicePrefSpecItem> = [
   {key: "wake_greeting", label: "Wake Greeting", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "album_art_style", label: "Album Art Style", domain: "select", default: "Full Screen", section: "interface", group_tier: "interface", options: ["Full Screen", "Letterbox", "Standard", "None"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "music_overlay_style", label: "Overlay Style", domain: "select", default: "Art + Metadata", section: "interface", group_tier: "interface", options: ["Art Only", "Art + Metadata", "Always Visible"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "music_auto_open", label: "Auto-open on play", domain: "select", default: "Now Playing", section: "interface", group_tier: "interface", options: ["Now Playing", "Lyrics", "Off"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "album_sort_order", label: "Album Sort Order", domain: "select", default: "Alphabetical", section: "interface", group_tier: "interface", options: ["Alphabetical", "Newest on Top", "Oldest on Top"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "artist_album_sort_order", label: "Artist Album Sort Order", domain: "select", default: "Oldest on Top", section: "interface", group_tier: "interface", options: ["Oldest on Top", "Newest on Top", "Alphabetical"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "podcast_sort_order", label: "Podcast Sort Order", domain: "select", default: "Newest on Top", section: "interface", group_tier: "interface", options: ["Newest on Top", "Oldest on Top"], min: null, max: null, step: null, unit: "", capability: "display" },

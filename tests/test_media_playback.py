@@ -416,3 +416,207 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
             assert out_img.info.get("progressive", 0) == 0
 
     assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_default_speaker_auto_open_persistence_listener_and_lyrics_push(
+    hass: Any,
+    latter_system: tuple[Any, Any, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """External `default_speaker` survives idle resets, auto-switches on play, sets `is_default_speaker`, and pushes lyrics."""
+    from custom_components.latter.const import (
+        CONF_BEDTIME_ACTIVE,
+        CONF_DEFAULT_SPEAKER,
+        CONF_MUSIC_AUTO_OPEN,
+    )
+    from custom_components.latter.groups.device_groups import GROUP_INTERFACE_DEVICE_KEYS
+    from custom_components.latter.media import playback as media_playback
+    from custom_components.latter.media.playback import (
+        bind_coordinator_speaker_listener,
+        enforce_local_speaker_if_remote_idle,
+        is_default_speaker_entity,
+        resolve_default_speaker_entity,
+    )
+
+    assert CONF_MUSIC_AUTO_OPEN in GROUP_INTERFACE_DEVICE_KEYS
+
+    entry, _sys_obj, coord = latter_system
+    desk_spk = "media_player.office_sonos"
+    other_spk = "media_player.kitchen_speaker"
+
+    hass.states.async_set(desk_spk, "idle", {"friendly_name": "Office Sonos"})
+    hass.states.async_set(other_spk, "idle", {"friendly_name": "Kitchen Speaker"})
+
+    # Configure external default_speaker + Lyrics auto-open mode
+    coord.update_device_config(
+        {
+            **coord.device_data,
+            CONF_DEFAULT_SPEAKER: desk_spk,
+            CONF_MUSIC_AUTO_OPEN: "Lyrics",
+        },
+        preserve_group=True,
+    )
+    await coord.async_apply_options()
+    await hass.async_block_till_done()
+
+    assert resolve_default_speaker_entity(coord) == desk_spk
+    assert coord.active_speaker == desk_spk
+    assert is_default_speaker_entity(coord, desk_spk) is True
+    assert is_default_speaker_entity(coord, other_spk) is False
+    assert is_default_speaker_entity(coord, coord.local_speaker) is False
+
+    # 1. Idle external default_speaker MUST NOT be clobbered back to local_speaker on boot/reconnect
+    enforce_local_speaker_if_remote_idle(coord, "ha_startup")
+    assert coord.active_speaker == desk_spk
+
+    # Payload exposes is_default_speaker=True (wire field 23 = "1") for desk_spk
+    coord.cached_media_payload = None
+    _st, attrs = build_active_media_payload(coord)
+    assert attrs["is_default_speaker"] is True
+    assert attrs["payload"].split("\x1f")[23] == "1"
+
+    # 2. Idle non-default speaker resets back to configured default_speaker (not local_speaker)
+    coord.active_speaker = other_spk
+    enforce_local_speaker_if_remote_idle(coord, "device_reconnect")
+    assert coord.active_speaker == desk_spk
+
+    # 3. While active_speaker is an idle non-default speaker, starting playback on default_speaker
+    #    switches active_speaker back to default_speaker and pushes lyrics proactively!
+    pushed_lyrics: list[str] = []
+
+    async def _fake_push_lyrics(
+        _hass: Any, _coord: Any, *, req_id: int = 0, search: str = ""
+    ) -> None:
+        pushed_lyrics.append(f"{req_id}:{search}")
+
+    monkeypatch.setattr(media_playback, "async_fetch_and_push_music_lyrics", _fake_push_lyrics)
+    monkeypatch.setattr(coord, "is_rpc_outbox_unavailable", lambda: False)
+
+    coord.active_speaker = other_spk
+    bind_coordinator_speaker_listener(coord)
+    coord.cached_media_payload = None
+    _st2, attrs2 = build_active_media_payload(coord)
+    assert attrs2["is_default_speaker"] is False
+    assert attrs2["payload"].split("\x1f")[23] == "0"
+
+    # Ephemeral TTS announcement on default speaker must NOT hijack active_speaker
+    hass.states.async_set(
+        desk_spk,
+        "playing",
+        {
+            "friendly_name": "Office Sonos",
+            "media_title": "Announcement",
+            "media_content_id": "/api/tts_proxy/abc123.mp3",
+        },
+    )
+    await hass.async_block_till_done()
+    assert coord.active_speaker == other_spk
+
+    # Real music starting on default speaker switches active_speaker -> desk_spk & pushes lyrics
+    hass.states.async_set(desk_spk, "idle", {"friendly_name": "Office Sonos"})
+    await hass.async_block_till_done()
+    hass.states.async_set(
+        desk_spk,
+        "playing",
+        {
+            "friendly_name": "Office Sonos",
+            "media_title": "Time",
+            "media_artist": "Pink Floyd",
+            "media_content_type": "music",
+        },
+    )
+    await hass.async_block_till_done()
+    assert coord.active_speaker == desk_spk
+    assert pushed_lyrics == ["0:Time|Pink Floyd"]
+
+    # 4. Track change on default speaker with music_auto_open == "Lyrics" pushes next track's lyrics
+    #    while screen is awake or on screensaver (display_power_state != 2), but skips speech / dark / bedtime.
+    hass.states.async_set(
+        desk_spk,
+        "playing",
+        {
+            "friendly_name": "Office Sonos",
+            "media_title": "Money",
+            "media_artist": "Pink Floyd",
+            "media_content_type": "music",
+        },
+    )
+    await hass.async_block_till_done()
+    assert pushed_lyrics[-1] == "0:Money|Pink Floyd"
+
+    # Podcast skips proactive lyrics push
+    count_before = len(pushed_lyrics)
+    hass.states.async_set(
+        desk_spk,
+        "playing",
+        {
+            "friendly_name": "Office Sonos",
+            "media_title": "Episode 42",
+            "media_artist": "Tech Show",
+            "media_content_type": "podcast",
+        },
+    )
+    await hass.async_block_till_done()
+    assert len(pushed_lyrics) == count_before
+
+    # Screen Off (display_power_state == 2) skips proactive lyrics push
+    coord.display_power_state = 2
+    hass.states.async_set(
+        desk_spk,
+        "playing",
+        {
+            "friendly_name": "Office Sonos",
+            "media_title": "Us and Them",
+            "media_artist": "Pink Floyd",
+            "media_content_type": "music",
+        },
+    )
+    await hass.async_block_till_done()
+    assert len(pushed_lyrics) == count_before
+
+    # Bedtime active skips proactive lyrics push even if display_power_state == 1
+    coord.display_power_state = 1
+    await coord.async_update_device_prefs({CONF_BEDTIME_ACTIVE: True})
+    hass.states.async_set(
+        desk_spk,
+        "playing",
+        {
+            "friendly_name": "Office Sonos",
+            "media_title": "Eclipse",
+            "media_artist": "Pink Floyd",
+            "media_content_type": "music",
+        },
+    )
+    await hass.async_block_till_done()
+    assert len(pushed_lyrics) == count_before
+
+    # 5. If active_speaker is actively playing, default_speaker starting does NOT steal active_speaker;
+    #    and if music_auto_open == "Off", default_speaker starting does NOT steal active_speaker.
+    await coord.async_update_device_prefs({CONF_BEDTIME_ACTIVE: False})
+    coord.display_power_state = 0
+    hass.states.async_set(desk_spk, "idle", {"friendly_name": "Office Sonos"})
+    hass.states.async_set(other_spk, "playing", {"friendly_name": "Kitchen Speaker", "media_title": "Jazz"})
+    coord.active_speaker = other_spk
+    bind_coordinator_speaker_listener(coord)
+    hass.states.async_set(
+        desk_spk,
+        "playing",
+        {"friendly_name": "Office Sonos", "media_title": "Rock", "media_artist": "Band"},
+    )
+    await hass.async_block_till_done()
+    assert coord.active_speaker == other_spk
+
+    # With music_auto_open == "Off", idle other_spk is not switched either
+    await coord.async_update_device_prefs({CONF_MUSIC_AUTO_OPEN: "Off"})
+    hass.states.async_set(desk_spk, "idle", {"friendly_name": "Office Sonos"})
+    hass.states.async_set(other_spk, "idle", {"friendly_name": "Kitchen Speaker"})
+    await hass.async_block_till_done()
+    hass.states.async_set(
+        desk_spk,
+        "playing",
+        {"friendly_name": "Office Sonos", "media_title": "Jazz 2", "media_artist": "Trio"},
+    )
+    await hass.async_block_till_done()
+    assert coord.active_speaker == other_spk
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

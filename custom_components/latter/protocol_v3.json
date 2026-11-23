@@ -467,6 +467,13 @@
           "cpp_enum": "MEDIA_CAPS",
           "type": "u16",
           "description": "Active speaker capability bitmask (1=pause, 2=seek, 4=volume_set, 8=volume_mute, 16=previous_track, 32=next_track, 64=shuffle_set, 128=repeat_set, 256=grouping, 512=music_assistant, 1024=favorite)"
+        },
+        {
+          "index": 23,
+          "name": "is_default_speaker",
+          "cpp_enum": "IS_DEFAULT_SPEAKER",
+          "type": "bool",
+          "description": "1 if active_speaker is this device's configured default speaker (or its own local speaker when unset), else 0"
         }
       ]
     },
@@ -1125,6 +1132,13 @@
           "cpp_enum": "DO_NOT_DISTURB",
           "type": "bool",
           "description": "1 = Do Not Disturb active, else 0"
+        },
+        {
+          "index": 71,
+          "name": "music_auto_open",
+          "cpp_enum": "MUSIC_AUTO_OPEN",
+          "type": "string",
+          "description": "Auto-open Music view when default speaker starts playing (Now Playing|Lyrics|Off)"
         }
       ]
     },
@@ -3087,6 +3101,24 @@
       "capability": "display"
     },
     {
+      "key": "music_auto_open",
+      "label": "Auto-open on play",
+      "domain": "select",
+      "default": "Now Playing",
+      "section": "interface",
+      "group_tier": "interface",
+      "options": [
+        "Now Playing",
+        "Lyrics",
+        "Off"
+      ],
+      "min": null,
+      "max": null,
+      "step": null,
+      "unit": "",
+      "capability": "display"
+    },
+    {
       "key": "album_sort_order",
       "label": "Album Sort Order",
       "domain": "select",
@@ -3676,7 +3708,7 @@
     }
   ],
   "studio_contract": {
-    "studio_rev": 45,
+    "studio_rev": 46,
     "allowed_device_actions": [
       "restart",
       "find_my",

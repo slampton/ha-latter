@@ -113,6 +113,7 @@ describe("i18n catalogs, UTF-8 byte bounds, locale formatters & telemetry parser
     assert.equal(tPrefLabel("camera_default_view"), "Default view");
     assert.equal(tPrefLabel("camera_doorbell_popup"), "Doorbell ring popup");
     assert.equal(tPrefLabel("do_not_disturb"), "Do not disturb");
+    assert.equal(tPrefLabel("music_auto_open"), "Auto-open on play");
     assert.equal(tPrefLabel("custom_unknown_pref"), "Custom unknown pref");
     assert.equal(tPrefLabel("", "Fallback label"), "Fallback label");
 
@@ -127,6 +128,9 @@ describe("i18n catalogs, UTF-8 byte bounds, locale formatters & telemetry parser
     assert.equal(tPrefOption("camera_stream_mode", "Low Bandwidth"), "Low bandwidth");
     assert.equal(tPrefOption("camera_carousel_interval", "60s"), "60 seconds");
     assert.equal(tPrefOption("auto_brightness_mode", "Ambient Light"), "Ambient light");
+    assert.equal(tPrefOption("music_auto_open", "Now Playing"), "Now playing");
+    assert.equal(tPrefOption("music_auto_open", "Lyrics"), "Lyrics");
+    assert.equal(tPrefOption("music_auto_open", "Off"), "Off");
   });
 
   it("truncates UTF-8 strings strictly on codepoint boundaries across ASCII, Latin, CJK, and surrogates", () => {

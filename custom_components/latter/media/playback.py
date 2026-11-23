@@ -23,7 +23,7 @@ from homeassistant.core import Event, EventStateChangedData, HomeAssistant, Stat
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_state_change_event
 
-from ..const import TRANSFER_HOLD_WINDOW_SECONDS
+from ..const import CONF_DEFAULT_SPEAKER, CONF_MUSIC_AUTO_OPEN, TRANSFER_HOLD_WINDOW_SECONDS
 from ..hub_registry import is_media_position_only_tick, peek_domain_data
 from .browse import async_lookup_ma_track_uri, extract_item_dict
 from .linking import (
@@ -360,9 +360,111 @@ def _sync_active_speaker_media_snapshot(coordinator: Any) -> None:
         coordinator.last_media_position = snap.position
 
 
+_SPEECH_MEDIA_TYPES: Final[frozenset[str]] = frozenset(
+    {"podcast", "podcast_episode", "audiobook"}
+)
+
+
+def resolve_default_speaker_entity(coordinator: Any) -> str:
+    """Return the Device's configured default speaker, falling back to `local_speaker`."""
+    raw = str(coordinator.get_opt(CONF_DEFAULT_SPEAKER) or "").strip()
+    return raw or str(coordinator.local_speaker or "").strip()
+
+
+def is_default_speaker_entity(coordinator: Any, entity_id: str | None) -> bool:
+    """Return True when `entity_id` matches the Device's default speaker or its MA counterpart."""
+    ent = str(entity_id or "").strip()
+    default_spk = resolve_default_speaker_entity(coordinator)
+    if not ent or not default_spk:
+        return False
+    if ent == default_spk:
+        return True
+    if coordinator.is_local_speaker_entity(default_spk) and coordinator.is_local_speaker_entity(ent):
+        return True
+    ma_def = resolve_ma_counterpart_entity(coordinator.hass, default_spk)
+    if ma_def and ent == ma_def:
+        return True
+    ma_ent = resolve_ma_counterpart_entity(coordinator.hass, ent)
+    return bool(ma_ent and ma_ent == default_spk)
+
+
+@callback
+def _maybe_schedule_proactive_lyrics_push(
+    coordinator: Any, prev_lyr_key: str, new_state: State | None
+) -> None:
+    new_lyr_key = (
+        f"{coordinator.last_media_title}|{coordinator.last_media_artist}"
+        if coordinator.last_media_title
+        else ""
+    )
+    if not new_lyr_key or coordinator.is_rpc_outbox_unavailable():
+        return
+    is_lyrics_auto = (
+        is_default_speaker_entity(coordinator, coordinator.active_speaker)
+        and str(coordinator.get_device_pref(CONF_MUSIC_AUTO_OPEN) or "") == "Lyrics"
+        and new_state is not None
+        and new_state.state == STATE_PLAYING
+        and coordinator.last_media_type not in _SPEECH_MEDIA_TYPES
+        and getattr(coordinator, "display_power_state", 0) != 2
+        and not bool(coordinator.get_device_pref("bedtime_active"))
+    )
+    if coordinator.lyrics_watch_active:
+        if new_lyr_key in (prev_lyr_key, coordinator.last_pushed_lyrics_key):
+            return
+    elif is_lyrics_auto:
+        if new_lyr_key == coordinator.last_pushed_lyrics_key:
+            return
+    else:
+        return
+    coordinator.last_pushed_lyrics_key = new_lyr_key
+    coordinator.create_background_task(
+        async_fetch_and_push_music_lyrics(
+            coordinator.hass, coordinator, req_id=0, search=new_lyr_key
+        ),
+        f"latter_lyrics_autopush_{coordinator.device_slug}",
+    )
+
+
+@callback
+def _maybe_auto_switch_to_default_speaker(
+    coordinator: Any,
+    default_spk: str,
+    old_state: State | None,
+    new_state: State | None,
+) -> bool:
+    if new_state is None or new_state.state != STATE_PLAYING:
+        return False
+    if old_state is not None and old_state.state == STATE_PLAYING:
+        return False
+    if str(coordinator.get_device_pref(CONF_MUSIC_AUTO_OPEN) or "") == "Off":
+        return False
+    if is_ephemeral_announcement_uri(
+        str(new_state.attributes.get("media_content_id") or "")
+    ):
+        return False
+    cur_st = coordinator.hass.states.get(coordinator.active_speaker)
+    if cur_st is not None and cur_st.state in (STATE_PLAYING, STATE_BUFFERING):
+        return False
+    _LOGGER.debug(
+        "Switching %s active_speaker from idle '%s' to playing default_speaker '%s'",
+        coordinator.device_slug,
+        coordinator.active_speaker,
+        default_spk,
+    )
+    coordinator.last_speaker = coordinator.active_speaker
+    coordinator.active_speaker = default_spk
+    coordinator.cached_media_anchor = None
+    coordinator.cached_media_payload = None
+    bind_coordinator_speaker_listener(coordinator)
+    coordinator.schedule_persist_runtime_state()
+    _maybe_schedule_proactive_lyrics_push(coordinator, "", new_state)
+    coordinator.async_notify_listeners()
+    return True
+
+
 @callback
 def bind_coordinator_speaker_listener(coordinator: Any) -> None:
-    """Subscribe to state changes on the active `media_player` and its volume/MA counterparts."""
+    """Subscribe to state changes on the active `media_player`, its volume/MA counterparts, and the default speaker."""
     coordinator.replace_speaker_state_unsub(None)
     coordinator.tracked_ma_counterpart = None
     if not coordinator.active_speaker:
@@ -377,11 +479,27 @@ def bind_coordinator_speaker_listener(coordinator: Any) -> None:
     if ma_counterpart and ma_counterpart not in tracked:
         tracked.append(ma_counterpart)
 
+    default_spk = resolve_default_speaker_entity(coordinator)
+    default_watched: set[str] = set()
+    if default_spk and not is_default_speaker_entity(coordinator, coordinator.active_speaker):
+        if default_spk not in tracked:
+            tracked.append(default_spk)
+            default_watched.add(default_spk)
+        ma_default = resolve_ma_counterpart_entity(coordinator.hass, default_spk)
+        if ma_default and ma_default not in tracked:
+            tracked.append(ma_default)
+            default_watched.add(ma_default)
+
     _sync_active_speaker_media_snapshot(coordinator)
 
     @callback
     def _on_speaker_state_change(event: Event[EventStateChangedData]) -> None:
+        changed_eid = str(event.data.get("entity_id") or "")
         old_state, new_state = event.data.get("old_state"), event.data.get("new_state")
+        if changed_eid in default_watched:
+            _maybe_auto_switch_to_default_speaker(coordinator, default_spk, old_state, new_state)
+            return
+
         prev_lyr_key = (
             f"{coordinator.last_media_title}|{coordinator.last_media_artist}"
             if coordinator.last_media_title
@@ -390,24 +508,7 @@ def bind_coordinator_speaker_listener(coordinator: Any) -> None:
         coordinator.cached_media_anchor = None
         coordinator.cached_media_payload = None
         _sync_active_speaker_media_snapshot(coordinator)
-        new_lyr_key = (
-            f"{coordinator.last_media_title}|{coordinator.last_media_artist}"
-            if coordinator.last_media_title
-            else ""
-        )
-        if (
-            coordinator.lyrics_watch_active
-            and new_lyr_key
-            and new_lyr_key not in (prev_lyr_key, coordinator.last_pushed_lyrics_key)
-            and not coordinator.is_rpc_outbox_unavailable()
-        ):
-            coordinator.last_pushed_lyrics_key = new_lyr_key
-            coordinator.create_background_task(
-                async_fetch_and_push_music_lyrics(
-                    coordinator.hass, coordinator, req_id=0, search=new_lyr_key
-                ),
-                f"latter_lyrics_autopush_{coordinator.device_slug}",
-            )
+        _maybe_schedule_proactive_lyrics_push(coordinator, prev_lyr_key, new_state)
         if is_media_position_only_tick(old_state, new_state):
             coordinator.cached_media_payload = None
             coordinator.schedule_debounced_notify()
@@ -421,13 +522,17 @@ def bind_coordinator_speaker_listener(coordinator: Any) -> None:
 
 @callback
 def enforce_local_speaker_if_remote_idle(coordinator: Any, reason: str) -> None:
-    """Reset `active_speaker` to `local_speaker` on boot/wake unless the remote speaker is playing."""
-    local_spk = coordinator.local_speaker
-    if not local_spk:
+    """Reset `active_speaker` to the Device's default speaker on boot/wake unless a non-default speaker is playing."""
+    default_spk = resolve_default_speaker_entity(coordinator)
+    if not default_spk:
         return
-    if coordinator.is_local_speaker_entity(coordinator.active_speaker):
-        if coordinator.active_speaker != local_spk:
-            coordinator.active_speaker = local_spk
+    if is_default_speaker_entity(coordinator, coordinator.active_speaker):
+        if (
+            coordinator.local_speaker
+            and coordinator.is_local_speaker_entity(default_spk)
+            and coordinator.active_speaker != coordinator.local_speaker
+        ):
+            coordinator.active_speaker = coordinator.local_speaker
             bind_coordinator_speaker_listener(coordinator)
             coordinator.schedule_persist_runtime_state()
         return
@@ -435,14 +540,14 @@ def enforce_local_speaker_if_remote_idle(coordinator: Any, reason: str) -> None:
     remote_state = coordinator.hass.states.get(coordinator.active_speaker)
     if not (remote_state and remote_state.state in (STATE_PLAYING, STATE_BUFFERING)):
         _LOGGER.info(
-            "Resetting active_speaker from idle remote '%s' (state=%s) to local_speaker '%s' (%s)",
+            "Resetting active_speaker from idle '%s' (state=%s) to default_speaker '%s' (%s)",
             coordinator.active_speaker,
             remote_state.state if remote_state else "missing",
-            local_spk,
+            default_spk,
             reason,
         )
         coordinator.last_speaker = coordinator.active_speaker
-        coordinator.active_speaker = local_spk
+        coordinator.active_speaker = default_spk
         bind_coordinator_speaker_listener(coordinator)
         coordinator.schedule_persist_runtime_state()
 

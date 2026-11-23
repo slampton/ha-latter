@@ -157,8 +157,8 @@ describe("crop-math, alarms, world-clocks, MDI catalog & combobox ranking", () =
     );
   });
 
-  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 45", () => {
-    assert.equal(STUDIO_REV, 45);
+  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 46", () => {
+    assert.equal(STUDIO_REV, 46);
     assert.equal(SYSTEM_VIEW_SLUGS.photos, "photos");
     assert.ok(NATIVE_DOCK_APP_TOKENS.includes("app:cameras"));
     assert.ok(NATIVE_DOCK_APP_TOKENS.includes("app:calendar"));

@@ -474,12 +474,21 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
     const musicKeys = [
       "album_art_style",
       "music_overlay_style",
+      "music_auto_open",
       "album_sort_order",
       "artist_album_sort_order",
       "podcast_sort_order",
     ] as const;
     body = html`<div class="settings-list">
-      ${musicKeys.map((k) => renderEditableSelectPref(store, k, `cfg-${k}`, caps))}
+      ${musicKeys.map((k) =>
+        renderEditableSelectPref(
+          store,
+          k,
+          `cfg-${k}`,
+          caps,
+          k === "music_auto_open" ? store.t("dialogs.music_auto_open_desc") : undefined,
+        ),
+      )}
     </div>`;
   } else if (app === "remote") {
     const remoteGroups = data?.system_config?.remote_groups || [];

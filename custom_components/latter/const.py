@@ -16,11 +16,11 @@ _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = _PROTOCOL_SCHEMA["defaults"]
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final[int] = 45
+STUDIO_REV: Final[int] = 46
 if int(_PROTOCOL_SCHEMA["studio_contract"]["studio_rev"]) != STUDIO_REV:
     raise RuntimeError("const.py STUDIO_REV is out of sync with protocol_v3.json")
 
-MIN_FIRMWARE_SDK_REV: Final = 2026112202
+MIN_FIRMWARE_SDK_REV: Final = 2026112301
 PLATFORMS: Final[tuple[str, ...]] = (
     "sensor",
     "binary_sensor",
@@ -162,6 +162,7 @@ CONF_HOME_MOON: Final = "home_moon"
 CONF_WAKE_GREETING: Final = "wake_greeting"
 CONF_ALBUM_ART_STYLE: Final = "album_art_style"
 CONF_MUSIC_OVERLAY_STYLE: Final = "music_overlay_style"
+CONF_MUSIC_AUTO_OPEN: Final = "music_auto_open"
 CONF_ALBUM_SORT_ORDER: Final = "album_sort_order"
 CONF_ARTIST_ALBUM_SORT_ORDER: Final = "artist_album_sort_order"
 CONF_PODCAST_SORT_ORDER: Final = "podcast_sort_order"

@@ -24,6 +24,7 @@ from .playback import (
     VOLUME_MUTE_FLAG,
     VOLUME_SET_FLAG,
     SpeakerMediaSnapshot,
+    is_default_speaker_entity,
     normalize_repeat_mode,
     read_live_ma_queue_state,
     read_volume_from_target,
@@ -191,6 +192,7 @@ def _build_idle_media_payload(
     idle_caps = compute_media_caps(
         coordinator.hass, None, snap.ma_st, snap.ma_counterpart, vol_target
     )
+    is_default_flag = is_default_speaker_entity(coordinator, coordinator.active_speaker)
     med_rev, med_payload = coordinator.pack_domain_payload(
         "active_media",
         *pack_active_media_fields(
@@ -214,6 +216,7 @@ def _build_idle_media_payload(
             False,
             0,
             idle_caps,
+            bool(is_default_flag),
         ),
     )
     res: tuple[str | None, dict[str, Any]] = (
@@ -233,6 +236,7 @@ def _build_idle_media_payload(
             "last_speaker": coordinator.last_speaker,
             "local_speaker": coordinator.local_speaker,
             "is_local": bool(snap.is_local_flag),
+            "is_default_speaker": bool(is_default_flag),
             "shuffle": False,
             "repeat": "",
             "muted": idle_muted,
@@ -458,6 +462,7 @@ def build_active_media_payload(
     raw_pos = safe_float(
         snap.attrs.get("media_position") or snap.m_attrs.get("media_position"), 0.0
     )
+    is_default_flag = is_default_speaker_entity(coordinator, coordinator.active_speaker)
     media_anchor = (
         snap.state,
         snap.title,
@@ -474,6 +479,7 @@ def build_active_media_payload(
         coordinator.last_speaker,
         coordinator.local_speaker,
         snap.is_local_flag,
+        is_default_flag,
         shuffle_flag,
         repeat_str,
         muted_flag,
@@ -511,6 +517,7 @@ def build_active_media_payload(
             favorite_flag,
             queue_count,
             media_caps,
+            bool(is_default_flag),
         ),
     )
     res: tuple[str | None, dict[str, Any]] = (
@@ -530,6 +537,7 @@ def build_active_media_payload(
             "last_speaker": coordinator.last_speaker,
             "local_speaker": coordinator.local_speaker,
             "is_local": bool(snap.is_local_flag),
+            "is_default_speaker": bool(is_default_flag),
             "shuffle": shuffle_flag,
             "repeat": repeat_str,
             "muted": muted_flag,
