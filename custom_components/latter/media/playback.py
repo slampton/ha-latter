@@ -591,6 +591,69 @@ def _populate_transfer_hold_state(
 
 
 @callback
+def _start_active_speaker_queue_transfer(
+    coordinator: Any, prev_speaker: str, speaker_entity_id: str
+) -> None:
+    prev_state = coordinator.hass.states.get(prev_speaker)
+    prev_ma = resolve_ma_counterpart_entity(coordinator.hass, prev_speaker)
+    prev_ma_st = (
+        coordinator.hass.states.get(prev_ma)
+        if prev_ma and prev_ma != prev_speaker
+        else None
+    )
+    active_states = (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING)
+    was_playing = bool(
+        (prev_state and prev_state.state in (STATE_PLAYING, STATE_BUFFERING))
+        or (prev_ma_st and prev_ma_st.state in (STATE_PLAYING, STATE_BUFFERING))
+    )
+    was_active = bool(
+        (prev_state and prev_state.state in active_states)
+        or (prev_ma_st and prev_ma_st.state in active_states)
+    )
+    handoff_src = (
+        prev_ma_st
+        if prev_ma_st is not None
+        and (prev_state is None or prev_state.attributes.get("media_position") is None)
+        else prev_state
+    )
+    handoff_pos = interpolate_speaker_position(handoff_src)
+    coordinator.transfer_hold_spinup_until = (
+        time.monotonic() + _SPINUP_GUARD_S if was_playing else 0.0
+    )
+    if not (was_active and (prev_state is not None or prev_ma_st is not None)):
+        return
+    p_attrs = _populate_transfer_hold_state(
+        coordinator, prev_speaker, prev_state, prev_ma_st, handoff_pos
+    )
+    raw_prev_cid = str(p_attrs.get("media_content_id") or "")
+    media_cid = str(
+        ("" if is_ephemeral_announcement_uri(raw_prev_cid) else raw_prev_cid)
+        or coordinator.last_media_uri
+        or ""
+    )
+    media_ctype = str(
+        p_attrs.get("media_content_type") or coordinator.last_media_type or "music"
+    )
+
+    async def _do_transfer() -> None:
+        await async_execute_ma_queue_transfer(
+            coordinator.hass,
+            coordinator.local_speaker,
+            prev_speaker,
+            speaker_entity_id,
+            was_playing,
+            handoff_pos,
+            media_cid,
+            media_ctype,
+        )
+        coordinator.async_notify_listeners()
+
+    coordinator.create_background_task(
+        _do_transfer(), f"latter_queue_transfer_{coordinator.device_slug}"
+    )
+
+
+@callback
 def set_coordinator_active_speaker(
     coordinator: Any, speaker_entity_id: str, transfer_queue: bool = True
 ) -> None:
@@ -601,57 +664,15 @@ def set_coordinator_active_speaker(
 
     prev_speaker = coordinator.active_speaker
     if speaker_entity_id != prev_speaker:
-        prev_state = coordinator.hass.states.get(prev_speaker)
-        prev_ma = resolve_ma_counterpart_entity(coordinator.hass, prev_speaker)
-        prev_ma_st = coordinator.hass.states.get(prev_ma) if prev_ma and prev_ma != prev_speaker else None
-        active_states = (STATE_PLAYING, STATE_PAUSED, STATE_BUFFERING)
-        was_playing = bool(
-            (prev_state and prev_state.state in (STATE_PLAYING, STATE_BUFFERING))
-            or (prev_ma_st and prev_ma_st.state in (STATE_PLAYING, STATE_BUFFERING))
-        )
-        was_active = bool(
-            (prev_state and prev_state.state in active_states)
-            or (prev_ma_st and prev_ma_st.state in active_states)
-        )
-        handoff_src = (
-            prev_ma_st
-            if prev_ma_st is not None and (prev_state is None or prev_state.attributes.get("media_position") is None)
-            else prev_state
-        )
-        handoff_pos = interpolate_speaker_position(handoff_src)
-        coordinator.transfer_hold_spinup_until = (
-            time.monotonic() + _SPINUP_GUARD_S if (transfer_queue and was_playing) else 0.0
-        )
-
-        if was_active and (prev_state is not None or prev_ma_st is not None):
-            p_attrs = _populate_transfer_hold_state(
-                coordinator, prev_speaker, prev_state, prev_ma_st, handoff_pos
+        if transfer_queue:
+            _start_active_speaker_queue_transfer(
+                coordinator, prev_speaker, speaker_entity_id
             )
-            if transfer_queue:
-                raw_prev_cid = str(p_attrs.get("media_content_id") or "")
-                media_cid = str(
-                    ("" if is_ephemeral_announcement_uri(raw_prev_cid) else raw_prev_cid)
-                    or coordinator.last_media_uri
-                    or ""
-                )
-                media_ctype = str(p_attrs.get("media_content_type") or coordinator.last_media_type or "music")
-
-                async def _do_transfer() -> None:
-                    await async_execute_ma_queue_transfer(
-                        coordinator.hass,
-                        coordinator.local_speaker,
-                        prev_speaker,
-                        speaker_entity_id,
-                        was_playing,
-                        handoff_pos,
-                        media_cid,
-                        media_ctype,
-                    )
-                    coordinator.async_notify_listeners()
-
-                coordinator.create_background_task(
-                    _do_transfer(), f"latter_queue_transfer_{coordinator.device_slug}"
-                )
+        else:
+            coordinator.transfer_hold_until = 0.0
+            coordinator.transfer_hold_spinup_until = 0.0
+            coordinator.transfer_hold_title = ""
+            coordinator.transfer_hold_track_key = ""
 
         coordinator.last_speaker = prev_speaker
         coordinator.active_speaker = speaker_entity_id

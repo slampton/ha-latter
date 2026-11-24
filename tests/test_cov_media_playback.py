@@ -386,6 +386,43 @@ async def test_playback_queue_state_listeners_and_coordinator_commands(
         set_coordinator_active_speaker(coord, "   ")
         assert coord.active_speaker == orig_spk
 
+        # 2b. Switching active speaker with transfer_queue=False never leaks previous speaker's
+        #     playing track onto the newly selected idle speaker via transfer_hold_*
+        hass.states.async_set(
+            "media_player.pocket_assistant_music",
+            STATE_PLAYING,
+            {
+                "friendly_name": "Pocket Assistant",
+                "media_title": "Local Track",
+                "media_artist": "Local Artist",
+                "media_album_name": "Local Album",
+                "media_duration": 200,
+                "media_position": 42,
+            },
+        )
+        hass.states.async_set(
+            "media_player.living_room_tv",
+            STATE_IDLE,
+            {"friendly_name": "Living Room TV", "volume_level": 0.4},
+        )
+        coord.transfer_hold_until = time.monotonic() + 15.0
+        coord.transfer_hold_spinup_until = time.monotonic() + 15.0
+        set_coordinator_active_speaker(
+            coord, "media_player.living_room_tv", transfer_queue=False
+        )
+        assert coord.active_speaker == "media_player.living_room_tv"
+        assert coord.last_speaker == "media_player.pocket_assistant_music"
+        assert coord.transfer_hold_until == 0.0
+        assert coord.transfer_hold_spinup_until == 0.0
+        st_tv, attrs_tv = build_active_media_payload(coord)
+        assert st_tv == STATE_IDLE
+        assert attrs_tv["active_speaker"] == "media_player.living_room_tv"
+        assert attrs_tv["speaker_name"] == "Living Room TV"
+        assert attrs_tv["title"] == ""
+        set_coordinator_active_speaker(
+            coord, "media_player.pocket_assistant_music", transfer_queue=False
+        )
+
         # 3. resolve_speaker_media_snapshot unusual state + podcast & audiobook media types
         hass.states.async_set(
             "media_player.pocket_assistant_music",
