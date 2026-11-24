@@ -1,5 +1,5 @@
 /**
- * Rich, Zero-PII `STUDIO_REV = 44` Multi-Device Hub Fixture Builder for Playwright E2E.
+ * Rich, Zero-PII `STUDIO_REV = 49` Multi-Device Hub Fixture Builder for Playwright E2E.
  *
  * Derives `device_prefs` directly from `DEVICE_PREF_SPECS_CATALOG` + `isCatalogItemSupported`
  * so E2E fixtures stay 100% aligned with `protocol/latter_v3.json` across P4 & S3 archetypes.
@@ -208,7 +208,7 @@ export function createDefaultMockHubState(): MockHubState {
         active_area_illuminance_name: "Harbor Studio Illuminance",
         ma_link_matched: true,
         device_sw_version: "3.0.0",
-        core_rev: "2026112303",
+        core_rev: "2026112401",
         firmware_outdated: false,
         fw_update_entity: "update.desk_assistant_firmware",
         fw_update_available: false,
@@ -314,7 +314,7 @@ export function createDefaultMockHubState(): MockHubState {
         active_area_name: "Kitchen",
         ble_closest_proxy: "Kitchen Proxy",
         device_sw_version: "3.0.0",
-        core_rev: "2026112303",
+        core_rev: "2026112401",
         firmware_outdated: false,
         is_ble_sleep_expected: true,
         radio_connected: false,
@@ -389,7 +389,7 @@ export function createDefaultMockHubState(): MockHubState {
       live: {
         active_area_name: "Harbor Studio",
         device_sw_version: "3.0.0",
-        core_rev: "2026112303",
+        core_rev: "2026112401",
         firmware_outdated: false,
         radio_connected: true,
       },

@@ -220,7 +220,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("TRACKER_KIND_TOKENS", ts_src)
         self.assertIn("ignoreDiscoveredDevice", discovered_view)
         self.assertIn("unignoreDiscoveredDevice", discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 48)
+        self.assertEqual(latter_const.STUDIO_REV, 49)
         self.assertNotIn("hold_crown_power_off", ts_src)
         self.assertIn(f"const STUDIO_REV = {latter_const.STUDIO_REV};", ts_src)
         self.assertIn(".card.handoff-active", ts_src)

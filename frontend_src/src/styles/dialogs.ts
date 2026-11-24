@@ -490,23 +490,6 @@ export const DIALOG_STYLES = css`
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .shortcut-page-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--studio-space-2);
-    padding: var(--studio-space-3);
-    border: 1px solid var(--studio-divider);
-    border-radius: var(--studio-radius-control);
-    background: var(--studio-surface-alt);
-  }
-  .shortcut-page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size:var(--studio-font-secondary);
-    font-weight: var(--studio-weight-medium);
-    color: var(--studio-text-secondary);
-  }
   .shortcut-toolbar {
     display: flex;
     align-items: center;

@@ -364,7 +364,7 @@ async def test_onboarding_smart_area_and_roaming_defaults(
     assert defs_assigned[CONF_SYNC_DEVICE_AREA] is False
     assert defs_assigned[CONF_DEFAULT_AREA] == "living_room"
 
-    # 2) Stationary device WITHOUT an ESPHome Area -> defaults to BLE Roaming (while keeping stationary VFM guard)
+    # 2) Stationary device WITHOUT an ESPHome Area -> stays Static in `wall_panels` (never demoted to `custom`)
     desk_unassigned, _ = make_esphome_device(
         hass,
         slug="desk_unassigned",
@@ -375,8 +375,8 @@ async def test_onboarding_smart_area_and_roaming_defaults(
     desk_unassigned_manifest = get_test_manifest(hass, desk_unassigned.id)
     defs_unassigned = _detect_hardware_defaults(hass, desk_unassigned, desk_unassigned_manifest)
     assert defs_unassigned[CONF_DEVICE_GROUP] == "wall_panels"
-    assert defs_unassigned[CONF_NATIVE_BLE_TRACKING] is True
-    assert defs_unassigned[CONF_BLE_AUTO_SWITCH] is True
+    assert defs_unassigned[CONF_NATIVE_BLE_TRACKING] is False
+    assert defs_unassigned[CONF_BLE_AUTO_SWITCH] is False
     assert defs_unassigned[CONF_SYNC_DEVICE_AREA] is False
     assert defs_unassigned[CONF_DEFAULT_AREA] == ""
 
@@ -386,9 +386,11 @@ async def test_onboarding_smart_area_and_roaming_defaults(
         {CONF_ESPHOME_DEVICE_ID: desk_unassigned.id, CONF_DEVICE_GROUP: "auto"},
         manifest=desk_unassigned_manifest,
     )
-    assert merged_auto[CONF_NATIVE_BLE_TRACKING] is True
-    assert merged_auto[CONF_BLE_AUTO_SWITCH] is True
+    assert merged_auto[CONF_DEVICE_GROUP] == "wall_panels"
+    assert merged_auto[CONF_NATIVE_BLE_TRACKING] is False
+    assert merged_auto[CONF_BLE_AUTO_SWITCH] is False
     assert merged_auto[CONF_SYNC_DEVICE_AREA] is False
+    assert merged_auto[CONF_DEFAULT_AREA] == ""
 
     # 3) Roaming round battery display -> defaults to `pocket_carry` + BLE Roaming (empty CONF_DEFAULT_AREA)
     pocket_dev, _ = make_esphome_device(

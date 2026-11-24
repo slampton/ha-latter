@@ -266,7 +266,6 @@ class StudioSpeakerVolumePayload(TypedDict):
     entity_id: str
     name: str
     domain: str
-    volume_pct: int | None
     state: str
     min: int
     max: int
@@ -730,7 +729,6 @@ def build_speaker_volume_payload(
         "entity_id": local_spk,
         "name": "Speaker Volume",
         "domain": "number",
-        "volume_pct": vol_pct,
         "state": str(vol_pct) if vol_pct is not None else "unavailable",
         "min": 0,
         "max": 100,

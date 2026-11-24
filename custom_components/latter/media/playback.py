@@ -35,7 +35,7 @@ from .linking import (
     safe_float,
     safe_opt_float,
 )
-from .lyrics import async_fetch_and_push_music_lyrics
+from .lyrics import async_fetch_and_push_music_lyrics, build_lyrics_track_key
 from .tts_queue import (
     async_execute_ma_queue_transfer,
     async_handle_queue_mutation_command,
@@ -392,10 +392,8 @@ def is_default_speaker_entity(coordinator: Any, entity_id: str | None) -> bool:
 def _maybe_schedule_proactive_lyrics_push(
     coordinator: Any, prev_lyr_key: str, new_state: State | None
 ) -> None:
-    new_lyr_key = (
-        f"{coordinator.last_media_title}|{coordinator.last_media_artist}"
-        if coordinator.last_media_title
-        else ""
+    new_lyr_key = build_lyrics_track_key(
+        coordinator.last_media_title, coordinator.last_media_artist
     )
     if not new_lyr_key or coordinator.is_rpc_outbox_unavailable():
         return
@@ -500,10 +498,8 @@ def bind_coordinator_speaker_listener(coordinator: Any) -> None:
             _maybe_auto_switch_to_default_speaker(coordinator, default_spk, old_state, new_state)
             return
 
-        prev_lyr_key = (
-            f"{coordinator.last_media_title}|{coordinator.last_media_artist}"
-            if coordinator.last_media_title
-            else ""
+        prev_lyr_key = build_lyrics_track_key(
+            coordinator.last_media_title, coordinator.last_media_artist
         )
         coordinator.cached_media_anchor = None
         coordinator.cached_media_payload = None

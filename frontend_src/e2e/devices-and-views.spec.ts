@@ -214,7 +214,7 @@ test.describe("Devices List & Per-Device Views E2E", () => {
 
     // Navigate to Tools -> expand Developer & telemetry drawer and verify live `device_telemetry` rows
     await page.locator("a[data-view='tools']").click();
-    await expect(page.locator("#diag-core-rev")).toHaveText("2026112303");
+    await expect(page.locator("#diag-core-rev")).toHaveText("2026112401");
     const devDrawer = page.locator("#card-device-diagnostics details.sub-collapsible");
     await devDrawer.locator("summary").click();
     await expect(devDrawer).toContainText("212 / 168 / 128 KB");

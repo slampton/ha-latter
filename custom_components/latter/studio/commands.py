@@ -7,7 +7,7 @@ Studio's selected Device (a System command that acts on one Device names it in i
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 import copy
 import logging
 import time
@@ -134,6 +134,43 @@ async def _async_dispatch_scoped_command(
     global_cfg = peek_global_config(hass)
     await handler(hass, coordinator, body, global_cfg, extra)
     return extra
+
+
+async def async_execute_studio_command(
+    hass: HomeAssistant,
+    command: str,
+    payload: Mapping[str, Any] | None = None,
+    *,
+    scope: Scope | None = None,
+    subentry_id: str | None = None,
+    coordinator: LatterCoordinator | None = None,
+) -> dict[str, Any]:
+    """Validate scope, target, and schema and execute a transport-agnostic Studio command."""
+    cmd = str(command or "").strip()
+    try:
+        cmd_scope = command_scope(cmd)
+    except UnknownStudioCommand:
+        raise StudioCommandError(
+            "unknown_command", f"Unsupported Studio command: {cmd}"
+        ) from None
+    if scope is not None and cmd_scope != scope:
+        raise StudioCommandError(
+            "wrong_scope", f"'{cmd}' is a {cmd_scope} command, not a {scope} command"
+        )
+    target = coordinator
+    if cmd_scope == "device" and target is None:
+        target = resolve_target_coordinator(hass, subentry_id)
+    if cmd_scope == "device" and target is None:
+        raise StudioCommandError(
+            "not_found", f"No Latter Device with subentry_id '{subentry_id}'"
+        )
+    return await _async_dispatch_scoped_command(
+        hass,
+        cmd_scope,
+        target if cmd_scope == "device" else None,
+        cmd,
+        dict(payload or {}),
+    )
 
 
 @require_admin
@@ -506,22 +543,13 @@ async def _async_handle_ws_command_impl(
     body = dict(msg.get("payload") or {})
     selected = resolve_target_coordinator(hass, msg.get("subentry_id"))
     try:
-        try:
-            cmd_scope = command_scope(cmd)
-        except UnknownStudioCommand:
-            raise StudioCommandError(
-                "unknown_command", f"Unsupported Studio command: {cmd}"
-            ) from None
-        if cmd_scope != scope:
-            raise StudioCommandError(
-                "wrong_scope", f"'{cmd}' is a {cmd_scope} command, not a {scope} command"
-            )
-        if scope == "device" and selected is None:
-            raise StudioCommandError(
-                "not_found", f"No Latter Device with subentry_id '{msg.get('subentry_id')}'"
-            )
-        extra = await _async_dispatch_scoped_command(
-            hass, scope, selected if scope == "device" else None, cmd, body
+        extra = await async_execute_studio_command(
+            hass,
+            cmd,
+            body,
+            scope=scope,
+            subentry_id=msg.get("subentry_id"),
+            coordinator=selected,
         )
     except StudioCommandError as err:
         connection.send_error(msg["id"], err.code, str(err))
@@ -807,6 +835,7 @@ __all__ = [
     "STUDIO_REV",
     "StudioCommandError",
     "_async_dispatch_scoped_command",
+    "async_execute_studio_command",
     "async_register_studio_ws_commands",
     "ws_handle_device_command",
     "ws_handle_device_export",

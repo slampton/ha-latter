@@ -49,7 +49,7 @@ test.describe("WCAG 2.2 AA axe-core, Light/Dark Themes, Mobile 360x800 & RTL E2E
               severity: "warning",
               subentry_id: "sub_desk",
               device_title: "Desk Assistant",
-              detail: "Core rev 2026112202 < 2026112303",
+              detail: "Core rev 2026112202 < 2026112401",
             },
           ];
         },

@@ -15,7 +15,7 @@ from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 
 from ..identity import esphome_service
-from ..protocol_codec import unescape_v3_subfield, utf8_safe_truncate
+from ..protocol_codec import escape_v3_subfield, unescape_v3_subfield, utf8_safe_truncate
 from .linking import (
     get_ma_mass_client,
     resolve_ma_counterpart_entity,
@@ -445,6 +445,15 @@ async def _search_library_track_lyrics(
     return (raw_lyrics or fallback_plain), matched_track
 
 
+def build_lyrics_track_key(title: str, artist: str) -> str:
+    """Build an escaped `title|artist` track key matching firmware `build_music_track_key()`."""
+    clean_title = str(title or "").strip()
+    if not clean_title:
+        return ""
+    clean_artist = str(artist or "").strip()
+    return f"{escape_v3_subfield(clean_title)}|{escape_v3_subfield(clean_artist)}"
+
+
 async def async_fetch_track_lyrics(
     hass: HomeAssistant,
     speaker: str,
@@ -459,7 +468,7 @@ async def async_fetch_track_lyrics(
     title, artist, album, clean_title, _clean_album, cache_key = _normalize_search_metadata(
         hass, speaker, search, (fallback_title, fallback_artist, fallback_album)
     )
-    track_key = f"{title}|{artist}" if title else ""
+    track_key = build_lyrics_track_key(title, artist)
     if not clean_title:
         return track_key, False, []
 

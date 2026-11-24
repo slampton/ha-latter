@@ -269,16 +269,16 @@ describe("i18n catalogs, UTF-8 byte bounds, locale formatters & telemetry parser
 
     assert.equal(
       issueMessage(
-        { kind: "outdated_firmware", detail: "Core rev 2026112202 < 2026112303" },
+        { kind: "outdated_firmware", detail: "Core rev 2026112202 < 2026112401" },
         repairHass,
       ),
-      "Update firmware (Core rev 2026112202 < 2026112303)",
+      "Update firmware (Core rev 2026112202 < 2026112401)",
     );
     assert.equal(
       localizeRepairIssue(null, "outdated_firmware", {
-        detail: "Core rev 2026112202 < 2026112303",
+        detail: "Core rev 2026112202 < 2026112401",
       }),
-      "Firmware update required (Core rev 2026112202 < 2026112303). Update the Device firmware in ESPHome.",
+      "Firmware update required (Core rev 2026112202 < 2026112401). Update the Device firmware in ESPHome.",
     );
     assert.equal(
       localizeRepairIssue(null, "outdated_firmware"),

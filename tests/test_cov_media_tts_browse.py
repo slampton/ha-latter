@@ -342,19 +342,14 @@ async def test_tts_queue_resume_queries_expansion_and_single_item(hass: Any) -> 
                 == []
             )
 
-        # 7. No resumable URI -> `async_find_queue_resume_items` returns [] & `async_find_queue_resume_item` returns ""
+        # 7. No resumable URI -> `async_find_queue_resume_items` returns []
         empty_uris, empty_pos = await tts_queue.async_find_queue_resume_items(
             hass, spk, "/api/tts_proxy/ephemeral.mp3", 14.0
         )
         assert empty_uris == []
         assert empty_pos == 14.0
-        single_empty, single_pos = await tts_queue.async_find_queue_resume_item(
-            hass, spk, "", 14.0
-        )
-        assert single_empty == ""
-        assert single_pos == 14.0
 
-        # 8. `current_item` + distinct `next_item` fallback -> `[cur_uri, next_uri]` & single item helper
+        # 8. `current_item` + distinct `next_item` fallback -> `[cur_uri, next_uri]`
         mock_service(
             hass,
             "music_assistant",
@@ -373,11 +368,6 @@ async def test_tts_queue_resume_queries_expansion_and_single_item(hass: Any) -> 
         )
         assert pair_uris == ["library://track/50", "library://track/51"]
         assert pair_pos == 21.0
-        primary_uri, primary_pos = await tts_queue.async_find_queue_resume_item(
-            hass, spk, "", 0.0
-        )
-        assert primary_uri == "library://track/50"
-        assert primary_pos == 21.0
     finally:
         clear_ma_counterpart_cache(hass)
 

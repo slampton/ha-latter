@@ -243,7 +243,6 @@ export const LABEL_ACRONYMS: Record<string, string> = {
   rgb: "RGB",
   rssi: "RSSI",
   rtsp: "RTSP",
-  sdk: "SDK",
   sram: "SRAM",
   ssid: "SSID",
   tts: "TTS",

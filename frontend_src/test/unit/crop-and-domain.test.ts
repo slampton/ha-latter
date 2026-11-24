@@ -160,8 +160,8 @@ describe("crop-math, alarms, world-clocks, MDI catalog & combobox ranking", () =
     );
   });
 
-  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 48", () => {
-    assert.equal(STUDIO_REV, 48);
+  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 49", () => {
+    assert.equal(STUDIO_REV, 49);
     const glassSpec = DEVICE_PREF_SPECS_MAP.glass_style;
     assert.ok(glassSpec);
     assert.equal(glassSpec.domain, "select");

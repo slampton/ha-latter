@@ -96,23 +96,19 @@ class TestProtocolV3Contract(unittest.TestCase):
         )
         self.assertEqual(rev_after_reset, 3)
 
-    def test_hardware_manifest_state_json_within_ha_255_char_limit(self) -> None:
-        """The System: Hardware Manifest entity state string must never exceed HA's 255-char MAX_STATE_LENGTH."""
-        longest_state_json = (
-            '{"v":2,"contract":3,"board":"waveshare_p4_86_panel",'
-            '"w":720,"h":720,"shape":"square",'
-            '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,'
-            '"imu":0,"battery":0,"stationary":1,"wearable":0,'
-            '"ips":1,"chip":"ESP32-P4","psram_mb":32,"minor":5}'
+    def test_lyrics_track_key_escapes_wire_delimiters(self) -> None:
+        """Lyrics track_key escapes `\\`, `|`, and `;` symmetrically with firmware `build_music_track_key()`."""
+        from custom_components.latter.media.lyrics import build_lyrics_track_key
+
+        self.assertEqual(build_lyrics_track_key("", "Artist"), "")
+        self.assertEqual(
+            build_lyrics_track_key("Would?", "Alice In Chains"),
+            "Would?|Alice In Chains",
         )
-        self.assertLessEqual(
-            len(longest_state_json),
-            255,
-            f"Hardware manifest state JSON is {len(longest_state_json)} chars (> 255 limit)",
+        self.assertEqual(
+            build_lyrics_track_key("Part 1 | Part 2; C\\D", "A | B"),
+            "Part 1 \\p Part 2\\s C\\\\D|A \\p B",
         )
-        parsed = json.loads(longest_state_json)
-        self.assertEqual(parsed["v"], 2)
-        self.assertEqual(parsed["minor"], 5)
 
     def test_show_notification_includes_alert_id(self) -> None:
         """latter_show_notification device action must include alert_id for deduplication."""

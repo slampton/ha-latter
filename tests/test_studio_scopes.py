@@ -10,6 +10,7 @@ import unittest
 
 from custom_components.latter import (
     backup,
+    protocol_specs,
     repairs_keys as issue_ids,
 )
 from custom_components.latter.groups import device_groups
@@ -227,7 +228,10 @@ class TestSaveScopes(unittest.TestCase):
     def test_key_lists_match_const_and_scopes_are_disjoint(self) -> None:
         conf_values = {v for k, v in self.CONST.items() if k.startswith("CONF_")}
         self.assertTrue(set(settings.SYSTEM_SETTING_KEYS) <= conf_values)
-        self.assertTrue(set(settings.DEVICE_SETTING_KEYS) <= conf_values)
+        self.assertTrue(
+            set(settings.DEVICE_SETTING_KEYS)
+            <= conf_values | set(protocol_specs.DEVICE_PREF_KEYS)
+        )
         self.assertTrue(set(settings.SYSTEM_SETTING_KEYS) <= set(self.GLOBAL_KEYS))
         self.assertFalse(set(settings.DEVICE_SETTING_KEYS) & set(self.GLOBAL_KEYS))
         self.assertNotIn("companion_base_url", self.GLOBAL_KEYS)

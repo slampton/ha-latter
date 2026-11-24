@@ -119,30 +119,10 @@ class TestEntitySections(unittest.TestCase):
         from custom_components.latter.groups import esphome_inspector as entity_sections
 
         desk = [
-            (
-                "select.desk_assistant_sleep_wake_battery_screen_timeout",
-                "Sleep & Wake: Battery Screen Timeout",
-            ),
-            (
-                "select.desk_assistant_sleep_wake_docked_idle_timeout",
-                "Sleep & Wake: Docked Idle Timeout",
-            ),
-            (
-                "select.desk_assistant_sleep_wake_pickup_to_wake",
-                "Sleep & Wake: Pickup to Wake",
-            ),
-            (
-                "select.desk_assistant_sleep_wake_power_profile",
-                "Sleep & Wake: Power Profile",
-            ),
-            (
-                "select.desk_assistant_sleep_wake_screensaver_style",
-                "Sleep & Wake: Screensaver Style",
-            ),
-            (
-                "switch.desk_assistant_sleep_wake_docked_screensaver",
-                "Sleep & Wake: Docked Screensaver",
-            ),
+            ("sensor.desk_assistant_battery_level", "Battery Level"),
+            ("binary_sensor.desk_assistant_battery_charging", "Battery Charging"),
+            ("switch.desk_assistant_speaker_enable", "Speaker Enable"),
+            ("binary_sensor.desk_assistant_boot_button", "Boot Button"),
         ]
         sections: dict[str, list[dict[str, str]]] = {}
         for ent, name in desk:
@@ -180,17 +160,8 @@ class TestEntitySections(unittest.TestCase):
         from custom_components.latter.groups import esphome_inspector as entity_sections
 
         cases = [
-            ("button.desk_display_actions_find_my_device", "Actions: Find My Device"),
-            ("button.desk_display_actions_trigger_voice_assistant", "Actions: Trigger Voice Assistant"),
-            ("button.desk_display_actions_activate_screensaver", "Actions: Activate Screensaver"),
             ("button.desk_display_actions_hibernate_device", "Actions: Hibernate Device"),
             ("button.desk_display_actions_restart_device", "Actions: Restart Device"),
-            ("button.desk_display_ble_find_my_device", "BLE: Find My Device"),
-            ("button.desk_display_voice_trigger_voice_assistant", "Voice: Trigger Voice Assistant"),
-            ("button.desk_display_sleep_wake_activate_screensaver", "Sleep & Wake: Activate Screensaver"),
-            ("button.desk_display_sleep_wake_hibernate_device", "Sleep & Wake: Hibernate Device"),
-            ("button.desk_display_system_restart_device", "System: Restart Device"),
-            ("button.desk_display_find_my_device", "Find My Device"),
             ("button.desk_display_restart", "Restart"),
         ]
         for ent_id, friendly in cases:
@@ -198,40 +169,14 @@ class TestEntitySections(unittest.TestCase):
                 self.assertEqual(self.classify(ent_id, friendly, domain="button"), "actions")
         self.assertEqual(
             entity_sections.classify_esphome_entity_section(
-                "button.desk_display_system_log_memory_report",
-                "System: Log Memory Report",
-                "button",
-                "",
-                "diagnostic",
-                device_object_prefixes=("desk_display",),
-            )[0],
-            "developer",
-        )
-        self.assertEqual(
-            self.classify(
-                "select.desk_display_developer_weather_simulation",
-                "Developer: Weather Simulation",
-            ),
-            "developer",
-        )
-        self.assertEqual(
-            self.classify(
-                "switch.desk_display_system_telemetry_profiler",
-                "System: Telemetry Profiler",
-                domain="switch",
-            ),
-            "developer",
-        )
-        self.assertEqual(
-            entity_sections.classify_esphome_entity_section(
-                "sensor.desk_display_system_internal_ram_low_water",
-                "System: Internal RAM Low Water",
+                "sensor.desk_display_wi_fi_signal",
+                "Wi-Fi Signal",
                 "sensor",
-                "",
+                "signal_strength",
                 "diagnostic",
                 device_object_prefixes=("desk_display",),
             )[0],
-            "developer",
+            "network",
         )
         self.assertEqual(
             entity_sections.classify_esphome_entity_section(
@@ -246,8 +191,9 @@ class TestEntitySections(unittest.TestCase):
         )
         self.assertEqual(
             self.classify(
-                "select.desk_display_area_ble_presence_beacon_mode",
-                "Area: BLE Presence Beacon Mode",
+                "switch.desk_display_speaker_enable",
+                "Speaker Enable",
+                domain="switch",
             ),
             "other",
         )

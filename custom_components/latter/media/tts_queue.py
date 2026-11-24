@@ -248,29 +248,6 @@ async def async_find_queue_resume_items(
     return [cur_uri], pos
 
 
-async def async_find_queue_resume_item(
-    hass: HomeAssistant,
-    speaker_entity_id: str,
-    last_media_uri: str,
-    last_media_position: float,
-    *,
-    last_media_title: str = "",
-    last_media_artist: str = "",
-    last_media_album: str = "",
-) -> tuple[str, float]:
-    """Query Music Assistant `get_queue` for the primary resume URI and position."""
-    uris, pos = await async_find_queue_resume_items(
-        hass,
-        speaker_entity_id,
-        last_media_uri,
-        last_media_position,
-        last_media_title=last_media_title,
-        last_media_artist=last_media_artist,
-        last_media_album=last_media_album,
-    )
-    return (uris[0] if uris else ""), pos
-
-
 async def _async_expand_and_play_container(
     hass: HomeAssistant,
     target_spk: str,

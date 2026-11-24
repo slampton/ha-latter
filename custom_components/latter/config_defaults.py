@@ -174,8 +174,8 @@ def compute_hardware_defaults(
     m = manifest or {}
     clean_area = str(esp_area_id or "").strip()
     has_display = _manifest_int(m, "display") != 0 if "display" in m else True
+    is_stationary = _manifest_int(m, "stationary") == 1
     if m and has_display and _manifest_int(m, "w") > 0 and _manifest_int(m, "h") > 0:
-        is_stationary = _manifest_int(m, "stationary") == 1
         is_wearable = _manifest_int(m, "wearable") == 1
         is_round_battery = (
             str(m.get("shape") or "").strip().lower() == "circle"
@@ -190,7 +190,7 @@ def compute_hardware_defaults(
                 else ("pocket_carry" if is_round_battery else "handhelds")
             )
         )
-        default_roaming = (not bool(clean_area)) if is_stationary else True
+        default_roaming = not is_stationary
         return {
             CONF_DEVICE_GROUP: default_grp,
             CONF_NATIVE_BLE_TRACKING: default_roaming,
@@ -222,11 +222,12 @@ def compute_hardware_defaults(
             CONF_GAMES_ITEMS: DEFAULT_GAMES_ITEMS,
         }
 
+    can_roam = has_ble_beacon and not is_stationary
     return {
         CONF_DEVICE_GROUP: DEFAULT_DEVICE_GROUP,
-        CONF_NATIVE_BLE_TRACKING: has_ble_beacon,
-        CONF_BLE_AUTO_SWITCH: has_ble_beacon,
-        CONF_SYNC_DEVICE_AREA: has_ble_beacon,
+        CONF_NATIVE_BLE_TRACKING: can_roam,
+        CONF_BLE_AUTO_SWITCH: can_roam,
+        CONF_SYNC_DEVICE_AREA: can_roam,
         CONF_AREA_HANDOFF: False,
         CONF_DEFAULT_AREA: clean_area,
     }

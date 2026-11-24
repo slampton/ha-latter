@@ -286,7 +286,6 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     for eid, suffix, init_state in (
         ("sensor.pocket_assistant_wi_fi_signal", "Wi-Fi Signal", "-58"),
         ("binary_sensor.pocket_assistant_ble_radio_active", "BLE Radio Active", "off"),
-        ("sensor.pocket_assistant_system_link_report", "System: Link Report", "ok"),
     ):
         register_entity(
             hass,
@@ -297,7 +296,6 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
             original_name=suffix,
         )
         hass.states.async_set(eid, init_state)
-    coord._bind_link_report_listener()
 
     t_hold = tracker.last_packet_monotonic + AWAY_TIMEOUT_SECONDS + 60.0
     tracker.check_away_timeout(t_hold)
@@ -306,8 +304,8 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     cur_name, _ = coord.get_current_area_and_distance()
     assert cur_name == "Bedroom"
 
-    # Battery hibernation latch also holds Area when Wi-Fi goes unavailable after "hibernating" report
-    hass.states.async_set("sensor.pocket_assistant_system_link_report", "hibernating")
+    # Battery hibernation latch via device_telemetry RPC holds Area when Wi-Fi goes unavailable
+    coord.apply_device_telemetry({"link": {"state": "hibernating"}})
     await hass.async_block_till_done()
     hass.states.async_set("sensor.pocket_assistant_wi_fi_signal", "unavailable")
     tracker.check_away_timeout(t_hold + 60.0)
@@ -316,8 +314,7 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
 
     # Whereas actively advertising unseen (ble_active == True via device_telemetry or ble_radio_active == "on") marks Away cleanly
     hass.states.async_set("sensor.pocket_assistant_wi_fi_signal", "-60")
-    hass.states.async_set("sensor.pocket_assistant_system_link_report", "ok")
-    coord.apply_device_telemetry({"ble_active": True, "int_ram_free_kb": 120})
+    coord.apply_device_telemetry({"link": {"state": "ok"}, "ble_active": True, "int_ram_free_kb": 120})
     hass.states.async_set("binary_sensor.pocket_assistant_ble_radio_active", "on")
     await hass.async_block_till_done()
     tracker.check_away_timeout(t_hold + 120.0)

@@ -2,30 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-import json
-from pathlib import Path
 import re
-from typing import Any, Final, Literal
+from typing import Final, Literal
 import uuid
 
-_PROTOCOL_SCHEMA: Final[dict[str, Any]] = json.loads(
-    (Path(__file__).resolve().parent / "protocol_v3.json").read_text(encoding="utf-8")
+from .protocol_specs import (
+    DEFAULT_GAMES_ITEMS as DEFAULT_GAMES_ITEMS,
+    DEFAULT_TOOLS_ITEMS as DEFAULT_TOOLS_ITEMS,
+    PROTOCOL_V3_DATA,
+    STUDIO_CONTRACT,
 )
-_STUDIO_CONTRACT_SCHEMA: Final[dict[str, Any]] = json.loads(
-    (Path(__file__).resolve().parent / "studio_contract.json").read_text(
-        encoding="utf-8"
-    )
-)
-_PROTOCOL_DEFAULTS: Final[dict[str, Any]] = _PROTOCOL_SCHEMA["defaults"]
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final[int] = 48
-if int(_STUDIO_CONTRACT_SCHEMA["studio_contract"]["studio_rev"]) != STUDIO_REV:
+STUDIO_REV: Final[int] = 49
+if int(STUDIO_CONTRACT["studio_rev"]) != STUDIO_REV:
     raise RuntimeError("const.py STUDIO_REV is out of sync with studio_contract.json")
 
-MIN_FIRMWARE_CORE_REV: Final = 2026112303
+MIN_FIRMWARE_CORE_REV: Final = 2026112401
 PLATFORMS: Final[tuple[str, ...]] = (
     "sensor",
     "binary_sensor",
@@ -122,71 +116,11 @@ CONF_SYSTEM_BLE_UUID: Final = "system_ble_uuid"
 CONF_IGNORED_DISCOVERED_DEVICES: Final = "ignored_discovered_devices"
 CONF_SYSTEM_CONFIG_REV: Final = "system_config_rev"
 
-# Device Preference Keys (Protocol v3 `device_prefs` domain)
-CONF_WAKE_WORD_MODE: Final = "wake_word_mode"
-CONF_TAP_TO_WAKE: Final = "tap_to_wake"
-CONF_PICKUP_TO_WAKE: Final = "pickup_to_wake"
-CONF_BATTERY_SCREEN_TIMEOUT: Final = "battery_screen_timeout"
-CONF_DOCKED_IDLE_TIMEOUT: Final = "docked_idle_timeout"
-CONF_BATTERY_HIBERNATE_TIMEOUT: Final = "battery_hibernate_timeout"
-CONF_SCREENSAVER_MODE: Final = "screensaver_mode"
-CONF_SCREENSAVER_STYLE: Final = "screensaver_style"
-CONF_SCREENSAVER_PHOTO_CLOCK: Final = "screensaver_photo_clock"
-CONF_BEDTIME_ACTIVE: Final = "bedtime_active"
-CONF_BEDTIME_DISPLAY: Final = "bedtime_display"
-CONF_BEDTIME_BRIGHTNESS: Final = "bedtime_brightness"
-CONF_BEDTIME_SCHEDULE: Final = "bedtime_schedule"
-CONF_BEDTIME_START_HOUR: Final = "bedtime_start_hour"
-CONF_BEDTIME_END_HOUR: Final = "bedtime_end_hour"
+# Active Device Preference Keys imported directly by integration modules
+# (full 65-key catalog lives canonically in `protocol_specs.DEVICE_PREF_KEYS`)
 CONF_DO_NOT_DISTURB: Final = "do_not_disturb"
-CONF_AUTO_BRIGHTNESS_MODE: Final = "auto_brightness_mode"
-CONF_MANUAL_BRIGHTNESS: Final = "manual_brightness"
-CONF_DAY_BRIGHTNESS: Final = "day_brightness"
-CONF_NIGHT_BRIGHTNESS: Final = "night_brightness"
-CONF_DAY_START_HOUR: Final = "day_start_hour"
-CONF_NIGHT_START_HOUR: Final = "night_start_hour"
-CONF_COLOR_PROFILE: Final = "color_profile"
-CONF_VA_VISUAL_PROFILE: Final = "va_visual_profile"
-CONF_HOME_SCREEN_ENABLED: Final = "home_screen_enabled"
-CONF_START_SCREEN: Final = "start_screen"
-CONF_HOME_CLOCK_TAP_ACTION: Final = "home_clock_tap_action"
-CONF_HOME_DATE_TAP_ACTION: Final = "home_date_tap_action"
-CONF_RETURN_TO_HOME_TIMEOUT: Final = "return_to_home_timeout"
-CONF_CALENDAR_LOOKAHEAD_DAYS: Final = "calendar_lookahead_days"
-CONF_CALENDAR_WEEK_START: Final = "calendar_week_start"
-CONF_CLOCK_FACE: Final = "clock_face"
-CONF_TIME_FORMAT: Final = "time_format"
-CONF_SHOW_UTC_CLOCK: Final = "show_utc_clock"
 CONF_WORLD_CLOCKS: Final = "world_clocks"
-CONF_LOCAL_CLOCK_LABEL: Final = "local_clock_label"
-CONF_ALARMS_SUMMARY: Final = "alarms_summary"
-CONF_WEATHER_BACKGROUND: Final = "weather_background"
-CONF_WEATHER_APP_BACKGROUND: Final = "weather_app_background"
-CONF_HOME_SUN: Final = "home_sun"
-CONF_HOME_MOON: Final = "home_moon"
-CONF_WAKE_GREETING: Final = "wake_greeting"
-CONF_ALBUM_ART_STYLE: Final = "album_art_style"
-CONF_MUSIC_OVERLAY_STYLE: Final = "music_overlay_style"
 CONF_MUSIC_AUTO_OPEN: Final = "music_auto_open"
-CONF_ALBUM_SORT_ORDER: Final = "album_sort_order"
-CONF_ARTIST_ALBUM_SORT_ORDER: Final = "artist_album_sort_order"
-CONF_PODCAST_SORT_ORDER: Final = "podcast_sort_order"
-CONF_WW_SENS_OKAY_NABU: Final = "ww_sens_okay_nabu"
-CONF_WW_SENS_HEY_LUNA: Final = "ww_sens_hey_luna"
-CONF_WW_SENS_HEY_JARVIS: Final = "ww_sens_hey_jarvis"
-CONF_WW_SENS_HEY_MYCROFT: Final = "ww_sens_hey_mycroft"
-CONF_WW_SENS_ALEXA: Final = "ww_sens_alexa"
-CONF_WAKE_SCREEN_ON_ASSIST: Final = "wake_screen_on_assist"
-CONF_ALERT_VOLUME: Final = "alert_volume"
-CONF_VOLUME_STEP_SIZE: Final = "volume_step_size"
-CONF_GAME_SOUND_EFFECTS: Final = "game_sound_effects"
-CONF_BLE_BEACON_MODE: Final = "ble_beacon_mode"
-CONF_WEATHER_SIM_CONDITION: Final = "weather_sim_condition"
-CONF_CAMERA_DEFAULT_VIEW: Final = "camera_default_view"
-CONF_CAMERA_CAROUSEL_INTERVAL: Final = "camera_carousel_interval"
-CONF_CAMERA_FRAMING: Final = "camera_framing"
-CONF_CAMERA_STREAM_MODE: Final = "camera_stream_mode"
-CONF_CAMERA_DOORBELL_POPUP: Final = "camera_doorbell_popup"
 CONF_GLASS_STYLE: Final = "glass_style"
 
 # Defaults
@@ -210,8 +144,6 @@ DEFAULT_AREA_HANDOFF: Final = False
 DEFAULT_DOCK_ROUTES: Final = "app:pinned,app:music,app:home_hub,app:cameras,app:area,app:remote,app:games,app:tools"
 DEFAULT_AREA_CATEGORIES: Final = "scene,light,cover,fan,switch,climate,media"
 DEFAULT_HOME_CATEGORIES: Final = "alarm,intercom,thermostat,entry,vacuum"
-DEFAULT_TOOLS_ITEMS: Final = str(_PROTOCOL_DEFAULTS["tools_items"])
-DEFAULT_GAMES_ITEMS: Final = str(_PROTOCOL_DEFAULTS["games_items"])
 # Home Activity Card: protocol_v3.json defaults.activity_card / defaults.activity_sources (checked by the tests)
 DEFAULT_ACTIVITY_CARD: Final = True
 DEFAULT_ACTIVITY_SOURCES: Final = "calendar,music_queue,stopwatch,alarms,timers"
@@ -223,7 +155,7 @@ DEFAULT_SCREENSAVER_PHOTO_COLLECTION: Final = "__all__"
 DEFAULT_SCREENSAVER_CYCLE_MINUTES: Final = 5
 DEFAULT_SCREENSAVER_SHUFFLE: Final = False
 DEFAULT_ART_SIZE: Final = 466  # artwork edge until the Device reports its hardware manifest
-WALLPAPER_MAX_DIM: Final = 720  # native wallpaper ceiling for 720x720 high-resolution displays
+WALLPAPER_MAX_DIM: Final = 1280  # native wallpaper ceiling for 1280x800 / 1024x600 high-resolution displays
 DAY_NIGHT_SKY_PRESET_ID: Final = "preset:day_night_sky"
 DAY_NIGHT_SKY_NATIVE_URL: Final = "latter://day_night_sky"
 
@@ -287,7 +219,7 @@ ALL_RPC_METHODS: Final[tuple[str, ...]] = (
     RPC_SET_DEVICE_PREFS,
     RPC_TIMER_ALARM_STATE,
 )
-if set(ALL_RPC_METHODS) != set(_PROTOCOL_SCHEMA["rpc_methods"].keys()):
+if set(ALL_RPC_METHODS) != set(PROTOCOL_V3_DATA["rpc_methods"].keys()):
     raise RuntimeError("const.py ALL_RPC_METHODS is out of sync with protocol_v3.json rpc_methods")
 
 # HTTP Endpoints (Artwork, Wallpaper, Wallpaper Upload, Camera Snapshot, Camera Stream/Grid/Audio)
@@ -400,14 +332,3 @@ def target_kind(value: object) -> TargetKind:
     if text.startswith(PERSON_PREFIX):
         return "person"
     return "device"
-
-
-def other_latter_devices[T](candidates: Iterable[T], caller_slug: str) -> list[T]:
-    """Return the Latter Devices other than the caller: objects with a `device_slug` that aren't BLE tags."""
-    return [
-        c
-        for c in candidates
-        if getattr(c, "device_slug", None)
-        and not getattr(c, "is_ble_tag", False)
-        and getattr(c, "device_slug", None) != caller_slug
-    ]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 import json
 from typing import Any
 
@@ -10,6 +11,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
+from homeassistant.util import dt as dt_util
 import pytest
 
 from custom_components.latter.const import (
@@ -112,6 +114,11 @@ async def test_rpc_outbox_single_and_multipart_dispatch_and_target_pinning(
     assert coord_a._last_pushed_v3 == {}
 
     hass.states.async_set("sensor.pocket_assistant_system_rpc_outbox", "unknown")
+    await hass.async_block_till_done()
+    # Reconnect fallback is deferred briefly so multipart device_hello can arrive first
+    from pytest_homeassistant.common import async_fire_time_changed
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
     await hass.async_block_till_done()
     reconnected_domains = {
         c.data.get("domain")

@@ -11,7 +11,6 @@ import yaml
 
 from custom_components.latter.const import (
     CONF_ASSIGNED_PERSON,
-    CONF_BEDTIME_ACTIVE,
     CONF_DEFAULT_AREA,
     CONF_DEVICE_SLUG,
     CONF_ESPHOME_DEVICE_ID,
@@ -126,7 +125,7 @@ async def test_navigate_single_device_wake_bedtime_and_validation(
     assert sent_cmds[-1] == "nav_silent:quick_actions"
 
     # 3. Bedtime Mode forces nav_silent:<route> even when wake=True
-    coord.update_device_config({**coord.device_data, CONF_BEDTIME_ACTIVE: True})
+    coord.update_device_config({**coord.device_data, "bedtime_active": True})
     await hass.services.async_call(
         DOMAIN,
         SERVICE_NAVIGATE,
@@ -136,7 +135,7 @@ async def test_navigate_single_device_wake_bedtime_and_validation(
     assert sent_cmds[-1] == "nav_silent:cameras:grid"
 
     # Clearing Bedtime Mode restores wake=True -> nav:<route>
-    coord.update_device_config({**coord.device_data, CONF_BEDTIME_ACTIVE: False})
+    coord.update_device_config({**coord.device_data, "bedtime_active": False})
     await hass.services.async_call(
         DOMAIN,
         SERVICE_NAVIGATE,
@@ -366,7 +365,7 @@ async def test_navigate_multi_target_all_occupied_person_and_offline_skip(
                 CONF_ESPHOME_DEVICE_ID: bed_dev.id,
                 "mac": bed_mac,
                 CONF_DEFAULT_AREA: "bedroom",
-                CONF_BEDTIME_ACTIVE: True,
+                "bedtime_active": True,
             },
             subentry_type=SUBENTRY_DEVICE,
             title="Bedroom Panel",

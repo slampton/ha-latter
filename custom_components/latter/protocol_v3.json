@@ -37,7 +37,6 @@
   ],
   "domains": {
     "area_context": {
-      "entity_suffix": "area_context",
       "cpp_enum_name": "AreaCtxField",
       "description": "Active Area state, climate/security/cover summaries, camera/intercom directories, and alert banner",
       "fields": [
@@ -324,7 +323,6 @@
       ]
     },
     "active_media": {
-      "entity_suffix": "active_media",
       "cpp_enum_name": "MediaField",
       "description": "Active media player state, metadata, playback progress, artwork URL, and speaker routing",
       "fields": [
@@ -478,7 +476,6 @@
       ]
     },
     "remote_config": {
-      "entity_suffix": "remote_config",
       "cpp_enum_name": "RemoteField",
       "description": "Universal TV/AV remote slot directory and active remote selection",
       "fields": [
@@ -506,7 +503,6 @@
       ]
     },
     "weather_forecast": {
-      "entity_suffix": "weather_forecast",
       "cpp_enum_name": "WeatherField",
       "description": "Current outdoor weather telemetry and 5-day daily forecast",
       "fields": [
@@ -618,7 +614,6 @@
       ]
     },
     "calendar_agenda": {
-      "entity_suffix": "calendar_agenda",
       "cpp_enum_name": "CalendarField",
       "description": "Upcoming calendar agenda events and next-event headline",
       "fields": [
@@ -653,7 +648,6 @@
       ]
     },
     "device_prefs": {
-      "entity_suffix": "device_prefs",
       "cpp_enum_name": "DevicePrefsField",
       "description": "Authoritative Device preferences, power/sleep policies, audio/wake-word tunables, and UI personalization synced between Latter and NVS",
       "fields": [
@@ -1150,7 +1144,6 @@
       ]
     },
     "shortcuts": {
-      "entity_suffix": "shortcuts",
       "cpp_enum_name": "ShortcutsField",
       "description": "App Dock and Pinned App shortcut tables (Latter OS routes and Home Assistant entity actions with live state), chunked across <=24-item frames for unlimited pages",
       "fields": [
@@ -1272,554 +1265,442 @@
       {
         "token": "app:pinned",
         "label": "Pinned",
-        "group": "Apps",
         "dock_only": true
       },
       {
         "token": "app:music",
-        "label": "Music",
-        "group": "Apps"
+        "label": "Music"
       },
       {
         "token": "app:home_hub",
-        "label": "Home Hub",
-        "group": "Apps"
+        "label": "Home Hub"
       },
       {
         "token": "app:cameras",
-        "label": "Cameras",
-        "group": "Apps"
+        "label": "Cameras"
       },
       {
         "token": "app:area",
-        "label": "Area Control",
-        "group": "Apps"
+        "label": "Area Control"
       },
       {
         "token": "app:remote",
-        "label": "Remote",
-        "group": "Apps"
+        "label": "Remote"
       },
       {
         "token": "app:weather",
-        "label": "Sky & Weather",
-        "group": "Apps"
+        "label": "Sky & Weather"
       },
       {
         "token": "app:time",
-        "label": "Time",
-        "group": "Apps"
+        "label": "Time"
       },
       {
         "token": "app:calendar",
-        "label": "Calendar",
-        "group": "Apps"
+        "label": "Calendar"
       },
       {
         "token": "app:tools",
-        "label": "Tools",
-        "group": "Apps"
+        "label": "Tools"
       },
       {
         "token": "app:games",
-        "label": "Games",
-        "group": "Apps"
+        "label": "Games"
       },
       {
         "token": "app:clock",
-        "label": "Clock Face",
-        "group": "Apps"
+        "label": "Clock Face"
       },
       {
         "token": "home_hub:alarm",
-        "label": "Security Alarm",
-        "group": "Home Hub"
+        "label": "Security Alarm"
       },
       {
         "token": "home_hub:intercom",
-        "label": "Broadcast",
-        "group": "Home Hub"
+        "label": "Broadcast"
       },
       {
         "token": "home_hub:thermostat",
-        "label": "Thermostat",
-        "group": "Home Hub"
+        "label": "Thermostat"
       },
       {
         "token": "home_hub:entry",
-        "label": "Entry & Garage",
-        "group": "Home Hub"
+        "label": "Entry & Garage"
       },
       {
         "token": "home_hub:vacuum",
-        "label": "Robot Vacuum",
-        "group": "Home Hub"
+        "label": "Robot Vacuum"
       },
       {
         "token": "cameras:grid",
-        "label": "Cameras: Grid",
-        "group": "Cameras"
+        "label": "Cameras: Grid"
       },
       {
         "token": "cameras:single",
-        "label": "Cameras: Live",
-        "group": "Cameras"
+        "label": "Cameras: Live"
       },
       {
         "token": "cameras:carousel",
-        "label": "Cameras: Carousel",
-        "group": "Cameras"
+        "label": "Cameras: Carousel"
       },
       {
         "token": "cameras:settings",
-        "label": "Cameras: Settings",
-        "group": "Cameras"
+        "label": "Cameras: Settings"
       },
       {
         "token": "area:picker",
-        "label": "Switch Area",
-        "group": "Area Control"
+        "label": "Switch Area"
       },
       {
         "token": "area:scene",
-        "label": "Area: Scenes",
-        "group": "Area Control"
+        "label": "Area: Scenes"
       },
       {
         "token": "area:light",
-        "label": "Area: Lights",
-        "group": "Area Control"
+        "label": "Area: Lights"
       },
       {
         "token": "area:cover",
-        "label": "Area: Blinds & Curtains",
-        "group": "Area Control"
+        "label": "Area: Blinds & Curtains"
       },
       {
         "token": "area:fan",
-        "label": "Area: Fans",
-        "group": "Area Control"
+        "label": "Area: Fans"
       },
       {
         "token": "area:switch",
-        "label": "Area: Switches",
-        "group": "Area Control"
+        "label": "Area: Switches"
       },
       {
         "token": "area:climate",
-        "label": "Area: Climate",
-        "group": "Area Control"
+        "label": "Area: Climate"
       },
       {
         "token": "area:media",
-        "label": "Area: Media",
-        "group": "Area Control"
+        "label": "Area: Media"
       },
       {
         "token": "area:all",
-        "label": "Area: All Devices",
-        "group": "Area Control"
+        "label": "Area: All Devices"
       },
       {
         "token": "weather:current",
-        "label": "Current Weather",
-        "group": "Sky & Weather"
+        "label": "Current Weather"
       },
       {
         "token": "weather:forecast",
-        "label": "5-Day Forecast",
-        "group": "Sky & Weather"
+        "label": "5-Day Forecast"
       },
       {
         "token": "weather:sun",
-        "label": "Sun Path",
-        "group": "Sky & Weather"
+        "label": "Sun Path"
       },
       {
         "token": "weather:moon",
-        "label": "Moon Phase",
-        "group": "Sky & Weather"
+        "label": "Moon Phase"
       },
       {
         "token": "time:clock",
-        "label": "World Clocks",
-        "group": "Time"
+        "label": "World Clocks"
       },
       {
         "token": "time:timers",
-        "label": "Timers",
-        "group": "Time"
+        "label": "Timers"
       },
       {
         "token": "time:alarms",
-        "label": "Alarms",
-        "group": "Time"
+        "label": "Alarms"
       },
       {
         "token": "time:stopwatch",
-        "label": "Stopwatch",
-        "group": "Time"
+        "label": "Stopwatch"
       },
       {
         "token": "calendar:overview",
-        "label": "Upcoming Events",
-        "group": "Calendar"
+        "label": "Upcoming Events"
       },
       {
         "token": "calendar:day",
-        "label": "Day View",
-        "group": "Calendar"
+        "label": "Day View"
       },
       {
         "token": "calendar:week",
-        "label": "Week View",
-        "group": "Calendar"
+        "label": "Week View"
       },
       {
         "token": "calendar:month",
-        "label": "Month View",
-        "group": "Calendar"
+        "label": "Month View"
       },
       {
         "token": "music:speakers",
-        "label": "Speakers",
-        "group": "Music"
+        "label": "Speakers"
       },
       {
         "token": "music:library",
-        "label": "Music Library",
-        "group": "Music"
+        "label": "Music Library"
       },
       {
         "token": "music:favorites",
-        "label": "Favorites",
-        "group": "Music"
+        "label": "Favorites"
       },
       {
         "token": "music:playlists",
-        "label": "Playlists",
-        "group": "Music"
+        "label": "Playlists"
       },
       {
         "token": "music:queue",
-        "label": "Playback Queue",
-        "group": "Music"
+        "label": "Playback Queue"
       },
       {
         "token": "music:album_tracks",
-        "label": "Album Tracks",
-        "group": "Music"
+        "label": "Album Tracks"
       },
       {
         "token": "music:lyrics",
-        "label": "Music Lyrics",
-        "group": "Music"
+        "label": "Music Lyrics"
       },
       {
         "token": "music:info",
-        "label": "Track Info",
-        "group": "Music"
+        "label": "Track Info"
       },
       {
         "token": "remote:devices",
-        "label": "Remote Devices",
-        "group": "Remote"
+        "label": "Remote Devices"
       },
       {
         "token": "tools:stopwatch",
         "label": "Analog Chronograph",
-        "group": "Tools",
         "capability": "round"
       },
       {
         "token": "tools:level",
         "label": "Bubble Level",
-        "group": "Tools",
         "capability": "imu"
       },
       {
         "token": "tools:flashlight",
-        "label": "Flashlight",
-        "group": "Tools"
+        "label": "Flashlight"
       },
       {
         "token": "tools:calculator",
-        "label": "Calculator",
-        "group": "Tools"
+        "label": "Calculator"
       },
       {
         "token": "tools:dice",
-        "label": "Dice Roll",
-        "group": "Tools"
+        "label": "Dice Roll"
       },
       {
         "token": "tools:coin_flip",
-        "label": "Coin Flip",
-        "group": "Tools"
+        "label": "Coin Flip"
       },
       {
         "token": "games:marbles",
-        "label": "Marbles",
-        "group": "Games"
+        "label": "Marbles"
       },
       {
         "token": "games:archery",
         "label": "Archery",
-        "group": "Games",
         "capability": "imu"
       },
       {
         "token": "games:bricks",
         "label": "Bricks",
-        "group": "Games",
         "capability": "imu"
       },
       {
         "token": "games:chomp",
         "label": "Chomp",
-        "group": "Games",
         "capability": "imu"
       },
       {
         "token": "games:blocks",
         "label": "Blocks",
-        "group": "Games",
         "capability": "no_imu"
       },
       {
         "token": "games:snake",
         "label": "Snake",
-        "group": "Games",
         "capability": "no_imu"
       },
       {
         "token": "games:drop_four",
         "label": "Drop Four",
-        "group": "Games",
         "capability": "no_imu"
       },
       {
         "token": "settings:display",
-        "label": "Display Settings",
-        "group": "Settings"
+        "label": "Display Settings"
       },
       {
         "token": "settings:sleep",
-        "label": "Sleep & Wake",
-        "group": "Settings"
+        "label": "Sleep & Wake"
       },
       {
         "token": "settings:sound",
-        "label": "Sound Settings",
-        "group": "Settings"
+        "label": "Sound Settings"
       },
       {
         "token": "settings:voice",
-        "label": "Voice Settings",
-        "group": "Settings"
+        "label": "Voice Settings"
       },
       {
         "token": "settings:music",
-        "label": "Music Settings",
-        "group": "Settings"
+        "label": "Music Settings"
       },
       {
         "token": "settings:home",
-        "label": "Home Settings",
-        "group": "Settings"
+        "label": "Home Settings"
       },
       {
         "token": "settings:actions",
-        "label": "Device Actions",
-        "group": "Settings"
+        "label": "Device Actions"
       },
       {
         "token": "settings:update",
-        "label": "Software Update",
-        "group": "Settings"
+        "label": "Software Update"
       },
       {
         "token": "settings:info",
-        "label": "System Info",
-        "group": "Settings"
+        "label": "System Info"
       }
     ],
     "activity_sources": [
       {
-        "token": "calendar",
-        "label": "Calendar"
+        "token": "calendar"
       },
       {
-        "token": "music_queue",
-        "label": "Music Queue"
+        "token": "music_queue"
       },
       {
-        "token": "stopwatch",
-        "label": "Stopwatch"
+        "token": "stopwatch"
       },
       {
-        "token": "alarms",
-        "label": "Alarms"
+        "token": "alarms"
       },
       {
-        "token": "timers",
-        "label": "Timers"
+        "token": "timers"
       }
     ],
     "area_categories": [
       {
-        "token": "scene",
-        "label": "Scenes"
+        "token": "scene"
       },
       {
-        "token": "light",
-        "label": "Lights"
+        "token": "light"
       },
       {
-        "token": "cover",
-        "label": "Blinds & Curtains"
+        "token": "cover"
       },
       {
-        "token": "fan",
-        "label": "Fans"
+        "token": "fan"
       },
       {
-        "token": "switch",
-        "label": "Switches"
+        "token": "switch"
       },
       {
-        "token": "climate",
-        "label": "Climate"
+        "token": "climate"
       },
       {
-        "token": "media",
-        "label": "Media"
+        "token": "media"
       },
       {
-        "token": "all",
-        "label": "All Devices"
+        "token": "all"
       }
     ],
     "home_categories": [
       {
-        "token": "alarm",
-        "label": "Security Alarm"
+        "token": "alarm"
       },
       {
-        "token": "intercom",
-        "label": "Broadcast"
+        "token": "intercom"
       },
       {
-        "token": "thermostat",
-        "label": "Thermostat"
+        "token": "thermostat"
       },
       {
-        "token": "entry",
-        "label": "Entry & Garage"
+        "token": "entry"
       },
       {
-        "token": "vacuum",
-        "label": "Robot Vacuum"
+        "token": "vacuum"
       }
     ],
     "tools_items": [
       {
         "token": "stopwatch",
-        "label": "Analog Chronograph",
         "capability": "round"
       },
       {
         "token": "level",
-        "label": "Bubble Level",
         "capability": "imu"
       },
       {
-        "token": "flashlight",
-        "label": "Flashlight"
+        "token": "flashlight"
       },
       {
-        "token": "calculator",
-        "label": "Calculator"
+        "token": "calculator"
       },
       {
-        "token": "dice",
-        "label": "Dice Roll"
+        "token": "dice"
       },
       {
-        "token": "coin_flip",
-        "label": "Coin Flip"
+        "token": "coin_flip"
       }
     ],
     "games_items": [
       {
         "token": "blocks",
-        "label": "Blocks",
         "capability": "no_imu"
       },
       {
         "token": "snake",
-        "label": "Snake",
         "capability": "no_imu"
       },
       {
         "token": "drop_four",
-        "label": "Drop Four",
         "capability": "no_imu"
       },
       {
-        "token": "marbles",
-        "label": "Marbles"
+        "token": "marbles"
       },
       {
         "token": "archery",
-        "label": "Archery",
         "capability": "imu"
       },
       {
         "token": "bricks",
-        "label": "Bricks",
         "capability": "imu"
       },
       {
         "token": "chomp",
-        "label": "Chomp",
         "capability": "imu"
       }
     ],
     "shortcut_badge_styles": [
       {
-        "token": "glass",
-        "label": "Frosted glass"
+        "token": "glass"
       },
       {
-        "token": "inverted",
-        "label": "Inverted badge"
+        "token": "inverted"
       }
     ],
     "shortcut_accents": [
       {
-        "token": "default",
-        "label": "Default"
+        "token": "default"
       },
       {
-        "token": "primary",
-        "label": "Theme"
+        "token": "primary"
       },
       {
-        "token": "gold",
-        "label": "Amber"
+        "token": "gold"
       },
       {
-        "token": "green",
-        "label": "Green"
+        "token": "green"
       },
       {
-        "token": "red",
-        "label": "Red"
+        "token": "red"
       },
       {
-        "token": "orange",
-        "label": "Orange"
+        "token": "orange"
       }
     ]
   },

@@ -421,7 +421,6 @@ class LatterCoordinator:
         self._unsub_wallpaper_timer: Callable[[], None] | None = None
         self._unsub_screensaver_timer: Callable[[], None] | None = None
         self._unsub_doorbell_ring_state: Callable[[], None] | None = None
-        self._unsub_link_report_state: Callable[[], None] | None = None
         self._unsub_ble_radio_state: Callable[[], None] | None = None
         self._unsub_reconnect_post_delay: Callable[[], None] | None = None
         self._transport_reconnect_sync_mono: float = 0.0
@@ -2581,7 +2580,6 @@ class LatterCoordinator:
             self._cached_media_payload = None
             bind_coordinator_speaker_listener(self)
             if is_own_device:
-                self._bind_link_report_listener()
                 self._bind_ble_radio_listener()
             try:
                 async_audit_coordinator_health(self.hass, self)
@@ -3226,6 +3224,7 @@ class LatterCoordinator:
         )
         self._transport_reconnect_sync_mono = 0.0
         if not transport_just_synced:
+            self._notify_debouncer.async_cancel()
             self._last_pushed_v3.clear()
             await self.async_provision_pin_session_key()
             self.force_republish_all_domains()
@@ -3642,6 +3641,8 @@ class LatterCoordinator:
         if self.is_rpc_outbox_unavailable():
             self._last_pushed_v3.clear()
             return
+        if self._rpc_receiver is not None and self._rpc_receiver.is_reconnect_deferred:
+            return
 
         for dom, payload in self._collect_domain_payload_pairs():
             if self.is_rpc_outbox_unavailable():
@@ -3668,6 +3669,7 @@ class LatterCoordinator:
     @callback
     def force_republish_all_domains(self) -> None:
         """Bump packer epoch, invalidate cached frames, and schedule a full Protocol v3 republish."""
+        self._notify_debouncer.async_cancel()
         self._packer.force_republish_all_domains()
         self.rev = max(self.rev, self._packer.rev)
         self._last_pushed_v3.clear()
@@ -4238,50 +4240,6 @@ class LatterCoordinator:
         self.async_notify_listeners()
 
     @callback
-    def _bind_link_report_listener(self) -> None:
-        if self._unsub_link_report_state is not None:
-            self._unsub_link_report_state()
-            self._unsub_link_report_state = None
-        link_ent = find_device_entity_by_suffix(
-            self.hass,
-            self.esphome_device_id,
-            "sensor",
-            ("_system_link_report",),
-        )
-        if not link_ent:
-            return
-        cur_st = self.hass.states.get(link_ent)
-        if cur_st is not None and cur_st.state == "hibernating":
-            self._entered_hibernate = True
-        elif cur_st is not None and cur_st.state not in (
-            STATE_UNAVAILABLE,
-            STATE_UNKNOWN,
-            "",
-            "hibernating",
-        ):
-            self._entered_hibernate = False
-
-        @callback
-        def _on_link_report_change(event: Event[Any]) -> None:
-            new_st: State | None = event.data.get("new_state")
-            if new_st is None:
-                return
-            if new_st.state == "hibernating":
-                if not self._entered_hibernate:
-                    self._entered_hibernate = True
-                    self.schedule_persist_runtime_state()
-            elif (
-                new_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, "")
-                and self._entered_hibernate
-            ):
-                self._entered_hibernate = False
-                self.schedule_persist_runtime_state()
-
-        self._unsub_link_report_state = async_track_state_change_event(
-            self.hass, [link_ent], _on_link_report_change
-        )
-
-    @callback
     def _bind_ble_radio_listener(self) -> None:
         if self._unsub_ble_radio_state is not None:
             self._unsub_ble_radio_state()
@@ -4329,7 +4287,6 @@ class LatterCoordinator:
         bind_coordinator_speaker_listener(self)
         bind_coordinator_area_listeners(self)
         bind_coordinator_doorbell_listener(self)
-        self._bind_link_report_listener()
         self._bind_ble_radio_listener()
         self.bind_wallpaper_cycle_timer()
         self.bind_screensaver_cycle_timer()
@@ -4422,7 +4379,6 @@ class LatterCoordinator:
             "_unsub_wallpaper_timer",
             "_unsub_screensaver_timer",
             "_unsub_doorbell_ring_state",
-            "_unsub_link_report_state",
             "_unsub_ble_radio_state",
             "_unsub_reconnect_post_delay",
             "_unsub_timer_tick",

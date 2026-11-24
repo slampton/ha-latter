@@ -45,7 +45,7 @@ Selects `entity_id` (`media_player.*`, required) as the device's active speaker.
 
 ### `latter.reset_device`
 Admin-only action that resets `target_device` (**required**; never falls back to a default device):
-- `device_settings` (`true` default): calls `esphome.<node>_latter_factory_reset` (erases saved on-device NVS preferences and restarts while keeping compiled Wi-Fi and API pairing; requires firmware core rev `2026112007+`).
+- `device_settings` (`true` default): calls `esphome.<node>_latter_factory_reset` (erases saved on-device NVS preferences and restarts while keeping compiled Wi-Fi and API pairing; requires firmware core rev `2026112401+`).
 - `latter_options` (`true` default): resets Studio per-device settings back to onboarding defaults while preserving the bound ESPHome device, MAC, slug, and Music Assistant player link.
 
 ### `latter.navigate`

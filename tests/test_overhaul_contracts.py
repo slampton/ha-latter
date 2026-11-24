@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 import json
 from typing import Any
 from unittest.mock import patch
@@ -11,15 +12,21 @@ from homeassistant.helpers import (
     entity_registry as er,
     issue_registry as ir,
 )
+from homeassistant.util import dt as dt_util
 import pytest
 
 from custom_components.latter.config_defaults import compute_hardware_defaults
 from custom_components.latter.const import (
+    CONF_BLE_AUTO_SWITCH,
+    CONF_DEFAULT_AREA,
     CONF_DEVICE_GROUP,
     CONF_GLASS_STYLE,
+    CONF_NATIVE_BLE_TRACKING,
+    CONF_SYNC_DEVICE_AREA,
     DOMAIN,
     MIN_FIRMWARE_CORE_REV,
     STUDIO_REV,
+    WALLPAPER_MAX_DIM,
 )
 from custom_components.latter.diagnostics import async_get_config_entry_diagnostics
 from custom_components.latter.groups.device_groups import (
@@ -48,9 +55,14 @@ from custom_components.latter.repairs_keys import (
 )
 from custom_components.latter.services.rpc_receiver import (
     MAX_RPC_PARTS,
+    RECONNECT_DEFER_SECONDS,
     RpcReassembler,
 )
 from custom_components.latter.services.rpc_slots import is_coord_in_quiet_mode
+from custom_components.latter.studio.commands import (
+    StudioCommandError,
+    async_execute_studio_command,
+)
 from custom_components.latter.studio.payload import (
     build_studio_state_payload,
     build_system_section,
@@ -78,7 +90,8 @@ def test_studio_contract_split_and_pref_ui_merge() -> None:
     proto = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
     contract = json.loads((LATTER_DIR / "studio_contract.json").read_text(encoding="utf-8"))
 
-    assert STUDIO_REV == 48
+    assert STUDIO_REV == 49
+    assert WALLPAPER_MAX_DIM == 1280
     assert contract["studio_contract"]["studio_rev"] == STUDIO_REV
     assert "studio_contract" not in proto
     assert "ha_services" not in proto
@@ -489,6 +502,9 @@ async def test_headless_display_zero_defaults_runtime_restore_and_capability_pru
         has_ble_beacon=True,
     )
     assert headless_defaults[CONF_DEVICE_GROUP] == "custom"
+    assert headless_defaults[CONF_NATIVE_BLE_TRACKING] is False
+    assert headless_defaults[CONF_BLE_AUTO_SWITCH] is False
+    assert headless_defaults[CONF_SYNC_DEVICE_AREA] is False
 
     entry, _sys_obj, coord = await setup_latter_hub(hass, with_device=True)
     slug = coord.device_slug
@@ -610,5 +626,274 @@ async def test_headless_display_zero_defaults_runtime_restore_and_capability_pru
     assert coord.display_shape == "none"
     assert ent_reg.async_get(dnd_eid) is None
     assert coordinator_supports_pref(coord, DEVICE_PREF_SPEC_MAP["do_not_disturb"]) is False
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+def test_compute_hardware_defaults_stationary_and_screenless_edges() -> None:
+    """Verify area-less stationary wall panels and screenless stationary nodes never default to roaming/VFM."""
+    # 1) Stationary wall panel onboarded before HA Area assignment stays static in `wall_panels`
+    panel_no_area = compute_hardware_defaults(
+        {
+            "display": 1,
+            "w": 1024,
+            "h": 600,
+            "shape": "square",
+            "stationary": 1,
+            "battery": 0,
+            "core_rev": MIN_FIRMWARE_CORE_REV,
+        },
+        esp_area_id="",
+        has_native_slots=True,
+        has_ble_beacon=True,
+    )
+    assert panel_no_area[CONF_DEVICE_GROUP] == "wall_panels"
+    assert panel_no_area[CONF_NATIVE_BLE_TRACKING] is False
+    assert panel_no_area[CONF_BLE_AUTO_SWITCH] is False
+    assert panel_no_area[CONF_SYNC_DEVICE_AREA] is False
+    assert panel_no_area[CONF_DEFAULT_AREA] == ""
+
+    # 2) Screenless stationary node (`display=0, stationary=1`) never enables VFM `sync_device_area`
+    screenless_stationary = compute_hardware_defaults(
+        {
+            "display": 0,
+            "w": 0,
+            "h": 0,
+            "shape": "none",
+            "stationary": 1,
+            "core_rev": MIN_FIRMWARE_CORE_REV,
+        },
+        esp_area_id="office",
+        has_native_slots=False,
+        has_ble_beacon=True,
+    )
+    assert screenless_stationary[CONF_DEVICE_GROUP] == "custom"
+    assert screenless_stationary[CONF_NATIVE_BLE_TRACKING] is False
+    assert screenless_stationary[CONF_BLE_AUTO_SWITCH] is False
+    assert screenless_stationary[CONF_SYNC_DEVICE_AREA] is False
+    assert screenless_stationary[CONF_DEFAULT_AREA] == "office"
+
+    # 3) Screenless roaming node (`display=0, stationary=0`) with BLE beacon still tracks & syncs Area
+    screenless_roaming = compute_hardware_defaults(
+        {
+            "display": 0,
+            "w": 0,
+            "h": 0,
+            "shape": "none",
+            "stationary": 0,
+            "core_rev": MIN_FIRMWARE_CORE_REV,
+        },
+        esp_area_id="",
+        has_native_slots=False,
+        has_ble_beacon=True,
+    )
+    assert screenless_roaming[CONF_DEVICE_GROUP] == "custom"
+    assert screenless_roaming[CONF_NATIVE_BLE_TRACKING] is True
+    assert screenless_roaming[CONF_BLE_AUTO_SWITCH] is True
+    assert screenless_roaming[CONF_SYNC_DEVICE_AREA] is True
+
+
+async def test_reconnect_deferral_multipart_hello_fallback_and_unload_cleanup(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify deferred reconnect prevents stale pref overwrite on multipart `device_hello`, falls back on silence, and cancels cleanly."""
+    from pytest_homeassistant.common import async_fire_time_changed
+
+    assert RECONNECT_DEFER_SECONDS == 0.5
+    entry, _sys_obj, coord = await setup_latter_hub(hass, with_device=True)
+    receiver = coord.rpc_receiver
+    assert receiver is not None
+    outbox_eid = f"sensor.{coord.device_slug}_system_rpc_outbox"
+    calls = get_service_calls(hass)
+
+    # Seed baseline HA pref state (`night_brightness=35` at `prefs_seq=5`)
+    await coord.async_update_device_prefs({"night_brightness": 35})
+    coord.prefs_seq = 5
+    coord.prefs_key_seq.clear()
+    await flush_debouncers(hass)
+
+    # Build realistic 4-part chunked `device_hello` carrying an offline edit (`night_brightness=55`, `prefs_seq=6`)
+    full_manifest = json.dumps(
+        {
+            "v": 2,
+            "contract": 3,
+            "w": 1024,
+            "h": 600,
+            "shape": "square",
+            "display": 1,
+            "stationary": 0,
+            "battery": 1,
+            "audio": 1,
+            "mic": 1,
+            "spk": 1,
+            "core_rev": MIN_FIRMWARE_CORE_REV,
+            "video": {"hw_jpeg": 1, "max_w": 768, "max_h": 592, "max_fps": 10, "grid_fps": 5},
+        },
+        separators=(",", ":"),
+    )
+    hello_env = json.dumps(
+        {
+            "s": "device_hello",
+            "d": {
+                "boot_id": "cafe4401",
+                "manifest": full_manifest,
+                "prefs_seq": 6,
+                "dirty_prefs": "night_brightness=55",
+            },
+        },
+        separators=(",", ":"),
+    )
+    step = (len(hello_env) + 3) // 4
+    chunks = [hello_env[i * step : (i + 1) * step] for i in range(4)]
+    assert len(chunks) == 4 and all(chunks)
+
+    # 1) `unavailable -> unknown` arms timer without pushing stale `device_prefs`; multipart chunks postpone timer
+    with patch("custom_components.latter.coordinator.core.async_call_later", return_value=lambda: None):
+        hass.states.async_set(outbox_eid, STATE_UNAVAILABLE)
+        await hass.async_block_till_done()
+        calls.clear()
+
+        hass.states.async_set(outbox_eid, STATE_UNKNOWN)
+        await hass.async_block_till_done()
+        await flush_debouncers(hass)
+        prev_timer = receiver._unsub_reconnect_timer
+        assert prev_timer is not None
+        assert not [c for c in calls if c.service.endswith("_latter_push_v3")]
+
+        for idx in range(3):
+            hass.states.async_set(
+                outbox_eid, _encode_rpc_part("cafe4401", 1, idx + 1, 4, chunks[idx])
+            )
+            await hass.async_block_till_done()
+            # Each incoming multipart slice reschedules (postpones) the reconnect fallback timer
+            cur_timer = receiver._unsub_reconnect_timer
+            assert cur_timer is not None
+            assert cur_timer is not prev_timer
+            prev_timer = cur_timer
+            assert not [c for c in calls if c.service.endswith("_latter_push_v3")]
+
+        # Final 4/4 chunk completes `device_hello`, cancels timer, merges dirty_prefs, and pushes all domains ONCE
+        hass.states.async_set(outbox_eid, _encode_rpc_part("cafe4401", 1, 4, 4, chunks[3]))
+        await hass.async_block_till_done()
+        await flush_debouncers(hass)
+        assert receiver._unsub_reconnect_timer is None
+        assert coord.get_device_pref("night_brightness") == 55
+        assert coord.prefs_seq == 7
+
+        # Advancing clock well past 0.5s must not fire any duplicate reconnect push
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=2))
+        await hass.async_block_till_done()
+        await flush_debouncers(hass)
+
+    pushed_after_hello = [
+        c for c in calls if c.service.endswith("_latter_push_v3")
+    ]
+    prefs_pushes = [c for c in pushed_after_hello if c.data.get("domain") == "device_prefs"]
+    assert len(prefs_pushes) == 1
+    prefs_parts = str(prefs_pushes[0].data.get("payload") or "").split("\x1f")
+    assert prefs_parts[3] == "7"
+    assert prefs_parts[15] == "55"
+    pin_pushes = [
+        c
+        for c in calls
+        if c.service.endswith("_latter_device_command")
+        and str(c.data.get("command") or "").startswith("set_pin_key:")
+    ]
+    assert len(pin_pushes) == 1
+
+    # 2) Fallback republish when NO `device_hello` arrives after `unavailable -> unknown`
+    with patch("custom_components.latter.coordinator.core.async_call_later", return_value=lambda: None):
+        hass.states.async_set(outbox_eid, STATE_UNAVAILABLE)
+        await hass.async_block_till_done()
+        calls.clear()
+
+        hass.states.async_set(outbox_eid, STATE_UNKNOWN)
+        await hass.async_block_till_done()
+        await flush_debouncers(hass)
+        assert receiver._unsub_reconnect_timer is not None
+        assert not [c for c in calls if c.service.endswith("_latter_push_v3")]
+
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+        await hass.async_block_till_done()
+        await flush_debouncers(hass)
+        assert receiver._unsub_reconnect_timer is None
+        fallback_domains = {
+            str(c.data.get("domain"))
+            for c in calls
+            if c.service.endswith("_latter_push_v3")
+        }
+        assert {"active_media", "weather_forecast", "area_context", "device_prefs"} <= fallback_domains
+
+    # 3) Re-disconnecting cancels pending timer; unloading while timer is armed cancels cleanly
+    hass.states.async_set(outbox_eid, STATE_UNAVAILABLE)
+    await hass.async_block_till_done()
+    hass.states.async_set(outbox_eid, STATE_UNKNOWN)
+    await hass.async_block_till_done()
+    assert receiver._unsub_reconnect_timer is not None
+    hass.states.async_set(outbox_eid, STATE_UNAVAILABLE)
+    await hass.async_block_till_done()
+    assert receiver._unsub_reconnect_timer is None
+
+    hass.states.async_set(outbox_eid, STATE_UNKNOWN)
+    await hass.async_block_till_done()
+    assert receiver._unsub_reconnect_timer is not None
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+    assert receiver._unsub_reconnect_timer is None
+
+
+async def test_async_execute_studio_command_public_seam(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify transport-agnostic `async_execute_studio_command()` supports System & Device scopes and error contracts."""
+    entry, _sys_obj, coord = await setup_latter_hub(hass, with_device=True)
+
+    # 1) System command (auto-inferred scope)
+    res_sys = await async_execute_studio_command(hass, "clear_internal_logs", {})
+    assert isinstance(res_sys, dict)
+
+    # 2) Device command resolved via `subentry_id`
+    await async_execute_studio_command(
+        hass,
+        "save_device_config",
+        {"config": {"glass_style": "Clear"}},
+        subentry_id=coord.subentry_id,
+    )
+    assert coord.get_device_pref("glass_style") == "Clear"
+
+    # 3) Device command with explicit `coordinator` and `scope`
+    await async_execute_studio_command(
+        hass,
+        "save_device_config",
+        {"config": {"glass_style": "Dark"}},
+        scope="device",
+        coordinator=coord,
+    )
+    assert coord.get_device_pref("glass_style") == "Dark"
+
+    # 4) Error contracts: unknown command, wrong explicit scope, missing device, invalid schema
+    with pytest.raises(StudioCommandError) as exc_unk:
+        await async_execute_studio_command(hass, "no_such_studio_cmd")
+    assert exc_unk.value.code == "unknown_command"
+
+    with pytest.raises(StudioCommandError) as exc_scope:
+        await async_execute_studio_command(
+            hass, "clear_internal_logs", scope="device", subentry_id=coord.subentry_id
+        )
+    assert exc_scope.value.code == "wrong_scope"
+
+    with pytest.raises(StudioCommandError) as exc_missing:
+        await async_execute_studio_command(
+            hass, "save_device_config", {"config": {}}, subentry_id="missing_sub"
+        )
+    assert exc_missing.value.code == "not_found"
+
+    with pytest.raises(StudioCommandError) as exc_fmt:
+        await async_execute_studio_command(
+            hass,
+            "save_device_config",
+            {"config": "not_a_dict"},
+            subentry_id=coord.subentry_id,
+        )
+    assert exc_fmt.value.code == "invalid_format"
 
     assert await hass.config_entries.async_unload(entry.entry_id) is True

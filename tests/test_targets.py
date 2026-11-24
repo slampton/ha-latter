@@ -39,29 +39,10 @@ _ = _hub_sync
 RETIRED = ("follow" + "_me", "occu" + "pied")
 
 
-class _Dev:
-    def __init__(self, slug: str, ble_tag: bool = False) -> None:
-        self.device_slug = slug
-        self.is_ble_tag = ble_tag
+class IntercomAndBroadcastContractTests(unittest.TestCase):
+    """Doorbell and broadcast helpers keep retired intercom aliases absent."""
 
-
-class OtherLatterDevicesTests(unittest.TestCase):
-    """other_latter_devices lists peer Latter Devices only: never the caller, never a BLE tag."""
-
-    def setUp(self) -> None:
-        self.pool = [
-            _Dev("desk"),
-            _Dev("kitchen"),
-            _Dev("phone", ble_tag=True),
-            _Dev("office"),
-            object(),
-        ]
-
-    def test_excludes_caller_and_ble_tags(self) -> None:
-        self.assertEqual(
-            [d.device_slug for d in targets.other_latter_devices(self.pool, "kitchen")],
-            ["desk", "office"],
-        )
+    def test_doorbell_and_broadcast_contracts(self) -> None:
         self.assertNotIn("call_target_slugs", inspect.getsource(doorbell))
         self.assertNotIn("unlock_door", inspect.getsource(doorbell))
         self.assertIn("broadcast_phrase_records(", read_py_tree("areas"))

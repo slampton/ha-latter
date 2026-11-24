@@ -121,7 +121,7 @@ def manifest_is_wearable(manifest: Mapping[str, Any]) -> bool:
 
 
 def manifest_has_display(manifest: Mapping[str, Any]) -> bool:
-    """Return False only when the manifest reports `display == 0` (a headless node)."""
+    """Return False only when the manifest reports `display == 0` (a screenless node)."""
     return manifest_flag(manifest, "display") != 0
 
 
@@ -171,11 +171,9 @@ def manifest_is_round(manifest: Mapping[str, Any]) -> bool:
 
 
 def manifest_video_caps(manifest: Mapping[str, Any]) -> dict[str, Any]:
-    """Parse hardware manifest `video` capabilities with trait-based fallback."""
+    """Parse hardware manifest `video` capabilities with conservative defaults."""
     has_disp = manifest_has_display(manifest)
     has_batt = manifest_has_battery(manifest)
-    chip = str(manifest.get("chip") or "").strip().upper()
-    is_p4 = chip == "ESP32-P4" or "P4" in chip
 
     raw_video = manifest.get("video")
     default_w = (int(manifest.get("w") or _DEFAULT_DISPLAY_DIM) & ~15) if has_disp else 0
@@ -193,11 +191,11 @@ def manifest_video_caps(manifest: Mapping[str, Any]) -> dict[str, Any]:
             raw_video.get("grid_fps") or ((5 if has_batt else 8) if hw_jpeg else 2)
         )
     else:
-        hw_jpeg = has_disp and is_p4
+        hw_jpeg = False
         max_w = default_w
         max_h = default_h
-        max_fps = (10 if has_batt else 15) if is_p4 else 5
-        grid_fps = (5 if has_batt else 8) if is_p4 else 2
+        max_fps = 5
+        grid_fps = 2
 
     if not has_disp:
         max_w = 0

@@ -26,7 +26,7 @@ Day-bucketed signatures stay identical throughout a UTC day so Protocol v3 conte
 
 ## Local Baseline JPEG & MJPEG Transcoding
 
-Every image endpoint decodes and re-encodes on an executor thread (or shared `CameraStreamHub`) as a **baseline (non-progressive) 4:2:0 JPEG** sized to the panel's dimensions (`<= 480×480` for artwork, `<= 720×720` for wallpapers/cameras, `16 px`-aligned on ESP32-P4 hardware JPEG decode), applying a circular mask over black when `shape=circle`:
+Every image endpoint decodes and re-encodes on an executor thread (or shared `CameraStreamHub`) as a **baseline (non-progressive) 4:2:0 JPEG** sized to the panel's dimensions (`<= 480×480` for artwork, `<= 1280×1280` for wallpapers, `<= 768×768` for P4 cameras / `<= 512×512` on S3, `16 px`-aligned on ESP32-P4 hardware JPEG decode), applying a circular mask over black when `shape=circle`:
 
 | Source | Resampling | JPEG Quality | Notes |
 | :--- | :--- | :--- | :--- |
@@ -65,4 +65,4 @@ Streams a camera's RTSP/HTTP audio through `ffmpeg` (`-protocol_whitelist`, `-t 
 - **Query params:** `sig` (**required**, binding `entity_id`, `nr`, `fmt`), `entity_id`, `nr` (`strong` \| `light` \| `off`), `fmt` (`flac` \| `wav`).
 
 ### Studio Static Mount
-Latter Studio serves its content-hashed admin `panel_custom` bundle (`latter-studio.js` + lazy `latter-studio-mdi.js` + precompressed `.gz` siblings) from a versioned static mount (`/latter_ui_<ver>`). Aside from `POST /api/latter/wallpaper/upload`, Studio communicates exclusively over admin-gated WebSocket commands (`latter/system/*` and `latter/device/*`, version-locked via `STUDIO_REV = 48`). Integration brand icons live in `custom_components/latter/brand/` and are served natively by Home Assistant.
+Latter Studio serves its content-hashed admin `panel_custom` bundle (`latter-studio.js` + lazy `latter-studio-mdi.js` + precompressed `.gz` siblings) from a versioned static mount (`/latter_ui_<ver>`). Aside from `POST /api/latter/wallpaper/upload`, Studio communicates exclusively over admin-gated WebSocket commands (`latter/system/*` and `latter/device/*`, version-locked via `STUDIO_REV = 49`). Integration brand icons live in `custom_components/latter/brand/` and are served natively by Home Assistant.

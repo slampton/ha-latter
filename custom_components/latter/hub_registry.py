@@ -30,8 +30,6 @@ from .const import (
 from .protocol_codec import V3Records
 from .protocol_policy import PinLockoutTracker
 
-_HOURS_PER_DAY: Final = 24
-
 # ---------------------------------------------------------------------------
 # Reactive O(1) Per-Area & Per-Domain Entity State Index
 # ---------------------------------------------------------------------------
@@ -457,16 +455,6 @@ def register_hub_hooks(
         _HUB_HOOKS.refresh_weather = refresh_weather
     if refresh_calendar is not None:
         _HUB_HOOKS.refresh_calendar = refresh_calendar
-
-
-def safe_hour(val: object, default: int) -> int:
-    """Coerce a schedule hour preference into `0..23` without raising on corrupted input."""
-    if isinstance(val, bool) or val is None or not isinstance(val, (int, float, str)):
-        return default
-    try:
-        return int(val) % _HOURS_PER_DAY
-    except (TypeError, ValueError):
-        return default
 
 
 class LatterSystemHub:

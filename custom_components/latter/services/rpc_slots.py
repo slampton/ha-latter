@@ -277,7 +277,7 @@ async def async_push_browse_slots(
 
     if esphome_action is None:
         _LOGGER.debug(
-            "No ESPHome service matching *_latter_set_slots found (target slug '%s'); device is headless or offline.",
+            "No ESPHome service matching *_latter_set_slots found (target slug '%s'); device is screenless or offline.",
             coord.device_slug,
         )
         return

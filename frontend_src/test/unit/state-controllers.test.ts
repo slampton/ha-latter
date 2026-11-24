@@ -42,6 +42,7 @@ import { renderDeviceOverviewView } from "../../src/views/device-overview-view.j
 import {
   DEV_TELEMETRY_REFRESH_DEBOUNCE_MS,
   handleDeveloperTelemetryDrawerToggle,
+  parseDeviceRuntimeTelemetryRows,
   renderDeviceToolsView,
 } from "../../src/views/device-tools-view.js";
 import {
@@ -145,7 +146,7 @@ function createHeadlessStore(initialPayload?: Partial<StudioStatePayload>): Head
     system_info: {
       ha_version: "2026.11.2",
       integration_version: "3.0.0",
-      min_firmware_core_rev: 2026112303,
+      min_firmware_core_rev: 2026112401,
       studio_rev: STUDIO_REV,
     },
     internal_logs: [],
@@ -450,7 +451,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.equal(store.currentViewId, "photos");
   });
 
-  it("constructs STUDIO_REV=48 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
+  it("constructs STUDIO_REV=49 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
     const { store, wsLog } = createHeadlessStore();
     store.applyRoute({ prefix: "/latter", path: "devices/sub_desk/overview" });
 
@@ -468,10 +469,10 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { do_not_disturb: true },
         expected_config_rev: 7,
       },
-      studio_rev: 48,
+      studio_rev: 49,
     });
 
-    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 48`
+    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 49`
     wsLog.length = 0;
     store.applyRoute({ prefix: "/latter", path: "system/presence" });
     store.entity.stageSystemSetting("ble_away_timeout_s", 240, undefined, 60_000);
@@ -485,7 +486,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { ble_away_timeout_s: 240 },
         expected_config_rev: 3,
       },
-      studio_rev: 48,
+      studio_rev: 49,
     });
 
     // `version_mismatch` sets `studioRevMismatch = true`
@@ -987,6 +988,44 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     offlineToggle({ currentTarget: { open: true } } as unknown as Event);
     await new Promise<void>((r) => setTimeout(r, 0));
     assert.equal(renderWs.length, 1);
+    // Verify live RPC-backed `parseDeviceRuntimeTelemetryRows()` renders RAM, PSRAM, BLE & link stats cleanly
+    assert.deepEqual(parseDeviceRuntimeTelemetryRows(null), []);
+    const telemRows = parseDeviceRuntimeTelemetryRows(
+      {
+        int_ram_free_kb: 212,
+        int_ram_min_kb: 168,
+        int_ram_largest_kb: 128,
+        psram_min_kb: 24576,
+        ble_active: true,
+        link: {
+          up_s: 7320,
+          rst: "POWERON",
+          disc: 1,
+          bto: 2,
+          rssi_avg: -48,
+          rssi_min: -53,
+          ha: 3,
+          gap_s: 90,
+          nvs_w: 4,
+          nvs_e: 1,
+          nvs_max_ms: 8,
+        },
+      },
+      renderStore.hass,
+    );
+    assert.equal(telemRows.length, 9);
+    assert.deepEqual(telemRows[0], {
+      label: "Internal RAM (free / min / largest)",
+      value: "212 / 168 / 128 KB",
+    });
+    assert.deepEqual(telemRows[1], { label: "PSRAM low-water mark", value: "24,576 KB" });
+    assert.deepEqual(telemRows[2], { label: "BLE beacon radio", value: "Active" });
+    assert.deepEqual(telemRows[3], { label: "Session uptime", value: "2h 2m" });
+    assert.deepEqual(telemRows[4], { label: "Last reset", value: "POWERON", code: true });
+    assert.deepEqual(telemRows[5], { label: "Wi-Fi disconnects", value: "1 (2 beacon timeouts)" });
+    assert.deepEqual(telemRows[6], { label: "Wi-Fi avg / min", value: "-48 / -53 dBm" });
+    assert.deepEqual(telemRows[7], { label: "Home Assistant sessions", value: "3 (max gap 1m 30s)" });
+    assert.deepEqual(telemRows[8], { label: "NVS flash writes", value: "4 writes (1 erases, 8 ms max)" });
   });
 
   it("renders core_rev, firmware_outdated warning banner/badges, and screenless System overview counts", () => {
@@ -1015,16 +1054,16 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     };
 
     const { store: currentStore } = createHeadlessStore({
-      live: { core_rev: "2026112303", firmware_outdated: false },
+      live: { core_rev: "2026112401", firmware_outdated: false },
     });
     currentStore.applyRoute({ prefix: "/latter", path: "devices/sub_desk/overview" });
     const summaryText = currentStore.tools.formatSystemInfoSummary();
-    assert.ok(summaryText.includes("Minimum firmware core: 2026112303"));
+    assert.ok(summaryText.includes("Minimum firmware core: 2026112401"));
     assert.equal(summaryText.includes("SDK"), false);
     assert.equal(renderFirmwareOutdatedBanner(currentStore), nothing);
     const currentToolsHtml = flattenTemplate(renderDeviceToolsView(currentStore));
     assert.ok(currentToolsHtml.includes("diag-core-rev"));
-    assert.ok(currentToolsHtml.includes("2026112303"));
+    assert.ok(currentToolsHtml.includes("2026112401"));
     assert.equal(currentToolsHtml.includes("diag-firmware-outdated-badge"), false);
 
     // Outdated firmware renders warning banner on Overview & Tools and badge on Diagnostics & Status card
@@ -1037,7 +1076,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.ok(bannerHtml.includes("alert-warning"));
     assert.ok(bannerHtml.includes("Firmware update required"));
     assert.ok(bannerHtml.includes("2026112202"));
-    assert.ok(bannerHtml.includes("2026112303"));
+    assert.ok(bannerHtml.includes("2026112401"));
 
     const overviewHtml = flattenTemplate(renderDeviceOverviewView(outdatedStore));
     assert.ok(overviewHtml.includes("device-firmware-outdated-banner"));

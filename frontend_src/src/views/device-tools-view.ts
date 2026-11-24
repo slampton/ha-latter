@@ -44,15 +44,8 @@ function isValidTelemetryState(val: unknown): val is string {
   return s !== "" && s !== "unknown" && s !== "unavailable";
 }
 
-const INTERNAL_NETWORK_BLOB_KEYS = new Set([
-  "rpc_outbox",
-  "hardware_manifest",
-  "link_report",
-]);
-
 function isInternalNetworkBlobEntity(it: EspHomeEntityItem): boolean {
-  if (it.key && INTERNAL_NETWORK_BLOB_KEYS.has(it.key)) return true;
-  return Array.from(INTERNAL_NETWORK_BLOB_KEYS).some((k) => it.entity_id.endsWith(`_${k}`));
+  return it.key === "rpc_outbox" || it.entity_id.endsWith("_rpc_outbox");
 }
 
 const SUMMARY_DUPLICATE_KEYS = new Set([
@@ -88,209 +81,8 @@ function formatTelemetryDuration(totalSec: number): string {
   return remHr > 0 ? `${days}d ${remHr}h` : `${days}d`;
 }
 
-export function parseDeviceLinkReportRows(
-  rawState: string | null | undefined,
-  hass?: HomeAssistant | null,
-  overlay?: Readonly<Record<string, string>> | null,
-): DiagnosticsTelemetryRow[] {
-  if (!isValidTelemetryState(rawState)) return [];
-  const kv = new Map<string, string>();
-  for (const tok of rawState.trim().split(/\s+/)) {
-    const eq = tok.indexOf("=");
-    if (eq > 0 && eq < tok.length - 1) {
-      kv.set(tok.slice(0, eq), tok.slice(eq + 1));
-    }
-  }
-  if (!kv.size) return [];
-
-  const rows: DiagnosticsTelemetryRow[] = [];
-  const upRaw = kv.get("up");
-  if (upRaw !== undefined && Number.isFinite(Number(upRaw))) {
-    rows.push({
-      label: t("dev_tools.telem_uptime", undefined, overlay),
-      value: formatTelemetryDuration(Number(upRaw)),
-    });
-  }
-
-  const rstRaw = kv.get("rst");
-  if (rstRaw) {
-    rows.push({
-      label: t("dev_tools.telem_last_reset", undefined, overlay),
-      value: rstRaw,
-      code: true,
-    });
-  }
-
-  const discRaw = kv.get("disc");
-  if (discRaw !== undefined && Number.isFinite(Number(discRaw))) {
-    const btoNum = Number(kv.get("bto") ?? 0);
-    const btoSuffix =
-      Number.isFinite(btoNum) && btoNum > 0
-        ? t(
-            "dev_tools.telem_beacon_timeouts",
-            { count: fmtNumber(btoNum, hass, 0) },
-            overlay,
-          )
-        : "";
-    rows.push({
-      label: t("dev_tools.telem_wifi_disc", undefined, overlay),
-      value: `${fmtNumber(Number(discRaw), hass, 0)}${btoSuffix}`,
-    });
-  }
-
-  const rssiRaw = kv.get("rssi");
-  if (rssiRaw && rssiRaw !== "na" && rssiRaw.includes("/")) {
-    const [avgStr, minStr] = rssiRaw.split("/", 2);
-    if (Number.isFinite(Number(avgStr)) && Number.isFinite(Number(minStr))) {
-      rows.push({
-        label: t("dev_tools.telem_wifi_avg_min", undefined, overlay),
-        value: `${fmtNumber(Number(avgStr), hass, 0)} / ${fmtNumber(Number(minStr), hass, 0)} dBm`,
-      });
-    }
-  }
-
-  const haRaw = kv.get("ha");
-  if (haRaw !== undefined && Number.isFinite(Number(haRaw))) {
-    const gapNum = Number(kv.get("gap") ?? 0);
-    const gapSuffix =
-      Number.isFinite(gapNum) && gapNum > 0
-        ? t("dev_tools.telem_max_gap", { duration: formatTelemetryDuration(gapNum) }, overlay)
-        : "";
-    rows.push({
-      label: t("dev_tools.telem_ha_sessions", undefined, overlay),
-      value: `${fmtNumber(Number(haRaw), hass, 0)}${gapSuffix}`,
-    });
-  }
-
-  const slpRaw = kv.get("slp");
-  if (slpRaw !== undefined && Number.isFinite(Number(slpRaw))) {
-    const lsNum = Number(kv.get("ls") ?? 0);
-    const lsSuffix =
-      Number.isFinite(lsNum) && lsNum > 0
-        ? t("dev_tools.telem_cycles", { count: fmtNumber(lsNum, hass, 0) }, overlay)
-        : "";
-    rows.push({
-      label: t("dev_tools.telem_light_sleep", undefined, overlay),
-      value: `${fmtNumber(Number(slpRaw), hass, 1)}%${lsSuffix}`,
-    });
-  }
-
-  const nvsRaw = kv.get("nvs");
-  if (nvsRaw && nvsRaw.includes("/")) {
-    const parts = nvsRaw.split("/");
-    if (parts.length >= 3 && parts.every((p) => Number.isFinite(Number(p)))) {
-      rows.push({
-        label: t("dev_tools.telem_nvs_writes", undefined, overlay),
-        value: t(
-          "dev_tools.telem_nvs_value",
-          {
-            writes: fmtNumber(Number(parts[0]), hass, 0),
-            erases: fmtNumber(Number(parts[1]), hass, 0),
-            maxMs: fmtNumber(Number(parts[2]), hass, 0),
-          },
-          overlay,
-        ),
-      });
-    }
-  }
-
-  return rows;
-}
-
-export function parseDeviceHardwareManifestRows(
-  rawState: string | null | undefined,
-  hass?: HomeAssistant | null,
-  overlay?: Readonly<Record<string, string>> | null,
-): DiagnosticsTelemetryRow[] {
-  if (!isValidTelemetryState(rawState)) return [];
-  const trimmed = rawState.trim();
-  if (!trimmed.startsWith("{")) return [];
-
-  let parsed: Record<string, unknown>;
-  try {
-    const obj = JSON.parse(trimmed);
-    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return [];
-    parsed = obj as Record<string, unknown>;
-  } catch {
-    return [];
-  }
-
-  const rows: DiagnosticsTelemetryRow[] = [];
-  const board = typeof parsed.board === "string" ? parsed.board.trim() : "";
-  if (board) {
-    rows.push({
-      label: t("dev_tools.telem_board", undefined, overlay),
-      value: board,
-      code: true,
-    });
-  }
-
-  const chip = typeof parsed.chip === "string" ? parsed.chip.trim() : "";
-  const psramMb = Number(parsed.psram_mb ?? 0);
-  if (chip) {
-    const psramSuffix =
-      Number.isFinite(psramMb) && psramMb > 0
-        ? t("dev_tools.telem_psram_suffix", { mb: fmtNumber(psramMb, hass, 0) }, overlay)
-        : "";
-    rows.push({
-      label: t("dev_tools.telem_processor", undefined, overlay),
-      value: `${chip}${psramSuffix}`,
-    });
-  }
-
-  const hasDisplay = Number(parsed.display ?? 0) === 1 && parsed.shape !== "none";
-  if (parsed.display !== undefined) {
-    if (!hasDisplay) {
-      rows.push({
-        label: t("dev_tools.telem_display_panel", undefined, overlay),
-        value: t("dev_tools.telem_headless", undefined, overlay),
-      });
-    } else {
-      const w = Number(parsed.w ?? 0);
-      const h = Number(parsed.h ?? 0);
-      const shape = typeof parsed.shape === "string" ? parsed.shape.trim() : "";
-      const panelTech =
-        parsed.ips === 1 ? "IPS" : parsed.ips === 0 ? "AMOLED" : "";
-      if (w > 0 && h > 0) {
-        const parts = [`${w}×${h}`, shape, panelTech].filter(Boolean);
-        rows.push({
-          label: t("dev_tools.telem_display_panel", undefined, overlay),
-          value: parts.join(" "),
-        });
-      }
-    }
-  }
-
-  const traits: string[] = [];
-  if (Number(parsed.touch) === 1) traits.push(t("dev_tools.trait_touch", undefined, overlay));
-  if (Number(parsed.mic) === 1) traits.push(t("dev_tools.trait_mic", undefined, overlay));
-  if (Number(parsed.spk) === 1) traits.push(t("dev_tools.trait_speaker", undefined, overlay));
-  if (Number(parsed.mic) !== 1 && Number(parsed.spk) !== 1 && Number(parsed.audio) === 1) {
-    traits.push(t("dev_tools.trait_audio", undefined, overlay));
-  }
-  if (Number(parsed.imu) === 1) traits.push(t("dev_tools.trait_imu", undefined, overlay));
-  if (Number(parsed.battery) === 1) {
-    traits.push(t("dev_tools.trait_battery", undefined, overlay));
-  }
-  if (Number(parsed.wearable) === 1) {
-    traits.push(t("dev_tools.trait_wearable", undefined, overlay));
-  }
-  if (Number(parsed.stationary) === 1) {
-    traits.push(t("dev_tools.trait_stationary", undefined, overlay));
-  }
-  if (traits.length) {
-    rows.push({
-      label: t("dev_tools.telem_traits", undefined, overlay),
-      value: traits.join(", "),
-    });
-  }
-
-  return rows;
-}
-
 export function parseDeviceRuntimeTelemetryRows(
   telemetry: DeviceRuntimeTelemetry | null | undefined,
-  includeLinkRows: boolean,
   hass?: HomeAssistant | null,
   overlay?: Readonly<Record<string, string>> | null,
 ): DiagnosticsTelemetryRow[] {
@@ -333,7 +125,7 @@ export function parseDeviceRuntimeTelemetryRows(
   }
 
   const link = telemetry.link;
-  if (includeLinkRows && link && typeof link === "object" && !Array.isArray(link)) {
+  if (link && typeof link === "object" && !Array.isArray(link)) {
     const upRaw = link.up_s ?? link.up;
     if (upRaw !== undefined && upRaw !== null && Number.isFinite(Number(upRaw))) {
       rows.push({
@@ -510,34 +302,13 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
     (it) =>
       INTERACTIVE_ENTITY_DOMAINS.has(it.domain) &&
       !it.pref_key &&
-      it.key !== "weather_sim_condition" &&
-      it.key !== "telemetry_profiler" &&
-      it.key !== "log_memory_report" &&
-      !it.entity_id.endsWith("_telemetry_profiler") &&
-      !it.entity_id.endsWith("_log_memory_report"),
+      it.key !== "weather_sim_condition",
   );
   const devSensorItems = developerItems.filter(
     (it) => !INTERACTIVE_ENTITY_DOMAINS.has(it.domain),
   );
-  const linkReportEntity = networkItems.find(
-    (it) => it.key === "link_report" || it.entity_id.endsWith("_link_report"),
-  );
-  const manifestEntity = networkItems.find(
-    (it) => it.key === "hardware_manifest" || it.entity_id.endsWith("_hardware_manifest"),
-  );
-  const linkRows = parseDeviceLinkReportRows(
-    linkReportEntity?.state,
-    store.hass,
-    store.localeOverlay,
-  );
   const runtimeRows = parseDeviceRuntimeTelemetryRows(
     live.telemetry,
-    linkRows.length === 0,
-    store.hass,
-    store.localeOverlay,
-  );
-  const manifestRows = parseDeviceHardwareManifestRows(
-    manifestEntity?.state,
     store.hass,
     store.localeOverlay,
   );
@@ -711,13 +482,10 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                       })}
                       ${devControlItems.map((it) => renderDeviceEntityRow(store, it))}
                     </div>
-                    ${devSensorItems.length ||
-                    runtimeRows.length ||
-                    linkRows.length ||
-                    manifestRows.length
+                    ${devSensorItems.length || runtimeRows.length
                       ? html`<div class="kv-list">
                           ${devSensorItems.map((it) => renderDeviceEntityRow(store, it))}
-                          ${[...runtimeRows, ...linkRows, ...manifestRows].map(
+                          ${runtimeRows.map(
                             (row) => html`<div class="kv-row">
                               <span>${row.label}</span>
                               <strong>

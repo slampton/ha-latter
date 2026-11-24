@@ -1,5 +1,5 @@
 /**
- * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 48`).
+ * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 49`).
  */
 
 import type {
@@ -464,8 +464,6 @@ export interface PhotoItem {
   media_source_path?: string;
   added_at?: string;
 }
-
-export type WallpaperItem = PhotoItem;
 
 export interface MediaBrowseRoot {
   id: string;

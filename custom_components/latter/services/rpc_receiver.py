@@ -8,11 +8,12 @@ from dataclasses import dataclass, field
 import json
 import logging
 import time
+from typing import Any, Final
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 
 from ..coordinator import LatterCoordinator, register_rpc_receiver_factory
 from ..identity import find_device_entity_by_suffix
@@ -24,6 +25,7 @@ MAX_RPC_PARTS: int = 32
 MAX_RPC_BYTES: int = 8192
 PARTIAL_TTL_SECONDS: float = 15.0
 DEDUP_HISTORY_LIMIT: int = 64
+RECONNECT_DEFER_SECONDS: Final[float] = 0.5
 
 _HEADER_PARTS_COUNT: int = 3
 _MAX_BOOT_ID_HEX_LEN: int = 16
@@ -210,6 +212,11 @@ class RpcReassembler:
         while len(self._completed) > DEDUP_HISTORY_LIMIT:
             self._completed.popitem(last=False)
 
+    @property
+    def has_inflight(self) -> bool:
+        """Return True when at least one multi-part RPC envelope is mid-assembly."""
+        return bool(self._inflight)
+
 
 class LatterRpcReceiver:
     """Watches a bound ESPHome Device's `System: RPC Outbox` entity and dispatches authenticated RPCs."""
@@ -222,6 +229,7 @@ class LatterRpcReceiver:
         self._was_unavailable: bool = False
         self._unsub_state: Callable[[], None] | None = None
         self._unsub_ent_reg: Callable[[], None] | None = None
+        self._unsub_reconnect_timer: Callable[[], None] | None = None
         coordinator.attach_rpc_receiver(self)
 
     @property
@@ -236,6 +244,11 @@ class LatterRpcReceiver:
         st = self.hass.states.get(self._tracked_entity_id)
         return st is not None and st.state == STATE_UNAVAILABLE
 
+    @property
+    def is_reconnect_deferred(self) -> bool:
+        """Return True while waiting briefly after reconnect for multipart `device_hello`."""
+        return self._unsub_reconnect_timer is not None
+
     @callback
     def start(self) -> None:
         """Bind to the Device's RPC outbox entity and track entity-registry rebinds."""
@@ -248,7 +261,8 @@ class LatterRpcReceiver:
 
     @callback
     def stop(self) -> None:
-        """Unsubscribe all listeners."""
+        """Unsubscribe all listeners and cancel any deferred reconnect fallback timer."""
+        self._cancel_reconnect_timer()
         if self._unsub_state is not None:
             self._unsub_state()
             self._unsub_state = None
@@ -257,6 +271,30 @@ class LatterRpcReceiver:
             self._unsub_ent_reg = None
         self._tracked_entity_id = None
         self._was_unavailable = False
+
+    @callback
+    def _cancel_reconnect_timer(self) -> bool:
+        """Cancel a pending deferred reconnect fallback timer; return True if one was armed."""
+        if self._unsub_reconnect_timer is None:
+            return False
+        self._unsub_reconnect_timer()
+        self._unsub_reconnect_timer = None
+        return True
+
+    @callback
+    def _schedule_reconnect_fallback(self) -> None:
+        """Defer `on_transport_reconnected()` briefly so multipart `device_hello` arrives first."""
+        self._cancel_reconnect_timer()
+        self._unsub_reconnect_timer = async_call_later(
+            self.hass, RECONNECT_DEFER_SECONDS, self._async_on_reconnect_timer
+        )
+
+    @callback
+    def _async_on_reconnect_timer(self, _now: Any = None) -> None:
+        self._unsub_reconnect_timer = None
+        if self._was_unavailable or self.is_device_unavailable() or self.hass.is_stopping:
+            return
+        self.coordinator.on_transport_reconnected()
 
     @callback
     def rebind(self) -> None:
@@ -286,6 +324,7 @@ class LatterRpcReceiver:
                 )
         if ent_id == self._tracked_entity_id:
             return
+        self._cancel_reconnect_timer()
         if self._unsub_state is not None:
             self._unsub_state()
             self._unsub_state = None
@@ -322,6 +361,40 @@ class LatterRpcReceiver:
             self.rebind()
 
     @callback
+    def _handle_reconnect_state(
+        self,
+        was_unavail: bool,
+        decoded: tuple[str, dict[str, object]] | None,
+    ) -> None:
+        """Coordinate deferred transport reconnect fallback with incoming multipart `device_hello`."""
+        is_hello = decoded is not None and decoded[0] == "device_hello"
+        if was_unavail:
+            self._was_unavailable = False
+            _LOGGER.info(
+                "Latter device '%s' reconnected",
+                self.coordinator.device_slug,
+            )
+            if is_hello:
+                self._cancel_reconnect_timer()
+                self.coordinator.clear_last_pushed_v3()
+                self.coordinator.async_update_listeners()
+                return
+            self.coordinator.async_update_listeners()
+            self._schedule_reconnect_fallback()
+            return
+        if is_hello:
+            if self._cancel_reconnect_timer():
+                self.coordinator.clear_last_pushed_v3()
+                self.coordinator.async_update_listeners()
+            return
+        if (
+            self._unsub_reconnect_timer is not None
+            and decoded is None
+            and self._reassembler.has_inflight
+        ):
+            self._schedule_reconnect_fallback()
+
+    @callback
     def _async_on_outbox_state_change(
         self, event: Event[EventStateChangedData]
     ) -> None:
@@ -330,6 +403,7 @@ class LatterRpcReceiver:
         if new_state is None:
             return
         if new_state.state == STATE_UNAVAILABLE:
+            self._cancel_reconnect_timer()
             if not self._was_unavailable:
                 self._was_unavailable = True
                 _LOGGER.info(
@@ -344,17 +418,7 @@ class LatterRpcReceiver:
         decoded: tuple[str, dict[str, object]] | None = None
         if new_state.state not in (STATE_UNKNOWN, ""):
             decoded = self._reassembler.feed(new_state.state)
-        if was_unavail:
-            self._was_unavailable = False
-            _LOGGER.info(
-                "Latter device '%s' reconnected",
-                self.coordinator.device_slug,
-            )
-            if decoded is not None and decoded[0] == "device_hello":
-                self.coordinator.clear_last_pushed_v3()
-                self.coordinator.async_update_listeners()
-            else:
-                self.coordinator.on_transport_reconnected()
+        self._handle_reconnect_state(was_unavail, decoded)
         if decoded is not None:
             self._dispatch_decoded(decoded)
 

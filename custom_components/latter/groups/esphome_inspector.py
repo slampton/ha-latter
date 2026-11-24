@@ -15,17 +15,6 @@ ASSIST_SATELLITE_TRANSLATION_KEYS: Final[frozenset[str]] = frozenset(
     {"pipeline", "pipeline_n", "vad_sensitivity", "wake_word", "wake_word_n"}
 )
 
-DEVELOPER_ENTITY_KEYWORDS: Final[tuple[str, ...]] = (
-    "telemetry_profiler",
-    "log_memory",
-    "memory_report",
-    "ram_low_water",
-    "ram_largest_block",
-    "psram_low_water",
-    "weather_sim",
-    "weather_simulation",
-)
-
 _BATTERY_KEYWORDS: Final[tuple[str, ...]] = (
     "battery",
     "charging",
@@ -88,11 +77,6 @@ UNIVERSAL_SECTION_META: Final[tuple[tuple[str, str, str], ...]] = (
         "Wi-Fi signal strength, IP/MAC address, status sensors, and firmware updates.",
     ),
     (
-        "developer",
-        "Developer",
-        "Telemetry profiler, memory reports, heap low-water marks, and weather simulation.",
-    ),
-    (
         "actions",
         "Device actions",
         "One-tap restart, hibernate, refresh, and maintenance triggers.",
@@ -125,8 +109,6 @@ def _classify_by_domain_and_keywords(
     clean_low: str,
     ent_suffix: str,
 ) -> str:
-    if any(k in clean_low or k in ent_suffix for k in DEVELOPER_ENTITY_KEYWORDS):
-        return "developer"
     if domain == "button" or dev_cls in ("restart", "identify"):
         return "actions"
     if domain == "media_player":

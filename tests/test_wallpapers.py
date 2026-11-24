@@ -118,8 +118,6 @@ class TestPhotoLibraryAndCrop(unittest.TestCase):
         self.assertEqual(presets[0]["id"], wp.DAY_NIGHT_SKY_PRESET_ID)
         self.assertEqual(presets[0]["name"], "Day & Night Sky")
         self.assertEqual(presets[0]["kind"], "dynamic_preset")
-        self.assertTrue(wp.is_dynamic_preset(wp.DAY_NIGHT_SKY_PRESET_ID))
-        self.assertFalse(wp.is_dynamic_preset("preset:forest_mountains"))
 
         wp_dir = LATTER_DIR / "wallpapers"
         photo_presets = [p for p in presets if p["kind"] == "preset"]

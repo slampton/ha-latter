@@ -196,12 +196,6 @@ def humanize_filename_stem(filename: str) -> str:
     return cleaned[:MAX_PHOTO_NAME_LEN] if cleaned else "Photo"
 
 
-def is_dynamic_preset(source_id: str) -> bool:
-    """Return True if `source_id` is a firmware-rendered dynamic wallpaper preset."""
-    preset = PRESET_BY_ID.get(str(source_id or "").strip())
-    return bool(preset and preset.get("kind") == "dynamic_preset")
-
-
 def _clamp_crop_float(val: Any, default: float, lo: float, hi: float) -> float:
     if val is None or isinstance(val, bool):
         return default

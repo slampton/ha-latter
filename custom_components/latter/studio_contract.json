@@ -1,6 +1,6 @@
 {
   "studio_contract": {
-    "studio_rev": 48,
+    "studio_rev": 49,
     "allowed_device_actions": [
       "restart",
       "find_my",
@@ -110,6 +110,138 @@
         "route",
         "wake"
       ]
+    }
+  },
+  "catalog_ui": {
+    "shortcut_route_groups": {
+      "app:pinned": "Apps",
+      "app:music": "Apps",
+      "app:home_hub": "Apps",
+      "app:cameras": "Apps",
+      "app:area": "Apps",
+      "app:remote": "Apps",
+      "app:weather": "Apps",
+      "app:time": "Apps",
+      "app:calendar": "Apps",
+      "app:tools": "Apps",
+      "app:games": "Apps",
+      "app:clock": "Apps",
+      "home_hub:alarm": "Home Hub",
+      "home_hub:intercom": "Home Hub",
+      "home_hub:thermostat": "Home Hub",
+      "home_hub:entry": "Home Hub",
+      "home_hub:vacuum": "Home Hub",
+      "cameras:grid": "Cameras",
+      "cameras:single": "Cameras",
+      "cameras:carousel": "Cameras",
+      "cameras:settings": "Cameras",
+      "area:picker": "Area Control",
+      "area:scene": "Area Control",
+      "area:light": "Area Control",
+      "area:cover": "Area Control",
+      "area:fan": "Area Control",
+      "area:switch": "Area Control",
+      "area:climate": "Area Control",
+      "area:media": "Area Control",
+      "area:all": "Area Control",
+      "weather:current": "Sky & Weather",
+      "weather:forecast": "Sky & Weather",
+      "weather:sun": "Sky & Weather",
+      "weather:moon": "Sky & Weather",
+      "time:clock": "Time",
+      "time:timers": "Time",
+      "time:alarms": "Time",
+      "time:stopwatch": "Time",
+      "calendar:overview": "Calendar",
+      "calendar:day": "Calendar",
+      "calendar:week": "Calendar",
+      "calendar:month": "Calendar",
+      "music:speakers": "Music",
+      "music:library": "Music",
+      "music:favorites": "Music",
+      "music:playlists": "Music",
+      "music:queue": "Music",
+      "music:album_tracks": "Music",
+      "music:lyrics": "Music",
+      "music:info": "Music",
+      "remote:devices": "Remote",
+      "tools:stopwatch": "Tools",
+      "tools:level": "Tools",
+      "tools:flashlight": "Tools",
+      "tools:calculator": "Tools",
+      "tools:dice": "Tools",
+      "tools:coin_flip": "Tools",
+      "games:marbles": "Games",
+      "games:archery": "Games",
+      "games:bricks": "Games",
+      "games:chomp": "Games",
+      "games:blocks": "Games",
+      "games:snake": "Games",
+      "games:drop_four": "Games",
+      "settings:display": "Settings",
+      "settings:sleep": "Settings",
+      "settings:sound": "Settings",
+      "settings:voice": "Settings",
+      "settings:music": "Settings",
+      "settings:home": "Settings",
+      "settings:actions": "Settings",
+      "settings:update": "Settings",
+      "settings:info": "Settings"
+    },
+    "catalog_labels": {
+      "activity_sources": {
+        "calendar": "Calendar",
+        "music_queue": "Music Queue",
+        "stopwatch": "Stopwatch",
+        "alarms": "Alarms",
+        "timers": "Timers"
+      },
+      "area_categories": {
+        "scene": "Scenes",
+        "light": "Lights",
+        "cover": "Blinds & Curtains",
+        "fan": "Fans",
+        "switch": "Switches",
+        "climate": "Climate",
+        "media": "Media",
+        "all": "All Devices"
+      },
+      "home_categories": {
+        "alarm": "Security Alarm",
+        "intercom": "Broadcast",
+        "thermostat": "Thermostat",
+        "entry": "Entry & Garage",
+        "vacuum": "Robot Vacuum"
+      },
+      "tools_items": {
+        "stopwatch": "Analog Chronograph",
+        "level": "Bubble Level",
+        "flashlight": "Flashlight",
+        "calculator": "Calculator",
+        "dice": "Dice Roll",
+        "coin_flip": "Coin Flip"
+      },
+      "games_items": {
+        "blocks": "Blocks",
+        "snake": "Snake",
+        "drop_four": "Drop Four",
+        "marbles": "Marbles",
+        "archery": "Archery",
+        "bricks": "Bricks",
+        "chomp": "Chomp"
+      },
+      "shortcut_badge_styles": {
+        "glass": "Frosted glass",
+        "inverted": "Inverted badge"
+      },
+      "shortcut_accents": {
+        "default": "Default",
+        "primary": "Theme",
+        "gold": "Amber",
+        "green": "Green",
+        "red": "Red",
+        "orange": "Orange"
+      }
     }
   },
   "world_clock_zones": [
@@ -690,37 +822,37 @@
   ],
   "device_pref_ui": {
     "wake_word_mode": {
-      "label": "Wake Word Mode",
+      "label": "Wake word mode",
       "section": "audio",
       "group_tier": "behavior",
       "unit": ""
     },
     "tap_to_wake": {
-      "label": "Tap to Wake",
+      "label": "Tap to wake",
       "section": "power",
       "group_tier": "behavior",
       "unit": ""
     },
     "pickup_to_wake": {
-      "label": "Pickup to Wake",
+      "label": "Pickup to wake",
       "section": "power",
       "group_tier": "behavior",
       "unit": ""
     },
     "battery_screen_timeout": {
-      "label": "Battery Screen Timeout",
+      "label": "Battery screen timeout",
       "section": "power",
       "group_tier": "behavior",
       "unit": ""
     },
     "docked_idle_timeout": {
-      "label": "Docked Idle Timeout",
+      "label": "Docked idle timeout",
       "section": "display",
       "group_tier": "behavior",
       "unit": ""
     },
     "battery_hibernate_timeout": {
-      "label": "Battery Hibernate Timeout",
+      "label": "Battery hibernate timeout",
       "section": "power",
       "group_tier": "behavior",
       "unit": ""
@@ -732,91 +864,91 @@
       "unit": ""
     },
     "screensaver_style": {
-      "label": "Screensaver Style",
+      "label": "Screensaver style",
       "section": "display",
       "group_tier": "display",
       "unit": ""
     },
     "auto_brightness_mode": {
-      "label": "Auto Brightness Mode",
+      "label": "Auto brightness mode",
       "section": "display",
       "group_tier": "behavior",
       "unit": ""
     },
     "manual_brightness": {
-      "label": "Manual Brightness",
+      "label": "Manual brightness",
       "section": "display",
       "group_tier": "behavior",
       "unit": "%"
     },
     "day_brightness": {
-      "label": "Day Brightness",
+      "label": "Day brightness",
       "section": "display",
       "group_tier": "behavior",
       "unit": "%"
     },
     "night_brightness": {
-      "label": "Night Brightness",
+      "label": "Night brightness",
       "section": "display",
       "group_tier": "behavior",
       "unit": "%"
     },
     "day_start_hour": {
-      "label": "Day Start Hour",
+      "label": "Day start hour",
       "section": "display",
       "group_tier": "behavior",
       "unit": ":00"
     },
     "night_start_hour": {
-      "label": "Night Start Hour",
+      "label": "Night start hour",
       "section": "display",
       "group_tier": "behavior",
       "unit": ":00"
     },
     "color_profile": {
-      "label": "Color Profile",
+      "label": "Color profile",
       "section": "display",
       "group_tier": "display",
       "unit": ""
     },
     "va_visual_profile": {
-      "label": "Visual Profile",
+      "label": "Visual profile",
       "section": "display",
       "group_tier": "display",
       "unit": ""
     },
     "home_screen_enabled": {
-      "label": "Enable Home Screen",
+      "label": "Enable Home screen",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "start_screen": {
-      "label": "Start Screen",
+      "label": "Start screen",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "return_to_home_timeout": {
-      "label": "Return to Home Timeout",
+      "label": "Return to Home timeout",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "clock_face": {
-      "label": "Clock Face",
+      "label": "Clock face",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "time_format": {
-      "label": "Time Format",
+      "label": "Time format",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "weather_background": {
-      "label": "Weather Background",
+      "label": "Live weather background on Home",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
@@ -834,19 +966,19 @@
       "unit": ""
     },
     "wake_greeting": {
-      "label": "Wake Greeting",
+      "label": "Wake greeting",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "album_art_style": {
-      "label": "Album Art Style",
+      "label": "Album art style",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "music_overlay_style": {
-      "label": "Overlay Style",
+      "label": "Overlay style",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
@@ -858,115 +990,115 @@
       "unit": ""
     },
     "album_sort_order": {
-      "label": "Album Sort Order",
+      "label": "Album sort order",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "artist_album_sort_order": {
-      "label": "Artist Album Sort Order",
+      "label": "Artist album sort order",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "podcast_sort_order": {
-      "label": "Podcast Sort Order",
+      "label": "Podcast sort order",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "ww_sens_okay_nabu": {
-      "label": "Okay Nabu Sensitivity",
+      "label": "Okay Nabu sensitivity",
       "section": "audio",
       "group_tier": "behavior",
       "unit": ""
     },
     "ww_sens_hey_luna": {
-      "label": "Hey Luna Sensitivity",
+      "label": "Hey Luna sensitivity",
       "section": "audio",
       "group_tier": "behavior",
       "unit": ""
     },
     "ww_sens_hey_jarvis": {
-      "label": "Hey Jarvis Sensitivity",
+      "label": "Hey Jarvis sensitivity",
       "section": "audio",
       "group_tier": "behavior",
       "unit": ""
     },
     "ww_sens_hey_mycroft": {
-      "label": "Hey Mycroft Sensitivity",
+      "label": "Hey Mycroft sensitivity",
       "section": "audio",
       "group_tier": "behavior",
       "unit": ""
     },
     "ww_sens_alexa": {
-      "label": "Alexa Sensitivity",
+      "label": "Alexa sensitivity",
       "section": "audio",
       "group_tier": "behavior",
       "unit": ""
     },
     "wake_screen_on_assist": {
-      "label": "Wake Screen on Assist",
+      "label": "Wake screen on Assist",
       "section": "audio",
       "group_tier": "behavior",
       "unit": ""
     },
     "alert_volume": {
-      "label": "Alert Volume",
+      "label": "Alert volume",
       "section": "audio",
       "group_tier": "behavior",
       "unit": "%"
     },
     "volume_step_size": {
-      "label": "Volume Step Size",
+      "label": "Volume step size",
       "section": "audio",
       "group_tier": "behavior",
       "unit": "%"
     },
     "game_sound_effects": {
-      "label": "Game Sound Effects",
+      "label": "Game sound effects",
       "section": "audio",
       "group_tier": "behavior",
       "unit": ""
     },
     "ble_beacon_mode": {
-      "label": "BLE Beacon Mode",
+      "label": "BLE beacon mode",
       "section": "presence",
       "group_tier": "behavior",
       "unit": ""
     },
     "weather_sim_condition": {
-      "label": "Weather Simulation",
+      "label": "Weather simulation",
       "section": "developer",
       "group_tier": null,
       "unit": ""
     },
     "home_clock_tap_action": {
-      "label": "Home Time Tap",
+      "label": "Home time tap",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "home_date_tap_action": {
-      "label": "Home Date Tap",
+      "label": "Home date tap",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "local_clock_label": {
-      "label": "Local Clock Label",
+      "label": "Local clock label",
       "section": "time",
       "group_tier": null,
       "unit": ""
     },
     "show_utc_clock": {
-      "label": "Show UTC Clock",
+      "label": "Show UTC clock",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "world_clocks": {
-      "label": "World Clocks",
+      "label": "World clocks",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
@@ -978,55 +1110,55 @@
       "unit": ""
     },
     "calendar_lookahead_days": {
-      "label": "Overview Lookahead",
+      "label": "Overview lookahead",
       "section": "interface",
       "group_tier": "interface",
       "unit": "d"
     },
     "calendar_week_start": {
-      "label": "Start Week On",
+      "label": "Start week on",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "bedtime_active": {
-      "label": "Bedtime Mode",
+      "label": "Bedtime mode",
       "section": "power",
       "group_tier": null,
       "unit": ""
     },
     "bedtime_display": {
-      "label": "Idle Display in Bedtime",
+      "label": "Idle display in bedtime",
       "section": "power",
       "group_tier": "behavior",
       "unit": ""
     },
     "bedtime_schedule": {
-      "label": "Bedtime Schedule",
+      "label": "Bedtime schedule",
       "section": "power",
       "group_tier": "behavior",
       "unit": ""
     },
     "bedtime_start_hour": {
-      "label": "Bedtime Starts",
+      "label": "Bedtime starts",
       "section": "power",
       "group_tier": "behavior",
       "unit": ":00"
     },
     "bedtime_end_hour": {
-      "label": "Bedtime Ends",
+      "label": "Bedtime ends",
       "section": "power",
       "group_tier": "behavior",
       "unit": ":00"
     },
     "bedtime_brightness": {
-      "label": "Bedtime Brightness",
+      "label": "Bedtime brightness",
       "section": "power",
       "group_tier": "behavior",
       "unit": "%"
     },
     "camera_default_view": {
-      "label": "Default camera view",
+      "label": "Default view",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
@@ -1038,13 +1170,13 @@
       "unit": ""
     },
     "camera_framing": {
-      "label": "Camera framing",
+      "label": "Video framing",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
     },
     "camera_stream_mode": {
-      "label": "Camera stream mode",
+      "label": "Stream mode",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
@@ -1062,7 +1194,7 @@
       "unit": ""
     },
     "weather_app_background": {
-      "label": "Weather app background",
+      "label": "Live weather background",
       "section": "interface",
       "group_tier": "interface",
       "unit": ""
@@ -1074,7 +1206,7 @@
       "unit": ""
     },
     "glass_style": {
-      "label": "Glass Style",
+      "label": "Glass style",
       "section": "display",
       "group_tier": "display",
       "unit": ""

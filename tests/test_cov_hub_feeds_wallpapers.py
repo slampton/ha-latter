@@ -1068,10 +1068,6 @@ async def test_hub_registry_and_identity_edge_cases(
         )
         is False
     )
-    assert hub_registry.safe_hour(True, 22) == 22
-    assert hub_registry.safe_hour(None, 22) == 22
-    assert hub_registry.safe_hour("25", 7) == 1
-    assert hub_registry.safe_hour("bad", 7) == 7
 
     # Pure helpers in identity (lines 126, 186, 220-221)
     assert identity_mod.manifest_flag({"w": True}, "w") is None

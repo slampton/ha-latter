@@ -25,12 +25,14 @@ class WorldClockZoneDict(TypedDict, total=False):
 
 
 class CatalogItemDict(TypedDict, total=False):
-    """Schema entry from `protocol_v3.json` `catalogs.*`."""
+    """Merged Protocol v3 + Studio contract catalog item."""
 
     token: str
     label: str
+    group: str
     icon: str
     dock_only: bool
+    capability: str
 
 
 class ShortcutItemDict(TypedDict):
@@ -446,11 +448,59 @@ def normalize_alarms_summary(val: object, *, strict: bool = False) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Protocol v3 Category & Launcher Catalogs
+# Protocol v3 Category & Launcher Catalogs (merged with studio_contract.json)
 # ---------------------------------------------------------------------------
 
-AREA_CATEGORIES_CATALOG: Final[tuple[CatalogItemDict, ...]] = tuple(
-    PROTOCOL_V3_DATA["catalogs"]["area_categories"]
+_CATALOG_UI: Final[dict[str, Any]] = STUDIO_CONTRACT_DATA["catalog_ui"]
+_SHORTCUT_ROUTE_GROUPS: Final[dict[str, str]] = _CATALOG_UI["shortcut_route_groups"]
+_CATALOG_LABELS: Final[dict[str, dict[str, str]]] = _CATALOG_UI["catalog_labels"]
+
+
+def _merge_labeled_catalog(cat_name: str) -> tuple[CatalogItemDict, ...]:
+    raw_items: list[dict[str, Any]] = PROTOCOL_V3_DATA["catalogs"][cat_name]
+    labels_map = _CATALOG_LABELS.get(cat_name)
+    if not isinstance(labels_map, dict):
+        raise RuntimeError(f"studio_contract.json catalog_ui.catalog_labels missing {cat_name!r}")
+    raw_tokens = {str(item["token"]) for item in raw_items}
+    if set(labels_map.keys()) != raw_tokens:
+        raise RuntimeError(
+            f"studio_contract.json catalog_ui.catalog_labels[{cat_name!r}] keys do not match protocol_v3.json"
+        )
+    merged: list[CatalogItemDict] = []
+    for raw in raw_items:
+        tok = str(raw["token"])
+        item: CatalogItemDict = {"token": tok, "label": str(labels_map[tok])}
+        if raw.get("capability"):
+            item["capability"] = str(raw["capability"])
+        merged.append(item)
+    return tuple(merged)
+
+
+def _merge_shortcut_routes() -> tuple[CatalogItemDict, ...]:
+    raw_routes: list[dict[str, Any]] = PROTOCOL_V3_DATA["catalogs"]["shortcut_routes"]
+    raw_tokens = {str(r["token"]) for r in raw_routes}
+    if set(_SHORTCUT_ROUTE_GROUPS.keys()) != raw_tokens:
+        raise RuntimeError(
+            "studio_contract.json catalog_ui.shortcut_route_groups keys do not match protocol_v3.json"
+        )
+    merged: list[CatalogItemDict] = []
+    for raw in raw_routes:
+        tok = str(raw["token"])
+        item: CatalogItemDict = {
+            "token": tok,
+            "label": str(raw["label"]),
+            "group": str(_SHORTCUT_ROUTE_GROUPS[tok]),
+        }
+        if raw.get("dock_only"):
+            item["dock_only"] = True
+        if raw.get("capability"):
+            item["capability"] = str(raw["capability"])
+        merged.append(item)
+    return tuple(merged)
+
+
+AREA_CATEGORIES_CATALOG: Final[tuple[CatalogItemDict, ...]] = _merge_labeled_catalog(
+    "area_categories"
 )
 AREA_CATEGORY_TOKENS: Final[tuple[str, ...]] = tuple(
     str(c["token"]) for c in AREA_CATEGORIES_CATALOG
@@ -459,8 +509,8 @@ DEFAULT_AREA_CATEGORIES: Final[str] = str(
     PROTOCOL_V3_DATA["defaults"]["area_categories"]
 )
 
-HOME_CATEGORIES_CATALOG: Final[tuple[CatalogItemDict, ...]] = tuple(
-    PROTOCOL_V3_DATA["catalogs"]["home_categories"]
+HOME_CATEGORIES_CATALOG: Final[tuple[CatalogItemDict, ...]] = _merge_labeled_catalog(
+    "home_categories"
 )
 HOME_CATEGORY_TOKENS: Final[tuple[str, ...]] = tuple(
     str(c["token"]) for c in HOME_CATEGORIES_CATALOG
@@ -469,24 +519,24 @@ DEFAULT_HOME_CATEGORIES: Final[str] = str(
     PROTOCOL_V3_DATA["defaults"]["home_categories"]
 )
 
-TOOLS_ITEMS_CATALOG: Final[tuple[CatalogItemDict, ...]] = tuple(
-    PROTOCOL_V3_DATA["catalogs"]["tools_items"]
+TOOLS_ITEMS_CATALOG: Final[tuple[CatalogItemDict, ...]] = _merge_labeled_catalog(
+    "tools_items"
 )
 TOOLS_ITEM_TOKENS: Final[tuple[str, ...]] = tuple(
     str(c["token"]) for c in TOOLS_ITEMS_CATALOG
 )
 DEFAULT_TOOLS_ITEMS: Final[str] = str(PROTOCOL_V3_DATA["defaults"]["tools_items"])
 
-GAMES_ITEMS_CATALOG: Final[tuple[CatalogItemDict, ...]] = tuple(
-    PROTOCOL_V3_DATA["catalogs"]["games_items"]
+GAMES_ITEMS_CATALOG: Final[tuple[CatalogItemDict, ...]] = _merge_labeled_catalog(
+    "games_items"
 )
 GAMES_ITEM_TOKENS: Final[tuple[str, ...]] = tuple(
     str(c["token"]) for c in GAMES_ITEMS_CATALOG
 )
 DEFAULT_GAMES_ITEMS: Final[str] = str(PROTOCOL_V3_DATA["defaults"]["games_items"])
 
-ACTIVITY_SOURCES_CATALOG: Final[tuple[CatalogItemDict, ...]] = tuple(
-    PROTOCOL_V3_DATA["catalogs"]["activity_sources"]
+ACTIVITY_SOURCES_CATALOG: Final[tuple[CatalogItemDict, ...]] = _merge_labeled_catalog(
+    "activity_sources"
 )
 ACTIVITY_SOURCE_KEYS: Final[tuple[str, ...]] = tuple(
     str(c["token"]) for c in ACTIVITY_SOURCES_CATALOG
@@ -598,9 +648,7 @@ def normalize_activity_sources(value: object) -> str:
 # Universal Shortcut Engine (`dock_items` & `pinned_items`)
 # ---------------------------------------------------------------------------
 
-SHORTCUT_ROUTES_CATALOG: Final[tuple[CatalogItemDict, ...]] = tuple(
-    PROTOCOL_V3_DATA["catalogs"]["shortcut_routes"]
-)
+SHORTCUT_ROUTES_CATALOG: Final[tuple[CatalogItemDict, ...]] = _merge_shortcut_routes()
 SHORTCUT_ROUTE_MAP: Final[dict[str, CatalogItemDict]] = {
     str(r["token"]): r for r in SHORTCUT_ROUTES_CATALOG
 }
@@ -612,14 +660,14 @@ NAVIGATE_ROUTES: Final[frozenset[str]] = (
     frozenset(SHORTCUT_ROUTE_TOKENS) | NAVIGATE_EXTRA_ROUTES
 )
 DEFAULT_DOCK_ROUTES: Final[str] = str(PROTOCOL_V3_DATA["defaults"]["dock_routes"])
-SHORTCUT_BADGE_STYLES_CATALOG: Final[tuple[CatalogItemDict, ...]] = tuple(
-    PROTOCOL_V3_DATA["catalogs"]["shortcut_badge_styles"]
+SHORTCUT_BADGE_STYLES_CATALOG: Final[tuple[CatalogItemDict, ...]] = (
+    _merge_labeled_catalog("shortcut_badge_styles")
 )
 SHORTCUT_BADGE_STYLE_TOKENS: Final[tuple[str, ...]] = tuple(
     str(c["token"]) for c in SHORTCUT_BADGE_STYLES_CATALOG
 )
-SHORTCUT_ACCENTS_CATALOG: Final[tuple[CatalogItemDict, ...]] = tuple(
-    PROTOCOL_V3_DATA["catalogs"]["shortcut_accents"]
+SHORTCUT_ACCENTS_CATALOG: Final[tuple[CatalogItemDict, ...]] = _merge_labeled_catalog(
+    "shortcut_accents"
 )
 SHORTCUT_ACCENT_TOKENS: Final[tuple[str, ...]] = tuple(
     str(c["token"]) for c in SHORTCUT_ACCENTS_CATALOG

@@ -1023,24 +1023,6 @@ async def test_telemetry_prefs_timer_commands_v3_transport_and_target_matching(
     assert wx_mock.await_count == 1
     assert cal_mock.await_count == 1
 
-    # 16) `_bind_link_report_listener` initial hibernating, rebind unsub, & state removal (`new_state=None`)
-    link_eid = register_entity(
-        hass,
-        f"sensor.{slug}_system_link_report",
-        platform="esphome",
-        device_id=coord.esphome_device_id,
-        config_entry_id=f"esp_entry_{slug}",
-        original_name="System: Link Report",
-    ).entity_id
-    hass.states.async_set(link_eid, "hibernating")
-    coord._bind_link_report_listener()
-    assert coord._entered_hibernate is True
-    # Rebind unsubscribes previous listener
-    coord._bind_link_report_listener()
-    hass.states.async_remove(link_eid)
-    await hass.async_block_till_done()
-    assert coord._entered_hibernate is True
-
     # 17) `_bind_ble_radio_listener` ignores attribute-only updates with unchanged state
     ble_radio_eid = f"binary_sensor.{slug}_ble_radio_active"
     hass.states.async_set(ble_radio_eid, "off", {"seq": 1})

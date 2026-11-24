@@ -462,6 +462,32 @@ async def test_wallpaper_upload_rbac_limits_and_proxy_views(
     with Image.open(io.BytesIO(r_wp_720_default.body)) as img_720_def:
         assert img_720_def.size == (720, 720)
 
+    # 1280x800 landscape tablet manifest passes HMAC validation (`_DEFAULT_MAX_DIM=1920`) and scales under `WALLPAPER_MAX_DIM=1280`
+    coord._runtime.hello_manifest = {
+        "v": 2,
+        "contract": 3,
+        "w": 1280,
+        "h": 800,
+        "shape": "square",
+        "display": 1,
+    }
+    assert coord.art_dimensions == (1280, 800)
+    assert coord.wallpaper_dimensions == (1280, 800)
+    wp_1280_url = coord.build_wallpaper_url()
+    assert "w=1280&h=800&shape=square&mode=wallpaper" in wp_1280_url
+    r_wp_1280 = await wp_view.get(_make_get_request(wp_1280_url), coord.device_slug)
+    assert r_wp_1280.status == 200
+    with Image.open(io.BytesIO(r_wp_1280.body)) as img_1280:
+        assert img_1280.size == (1280, 800)
+
+    # 1024x600 stays native; 1920x1200 and 1920x1920 scale proportionally down to WALLPAPER_MAX_DIM=1280
+    coord._runtime.hello_manifest = {"v": 2, "contract": 3, "w": 1024, "h": 600, "shape": "square", "display": 1}
+    assert coord.wallpaper_dimensions == (1024, 600)
+    coord._runtime.hello_manifest = {"v": 2, "contract": 3, "w": 1920, "h": 1200, "shape": "square", "display": 1}
+    assert coord.wallpaper_dimensions == (1280, 800)
+    coord._runtime.hello_manifest = {"v": 2, "contract": 3, "w": 1920, "h": 1920, "shape": "square", "display": 1}
+    assert coord.wallpaper_dimensions == (1280, 1280)
+
     assert delete_photo(hass, uploaded_src) is True
     await async_refresh_wallpaper_cache(hass)
     assert await hass.config_entries.async_unload(entry.entry_id) is True
@@ -548,6 +574,18 @@ async def test_artwork_camera_map_and_brand_icon_views(
     )
     assert r_art_hit.status == 200
     assert r_art_hit.headers["X-Latter-Cache"] == "HIT"
+
+    # 1280x800 signed artwork proxy URL passes HMAC validation (`_DEFAULT_MAX_DIM = 1920`, no 1200px clamp 403)
+    art_1280_sig = coord.sign_payload_resource("artwork|1280|800|square")
+    r_art_1280 = await art_view.get(
+        _make_get_request(
+            f"/api/latter/artwork/{coord.device_slug}?w=1280&h=800&sig={art_1280_sig}"
+        ),
+        coord.device_slug,
+    )
+    assert r_art_1280.status == 200
+    with Image.open(io.BytesIO(r_art_1280.body)) as img_art_1280:
+        assert img_art_1280.size == (1280, 800)
 
     # 2) Camera Snapshot View: allow-list check, rotation check, live feed poll, and clean unload
     cam_view = LatterCameraSnapshotView(hass)

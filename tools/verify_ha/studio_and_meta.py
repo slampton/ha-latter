@@ -35,7 +35,8 @@ TEXT_EXTS: Final[frozenset[str]] = frozenset(
     {".py", ".json", ".yaml", ".yml", ".js", ".ts", ".mjs", ".md", ".toml"}
 )
 
-MIN_CORE_REV_FLOOR: Final = 2026112303
+MIN_CORE_REV_FLOOR: Final = 2026112401
+MIN_STUDIO_REV_FLOOR: Final = 49
 MIN_OPEN_ARGS: Final = 2
 
 BANNED_MOCK_SHIMS: Final[tuple[str, ...]] = (
@@ -303,16 +304,16 @@ def _check_sibling_core_lockstep(
                 f"esphome-latter-core LATTER_CORE_REV ({sorted(set(core_revs))})"
             )
 
-    sibling_base = sibling_core / "modules" / "base.yaml"
-    if sibling_base.is_file():
+    sibling_sys_core = sibling_core / "modules" / "system_core.yaml"
+    if sibling_sys_core.is_file():
         m_core = re.search(
             r'(?m)^\s*version:\s*"([^"]+)"',
-            sibling_base.read_text(encoding="utf-8"),
+            sibling_sys_core.read_text(encoding="utf-8"),
         )
         if m_core and m_core.group(1) != ha_ver:
             failures.append(
                 f"[VERSION LOCKSTEP] ha-latter ({ha_ver}) != "
-                f"esphome-latter-core base.yaml ({m_core.group(1)})"
+                f"esphome-latter-core system_core.yaml ({m_core.group(1)})"
             )
 
     devices_dir = sibling_core / "devices"
@@ -329,7 +330,7 @@ def _check_sibling_core_lockstep(
                 )
 
 
-def _check_version_and_sdk_lockstep(
+def _check_version_and_core_rev_lockstep(
     root: Path,
     manifest: dict[str, object],
     failures: list[str],
@@ -368,6 +369,17 @@ def _check_version_and_sdk_lockstep(
                 f"[PYPROJECT PARITY] pyproject.toml license is {lic_text!r} "
                 "(expected 'Apache-2.0')"
             )
+
+    m_studio = re.search(
+        r"(?m)^\s*STUDIO_REV(?:\s*:\s*[^=\r\n]+)?\s*=\s*(\d+)\b", const_txt
+    )
+    if not m_studio:
+        failures.append("[VERSION LOCKSTEP] const.py missing STUDIO_REV")
+    elif int(m_studio.group(1)) < MIN_STUDIO_REV_FLOOR:
+        failures.append(
+            f"[VERSION LOCKSTEP] STUDIO_REV ({m_studio.group(1)}) < "
+            f"floor ({MIN_STUDIO_REV_FLOOR})"
+        )
 
     m_core = re.search(
         r"(?m)^\s*MIN_FIRMWARE_CORE_REV(?:\s*:\s*[^=\r\n]+)?\s*=\s*(\d+)\b", const_txt
@@ -677,7 +689,7 @@ def check_repo_meta_and_studio(
     failures: list[str],
 ) -> None:
     """Run lockstep, workflow gate, Studio, test-clock, and frontend build checks."""
-    _check_version_and_sdk_lockstep(root, manifest, failures)
+    _check_version_and_core_rev_lockstep(root, manifest, failures)
     _check_studio_schema_generator(root, failures)
     val_yml_path = root / ".github" / "workflows" / "validate.yml"
     val_yml = val_yml_path.read_text(encoding="utf-8") if val_yml_path.is_file() else ""

@@ -13,6 +13,7 @@ _REQUIRED_STUDIO_TOP_KEYS: Final[frozenset[str]] = frozenset(
     {
         "studio_contract",
         "ha_services",
+        "catalog_ui",
         "world_clock_zones",
         "world_clock_aliases",
         "device_pref_ui",
@@ -23,6 +24,16 @@ _REQUIRED_PREF_UI_KEYS: Final[frozenset[str]] = frozenset(
 )
 _VALID_GROUP_TIERS: Final[frozenset[str | None]] = frozenset(
     {"behavior", "display", "interface", None}
+)
+_CSV_DEFAULT_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "dock_routes",
+        "activity_sources",
+        "area_categories",
+        "home_categories",
+        "tools_items",
+        "games_items",
+    }
 )
 
 
@@ -84,11 +95,63 @@ def _validate_pref_ui_coverage(
             raise ValueError(f"device_pref_ui[{key!r}].unit must be a string")
 
 
+def _validate_catalog_ui_coverage(
+    protocol_catalogs: dict[str, Any],
+    catalog_ui: dict[str, Any],
+) -> None:
+    if not isinstance(protocol_catalogs, dict) or "shortcut_routes" not in protocol_catalogs:
+        raise ValueError("protocol_v3.json['catalogs'] must be an object containing 'shortcut_routes'")
+    if not isinstance(catalog_ui, dict):
+        raise ValueError("studio_contract.json['catalog_ui'] must be an object")
+
+    route_groups = catalog_ui.get("shortcut_route_groups")
+    if not isinstance(route_groups, dict):
+        raise ValueError("studio_contract.json['catalog_ui']['shortcut_route_groups'] must be an object")
+    route_tokens = {str(r["token"]) for r in protocol_catalogs["shortcut_routes"]}
+    if set(route_groups.keys()) != route_tokens:
+        missing = sorted(route_tokens - set(route_groups.keys()))
+        extra = sorted(set(route_groups.keys()) - route_tokens)
+        raise ValueError(
+            "1:1 key mismatch between protocol_v3.json['catalogs']['shortcut_routes'] and "
+            f"studio_contract.json['catalog_ui']['shortcut_route_groups'] (missing={missing}, extra={extra})"
+        )
+    for tok, grp in route_groups.items():
+        if not isinstance(grp, str) or not grp.strip():
+            raise ValueError(f"catalog_ui.shortcut_route_groups[{tok!r}] must be a non-empty string")
+
+    catalog_labels = catalog_ui.get("catalog_labels")
+    if not isinstance(catalog_labels, dict):
+        raise ValueError("studio_contract.json['catalog_ui']['catalog_labels'] must be an object")
+    non_fw_cats = set(protocol_catalogs.keys()) - {"shortcut_routes"}
+    if set(catalog_labels.keys()) != non_fw_cats:
+        missing_c = sorted(non_fw_cats - set(catalog_labels.keys()))
+        extra_c = sorted(set(catalog_labels.keys()) - non_fw_cats)
+        raise ValueError(
+            "1:1 catalog mismatch between protocol_v3.json['catalogs'] and "
+            f"studio_contract.json['catalog_ui']['catalog_labels'] (missing={missing_c}, extra={extra_c})"
+        )
+    for cat_name in sorted(non_fw_cats):
+        labels_map = catalog_labels[cat_name]
+        if not isinstance(labels_map, dict):
+            raise ValueError(f"catalog_ui.catalog_labels[{cat_name!r}] must be an object")
+        cat_tokens = {str(item["token"]) for item in protocol_catalogs[cat_name]}
+        if set(labels_map.keys()) != cat_tokens:
+            missing_t = sorted(cat_tokens - set(labels_map.keys()))
+            extra_t = sorted(set(labels_map.keys()) - cat_tokens)
+            raise ValueError(
+                f"1:1 token mismatch for catalog {cat_name!r} "
+                f"(missing={missing_t}, extra={extra_t})"
+            )
+        for tok, lbl in labels_map.items():
+            if not isinstance(lbl, str) or not lbl.strip():
+                raise ValueError(f"catalog_ui.catalog_labels[{cat_name!r}][{tok!r}] must be a non-empty string")
+
+
 def validate_contracts(
     protocol_schema: dict[str, Any],
     studio_data: dict[str, Any],
 ) -> None:
-    """Validate protocol_v3.json + studio_contract.json ownership split and 1:1 pref UI coverage."""
+    """Validate protocol_v3.json + studio_contract.json ownership split and 1:1 UI coverage."""
     leaked_keys = sorted(_REQUIRED_STUDIO_TOP_KEYS.intersection(protocol_schema.keys()))
     if leaked_keys:
         raise ValueError(
@@ -115,13 +178,21 @@ def validate_contracts(
     if not isinstance(studio_data["world_clock_aliases"], list):
         raise ValueError("studio_contract.json['world_clock_aliases'] must be a list")
 
+    _validate_catalog_ui_coverage(
+        protocol_schema.get("catalogs", {}),
+        studio_data["catalog_ui"],
+    )
     _validate_pref_ui_coverage(
         protocol_schema.get("device_pref_specs", []),
         studio_data["device_pref_ui"],
     )
 
 
-def _append_catalogs_ts(lines: list[str], catalogs: dict[str, Any]) -> None:
+def _append_catalogs_ts(
+    lines: list[str],
+    catalogs: dict[str, Any],
+    catalog_ui: dict[str, Any],
+) -> None:
     lines.extend(
         [
             "export interface CatalogItem {",
@@ -134,20 +205,30 @@ def _append_catalogs_ts(lines: list[str], catalogs: dict[str, Any]) -> None:
             "",
         ]
     )
+    route_groups: dict[str, str] = catalog_ui["shortcut_route_groups"]
+    catalog_labels: dict[str, dict[str, str]] = catalog_ui["catalog_labels"]
+
     for cat_name, cat_items in catalogs.items():
         const_name = f"{cat_name.upper()}_CATALOG"
         lines.append(f"export const {const_name}: ReadonlyArray<CatalogItem> = [")
         for item in cat_items:
+            tok = str(item["token"])
+            label = (
+                str(item["label"])
+                if cat_name == "shortcut_routes"
+                else str(catalog_labels[cat_name][tok])
+            )
+            group = route_groups[tok] if cat_name == "shortcut_routes" else ""
             extras: list[str] = []
-            if item.get("group"):
-                extras.append(f"group: {_ts_json(item['group'])}")
+            if group:
+                extras.append(f"group: {_ts_json(group)}")
             if item.get("dock_only"):
                 extras.append("dockOnly: true")
             if item.get("capability"):
                 extras.append(f"capability: {_ts_json(item['capability'])}")
             extra_str = (", " + ", ".join(extras)) if extras else ""
             lines.append(
-                f"  {{token: {_ts_json(item['token'])}, label: {_ts_json(item['label'])}{extra_str}}},"
+                f"  {{token: {_ts_json(tok)}, label: {_ts_json(label)}{extra_str}}},"
             )
         lines.extend(["];", ""])
 
@@ -236,6 +317,7 @@ def build_typescript_schema(
 
     studio_contract = studio_data["studio_contract"]
     catalogs = protocol_schema.get("catalogs", {})
+    catalog_ui = studio_data["catalog_ui"]
     defaults = protocol_schema.get("defaults", {})
     world_clock_zones = studio_data["world_clock_zones"]
     device_pref_specs = protocol_schema["device_pref_specs"]
@@ -261,17 +343,20 @@ def build_typescript_schema(
         "",
     ]
 
-    _append_catalogs_ts(lines, catalogs)
+    _append_catalogs_ts(lines, catalogs, catalog_ui)
     _append_world_clocks_ts(lines, world_clock_zones)
     _append_device_pref_specs_ts(lines, device_pref_specs, device_pref_ui)
 
     for key, val in defaults.items():
         const_name = f"DEFAULT_{key.upper()}"
         lines.append(f"export const {const_name} = {_ts_json(val)};")
-        tokens = [t.strip() for t in str(val).split(",") if t.strip()]
-        lines.append(f"export const DEFAULT_{key.upper()}_TOKENS: ReadonlyArray<string> = [")
-        lines.extend(f"  {_ts_json(tok)}," for tok in tokens)
-        lines.extend(["];", ""])
+        if key in _CSV_DEFAULT_KEYS:
+            tokens = [t.strip() for t in str(val).split(",") if t.strip()]
+            lines.append(f"export const DEFAULT_{key.upper()}_TOKENS: ReadonlyArray<string> = [")
+            lines.extend(f"  {_ts_json(tok)}," for tok in tokens)
+            lines.extend(["];", ""])
+        else:
+            lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
 

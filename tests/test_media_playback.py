@@ -324,7 +324,7 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
     }
     assert coord.art_dimensions == (720, 720)
 
-    # Oversized 1200x1200 manifest still clamps cleanly to 720x720
+    # High-res 1200x1200 and 1280x800 tablet manifests stay native under WALLPAPER_MAX_DIM=1280
     coord._runtime.hello_manifest = {
         "v": 2,
         "contract": 3,
@@ -333,7 +333,30 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
         "shape": "square",
         "display": 1,
     }
-    assert coord.art_dimensions == (720, 720)
+    assert coord.art_dimensions == (1200, 1200)
+
+    coord._runtime.hello_manifest = {
+        "v": 2,
+        "contract": 3,
+        "w": 1280,
+        "h": 800,
+        "shape": "square",
+        "display": 1,
+    }
+    assert coord.art_dimensions == (1280, 800)
+    assert coord.wallpaper_dimensions == (1280, 800)
+
+    # Oversized 1920x1200 manifest scales proportionally to WALLPAPER_MAX_DIM=1280 (1280x800)
+    coord._runtime.hello_manifest = {
+        "v": 2,
+        "contract": 3,
+        "w": 1920,
+        "h": 1200,
+        "shape": "square",
+        "display": 1,
+    }
+    assert coord.art_dimensions == (1280, 800)
+    assert coord.wallpaper_dimensions == (1280, 800)
 
     # Restore 720x720 Desk manifest and verify signed art_url + HTTP baseline JPEG output
     coord._runtime.hello_manifest = {
@@ -409,7 +432,6 @@ async def test_default_speaker_auto_open_persistence_listener_and_lyrics_push(
 ) -> None:
     """External `default_speaker` survives idle resets, auto-switches on play, sets `is_default_speaker`, and pushes lyrics."""
     from custom_components.latter.const import (
-        CONF_BEDTIME_ACTIVE,
         CONF_DEFAULT_SPEAKER,
         CONF_MUSIC_AUTO_OPEN,
     )
@@ -600,7 +622,7 @@ async def test_default_speaker_auto_open_persistence_listener_and_lyrics_push(
 
     # Bedtime active skips proactive lyrics push even if display_power_state == 1
     coord.display_power_state = 1
-    await coord.async_update_device_prefs({CONF_BEDTIME_ACTIVE: True})
+    await coord.async_update_device_prefs({"bedtime_active": True})
     hass.states.async_set(
         desk_spk,
         "playing",
@@ -616,7 +638,7 @@ async def test_default_speaker_auto_open_persistence_listener_and_lyrics_push(
 
     # 5. If active_speaker is actively playing, default_speaker starting does NOT steal active_speaker;
     #    and if music_auto_open == "Off", default_speaker starting does NOT steal active_speaker.
-    await coord.async_update_device_prefs({CONF_BEDTIME_ACTIVE: False})
+    await coord.async_update_device_prefs({"bedtime_active": False})
     coord.display_power_state = 0
     hass.states.async_set(desk_spk, "idle", {"friendly_name": "Office Sonos"})
     hass.states.async_set(other_spk, "playing", {"friendly_name": "Kitchen Speaker", "media_title": "Jazz"})

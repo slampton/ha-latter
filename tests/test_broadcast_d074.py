@@ -8,7 +8,6 @@ from homeassistant.helpers import entity_registry as er
 import pytest
 
 from custom_components.latter.const import (
-    CONF_BEDTIME_ACTIVE,
     CONF_BROADCAST_PHRASES,
     CONF_BROADCAST_SPEAKER_ENTITIES,
     CONF_BROADCAST_SPEAKERS,
@@ -97,7 +96,7 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
             CONF_ESPHOME_DEVICE_ID: esp_dev_2.id,
             "mac": mac_2,
             CONF_DEVICE_SLUG: "bedroom_panel",
-            CONF_BEDTIME_ACTIVE: True,
+            "bedtime_active": True,
         },
         subentry_type=SUBENTRY_DEVICE,
         title="Bedroom Panel",
@@ -193,7 +192,7 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
 
     # 2. Turning off Bedtime Mode on Bedroom Panel includes it while still excluding caller
     bed_coord.update_device_config(
-        {**bed_coord.device_data, CONF_BEDTIME_ACTIVE: False}
+        {**bed_coord.device_data, "bedtime_active": False}
     )
     res_awake = await hass.services.async_call(
         DOMAIN,
@@ -253,7 +252,7 @@ async def test_broadcast_delivery_excludes_caller_and_bedtime_displays(
 
     # 4. System-wide target_device="all" uses System broadcast_speakers and skips unconfigured AVR + Bedtime displays
     bed_coord.update_device_config(
-        {**bed_coord.device_data, CONF_BEDTIME_ACTIVE: True}
+        {**bed_coord.device_data, "bedtime_active": True}
     )
     res_all = await hass.services.async_call(
         DOMAIN,

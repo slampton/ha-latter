@@ -1,5 +1,5 @@
 /**
- * `STUDIO_REV = 44` `StudioStatePayload` Builder for Playwright E2E.
+ * `STUDIO_REV = 49` `StudioStatePayload` Builder for Playwright E2E.
  *
  * Separated from `studio-fixtures.ts` to keep fixture definitions and payload assembly modular.
  */
@@ -135,7 +135,7 @@ export function buildPayloadFromHub(
     system_info: {
       ha_version: "2026.11.2",
       integration_version: "3.0.0",
-      min_firmware_core_rev: 2026112303,
+      min_firmware_core_rev: 2026112401,
       studio_rev: hub.studioRev,
     },
     internal_logs: includeLogs

@@ -2,7 +2,7 @@
 """Cross-platform DAG, security, Studio, and HA Platinum compliance verifier for ha-latter.
 
 Enforces Tarjan SCC zero-cycle DAG + coarse architectural boundaries, AST bound-identity & service/RPC
-split invariants, `pyproject.toml` / `manifest.json` / `base.yaml` `major.minor.patch` lockstep,
+split invariants, `pyproject.toml` / `manifest.json` / `system_core.yaml` `major.minor.patch` lockstep,
 and Latter Studio WebSocket/XHR/CSS token guardrails.
 """
 
