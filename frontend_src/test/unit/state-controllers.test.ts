@@ -38,6 +38,7 @@ import type {
   SystemDeviceEntry,
 } from "../../src/types.js";
 import { renderDeviceDisplayView } from "../../src/views/device-display-view.js";
+import { renderDeviceInterfaceView } from "../../src/views/device-interface-view.js";
 import { renderDeviceOverviewView } from "../../src/views/device-overview-view.js";
 import {
   DEV_TELEMETRY_REFRESH_DEBOUNCE_MS,
@@ -146,7 +147,7 @@ function createHeadlessStore(initialPayload?: Partial<StudioStatePayload>): Head
     system_info: {
       ha_version: "2026.11.2",
       integration_version: "3.0.0",
-      min_firmware_core_rev: 2026112401,
+      min_firmware_core_rev: 2026112402,
       studio_rev: STUDIO_REV,
     },
     internal_logs: [],
@@ -451,7 +452,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.equal(store.currentViewId, "photos");
   });
 
-  it("constructs STUDIO_REV=49 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
+  it("constructs STUDIO_REV=50 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
     const { store, wsLog } = createHeadlessStore();
     store.applyRoute({ prefix: "/latter", path: "devices/sub_desk/overview" });
 
@@ -469,10 +470,10 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { do_not_disturb: true },
         expected_config_rev: 7,
       },
-      studio_rev: 49,
+      studio_rev: 50,
     });
 
-    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 49`
+    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 50`
     wsLog.length = 0;
     store.applyRoute({ prefix: "/latter", path: "system/presence" });
     store.entity.stageSystemSetting("ble_away_timeout_s", 240, undefined, 60_000);
@@ -486,7 +487,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { ble_away_timeout_s: 240 },
         expected_config_rev: 3,
       },
-      studio_rev: 49,
+      studio_rev: 50,
     });
 
     // `version_mismatch` sets `studioRevMismatch = true`
@@ -1054,16 +1055,16 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     };
 
     const { store: currentStore } = createHeadlessStore({
-      live: { core_rev: "2026112401", firmware_outdated: false },
+      live: { core_rev: "2026112402", firmware_outdated: false },
     });
     currentStore.applyRoute({ prefix: "/latter", path: "devices/sub_desk/overview" });
     const summaryText = currentStore.tools.formatSystemInfoSummary();
-    assert.ok(summaryText.includes("Minimum firmware core: 2026112401"));
+    assert.ok(summaryText.includes("Minimum firmware core: 2026112402"));
     assert.equal(summaryText.includes("SDK"), false);
     assert.equal(renderFirmwareOutdatedBanner(currentStore), nothing);
     const currentToolsHtml = flattenTemplate(renderDeviceToolsView(currentStore));
     assert.ok(currentToolsHtml.includes("diag-core-rev"));
-    assert.ok(currentToolsHtml.includes("2026112401"));
+    assert.ok(currentToolsHtml.includes("2026112402"));
     assert.equal(currentToolsHtml.includes("diag-firmware-outdated-badge"), false);
 
     // Outdated firmware renders warning banner on Overview & Tools and badge on Diagnostics & Status card
@@ -1076,7 +1077,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.ok(bannerHtml.includes("alert-warning"));
     assert.ok(bannerHtml.includes("Firmware update required"));
     assert.ok(bannerHtml.includes("2026112202"));
-    assert.ok(bannerHtml.includes("2026112401"));
+    assert.ok(bannerHtml.includes("2026112402"));
 
     const overviewHtml = flattenTemplate(renderDeviceOverviewView(outdatedStore));
     assert.ok(overviewHtml.includes("device-firmware-outdated-banner"));
@@ -1306,5 +1307,111 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.equal(effAfter.staged, true);
     assert.equal(effAfter.value, "Dark");
     assert.equal(store.groups.previewBatchDetachmentCount(), 2);
+  });
+
+  it("renders grouped Home screen element toggles, conditional tap actions, and display_battery gating (D-085)", () => {
+    const flattenTemplate = (node: unknown): string => {
+      if (node === null || node === undefined || node === nothing) return "";
+      if (typeof node === "string" || typeof node === "number" || typeof node === "boolean") {
+        return String(node);
+      }
+      if (Array.isArray(node)) return node.map(flattenTemplate).join("");
+      if (typeof node === "object") {
+        const tpl = node as { strings?: readonly string[]; values?: readonly unknown[] };
+        if (Array.isArray(tpl.strings)) {
+          let out = "";
+          for (let i = 0; i < tpl.strings.length; i += 1) {
+            out += tpl.strings[i] ?? "";
+            if (Array.isArray(tpl.values) && i < tpl.values.length) {
+              out += flattenTemplate(tpl.values[i]);
+            }
+          }
+          return out;
+        }
+      }
+      return "";
+    };
+
+    // 1. Battery display shows all 5 new controls + Home elements / Background subsections + "None" option
+    const { store: battStore } = createHeadlessStore({
+      capabilities: { has_display: true, has_battery: true, is_round: true },
+      config: {
+        home_screen_enabled: true,
+        home_show_time: true,
+        home_show_date: true,
+        home_show_weather: true,
+        home_show_battery: true,
+        home_clock_tap_action: "Time App",
+        home_date_tap_action: "Overview",
+        home_weather_tap_action: "Current Weather",
+      },
+    });
+    const fullHtml = flattenTemplate(renderDeviceInterfaceView(battStore));
+    assert.ok(fullHtml.includes("Home elements"));
+    assert.ok(fullHtml.includes("Background"));
+    assert.ok(fullHtml.includes("cfg-home_show_time"));
+    assert.ok(fullHtml.includes("cfg-home_clock_tap_action"));
+    assert.ok(fullHtml.includes("cfg-home_show_date"));
+    assert.ok(fullHtml.includes("cfg-home_date_tap_action"));
+    assert.ok(fullHtml.includes("cfg-home_show_weather"));
+    assert.ok(fullHtml.includes("cfg-home_weather_tap_action"));
+    assert.ok(fullHtml.includes("cfg-home_show_battery"));
+    assert.ok(fullHtml.includes("5-day forecast"));
+    assert.ok(fullHtml.includes("None"));
+
+    // 2. Hiding Time / Date / Weather hides their paired tap selects; non-battery device hides Show battery
+    const { store: wallStore } = createHeadlessStore({
+      capabilities: { has_display: true, has_battery: false, is_round: false },
+      config: {
+        home_screen_enabled: true,
+        start_screen: "Clock Face",
+        home_show_time: false,
+        home_show_date: false,
+        home_show_weather: false,
+      },
+    });
+    const hiddenHtml = flattenTemplate(renderDeviceInterfaceView(wallStore));
+    assert.ok(hiddenHtml.includes("cfg-home_show_time"));
+    assert.equal(hiddenHtml.includes("cfg-home_clock_tap_action"), false);
+    assert.equal(hiddenHtml.includes("cfg-home_date_tap_action"), false);
+    assert.equal(hiddenHtml.includes("cfg-home_weather_tap_action"), false);
+    assert.equal(hiddenHtml.includes("cfg-home_show_battery"), false);
+    // Start screen == Clock Face still shows Clock face selector cleanly when Home time is hidden
+    assert.ok(hiddenHtml.includes("cfg-clock_face"));
+
+    // 3. Group Baseline Drawer omits Show battery for wall_panels (has_battery: false) and includes it for pocket_carry
+    const deskMember = wallStore.state!.system_devices.find((d) => d.subentry_id === "sub_desk")!;
+    const wallGroup: DeviceGroup = {
+      id: "wall_panels",
+      name: "Wall & Desk Panels",
+      description: "Stationary displays",
+      builtin: true,
+      include_display: false,
+      include_interface: true,
+      device_config: { home_show_time: true, home_show_date: false, home_show_weather: true },
+    };
+    wallStore.openGroupIds.add("wall_panels");
+    const wallGrpHtml = flattenTemplate(
+      renderGroupBaselineDrawer(wallStore, wallGroup, [deskMember], [deskMember]),
+    );
+    assert.ok(wallGrpHtml.includes("Home time tap"));
+    assert.equal(wallGrpHtml.includes("Home date tap"), false);
+    assert.ok(wallGrpHtml.includes("Home weather tap"));
+    assert.equal(wallGrpHtml.includes("Show battery"), false);
+
+    const pocketGroup: DeviceGroup = {
+      id: "pocket_carry",
+      name: "Pocket Carry",
+      description: "Battery displays",
+      builtin: true,
+      include_display: false,
+      include_interface: true,
+      device_config: {},
+    };
+    battStore.openGroupIds.add("pocket_carry");
+    const pocketGrpHtml = flattenTemplate(
+      renderGroupBaselineDrawer(battStore, pocketGroup, [], [deskMember]),
+    );
+    assert.ok(pocketGrpHtml.includes("Show battery"));
   });
 });

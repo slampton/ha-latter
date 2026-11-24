@@ -209,7 +209,29 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             self.assertNotIn(retired_key, studio_scope.DEVICE_SETTING_KEYS)
             with self.assertRaises(studio_scope.SettingsScopeError):
                 studio_scope.clean_device_settings({retired_key: "1"})
-        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 65)
+        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 70)
+        self.assertEqual(
+            studio_scope.DEVICE_PREF_SPEC_MAP["home_clock_tap_action"].options,
+            ("Time App", "Clock Face", "None"),
+        )
+        self.assertEqual(
+            studio_scope.DEVICE_PREF_SPEC_MAP["home_date_tap_action"].options,
+            ("Day View", "Overview", "None"),
+        )
+        wt_spec = studio_scope.DEVICE_PREF_SPEC_MAP["home_weather_tap_action"]
+        self.assertEqual(
+            (wt_spec.domain, wt_spec.section, wt_spec.group_tier, wt_spec.default, wt_spec.options),
+            ("select", "interface", "interface", "Current Weather", ("Current Weather", "5-Day Forecast", "None")),
+        )
+        batt_spec = studio_scope.DEVICE_PREF_SPEC_MAP["home_show_battery"]
+        self.assertEqual(
+            (batt_spec.domain, batt_spec.section, batt_spec.group_tier, batt_spec.default, batt_spec.capability),
+            ("switch", "interface", "interface", True, "display_battery"),
+        )
+        for show_key in ("home_show_date", "home_show_time", "home_show_weather"):
+            sp = studio_scope.DEVICE_PREF_SPEC_MAP[show_key]
+            self.assertEqual((sp.domain, sp.section, sp.group_tier, sp.default, sp.capability),
+                             ("switch", "interface", "interface", True, "display"))
         dnd_spec = studio_scope.DEVICE_PREF_SPEC_MAP["do_not_disturb"]
         self.assertEqual(
             (dnd_spec.domain, dnd_spec.section, dnd_spec.group_tier, dnd_spec.capability),

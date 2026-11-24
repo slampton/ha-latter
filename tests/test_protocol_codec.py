@@ -39,7 +39,7 @@ class TestProtocolV3Contract(unittest.TestCase):
             "remote_config": 3,
             "weather_forecast": 15,
             "calendar_agenda": 4,
-            "device_prefs": 70,
+            "device_prefs": 75,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})

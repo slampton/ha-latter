@@ -1,9 +1,11 @@
 /**
- * Device Interface View (`interface`, `D-026`, `D-035`, `D-047`, `D-053`, `D-064`, `D-069`):
- * - Column 1: Home screen (`home_screen_enabled`, `start_screen` + inline `Configure`, `time_format`,
- *   `home_clock_tap_action` + conditional `clock_face`, `home_date_tap_action`, `return_to_home_timeout`,
- *   `wake_greeting`, `weather_background` + conditional `home_sun`/`home_moon` pills, `activity_card`,
- *   & sortable `renderPillList` for `activity_sources`).
+ * Device Interface View (`interface`, `D-026`, `D-035`, `D-047`, `D-053`, `D-064`, `D-069`, `D-085`):
+ * - Column 1: Home screen (`home_screen_enabled`, `start_screen` + inline `Configure`,
+ *   `return_to_home_timeout`, `time_format`, Home elements: `home_show_time` + conditional
+ *   `home_clock_tap_action` / `clock_face`, `home_show_date` + conditional `home_date_tap_action`,
+ *   `home_show_weather` + conditional `home_weather_tap_action`, capability-gated `home_show_battery`,
+ *   `wake_greeting`, `activity_card` + sortable `activity_sources`; Background: `weather_background` +
+ *   conditional `home_sun`/`home_moon` pills).
  * - Column 2: App Dock (`renderSortableList` with `≡` drag handle + focus-preserving `↑`/`↓` and
  *   non-truncating `.dock-row` layout, `requestResetDockItems` confirmation, and Hidden from dock) —
  *   omitted cleanly when `home_screen_enabled === false` (`D-069`).
@@ -24,6 +26,7 @@ import {
   GAMES_ITEMS_CATALOG,
   HOME_CLOCK_TAP_OPTIONS,
   HOME_DATE_TAP_OPTIONS,
+  HOME_WEATHER_TAP_OPTIONS,
   MAX_DOCK_ITEMS,
   NATIVE_DOCK_APP_TOKENS,
   NATIVE_DOCK_CONFIG_APP_MAP,
@@ -144,6 +147,19 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
   }));
   const homeDateTapValue = String(
     homeDateTapPref?.value ?? cfg.home_date_tap_action ?? "Overview",
+  );
+
+  const homeWeatherTapPref = store.entity.getPref("home_weather_tap_action");
+  const homeWeatherTapOptions = (
+    homeWeatherTapPref?.options && homeWeatherTapPref.options.length > 0
+      ? homeWeatherTapPref.options
+      : HOME_WEATHER_TAP_OPTIONS
+  ).map((opt) => ({
+    value: opt,
+    label: store.tPrefOption("home_weather_tap_action", opt),
+  }));
+  const homeWeatherTapValue = String(
+    homeWeatherTapPref?.value ?? cfg.home_weather_tap_action ?? "Current Weather",
   );
 
   const returnTimeoutPref = store.entity.getPref("return_to_home_timeout");
@@ -270,36 +286,32 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
     ? store.t("dev_interface.clock_24h")
     : store.t("dev_interface.clock_12h");
 
-  // Home screen appearance controls consolidated into Home screen (`D-069`)
-  const wakeGreetingPref = store.entity.getPref("wake_greeting");
-  const wakeGreetingRaw = wakeGreetingPref?.value ?? cfg.wake_greeting;
-  const wakeGreetingOn =
-    wakeGreetingRaw !== undefined && wakeGreetingRaw !== null
-      ? typeof wakeGreetingRaw === "string"
-        ? !["", "0", "false", "off", "disabled"].includes(wakeGreetingRaw.trim().toLowerCase())
-        : Boolean(wakeGreetingRaw)
-      : true;
-  const weatherBgPref = store.entity.getPref("weather_background");
-  const weatherBgRaw = weatherBgPref?.value ?? cfg.weather_background;
-  const weatherBgOn =
-    weatherBgRaw !== undefined && weatherBgRaw !== null
-      ? typeof weatherBgRaw === "string"
-        ? !["", "0", "false", "off", "disabled"].includes(weatherBgRaw.trim().toLowerCase())
-        : Boolean(weatherBgRaw)
-      : true;
+  // Home screen appearance & element visibility controls consolidated into Home screen (`D-069`, `D-085`)
+  const resolveBoolPref = (key: string, defaultVal = true): boolean => {
+    const pref = store.entity.getPref(key);
+    const raw = pref?.value ?? cfg[key];
+    if (raw === undefined || raw === null) return defaultVal;
+    if (typeof raw === "string") {
+      return !["", "0", "false", "off", "disabled"].includes(raw.trim().toLowerCase());
+    }
+    return Boolean(raw);
+  };
+  const homeShowTimeOn = resolveBoolPref("home_show_time", true);
+  const homeShowDateOn = resolveBoolPref("home_show_date", true);
+  const homeShowWeatherOn = resolveBoolPref("home_show_weather", true);
+  const homeShowBatterySpec = store.entity.getPrefSpec("home_show_battery") || {
+    capability: "display_battery",
+  };
+  const homeShowBatterySupported = isCatalogItemSupported(homeShowBatterySpec, caps);
+  const homeShowBatteryOn = resolveBoolPref("home_show_battery", true);
+  const wakeGreetingOn = resolveBoolPref("wake_greeting", true);
+  const weatherBgOn = resolveBoolPref("weather_background", true);
   const celestialPillItems = (["home_sun", "home_moon"] as const).map((key) => {
     const pref = store.entity.getPref(key);
-    const rawVal = pref?.value ?? cfg[key];
-    const enabled =
-      rawVal !== undefined && rawVal !== null
-        ? typeof rawVal === "string"
-          ? !["", "0", "false", "off", "disabled"].includes(rawVal.trim().toLowerCase())
-          : Boolean(rawVal)
-        : true;
     return {
       token: key,
       label: store.tPrefLabel(key, pref?.label),
-      enabled,
+      enabled: resolveBoolPref(key, true),
     };
   });
 
@@ -580,6 +592,22 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                     </button>`
                   : nothing}`,
             })}
+            ${homeScreenEnabled
+              ? renderSelectRow({
+                  id: "cfg-return_to_home_timeout",
+                  label: store.tPrefLabel("return_to_home_timeout"),
+                  description: store.t("dev_interface.return_timeout_desc"),
+                  value: returnTimeoutValue,
+                  rawOptions: rawReturnTimeoutOptions,
+                  onChange: (val) => {
+                    store.entity.stageDeviceSetting(
+                      "return_to_home_timeout",
+                      val,
+                      "cfg-return_to_home_timeout",
+                    );
+                  },
+                })
+              : nothing}
             ${timeFormatOptions.length > 0
               ? renderSelectRow({
                   id: "cfg-time_format",
@@ -592,55 +620,118 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                   },
                 })
               : nothing}
-            ${!homeScreenEnabled && startScreenValue === "Clock Face"
+            ${(!homeScreenEnabled || !homeShowTimeOn) && startScreenValue === "Clock Face"
               ? renderInlineClockFaceRow()
               : nothing}
             ${homeScreenEnabled
-              ? html`${renderSelectRow({
-                    id: "cfg-home_clock_tap_action",
-                    label: store.tPrefLabel("home_clock_tap_action"),
-                    description: store.t("dev_interface.home_clock_tap_desc"),
-                    value: homeClockTapValue,
-                    rawOptions: homeClockTapOptions,
-                    onChange: (val) => {
+              ? html`<div class="subsection-title">
+                    ${store.t("dev_interface.section_home_elements")}
+                  </div>
+                  ${renderSwitchRow({
+                    id: "cfg-home_show_time",
+                    label: store.tPrefLabel("home_show_time"),
+                    description: store.t("dev_interface.home_show_time_desc"),
+                    checked: homeShowTimeOn,
+                    onChange: (checked) => {
                       store.entity.stageDeviceSetting(
-                        "home_clock_tap_action",
-                        val,
-                        "cfg-home_clock_tap_action",
+                        "home_show_time",
+                        checked,
+                        "cfg-home_show_time",
                       );
                     },
                   })}
-                  ${homeClockTapValue === "Clock Face" || startScreenValue === "Clock Face"
-                    ? renderInlineClockFaceRow()
+                  ${homeShowTimeOn
+                    ? html`${renderSelectRow({
+                          id: "cfg-home_clock_tap_action",
+                          label: store.tPrefLabel("home_clock_tap_action"),
+                          description: store.t("dev_interface.home_clock_tap_desc"),
+                          value: homeClockTapValue,
+                          rawOptions: homeClockTapOptions,
+                          onChange: (val) => {
+                            store.entity.stageDeviceSetting(
+                              "home_clock_tap_action",
+                              val,
+                              "cfg-home_clock_tap_action",
+                            );
+                          },
+                        })}
+                        ${homeClockTapValue === "Clock Face" || startScreenValue === "Clock Face"
+                          ? renderInlineClockFaceRow()
+                          : nothing}`
                     : nothing}
-                  ${renderSelectRow({
-                    id: "cfg-home_date_tap_action",
-                    label: store.tPrefLabel("home_date_tap_action"),
-                    description: store.t("dev_interface.home_date_tap_desc"),
-                    value: homeDateTapValue,
-                    rawOptions: homeDateTapOptions,
-                    onChange: (val) => {
+                  ${renderSwitchRow({
+                    id: "cfg-home_show_date",
+                    label: store.tPrefLabel("home_show_date"),
+                    description: store.t("dev_interface.home_show_date_desc"),
+                    checked: homeShowDateOn,
+                    onChange: (checked) => {
                       store.entity.stageDeviceSetting(
-                        "home_date_tap_action",
-                        val,
-                        "cfg-home_date_tap_action",
+                        "home_show_date",
+                        checked,
+                        "cfg-home_show_date",
                       );
                     },
                   })}
-                  ${renderSelectRow({
-                    id: "cfg-return_to_home_timeout",
-                    label: store.tPrefLabel("return_to_home_timeout"),
-                    description: store.t("dev_interface.return_timeout_desc"),
-                    value: returnTimeoutValue,
-                    rawOptions: rawReturnTimeoutOptions,
-                    onChange: (val) => {
+                  ${homeShowDateOn
+                    ? renderSelectRow({
+                        id: "cfg-home_date_tap_action",
+                        label: store.tPrefLabel("home_date_tap_action"),
+                        description: store.t("dev_interface.home_date_tap_desc"),
+                        value: homeDateTapValue,
+                        rawOptions: homeDateTapOptions,
+                        onChange: (val) => {
+                          store.entity.stageDeviceSetting(
+                            "home_date_tap_action",
+                            val,
+                            "cfg-home_date_tap_action",
+                          );
+                        },
+                      })
+                    : nothing}
+                  ${renderSwitchRow({
+                    id: "cfg-home_show_weather",
+                    label: store.tPrefLabel("home_show_weather"),
+                    description: store.t("dev_interface.home_show_weather_desc"),
+                    checked: homeShowWeatherOn,
+                    onChange: (checked) => {
                       store.entity.stageDeviceSetting(
-                        "return_to_home_timeout",
-                        val,
-                        "cfg-return_to_home_timeout",
+                        "home_show_weather",
+                        checked,
+                        "cfg-home_show_weather",
                       );
                     },
                   })}
+                  ${homeShowWeatherOn
+                    ? renderSelectRow({
+                        id: "cfg-home_weather_tap_action",
+                        label: store.tPrefLabel("home_weather_tap_action"),
+                        description: store.t("dev_interface.home_weather_tap_desc"),
+                        value: homeWeatherTapValue,
+                        rawOptions: homeWeatherTapOptions,
+                        onChange: (val) => {
+                          store.entity.stageDeviceSetting(
+                            "home_weather_tap_action",
+                            val,
+                            "cfg-home_weather_tap_action",
+                          );
+                        },
+                      })
+                    : nothing}
+                  ${homeShowBatterySupported
+                    ? renderSwitchRow({
+                        id: "cfg-home_show_battery",
+                        label: store.tPrefLabel("home_show_battery"),
+                        description: store.t("dev_interface.home_show_battery_desc"),
+                        checked: homeShowBatteryOn,
+                        onChange: (checked) => {
+                          store.entity.stageDeviceSetting(
+                            "home_show_battery",
+                            checked,
+                            "cfg-home_show_battery",
+                          );
+                        },
+                      })
+                    : nothing}
                   ${renderSwitchRow({
                     id: "cfg-wake_greeting",
                     label: store.tPrefLabel("wake_greeting"),
@@ -654,35 +745,6 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                       );
                     },
                   })}
-                  ${renderSwitchRow({
-                    id: "cfg-weather_background",
-                    label: store.tPrefLabel("weather_background"),
-                    description: store.t("dev_interface.weather_bg_desc"),
-                    checked: weatherBgOn,
-                    onChange: (checked) => {
-                      store.entity.stageDeviceSetting(
-                        "weather_background",
-                        checked,
-                        "cfg-weather_background",
-                      );
-                    },
-                  })}
-                  ${weatherBgOn
-                    ? renderSettingsRow({
-                        id: "weather-celestial-bodies",
-                        label: store.t("dev_interface.sun_moon_label"),
-                        description: store.t("dev_interface.sun_moon_desc"),
-                        control: renderPillList({
-                          id: "weather-celestial-pills",
-                          ariaLabel: store.t("dev_interface.sun_moon_label"),
-                          items: celestialPillItems,
-                          onToggle: (token, nextEnabled) => {
-                            store.entity.stageDeviceSetting(token, nextEnabled);
-                          },
-                          overlay: store.localeOverlay,
-                        }),
-                      })
-                    : nothing}
                   ${renderSwitchRow({
                     id: "cfg-activity_card",
                     label: store.tPrefLabel("activity_card"),
@@ -710,6 +772,38 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                           },
                           onReorder: (fromIdx, toIdx) => {
                             store.entity.reorderActivitySources(fromIdx, toIdx);
+                          },
+                          overlay: store.localeOverlay,
+                        }),
+                      })
+                    : nothing}
+                  <div class="subsection-title">
+                    ${store.t("dev_interface.section_home_background")}
+                  </div>
+                  ${renderSwitchRow({
+                    id: "cfg-weather_background",
+                    label: store.tPrefLabel("weather_background"),
+                    description: store.t("dev_interface.weather_bg_desc"),
+                    checked: weatherBgOn,
+                    onChange: (checked) => {
+                      store.entity.stageDeviceSetting(
+                        "weather_background",
+                        checked,
+                        "cfg-weather_background",
+                      );
+                    },
+                  })}
+                  ${weatherBgOn
+                    ? renderSettingsRow({
+                        id: "weather-celestial-bodies",
+                        label: store.t("dev_interface.sun_moon_label"),
+                        description: store.t("dev_interface.sun_moon_desc"),
+                        control: renderPillList({
+                          id: "weather-celestial-pills",
+                          ariaLabel: store.t("dev_interface.sun_moon_label"),
+                          items: celestialPillItems,
+                          onToggle: (token, nextEnabled) => {
+                            store.entity.stageDeviceSetting(token, nextEnabled);
                           },
                           overlay: store.localeOverlay,
                         }),

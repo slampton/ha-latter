@@ -35,7 +35,7 @@ TEXT_EXTS: Final[frozenset[str]] = frozenset(
     {".py", ".json", ".yaml", ".yml", ".js", ".ts", ".mjs", ".md", ".toml"}
 )
 
-MIN_CORE_REV_FLOOR: Final = 2026112401
+MIN_CORE_REV_FLOOR: Final = 2026112402
 MIN_STUDIO_REV_FLOOR: Final = 49
 MIN_OPEN_ARGS: Final = 2
 

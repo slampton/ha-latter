@@ -90,7 +90,7 @@ def test_studio_contract_split_and_pref_ui_merge() -> None:
     proto = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
     contract = json.loads((LATTER_DIR / "studio_contract.json").read_text(encoding="utf-8"))
 
-    assert STUDIO_REV == 49
+    assert STUDIO_REV == 50
     assert WALLPAPER_MAX_DIM == 1280
     assert contract["studio_contract"]["studio_rev"] == STUDIO_REV
     assert "studio_contract" not in proto
@@ -101,7 +101,7 @@ def test_studio_contract_split_and_pref_ui_merge() -> None:
     proto_keys = {spec["key"] for spec in proto["device_pref_specs"]}
     ui_keys = set(contract["device_pref_ui"])
     assert proto_keys == ui_keys
-    assert len(DEVICE_PREF_SPECS) == 65
+    assert len(DEVICE_PREF_SPECS) == 70
     for raw_spec in proto["device_pref_specs"]:
         for ui_only in ("label", "section", "group_tier", "unit"):
             assert ui_only not in raw_spec
@@ -444,12 +444,14 @@ async def test_glass_style_end_to_end_pref_select_wire_and_studio(
         supports_hw_jpeg=coord.supports_hw_jpeg,
         do_not_disturb=coord.do_not_disturb,
     )
-    assert len(packed_fields) == 70  # indices 3..72 inclusive
+    assert len(packed_fields) == 75  # indices 3..77 inclusive
     assert packed_fields[69] == "Dark"
+    assert packed_fields[70:75] == (True, True, True, "Current Weather", True)
     _seq, prefs_payload = coord.get_device_prefs_payload()
     wire_parts = str(prefs_payload["payload"]).split("\x1f")
-    assert len(wire_parts) == 73  # 3 header fields + 70 pref fields
+    assert len(wire_parts) == 78  # 3 header fields + 75 pref fields
     assert wire_parts[72] == "Dark"
+    assert wire_parts[73:78] == ["1", "1", "1", "Current Weather", "1"]
 
     # Studio payload and WS save_device_config / apply_batch_control
     conn = make_ws_connection(hass)

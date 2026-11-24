@@ -1,6 +1,6 @@
 {
   "studio_contract": {
-    "studio_rev": 49,
+    "studio_rev": 50,
     "allowed_device_actions": [
       "restart",
       "find_my",
@@ -1209,6 +1209,36 @@
       "label": "Glass style",
       "section": "display",
       "group_tier": "display",
+      "unit": ""
+    },
+    "home_show_date": {
+      "label": "Show date",
+      "section": "interface",
+      "group_tier": "interface",
+      "unit": ""
+    },
+    "home_show_time": {
+      "label": "Show time",
+      "section": "interface",
+      "group_tier": "interface",
+      "unit": ""
+    },
+    "home_show_weather": {
+      "label": "Show weather",
+      "section": "interface",
+      "group_tier": "interface",
+      "unit": ""
+    },
+    "home_weather_tap_action": {
+      "label": "Home weather tap",
+      "section": "interface",
+      "group_tier": "interface",
+      "unit": ""
+    },
+    "home_show_battery": {
+      "label": "Show battery",
+      "section": "interface",
+      "group_tier": "interface",
       "unit": ""
     }
   }

@@ -354,6 +354,13 @@ export interface DeviceConfig {
   area_handoff?: boolean;
   device_custom_color?: string;
   glass_style?: string;
+  home_show_date?: boolean;
+  home_show_time?: boolean;
+  home_show_weather?: boolean;
+  home_show_battery?: boolean;
+  home_clock_tap_action?: string;
+  home_date_tap_action?: string;
+  home_weather_tap_action?: string;
   dock_items?: ShortcutItem[];
   pinned_items?: ShortcutItem[];
   area_categories?: string;

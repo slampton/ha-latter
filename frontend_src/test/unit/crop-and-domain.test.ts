@@ -160,8 +160,24 @@ describe("crop-math, alarms, world-clocks, MDI catalog & combobox ranking", () =
     );
   });
 
-  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 49", () => {
-    assert.equal(STUDIO_REV, 49);
+  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 50", () => {
+    assert.equal(STUDIO_REV, 50);
+    assert.deepEqual(DEVICE_PREF_SPECS_MAP.home_clock_tap_action?.options, [
+      "Time App",
+      "Clock Face",
+      "None",
+    ]);
+    assert.deepEqual(DEVICE_PREF_SPECS_MAP.home_date_tap_action?.options, [
+      "Day View",
+      "Overview",
+      "None",
+    ]);
+    assert.deepEqual(DEVICE_PREF_SPECS_MAP.home_weather_tap_action?.options, [
+      "Current Weather",
+      "5-Day Forecast",
+      "None",
+    ]);
+    assert.equal(DEVICE_PREF_SPECS_MAP.home_show_battery?.capability, "display_battery");
     const glassSpec = DEVICE_PREF_SPECS_MAP.glass_style;
     assert.ok(glassSpec);
     assert.equal(glassSpec.domain, "select");

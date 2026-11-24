@@ -162,6 +162,9 @@ export const HOME_CLOCK_TAP_OPTIONS: ReadonlyArray<string> =
 export const HOME_DATE_TAP_OPTIONS: ReadonlyArray<string> =
   DEVICE_PREF_SPECS_MAP.home_date_tap_action?.options ?? [];
 
+export const HOME_WEATHER_TAP_OPTIONS: ReadonlyArray<string> =
+  DEVICE_PREF_SPECS_MAP.home_weather_tap_action?.options ?? [];
+
 export const CALENDAR_WEEK_START_OPTIONS: ReadonlyArray<string> =
   DEVICE_PREF_SPECS_MAP.calendar_week_start?.options ?? [];
 

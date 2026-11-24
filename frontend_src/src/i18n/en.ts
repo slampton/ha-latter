@@ -1297,7 +1297,7 @@ export const EN_STRINGS = {
   "dev_display.rot_360": "Every 6 hours",
   "dev_display.rot_1440": "Once a day",
 
-  // Device -> Interface (D-053 / D-064 / D-069)
+  // Device -> Interface (D-053 / D-064 / D-069 / D-085)
   "dev_interface.enable_home_desc":
     "Provides the Home screen and App Dock. Turn off to lock this Device to a single start screen app.",
   "dev_interface.start_screen_multi_desc":
@@ -1306,12 +1306,24 @@ export const EN_STRINGS = {
     "Single-app screen shown at all times while the Home screen is disabled.",
   "dev_interface.time_format_desc":
     "Applies 12-hour or 24-hour time across Home, alarms, calendar, and schedules.",
+  "dev_interface.section_home_elements": "Home elements",
+  "dev_interface.section_home_background": "Background",
+  "dev_interface.home_show_time_desc":
+    "Shows the current clock readout on the Home screen.",
   "dev_interface.home_clock_tap_desc":
-    "Choose whether tapping the clock readout on Home opens the Time app or the standalone clock face.",
+    "Choose what happens when tapping the clock readout on Home, or select None to disable tapping.",
   "dev_interface.clock_face_desc":
     "Visual style for the standalone clock face screen.",
+  "dev_interface.home_show_date_desc":
+    "Shows the current date readout above the clock on Home.",
   "dev_interface.home_date_tap_desc":
-    "Choose whether tapping the date readout on Home opens Day view or Overview in the Calendar app.",
+    "Choose what happens when tapping the date readout on Home, or select None to disable tapping.",
+  "dev_interface.home_show_weather_desc":
+    "Shows the current temperature and weather condition summary on Home.",
+  "dev_interface.home_weather_tap_desc":
+    "Choose what happens when tapping the weather summary on Home, or select None to disable tapping.",
+  "dev_interface.home_show_battery_desc":
+    "Shows the battery indicator on the Home screen.",
   "dev_interface.return_timeout_desc":
     "Resets idle screens back to Home unless media is playing or a live activity is active.",
   "dev_interface.wake_greeting_desc":
@@ -1554,6 +1566,11 @@ export const PREF_LABELS: Readonly<Record<string, string>> = {
   weather_sim_condition: "Weather simulation",
   home_clock_tap_action: "Home time tap",
   home_date_tap_action: "Home date tap",
+  home_show_date: "Show date",
+  home_show_time: "Show time",
+  home_show_weather: "Show weather",
+  home_weather_tap_action: "Home weather tap",
+  home_show_battery: "Show battery",
   local_clock_label: "Local clock label",
   show_utc_clock: "Show UTC clock",
   world_clocks: "World clocks",
@@ -1662,6 +1679,8 @@ export const PREF_OPTION_LABELS: Readonly<Record<string, string>> = {
   "24-Hour": "24-hour",
   "Day View": "Day view",
   Overview: "Overview",
+  "Current Weather": "Current weather",
+  "5-Day Forecast": "5-day forecast",
   Sunday: "Sunday",
   Monday: "Monday",
 

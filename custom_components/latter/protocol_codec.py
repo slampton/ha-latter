@@ -723,7 +723,7 @@ def pack_device_prefs_fields(
     supports_hw_jpeg: bool = True,
     do_not_disturb: bool | None = None,
 ) -> tuple[Any, ...]:
-    """Return the ordered body fields (`indices 3..72`) for Protocol v3 `device_prefs`."""
+    """Return the ordered body fields (`indices 3..77`) for Protocol v3 `device_prefs`."""
     home_enabled = bool(resolve_device_pref_value(cfg, "home_screen_enabled"))
     clean_hex = str(custom_color_hex or "").strip().upper()
     if clean_hex and not _HEX_RGB_RE.fullmatch(clean_hex):

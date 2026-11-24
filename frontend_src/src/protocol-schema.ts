@@ -1,7 +1,7 @@
 // AUTO-GENERATED FROM protocol_v3.json + studio_contract.json BY tools/gen_studio_schema.py — DO NOT EDIT MANUALLY.
 
 export const PROTOCOL_CONTRACT_VERSION = 3;
-export const STUDIO_REV = 49;
+export const STUDIO_REV = 50;
 
 export const ALLOWED_DEVICE_ACTIONS: ReadonlyArray<string> = [
   "restart",
@@ -326,8 +326,8 @@ export const DEVICE_PREF_SPECS_CATALOG: ReadonlyArray<DevicePrefSpecItem> = [
   {key: "game_sound_effects", label: "Game sound effects", domain: "switch", default: true, section: "audio", group_tier: "behavior", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "ble_beacon_mode", label: "BLE beacon mode", domain: "select", default: "Handheld Only", section: "presence", group_tier: "behavior", options: ["Handheld Only", "Handheld + Screen Off", "Always"], min: null, max: null, step: null, unit: "", capability: "beacon_battery" },
   {key: "weather_sim_condition", label: "Weather simulation", domain: "select", default: "Live (Home Assistant)", section: "developer", group_tier: null, options: ["Live (Home Assistant)", "Clear Night", "Sunny / Clear Day", "Partly Cloudy (Day)", "Partly Cloudy (Night)", "Cloudy / Overcast (Day)", "Cloudy / Overcast (Night)", "Fog / Mist (Day)", "Fog / Mist (Night)", "Rainy (Day)", "Rainy (Night)", "Pouring / Heavy Rain", "Snow (Day)", "Snow (Night)", "Thunderstorm (Day)", "Thunderstorm (Night)", "Windy"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "home_clock_tap_action", label: "Home time tap", domain: "select", default: "Time App", section: "interface", group_tier: "interface", options: ["Time App", "Clock Face"], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "home_date_tap_action", label: "Home date tap", domain: "select", default: "Overview", section: "interface", group_tier: "interface", options: ["Day View", "Overview"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_clock_tap_action", label: "Home time tap", domain: "select", default: "Time App", section: "interface", group_tier: "interface", options: ["Time App", "Clock Face", "None"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_date_tap_action", label: "Home date tap", domain: "select", default: "Overview", section: "interface", group_tier: "interface", options: ["Day View", "Overview", "None"], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "local_clock_label", label: "Local clock label", domain: "text", default: "", section: "time", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "show_utc_clock", label: "Show UTC clock", domain: "switch", default: false, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "world_clocks", label: "World clocks", domain: "text", default: "", section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
@@ -349,6 +349,11 @@ export const DEVICE_PREF_SPECS_CATALOG: ReadonlyArray<DevicePrefSpecItem> = [
   {key: "weather_app_background", label: "Live weather background", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "do_not_disturb", label: "Do not disturb", domain: "switch", default: false, section: "power", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display_or_audio" },
   {key: "glass_style", label: "Glass style", domain: "select", default: "Auto", section: "display", group_tier: "display", options: ["Auto", "Clear", "Dark"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_show_date", label: "Show date", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_show_time", label: "Show time", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_show_weather", label: "Show weather", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_weather_tap_action", label: "Home weather tap", domain: "select", default: "Current Weather", section: "interface", group_tier: "interface", options: ["Current Weather", "5-Day Forecast", "None"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "home_show_battery", label: "Show battery", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display_battery" },
 ];
 
 export const DEVICE_PREF_SPECS_MAP: Readonly<Record<string, DevicePrefSpecItem>> = Object.fromEntries(DEVICE_PREF_SPECS_CATALOG.map((s) => [s.key, s]));

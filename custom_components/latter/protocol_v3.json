@@ -964,7 +964,7 @@
           "name": "home_clock_tap_action",
           "cpp_enum": "HOME_CLOCK_TAP_ACTION",
           "type": "string",
-          "description": "Action when tapping the time readout on the Home Screen (Time App|Clock Face)"
+          "description": "Action when tapping the time readout on the Home Screen (Time App|Clock Face|None)"
         },
         {
           "index": 48,
@@ -1013,7 +1013,7 @@
           "name": "home_date_tap_action",
           "cpp_enum": "HOME_DATE_TAP_ACTION",
           "type": "string",
-          "description": "Action when tapping the date readout on the Home Screen (Day View|Overview)"
+          "description": "Action when tapping the date readout on the Home Screen (Day View|Overview|None)"
         },
         {
           "index": 55,
@@ -1140,6 +1140,41 @@
           "cpp_enum": "GLASS_STYLE",
           "type": "string",
           "description": "Glass chrome surface style (Auto|Clear|Dark); Auto adapts contrast over bright backdrops"
+        },
+        {
+          "index": 73,
+          "name": "home_show_date",
+          "cpp_enum": "HOME_SHOW_DATE",
+          "type": "bool",
+          "description": "1 = show date readout on Home screen, else 0"
+        },
+        {
+          "index": 74,
+          "name": "home_show_time",
+          "cpp_enum": "HOME_SHOW_TIME",
+          "type": "bool",
+          "description": "1 = show clock readout on Home screen, else 0"
+        },
+        {
+          "index": 75,
+          "name": "home_show_weather",
+          "cpp_enum": "HOME_SHOW_WEATHER",
+          "type": "bool",
+          "description": "1 = show current weather summary text on Home screen, else 0"
+        },
+        {
+          "index": 76,
+          "name": "home_weather_tap_action",
+          "cpp_enum": "HOME_WEATHER_TAP_ACTION",
+          "type": "string",
+          "description": "Action when tapping the weather summary on the Home Screen (Current Weather|5-Day Forecast|None)"
+        },
+        {
+          "index": 77,
+          "name": "home_show_battery",
+          "cpp_enum": "HOME_SHOW_BATTERY",
+          "type": "bool",
+          "description": "1 = show battery indicator on Home screen on battery-powered devices, else 0"
         }
       ]
     },
@@ -2482,7 +2517,8 @@
       "default": "Time App",
       "options": [
         "Time App",
-        "Clock Face"
+        "Clock Face",
+        "None"
       ],
       "min": null,
       "max": null,
@@ -2495,7 +2531,8 @@
       "default": "Overview",
       "options": [
         "Day View",
-        "Overview"
+        "Overview",
+        "None"
       ],
       "min": null,
       "max": null,
@@ -2740,6 +2777,60 @@
       "max": null,
       "step": null,
       "capability": "display"
+    },
+    {
+      "key": "home_show_date",
+      "domain": "switch",
+      "default": true,
+      "options": [],
+      "min": null,
+      "max": null,
+      "step": null,
+      "capability": "display"
+    },
+    {
+      "key": "home_show_time",
+      "domain": "switch",
+      "default": true,
+      "options": [],
+      "min": null,
+      "max": null,
+      "step": null,
+      "capability": "display"
+    },
+    {
+      "key": "home_show_weather",
+      "domain": "switch",
+      "default": true,
+      "options": [],
+      "min": null,
+      "max": null,
+      "step": null,
+      "capability": "display"
+    },
+    {
+      "key": "home_weather_tap_action",
+      "domain": "select",
+      "default": "Current Weather",
+      "options": [
+        "Current Weather",
+        "5-Day Forecast",
+        "None"
+      ],
+      "min": null,
+      "max": null,
+      "step": null,
+      "capability": "display"
+    },
+    {
+      "key": "home_show_battery",
+      "domain": "switch",
+      "default": true,
+      "options": [],
+      "min": null,
+      "max": null,
+      "step": null,
+      "capability": "display_battery"
     }
   ]
 }

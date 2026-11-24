@@ -15,11 +15,11 @@ from .protocol_specs import (
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final[int] = 49
+STUDIO_REV: Final[int] = 50
 if int(STUDIO_CONTRACT["studio_rev"]) != STUDIO_REV:
     raise RuntimeError("const.py STUDIO_REV is out of sync with studio_contract.json")
 
-MIN_FIRMWARE_CORE_REV: Final = 2026112401
+MIN_FIRMWARE_CORE_REV: Final = 2026112402
 PLATFORMS: Final[tuple[str, ...]] = (
     "sensor",
     "binary_sensor",

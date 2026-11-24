@@ -159,7 +159,7 @@ reset_device:
           integration: latter
     device_settings:
       name: Device settings
-      description: Erase everything saved on the device and restart it. Needs Latter firmware Core rev 2026112401 or later. Not available for BLE tags.
+      description: Erase everything saved on the device and restart it. Needs Latter firmware Core rev 2026112402 or later. Not available for BLE tags.
       required: false
       default: true
       selector:

@@ -805,11 +805,22 @@ function renderBaselineInterfaceSection(
     <div class="card-content settings-list">
       ${h.renderSpecSwitch("home_screen_enabled", cfg.home_screen_enabled)}
       ${h.renderSpecSelect("start_screen", cfg.start_screen)}
-      ${h.renderSpecSelect("time_format", cfg.time_format)}
-      ${h.renderSpecSelect("home_clock_tap_action", cfg.home_clock_tap_action)}
-      ${h.renderSpecSelect("clock_face", cfg.clock_face)}
-      ${h.renderSpecSelect("home_date_tap_action", cfg.home_date_tap_action)}
       ${h.renderSpecSelect("return_to_home_timeout", cfg.return_to_home_timeout)}
+      ${h.renderSpecSelect("time_format", cfg.time_format)}
+      ${h.renderSpecSwitch("home_show_time", cfg.home_show_time)}
+      ${cfg.home_show_time !== false
+        ? h.renderSpecSelect("home_clock_tap_action", cfg.home_clock_tap_action)
+        : nothing}
+      ${h.renderSpecSelect("clock_face", cfg.clock_face)}
+      ${h.renderSpecSwitch("home_show_date", cfg.home_show_date)}
+      ${cfg.home_show_date !== false
+        ? h.renderSpecSelect("home_date_tap_action", cfg.home_date_tap_action)
+        : nothing}
+      ${h.renderSpecSwitch("home_show_weather", cfg.home_show_weather)}
+      ${cfg.home_show_weather !== false
+        ? h.renderSpecSelect("home_weather_tap_action", cfg.home_weather_tap_action)
+        : nothing}
+      ${h.renderSpecSwitch("home_show_battery", cfg.home_show_battery)}
       ${h.renderSpecSwitch("wake_greeting", cfg.wake_greeting)}
       ${h.renderSpecSwitch("weather_background", cfg.weather_background)}
       ${h.renderSpecSwitch("weather_app_background", cfg.weather_app_background)}
