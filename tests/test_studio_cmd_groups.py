@@ -129,8 +129,13 @@ async def test_studio_commands_device_groups_and_backup_restore(
                         "label": "Moon",
                         "badge_style": "inverted",
                         "accent": "gold",
+                        "page": 0,
+                        "col": 1,
+                        "row": 0,
+                        "col_span": 2,
                     },
                 ],
+                "pinned_page_titles": {"0": "Nightstand"},
             },
         },
     )
@@ -140,6 +145,8 @@ async def test_studio_commands_device_groups_and_backup_restore(
     assert coord.pinned_items[0]["target"] == "weather:moon"
     assert coord.pinned_items[0]["badge_style"] == "inverted"
     assert coord.pinned_items[0]["accent"] == "gold"
+    assert coord.pinned_items[0]["col_span"] == 2
+    assert coord.pinned_page_titles == {"0": "Nightstand"}
     assert coord.device_group == "guest_suites"
 
     # Operational one-off batch tweak diverges from Guest Suites baseline -> auto-switches to 'custom'
@@ -167,6 +174,8 @@ async def test_studio_commands_device_groups_and_backup_restore(
     assert vip_grp["device_config"]["alert_volume"] == 40
     assert vip_grp["device_config"]["pinned_items"][0]["badge_style"] == "inverted"
     assert vip_grp["device_config"]["pinned_items"][0]["accent"] == "gold"
+    assert vip_grp["device_config"]["pinned_items"][0]["col_span"] == 2
+    assert vip_grp["device_config"]["pinned_page_titles"] == {"0": "Nightstand"}
 
     # Built-in groups cannot be deleted; deleting custom group resets members to 'custom'
     msg_seq += 1
@@ -241,6 +250,8 @@ async def test_studio_commands_device_groups_and_backup_restore(
         == "inverted"
     )
     assert dev_bundle["device"]["device_config"]["pinned_items"][0]["accent"] == "gold"
+    assert dev_bundle["device"]["device_config"]["pinned_items"][0]["col_span"] == 2
+    assert dev_bundle["device"]["device_config"]["pinned_page_titles"] == {"0": "Nightstand"}
 
     msg_seq += 1
     await call_ws(
@@ -255,6 +266,8 @@ async def test_studio_commands_device_groups_and_backup_restore(
     assert not conn.errors
     assert coord.pinned_items[0]["badge_style"] == "inverted"
     assert coord.pinned_items[0]["accent"] == "gold"
+    assert coord.pinned_items[0]["col_span"] == 2
+    assert coord.pinned_page_titles == {"0": "Nightstand"}
 
     msg_seq += 1
     await call_ws(

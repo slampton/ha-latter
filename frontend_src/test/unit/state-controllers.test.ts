@@ -452,7 +452,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.equal(store.currentViewId, "photos");
   });
 
-  it("constructs STUDIO_REV=50 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
+  it("constructs STUDIO_REV=51 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
     const { store, wsLog } = createHeadlessStore();
     store.applyRoute({ prefix: "/latter", path: "devices/sub_desk/overview" });
 
@@ -470,10 +470,10 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { do_not_disturb: true },
         expected_config_rev: 7,
       },
-      studio_rev: 50,
+      studio_rev: 51,
     });
 
-    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 50`
+    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 51`
     wsLog.length = 0;
     store.applyRoute({ prefix: "/latter", path: "system/presence" });
     store.entity.stageSystemSetting("ble_away_timeout_s", 240, undefined, 60_000);
@@ -487,7 +487,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { ble_away_timeout_s: 240 },
         expected_config_rev: 3,
       },
-      studio_rev: 50,
+      studio_rev: 51,
     });
 
     // `version_mismatch` sets `studioRevMismatch = true`
@@ -701,6 +701,9 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         confirm: false,
         badge_style: "inverted",
         accent: "gold",
+        page: 0,
+        col: 0,
+        row: 0,
       },
     ]);
 
@@ -790,8 +793,12 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     const unknownMember: SystemDeviceEntry = { ...noImuMember, has_imu: undefined };
 
     assert.equal(deriveGroupCapabilities(makeGroup("pocket_carry"), []).has_imu, true);
+    assert.equal(deriveGroupCapabilities(makeGroup("pocket_carry"), []).grid_cols, 2);
     assert.equal(deriveGroupCapabilities(makeGroup("wearables"), []).has_imu, true);
+    assert.equal(deriveGroupCapabilities(makeGroup("wearables"), []).grid_cols, 2);
     assert.equal(deriveGroupCapabilities(makeGroup("wall_panels"), []).has_imu, false);
+    assert.equal(deriveGroupCapabilities(makeGroup("wall_panels"), []).grid_cols, 3);
+    assert.equal(deriveGroupCapabilities(makeGroup("wall_panels"), []).grid_rows, 3);
 
     // Handhelds spans IMU Mobile Assistant & non-IMU Remote Assistant
     assert.equal(deriveGroupCapabilities(makeGroup("handhelds"), []).has_imu, undefined);

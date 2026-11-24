@@ -161,6 +161,11 @@ export interface ShortcutItem {
   confirm: boolean;
   badge_style?: ShortcutBadgeStyle;
   accent?: ShortcutAccent;
+  page?: number;
+  col?: number;
+  row?: number;
+  col_span?: number;
+  row_span?: number;
 }
 
 interface ShortcutEntityOption {
@@ -363,6 +368,7 @@ export interface DeviceConfig {
   home_weather_tap_action?: string;
   dock_items?: ShortcutItem[];
   pinned_items?: ShortcutItem[];
+  pinned_page_titles?: Record<string, string>;
   area_categories?: string;
   home_categories?: string;
   tools_items?: string;
@@ -407,6 +413,10 @@ export interface DeviceCapabilities {
   hw_jpeg?: boolean;
   video_max_fps?: number;
   video_grid_fps?: number;
+  screen_w?: number;
+  screen_h?: number;
+  grid_cols?: number;
+  grid_rows?: number;
 }
 
 export interface EspHomeEntityItem {

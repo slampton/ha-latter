@@ -165,6 +165,23 @@ export const TOKEN_STYLES = css`
     --studio-photo-badge-text: #ffffff;
     --studio-photo-ring-selected: 0 0 0 2px var(--studio-primary);
     --studio-dropzone-bg: color-mix(in srgb, var(--studio-primary) 6%, var(--studio-input-bg));
+    /* Visual tile-grid page editor tokens (D-086) */
+    --studio-grid-dialog-width: min(740px, calc(100vw - 32px));
+    --studio-grid-canvas-max-w: 580px;
+    --studio-grid-cell-min-h: 92px;
+    --studio-grid-tile-action-size: 28px;
+    --studio-grid-resize-size: 24px;
+    --studio-grid-resize-grip: 10px;
+    --studio-grid-border-w: 1px;
+    --studio-grid-border-strong-w: 2px;
+    --studio-grid-ghost-valid-bg: color-mix(in srgb, var(--studio-primary) 18%, transparent);
+    --studio-grid-ghost-valid-border: var(--studio-primary);
+    --studio-grid-ghost-invalid-bg: color-mix(in srgb, var(--studio-error) 18%, transparent);
+    --studio-grid-ghost-invalid-border: var(--studio-error);
+    --studio-grid-round-ring: color-mix(in srgb, var(--studio-text-secondary) 28%, transparent);
+    --studio-grid-empty-hover-bg: color-mix(in srgb, var(--studio-primary) 8%, var(--studio-input-bg));
+    --studio-span-cell-size: 28px;
+    --studio-span-cell-radius: 6px;
     --studio-nav-scroll-mask: linear-gradient(
       to right,
       transparent 0,

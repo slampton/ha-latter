@@ -1,6 +1,6 @@
 {
   "studio_contract": {
-    "studio_rev": 50,
+    "studio_rev": 51,
     "allowed_device_actions": [
       "restart",
       "find_my",

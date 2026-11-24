@@ -1201,7 +1201,7 @@
           "name": "dock_items",
           "cpp_enum": "DOCK_ITEMS",
           "type": "records",
-          "description": "0x1E-joined kind|target|action|label|icon|confirm|state|badge_style|accent App Dock shortcut records (sent on chunk_index == 0, up to 24; badge_style is empty/glass or inverted; accent is empty/default or primary|gold|green|red|orange; empty until configured so device uses defaults.dock_routes; Settings is always appended last)"
+          "description": "0x1E-joined kind|target|action|label|icon|confirm|state|badge_style|accent|page|col|row|col_span|row_span App Dock shortcut records (sent on chunk_index == 0, up to 24; badge_style is empty/glass or inverted; accent is empty/default or primary|gold|green|red|orange; page/col/row/col_span/row_span empty on App Dock; empty until configured so device uses defaults.dock_routes; Settings is always appended last)"
         },
         {
           "index": 6,
@@ -1215,7 +1215,14 @@
           "name": "pinned_items",
           "cpp_enum": "PINNED_ITEMS",
           "type": "records",
-          "description": "0x1E-joined kind|target|action|label|icon|confirm|state|badge_style|accent Pinned App shortcut records for this chunk (up to 24 per chunk, rendered 6 per page; badge_style is empty/glass or inverted; accent is empty/default or primary|gold|green|red|orange)"
+          "description": "0x1E-joined kind|target|action|label|icon|confirm|state|badge_style|accent|page|col|row|col_span|row_span Pinned App shortcut records for this chunk (up to 24 per chunk; badge_style is empty/glass or inverted; accent is empty/default or primary|gold|green|red|orange; page 0..31, col 0..3, row 0..2 empty when auto-flow; col_span 1..4, row_span 1..3 empty/1 for 1x1)"
+        },
+        {
+          "index": 8,
+          "name": "pinned_page_titles",
+          "cpp_enum": "PINNED_PAGE_TITLES",
+          "type": "records",
+          "description": "0x1E-joined page_index|title optional custom titles for Pinned App pages (sent on chunk_index == 0, up to 32 entries, title max 24 chars; absent pages render the default PINNED header)"
         }
       ]
     }

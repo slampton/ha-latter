@@ -101,6 +101,8 @@ export function deriveGroupCapabilities(
       has_audio: true,
       is_roaming_device: true,
       hw_jpeg: false,
+      grid_cols: 2,
+      grid_rows: 3,
     };
   }
   if (group.id === "handhelds") {
@@ -114,6 +116,8 @@ export function deriveGroupCapabilities(
       has_audio: true,
       is_roaming_device: true,
       hw_jpeg: members.length > 0 ? members.some((m) => m.hw_jpeg === true) : true,
+      grid_cols: 2,
+      grid_rows: 3,
     };
   }
   if (group.id === "wearables") {
@@ -127,6 +131,8 @@ export function deriveGroupCapabilities(
       has_audio: true,
       is_roaming_device: true,
       hw_jpeg: false,
+      grid_cols: 2,
+      grid_rows: 3,
     };
   }
   if (group.id === "wall_panels") {
@@ -140,6 +146,8 @@ export function deriveGroupCapabilities(
       has_audio: true,
       is_roaming_device: false,
       hw_jpeg: true,
+      grid_cols: 3,
+      grid_rows: 3,
     };
   }
   if (members.length > 0) {
@@ -925,7 +933,10 @@ function renderBaselineInterfaceSection(
               control: html`<button
                 type="button"
                 @click=${() =>
-                  h.requestCopyKeys(["pinned_items"], store.t("dialogs.pinned_label"))}
+                  h.requestCopyKeys(
+                    ["pinned_items", "pinned_page_titles"],
+                    store.t("dialogs.pinned_label"),
+                  )}
                 class="btn btn-secondary btn-compact"
               >
                 ${store.t("groups.copy_pinned")}

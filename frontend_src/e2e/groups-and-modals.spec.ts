@@ -259,4 +259,104 @@ test.describe("Device Groups, Non-Detaching DND & WAI-ARIA Modals E2E", () => {
         .toBe(true);
     }
   });
+
+  test("operates the Pinned Visual Tile-Grid Page Editor (cell placement, multi-span, page titles, keyboard move/resize, page delete) and passes axe WCAG 2.2 AA in light and dark themes", async ({
+    page,
+  }) => {
+    for (const darkMode of [false, true]) {
+      const themeLabel = darkMode ? "dark" : "light";
+      const ctrl = await mountStudio(page, {
+        path: "/latter/devices/sub_desk/interface",
+        darkMode,
+      });
+
+      // 1. Open Configure Pinned from App Dock (sub_desk has 3×3 grid)
+      const pinnedRow = page
+        .locator("#dock-shortcuts-container .dock-row")
+        .filter({ hasText: "Pinned" });
+      await pinnedRow.getByRole("button", { name: "Configure" }).click();
+
+      const appModal = page.locator("#latter-app-config-modal");
+      await expect(appModal).toBeVisible();
+      await expect(appModal).toHaveClass(/grid-editor-dialog/);
+      await expect(appModal.locator(".pinned-grid-dims-chip")).toContainText("3 × 3");
+      await expect(appModal.locator(".pinned-grid-empty-cell")).toHaveCount(9);
+
+      // 2. Click empty cell (col=0, row=0) -> opens Shortcut Modal with Tile layout section
+      await appModal.locator('.pinned-grid-empty-cell[data-grid-cell="0,0"]').click();
+      const scModal = page.locator("#latter-shortcut-modal");
+      await expect(scModal).toBeVisible();
+      await expect(scModal.locator("#shortcut-span-matrix")).toBeVisible();
+      await expect(scModal.locator("#shortcut-span-matrix .span-matrix-cell")).toHaveCount(9);
+
+      // Choose Home Assistant entity, pick 2×1 span + inverted gold style, and save
+      await scModal.locator("#shortcut-tab-entity").click();
+      await scModal.locator("#shortcut-label-input").fill("Harbor Lights");
+      await scModal.locator("#shortcut-badge-style-inverted").click();
+      await scModal.locator("#shortcut-accent-gold").click();
+      await scModal.locator('.span-matrix-cell[data-span-w="2"][data-span-h="1"]').click();
+      await expect(scModal.locator("#shortcut-tile-size-badge")).toContainText("2 × 1");
+      await scModal.locator("#shortcut-save-btn").click();
+
+      // Reopens Pinned Visual Tile-Grid Editor with the placed 2×1 tile and 7 remaining empty cells
+      await expect(scModal).toBeHidden();
+      await expect(appModal).toBeVisible();
+      const placedTile = appModal.locator(".pinned-grid-tile").first();
+      await expect(placedTile).toBeVisible();
+      await expect(placedTile).toContainText("Harbor Lights");
+      await expect(placedTile.locator(".pinned-tile-span-badge")).toContainText("2×1");
+      await expect(appModal.locator(".pinned-grid-empty-cell")).toHaveCount(7);
+
+      // 3. Edit Page 1 custom title and persist pinned_page_titles
+      const titleInput = appModal.locator("#pinned-page-title-input");
+      await titleInput.fill("Harbor Area");
+      await titleInput.press("Enter");
+      await expect(appModal.locator("#pinned-page-tab-0")).toContainText("Harbor Area");
+
+      // 4. Keyboard move (`ArrowRight`: col 0 -> 1) and resize (`Shift+ArrowDown`: 2×1 -> 2×2)
+      await placedTile.focus();
+      await placedTile.press("ArrowRight");
+      await expect(placedTile).toHaveAttribute("aria-label", /row 1 column 2/i);
+      await placedTile.press("Shift+ArrowDown");
+      await expect(placedTile.locator(".pinned-tile-span-badge")).toContainText("2×2");
+      await expect(appModal.locator(".pinned-grid-empty-cell")).toHaveCount(5);
+
+      // Audit active Pinned Visual Tile-Grid Editor under axe-core WCAG 2.2 AA & overflow guard
+      await expectZeroAxeViolations(
+        page,
+        `Pinned Visual Tile-Grid Editor (${themeLabel}, 2x2 inverted gold tile)`,
+      );
+      await expectZeroHorizontalOverflow(
+        page,
+        `Pinned Visual Tile-Grid Editor (${themeLabel})`,
+      );
+
+      // 5. Add Page 2, switch back to Page 1, and delete Page 1 via confirmation dialog
+      await appModal.locator("#btn-pinned-add-page").click();
+      await expect(appModal.locator("#pinned-page-tab-1")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await appModal.locator("#pinned-page-tab-0").click();
+      await appModal.locator("#btn-pinned-delete-page").click();
+
+      const confirmModal = page.locator("#latter-confirm-modal");
+      await expect(confirmModal).toBeVisible();
+      await confirmModal.locator("#btn-confirm-modal-accept").click();
+      await expect(confirmModal).toBeHidden();
+      await expect(appModal.locator(".pinned-grid-tile")).toHaveCount(0);
+
+      await expect
+        .poll(() =>
+          ctrl.wsCalls.some((m) => {
+            if (m.command !== "save_device_config") return false;
+            const cfg = (m.payload as Record<string, unknown>)?.config as
+              | Record<string, unknown>
+              | undefined;
+            return Boolean(cfg && "pinned_page_titles" in cfg);
+          }),
+        )
+        .toBe(true);
+    }
+  });
 });

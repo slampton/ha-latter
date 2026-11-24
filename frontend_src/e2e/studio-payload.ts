@@ -1,5 +1,5 @@
 /**
- * `STUDIO_REV = 50` `StudioStatePayload` Builder for Playwright E2E.
+ * `STUDIO_REV = 51` `StudioStatePayload` Builder for Playwright E2E.
  *
  * Separated from `studio-fixtures.ts` to keep fixture definitions and payload assembly modular.
  */

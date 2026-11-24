@@ -337,7 +337,7 @@ export function renderBatchControlsCard(
               latterDevices,
               matchingDevs.length,
               selectedTargetName,
-              ["pinned_items"],
+              ["pinned_items", "pinned_page_titles"],
               store.t("dialogs.pinned_label"),
             )}
           class="btn btn-secondary btn-compact"

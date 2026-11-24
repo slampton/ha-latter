@@ -77,6 +77,10 @@ export {
 export const MAX_DOCK_ITEMS = 24;
 export const MAX_PINNED_ITEMS = 96;
 export const SHORTCUT_LABEL_MAX = 24;
+export const PINNED_PAGE_TITLE_MAX = 24;
+export const MAX_PINNED_GRID_PAGES = 32;
+export const PINNED_GRID_MAX_COLS = 4;
+export const PINNED_GRID_MAX_ROWS = 3;
 
 export const NATIVE_DOCK_APP_TOKENS: ReadonlyArray<string> = [
   "app:pinned",
@@ -208,6 +212,7 @@ export const GROUP_DISPLAY_NON_PREF_KEYS: ReadonlyArray<string> = [
 export const GROUP_INTERFACE_NON_PREF_KEYS: ReadonlyArray<string> = [
   "dock_items",
   "pinned_items",
+  "pinned_page_titles",
   "area_categories",
   "home_categories",
   "tools_items",

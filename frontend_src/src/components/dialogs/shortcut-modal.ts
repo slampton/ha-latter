@@ -9,6 +9,7 @@
  */
 
 import {
+  MAX_PINNED_GRID_PAGES,
   NATIVE_DOCK_APP_TOKENS,
   SHORTCUT_ACCENTS_CATALOG,
   SHORTCUT_BADGE_STYLES_CATALOG,
@@ -36,10 +37,17 @@ import {
 import type { ShortcutAccent, ShortcutBadgeStyle } from "../../types.js";
 import { fmtNumber } from "../../utils/format.js";
 import {
+  canPlaceTile,
+  resolveDeviceGridDims,
+  resolveTileGridLayout,
+} from "../../utils/tile-grid.js";
+import {
   type ComboboxOptionItem,
   renderEntityCombobox,
   renderSwitchRow,
 } from "../controls.js";
+
+const hoveredSpanByStore = new WeakMap<StudioStore, { w: number; h: number }>();
 
 const ICON_STYLE_OPTIONS: ReadonlyArray<{
   value: MdiIconStyleFilter;
@@ -712,6 +720,201 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
           })}
         </div>
       </div>
+
+      ${!scIsDock
+        ? (() => {
+            const dims = resolveDeviceGridDims(devCaps);
+            const pinnedItems = store.entity.getPinnedItems();
+            const pageTitles = store.entity.getPinnedPageTitles();
+            const resolved = resolveTileGridLayout(pinnedItems, dims.cols, dims.rows);
+            const titleKeys = Object.keys(pageTitles);
+            const maxTitlePage = titleKeys.reduce((m, k) => Math.max(m, Number(k) || 0), 0);
+            const basePages = Math.max(
+              1,
+              resolved.pageCount,
+              titleKeys.length > 0 ? maxTitlePage + 1 : 1,
+            );
+            const totalPages = Math.min(
+              MAX_PINNED_GRID_PAGES,
+              Math.max(
+                basePages + Math.max(0, store.pinnedExtraPages),
+                scModal.tilePage + 1,
+              ),
+            );
+            const selectedCs = Math.max(1, Math.min(dims.cols, scModal.tileColSpan || 1));
+            const selectedRs = Math.max(1, Math.min(dims.rows, scModal.tileRowSpan || 1));
+            const hoverSpan = hoveredSpanByStore.get(store) ?? null;
+            const previewW = hoverSpan ? hoverSpan.w : selectedCs;
+            const previewH = hoverSpan ? hoverSpan.h : selectedRs;
+            const excludeIdx = scModal.editIndex !== null ? scModal.editIndex : -1;
+
+            const spanFitsWithoutReflow = (w: number, h: number): boolean => {
+              if (scModal.tileCol === null || scModal.tileRow === null) return true;
+              if (
+                canPlaceTile(
+                  resolved,
+                  excludeIdx,
+                  scModal.tilePage,
+                  scModal.tileCol,
+                  scModal.tileRow,
+                  w,
+                  h,
+                  dims.cols,
+                  dims.rows,
+                )
+              ) {
+                return true;
+              }
+              const shiftedCol = Math.min(scModal.tileCol, dims.cols - w);
+              const shiftedRow = Math.min(scModal.tileRow, dims.rows - h);
+              return canPlaceTile(
+                resolved,
+                excludeIdx,
+                scModal.tilePage,
+                shiftedCol,
+                shiftedRow,
+                w,
+                h,
+                dims.cols,
+                dims.rows,
+              );
+            };
+
+            const selectedWouldReflow = !spanFitsWithoutReflow(selectedCs, selectedRs);
+            const matrixCells: Array<{ w: number; h: number }> = [];
+            for (let h = 1; h <= dims.rows; h += 1) {
+              for (let w = 1; w <= dims.cols; w += 1) {
+                matrixCells.push({ w, h });
+              }
+            }
+            const pageOptions = Array.from({ length: totalPages }, (_, idx) => idx);
+
+            return html`<div class="shortcut-tile-layout">
+              <span class="field-label">${store.t("dialogs.sc_tile_layout_label")}</span>
+              <div class="shortcut-tile-layout-row">
+                <div class="stacked-field shortcut-span-field">
+                  <div class="shortcut-span-header">
+                    <span id="shortcut-tile-size-label" class="field-label">
+                      ${store.t("dialogs.sc_tile_size_label")}
+                    </span>
+                    <span id="shortcut-tile-size-badge" class="chip">
+                      ${store.t("dialogs.sc_tile_size_badge", {
+                        cols: previewW,
+                        rows: previewH,
+                      })}
+                    </span>
+                  </div>
+                  <div
+                    id="shortcut-span-matrix"
+                    role="group"
+                    aria-label=${store.t("dialogs.sc_tile_size_aria", {
+                      cols: dims.cols,
+                      rows: dims.rows,
+                    })}
+                    style="--grid-cols: ${dims.cols}; --grid-rows: ${dims.rows};"
+                    @mouseleave=${() => {
+                      if (hoveredSpanByStore.has(store)) {
+                        hoveredSpanByStore.delete(store);
+                        store.host.requestUpdate();
+                      }
+                    }}
+                    class="span-matrix"
+                  >
+                    ${matrixCells.map(({ w, h }) => {
+                      const inSelected = w <= selectedCs && h <= selectedRs;
+                      const inHover = hoverSpan !== null && w <= hoverSpan.w && h <= hoverSpan.h;
+                      const isCurrent = w === selectedCs && h === selectedRs;
+                      const wouldReflow = !spanFitsWithoutReflow(w, h);
+                      return html`<button
+                        type="button"
+                        data-span-w=${String(w)}
+                        data-span-h=${String(h)}
+                        aria-label=${store.t("dialogs.sc_tile_size_cell_aria", {
+                          cols: w,
+                          rows: h,
+                        })}
+                        aria-pressed=${isCurrent ? "true" : "false"}
+                        @mouseenter=${() => {
+                          hoveredSpanByStore.set(store, { w, h });
+                          store.host.requestUpdate();
+                        }}
+                        @click=${() => {
+                          store.shortcutModal = {
+                            ...store.shortcutModal,
+                            tileColSpan: w,
+                            tileRowSpan: h,
+                          };
+                          store.host.requestUpdate();
+                        }}
+                        class="span-matrix-cell${inSelected ? " selected" : ""}${inHover ? " hovered" : ""}${wouldReflow ? " would-reflow" : ""}"
+                      ></button>`;
+                    })}
+                  </div>
+                  ${selectedWouldReflow
+                    ? html`<p class="row-description">
+                        ${store.t("dialogs.sc_span_reflow_hint")}
+                      </p>`
+                    : nothing}
+                </div>
+
+                <div class="stacked-field shortcut-page-field">
+                  <label for="shortcut-page-select">${store.t("dialogs.sc_page_label")}</label>
+                  <select
+                    id="shortcut-page-select"
+                    .value=${live(String(scModal.tilePage))}
+                    @change=${(ev: Event) => {
+                      const raw = (ev.currentTarget as HTMLSelectElement).value;
+                      if (raw === "__new__") {
+                        const newIdx = totalPages;
+                        store.pinnedExtraPages = Math.max(
+                          store.pinnedExtraPages,
+                          newIdx - basePages + 1,
+                        );
+                        store.shortcutModal = {
+                          ...store.shortcutModal,
+                          tilePage: newIdx,
+                          tileCol: null,
+                          tileRow: null,
+                        };
+                      } else {
+                        const nextPage = Math.max(0, Math.min(totalPages - 1, Number(raw) || 0));
+                        const movedPage = nextPage !== scModal.tilePage;
+                        store.shortcutModal = {
+                          ...store.shortcutModal,
+                          tilePage: nextPage,
+                          tileCol: movedPage ? null : scModal.tileCol,
+                          tileRow: movedPage ? null : scModal.tileRow,
+                        };
+                      }
+                      store.host.requestUpdate();
+                    }}
+                  >
+                    ${pageOptions.map((pIdx) => {
+                      const customTitle = pageTitles[String(pIdx)];
+                      const optLabel = customTitle
+                        ? store.t("dialogs.sc_page_titled_option", {
+                            page: pIdx + 1,
+                            title: customTitle,
+                          })
+                        : store.t("dialogs.pinned_page_slot", { page: pIdx + 1 });
+                      return html`<option
+                        value=${String(pIdx)}
+                        .selected=${live(pIdx === scModal.tilePage)}
+                      >
+                        ${optLabel}
+                      </option>`;
+                    })}
+                    ${totalPages < MAX_PINNED_GRID_PAGES
+                      ? html`<option value="__new__" .selected=${live(false)}>
+                          ${store.t("dialogs.sc_page_new_option")}
+                        </option>`
+                      : nothing}
+                  </select>
+                </div>
+              </div>
+            </div>`;
+          })()
+        : nothing}
 
       <div class="dialog-actions">
         <button type="button" @click=${close} class="btn btn-secondary">

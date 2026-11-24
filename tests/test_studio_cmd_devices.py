@@ -25,7 +25,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify mandatory studio_rev schema validation, non-admin rejection, and studio_rev_mismatch on all 9 WS endpoints."""
-    assert STUDIO_REV == 50
+    assert STUDIO_REV == 51
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     ensure_area(hass, "Living Room", area_id="living_room")
 

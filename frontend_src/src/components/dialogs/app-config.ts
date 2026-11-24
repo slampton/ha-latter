@@ -13,8 +13,6 @@ import {
   type CatalogItem,
   GAMES_ITEMS_CATALOG,
   HOME_CATEGORIES_CATALOG,
-  MAX_PINNED_ITEMS,
-  SHORTCUT_ROUTES_CATALOG,
   TOOLS_ITEMS_CATALOG,
 } from "../../constants.js";
 import {
@@ -22,23 +20,20 @@ import {
   type StudioTranslationKey,
 } from "../../i18n/index.js";
 import { html, nothing, type TemplateResult } from "../../lib/lit.js";
-import { ROUTE_PREVIEW_ICONS, shortcutActionLabel } from "../../mdi-catalog.js";
 import {
   isCatalogItemSupported,
-  shortcutBadgeClass,
   type StudioStore,
 } from "../../state/store.js";
-import type { ConfigurableAppId, DeviceCapabilities, ShortcutItem } from "../../types.js";
+import type { ConfigurableAppId, DeviceCapabilities } from "../../types.js";
 import { defaultLocaleTimeFormat, entityLabel } from "../../utils/format.js";
 import {
   type PillListItem,
   renderPillList,
   renderSelectRow,
   renderSettingsRow,
-  renderSortableList,
   renderSwitchRow,
-  renderTrashIconButton,
 } from "../controls.js";
+import { renderPinnedGridEditor } from "./pinned-grid-editor.js";
 import { renderTimeAppConfigBody } from "./world-clocks.js";
 
 const APP_MODAL_TITLE_KEYS: Readonly<Record<ConfigurableAppId, StudioTranslationKey>> = {
@@ -158,100 +153,7 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
 
   if (app === "pinned") {
     donePrimary = false;
-    const pinnedItems = store.entity.getPinnedItems();
-    const shortcutEntityMap = new Map(
-      (data?.catalog?.shortcut_entities || []).map((e) => [e.id, e]),
-    );
-    const routeSpecMap = new Map(SHORTCUT_ROUTES_CATALOG.map((r) => [r.token, r]));
-
-    const resolvePinnedMeta = (
-      item: ShortcutItem,
-    ): { displayTitle: string; metaLine: string; iconSlug: string } => {
-      if (item.kind === "route") {
-        const spec = routeSpecMap.get(item.target);
-        return {
-          displayTitle: item.label || spec?.label || item.target,
-          metaLine: spec ? `${spec.group} • ${spec.label}` : item.target,
-          iconSlug: item.icon || ROUTE_PREVIEW_ICONS[item.target] || "mdi:apps",
-        };
-      }
-      const ent = shortcutEntityMap.get(item.target);
-      const dom = item.target.split(".", 1)[0] || "";
-      const actLbl = shortcutActionLabel(dom, item.action);
-      const modeLbl = item.confirm
-        ? store.t("dialogs.pinned_confirm_mode")
-        : store.t("dialogs.pinned_one_tap_mode");
-      return {
-        displayTitle: item.label || ent?.name || item.target,
-        metaLine: `${actLbl} • ${modeLbl} • ${item.target}`,
-        iconSlug: item.icon || ent?.icon || "mdi:flash",
-      };
-    };
-
-    body = html`<div class="settings-list">
-      ${renderSettingsRow({
-        id: "pinned-shortcuts-row",
-        label: store.t("dialogs.pinned_label"),
-        description: store.t("dialogs.pinned_desc"),
-        stacked: true,
-        control: html`<div class="stack">
-          ${renderSortableList({
-            id: "pinned-shortcuts-container",
-            ariaLabel: store.t("dialogs.pinned_aria"),
-            items: pinnedItems,
-            rowClass: "shortcut-item-row",
-            emptyState: store.t("dialogs.pinned_empty"),
-            overlay: store.localeOverlay,
-            getKey: (item) => `${item.kind}|${item.target}|${item.action}`,
-            getLabel: (item) => resolvePinnedMeta(item).displayTitle,
-            onReorder: (fromIdx, toIdx) =>
-              store.entity.reorderShortcutItems("pinned_items", fromIdx, toIdx),
-            renderContent: (item, idx) => {
-              const info = resolvePinnedMeta(item);
-              const pageNum = Math.floor(idx / 6) + 1;
-              return html`<div class="shortcut-icon-row">
-                <span class=${shortcutBadgeClass(item.badge_style, item.accent)} aria-hidden="true">
-                  <ha-icon .icon=${info.iconSlug}></ha-icon>
-                </span>
-                <div class="shortcut-item-info">
-                  <span class="shortcut-item-title">${info.displayTitle}</span>
-                  <span class="shortcut-item-meta">${info.metaLine}</span>
-                </div>
-                <span class="chip">
-                  ${store.t("dialogs.pinned_page_slot", { page: pageNum })}
-                </span>
-              </div>`;
-            },
-            renderActions: (item, idx) => {
-              const info = resolvePinnedMeta(item);
-              return html`<button
-                  type="button"
-                  aria-label=${store.t("action.edit_item", { item: info.displayTitle })}
-                  @click=${() => store.entity.openShortcutModal("pinned_items", idx)}
-                  class="btn btn-secondary btn-compact"
-                >
-                  ${store.t("action.edit")}
-                </button>
-                ${renderTrashIconButton(
-                  store.t("action.remove_item", { item: info.displayTitle }),
-                  () => store.entity.removeShortcutItem("pinned_items", idx),
-                )}`;
-            },
-          })}
-          <div class="shortcut-toolbar">
-            <button
-              type="button"
-              id="btn-add-pinned-item"
-              ?disabled=${pinnedItems.length >= MAX_PINNED_ITEMS}
-              @click=${() => store.entity.openShortcutModal("pinned_items", null)}
-              class="btn btn-primary"
-            >
-              ${store.t("action.add_pinned_item")}
-            </button>
-          </div>
-        </div>`,
-      })}
-    </div>`;
+    body = renderPinnedGridEditor(store);
   } else if (app === "home_hub") {
     const enabledHomeCats = store.entity.getEnabledHomeCategories();
     const pillItems = buildOrderedPillItems(HOME_CATEGORIES_CATALOG, enabledHomeCats, caps);
@@ -692,13 +594,14 @@ export function renderAppConfigDialog(store: StudioStore): TemplateResult {
       close();
     }
   };
+  const isPinnedGrid = store.appConfigModal.open && store.appConfigModal.app === "pinned";
 
   return html`<dialog
     id="latter-app-config-modal"
     aria-labelledby="latter-app-config-title"
     @cancel=${close}
     @click=${onBackdropClick}
-    class="studio-dialog shortcut-dialog"
+    class="studio-dialog ${isPinnedGrid ? "grid-editor-dialog" : "shortcut-dialog"}"
   >
     ${store.appConfigModal.open ? renderAppConfigModalBody(store) : nothing}
   </dialog>`;

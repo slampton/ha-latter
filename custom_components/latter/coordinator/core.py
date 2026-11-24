@@ -88,6 +88,7 @@ from ..const import (
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PINNED_ITEMS,
+    CONF_PINNED_PAGE_TITLES,
     CONF_REMOTE_GROUPS,
     CONF_REMOTES_LIST,
     CONF_SCREENSAVER_CYCLE_MINUTES,
@@ -173,6 +174,7 @@ from ..identity import (
     esphome_service,
     find_device_entity_by_suffix,
     get_bound_esphome_device,
+    manifest_flag,
     manifest_has_audio,
     manifest_has_battery,
     manifest_has_display,
@@ -217,6 +219,7 @@ from ..protocol_policy import (
     effective_security_pin_policy,
     mint_pin_session_key,
     normalize_security_pin_policy,
+    pinned_page_title_records,
     resolve_shortcut_entity_icon,
     resolve_shortcut_live_state,
     shortcut_records,
@@ -224,6 +227,8 @@ from ..protocol_policy import (
 from ..protocol_specs import (
     DEVICE_PREF_KEYS,
     MAX_DOCK_ITEMS,
+    MAX_GRID_COLS,
+    MAX_GRID_ROWS,
     MAX_PINNED_ITEMS,
     normalize_activity_sources,
     normalize_area_categories,
@@ -231,9 +236,11 @@ from ..protocol_specs import (
     normalize_games_items,
     normalize_home_categories,
     normalize_pinned_items,
+    normalize_pinned_page_titles,
     normalize_tools_items,
     resolve_device_pref_value,
     sanitize_shortcut_label,
+    tile_grid_dims_for_screen,
 )
 from ..remotes import (
     build_remote_config_payload,
@@ -974,6 +981,13 @@ class LatterCoordinator:
         self.hass.config_entries.async_update_subentry(
             self.entry, self._live_subentry(), data=merged_data
         )
+        if (
+            prev.get(CONF_DOCK_ITEMS) != merged_data.get(CONF_DOCK_ITEMS)
+            or prev.get(CONF_PINNED_ITEMS) != merged_data.get(CONF_PINNED_ITEMS)
+            or prev.get(CONF_PINNED_PAGE_TITLES)
+            != merged_data.get(CONF_PINNED_PAGE_TITLES)
+        ):
+            self._cached_shortcuts_payload = None
         self._live_subentry()
         self.device_config_rev = max(1, self.device_config_rev + 1)
         self.schedule_persist_runtime_state()
@@ -1187,6 +1201,52 @@ class LatterCoordinator:
         return self.has_display and manifest_is_round(self.hardware_manifest)
 
     @property
+    def screen_width(self) -> int:
+        if self.is_ble_tag or not self.has_display:
+            return 0
+        val = manifest_flag(self.hardware_manifest, "w")
+        return val if val is not None and val > 0 else 0
+
+    @property
+    def screen_height(self) -> int:
+        if self.is_ble_tag or not self.has_display:
+            return 0
+        val = manifest_flag(self.hardware_manifest, "h")
+        return val if val is not None and val > 0 else 0
+
+    def _resolved_grid_dims(self) -> tuple[int, int]:
+        if self.is_ble_tag or not self.has_display:
+            return (2, 3)
+        hw = self.hardware_manifest
+        w, h = self.screen_width, self.screen_height
+        fb_cols, fb_rows = (
+            tile_grid_dims_for_screen(w, h, is_round=self.is_round_display)
+            if (w > 0 and h > 0)
+            else (2, 3)
+        )
+        raw_cols = manifest_flag(hw, "grid_cols")
+        raw_rows = manifest_flag(hw, "grid_rows")
+        cols = (
+            raw_cols
+            if raw_cols is not None and 1 <= raw_cols <= MAX_GRID_COLS
+            else fb_cols
+        )
+        rows = (
+            raw_rows
+            if raw_rows is not None and 1 <= raw_rows <= MAX_GRID_ROWS
+            else fb_rows
+        )
+        return (cols, rows)
+
+    @property
+    def grid_cols(self) -> int:
+        return self._resolved_grid_dims()[0]
+
+    @property
+    def grid_rows(self) -> int:
+        return self._resolved_grid_dims()[1]
+
+    @property
     def supports_hw_jpeg(self) -> bool:
         return not self.is_ble_tag and manifest_supports_hw_jpeg(self.hardware_manifest)
 
@@ -1296,6 +1356,12 @@ class LatterCoordinator:
             normalize_pinned_items(
                 self._live_subentry().data.get(CONF_PINNED_ITEMS), strict=False
             )
+        )
+
+    @property
+    def pinned_page_titles(self) -> dict[str, str]:
+        return normalize_pinned_page_titles(
+            self._live_subentry().data.get(CONF_PINNED_PAGE_TITLES), strict=False
         )
 
     @property
@@ -3731,8 +3797,10 @@ class LatterCoordinator:
     def _resolve_shortcut_wire_items(
         self, items: list[dict[str, Any]], *, max_len: int
     ) -> list[dict[str, Any]]:
+        grid_keys = ("page", "col", "row", "col_span", "row_span")
         resolved: list[dict[str, Any]] = []
         for item in items[:max_len]:
+            grid_extras = {k: item[k] for k in grid_keys if k in item}
             if item.get("kind") == "route":
                 resolved.append(
                     {
@@ -3745,6 +3813,7 @@ class LatterCoordinator:
                         "state": -1,
                         "badge_style": str(item.get("badge_style") or ""),
                         "accent": str(item.get("accent") or ""),
+                        **grid_extras,
                     }
                 )
                 continue
@@ -3782,6 +3851,7 @@ class LatterCoordinator:
                     "state": live_state,
                     "badge_style": str(item.get("badge_style") or ""),
                     "accent": str(item.get("accent") or ""),
+                    **grid_extras,
                 }
             )
         return resolved
@@ -3797,7 +3867,10 @@ class LatterCoordinator:
         )
         dock_recs = shortcut_records(dock_wire, max_records=MAX_DOCK_ITEMS)
         pinned_recs = shortcut_records(pinned_wire, max_records=MAX_PINNED_ITEMS)
-        cur_rev, frames = self._packer.pack_shortcuts(dock_recs, pinned_recs)
+        title_recs = pinned_page_title_records(self.pinned_page_titles)
+        cur_rev, frames = self._packer.pack_shortcuts(
+            dock_recs, pinned_recs, pinned_page_titles=title_recs
+        )
         self.rev = max(self.rev, self._packer.rev)
         res = (cur_rev, frames)
         self._cached_shortcuts_payload = res

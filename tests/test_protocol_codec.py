@@ -40,7 +40,7 @@ class TestProtocolV3Contract(unittest.TestCase):
             "weather_forecast": 15,
             "calendar_agenda": 4,
             "device_prefs": 75,
-            "shortcuts": 5,
+            "shortcuts": 6,
         }
         domains = self.schema.get("domains", {})
         self.assertEqual(set(domains.keys()), set(expected_counts.keys()))
@@ -268,6 +268,7 @@ class TestRecordsFields(unittest.TestCase):
                 ("calendar_agenda", "locations_catalog"),
                 ("shortcuts", "dock_items"),
                 ("shortcuts", "pinned_items"),
+                ("shortcuts", "pinned_page_titles"),
             },
         )
         ctx_src = read_py_tree("areas")
@@ -289,6 +290,7 @@ class TestRecordsFields(unittest.TestCase):
         self.assertIn("calendar_sources_records(", feeds_src)
         self.assertIn("calendar_locations_records(", feeds_src)
         self.assertIn("shortcut_records(", coord_src)
+        self.assertIn("pinned_page_title_records(", coord_src)
 
     def test_cameras(self) -> None:
         self.assertEqual(
@@ -426,9 +428,17 @@ class TestRecordsFields(unittest.TestCase):
             "state",
             "badge_style",
             "accent",
+            "page",
+            "col",
+            "row",
+            "col_span",
+            "row_span",
         ]
         self.assertEqual(self.layout("shortcuts", "dock_items"), expected_layout)
         self.assertEqual(self.layout("shortcuts", "pinned_items"), expected_layout)
+        self.assertEqual(
+            self.layout("shortcuts", "pinned_page_titles"), ["page_index", "title"]
+        )
         recs = protocol_policy.shortcut_records(
             [
                 {
@@ -449,15 +459,38 @@ class TestRecordsFields(unittest.TestCase):
                     "state": 1,
                     "badge_style": "glass",
                     "accent": "orange",
+                    "page": 1,
+                    "col": 2,
+                    "row": 0,
+                    "col_span": 2,
+                    "row_span": 3,
+                },
+                {
+                    "kind": "route",
+                    "target": "app:music",
+                    "label": "Music",
+                    "page": True,
+                    "col": 0,
+                    "row": 0,
+                    "col_span": 1,
+                    "row_span": True,
                 },
             ]
         )
         self.assertEqual(
             list(recs),
             [
-                ("route", "weather:moon", "", "Moon", "mdi:moon-waning-crescent", "0", "-1", "inverted", "primary"),
-                ("entity", "light.desk", "toggle", "Desk", "mdi:lamp", "1", "1", "", "orange"),
+                ("route", "weather:moon", "", "Moon", "mdi:moon-waning-crescent", "0", "-1", "inverted", "primary", "", "", "", "", ""),
+                ("entity", "light.desk", "toggle", "Desk", "mdi:lamp", "1", "1", "", "orange", "1", "2", "0", "2", "3"),
+                ("route", "app:music", "", "Music", "", "0", "-1", "", "", "", "", "", "", ""),
             ],
+        )
+        title_recs = protocol_policy.pinned_page_title_records(
+            {"10": "Media | Zone", "2": "  Lighting  ", "0": "A" * 40, "3": "   "}
+        )
+        self.assertEqual(
+            list(title_recs),
+            [("0", "A" * 24), ("2", "Lighting"), ("10", "Media Zone")],
         )
 
     def test_records_revs_are_content_hashed(self) -> None:

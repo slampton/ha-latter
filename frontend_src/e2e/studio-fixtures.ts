@@ -1,5 +1,5 @@
 /**
- * Rich, Zero-PII `STUDIO_REV = 50` Multi-Device Hub Fixture Builder for Playwright E2E.
+ * Rich, Zero-PII `STUDIO_REV = 51` Multi-Device Hub Fixture Builder for Playwright E2E.
  *
  * Derives `device_prefs` directly from `DEVICE_PREF_SPECS_CATALOG` + `isCatalogItemSupported`
  * so E2E fixtures stay 100% aligned with `protocol/latter_v3.json` across P4 & S3 archetypes.
@@ -138,7 +138,7 @@ export function createDefaultMockHubState(): MockHubState {
         ble_packets_seen: 0,
         is_current: false,
       },
-      capabilities: { has_display: true, has_imu: false, is_round: false, has_battery: false, has_power: true, has_voice: true, has_audio: true, has_ble_beacon: true, is_roaming_device: false, hw_jpeg: true, video_max_fps: 15, video_grid_fps: 5 },
+      capabilities: { has_display: true, has_imu: false, is_round: false, has_battery: false, has_power: true, has_voice: true, has_audio: true, has_ble_beacon: true, is_roaming_device: false, hw_jpeg: true, video_max_fps: 15, video_grid_fps: 5, screen_w: 720, screen_h: 720, grid_cols: 3, grid_rows: 3 },
       config: {
         device_slug: "desk_assistant",
         kind: "device",
@@ -280,7 +280,7 @@ export function createDefaultMockHubState(): MockHubState {
         ble_packets_seen: 28,
         is_current: false,
       },
-      capabilities: { has_display: true, has_imu: true, is_round: true, has_battery: true, has_power: true, has_voice: true, has_audio: true, has_ble_beacon: true, is_roaming_device: true, hw_jpeg: false },
+      capabilities: { has_display: true, has_imu: true, is_round: true, has_battery: true, has_power: true, has_voice: true, has_audio: true, has_ble_beacon: true, is_roaming_device: true, hw_jpeg: false, screen_w: 466, screen_h: 466, grid_cols: 2, grid_rows: 3 },
       config: {
         device_slug: "pocket_assistant",
         kind: "device",
@@ -371,6 +371,10 @@ export function createDefaultMockHubState(): MockHubState {
         has_ble_beacon: true,
         is_roaming_device: true,
         hw_jpeg: false,
+        screen_w: 410,
+        screen_h: 502,
+        grid_cols: 2,
+        grid_rows: 3,
       },
       config: {
         device_slug: "wrist_assist",

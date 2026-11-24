@@ -13,10 +13,16 @@ from typing import Any, Final
 
 from .protocol_codec import V3Records, build_v3_records
 from .protocol_specs import (
+    MAX_GRID_COLS,
+    MAX_GRID_PAGES,
+    MAX_GRID_ROWS,
     MAX_PINNED_ITEMS,
+    MAX_PINNED_PAGE_TITLES,
+    PINNED_PAGE_TITLE_MAX,
     SHORTCUT_LABEL_MAX,
     normalize_activity_sources,
     normalize_mdi_icon,
+    normalize_pinned_page_titles,
     normalize_shortcut_accent,
     normalize_shortcut_badge_style,
 )
@@ -151,10 +157,48 @@ def _coerce_shortcut_state(kind: str, raw_state: object) -> int:
     return state_val if state_val in (-1, 0, 1, 2) else -1
 
 
+def _shortcut_grid_wire_fields(
+    item: Mapping[str, Any],
+) -> tuple[str, str, str, str, str]:
+    raw_p, raw_c, raw_r = item.get("page"), item.get("col"), item.get("row")
+    if (
+        isinstance(raw_p, int)
+        and not isinstance(raw_p, bool)
+        and isinstance(raw_c, int)
+        and not isinstance(raw_c, bool)
+        and isinstance(raw_r, int)
+        and not isinstance(raw_r, bool)
+        and 0 <= raw_p < MAX_GRID_PAGES
+        and 0 <= raw_c < MAX_GRID_COLS
+        and 0 <= raw_r < MAX_GRID_ROWS
+    ):
+        page_str, col_str, row_str = str(raw_p), str(raw_c), str(raw_r)
+    else:
+        page_str, col_str, row_str = "", "", ""
+
+    raw_cs = item.get("col_span")
+    col_span_str = (
+        str(raw_cs)
+        if isinstance(raw_cs, int)
+        and not isinstance(raw_cs, bool)
+        and 1 < raw_cs <= MAX_GRID_COLS
+        else ""
+    )
+    raw_rs = item.get("row_span")
+    row_span_str = (
+        str(raw_rs)
+        if isinstance(raw_rs, int)
+        and not isinstance(raw_rs, bool)
+        and 1 < raw_rs <= MAX_GRID_ROWS
+        else ""
+    )
+    return (page_str, col_str, row_str, col_span_str, row_span_str)
+
+
 def shortcut_records(
     items: Iterable[Mapping[str, Any]], *, max_records: int = MAX_PINNED_ITEMS
 ) -> V3Records:
-    """Encode resolved shortcut items (`kind|target|action|label|icon|confirm|state|badge_style|accent`) into `V3Records`."""
+    """Encode resolved shortcut items (`kind|target|action|label|icon|confirm|state|badge_style|accent|page|col|row|col_span|row_span`) into `V3Records`."""
     rows: list[tuple[object, ...]] = []
     for it in items:
         kind = str(it.get("kind") or "")
@@ -168,6 +212,9 @@ def shortcut_records(
             it.get("badge_style"), strict=False
         )
         accent = normalize_shortcut_accent(it.get("accent"), strict=False)
+        page_str, col_str, row_str, col_span_str, row_span_str = (
+            _shortcut_grid_wire_fields(it)
+        )
         rows.append(
             (
                 kind,
@@ -179,12 +226,28 @@ def shortcut_records(
                 str(state_val),
                 badge_style,
                 accent,
+                page_str,
+                col_str,
+                row_str,
+                col_span_str,
+                row_span_str,
             )
         )
     return build_v3_records(
         rows,
-        (None, None, None, SHORTCUT_LABEL_MAX, None, 1, 2, 16, 16),
+        (None, None, None, SHORTCUT_LABEL_MAX, None, 1, 2, 16, 16, 2, 1, 1, 1, 1),
         max_records,
+    )
+
+
+def pinned_page_title_records(titles: Mapping[str, str]) -> V3Records:
+    """Encode normalized Pinned App page titles (`page_index|title`) into `V3Records`."""
+    clean = normalize_pinned_page_titles(titles, strict=False)
+    rows = [(page_str, title) for page_str, title in clean.items()]
+    return build_v3_records(
+        rows,
+        (2, PINNED_PAGE_TITLE_MAX),
+        MAX_PINNED_PAGE_TITLES,
     )
 
 

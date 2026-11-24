@@ -418,6 +418,9 @@ export interface EntityControllerContract {
   flushAllPendingSettings(): Promise<void>;
   getDockItems(): ShortcutItem[];
   getPinnedItems(): ShortcutItem[];
+  getPinnedPageTitles(): Record<string, string>;
+  savePinnedPageTitles(nextTitles: Record<string, string>): void;
+  savePinnedGridState(nextItems: ShortcutItem[], nextTitles?: Record<string, string>): void;
   applyDeviceCustomColor(hex: string, switchColorProfile?: boolean): void;
   clearCameraPreviewCache(): void;
 }
@@ -588,8 +591,15 @@ export interface StudioStoreContext {
     badgeStyle: ShortcutBadgeStyle;
     accent: ShortcutAccent;
     confirm: boolean;
+    tilePage: number;
+    tileCol: number | null;
+    tileRow: number | null;
+    tileColSpan: number;
+    tileRowSpan: number;
   };
   appConfigModal: { open: boolean; app: ConfigurableAppId | null };
+  pinnedActivePage: number;
+  pinnedExtraPages: number;
   cameraConfigModal: {
     open: boolean;
     cameraId: string;

@@ -801,8 +801,34 @@ async def test_telemetry_prefs_timer_commands_v3_transport_and_target_matching(
     outbox_eid = f"sensor.{slug}_system_rpc_outbox"
     manifest_raw = json.dumps(coord.hardware_manifest)
 
-    # 1) PIN session key guard for BLE tag
+    # 1) PIN session key guard for BLE tag + grid capability trait resolution & shortcuts cache invalidation
     assert await ble_coord.async_provision_pin_session_key() is False
+    assert (ble_coord.screen_width, ble_coord.screen_height) == (0, 0)
+    assert (ble_coord.grid_cols, ble_coord.grid_rows) == (2, 3)
+
+    orig_manifest = coord._runtime.hello_manifest
+    try:
+        coord._runtime.hello_manifest = {"w": 1280, "h": 800, "shape": "square", "grid_cols": 4, "grid_rows": 3}
+        assert (coord.screen_width, coord.screen_height, coord.grid_cols, coord.grid_rows) == (1280, 800, 4, 3)
+        coord._runtime.hello_manifest = {"w": 1024, "h": 600, "shape": "square"}
+        assert (coord.grid_cols, coord.grid_rows) == (4, 3)
+        coord._runtime.hello_manifest = {"w": 720, "h": 720, "shape": "square"}
+        assert (coord.grid_cols, coord.grid_rows) == (3, 3)
+        coord._runtime.hello_manifest = {"w": 466, "h": 466, "shape": "circle"}
+        assert (coord.grid_cols, coord.grid_rows) == (2, 3)
+        coord._runtime.hello_manifest = {"w": 410, "h": 502, "shape": "square"}
+        assert (coord.grid_cols, coord.grid_rows) == (2, 3)
+        coord._runtime.hello_manifest = None
+        assert (coord.screen_width, coord.screen_height, coord.grid_cols, coord.grid_rows) == (0, 0, 2, 3)
+    finally:
+        coord._runtime.hello_manifest = orig_manifest
+
+    rev_before, _ = coord.get_shortcuts_payload()
+    coord.update_device_config({**coord.device_data, "pinned_page_titles": {"0": "Deck"}})
+    assert coord.pinned_page_titles == {"0": "Deck"}
+    rev_after, frames_after = coord.get_shortcuts_payload()
+    assert rev_after == rev_before + 1
+    assert frames_after[0].split("\x1f")[8] == "0|Deck"
 
     # 2) `apply_display_state` & `_resolve_next_display_power` edge inputs
     coord.display_power_state = 0

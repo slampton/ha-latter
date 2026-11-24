@@ -36,6 +36,7 @@ from ..const import (
     CONF_HOME_CATEGORIES,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PINNED_ITEMS,
+    CONF_PINNED_PAGE_TITLES,
     CONF_SCREENSAVER_CYCLE_MINUTES,
     CONF_SCREENSAVER_PHOTO_COLLECTION,
     CONF_SCREENSAVER_PHOTO_MODE,
@@ -86,6 +87,7 @@ from ..protocol_specs import (
     normalize_games_items,
     normalize_home_categories,
     normalize_pinned_items,
+    normalize_pinned_page_titles,
     normalize_tools_items,
     resolve_device_pref_value,
 )
@@ -160,6 +162,7 @@ GROUP_DISPLAY_DEVICE_KEYS: Final[tuple[str, ...]] = (
 GROUP_INTERFACE_NON_PREF_KEYS: Final[tuple[str, ...]] = (
     CONF_DOCK_ITEMS,
     CONF_PINNED_ITEMS,
+    CONF_PINNED_PAGE_TITLES,
     CONF_AREA_CATEGORIES,
     CONF_HOME_CATEGORIES,
     CONF_BROADCAST_SPEAKER_ENTITIES,
@@ -285,6 +288,7 @@ def default_group_baseline_config(
             {
                 CONF_DOCK_ITEMS: default_dock_items(),
                 CONF_PINNED_ITEMS: [],
+                CONF_PINNED_PAGE_TITLES: {},
                 CONF_AREA_CATEGORIES: DEFAULT_AREA_CATEGORIES,
                 CONF_HOME_CATEGORIES: DEFAULT_HOME_CATEGORIES,
                 CONF_BROADCAST_SPEAKER_ENTITIES: [],
@@ -381,6 +385,10 @@ def _resolve_interface_key_value(data: Mapping[str, Any], key: str) -> tuple[boo
         val = normalize_dock_items(data.get(CONF_DOCK_ITEMS), strict=False)
     elif key == CONF_PINNED_ITEMS:
         val = normalize_pinned_items(data.get(CONF_PINNED_ITEMS), strict=False)
+    elif key == CONF_PINNED_PAGE_TITLES:
+        val = normalize_pinned_page_titles(
+            data.get(CONF_PINNED_PAGE_TITLES), strict=False
+        )
     elif key == CONF_BROADCAST_SPEAKER_ENTITIES:
         val = _dedup_prefixed_list(data.get(key), "media_player.", _MAX_BROADCAST_SPKS)
     elif key in (CONF_CAMERA_VISIBLE_ENTITIES, CONF_CAMERA_CAROUSEL_ENTITIES):
@@ -444,6 +452,8 @@ def _normalize_group_config_value(key: str, val: Any) -> Any:
         return normalize_dock_items(val, strict=False)
     if key == CONF_PINNED_ITEMS:
         return normalize_pinned_items(val, strict=False)
+    if key == CONF_PINNED_PAGE_TITLES:
+        return normalize_pinned_page_titles(val, strict=False)
     return val
 
 

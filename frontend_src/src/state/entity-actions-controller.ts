@@ -26,6 +26,7 @@ import type {
   SystemConfig,
 } from "../types.js";
 import { isValidHexColor } from "../utils/format.js";
+import { normalizePinnedPageTitles } from "../utils/tile-grid.js";
 import { isCatalogItemSupported, overlayPendingEntityStates } from "./group-overlay.js";
 import {
   addRemoteGroupRowOp,
@@ -81,8 +82,11 @@ import { SettingsSaveController } from "./settings-save-controller.js";
 import {
   createTokenListOps,
   defaultDockShortcutItems,
+  deletePinnedPageOp,
   normalizeShortcutArray,
   openShortcutModalOp,
+  savePinnedGridStateOp,
+  savePinnedPageTitlesOp,
   saveShortcutModalOp,
   TOKEN_LIST_SPECS,
 } from "./shortcuts-ops.js";
@@ -438,6 +442,22 @@ export class EntityController implements EntityControllerContract {
     return raw === undefined || raw === null ? [] : normalizeShortcutArray(raw, false);
   }
 
+  getPinnedPageTitles(): Record<string, string> {
+    return normalizePinnedPageTitles(this.store.state?.config?.pinned_page_titles);
+  }
+
+  savePinnedPageTitles(nextTitles: Record<string, string>): void {
+    savePinnedPageTitlesOp(this.store, nextTitles);
+  }
+
+  savePinnedGridState(nextItems: ShortcutItem[], nextTitles?: Record<string, string>): void {
+    savePinnedGridStateOp(this.store, nextItems, nextTitles);
+  }
+
+  deletePinnedPage(pageIdx: number): void {
+    deletePinnedPageOp(this.store, pageIdx);
+  }
+
   moveShortcutItem(listKey: "dock_items" | "pinned_items", idx: number, delta: -1 | 1): void {
     this.reorderShortcutItems(listKey, idx, idx + delta);
   }
@@ -524,20 +544,26 @@ export class EntityController implements EntityControllerContract {
     if (this.store.shortcutModal.open) {
       this.store.shortcutModal = { ...this.store.shortcutModal, open: false };
     }
+    if (app === "pinned") {
+      this.store.pinnedActivePage = 0;
+      this.store.pinnedExtraPages = 0;
+    }
     this.store.appConfigModal = { open: true, app };
     this.store.host.requestUpdate();
   }
 
   closeAppConfigModal(): void {
     this.store.appConfigModal = { open: false, app: null };
+    this.store.pinnedExtraPages = 0;
     this.store.host.requestUpdate();
   }
 
   openShortcutModal(
     listKey: "dock_items" | "pinned_items",
     editIndex: number | null = null,
+    targetCell: { page: number; col: number; row: number } | null = null,
   ): void {
-    openShortcutModalOp(this.store, listKey, editIndex);
+    openShortcutModalOp(this.store, listKey, editIndex, targetCell);
   }
 
   closeShortcutModal(): void {

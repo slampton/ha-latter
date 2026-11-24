@@ -160,8 +160,8 @@ describe("crop-math, alarms, world-clocks, MDI catalog & combobox ranking", () =
     );
   });
 
-  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 50", () => {
-    assert.equal(STUDIO_REV, 50);
+  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 51", () => {
+    assert.equal(STUDIO_REV, 51);
     assert.deepEqual(DEVICE_PREF_SPECS_MAP.home_clock_tap_action?.options, [
       "Time App",
       "Clock Face",

@@ -24,7 +24,12 @@ from .protocol_specs import (
     GAMES_ITEMS_CATALOG as GAMES_ITEMS_CATALOG,
     HOME_CATEGORY_TOKENS as HOME_CATEGORY_TOKENS,
     MAX_DOCK_ITEMS as MAX_DOCK_ITEMS,
+    MAX_GRID_COLS as MAX_GRID_COLS,
+    MAX_GRID_PAGES as MAX_GRID_PAGES,
+    MAX_GRID_ROWS as MAX_GRID_ROWS,
     MAX_PINNED_ITEMS as MAX_PINNED_ITEMS,
+    MAX_PINNED_PAGE_TITLES as MAX_PINNED_PAGE_TITLES,
+    PINNED_PAGE_TITLE_MAX as PINNED_PAGE_TITLE_MAX,
     PROTOCOL_V3_DATA,
     PROTOCOL_V3_DOMAINS as PROTOCOL_V3_DOMAINS,
     SHORTCUT_ACCENT_TOKENS as SHORTCUT_ACCENT_TOKENS,
@@ -52,6 +57,7 @@ from .protocol_specs import (
     normalize_home_categories as normalize_home_categories,
     normalize_mdi_icon as normalize_mdi_icon,
     normalize_pinned_items as normalize_pinned_items,
+    normalize_pinned_page_titles as normalize_pinned_page_titles,
     normalize_shortcut_accent as normalize_shortcut_accent,
     normalize_shortcut_badge_style as normalize_shortcut_badge_style,
     normalize_shortcut_item as normalize_shortcut_item,
@@ -66,6 +72,7 @@ from .protocol_specs import (
     sanitize_clock_label as sanitize_clock_label,
     sanitize_shortcut_label as sanitize_shortcut_label,
     snap_calendar_lookahead_days as snap_calendar_lookahead_days,
+    tile_grid_dims_for_screen as tile_grid_dims_for_screen,
 )
 
 FIELD_SEP: Final = "\x1f"
@@ -634,6 +641,7 @@ class DomainPayloadPacker:
         self,
         dock_records: V3Records,
         pinned_records: V3Records,
+        pinned_page_titles: Iterable[Sequence[object]] = (),
         *,
         chunk_size: int = SHORTCUTS_CHUNK_SIZE,
     ) -> tuple[int, tuple[str, ...]]:
@@ -641,7 +649,10 @@ class DomainPayloadPacker:
         eff_chunk_size = max(1, int(chunk_size))
         dock_blob = encode_v3_records(dock_records)
         pinned_full_blob = encode_v3_records(pinned_records)
-        digest = hashlib.sha256(f"{dock_blob}\x1f{pinned_full_blob}".encode()).hexdigest()[:16]
+        pinned_titles_blob = encode_v3_records(pinned_page_titles)
+        digest = hashlib.sha256(
+            f"{dock_blob}\x1f{pinned_full_blob}\x1f{pinned_titles_blob}".encode()
+        ).hexdigest()[:16]
         cur_rev = self._bump_or_keep_rev("shortcuts", digest)
         pinned_total = len(pinned_records)
         chunk_count = max(1, math.ceil(pinned_total / eff_chunk_size))
@@ -654,6 +665,7 @@ class DomainPayloadPacker:
                     dock_blob if chunk_idx == 0 else "",
                     str(pinned_total),
                     encode_v3_records(pinned_records[chunk_idx * eff_chunk_size : (chunk_idx + 1) * eff_chunk_size]),
+                    pinned_titles_blob if chunk_idx == 0 else "",
                 )
             )
             for chunk_idx in range(chunk_count)

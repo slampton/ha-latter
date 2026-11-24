@@ -90,7 +90,7 @@ def test_studio_contract_split_and_pref_ui_merge() -> None:
     proto = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
     contract = json.loads((LATTER_DIR / "studio_contract.json").read_text(encoding="utf-8"))
 
-    assert STUDIO_REV == 50
+    assert STUDIO_REV == 51
     assert WALLPAPER_MAX_DIM == 1280
     assert contract["studio_contract"]["studio_rev"] == STUDIO_REV
     assert "studio_contract" not in proto

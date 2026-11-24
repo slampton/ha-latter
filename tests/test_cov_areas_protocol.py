@@ -664,10 +664,42 @@ def test_protocol_policy_icons_states_pin_wrap_lockout_and_verify() -> None:
             },
         ]
     )
-    assert len(recs[0]) == 9
-    assert recs[0][6:] == ("-1", "", "")
-    assert recs[1] == ("route", "weather:moon", "", "Moon", "", "0", "-1", "inverted", "gold")
-    assert recs[2][6:] == ("1", "", "")
+    assert len(recs[0]) == 14
+    assert recs[0][6:] == ("-1", "", "", "", "", "", "", "")
+    assert recs[1] == (
+        "route",
+        "weather:moon",
+        "",
+        "Moon",
+        "",
+        "0",
+        "-1",
+        "inverted",
+        "gold",
+        "",
+        "",
+        "",
+        "",
+        "",
+    )
+    assert recs[2][6:] == ("1", "", "", "", "", "", "", "")
+
+    # Grid field branches in protocol_specs & protocol_policy
+    assert protocol_specs._parse_grid_int("") is None
+    assert protocol_specs._parse_grid_int("   ") is None
+    assert protocol_specs._parse_grid_int("3") == 3
+    assert protocol_specs._parse_grid_int(3.5) is None
+    assert (
+        protocol_specs.normalize_pinned_items(
+            [{"kind": "route", "target": "app:music", "page": "", "col": "", "row": "", "col_span": ""}],
+            strict=True,
+        )[0].get("page")
+        is None
+    )
+    assert protocol_policy.pinned_page_title_records({"1": "One", "0": "Zero"}) == (
+        ("0", "Zero"),
+        ("1", "One"),
+    )
 
     non_str_pin: Any = 1234
     assert protocol_policy.is_valid_pin_digits(None) is False

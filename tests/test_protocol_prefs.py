@@ -674,24 +674,28 @@ class TestShortcutsProtocolAndPolicy(unittest.TestCase):
                 "state": idx % 2,
                 "badge_style": "inverted" if idx == 0 else "",
                 "accent": "red" if idx == 0 else "",
+                **({"page": 0, "col": 1, "row": 0, "col_span": 2, "row_span": 1} if idx == 1 else {}),
             }
             for idx in range(25)
         ]
         pinned_recs = _PAYLOADS_MOD.shortcut_records(pinned_items, max_records=studio_scope.MAX_PINNED_ITEMS)
-        rev1, frames1 = packer.pack_shortcuts(dock_recs, pinned_recs)
+        title_recs = _PAYLOADS_MOD.pinned_page_title_records({"2": "Office", "0": "Favorites"})
+        rev1, frames1 = packer.pack_shortcuts(dock_recs, pinned_recs, pinned_page_titles=title_recs)
         self.assertEqual(rev1, 1)
         self.assertEqual(len(frames1), 2)
 
-        # Chunk 0 carries dock_items + first 18 pinned items; Chunk 1 carries empty dock_items + remaining 7 pinned items
+        # Chunk 0 carries dock_items + first 18 pinned items + pinned_page_titles; Chunk 1 carries empty dock_items + remaining 7 pinned items + empty titles
         parts0 = frames1[0].split("\x1f")
         parts1 = frames1[1].split("\x1f")
+        self.assertEqual(len(parts0), 9)
+        self.assertEqual(len(parts1), 9)
         self.assertEqual(parts0[:5], ["v3", "777", "1", "0", "2"])
         self.assertEqual(parts1[:5], ["v3", "777", "1", "1", "2"])
         dock_wire_rows = parts0[5].split("\x1e")
-        self.assertEqual(dock_wire_rows[0], "route|app:pinned||||0|-1||")
+        self.assertEqual(dock_wire_rows[0], "route|app:pinned||||0|-1|||||||")
         self.assertEqual(
             dock_wire_rows[1],
-            "entity|scene.movie_night|turn_on|Movie|mdi:movie-open|1|-1|inverted|gold",
+            "entity|scene.movie_night|turn_on|Movie|mdi:movie-open|1|-1|inverted|gold|||||",
         )
         self.assertEqual(parts1[5], "")
         self.assertEqual(parts0[6], "25")
@@ -700,17 +704,24 @@ class TestShortcutsProtocolAndPolicy(unittest.TestCase):
         self.assertEqual(len(pinned_wire_rows0), 18)
         self.assertEqual(
             pinned_wire_rows0[0],
-            "entity|switch.zone_0|toggle|Zone 0|mdi:toggle-switch|0|0|inverted|red",
+            "entity|switch.zone_0|toggle|Zone 0|mdi:toggle-switch|0|0|inverted|red|||||",
+        )
+        self.assertEqual(
+            pinned_wire_rows0[1],
+            "entity|switch.zone_1|toggle|Zone 1|mdi:toggle-switch|0|1|||0|1|0|2|",
         )
         self.assertEqual(len(parts1[7].split("\x1e")), 7)
+        self.assertEqual(parts0[8], "0|Favorites\x1e2|Office")
+        self.assertEqual(parts1[8], "")
 
-        # Identical snapshot preserves rev; mutated state or accent/badge_style increments rev across all chunks
-        rev_same, _ = packer.pack_shortcuts(dock_recs, pinned_recs)
+        # Identical snapshot preserves rev; mutated state, accent, or page title increments rev across all chunks
+        rev_same, _ = packer.pack_shortcuts(dock_recs, pinned_recs, pinned_page_titles=title_recs)
         self.assertEqual(rev_same, 1)
         pinned_items[0]["state"] = 1
         rev2, frames2 = packer.pack_shortcuts(
             dock_recs,
             _PAYLOADS_MOD.shortcut_records(pinned_items, max_records=studio_scope.MAX_PINNED_ITEMS),
+            pinned_page_titles=title_recs,
         )
         self.assertEqual(rev2, 2)
         self.assertTrue(all(f.startswith("v3\x1f777\x1f2\x1f") for f in frames2))
@@ -719,6 +730,16 @@ class TestShortcutsProtocolAndPolicy(unittest.TestCase):
         rev3, frames3 = packer.pack_shortcuts(
             dock_recs,
             _PAYLOADS_MOD.shortcut_records(pinned_items, max_records=studio_scope.MAX_PINNED_ITEMS),
+            pinned_page_titles=title_recs,
         )
         self.assertEqual(rev3, 3)
         self.assertIn("|inverted|green", frames3[0])
+
+        rev4, frames4 = packer.pack_shortcuts(
+            dock_recs,
+            _PAYLOADS_MOD.shortcut_records(pinned_items, max_records=studio_scope.MAX_PINNED_ITEMS),
+            pinned_page_titles=_PAYLOADS_MOD.pinned_page_title_records({"0": "Media Wall"}),
+        )
+        self.assertEqual(rev4, 4)
+        self.assertEqual(frames4[0].split("\x1f")[8], "0|Media Wall")
+        self.assertEqual(frames4[1].split("\x1f")[8], "")

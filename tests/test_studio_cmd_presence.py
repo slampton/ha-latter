@@ -168,6 +168,11 @@ async def test_studio_commands_security_pin_secrecy_and_presence_calibration(
                             "label": "Moon",
                             "badge_style": "inverted",
                             "accent": "primary",
+                            "page": 0,
+                            "col": 0,
+                            "row": 0,
+                            "col_span": 2,
+                            "row_span": 1,
                         },
                         {
                             "kind": "route",
@@ -182,8 +187,17 @@ async def test_studio_commands_security_pin_secrecy_and_presence_calibration(
                             "label": "Baby Help",
                             "confirm": False,
                             "accent": "red",
+                            "page": 1,
+                            "col": 1,
+                            "row": 1,
+                            "col_span": 1,
+                            "row_span": 2,
                         },
                     ],
+                    "pinned_page_titles": {
+                        "1": "Scenes & Scripts",
+                        "0": "Favorites",
+                    },
                 }
             },
         )
@@ -202,34 +216,53 @@ async def test_studio_commands_security_pin_secrecy_and_presence_calibration(
         assert state_after_pin["config"]["dock_items"][2]["accent"] == "gold"
         assert state_after_pin["config"]["pinned_items"][0]["badge_style"] == "inverted"
         assert state_after_pin["config"]["pinned_items"][0]["accent"] == "primary"
+        assert state_after_pin["config"]["pinned_items"][0]["page"] == 0
+        assert state_after_pin["config"]["pinned_items"][0]["col"] == 0
+        assert state_after_pin["config"]["pinned_items"][0]["row"] == 0
+        assert state_after_pin["config"]["pinned_items"][0]["col_span"] == 2
+        assert "row_span" not in state_after_pin["config"]["pinned_items"][0]
         assert state_after_pin["config"]["pinned_items"][1]["badge_style"] == ""
         assert state_after_pin["config"]["pinned_items"][1]["accent"] == ""
         assert state_after_pin["config"]["pinned_items"][2]["badge_style"] == ""
         assert state_after_pin["config"]["pinned_items"][2]["accent"] == "red"
+        assert state_after_pin["config"]["pinned_items"][2]["row_span"] == 2
+        assert state_after_pin["config"]["pinned_page_titles"] == {
+            "0": "Favorites",
+            "1": "Scenes & Scripts",
+        }
+        caps = state_after_pin["capabilities"]
+        assert caps["screen_w"] == coord.screen_width
+        assert caps["screen_h"] == coord.screen_height
+        assert caps["grid_cols"] == coord.grid_cols
+        assert caps["grid_rows"] == coord.grid_rows
 
-        # Coordinator Protocol v3 shortcuts frame emits 9-column wire records with badge_style & accent
+        # Coordinator Protocol v3 shortcuts frame emits 14-column wire records + pinned_page_titles
         _sc_rev, sc_frames = coord.get_shortcuts_payload()
         sc_parts = sc_frames[0].split("\x1f")
+        assert len(sc_parts) == 9
         dock_wire = sc_parts[5].split("\x1e")
         pinned_wire = sc_parts[7].split("\x1e")
-        assert all(len(row.split("|")) == 9 for row in dock_wire)
-        assert all(len(row.split("|")) == 9 for row in pinned_wire)
-        assert dock_wire[0] == "route|app:pinned||||0|-1||"
+        assert all(len(row.split("|")) == 14 for row in dock_wire)
+        assert all(len(row.split("|")) == 14 for row in pinned_wire)
+        assert dock_wire[0] == "route|app:pinned||||0|-1|||||||"
         assert (
             dock_wire[2]
-            == "entity|scene.movie_night|turn_on|Movie|mdi:palette|1|2|inverted|gold"
+            == "entity|scene.movie_night|turn_on|Movie|mdi:palette|1|2|inverted|gold|||||"
         )
-        assert pinned_wire[0] == "route|weather:moon||Moon||0|-1|inverted|primary"
-        assert pinned_wire[1] == "route|music:lyrics||||0|-1||"
+        assert pinned_wire[0] == "route|weather:moon||Moon||0|-1|inverted|primary|0|0|0|2|"
+        assert pinned_wire[1] == "route|music:lyrics||||0|-1|||||||"
         assert (
             pinned_wire[2]
-            == "entity|script.baby_help|turn_on|Baby Help|mdi:script-text-play|0|2||red"
+            == "entity|script.baby_help|turn_on|Baby Help|mdi:script-text-play|0|2||red|1|1|1||2"
         )
+        assert sc_parts[8] == "0|Favorites\x1e1|Scenes & Scripts"
 
-        # Invalid badge_style or accent is rejected via WS `invalid_format`
+        # Invalid badge_style, accent, grid coordinates, or page titles rejected via WS `invalid_format`
         for bad_sc in (
             {"dock_items": [{"kind": "route", "target": "weather:moon", "badge_style": "neon"}]},
             {"pinned_items": [{"kind": "route", "target": "weather:moon", "accent": "cyan"}]},
+            {"pinned_items": [{"kind": "route", "target": "weather:moon", "page": 0, "col": 1}]},
+            {"pinned_page_titles": {"99": "Invalid Page"}},
         ):
             msg_seq += 1
             await call_ws(

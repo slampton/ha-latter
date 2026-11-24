@@ -15,11 +15,11 @@ from .protocol_specs import (
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final[int] = 50
+STUDIO_REV: Final[int] = 51
 if int(STUDIO_CONTRACT["studio_rev"]) != STUDIO_REV:
     raise RuntimeError("const.py STUDIO_REV is out of sync with studio_contract.json")
 
-MIN_FIRMWARE_CORE_REV: Final = 2026112402
+MIN_FIRMWARE_CORE_REV: Final = 2026112403
 PLATFORMS: Final[tuple[str, ...]] = (
     "sensor",
     "binary_sensor",
@@ -79,6 +79,7 @@ DEFAULT_DEVICE_REMOTE_GROUP: Final = "area_auto"
 CONF_CALENDAR_ENTITIES: Final = "calendar_entities"
 CONF_DOCK_ITEMS: Final = "dock_items"
 CONF_PINNED_ITEMS: Final = "pinned_items"
+CONF_PINNED_PAGE_TITLES: Final = "pinned_page_titles"
 CONF_AREA_CATEGORIES: Final = "area_categories"
 CONF_HOME_CATEGORIES: Final = "home_categories"
 CONF_CAMERA_VISIBLE_ENTITIES: Final = "camera_visible_entities"

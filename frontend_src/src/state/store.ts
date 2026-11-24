@@ -288,8 +288,15 @@ export class StudioStore implements ReactiveController, StudioStoreContext {
     badgeStyle: "" as ShortcutBadgeStyle,
     accent: "" as ShortcutAccent,
     confirm: false,
+    tilePage: 0,
+    tileCol: null as number | null,
+    tileRow: null as number | null,
+    tileColSpan: 1,
+    tileRowSpan: 1,
   };
   appConfigModal: { open: boolean; app: ConfigurableAppId | null } = { open: false, app: null };
+  pinnedActivePage = 0;
+  pinnedExtraPages = 0;
   cameraConfigModal = {
     open: false,
     cameraId: "",

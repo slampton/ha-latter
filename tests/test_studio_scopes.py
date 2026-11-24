@@ -130,12 +130,121 @@ class TestShortcutPolicy(unittest.TestCase):
             protocol_json["rpc_methods"]["shortcut_action"]["fields"],
             ["entity_id", "action", "code"],
         )
-        for key in ("dock_items", "pinned_items"):
+        for key in ("dock_items", "pinned_items", "pinned_page_titles"):
             self.assertIn(key, settings.DEVICE_SETTING_KEYS)
             self.assertIn(key, groups.GROUP_APPEARANCE_DEVICE_KEYS)
             self.assertIn(key, backup.DEVICE_CONFIG_EXPORT_KEYS)
         self.assertNotIn("dock_apps", read_py_tree("coordinator"))
         self.assertNotIn("set_dock_apps", read_py_tree("services"))
+
+    def test_grid_dims_multi_span_pinned_items_and_page_titles(self) -> None:
+        # Trait-derived adaptive tile grid dimensions match firmware identically
+        self.assertEqual(protocol_specs.tile_grid_dims_for_screen(466, 466, is_round=True), (2, 3))
+        self.assertEqual(protocol_specs.tile_grid_dims_for_screen(800, 800, is_round=True), (2, 3))
+        self.assertEqual(protocol_specs.tile_grid_dims_for_screen(1280, 800, is_round=False), (4, 3))
+        self.assertEqual(protocol_specs.tile_grid_dims_for_screen(1024, 600, is_round=False), (4, 3))
+        self.assertEqual(protocol_specs.tile_grid_dims_for_screen(800, 520, is_round=False), (4, 3))
+        self.assertEqual(protocol_specs.tile_grid_dims_for_screen(720, 720, is_round=False), (3, 3))
+        self.assertEqual(protocol_specs.tile_grid_dims_for_screen(600, 600, is_round=False), (3, 3))
+        self.assertEqual(protocol_specs.tile_grid_dims_for_screen(410, 502, is_round=False), (2, 3))
+
+        # Dock items never emit grid placement or span fields
+        dock_with_grid = settings.normalize_dock_items(
+            [{"kind": "route", "target": "app:music", "page": 0, "col": 0, "row": 0, "col_span": 2, "row_span": 2}],
+            strict=True,
+        )
+        for gkey in ("page", "col", "row", "col_span", "row_span"):
+            self.assertNotIn(gkey, dock_with_grid[0])
+
+        # Pinned items preserve valid placement & >1 spans while omitting 1x1 spans
+        pinned = settings.normalize_pinned_items(
+            [
+                {
+                    "kind": "route",
+                    "target": "app:music",
+                    "page": 0,
+                    "col": 1,
+                    "row": 2,
+                    "col_span": 2,
+                    "row_span": 1,
+                },
+                {
+                    "kind": "entity",
+                    "target": "light.desk",
+                    "action": "toggle",
+                    "col_span": 1,
+                    "row_span": 3,
+                },
+            ],
+            strict=True,
+        )
+        self.assertEqual((pinned[0]["page"], pinned[0]["col"], pinned[0]["row"]), (0, 1, 2))
+        self.assertEqual(pinned[0]["col_span"], 2)
+        self.assertNotIn("row_span", pinned[0])
+        self.assertNotIn("page", pinned[1])
+        self.assertNotIn("col_span", pinned[1])
+        self.assertEqual(pinned[1]["row_span"], 3)
+
+        # Strict mode rejects partial coordinates, booleans, and out-of-range values
+        for bad_item in (
+            {"kind": "route", "target": "app:music", "page": 0, "col": 1},
+            {"kind": "route", "target": "app:music", "page": True, "col": 0, "row": 0},
+            {"kind": "route", "target": "app:music", "page": 32, "col": 0, "row": 0},
+            {"kind": "route", "target": "app:music", "page": 0, "col": 4, "row": 0},
+            {"kind": "route", "target": "app:music", "page": 0, "col": 0, "row": 3},
+            {"kind": "route", "target": "app:music", "col_span": 0},
+            {"kind": "route", "target": "app:music", "col_span": 5},
+            {"kind": "route", "target": "app:music", "col_span": True},
+            {"kind": "route", "target": "app:music", "row_span": 4},
+        ):
+            with self.assertRaises(ValueError):
+                settings.normalize_pinned_items([bad_item], strict=True)
+            with self.assertRaises(settings.SettingsScopeError):
+                settings.clean_device_settings({"pinned_items": [bad_item]})
+
+        # Non-strict mode drops partial/invalid placement and clamps spans
+        relaxed = settings.normalize_pinned_items(
+            [
+                {"kind": "route", "target": "app:music", "page": 0, "col": 1, "col_span": 9, "row_span": 0},
+                {"kind": "route", "target": "app:weather", "page": 99, "col": 0, "row": 0, "col_span": "bad"},
+            ],
+            strict=False,
+        )
+        self.assertNotIn("page", relaxed[0])
+        self.assertEqual(relaxed[0]["col_span"], 4)
+        self.assertNotIn("row_span", relaxed[0])
+        self.assertNotIn("page", relaxed[1])
+        self.assertNotIn("col_span", relaxed[1])
+
+        # Pinned page titles: sorting, sanitization, truncation, empty drops, and strict errors
+        self.assertEqual(settings.normalize_pinned_page_titles(None, strict=True), {})
+        cleaned_titles = settings.clean_device_settings(
+            {
+                "pinned_page_titles": {
+                    "10": "Media\x1f|Wall\n",
+                    "2": "  Lighting  ",
+                    "0": "X" * 30,
+                    "1": "   ",
+                    "3": None,
+                }
+            }
+        )["pinned_page_titles"]
+        self.assertEqual(
+            list(cleaned_titles.items()),
+            [("0", "X" * 24), ("2", "Lighting"), ("10", "Media Wall")],
+        )
+        for bad_titles in ("not_a_dict", {"32": "Too High"}, {"-1": "Neg"}, {True: "Bool"}, {"0": 123}):
+            with self.assertRaises(ValueError):
+                settings.normalize_pinned_page_titles(bad_titles, strict=True)
+            with self.assertRaises(settings.SettingsScopeError):
+                settings.clean_device_settings({"pinned_page_titles": bad_titles})
+        self.assertEqual(
+            settings.normalize_pinned_page_titles(
+                {"bad": "Skip", "99": "Skip", "1": 123, "0": "Valid"}, strict=False
+            ),
+            {"0": "Valid"},
+        )
+        self.assertEqual(settings.normalize_pinned_page_titles("not_a_dict", strict=False), {})
 
     def test_media_handoff_is_one_latter_setting(self) -> None:
         protocol_json = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))

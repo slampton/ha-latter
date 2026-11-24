@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
-from typing import Any, Final, Literal, TypedDict
+from typing import Any, Final, Literal, NotRequired, TypedDict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 
@@ -46,6 +46,11 @@ class ShortcutItemDict(TypedDict):
     confirm: bool
     badge_style: str
     accent: str
+    page: NotRequired[int]
+    col: NotRequired[int]
+    row: NotRequired[int]
+    col_span: NotRequired[int]
+    row_span: NotRequired[int]
 
 
 _AVAILABLE_IANA_ZONES: frozenset[str] | None = None
@@ -684,6 +689,24 @@ def normalize_navigate_route(raw: object) -> str:
 MAX_DOCK_ITEMS: Final = 24
 MAX_PINNED_ITEMS: Final = 96
 SHORTCUT_LABEL_MAX: Final = 24
+PINNED_PAGE_TITLE_MAX: Final = 24
+MAX_PINNED_PAGE_TITLES: Final = 32
+MAX_GRID_PAGES: Final = 32
+MAX_GRID_COLS: Final = 4
+MAX_GRID_ROWS: Final = 3
+
+
+def tile_grid_dims_for_screen(
+    width: int, height: int, *, is_round: bool
+) -> tuple[int, int]:
+    """Return `(cols, rows)` for the adaptive tile grid from display traits."""
+    if is_round:
+        return (2, 3)
+    if width >= 800 and height >= 520:
+        return (4, 3)
+    if width >= 600 and height >= 600:
+        return (3, 3)
+    return (2, 3)
 
 SHORTCUT_DOMAIN_ACTIONS: Final[dict[str, tuple[tuple[str, str], ...]]] = {
     "light": (("toggle", "Toggle"), ("turn_on", "Turn On"), ("turn_off", "Turn Off")),
@@ -932,11 +955,89 @@ def _normalize_entity_shortcut(
     }
 
 
+def _is_grid_field_present(raw: Mapping[str, object], key: str) -> bool:
+    val = raw.get(key)
+    if val is None:
+        return False
+    return not (isinstance(val, str) and not val.strip())
+
+
+def _parse_grid_int(val: object) -> int | None:
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, int):
+        return val
+    if isinstance(val, str):
+        tok = val.strip()
+        if not tok:
+            return None
+        try:
+            return int(tok)
+        except ValueError:
+            return None
+    return None
+
+
+def _parse_grid_span(
+    raw: Mapping[str, object], key: str, max_span: int, *, strict: bool
+) -> int | None:
+    if not _is_grid_field_present(raw, key):
+        return None
+    parsed = _parse_grid_int(raw.get(key))
+    if parsed is None or not (1 <= parsed <= max_span):
+        if strict:
+            raise ValueError(f"Shortcut {key} must be an integer in 1..{max_span}")
+        if parsed is None:
+            return None
+        parsed = max(1, min(max_span, parsed))
+    return parsed if parsed > 1 else None
+
+
+def _apply_shortcut_grid_fields(
+    raw: Mapping[str, object], item: ShortcutItemDict, *, strict: bool
+) -> None:
+    pos_present = [_is_grid_field_present(raw, k) for k in ("page", "col", "row")]
+    if any(pos_present):
+        if not all(pos_present):
+            if strict:
+                raise ValueError(
+                    "Shortcut grid placement requires page, col, and row together"
+                )
+        else:
+            p = _parse_grid_int(raw.get("page"))
+            c = _parse_grid_int(raw.get("col"))
+            r = _parse_grid_int(raw.get("row"))
+            if (
+                p is not None
+                and c is not None
+                and r is not None
+                and 0 <= p < MAX_GRID_PAGES
+                and 0 <= c < MAX_GRID_COLS
+                and 0 <= r < MAX_GRID_ROWS
+            ):
+                item["page"] = p
+                item["col"] = c
+                item["row"] = r
+            elif strict:
+                raise ValueError(
+                    f"Shortcut grid position out of range (page 0..{MAX_GRID_PAGES - 1}, "
+                    f"col 0..{MAX_GRID_COLS - 1}, row 0..{MAX_GRID_ROWS - 1})"
+                )
+
+    col_span = _parse_grid_span(raw, "col_span", MAX_GRID_COLS, strict=strict)
+    if col_span is not None:
+        item["col_span"] = col_span
+    row_span = _parse_grid_span(raw, "row_span", MAX_GRID_ROWS, strict=strict)
+    if row_span is not None:
+        item["row_span"] = row_span
+
+
 def normalize_shortcut_item(
     raw: object,
     *,
     is_dock: bool,
     strict: bool = True,
+    allow_grid: bool = False,
 ) -> ShortcutItemDict | None:
     """Validate and normalize one `ShortcutItemDict` (`route` or `entity`)."""
     if not isinstance(raw, Mapping):
@@ -945,12 +1046,16 @@ def normalize_shortcut_item(
         return None
     kind = str(raw.get("kind") or "").strip().lower()
     if kind == "route":
-        return _normalize_route_shortcut(raw, is_dock=is_dock, strict=strict)
-    if kind == "entity":
-        return _normalize_entity_shortcut(raw, is_dock=is_dock, strict=strict)
-    if strict:
-        raise ValueError(f"Unknown shortcut kind: {kind or '(empty)'}")
-    return None
+        item = _normalize_route_shortcut(raw, is_dock=is_dock, strict=strict)
+    elif kind == "entity":
+        item = _normalize_entity_shortcut(raw, is_dock=is_dock, strict=strict)
+    else:
+        if strict:
+            raise ValueError(f"Unknown shortcut kind: {kind or '(empty)'}")
+        return None
+    if item is not None and allow_grid:
+        _apply_shortcut_grid_fields(raw, item, strict=strict)
+    return item
 
 
 def _normalize_shortcut_list(
@@ -959,6 +1064,7 @@ def _normalize_shortcut_list(
     is_dock: bool,
     max_items: int,
     strict: bool,
+    allow_grid: bool = False,
 ) -> list[ShortcutItemDict]:
     if not isinstance(val, (list, tuple)):
         if strict:
@@ -968,7 +1074,9 @@ def _normalize_shortcut_list(
     out: list[ShortcutItemDict] = []
     seen: set[tuple[str, str, str]] = set()
     for raw in val:
-        norm = normalize_shortcut_item(raw, is_dock=is_dock, strict=strict)
+        norm = normalize_shortcut_item(
+            raw, is_dock=is_dock, strict=strict, allow_grid=allow_grid
+        )
         if norm is None:
             continue
         dedup_key = (norm["kind"], norm["target"], norm["action"])
@@ -991,7 +1099,7 @@ def normalize_dock_items(
     if val is None:
         return default_dock_items()
     return _normalize_shortcut_list(
-        val, is_dock=True, max_items=MAX_DOCK_ITEMS, strict=strict
+        val, is_dock=True, max_items=MAX_DOCK_ITEMS, strict=strict, allow_grid=False
     )
 
 
@@ -1002,8 +1110,49 @@ def normalize_pinned_items(
     if val is None:
         return []
     return _normalize_shortcut_list(
-        val, is_dock=False, max_items=MAX_PINNED_ITEMS, strict=strict
+        val, is_dock=False, max_items=MAX_PINNED_ITEMS, strict=strict, allow_grid=True
     )
+
+
+def normalize_pinned_page_titles(
+    raw: object, *, strict: bool = False
+) -> dict[str, str]:
+    """Validate and normalize optional custom Pinned App page titles (`page_index -> title`)."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, Mapping):
+        if strict:
+            raise ValueError(
+                "pinned_page_titles must be an object mapping page index to title"
+            )
+        return {}
+    entries: dict[int, str] = {}
+    for raw_key, raw_val in raw.items():
+        page_idx = _parse_grid_int(raw_key)
+        if page_idx is None or not (0 <= page_idx < MAX_GRID_PAGES):
+            if strict:
+                raise ValueError(
+                    f"Invalid pinned page index: {raw_key!r} (expected 0..{MAX_GRID_PAGES - 1})"
+                )
+            continue
+        if raw_val is None:
+            entries.pop(page_idx, None)
+            continue
+        if not isinstance(raw_val, str):
+            if strict:
+                raise ValueError(
+                    f"Pinned page title for page {page_idx} must be a string"
+                )
+            continue
+        title = sanitize_shortcut_label(raw_val, max_chars=PINNED_PAGE_TITLE_MAX)
+        if title:
+            entries[page_idx] = title
+        else:
+            entries.pop(page_idx, None)
+    return {
+        str(idx): title
+        for idx, title in sorted(entries.items())[:MAX_PINNED_PAGE_TITLES]
+    }
 
 
 # ---------------------------------------------------------------------------

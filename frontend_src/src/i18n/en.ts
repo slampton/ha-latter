@@ -738,13 +738,34 @@ export const EN_STRINGS = {
   "dialogs.app_fallback": "Configure app",
   "dialogs.pinned_label": "Pinned shortcuts",
   "dialogs.pinned_desc":
-    "Assign Home Assistant entity quick actions or deep-link any Latter app or subpage (6 buttons per page, swipable vertically).",
+    "Arrange Home Assistant quick actions and Latter routes onto visual tile pages. Drag tiles to move or resize, or select an empty cell to add one.",
   "dialogs.pinned_aria": "Pinned app shortcuts",
   "dialogs.pinned_page_slot": "Page {page}",
+  "dialogs.pinned_pages_aria": "Pinned pages",
+  "dialogs.pinned_add_page": "Add page",
+  "dialogs.pinned_delete_page": "Delete page",
+  "dialogs.pinned_grid_dims": "{cols} × {rows} grid",
+  "dialogs.pinned_page_title_label": "Page title",
+  "dialogs.pinned_page_title_placeholder": "Pinned",
+  "dialogs.pinned_reflow_notice":
+    "Some tiles were arranged for another grid size and will auto-reflow on this {cols} × {rows} display.",
+  "dialogs.pinned_pack_to_grid": "Pack to this grid",
+  "dialogs.pinned_packed_status": "Packed pinned tiles to this grid",
+  "dialogs.pinned_grid_aria": "Pinned tile grid for {page}",
+  "dialogs.pinned_add_cell_aria": "Add tile at row {row}, column {col}",
+  "dialogs.pinned_resize_tile": "Resize tile",
+  "dialogs.pinned_tile_aria":
+    "{title}, row {row} column {col}, {colSpan} by {rowSpan}. Arrow keys move, Shift and arrow keys resize, Enter edits, Delete removes.",
+  "dialogs.pinned_moved_status": "Moved {item} to row {row}, column {col}",
+  "dialogs.pinned_resized_status": "Resized {item} to {colSpan} by {rowSpan}",
+  "dialogs.pinned_removed_status": "Removed {item}",
+  "dialogs.pinned_add_tile": "Add tile",
+  "dialogs.pinned_tile_count": "{count} of {max} tiles",
+  "dialogs.pinned_confirm_badge_title": "Requires confirmation tap",
   "dialogs.pinned_confirm_mode": "Confirm",
   "dialogs.pinned_one_tap_mode": "1-tap",
   "dialogs.pinned_empty":
-    "No pinned items configured yet. The Pinned icon stays hidden on the App Dock until you add at least one item.",
+    "No pinned tiles configured yet. The Pinned icon stays hidden on the App Dock until you add at least one tile.",
   "dialogs.home_cats_label": "Home categories",
   "dialogs.home_cats_desc":
     "Toggle and reorder categories shown in the Home hub. The first available category opens by default; categories with no configured entity are not displayed.",
@@ -858,6 +879,15 @@ export const EN_STRINGS = {
   "dialogs.sc_accent_green": "Green",
   "dialogs.sc_accent_red": "Red",
   "dialogs.sc_accent_orange": "Orange",
+  "dialogs.sc_tile_layout_label": "Tile layout",
+  "dialogs.sc_tile_size_label": "Tile size",
+  "dialogs.sc_tile_size_aria": "Choose tile size up to {cols} by {rows}",
+  "dialogs.sc_tile_size_cell_aria": "{cols} by {rows}",
+  "dialogs.sc_tile_size_badge": "{cols} × {rows}",
+  "dialogs.sc_span_reflow_hint": "This size will move the tile to the next open space.",
+  "dialogs.sc_page_label": "Page",
+  "dialogs.sc_page_titled_option": "Page {page} — {title}",
+  "dialogs.sc_page_new_option": "+ New page",
   "dialogs.cw_title": "Add a custom color",
   "dialogs.cw_color_aria": "Color",
   "dialogs.cw_hex_aria": "Hex color",
@@ -927,6 +957,12 @@ export const EN_STRINGS = {
   "confirm.delete_collection.body":
     "Deletes this collection label. Photos inside stay in your Photo library.",
   "confirm.delete_collection.confirm": "Delete collection",
+  "confirm.delete_pinned_page.title": "Delete {page}?",
+  "confirm.delete_pinned_page.body_one":
+    "Removes 1 tile on this page and shifts later pages up.",
+  "confirm.delete_pinned_page.body_many":
+    "Removes {count} tiles on this page and shifts later pages up.",
+  "confirm.delete_pinned_page.confirm": "Delete page",
 
   // System -> Photos library, upload cropper, & HA Media import (D-072)
   "photos.subtitle":

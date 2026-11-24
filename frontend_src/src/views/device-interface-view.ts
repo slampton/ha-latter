@@ -51,6 +51,7 @@ import {
   fmtNumber,
   hassFirstWeekday,
 } from "../utils/format.js";
+import { resolveDeviceGridDims, resolveTileGridLayout } from "../utils/tile-grid.js";
 
 const IFACE_UTC_ZONES = new Set([
   "UTC",
@@ -370,7 +371,8 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
         if (pinnedItems.length === 0) {
           return store.t("dev_interface.pinned_empty_meta");
         }
-        const pages = Math.ceil(pinnedItems.length / 6);
+        const dims = resolveDeviceGridDims(caps);
+        const pages = resolveTileGridLayout(pinnedItems, dims.cols, dims.rows).pageCount;
         return store.t("dev_interface.pinned_count_meta", {
           count: fmtNumber(pinnedItems.length, store.hass, 0),
           shortcutWord:

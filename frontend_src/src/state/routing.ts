@@ -235,6 +235,8 @@ export function onActiveDeviceChangedOp(
     store.worldClockRowKeys = [];
     store.overviewAlarmsOpen = false;
     store.appConfigModal = { open: false, app: null };
+    store.pinnedActivePage = 0;
+    store.pinnedExtraPages = 0;
     store.cameraConfigModal = { ...store.cameraConfigModal, open: false };
     store.photoPickerModal = emptyPhotoPickerModalState();
     store.shortcutModal = { ...store.shortcutModal, open: false };

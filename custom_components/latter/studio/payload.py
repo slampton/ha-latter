@@ -51,6 +51,7 @@ from ..const import (
     CONF_MA_PLAYER_ENTITY,
     CONF_NATIVE_BLE_TRACKING,
     CONF_PINNED_ITEMS,
+    CONF_PINNED_PAGE_TITLES,
     CONF_SCREENSAVER_CYCLE_MINUTES,
     CONF_SCREENSAVER_PHOTO_COLLECTION,
     CONF_SCREENSAVER_PHOTO_IDS,
@@ -411,6 +412,10 @@ class StudioDeviceCapabilities(TypedDict):
     hw_jpeg: bool
     video_max_fps: int
     video_grid_fps: int
+    screen_w: int
+    screen_h: int
+    grid_cols: int
+    grid_rows: int
 
 
 class StudioLinksPayload(TypedDict):
@@ -1918,6 +1923,10 @@ def _build_device_capabilities(
         "hw_jpeg": coordinator.supports_hw_jpeg,
         "video_max_fps": coordinator.video_max_fps,
         "video_grid_fps": coordinator.video_grid_fps,
+        "screen_w": coordinator.screen_width,
+        "screen_h": coordinator.screen_height,
+        "grid_cols": coordinator.grid_cols,
+        "grid_rows": coordinator.grid_rows,
     }
 
 
@@ -1981,6 +1990,7 @@ def _build_device_config_data(
         CONF_DEVICE_CUSTOM_COLOR: coordinator.device_custom_color,
         CONF_DOCK_ITEMS: coordinator.dock_items,
         CONF_PINNED_ITEMS: coordinator.pinned_items,
+        CONF_PINNED_PAGE_TITLES: coordinator.pinned_page_titles,
         CONF_AREA_CATEGORIES: coordinator.area_categories_csv,
         CONF_HOME_CATEGORIES: coordinator.home_categories_csv,
         CONF_BROADCAST_SPEAKER_ENTITIES: coordinator.configured_broadcast_speaker_entities,

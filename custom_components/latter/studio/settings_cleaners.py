@@ -28,8 +28,13 @@ from ..protocol_specs import (
     HOME_CATEGORIES_CATALOG as HOME_CATEGORIES_CATALOG,
     HOME_CATEGORY_TOKENS as HOME_CATEGORY_TOKENS,
     MAX_DOCK_ITEMS as MAX_DOCK_ITEMS,
+    MAX_GRID_COLS as MAX_GRID_COLS,
+    MAX_GRID_PAGES as MAX_GRID_PAGES,
+    MAX_GRID_ROWS as MAX_GRID_ROWS,
     MAX_PINNED_ITEMS as MAX_PINNED_ITEMS,
+    MAX_PINNED_PAGE_TITLES as MAX_PINNED_PAGE_TITLES,
     MAX_WORLD_CLOCKS as MAX_WORLD_CLOCKS,
+    PINNED_PAGE_TITLE_MAX as PINNED_PAGE_TITLE_MAX,
     RETURN_TO_HOME_TIMEOUT_OPTIONS as RETURN_TO_HOME_TIMEOUT_OPTIONS,
     SHORTCUT_ACCENT_TOKENS as SHORTCUT_ACCENT_TOKENS,
     SHORTCUT_ACCENTS_CATALOG as SHORTCUT_ACCENTS_CATALOG,
@@ -64,6 +69,7 @@ from ..protocol_specs import (
     normalize_home_categories as normalize_home_categories,
     normalize_mdi_icon as normalize_mdi_icon,
     normalize_pinned_items as normalize_pinned_items,
+    normalize_pinned_page_titles as normalize_pinned_page_titles,
     normalize_shortcut_accent as normalize_shortcut_accent,
     normalize_shortcut_badge_style as normalize_shortcut_badge_style,
     normalize_shortcut_item as normalize_shortcut_item,
@@ -78,6 +84,7 @@ from ..protocol_specs import (
     sanitize_clock_label as sanitize_clock_label,
     sanitize_shortcut_label as sanitize_shortcut_label,
     snap_calendar_lookahead_days as snap_calendar_lookahead_days,
+    tile_grid_dims_for_screen as tile_grid_dims_for_screen,
     warm_timezone_cache as warm_timezone_cache,
 )
 
@@ -155,7 +162,8 @@ class AnnouncementDispatchDict(TypedDict):
 
 type SettingValue = (
     bool | int | float | str | list[str] | list[ShortcutItemDict] | list[VolumeOverrideDict]
-    | list[RemoteGroupDict] | list[CustomPaletteDict] | dict[str, CameraConfigEntryDict] | None
+    | list[RemoteGroupDict] | list[CustomPaletteDict] | dict[str, CameraConfigEntryDict]
+    | dict[str, str] | None
 )
 
 # ---------------------------------------------------------------------------
@@ -187,7 +195,7 @@ DEVICE_BOOL_KEYS: Final[tuple[str, ...]] = (
 DEVICE_SETTING_KEYS: Final[tuple[str, ...]] = (
     *DEVICE_TEXT_KEYS,
     *DEVICE_BOOL_KEYS,
-    "dock_items", "pinned_items", "broadcast_speaker_entities",
+    "dock_items", "pinned_items", "pinned_page_titles", "broadcast_speaker_entities",
     "camera_visible_entities", "camera_carousel_entities",
     "wallpaper_favorites", "wallpaper_cycle_minutes",
     "screensaver_photo_ids", "screensaver_cycle_minutes",
@@ -795,6 +803,10 @@ def _clean_device_lists_and_shortcuts(incoming: Mapping[str, object], out: dict[
             out["dock_items"] = normalize_dock_items(incoming["dock_items"], strict=True)
         if "pinned_items" in incoming:
             out["pinned_items"] = normalize_pinned_items(incoming["pinned_items"], strict=True)
+        if "pinned_page_titles" in incoming:
+            out["pinned_page_titles"] = normalize_pinned_page_titles(
+                incoming["pinned_page_titles"], strict=True
+            )
     except ValueError as err:
         raise SettingsScopeError(str(err)) from None
 

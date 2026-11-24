@@ -16,8 +16,11 @@ import {
   GAMES_ITEMS_CATALOG,
   HOME_CATEGORIES_CATALOG,
   MAX_DOCK_ITEMS,
+  MAX_PINNED_GRID_PAGES,
   MAX_PINNED_ITEMS,
   NATIVE_DOCK_APP_TOKENS,
+  PINNED_GRID_MAX_COLS,
+  PINNED_GRID_MAX_ROWS,
   SHORTCUT_LABEL_MAX,
   SHORTCUT_ROUTES_CATALOG,
   TOOLS_ITEMS_CATALOG,
@@ -29,6 +32,15 @@ import {
   SHORTCUT_DOMAIN_ACTIONS,
 } from "../mdi-catalog.js";
 import type { ShortcutAccent, ShortcutBadgeStyle, ShortcutItem } from "../types.js";
+import {
+  canPlaceTile,
+  deletePageAndShift,
+  findFirstOpenSlot,
+  normalizePinnedPageTitles,
+  resolveDeviceGridDims,
+  resolveTileGridLayout,
+  withExplicitLayout,
+} from "../utils/tile-grid.js";
 import {
   isCatalogItemSupported,
   type StudioStoreContext,
@@ -301,6 +313,51 @@ export function defaultDockShortcutItems(): ShortcutItem[] {
   }));
 }
 
+function applyNormalizedPinnedLayout(
+  rec: Record<string, unknown>,
+  target: ShortcutItem,
+): void {
+  const page = rec.page;
+  const col = rec.col;
+  const row = rec.row;
+  if (
+    typeof page === "number" &&
+    Number.isInteger(page) &&
+    page >= 0 &&
+    page < MAX_PINNED_GRID_PAGES &&
+    typeof col === "number" &&
+    Number.isInteger(col) &&
+    col >= 0 &&
+    col < PINNED_GRID_MAX_COLS &&
+    typeof row === "number" &&
+    Number.isInteger(row) &&
+    row >= 0 &&
+    row < PINNED_GRID_MAX_ROWS
+  ) {
+    target.page = page;
+    target.col = col;
+    target.row = row;
+  }
+  const colSpan = rec.col_span;
+  if (
+    typeof colSpan === "number" &&
+    Number.isInteger(colSpan) &&
+    colSpan >= 2 &&
+    colSpan <= PINNED_GRID_MAX_COLS
+  ) {
+    target.col_span = colSpan;
+  }
+  const rowSpan = rec.row_span;
+  if (
+    typeof rowSpan === "number" &&
+    Number.isInteger(rowSpan) &&
+    rowSpan >= 2 &&
+    rowSpan <= PINNED_GRID_MAX_ROWS
+  ) {
+    target.row_span = rowSpan;
+  }
+}
+
 export function normalizeShortcutArray(raw: unknown, isDock: boolean): ShortcutItem[] {
   if (!Array.isArray(raw)) {
     return isDock ? defaultDockShortcutItems() : [];
@@ -324,7 +381,7 @@ export function normalizeShortcutArray(raw: unknown, isDock: boolean): ShortcutI
       if (seen.has(dedupKey)) continue;
       seen.add(dedupKey);
       const isNativeDockApp = isDock && NATIVE_DOCK_APP_TOKENS.includes(target);
-      out.push({
+      const built: ShortcutItem = {
         kind: "route",
         target,
         action: "",
@@ -333,7 +390,11 @@ export function normalizeShortcutArray(raw: unknown, isDock: boolean): ShortcutI
         confirm: false,
         badge_style: isNativeDockApp ? "" : normalizeShortcutBadgeStyle(rec.badge_style),
         accent: isNativeDockApp ? "" : normalizeShortcutAccent(rec.accent),
-      });
+      };
+      if (!isDock) {
+        applyNormalizedPinnedLayout(rec, built);
+      }
+      out.push(built);
     } else if (kind === "entity") {
       const target = String(rec.target || "").trim().toLowerCase();
       const dotIdx = target.indexOf(".");
@@ -349,7 +410,7 @@ export function normalizeShortcutArray(raw: unknown, isDock: boolean): ShortcutI
       const dedupKey = `entity|${target}|${action}`;
       if (seen.has(dedupKey)) continue;
       seen.add(dedupKey);
-      out.push({
+      const built: ShortcutItem = {
         kind: "entity",
         target,
         action,
@@ -358,17 +419,87 @@ export function normalizeShortcutArray(raw: unknown, isDock: boolean): ShortcutI
         confirm: rec.confirm === undefined ? isDock : Boolean(rec.confirm),
         badge_style: normalizeShortcutBadgeStyle(rec.badge_style),
         accent: normalizeShortcutAccent(rec.accent),
-      });
+      };
+      if (!isDock) {
+        applyNormalizedPinnedLayout(rec, built);
+      }
+      out.push(built);
     }
     if (out.length >= maxItems) break;
   }
   return out;
 }
 
+export function savePinnedPageTitlesOp(
+  store: StudioStoreContext,
+  nextTitles: Record<string, string>,
+): void {
+  const cleanTitles = normalizePinnedPageTitles(nextTitles);
+  store.entity.stageDeviceSetting("pinned_page_titles", cleanTitles);
+}
+
+export function savePinnedGridStateOp(
+  store: StudioStoreContext,
+  nextItems: ShortcutItem[],
+  nextTitles?: Record<string, string>,
+): void {
+  const cleanItems = normalizeShortcutArray(nextItems, false);
+  store.entity.stageDeviceSetting("pinned_items", cleanItems);
+  if (nextTitles !== undefined) {
+    store.entity.stageDeviceSetting(
+      "pinned_page_titles",
+      normalizePinnedPageTitles(nextTitles),
+    );
+  }
+}
+
+export function deletePinnedPageOp(store: StudioStoreContext, pageIdx: number): void {
+  const dims = resolveDeviceGridDims(store.state?.capabilities);
+  const pinnedItems = store.entity.getPinnedItems();
+  const pageTitles = store.entity.getPinnedPageTitles();
+  const prevResolved = resolveTileGridLayout(pinnedItems, dims.cols, dims.rows);
+  const titleKeys = Object.keys(pageTitles);
+  const prevMaxTitlePage = titleKeys.reduce((m, k) => Math.max(m, Number(k) || 0), 0);
+  const prevBasePages = Math.max(
+    1,
+    prevResolved.pageCount,
+    titleKeys.length > 0 ? prevMaxTitlePage + 1 : 1,
+  );
+  const prevTotalPages = Math.min(
+    MAX_PINNED_GRID_PAGES,
+    prevBasePages + Math.max(0, store.pinnedExtraPages),
+  );
+  if (prevTotalPages <= 1) return;
+
+  const { items: nextItems, pageTitles: nextTitles } = deletePageAndShift(
+    pinnedItems,
+    pageTitles,
+    pageIdx,
+    dims.cols,
+    dims.rows,
+  );
+  const nextResolved = resolveTileGridLayout(nextItems, dims.cols, dims.rows);
+  const nextTitleKeys = Object.keys(nextTitles);
+  const nextMaxTitlePage = nextTitleKeys.reduce((m, k) => Math.max(m, Number(k) || 0), 0);
+  const nextBasePages = Math.max(
+    1,
+    nextResolved.pageCount,
+    nextTitleKeys.length > 0 ? nextMaxTitlePage + 1 : 1,
+  );
+  const targetTotalPages = Math.max(1, prevTotalPages - 1);
+  store.pinnedExtraPages = Math.max(0, targetTotalPages - nextBasePages);
+  store.pinnedActivePage = Math.max(
+    0,
+    Math.min(store.pinnedActivePage, targetTotalPages - 1),
+  );
+  savePinnedGridStateOp(store, nextItems, nextTitles);
+}
+
 export function openShortcutModalOp(
   store: StudioStoreContext,
   listKey: "dock_items" | "pinned_items",
   editIndex: number | null = null,
+  targetCell: { page: number; col: number; row: number } | null = null,
 ): void {
   const isDock = listKey === "dock_items";
   if (
@@ -383,6 +514,10 @@ export function openShortcutModalOp(
   }
   const current = isDock ? store.entity.getDockItems() : store.entity.getPinnedItems();
   const caps = store.state?.capabilities;
+  const dims = resolveDeviceGridDims(caps);
+  const resolvedPinned = !isDock
+    ? resolveTileGridLayout(current, dims.cols, dims.rows)
+    : null;
   const compatibleRoutes = SHORTCUT_ROUTES_CATALOG.filter((r) => {
     if (!isDock && r.dockOnly) return false;
     if (isDock && (r.token === "settings:root" || NATIVE_DOCK_APP_TOKENS.includes(r.token))) {
@@ -403,6 +538,13 @@ export function openShortcutModalOp(
   if (existing && editIndex !== null) {
     const existingBadgeStyle = normalizeShortcutBadgeStyle(existing.badge_style);
     const existingAccent = normalizeShortcutAccent(existing.accent);
+    const resTile = resolvedPinned?.tiles.find((t) => t.index === editIndex);
+    const tilePage = !isDock ? (resTile?.page ?? Math.max(0, store.pinnedActivePage)) : 0;
+    const tileCol = !isDock && resTile ? resTile.col : null;
+    const tileRow = !isDock && resTile ? resTile.row : null;
+    const tileColSpan = !isDock ? (resTile?.colSpan ?? 1) : 1;
+    const tileRowSpan = !isDock ? (resTile?.rowSpan ?? 1) : 1;
+
     if (existing.kind === "entity") {
       const dom = existing.target.split(".", 1)[0] || firstDomain;
       store.shortcutModal = {
@@ -422,6 +564,11 @@ export function openShortcutModalOp(
         badgeStyle: existingBadgeStyle,
         accent: existingAccent,
         confirm: Boolean(existing.confirm),
+        tilePage,
+        tileCol,
+        tileRow,
+        tileColSpan,
+        tileRowSpan,
       };
     } else {
       store.shortcutModal = {
@@ -441,9 +588,22 @@ export function openShortcutModalOp(
         badgeStyle: existingBadgeStyle,
         accent: existingAccent,
         confirm: isDock,
+        tilePage,
+        tileCol,
+        tileRow,
+        tileColSpan,
+        tileRowSpan,
       };
     }
   } else {
+    const initPage = !isDock
+      ? targetCell
+        ? Math.max(0, Math.min(MAX_PINNED_GRID_PAGES - 1, Math.trunc(targetCell.page)))
+        : Math.max(0, store.pinnedActivePage)
+      : 0;
+    const initCol = !isDock && targetCell ? Math.max(0, Math.min(dims.cols - 1, targetCell.col)) : null;
+    const initRow = !isDock && targetCell ? Math.max(0, Math.min(dims.rows - 1, targetCell.row)) : null;
+
     store.shortcutModal = {
       open: true,
       listKey,
@@ -461,6 +621,11 @@ export function openShortcutModalOp(
       badgeStyle: "",
       accent: "",
       confirm: isDock,
+      tilePage: initPage,
+      tileCol: initCol,
+      tileRow: initRow,
+      tileColSpan: 1,
+      tileRowSpan: 1,
     };
   }
   store.host.requestUpdate();
@@ -577,7 +742,83 @@ export function saveShortcutModalOp(store: StudioStoreContext): void {
     return;
   }
 
-  if (modal.editIndex !== null && modal.editIndex >= 0 && modal.editIndex < current.length) {
+  if (!isDock) {
+    const dims = resolveDeviceGridDims(store.state?.capabilities);
+    const resolved = resolveTileGridLayout(current, dims.cols, dims.rows);
+    const prevBasePages = resolved.pageCount;
+    const wantCs = Math.max(1, Math.min(dims.cols, Math.trunc(modal.tileColSpan || 1)));
+    const wantRs = Math.max(1, Math.min(dims.rows, Math.trunc(modal.tileRowSpan || 1)));
+    const wantPage = Math.max(
+      0,
+      Math.min(MAX_PINNED_GRID_PAGES - 1, Math.trunc(modal.tilePage || 0)),
+    );
+    const excludeIdx = modal.editIndex !== null ? modal.editIndex : -1;
+
+    let placed: { page: number; col: number; row: number } | null = null;
+    if (modal.tileCol !== null && modal.tileRow !== null) {
+      if (
+        canPlaceTile(
+          resolved,
+          excludeIdx,
+          wantPage,
+          modal.tileCol,
+          modal.tileRow,
+          wantCs,
+          wantRs,
+          dims.cols,
+          dims.rows,
+        )
+      ) {
+        placed = { page: wantPage, col: modal.tileCol, row: modal.tileRow };
+      } else {
+        const shiftedCol = Math.min(modal.tileCol, dims.cols - wantCs);
+        const shiftedRow = Math.min(modal.tileRow, dims.rows - wantRs);
+        if (
+          canPlaceTile(
+            resolved,
+            excludeIdx,
+            wantPage,
+            shiftedCol,
+            shiftedRow,
+            wantCs,
+            wantRs,
+            dims.cols,
+            dims.rows,
+          )
+        ) {
+          placed = { page: wantPage, col: shiftedCol, row: shiftedRow };
+        }
+      }
+    }
+    if (!placed) {
+      placed = findFirstOpenSlot(
+        resolved,
+        wantPage,
+        wantCs,
+        wantRs,
+        dims.cols,
+        dims.rows,
+        excludeIdx,
+      );
+    }
+
+    built = withExplicitLayout(built, placed.page, placed.col, placed.row, wantCs, wantRs);
+
+    if (modal.editIndex !== null && modal.editIndex >= 0 && modal.editIndex < current.length) {
+      current[modal.editIndex] = built;
+    } else {
+      current.push(built);
+    }
+
+    store.pinnedActivePage = placed.page;
+    const nextResolved = resolveTileGridLayout(current, dims.cols, dims.rows);
+    if (nextResolved.pageCount > prevBasePages) {
+      store.pinnedExtraPages = Math.max(
+        0,
+        store.pinnedExtraPages - (nextResolved.pageCount - prevBasePages),
+      );
+    }
+  } else if (modal.editIndex !== null && modal.editIndex >= 0 && modal.editIndex < current.length) {
     current[modal.editIndex] = built;
   } else {
     current.push(built);
