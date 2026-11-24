@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator, Callable, Mapping
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -17,6 +18,12 @@ from tests.helpers.paths import (
     read_ts_tree,
     run_studio_node_esm,
 )
+
+
+@pytest.fixture
+def hass_config_dir(tmp_path: Path) -> str:
+    """Isolate each test's Home Assistant config directory on fast per-test temp storage."""
+    return str(tmp_path)
 
 
 @pytest.fixture
@@ -223,6 +230,7 @@ __all__ = [
     "NODE_BIN",
     "REPO_ROOT",
     "hass",
+    "hass_config_dir",
     "make_esphome_device",
     "read_py_tree",
     "read_ts_tree",
