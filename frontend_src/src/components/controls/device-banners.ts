@@ -45,6 +45,42 @@ export function renderDeviceOfflineBanner(store: StudioStore): TemplateResult | 
 }
 
 /**
+ * Shared warning banner rendered on Device Overview & Device Tools when
+ * `live.firmware_outdated` is true (reported `core_rev < min_firmware_core_rev`).
+ */
+export function renderFirmwareOutdatedBanner(
+  store: StudioStore,
+): TemplateResult | typeof nothing {
+  const data = store.state;
+  const cfg = data?.config || {};
+  if (cfg.kind === "ble_tag") return nothing;
+  const live = data?.live;
+  if (!live?.firmware_outdated) return nothing;
+  const reported = String(live.core_rev || "").trim();
+  const required = data?.system_info?.min_firmware_core_rev
+    ? String(data.system_info.min_firmware_core_rev)
+    : "";
+  const bodyText =
+    reported && required
+      ? store.t("firmware.outdated_banner_detail", { reported, required })
+      : required
+        ? store.t("firmware.outdated_banner_min", { required })
+        : store.t("firmware.outdated_banner_body");
+  return html`<div
+    id="device-firmware-outdated-banner"
+    role="region"
+    aria-label=${store.t("status.firmware_update_required")}
+    class="alert alert-warning"
+  >
+    <div class="alert-body">
+      <strong>${store.t("status.firmware_update_required")}</strong>
+      <span>${bodyText}</span>
+    </div>
+    ${reported ? html`<span class="chip chip-warning">${reported}</span>` : nothing}
+  </div>`;
+}
+
+/**
  * Formats non-pref Home Assistant entity `select` options and sensor states via `formatHaEntityState`,
  * while delegating preference-backed, switch, number, button, and update controls to `renderNativeControlRow`.
  */

@@ -20,7 +20,7 @@ from custom_components.latter.const import (
     CONF_SECURITY_PIN_POLICY,
     CONF_VOLUME_OVERRIDES,
     DOMAIN,
-    MIN_FIRMWARE_SDK_REV,
+    MIN_FIRMWARE_CORE_REV,
     PUBLIC_SERVICES,
     RPC_AREA_ACTION,
     RPC_AREA_BROWSE,
@@ -238,14 +238,12 @@ async def test_all_domain_services_ma_link_and_browse_lru(
     clear_browse_cache()
     assert MAX_BROWSE_CACHE_ENTRIES == 64
     cache_dict = (
-        vars(_lyrics_mod).get("_BROWSE_LYRICS_BIO_CACHE")
-        if "_BROWSE_LYRICS_BIO_CACHE" in vars(_lyrics_mod)
-        else vars(_browse_mod)["_BROWSE_LYRICS_BIO_CACHE"]
+        vars(_lyrics_mod).get("BROWSE_LYRICS_BIO_CACHE")
+        if "BROWSE_LYRICS_BIO_CACHE" in vars(_lyrics_mod)
+        else vars(_browse_mod)["BROWSE_LYRICS_BIO_CACHE"]
     )
     cache_put = (
-        vars(_lyrics_mod).get("_cache_put")
-        or vars(_lyrics_mod).get("cache_put")
-        or vars(_browse_mod).get("_cache_put")
+        vars(_lyrics_mod).get("cache_put")
         or vars(_browse_mod)["cache_put"]
     )
     for i in range(80):
@@ -430,7 +428,7 @@ async def test_all_domain_services_ma_link_and_browse_lru(
             "shape": "circle",
             "display": 1,
             "stationary": 0,
-            "sdk": MIN_FIRMWARE_SDK_REV,
+            "core_rev": MIN_FIRMWARE_CORE_REV,
             "beacon": {
                 "uuid": "E2C56DB5-DFFB-48D2-B060-D0F5A71096E1",
                 "major": 1,

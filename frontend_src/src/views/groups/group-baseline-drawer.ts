@@ -763,6 +763,7 @@ function renderBaselineDisplaySection(
               <span class="chip">${customHex}</span>`,
           })
         : nothing}
+      ${h.renderSpecSelect("glass_style", cfg.glass_style)}
       ${h.renderSpecSelect("va_visual_profile", cfg.va_visual_profile)}
     </div>
   </details>`;

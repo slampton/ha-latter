@@ -19,15 +19,17 @@ bluetooth_proxy:
   active: true
 ```
 
-## ESPHome beacons are tracked like any iBeacon
+## ESPHome beacons & standalone `latter_beacon`
 
-A node that advertises an iBeacon can be tracked as it moves between Areas. Give each node its own UUID:
+Any node that advertises an iBeacon can be tracked as it moves between Areas. Give each node its own UUID using stock `esp32_ble_beacon`:
 
 ```yaml
 esp32_ble_beacon:
   type: iBeacon
   uuid: "<a UUID unique to this node>"
 ```
+
+If you want lightweight raw-HCI iBeacon advertising on ESP32-S3 or ESP32-P4 without pulling Bluedroid or NimBLE into RAM, you can also drop the standalone [`latter_beacon`](https://github.com/slampton/esphome-latter-core/tree/main/components/latter_beacon) external component directly into your own ESPHome YAML.
 
 Then open **Studio → Devices → Discovered → Bluetooth devices** (**Phones & trackers** filter) and click **Adopt**, or add it by UUID with **Add BLE tag**.
 
@@ -40,6 +42,6 @@ Then open **Studio → Devices → Discovered → Bluetooth devices** (**Phones 
 
 ---
 
-## Building your own Latter device
+## Porting another display board to Latter Core
 
-To make an ESPHome device a full Latter device, build it on [Latter Core](https://github.com/slampton/esphome-latter-core) and implement the [Device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md) (`latter_ping`, `latter_push_v3`, `latter_device_command`, and `System: RPC Outbox` emitting `device_hello` with Hardware Manifest v2, plus `latter_set_slots`, `latter_set_music_lyrics`, `latter_set_calendar_view`, and `latter_show_notification` on displays). Home Assistant then discovers it automatically as **Discovered: Latter**.
+Want to run Latter OS on a different ESP32-S3 or ESP32-P4 display (including audio-less or rotary-knob displays)? Write a board HAL using the typed `latter_core:` schema and combine it with `modules/latter_display_firmware.yaml` (or `modules/latter_display_only_firmware.yaml`) in [Latter Core](https://github.com/slampton/esphome-latter-core) — see the **[Porting hardware guide](https://github.com/slampton/esphome-latter-core/blob/main/docs/porting-hardware.md)** and `tools/check_boards.py --external`. Home Assistant discovers the flashed board automatically as **Discovered: Latter**.

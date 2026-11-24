@@ -111,6 +111,7 @@ export const EN_STRINGS = {
   "status.online": "Online",
   "status.offline": "Offline",
   "status.update": "Update available",
+  "status.firmware_update_required": "Firmware update required",
   "status.up_to_date": "Up to date",
   "status.away": "Away",
   "status.scanning": "Scanning",
@@ -164,6 +165,10 @@ export const EN_STRINGS = {
   "issue.device_brownout": "Restarted after a power dip (brownout).",
   "issue.firmware_rolled_back":
     "A firmware update failed to start; the previous firmware is running.",
+  "issue.outdated_firmware":
+    "Firmware core revision is below the minimum required by this Latter release. Update the Device firmware in ESPHome.",
+  "issue.outdated_firmware_detail":
+    "Firmware update required ({detail}). Update the Device firmware in ESPHome.",
   "issue.generic": "Repair: {label}.",
 
   // System card titles
@@ -192,7 +197,7 @@ export const EN_STRINGS = {
   // Support & diagnostics card (D-066)
   "support.ha_version": "Home Assistant",
   "support.integration_version": "Latter integration",
-  "support.sdk_rev": "Minimum firmware SDK",
+  "support.core_rev": "Minimum firmware core",
   "support.studio_rev": "Studio contract",
   "support.managed_devices": "Managed Devices",
   "support.managed_devices_value":
@@ -225,7 +230,8 @@ export const EN_STRINGS = {
   "sys_overview.phones_many": "{count} phones",
   "sys_overview.ble_tags_one": "1 BLE tag",
   "sys_overview.ble_tags_many": "{count} BLE tags",
-  "sys_overview.audio_count": "{count} audio",
+  "sys_overview.screenless_one": "1 screenless",
+  "sys_overview.screenless_many": "{count} screenless",
   "sys_overview.open_device": "Open Device",
   "sys_overview.discovered_banner_title": "Hardware ready to adopt",
   "sys_overview.discovered_banner_one":
@@ -469,7 +475,7 @@ export const EN_STRINGS = {
   "groups.confirm_copy_confirm": "Copy into baseline",
   "groups.include_display": "Include display settings",
   "groups.include_display_desc":
-    "Sync wallpapers, clock face, color profile, and media appearance.",
+    "Sync wallpapers, screensaver style, color profile, glass style, and visual profile.",
   "groups.include_interface": "Include interface & shortcuts",
   "groups.include_interface_desc":
     "Sync start screen, App Dock, pinned shortcuts, and hub categories.",
@@ -1073,6 +1079,12 @@ export const EN_STRINGS = {
   "offline.ble_tx_off_title": "BLE transmitter not active ({state})",
   "offline.ble_tx_off_body":
     "Enable the BLE Transmitter sensor in the Home Assistant Companion App on this phone so Bluetooth proxies can detect its Area.",
+  "firmware.outdated_banner_detail":
+    "This Device reports firmware core {reported}, which is below the minimum required revision {required}. Update the Device firmware in ESPHome.",
+  "firmware.outdated_banner_min":
+    "This Device is below the minimum required firmware core revision ({required}). Update the Device firmware in ESPHome.",
+  "firmware.outdated_banner_body":
+    "This Device is below the minimum required firmware core revision. Update the Device firmware in ESPHome.",
 
   // Device card titles & disambiguated display sections (D-066)
   "card.status": "Status",
@@ -1253,6 +1265,8 @@ export const EN_STRINGS = {
     "Randomizes photo order instead of advancing alphabetically.",
   "dev_display.custom_color_label": "Custom color",
   "dev_display.custom_color_desc": "Used when Color profile is set to Custom.",
+  "dev_display.glass_style_desc":
+    "Auto adapts contrast over bright backdrops, Clear keeps crisp translucent glass, and Dark uses high-contrast dark glass.",
   "dev_display.current_color_option": "Current ({hex})",
   "dev_display.add_color_btn": "Add color",
   "dev_display.wallpapers_subtitle":
@@ -1428,7 +1442,8 @@ export const EN_STRINGS = {
   "dev_tools.model": "Model",
   "dev_tools.esphome_node": "ESPHome node",
   "dev_tools.firmware_version": "Firmware version",
-  "dev_tools.latter_sdk": "Latter SDK",
+  "dev_tools.firmware_core": "Firmware core",
+  "dev_tools.firmware_status": "Firmware status",
   "dev_tools.wifi_signal": "Wi-Fi signal",
   "dev_tools.ip_address": "IP address",
   "dev_tools.mac_address": "MAC address",
@@ -1524,6 +1539,7 @@ export const PREF_LABELS: Readonly<Record<string, string>> = {
   day_start_hour: "Day start hour",
   night_start_hour: "Night start hour",
   color_profile: "Color profile",
+  glass_style: "Glass style",
   va_visual_profile: "Visual profile",
   home_screen_enabled: "Enable Home screen",
   start_screen: "Start screen",
@@ -1633,6 +1649,8 @@ export const PREF_OPTION_LABELS: Readonly<Record<string, string>> = {
   Blue: "Blue",
   Green: "Green",
   Custom: "Custom",
+  Clear: "Clear",
+  Dark: "Dark",
   Nebula: "Nebula",
   Solaris: "Solaris",
   Rings: "Rings",

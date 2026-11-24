@@ -11,8 +11,6 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from ..config_defaults import (
-    BUILTIN_GROUP_PRESET_VERSION as BUILTIN_GROUP_PRESET_VERSION,
-    CONF_BUILTIN_GROUP_PRESET_VERSION as CONF_BUILTIN_GROUP_PRESET_VERSION,
     DEFAULT_DEVICE_GROUPS as DEFAULT_DEVICE_GROUPS,
     ble_tag_option_defaults,
     compute_hardware_defaults,
@@ -66,7 +64,7 @@ from ..const import (
     DEFAULT_WALLPAPER_CYCLE_MINUTES,
     DEFAULT_WALLPAPER_MODE,
     DOMAIN,
-    MIN_FIRMWARE_SDK_REV,
+    MIN_FIRMWARE_CORE_REV,
 )
 from ..hub_registry import peek_global_config
 from ..identity import (
@@ -110,7 +108,7 @@ BLE_TAG_IDENTITY_KEYS: Final[tuple[str, ...]] = (
     "ble_target_address",
 )
 
-FACTORY_RESET_MIN_SDK_REV: Final = MIN_FIRMWARE_SDK_REV
+FACTORY_RESET_MIN_CORE_REV: Final = MIN_FIRMWARE_CORE_REV
 
 _FLAG_ERRORS: Final[dict[str, str]] = {
     "reset_nothing_selected": "Select what to reset: the device settings, the Latter options, or both.",
@@ -215,6 +213,10 @@ def coordinator_supports_pref(coordinator: Any, spec: DevicePrefSpec) -> bool:
     """Return True when `coordinator`'s hardware supports preference `spec`."""
     if getattr(coordinator, "is_ble_tag", False):
         return False
+    if spec.capability == "display_or_audio":
+        return bool(getattr(coordinator, "has_display", True)) or bool(
+            getattr(coordinator, "has_speaker", True)
+        )
     checks = _CAPABILITY_ATTRS.get(spec.capability)
     if checks is None:
         return True
@@ -464,7 +466,7 @@ def _normalize_group_entry(raw: Mapping[str, Any] | dict[str, Any]) -> dict[str,
         for k, v in raw["device_config"].items():
             if k in GROUP_ALL_DEVICE_KEYS and v is not None:
                 base_dev[k] = _normalize_group_config_value(k, v)
-    out_entry: dict[str, Any] = {
+    return {
         "id": gid,
         "name": str((builtin_def["name"] if builtin_def else raw.get("name")) or gid),
         "description": str((builtin_def["description"] if builtin_def else raw.get("description")) or ""),
@@ -473,58 +475,12 @@ def _normalize_group_entry(raw: Mapping[str, Any] | dict[str, Any]) -> dict[str,
         "include_interface": include_interface,
         "device_config": base_dev,
     }
-    if builtin_def is not None:
-        out_entry["preset_version"] = BUILTIN_GROUP_PRESET_VERSION
-    return out_entry
 
 
 def reset_builtin_group_entry(group_id: str) -> dict[str, Any] | None:
     """Return a freshly normalized default baseline for built-in `group_id`, or `None` if custom."""
     bdef = _BUILTIN_GROUPS_BY_ID.get(str(group_id or "").strip())
     return _normalize_group_entry(bdef) if bdef is not None else None
-
-
-def upgrade_stored_builtin_groups(global_cfg: dict[str, Any]) -> bool:
-    """Refresh stored built-in groups when `builtin_group_preset_version` advances; preserve custom groups."""
-    if global_cfg.get(CONF_BUILTIN_GROUP_PRESET_VERSION) == BUILTIN_GROUP_PRESET_VERSION:
-        return False
-    raw_groups = global_cfg.get(CONF_DEVICE_GROUPS)
-    if isinstance(raw_groups, list) and raw_groups:
-        custom_entries: list[dict[str, Any]] = []
-        seen_custom: set[str] = set()
-        for item in raw_groups:
-            if not isinstance(item, dict) or item.get("builtin") is True:
-                continue
-            gid = str(item.get("id") or "").strip()
-            if gid and gid != DEFAULT_DEVICE_GROUP and gid not in _BUILTIN_GROUPS_BY_ID and gid not in seen_custom:
-                seen_custom.add(gid)
-                custom_entries.append(_normalize_group_entry(item))
-        global_cfg[CONF_DEVICE_GROUPS] = [
-            _normalize_group_entry(g) for g in DEFAULT_DEVICE_GROUPS
-        ] + custom_entries
-    global_cfg[CONF_BUILTIN_GROUP_PRESET_VERSION] = BUILTIN_GROUP_PRESET_VERSION
-    return True
-
-
-async def async_sync_coordinators_to_builtin_presets(
-    hass: HomeAssistant, coordinators: Iterable[Any]
-) -> int:
-    """Sync Devices currently assigned to built-in groups onto upgraded built-in baselines."""
-    groups_by_id = {
-        g["id"]: g for g in get_device_groups(hass) if g.get("id") in _BUILTIN_GROUPS_BY_ID
-    }
-    synced_total = 0
-    for gid, grp in groups_by_id.items():
-        matching = [
-            c
-            for c in coordinators
-            if not getattr(c, "is_ble_tag", False)
-            and str((getattr(c, "device_data", {}) or {}).get("device_group") or "").strip() == gid
-        ]
-        if matching:
-            res = await async_apply_group_baseline_to_coordinators(hass, grp, matching)
-            synced_total += int(res.get("updated_devices", 0))
-    return synced_total
 
 
 def get_device_groups(hass: HomeAssistant) -> list[dict[str, Any]]:
@@ -638,7 +594,7 @@ def resolve_effective_device_group(
     raw_grp = str(dev_data.get("device_group") or DEFAULT_DEVICE_GROUP).strip()
     if not raw_grp or raw_grp == DEFAULT_DEVICE_GROUP:
         return DEFAULT_DEVICE_GROUP
-    if raw_grp in ("pocket_carry", "handhelds", "wearables") and not bool(
+    if raw_grp in ("pocket_carry", "handhelds", "wearables", "wall_panels") and not bool(
         getattr(coordinator, "has_display", True)
     ):
         return DEFAULT_DEVICE_GROUP
@@ -807,9 +763,6 @@ def detect_hardware_defaults(
     )
 
 
-_detect_hardware_defaults = detect_hardware_defaults
-
-
 def device_option_defaults(
     hass: HomeAssistant,
     dev: dr.DeviceEntry | None,
@@ -891,12 +844,12 @@ async def async_reset_device(
         if reset_action is None:
             raise ServiceValidationError(
                 f"{coordinator.device_title} doesn't offer Reset to defaults. Update its firmware "
-                f"to Latter SDK rev {FACTORY_RESET_MIN_SDK_REV} or later.",
+                f"to Latter Core rev {FACTORY_RESET_MIN_CORE_REV} or later.",
                 translation_domain=DOMAIN,
                 translation_key="factory_reset_unsupported",
                 translation_placeholders={
                     "device": coordinator.device_title,
-                    "sdk_rev": str(FACTORY_RESET_MIN_SDK_REV),
+                    "core_rev": str(FACTORY_RESET_MIN_CORE_REV),
                 },
             )
 

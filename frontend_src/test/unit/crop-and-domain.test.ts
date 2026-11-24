@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   DEFAULT_GAMES_ITEMS,
+  DEVICE_PREF_SPECS_MAP,
   GAMES_ITEMS_CATALOG,
   HOME_CATEGORIES_CATALOG,
   NATIVE_DOCK_APP_TOKENS,
@@ -159,8 +160,17 @@ describe("crop-math, alarms, world-clocks, MDI catalog & combobox ranking", () =
     );
   });
 
-  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 47", () => {
-    assert.equal(STUDIO_REV, 47);
+  it("maintains 7,447-icon MDI firmware parity, solid route preview icons, style filters, synonyms, and STUDIO_REV = 48", () => {
+    assert.equal(STUDIO_REV, 48);
+    const glassSpec = DEVICE_PREF_SPECS_MAP.glass_style;
+    assert.ok(glassSpec);
+    assert.equal(glassSpec.domain, "select");
+    assert.equal(glassSpec.default, "Auto");
+    assert.deepEqual(glassSpec.options, ["Auto", "Clear", "Dark"]);
+    assert.equal(glassSpec.section, "display");
+    assert.equal(glassSpec.group_tier, "display");
+    assert.equal(glassSpec.capability, "display");
+    assert.equal(DEVICE_PREF_SPECS_MAP.do_not_disturb?.capability, "display_or_audio");
     assert.equal(DEFAULT_GAMES_ITEMS, "blocks,snake,drop_four,marbles,archery,bricks,chomp");
     assert.deepEqual(
       GAMES_ITEMS_CATALOG.map((g) => [g.token, g.capability ?? null]),

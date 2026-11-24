@@ -38,10 +38,12 @@ from tests.helpers.ha_setup import (
     add_mock_entry,
     ensure_area,
     flush_debouncers,
+    get_test_manifest,
     make_subentry_dict,
     prepare_latter_dependencies,
     register_device,
     register_entity,
+    seed_device_hello_manifest,
 )
 
 
@@ -654,6 +656,8 @@ async def test_payload_device_system_catalog_online_and_edge_branches(
             ),
         ],
     )
+    await seed_device_hello_manifest(hass, "sub_square", get_test_manifest(hass, wall_dev.id))
+    await seed_device_hello_manifest(hass, "sub_stationary", get_test_manifest(hass, stat_dev.id))
     assert await hass.config_entries.async_setup(entry.entry_id) is True
     await hass.async_block_till_done()
     await flush_debouncers(hass)

@@ -32,9 +32,11 @@ from tests.conftest import LATTER_DIR
 from tests.helpers import (
     add_mock_entry,
     ensure_area,
+    get_test_manifest,
     make_subentry_dict,
     mock_service,
     prepare_latter_dependencies,
+    seed_device_hello_manifest,
     seed_esphome_device,
 )
 
@@ -230,6 +232,7 @@ async def test_navigate_single_device_fallback_and_headless_rejection(
         subentries_data=[sub_desk],
         unique_id=DOMAIN,
     )
+    await seed_device_hello_manifest(hass, "sub_desk", get_test_manifest(hass, desk_dev.id))
     assert await hass.config_entries.async_setup(entry.entry_id) is True
     await hass.async_block_till_done()
 
@@ -281,6 +284,7 @@ async def test_navigate_single_device_fallback_and_headless_rejection(
         subentries_data=[sub_headless],
         unique_id=f"{DOMAIN}_2",
     )
+    await seed_device_hello_manifest(hass, "sub_headless", get_test_manifest(hass, headless_dev.id))
     assert await hass.config_entries.async_setup(entry2.entry_id) is True
     await hass.async_block_till_done()
 
@@ -414,6 +418,10 @@ async def test_navigate_multi_target_all_occupied_person_and_offline_skip(
         subentries_data=subentries,
         unique_id=DOMAIN,
     )
+    await seed_device_hello_manifest(hass, "sub_desk", get_test_manifest(hass, desk_dev.id))
+    await seed_device_hello_manifest(hass, "sub_bedroom", get_test_manifest(hass, bed_dev.id))
+    await seed_device_hello_manifest(hass, "sub_pocket", get_test_manifest(hass, pocket_dev.id))
+    await seed_device_hello_manifest(hass, "sub_headless", get_test_manifest(hass, headless_dev.id))
     assert await hass.config_entries.async_setup(entry.entry_id) is True
     await hass.async_block_till_done()
 

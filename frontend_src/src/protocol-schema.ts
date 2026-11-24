@@ -1,7 +1,7 @@
-// AUTO-GENERATED FROM protocol/latter_v3.json BY tools/gen_protocol.py — DO NOT EDIT MANUALLY.
+// AUTO-GENERATED FROM protocol_v3.json + studio_contract.json BY tools/gen_studio_schema.py — DO NOT EDIT MANUALLY.
 
 export const PROTOCOL_CONTRACT_VERSION = 3;
-export const STUDIO_REV = 47;
+export const STUDIO_REV = 48;
 
 export const ALLOWED_DEVICE_ACTIONS: ReadonlyArray<string> = [
   "restart",
@@ -347,7 +347,8 @@ export const DEVICE_PREF_SPECS_CATALOG: ReadonlyArray<DevicePrefSpecItem> = [
   {key: "camera_doorbell_popup", label: "Doorbell ring popup", domain: "select", default: "Snapshot", section: "interface", group_tier: "interface", options: ["Snapshot", "Live Video"], min: null, max: null, step: null, unit: "", capability: "hw_jpeg" },
   {key: "screensaver_photo_clock", label: "Show subtle clock", domain: "switch", default: false, section: "display", group_tier: "display", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
   {key: "weather_app_background", label: "Weather app background", domain: "switch", default: true, section: "interface", group_tier: "interface", options: [], min: null, max: null, step: null, unit: "", capability: "display" },
-  {key: "do_not_disturb", label: "Do not disturb", domain: "switch", default: false, section: "power", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "do_not_disturb", label: "Do not disturb", domain: "switch", default: false, section: "power", group_tier: null, options: [], min: null, max: null, step: null, unit: "", capability: "display_or_audio" },
+  {key: "glass_style", label: "Glass Style", domain: "select", default: "Auto", section: "display", group_tier: "display", options: ["Auto", "Clear", "Dark"], min: null, max: null, step: null, unit: "", capability: "display" },
 ];
 
 export const DEVICE_PREF_SPECS_MAP: Readonly<Record<string, DevicePrefSpecItem>> = Object.fromEntries(DEVICE_PREF_SPECS_CATALOG.map((s) => [s.key, s]));

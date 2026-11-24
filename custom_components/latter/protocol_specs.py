@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 
 class WorldClockZoneDict(TypedDict, total=False):
-    """Schema entry from `protocol_v3.json` `world_clock_zones` / `world_clock_aliases`."""
+    """Schema entry from `studio_contract.json` `world_clock_zones` / `world_clock_aliases`."""
 
     iana: str
     city: str
@@ -52,10 +52,15 @@ _ZONEINFO_CACHE: dict[str, ZoneInfo | None] = {}
 PROTOCOL_V3_DATA: Final[dict[str, Any]] = json.loads(
     (Path(__file__).resolve().parent / "protocol_v3.json").read_text(encoding="utf-8")
 )
+STUDIO_CONTRACT_DATA: Final[dict[str, Any]] = json.loads(
+    (Path(__file__).resolve().parent / "studio_contract.json").read_text(
+        encoding="utf-8"
+    )
+)
 PROTOCOL_V3_DOMAINS: Final[tuple[str, ...]] = tuple(
     PROTOCOL_V3_DATA["domains"].keys()
 )
-STUDIO_CONTRACT: Final[dict[str, Any]] = PROTOCOL_V3_DATA["studio_contract"]
+STUDIO_CONTRACT: Final[dict[str, Any]] = STUDIO_CONTRACT_DATA["studio_contract"]
 
 SYSTEM_COMMANDS: Final[frozenset[str]] = frozenset(STUDIO_CONTRACT["system_commands"])
 DEVICE_COMMANDS: Final[frozenset[str]] = frozenset(STUDIO_CONTRACT["device_commands"])
@@ -71,6 +76,7 @@ PrefCapability = Literal[
     "display",
     "display_imu",
     "display_battery",
+    "display_or_audio",
     "hw_jpeg",
     "mic",
     "speaker",
@@ -131,10 +137,10 @@ MAX_WORLD_CLOCKS: Final = 4
 DEFAULT_ALARMS_SUMMARY: Final = "07:00|0|1;08:30|0|2;09:00|0|2"
 
 WORLD_CLOCK_ZONES: Final[tuple[WorldClockZoneDict, ...]] = tuple(
-    PROTOCOL_V3_DATA["world_clock_zones"]
+    STUDIO_CONTRACT_DATA["world_clock_zones"]
 )
 WORLD_CLOCK_CATALOG: Final[tuple[WorldClockZoneDict, ...]] = WORLD_CLOCK_ZONES + tuple(
-    PROTOCOL_V3_DATA.get("world_clock_aliases", ())
+    STUDIO_CONTRACT_DATA.get("world_clock_aliases", ())
 )
 WORLD_CLOCK_CATALOG_MAP: Final[dict[str, WorldClockZoneDict]] = {
     str(item["iana"]): item for item in WORLD_CLOCK_CATALOG
@@ -956,20 +962,32 @@ def normalize_pinned_items(
 # Protocol v3 Device Preference Specs & Value Resolver
 # ---------------------------------------------------------------------------
 
+_DEVICE_PREF_UI: Final[dict[str, dict[str, Any]]] = STUDIO_CONTRACT_DATA[
+    "device_pref_ui"
+]
+
+_PROTOCOL_PREF_KEYS: Final[set[str]] = {
+    str(raw["key"]) for raw in PROTOCOL_V3_DATA["device_pref_specs"]
+}
+if set(_DEVICE_PREF_UI.keys()) != _PROTOCOL_PREF_KEYS:
+    raise RuntimeError(
+        "studio_contract.json device_pref_ui keys do not match protocol_v3.json device_pref_specs"
+    )
+
 DEVICE_PREF_SPECS: Final[tuple[DevicePrefSpec, ...]] = tuple(
     DevicePrefSpec(
         key=str(raw["key"]),
-        label=str(raw["label"]),
+        label=str(_DEVICE_PREF_UI[str(raw["key"])]["label"]),
         domain=raw["domain"],
         default=raw["default"],
-        section=str(raw["section"]),
+        section=str(_DEVICE_PREF_UI[str(raw["key"])]["section"]),
         capability=raw["capability"],
-        group_tier=raw.get("group_tier"),
+        group_tier=_DEVICE_PREF_UI[str(raw["key"])].get("group_tier"),
         options=tuple(str(o) for o in (raw.get("options") or ())),
         min_val=int(raw["min"]) if raw.get("min") is not None else None,
         max_val=int(raw["max"]) if raw.get("max") is not None else None,
         step=int(raw["step"]) if raw.get("step") is not None else None,
-        unit=str(raw.get("unit") or ""),
+        unit=str(_DEVICE_PREF_UI[str(raw["key"])].get("unit") or ""),
     )
     for raw in PROTOCOL_V3_DATA["device_pref_specs"]
 )
@@ -987,6 +1005,9 @@ START_SCREEN_OPTIONS: Final[tuple[str, ...]] = tuple(
 )
 RETURN_TO_HOME_TIMEOUT_OPTIONS: Final[tuple[str, ...]] = tuple(
     DEVICE_PREF_SPEC_MAP["return_to_home_timeout"].options
+)
+GLASS_STYLE_OPTIONS: Final[tuple[str, ...]] = tuple(
+    DEVICE_PREF_SPEC_MAP["glass_style"].options
 )
 
 

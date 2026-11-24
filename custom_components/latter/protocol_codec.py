@@ -8,7 +8,7 @@ import hashlib
 import math
 import re
 import secrets
-from typing import Any, Final
+from typing import Any, Final, SupportsIndex, overload
 import unicodedata
 
 from .protocol_specs import (
@@ -187,6 +187,27 @@ def unescape_v3_subfield(val: str | None) -> str:
 class V3Records(tuple[Sequence[Any], ...]):
     """A Protocol v3 `records` field: a tuple of records, each a sequence of subfields."""
 
+    _sanitized: bool = False
+
+    @classmethod
+    def from_sanitized(cls, rows: Iterable[Sequence[str]]) -> V3Records:
+        """Build `V3Records` whose subfields are already escaped via `sanitize_v3_subfield`."""
+        inst = cls(rows)
+        inst._sanitized = True
+        return inst
+
+    @overload
+    def __getitem__(self, key: SupportsIndex, /) -> Sequence[Any]: ...
+
+    @overload
+    def __getitem__(self, key: slice[Any, Any, Any], /) -> V3Records: ...
+
+    def __getitem__(self, key: SupportsIndex | slice[Any, Any, Any], /) -> Any:
+        result = super().__getitem__(key)
+        if isinstance(key, slice):
+            return V3Records.from_sanitized(result) if self._sanitized else V3Records(result)
+        return result
+
 
 def _is_control_or_sep_char(ch: str) -> bool:
     code = ord(ch)
@@ -194,18 +215,21 @@ def _is_control_or_sep_char(ch: str) -> bool:
 
 
 def sanitize_v3_subfield(val: object, max_len: int | None = None) -> str:
-    """Return one subfield of a records field: no separators, no control characters, capped."""
+    """Return one escaped, delimiter-safe records subfield (`\\` -> `\\\\`, `|` -> `\\p`, `;` -> `\\s`)."""
     if val is None:
         return ""
     if isinstance(val, bool):
         return "1" if val else "0"
-    s = str(val).replace(SUBFIELD_SEP, "/")
-    s = " ".join("".join(" " if _is_control_or_sep_char(ch) else ch for ch in s).split())
-    return s[:max_len].rstrip() if max_len is not None and len(s) > max_len else s
+    s = " ".join("".join(" " if _is_control_or_sep_char(ch) else ch for ch in str(val)).split())
+    if max_len is not None and len(s) > max_len:
+        s = s[:max_len].rstrip()
+    return s.replace("\\", "\\\\").replace("|", "\\p").replace(";", "\\s")
 
 
 def encode_v3_records(records: Iterable[Sequence[object]]) -> str:
     """Encode records as `0x1E`-joined records of `|`-joined, sanitized subfields."""
+    if isinstance(records, V3Records) and records._sanitized:
+        return RECORD_SEP.join(SUBFIELD_SEP.join(str(sub) for sub in rec) for rec in records)
     return RECORD_SEP.join(
         SUBFIELD_SEP.join(sanitize_v3_subfield(sub) for sub in rec) for rec in records
     )
@@ -220,7 +244,7 @@ def build_v3_records(
         if len(out) >= max_records:
             break
         out.append(tuple(sanitize_v3_subfield(val, cap) for val, cap in zip(row, caps, strict=True)))
-    return V3Records(out)
+    return V3Records.from_sanitized(out)
 
 
 def _whole_number(val: object) -> str:
@@ -466,7 +490,7 @@ def calendar_agenda_records(events: Iterable[Mapping[str, Any]], today: date) ->
                 "1" if all_day else "0",
             )
         )
-    return V3Records(out)
+    return V3Records.from_sanitized(out)
 
 
 def calendar_sources_records(sources: Iterable[Mapping[str, Any]]) -> V3Records:
@@ -498,7 +522,7 @@ def calendar_locations_records(locations: Iterable[object]) -> V3Records:
             rows.append((clean,))
             if len(rows) >= CALENDAR_LOCATIONS_MAX:
                 break
-    return V3Records(rows)
+    return V3Records.from_sanitized(rows)
 
 
 def _sanitize_window_field(val: object, max_len: int | None = None) -> str:
@@ -699,7 +723,7 @@ def pack_device_prefs_fields(
     supports_hw_jpeg: bool = True,
     do_not_disturb: bool | None = None,
 ) -> tuple[Any, ...]:
-    """Return the ordered body fields (`indices 3..71`) for Protocol v3 `device_prefs`."""
+    """Return the ordered body fields (`indices 3..72`) for Protocol v3 `device_prefs`."""
     home_enabled = bool(resolve_device_pref_value(cfg, "home_screen_enabled"))
     clean_hex = str(custom_color_hex or "").strip().upper()
     if clean_hex and not _HEX_RGB_RE.fullmatch(clean_hex):

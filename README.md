@@ -12,7 +12,7 @@ Most ESPHome display projects hardcode entity IDs into YAML—a renamed light, a
 | Repository | Runs on | Responsibility |
 | :--- | :--- | :--- |
 | **ha-latter** *(this repo)* | Home Assistant | Integration and **Latter Studio**: live entity mapping, BLE Area presence & sensor fusion, signed ESP32 media proxy, and 6 public `latter.*` services. |
-| **[esphome-latter-core](https://github.com/slampton/esphome-latter-core)** | ESP32-S3 / ESP32-P4 | Compiled C++20 firmware for five Waveshare touch displays, [Web Installer](https://slampton.github.io/esphome-latter-core/), and the Latter Core SDK. |
+| **[esphome-latter-core](https://github.com/slampton/esphome-latter-core)** | ESP32-S3 / ESP32-P4 | Compiled C++20 companion OS for five Waveshare touch displays, [Web Installer](https://slampton.github.io/esphome-latter-core/), board-porting catalog, and standalone `latter_beacon`. |
 
 You need both repos for the touch displays. If you only want BLE Area presence and occupancy fusion from the Bluetooth proxies, phones, watches, and beacons you already own, `ha-latter` works standalone with zero displays configured.
 
@@ -43,7 +43,7 @@ Latter detects your doorbell's ring entity automatically, wakes displays for 20 
 ### Latter Studio
 An admin-only sidebar control plane where every change pushes live without reflashing (and queues automatically for sleeping battery Devices):
 - **System scope:** shared Home Hub & weather entities (searchable WAI-ARIA comboboxes), cameras (on-demand signed previews) & doorbell audio filter, dedicated **Photos** library (`/latter/system/photos`: 6 built-in presets, 15 MB multi-photo uploads with interactive crop staging, Home Assistant `/media` folder import, and collections), 24-swatch custom color library, TV/AV remotes & remote groups, operational Device groups + staged **Batch controls**, live WebSocket BLE calibration + 1-click 7-day illuminance auto-calibration, doorbell speaker testing, HMAC key rotation, JSON backup/restore, and **Support & diagnostics**.
-- **Per-Device scope:** **Overview** (status tiles, quick actions, sleep-safe **Do not disturb**, **Open in Home Assistant**, assignments, and 2-way **Timers & alarms**), **Display** (**Screensaver** including *Photo frame*, **Voice assistant**, **Brightness** including per-Area *Ambient light*, **Colors**, and **Wallpapers**), **Interface** (Single-App kiosk mode, **Home screen**, drag-and-drop **App Dock**, and per-app configuration modals for **Pinned**, **Home hub**, **Cameras**, **Area control**, **Music**, **Remote**, **Sky & weather**, **Time**, **Calendar**, **Clock face**, **Tools**, and **Games**), **Audio**, **Power**, **Presence**, and **Tools** (**Developer & telemetry**).
+- **Per-Device scope:** **Overview** (status tiles, outdated-firmware warnings, quick actions, sleep-safe **Do not disturb**, **Open in Home Assistant**, assignments, and 2-way **Timers & alarms**), **Display** (**Screensaver** including *Photo frame*, **Voice assistant**, **Brightness** including per-Area *Ambient light*, **Colors** + adaptive **Glass style** `Auto` / `Clear` / `Dark`, and **Wallpapers**), **Interface** (Single-App kiosk mode, **Home screen**, drag-and-drop **App Dock**, and per-app configuration modals for **Pinned**, **Home hub**, **Cameras**, **Area control**, **Music**, **Remote**, **Sky & weather**, **Time**, **Calendar**, **Clock face**, **Tools**, and **Games**), **Audio**, **Power**, **Presence**, and **Tools** (**Developer & telemetry**).
 
 ![Latter Studio — System Overview](docs/media/studio-system-overview.png)
 
@@ -85,7 +85,7 @@ flowchart LR
 ```
 
 - **Zero-Privilege Bound RPC & Protocol v3 Push.** Displays bind strictly by `esphome_device_id` and hardware MAC (`via_device_id`), requiring neither `allow_service_calls` nor `device_slug` YAML substitutions. Outbound taps stream over an auto-hidden `System: RPC Outbox` entity into a private `LatterRpcDispatcher`, while inbound state pushes across 7 content-hashed domains (`area_context`, `active_media`, `remote_config`, `weather_forecast`, `calendar_agenda`, `device_prefs`, `shortcuts`) via `latter_push_v3` and `latter_set_slots`. Signed URLs and preference payloads stay off Home Assistant's `state_changed` bus and SQLite recorder.
-- **Sleep-Safe Preferences & `O(1)` Area Index.** All 63 typed device preferences persist in config subentries and reconcile offline NVS edits on `device_hello`, so Studio and Device Groups work while battery handhelds hibernate. Home Assistant exposes a curated 8-platform entity surface (screen light, screensaver/DND/bedtime switches, dismiss/find buttons, group/wake-word selects, alert volume, timer/alarm states, Area occupancy, and metric BLE distance). Runtime lookups run against an incremental `O(1)` `AreaStateIndex` (`hub_registry.py`) instead of scanning `hass.states.async_all()`.
+- **Sleep-Safe Preferences & `O(1)` Area Index.** All 65 typed device preferences persist in config subentries and reconcile offline NVS edits on `device_hello`, so Studio and Device Groups work while battery handhelds hibernate. Home Assistant exposes a curated 8-platform entity surface (screen light, screensaver/DND/bedtime switches, dismiss/find buttons, group/wake-word selects, alert volume, timer/alarm states, Area occupancy, and metric BLE distance) with automatic capability reconciliation. Runtime lookups run against an incremental `O(1)` `AreaStateIndex` (`hub_registry.py`) instead of scanning `hass.states.async_all()`.
 - **ESP32-Native Signed Local Media Proxy.** ESP-IDF's JPEG decoder rejects progressive JPEGs and cannot resolve `.local` mDNS hostnames. Latter re-encodes local artwork, `720p` wallpapers, camera snapshots, and live single or 2×2 MJPEG streams as baseline 4:2:0 JPEG on executor threads, applying circular masks for round screens. Every media endpoint serves over Home Assistant's numeric LAN IPv4 with constant-time, parameter-scoped HMAC signatures (`http/`).
 
 ---
@@ -101,7 +101,7 @@ flowchart LR
 | **[Entities](docs/reference/entities.md)** | The 3-tier entity architecture across all 8 Home Assistant platforms, occupancy attributes, and `latter_event` payloads |
 | **[HTTP API](docs/reference/http-api.md)** | Signed baseline-JPEG & PCM/FLAC endpoints, Bearer wallpaper upload, and Studio WebSocket architecture |
 | **[Device protocol](https://github.com/slampton/esphome-latter-core/blob/main/docs/device-protocol.md)** | Discovery, Manifest v2, 7-domain Protocol v3 push, and `System: RPC Outbox` framing |
-| **[Building a GUI](https://github.com/slampton/esphome-latter-core/blob/main/docs/building-a-gui.md)** | Writing a custom touch or rotary UI on top of `esphome-latter-core` |
+| **[Porting hardware](https://github.com/slampton/esphome-latter-core/blob/main/docs/porting-hardware.md)** | Bringing up a new ESP32-S3 or ESP32-P4 display board on `esphome-latter-core` (`latter_core:` schema & `check_boards.py --external`) |
 
 ---
 

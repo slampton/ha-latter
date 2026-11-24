@@ -105,6 +105,7 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
         "switch.pocket_assistant_do_not_disturb",
         "switch.pocket_assistant_screensaver",
         "select.pocket_assistant_device_group",
+        "select.pocket_assistant_glass_style",
         "select.pocket_assistant_wake_word_mode",
         "number.pocket_assistant_alert_volume",
         "button.pocket_assistant_find_my_device",

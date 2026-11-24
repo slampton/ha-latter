@@ -6,13 +6,10 @@ import json
 from typing import Any
 
 from custom_components.latter.const import (
-    CONF_DEVICE_GROUP,
     CONF_DEVICE_GROUPS,
     STUDIO_REV,
 )
 from custom_components.latter.groups.device_groups import (
-    BUILTIN_GROUP_PRESET_VERSION,
-    CONF_BUILTIN_GROUP_PRESET_VERSION,
     get_device_groups,
 )
 from custom_components.latter.hub_registry import get_global_config
@@ -378,14 +375,14 @@ async def test_multi_entity_home_hub_settings_and_strict_garage_cover_filtering(
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
-async def test_builtin_group_reset_preset_and_v2_preset_migration(
+async def test_builtin_group_reset_preset_and_reload_normalization(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify `update_group_baseline(reset_to_default=True)` and one-time `BUILTIN_GROUP_PRESET_VERSION` sync (`D-067`)."""
+    """Verify `update_group_baseline(reset_to_default=True)` and clean group normalization without legacy preset_version shims."""
     entry, _sys_obj, coord = await setup_latter_hub(hass, stationary=1)
     conn = make_ws_connection(hass)
 
-    # Wall & Desk Panels default: `screensaver_mode == "Never"`, `docked_idle_timeout == "Never"`
+    # Wall & Desk Panels default: `screensaver_mode == "Never"`, `docked_idle_timeout == "Never"`, `glass_style == "Auto"`
     await call_ws(
         hass,
         conn,
@@ -400,6 +397,7 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     assert coord.device_group == "wall_panels"
     assert coord.get_device_pref("screensaver_mode") == "Never"
     assert coord.get_device_pref("docked_idle_timeout") == "Never"
+    assert coord.get_device_pref("glass_style") == "Auto"
 
     # Mutate `wall_panels` baseline, then reset it via `reset_to_default: True`
     await call_ws(
@@ -411,13 +409,18 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
         payload={
             "group_id": "wall_panels",
             "include_display": True,
-            "config": {"screensaver_mode": "Always", "docked_idle_timeout": "5 min"},
+            "config": {
+                "screensaver_mode": "Always",
+                "docked_idle_timeout": "5 min",
+                "glass_style": "Dark",
+            },
         },
         studio_rev=STUDIO_REV,
     )
     assert not conn.errors
     assert coord.get_device_pref("screensaver_mode") == "Always"
     assert coord.get_device_pref("docked_idle_timeout") == "5 min"
+    assert coord.get_device_pref("glass_style") == "Dark"
 
     await call_ws(
         hass,
@@ -456,16 +459,9 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
     assert conn.errors[-1][1] == "not_allowed"
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
-    # Simulate an existing pre-v2 `.storage/latter.site` reload where `handhelds` had stale `wake_word_mode = "Always On"`
+    # Reload with stored custom group + fresh builtin defaults (no preset_version shim!)
     global_cfg = get_global_config(hass)
-    global_cfg.pop(CONF_BUILTIN_GROUP_PRESET_VERSION, None)
     global_cfg[CONF_DEVICE_GROUPS] = [
-        {
-            "id": "handhelds",
-            "name": "Handhelds",
-            "builtin": True,
-            "device_config": {"wake_word_mode": "Always On"},
-        },
         {
             "id": "nightstands",
             "name": "Nightstands",
@@ -497,40 +493,28 @@ async def test_builtin_group_reset_preset_and_v2_preset_migration(
         },
     ]
     sub = next(iter(entry.subentries.values()))
-    hass.config_entries.async_update_subentry(
-        entry,
-        sub,
-        data={
-            **sub.data,
-            CONF_DEVICE_GROUP: "handhelds",
-            "wake_word_mode": "Always On",
-        },
-    )
-
     assert await hass.config_entries.async_setup(entry.entry_id) is True
     await hass.async_block_till_done()
-    assert BUILTIN_GROUP_PRESET_VERSION == 4
-    assert global_cfg[CONF_BUILTIN_GROUP_PRESET_VERSION] == BUILTIN_GROUP_PRESET_VERSION
-    upgraded_groups = {g["id"]: g for g in get_device_groups(hass)}
+    assert "builtin_group_preset_version" not in global_cfg
+    reloaded_groups = {g["id"]: g for g in get_device_groups(hass)}
+    for grp in reloaded_groups.values():
+        assert "preset_version" not in grp
     assert (
-        upgraded_groups["handhelds"]["device_config"]["wake_word_mode"] == "Docked Only"
+        reloaded_groups["handhelds"]["device_config"]["wake_word_mode"] == "Docked Only"
     )
-    assert upgraded_groups["handhelds"]["device_config"]["day_brightness"] == 90
-    assert upgraded_groups["handhelds"]["device_config"]["night_brightness"] == 35
-    assert upgraded_groups["handhelds"]["device_config"]["bedtime_brightness"] == 15
-    assert upgraded_groups["wearables"]["device_config"]["day_brightness"] == 80
-    assert upgraded_groups["wearables"]["device_config"]["night_brightness"] == 25
-    assert upgraded_groups["wearables"]["device_config"]["bedtime_brightness"] == 15
+    assert reloaded_groups["handhelds"]["device_config"]["day_brightness"] == 90
+    assert reloaded_groups["handhelds"]["device_config"]["night_brightness"] == 35
+    assert reloaded_groups["handhelds"]["device_config"]["bedtime_brightness"] == 15
+    assert reloaded_groups["wearables"]["device_config"]["day_brightness"] == 80
+    assert reloaded_groups["wearables"]["device_config"]["night_brightness"] == 25
+    assert reloaded_groups["wearables"]["device_config"]["bedtime_brightness"] == 15
     assert (
-        upgraded_groups["nightstands"]["device_config"]["wake_word_mode"] == "Disabled"
+        reloaded_groups["nightstands"]["device_config"]["wake_word_mode"] == "Disabled"
     )
-    assert upgraded_groups["nightstands"]["device_config"]["dock_items"][0]["badge_style"] == ""
-    assert upgraded_groups["nightstands"]["device_config"]["dock_items"][0]["accent"] == ""
-    assert upgraded_groups["nightstands"]["device_config"]["pinned_items"][0]["badge_style"] == ""
-    assert upgraded_groups["nightstands"]["device_config"]["pinned_items"][0]["accent"] == ""
+    assert reloaded_groups["nightstands"]["device_config"]["dock_items"][0]["badge_style"] == ""
+    assert reloaded_groups["nightstands"]["device_config"]["dock_items"][0]["accent"] == ""
+    assert reloaded_groups["nightstands"]["device_config"]["pinned_items"][0]["badge_style"] == ""
+    assert reloaded_groups["nightstands"]["device_config"]["pinned_items"][0]["accent"] == ""
     reloaded_coord = entry.runtime_data.coordinators[sub.subentry_id]
-    assert reloaded_coord.get_device_pref("wake_word_mode") == "Docked Only"
-    assert reloaded_coord.get_device_pref("night_brightness") == 35
-    assert reloaded_coord.get_device_pref("bedtime_brightness") == 15
-    assert reloaded_coord.device_group == "handhelds"
+    assert reloaded_coord.device_group == "wall_panels"
     assert await hass.config_entries.async_unload(entry.entry_id) is True

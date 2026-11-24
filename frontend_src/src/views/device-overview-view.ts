@@ -9,6 +9,7 @@ import {
   renderCard,
   renderDeviceEntityRow,
   renderDeviceOfflineBanner,
+  renderFirmwareOutdatedBanner,
 } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
@@ -48,6 +49,7 @@ export function renderDeviceOverviewView(store: StudioStore): TemplateResult {
 
   return html`<section id="view-dashboard" class="stack">
     ${renderDeviceOfflineBanner(store)}
+    ${renderFirmwareOutdatedBanner(store)}
 
     ${deviceIssues.length
       ? html`<div

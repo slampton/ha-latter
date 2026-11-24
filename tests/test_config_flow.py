@@ -19,7 +19,6 @@ from custom_components.latter.config_flow import (
     LatterConfigFlow,
     _apply_onboarding_profile_and_defaults,
     _build_schema,
-    _detect_hardware_defaults as _cf_detect_hardware_defaults,
 )
 from custom_components.latter.const import (
     CONF_ASSIGNED_PERSON,
@@ -42,6 +41,7 @@ from custom_components.latter.groups.device_groups import (
 from custom_components.latter.hub_registry import get_domain_data
 from tests.helpers.ha_setup import (
     add_mock_entry,
+    get_test_manifest,
     make_subentry,
     prepare_latter_dependencies,
     register_device,
@@ -140,7 +140,8 @@ async def test_hub_config_flow_user_discovery_and_single_instance(
     assert len(subs) == 1
     assert subs[0].data[CONF_ESPHOME_DEVICE_ID] == dev.id
     assert subs[0].data["mac"] == mac
-    assert subs[0].data[CONF_DEVICE_GROUP] == "wall_panels"
+    # Pre-hello unbound device with explicit `native_ble_tracking=False` overrides default `handhelds` -> `custom`
+    assert subs[0].data[CONF_DEVICE_GROUP] == "custom"
 
     # Once hub entry exists, second user flow and discovery flow abort
     second = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
@@ -210,7 +211,8 @@ async def test_device_and_ble_tag_subentry_flows_and_hardware_replacement(
     )
     await hass.async_block_till_done()
     assert created["type"] == FlowResultType.CREATE_ENTRY
-    assert created["data"][CONF_DEVICE_GROUP] == "wearables"
+    # Pre-hello unbound device with `latter_set_slots` defaults to `handhelds` until `device_hello` reports traits
+    assert created["data"][CONF_DEVICE_GROUP] == "handhelds"
 
     # Reconfigure sub_pocket with replacement hardware dev3 -> migrates Latter DeviceEntry MAC identifier in-place
     dev3, mac3 = make_esphome_device(
@@ -344,6 +346,8 @@ async def test_onboarding_smart_area_and_roaming_defaults(
     hass: Any, make_esphome_device: Any
 ) -> None:
     """Verify D-032 trait + Area onboarding smart defaults and explicit user overrides."""
+    assert LatterConfigFlow.VERSION == 1
+
     # 1) Stationary device WITH an assigned ESPHome Area -> defaults to Static pinned to that Area
     desk_assigned, _ = make_esphome_device(
         hass,
@@ -352,7 +356,8 @@ async def test_onboarding_smart_area_and_roaming_defaults(
         area_id="living_room",
         stationary=1,
     )
-    defs_assigned = _detect_hardware_defaults(hass, desk_assigned)
+    desk_assigned_manifest = get_test_manifest(hass, desk_assigned.id)
+    defs_assigned = _detect_hardware_defaults(hass, desk_assigned, desk_assigned_manifest)
     assert defs_assigned[CONF_DEVICE_GROUP] == "wall_panels"
     assert defs_assigned[CONF_NATIVE_BLE_TRACKING] is False
     assert defs_assigned[CONF_BLE_AUTO_SWITCH] is False
@@ -367,7 +372,8 @@ async def test_onboarding_smart_area_and_roaming_defaults(
         area_id=None,
         stationary=1,
     )
-    defs_unassigned = _detect_hardware_defaults(hass, desk_unassigned)
+    desk_unassigned_manifest = get_test_manifest(hass, desk_unassigned.id)
+    defs_unassigned = _detect_hardware_defaults(hass, desk_unassigned, desk_unassigned_manifest)
     assert defs_unassigned[CONF_DEVICE_GROUP] == "wall_panels"
     assert defs_unassigned[CONF_NATIVE_BLE_TRACKING] is True
     assert defs_unassigned[CONF_BLE_AUTO_SWITCH] is True
@@ -378,6 +384,7 @@ async def test_onboarding_smart_area_and_roaming_defaults(
         hass,
         desk_unassigned,
         {CONF_ESPHOME_DEVICE_ID: desk_unassigned.id, CONF_DEVICE_GROUP: "auto"},
+        manifest=desk_unassigned_manifest,
     )
     assert merged_auto[CONF_NATIVE_BLE_TRACKING] is True
     assert merged_auto[CONF_BLE_AUTO_SWITCH] is True
@@ -391,7 +398,8 @@ async def test_onboarding_smart_area_and_roaming_defaults(
         area_id="garage",
         stationary=0,
     )
-    defs_pocket = _detect_hardware_defaults(hass, pocket_dev)
+    pocket_manifest = get_test_manifest(hass, pocket_dev.id)
+    defs_pocket = _detect_hardware_defaults(hass, pocket_dev, pocket_manifest)
     assert defs_pocket[CONF_DEVICE_GROUP] == "pocket_carry"
     assert defs_pocket[CONF_NATIVE_BLE_TRACKING] is True
     assert defs_pocket[CONF_BLE_AUTO_SWITCH] is True
@@ -408,7 +416,12 @@ async def test_onboarding_smart_area_and_roaming_defaults(
         w=368,
         h=448,
     )
-    assert _detect_hardware_defaults(hass, mobile_dev)[CONF_DEVICE_GROUP] == "handhelds"
+    assert (
+        _detect_hardware_defaults(hass, mobile_dev, get_test_manifest(hass, mobile_dev.id))[
+            CONF_DEVICE_GROUP
+        ]
+        == "handhelds"
+    )
     wrist_dev, _ = make_esphome_device(
         hass,
         slug="wrist_roam",
@@ -417,7 +430,12 @@ async def test_onboarding_smart_area_and_roaming_defaults(
         wearable=1,
         shape="square",
     )
-    assert _detect_hardware_defaults(hass, wrist_dev)[CONF_DEVICE_GROUP] == "wearables"
+    assert (
+        _detect_hardware_defaults(hass, wrist_dev, get_test_manifest(hass, wrist_dev.id))[
+            CONF_DEVICE_GROUP
+        ]
+        == "wearables"
+    )
 
     # 4) Explicit onboarding toggle override: pinning handheld to Static adopts ESPHome Area; enabling roaming on desk clears it
     pinned_pocket = _apply_onboarding_profile_and_defaults(
@@ -428,6 +446,7 @@ async def test_onboarding_smart_area_and_roaming_defaults(
             CONF_DEVICE_GROUP: "auto",
             CONF_NATIVE_BLE_TRACKING: False,
         },
+        manifest=pocket_manifest,
     )
     assert pinned_pocket[CONF_NATIVE_BLE_TRACKING] is False
     assert pinned_pocket[CONF_BLE_AUTO_SWITCH] is False
@@ -442,6 +461,7 @@ async def test_onboarding_smart_area_and_roaming_defaults(
             CONF_DEVICE_GROUP: "auto",
             CONF_NATIVE_BLE_TRACKING: True,
         },
+        manifest=desk_assigned_manifest,
     )
     assert roaming_desk[CONF_NATIVE_BLE_TRACKING] is True
     assert roaming_desk[CONF_BLE_AUTO_SWITCH] is True
@@ -483,8 +503,9 @@ async def test_config_flow_edge_cases_and_guards(
         name="Plain Node",
     )
 
-    # 3) Direct _detect_hardware_defaults with manifest=None and _build_schema fallback for stale group id
-    hw_defs = _cf_detect_hardware_defaults(hass, dev2)
+    # 3) Direct detect_hardware_defaults with manifest=None (pre-hello w/ slots -> handhelds) and with cached manifest + _build_schema fallback for stale group id
+    assert _detect_hardware_defaults(hass, dev2)[CONF_DEVICE_GROUP] == "handhelds"
+    hw_defs = _detect_hardware_defaults(hass, dev2, get_test_manifest(hass, dev2.id))
     assert hw_defs[CONF_DEVICE_GROUP] == "wall_panels"
     schema_stale = _build_schema(hass, {CONF_DEVICE_GROUP: "deleted_group_id"})
     assert schema_stale is not None

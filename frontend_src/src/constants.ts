@@ -38,7 +38,6 @@ import {
 import type {
   ConfigurableAppId,
   DeviceViewId,
-  SecurityPinPolicy,
   SystemViewId,
 } from "./types.js";
 
@@ -163,8 +162,6 @@ export const HOME_CLOCK_TAP_OPTIONS: ReadonlyArray<string> =
 export const HOME_DATE_TAP_OPTIONS: ReadonlyArray<string> =
   DEVICE_PREF_SPECS_MAP.home_date_tap_action?.options ?? [];
 
-export const CALENDAR_LOOKAHEAD_DAYS: ReadonlyArray<number> = [7, 14, 30, 60];
-
 export const CALENDAR_WEEK_START_OPTIONS: ReadonlyArray<string> =
   DEVICE_PREF_SPECS_MAP.calendar_week_start?.options ?? [];
 
@@ -173,15 +170,6 @@ export const DEFAULT_ALARMS_SUMMARY = "07:00|0|1;08:30|0|2;09:00|0|2";
 
 export const RETURN_TO_HOME_TIMEOUT_OPTIONS: ReadonlyArray<string> =
   DEVICE_PREF_SPECS_MAP.return_to_home_timeout?.options ?? [];
-
-export const SECURITY_PIN_POLICIES: ReadonlyArray<SecurityPinPolicy> = [
-  "auto",
-  "allow",
-  "require_pin",
-  "block",
-];
-
-export const WALLPAPER_ROTATION_MINUTES: ReadonlyArray<number> = [0, 5, 15, 30, 60, 360, 1440];
 
 export const DEFAULT_DEVICE_GROUP_IDS = new Set([
   "pocket_carry",

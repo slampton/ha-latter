@@ -71,7 +71,7 @@ from ..const import (
     DEFAULT_DEVICE_GROUP,
     DOMAIN,
     INTEGRATION_VERSION,
-    MIN_FIRMWARE_SDK_REV,
+    MIN_FIRMWARE_CORE_REV,
     STUDIO_REV,
 )
 from ..coordinator import LatterCoordinator
@@ -218,7 +218,7 @@ class StudioSystemInfo(TypedDict):
 
     ha_version: str
     integration_version: str
-    min_firmware_sdk_rev: int
+    min_firmware_core_rev: int
     studio_rev: int
 
 
@@ -816,6 +816,17 @@ def build_issues(
         )
         placeholders = issue.translation_placeholders or {}
         severity = getattr(issue.severity, "value", issue.severity)
+        detail = str(
+            placeholders.get("reason")
+            or placeholders.get("missing_list")
+            or (
+                f"Core rev {placeholders['core_rev']} < {placeholders['min_core_rev']}"
+                if kind == "outdated_firmware"
+                and "core_rev" in placeholders
+                and "min_core_rev" in placeholders
+                else ""
+            )
+        )
         out.append(
             {
                 "issue_id": issue.issue_id,
@@ -823,11 +834,7 @@ def build_issues(
                 "severity": str(severity or "warning"),
                 "subentry_id": sub_id,
                 "device_title": by_sub[sub_id].device_title if sub_id else "",
-                "detail": str(
-                    placeholders.get("reason")
-                    or placeholders.get("missing_list")
-                    or ""
-                ),
+                "detail": detail,
             }
         )
     out.sort(key=lambda i: (i["device_title"].lower(), i["kind"]))
@@ -1830,7 +1837,7 @@ def build_system_section(
                 or ""
             ),
             "integration_version": INTEGRATION_VERSION,
-            "min_firmware_sdk_rev": MIN_FIRMWARE_SDK_REV,
+            "min_firmware_core_rev": MIN_FIRMWARE_CORE_REV,
             "studio_rev": STUDIO_REV,
         },
         "locale_strings": resolve_studio_locale_strings(hass),
@@ -2099,7 +2106,8 @@ def _build_device_live_payload(
         ),
         "area_presence_grid": presence_grid,
         "device_sw_version": fw_version,
-        "sdk_rev": str(coordinator.hardware_manifest.get("sdk") or ""),
+        "core_rev": str(coordinator.hardware_manifest.get("core_rev") or ""),
+        "firmware_outdated": bool(coordinator.firmware_outdated),
         "fw_update_entity": fw_update_entity,
         "fw_update_available": any(it.get("state") == "on" for it in update_items),
         "effective_security_pin_policy": coordinator.security_pin_policy,

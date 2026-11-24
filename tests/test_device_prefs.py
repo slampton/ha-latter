@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 import time
 from typing import Any
 
@@ -46,7 +47,7 @@ async def test_device_hello_cases_a_b_and_c(
     """Verify Case A (initial adoption seed), Case B (wiped ESP32 replacement), and Case C (offline per-key merge)."""
     entry, _sys_obj, coord = await setup_latter_hub(hass, with_device=True)
     _register_wifi_sensor(hass, coord, "-48")
-    manifest_raw = hass.states.get(f"sensor.{coord.device_slug}_system_hardware_manifest").state
+    manifest_raw = json.dumps(coord.hardware_manifest)
 
     # Case A: Initial adoption (`coord.prefs_seq == 0`) seeds untouched keys while preserving onboarding `native_ble_tracking=True`
     assert coord.prefs_seq == 0
@@ -534,7 +535,7 @@ async def test_timer_alarm_state_event_driven_and_boot_reset(
     assert int(hass.states.get(f"sensor.{slug}_timer_remaining").state) == 85
 
     # Reboot (`is_new_boot`) clears stale timer and ringing state
-    manifest_raw = hass.states.get(f"sensor.{slug}_system_hardware_manifest").state
+    manifest_raw = json.dumps(coord.hardware_manifest)
     await coord.async_handle_device_hello("fresh_boot_99", manifest_raw)
     assert hass.states.get(f"binary_sensor.{slug}_timer_active").state == "off"
     assert hass.states.get(f"binary_sensor.{slug}_alarm_ringing").state == "off"

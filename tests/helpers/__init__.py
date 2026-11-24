@@ -29,6 +29,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "seed_ble_proxies": "tests.helpers.ble_and_ws",
     "RecordedServiceCall": "tests.helpers.ha_setup",
     "add_mock_entry": "tests.helpers.ha_setup",
+    "build_test_manifest": "tests.helpers.ha_setup",
     "ensure_area": "tests.helpers.ha_setup",
     "ensure_floor": "tests.helpers.ha_setup",
     "find_entity_instance": "tests.helpers.ha_setup",
@@ -38,6 +39,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "get_registered_panels": "tests.helpers.ha_setup",
     "get_service_calls": "tests.helpers.ha_setup",
     "get_static_paths": "tests.helpers.ha_setup",
+    "get_test_manifest": "tests.helpers.ha_setup",
     "install_service_call_recorder": "tests.helpers.ha_setup",
     "make_subentry": "tests.helpers.ha_setup",
     "make_subentry_dict": "tests.helpers.ha_setup",
@@ -46,6 +48,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "register_common_target_services": "tests.helpers.ha_setup",
     "register_device": "tests.helpers.ha_setup",
     "register_entity": "tests.helpers.ha_setup",
+    "seed_device_hello_manifest": "tests.helpers.ha_setup",
     "seed_esphome_device": "tests.helpers.ha_setup",
 }
 

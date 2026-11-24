@@ -20,7 +20,6 @@ from homeassistant.config_entries import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import (
     device_registry as dr,
-    entity_registry as er,
     selector,
 )
 import probatio as vol
@@ -28,7 +27,6 @@ import probatio as vol
 from .config_defaults import (
     ble_tag_option_defaults,
     build_ble_tag_data,
-    compute_hardware_defaults,
 )
 from .const import (
     CONF_ALARM_ENTITY,
@@ -53,12 +51,14 @@ from .const import (
 )
 from .groups.device_groups import (
     active_group_keys,
+    detect_hardware_defaults,
     device_option_defaults,
     get_device_groups,
 )
 from .hub_registry import (
     get_area_state_index,
     get_system_config_lock,
+    iter_coordinators,
     peek_domain_data,
 )
 from .identity import (
@@ -68,7 +68,6 @@ from .identity import (
     device_title,
     device_unique_id,
     esphome_node_name,
-    esphome_service,
     find_device_entity_by_suffix,
     get_bound_esphome_device,
     get_discovered_latter_devices,
@@ -79,13 +78,6 @@ from .identity import (
 )
 from .media.linking import discover_ma_player_for_device
 from .repairs import async_delete_device_issues
-
-_device_mac = device_mac
-_device_unique_id = device_unique_id
-_ble_unique_id = ble_unique_id
-_device_title = device_title
-_bound_elsewhere = bound_elsewhere
-_build_ble_tag_data = build_ble_tag_data
 
 
 def _discover_unconfigured_latter_device_id(hass: HomeAssistant) -> str:
@@ -121,33 +113,6 @@ def _discover_default_speaker(
             hass, esphome_device_id, "media_player", ("", "_music", "_media_player")
         )
         or ""
-    )
-
-
-def _detect_hardware_defaults(
-    hass: HomeAssistant,
-    dev: dr.DeviceEntry | None,
-    manifest: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Auto-detect group, area, and roaming BLE capability from the device's hardware manifest."""
-    ent_reg = er.async_get(hass)
-    dev_id = dev.id if dev is not None else None
-    if manifest is None:
-        manifest = read_device_hardware_manifest(hass, dev_id)
-    has_native_slots = bool(esphome_service(hass, dev_id, "latter_set_slots"))
-    has_ble_beacon = isinstance(manifest.get("beacon"), dict) or (
-        dev is not None
-        and any(
-            e.entity_id.endswith("_ble_radio_active")
-            for e in er.async_entries_for_device(ent_reg, dev.id)
-        )
-    )
-    esp_area = str(dev.area_id or "").strip() if dev is not None else ""
-    return compute_hardware_defaults(
-        manifest,
-        esp_area_id=esp_area,
-        has_native_slots=has_native_slots,
-        has_ble_beacon=has_ble_beacon,
     )
 
 
@@ -216,6 +181,18 @@ def _apply_group_selection(
     return matched_grp
 
 
+def _cached_manifest_for_device(
+    hass: HomeAssistant, dev_id: str | None
+) -> dict[str, Any] | None:
+    """Return a bound coordinator's cached `device_hello` manifest for `dev_id`, if any."""
+    if not dev_id:
+        return None
+    for coord in iter_coordinators(hass):
+        if coord.esphome_device_id == dev_id and coord.hardware_manifest:
+            return dict(coord.hardware_manifest)
+    return None
+
+
 def _apply_onboarding_profile_and_defaults(
     hass: HomeAssistant,
     dev: dr.DeviceEntry,
@@ -223,11 +200,18 @@ def _apply_onboarding_profile_and_defaults(
     existing: dict[str, Any] | None = None,
     *,
     rebind_hardware: bool = False,
+    manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Merge auto-detected hardware defaults, the device binding, roaming flag, optional Group, and global defaults."""
-    hw_manifest = read_device_hardware_manifest(hass, dev.id)
+    hw_manifest = read_device_hardware_manifest(
+        hass,
+        dev.id,
+        cached_manifest=manifest
+        if manifest is not None
+        else _cached_manifest_for_device(hass, dev.id),
+    )
     is_stationary_hw = int(hw_manifest.get("stationary") or 0) == 1
-    hw_defaults = _detect_hardware_defaults(hass, dev, hw_manifest)
+    hw_defaults = detect_hardware_defaults(hass, dev, hw_manifest)
     merged: dict[str, Any] = {**hw_defaults, **(existing or {})}
     merged[CONF_DEVICE_SLUG] = esphome_node_name(hass, dev)
     if rebind_hardware or not merged.get(CONF_ESPHOME_DEVICE_ID):
@@ -313,10 +297,13 @@ def _build_schema(
         or _discover_unconfigured_latter_device_id(hass)
     )
     default_dev = get_bound_esphome_device(hass, default_dev_id)
+    default_id = default_dev.id if default_dev else None
     hw_manifest = read_device_hardware_manifest(
-        hass, default_dev.id if default_dev else None
+        hass,
+        default_id,
+        cached_manifest=_cached_manifest_for_device(hass, default_id),
     )
-    hw_defs = _detect_hardware_defaults(hass, default_dev, hw_manifest)
+    hw_defs = detect_hardware_defaults(hass, default_dev, hw_manifest)
     is_roaming_default = bool(
         current.get(
             CONF_NATIVE_BLE_TRACKING,
@@ -440,7 +427,7 @@ def _migrate_replaced_hardware_registry(
 class LatterConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the single System hub config flow and initial ESPHome device discovery for Latter."""
 
-    VERSION = 2
+    VERSION = 1
 
     def __init__(self) -> None:
         """Initialize config flow."""

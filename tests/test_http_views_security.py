@@ -435,10 +435,14 @@ async def test_wallpaper_upload_rbac_limits_and_proxy_views(
     assert r_media_trav.status == 404
 
     # 720x720 square display manifest serves native 720x720 album art and 720x720 wallpapers
-    hass.states.async_set(
-        f"sensor.{coord.device_slug}_system_hardware_manifest",
-        json.dumps({"v": 2, "contract": 3, "w": 720, "h": 720, "shape": "square", "display": 1}),
-    )
+    coord._runtime.hello_manifest = {
+        "v": 2,
+        "contract": 3,
+        "w": 720,
+        "h": 720,
+        "shape": "square",
+        "display": 1,
+    }
     assert coord.art_dimensions == (720, 720)
     assert coord.wallpaper_dimensions == (720, 720)
     wp_720_url = coord.build_wallpaper_url()

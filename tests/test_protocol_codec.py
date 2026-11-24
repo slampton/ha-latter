@@ -39,7 +39,7 @@ class TestProtocolV3Contract(unittest.TestCase):
             "remote_config": 3,
             "weather_forecast": 15,
             "calendar_agenda": 4,
-            "device_prefs": 69,
+            "device_prefs": 70,
             "shortcuts": 5,
         }
         domains = self.schema.get("domains", {})
@@ -183,20 +183,25 @@ class TestCalendarAgendaRecords(unittest.TestCase):
         self.assertEqual(packed.split("\x1f")[3:], ["", "0", ""])
 
     def test_sanitizing_keeps_the_separators_out(self) -> None:
-        nasty = "A|B\x1fC\x1eD\x1dE\nF\r\tG\x00H\u2028I  \u00a0 J"
+        nasty = "A|B\\C;D\x1fE\x1eF\x1dG\nH\r\tI\x00J\u2028K  \u00a0 L"
         clean = self.p.sanitize_v3_subfield(nasty)
-        self.assertEqual(clean, "A/B C D E F G H I J")
+        self.assertEqual(clean, "A\\pB\\\\C\\sD E F G H I J K L")
+        self.assertEqual(self.p.unescape_v3_subfield(clean), "A|B\\C;D E F G H I J K L")
         records = self.p.calendar_agenda_records(
-            [self.ev(2026, 11, 8, 9, 0, summary=nasty, location=" Room | 2\n")], self.today
+            [self.ev(2026, 11, 8, 9, 0, summary=nasty, location=" Area | 2; B\\1\n")], self.today
         )
         title, location = records[0][1], records[0][2]
         for sub in records[0]:
-            self.assertFalse(any(ch in sub for ch in "|\x1f\x1e\x1d\n\r\t\x00"), repr(sub))
-        self.assertEqual(location, "Room / 2")
-        self.assertTrue(title.startswith("A/B C D"))
+            self.assertFalse(any(ch in sub for ch in "|;\x1f\x1e\x1d\n\r\t\x00"), repr(sub))
+        self.assertEqual(location, "Area \\p 2\\s B\\\\1")
+        self.assertEqual(self.p.unescape_v3_subfield(location), "Area | 2; B\\1")
+        self.assertTrue(title.startswith("A\\pB\\\\C\\sD E F"))
         packed = DomainPayloadPacker(epoch=7).pack("calendar_agenda", records, 1, nasty)[1]
         self.assertEqual(len(packed.split("\x1f")), 6)
+        # Pre-sanitized V3Records must NOT be double-escaped when packed!
         self.assertEqual(packed.split("\x1f")[3].count("|"), 3)
+        self.assertIn("Area \\p 2\\s B\\\\1", packed.split("\x1f")[3])
+        self.assertNotIn("Area \\\\p", packed.split("\x1f")[3])
 
     def test_caps(self) -> None:
         events = [
@@ -307,7 +312,7 @@ class TestRecordsFields(unittest.TestCase):
             ]
         )
         self.assertEqual(
-            recs[0], ("camera.front", "Front / Door", "porch", "63", "lock.front_door")
+            recs[0], ("camera.front", "Front \\p Door", "porch", "63", "lock.front_door")
         )
         self.assertEqual(recs[1][1], "Y" * self.p.CAMERA_NAME_MAX)
         self.assertEqual(recs[1][2], "")
@@ -356,7 +361,7 @@ class TestRecordsFields(unittest.TestCase):
         therms = self.p.thermostat_records(
             [{"entity_id": "climate.main", "name": "Main|Zone", "area_id": "living", "state": "heat", "target_temp": 72, "current_temp": 70.5, "caps": 7}]
         )
-        self.assertEqual(list(therms), [("climate.main", "Main/Zone", "living", "heat", "72", "70.5", "7")])
+        self.assertEqual(list(therms), [("climate.main", "Main\\pZone", "living", "heat", "72", "70.5", "7")])
         locks = self.p.entry_records(
             [{"entity_id": "lock.front", "name": "Front Door", "area_id": "entry", "state": "locked"}],
             max_records=self.p.LOCKS_MAX_RECORDS,

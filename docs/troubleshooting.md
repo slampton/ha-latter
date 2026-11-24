@@ -76,7 +76,7 @@ If the speaker's real volume control is an AV receiver, map the speaker in **Stu
 
 **A repair says the device restarted after a crash**
 
-The device reported a panic or watchdog reset when it booted. Open its logs in ESPHome Device Builder before it restarts again: ESPHome prints the decoded backtrace to every log client until the next restart, and decoding needs the build the device is running. The repair shows the Latter SDK rev and the boot time, and clears when a later boot is clean (power-on, external, software, deep sleep, USB reset).
+The device reported a panic or watchdog reset when it booted. Open its logs in ESPHome Device Builder before it restarts again: ESPHome prints the decoded backtrace to every log client until the next restart, and decoding needs the build the device is running. The repair shows the Latter firmware core rev and the boot time, and clears when a later boot is clean (power-on, external, software, deep sleep, USB reset).
 
 **A repair says the device restarted after a brownout**
 
@@ -86,7 +86,11 @@ The supply voltage sagged below the safe level. Try another power supply or USB 
 
 The update didn't boot, so the device went back to the previous firmware. Check the build logs and install the update again; the repair clears after a successful update.
 
-The last reported reset reason, crash flag, rollback flag and SDK rev for each Device are in Latter's diagnostics download.
+**A repair or Studio banner says the device firmware is outdated**
+
+The device reported a `core_rev` older than `ha-latter`'s minimum firmware core revision. Existing controls continue running non-blockingly, and the warning repair and Studio badge clear automatically as soon as you update the device firmware in ESPHome or via **Project Firmware** OTA.
+
+The last reported reset reason, crash flag, rollback flag and firmware core rev for each Device are in Latter's diagnostics download.
 
 **Firmware updates are very slow or stall at 0%, or the device drops off Wi-Fi**
 
@@ -101,4 +105,4 @@ Start one update at a time: ESPHome Device Builder runs simultaneous uploads in 
 
 ## Getting help
 
-When you [open an issue](https://github.com/slampton/ha-latter/issues), open **Studio → System → Tools → Support & diagnostics** and click **Download System diagnostics** (or **Device → Tools → Diagnostics → Download diagnostics** for a single Device; also available via **Settings → Devices & Services → Latter → ⋮ → Download diagnostics**) and **Copy version summary** to paste your exact Home Assistant, Latter integration, minimum firmware SDK, and Studio contract versions. Latter automatically redacts URL `sig=` signatures, Protocol v3 `payload` blobs, security PINs/hashes, BLE UUIDs/addresses, calendar titles and locations, and MAC dictionary keys, though you should still review the file (for example, LAN IP addresses) before posting it publicly.
+When you [open an issue](https://github.com/slampton/ha-latter/issues), open **Studio → System → Tools → Support & diagnostics** and click **Download System diagnostics** (or **Device → Tools → Diagnostics → Download diagnostics** for a single Device; also available via **Settings → Devices & Services → Latter → ⋮ → Download diagnostics**) and **Copy version summary** to paste your exact Home Assistant, Latter integration, minimum firmware core, and Studio contract versions. Latter automatically redacts URL `sig=` signatures, Protocol v3 `payload` blobs, security PINs/hashes, BLE UUIDs/addresses, calendar titles and locations, and MAC dictionary keys, though you should still review the file (for example, LAN IP addresses) before posting it publicly.

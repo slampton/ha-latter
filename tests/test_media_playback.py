@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import json
 from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -314,52 +313,37 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
     entry, _sys_obj, coord = await setup_latter_hub(hass, stationary=1)
     assert coord is not None
 
-    hass.states.async_set(
-        f"sensor.{coord.device_slug}_system_hardware_manifest",
-        json.dumps(
-            {
-                "v": 2,
-                "contract": 3,
-                "board": "desk_p4_board",
-                "w": 720,
-                "h": 720,
-                "shape": "square",
-                "display": 1,
-            }
-        ),
-    )
+    coord._runtime.hello_manifest = {
+        "v": 2,
+        "contract": 3,
+        "board": "desk_p4_board",
+        "w": 720,
+        "h": 720,
+        "shape": "square",
+        "display": 1,
+    }
     assert coord.art_dimensions == (720, 720)
 
     # Oversized 1200x1200 manifest still clamps cleanly to 720x720
-    hass.states.async_set(
-        f"sensor.{coord.device_slug}_system_hardware_manifest",
-        json.dumps(
-            {
-                "v": 2,
-                "contract": 3,
-                "w": 1200,
-                "h": 1200,
-                "shape": "square",
-                "display": 1,
-            }
-        ),
-    )
+    coord._runtime.hello_manifest = {
+        "v": 2,
+        "contract": 3,
+        "w": 1200,
+        "h": 1200,
+        "shape": "square",
+        "display": 1,
+    }
     assert coord.art_dimensions == (720, 720)
 
     # Restore 720x720 Desk manifest and verify signed art_url + HTTP baseline JPEG output
-    hass.states.async_set(
-        f"sensor.{coord.device_slug}_system_hardware_manifest",
-        json.dumps(
-            {
-                "v": 2,
-                "contract": 3,
-                "w": 720,
-                "h": 720,
-                "shape": "square",
-                "display": 1,
-            }
-        ),
-    )
+    coord._runtime.hello_manifest = {
+        "v": 2,
+        "contract": 3,
+        "w": 720,
+        "h": 720,
+        "shape": "square",
+        "display": 1,
+    }
     hass.states.async_set(
         "media_player.pocket_assistant_music",
         "playing",

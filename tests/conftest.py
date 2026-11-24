@@ -40,7 +40,7 @@ async def hass(hass: Any) -> AsyncGenerator[Any]:
 @pytest.fixture
 def make_esphome_device() -> Callable[..., tuple[Any, str]]:
     """Seed a realistic ESPHome device and entities in real Device/Entity/State registries."""
-    from custom_components.latter.const import MIN_FIRMWARE_SDK_REV
+    from custom_components.latter.const import MIN_FIRMWARE_CORE_REV
     from tests.helpers.ha_setup import seed_esphome_device
 
     def _factory(
@@ -56,7 +56,7 @@ def make_esphome_device() -> Callable[..., tuple[Any, str]]:
         w: int = 466,
         h: int = 466,
         shape: str = "circle",
-        sdk: int = MIN_FIRMWARE_SDK_REV,
+        core_rev: int = MIN_FIRMWARE_CORE_REV,
         with_speaker: bool = True,
     ) -> tuple[Any, str]:
         return seed_esphome_device(
@@ -71,7 +71,7 @@ def make_esphome_device() -> Callable[..., tuple[Any, str]]:
             w=w,
             h=h,
             shape=shape,
-            sdk=sdk,
+            core_rev=core_rev,
             with_speaker=with_speaker,
         )
 
@@ -104,8 +104,10 @@ def setup_latter_hub(
         ensure_area,
         ensure_floor,
         flush_debouncers,
+        get_test_manifest,
         make_subentry_dict,
         prepare_latter_dependencies,
+        seed_device_hello_manifest,
     )
 
     async def _setup(
@@ -185,6 +187,9 @@ def setup_latter_hub(
                     unique_id=mac,
                     subentry_id="sub_pocket",
                 )
+            )
+            await seed_device_hello_manifest(
+                hass, "sub_pocket", get_test_manifest(hass, esp_dev.id)
             )
 
         if with_ble_tag:

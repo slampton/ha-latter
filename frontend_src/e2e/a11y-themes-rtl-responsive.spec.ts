@@ -45,11 +45,11 @@ test.describe("WCAG 2.2 AA axe-core, Light/Dark Themes, Mobile 360x800 & RTL E2E
           hub.issues = [
             {
               issue_id: "iss_1",
-              kind: "sdk_mismatch",
+              kind: "outdated_firmware",
               severity: "warning",
               subentry_id: "sub_desk",
               device_title: "Desk Assistant",
-              detail: "2026112007",
+              detail: "Core rev 2026112202 < 2026112303",
             },
           ];
         },

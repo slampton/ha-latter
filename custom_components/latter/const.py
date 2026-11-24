@@ -12,15 +12,20 @@ import uuid
 _PROTOCOL_SCHEMA: Final[dict[str, Any]] = json.loads(
     (Path(__file__).resolve().parent / "protocol_v3.json").read_text(encoding="utf-8")
 )
+_STUDIO_CONTRACT_SCHEMA: Final[dict[str, Any]] = json.loads(
+    (Path(__file__).resolve().parent / "studio_contract.json").read_text(
+        encoding="utf-8"
+    )
+)
 _PROTOCOL_DEFAULTS: Final[dict[str, Any]] = _PROTOCOL_SCHEMA["defaults"]
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final[int] = 47
-if int(_PROTOCOL_SCHEMA["studio_contract"]["studio_rev"]) != STUDIO_REV:
-    raise RuntimeError("const.py STUDIO_REV is out of sync with protocol_v3.json")
+STUDIO_REV: Final[int] = 48
+if int(_STUDIO_CONTRACT_SCHEMA["studio_contract"]["studio_rev"]) != STUDIO_REV:
+    raise RuntimeError("const.py STUDIO_REV is out of sync with studio_contract.json")
 
-MIN_FIRMWARE_SDK_REV: Final = 2026112302
+MIN_FIRMWARE_CORE_REV: Final = 2026112303
 PLATFORMS: Final[tuple[str, ...]] = (
     "sensor",
     "binary_sensor",
@@ -182,6 +187,7 @@ CONF_CAMERA_CAROUSEL_INTERVAL: Final = "camera_carousel_interval"
 CONF_CAMERA_FRAMING: Final = "camera_framing"
 CONF_CAMERA_STREAM_MODE: Final = "camera_stream_mode"
 CONF_CAMERA_DOORBELL_POPUP: Final = "camera_doorbell_popup"
+CONF_GLASS_STYLE: Final = "glass_style"
 
 # Defaults
 DEFAULT_SECURITY_PIN_POLICY: Final = "auto"
@@ -292,7 +298,6 @@ API_CAMERA_PROXY_PATH: Final = "/api/latter/camera/{target_device}"
 API_CAMERA_STREAM_PATH: Final = "/api/latter/camera_stream/{target_device}"
 API_CAMERA_GRID_PATH: Final = "/api/latter/camera_grid/{target_device}"
 API_CAMERA_AUDIO_STREAM_PATH: Final = "/api/latter/camera_audio/{target_device}"
-API_MAP_PROXY_PATH: Final = "/api/latter/map/{target_device}"
 
 # Feed refresh intervals
 FORECAST_REFRESH_INTERVAL_MINUTES: Final = 30

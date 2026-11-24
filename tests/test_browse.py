@@ -137,15 +137,15 @@ class TestOnePath(unittest.TestCase):
         self.assertEqual(ma_browse.MAX_BROWSE_CACHE_ENTRIES, 64)
         ma_browse.clear_browse_cache()
         for i in range(80):
-            ma_browse._cache_put(f"key_{i}", {"slots": [f"line_{i}"]})
-        self.assertEqual(len(ma_browse._BROWSE_LYRICS_BIO_CACHE), 64)
-        self.assertIsNone(ma_browse._cache_get("key_0"))
-        self.assertIsNotNone(ma_browse._cache_get("key_16"))
-        ma_browse._cache_put("key_80", {"slots": ["line_80"]})
-        self.assertIsNotNone(ma_browse._cache_get("key_16"))
-        self.assertIsNone(ma_browse._cache_get("key_17"))
+            ma_browse.cache_put(f"key_{i}", {"slots": [f"line_{i}"]})
+        self.assertEqual(len(ma_browse.BROWSE_LYRICS_BIO_CACHE), 64)
+        self.assertIsNone(ma_browse.cache_get("key_0"))
+        self.assertIsNotNone(ma_browse.cache_get("key_16"))
+        ma_browse.cache_put("key_80", {"slots": ["line_80"]})
+        self.assertIsNotNone(ma_browse.cache_get("key_16"))
+        self.assertIsNone(ma_browse.cache_get("key_17"))
         ma_browse.clear_browse_cache()
-        self.assertEqual(len(ma_browse._BROWSE_LYRICS_BIO_CACHE), 0)
+        self.assertEqual(len(ma_browse.BROWSE_LYRICS_BIO_CACHE), 0)
 
 
 if __name__ == "__main__":

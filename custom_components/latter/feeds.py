@@ -24,6 +24,7 @@ from .protocol_codec import (
     ha_value,
     normalize_temp_unit,
     pack_weather_forecast_fields,
+    unescape_v3_subfield,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -316,9 +317,9 @@ async def async_fetch_raw_calendar_events(
         time_label, title, location, _all_day = calendar_agenda_records([ev], today)[0]
         raw_rows.append(
             {
-                "time_label": time_label,
-                "title": title,
-                "location": location,
+                "time_label": unescape_v3_subfield(time_label),
+                "title": unescape_v3_subfield(title),
+                "location": unescape_v3_subfield(location),
                 "start": ev["start_raw"],
                 "end": ev["end_raw"],
             }
@@ -328,7 +329,6 @@ async def async_fetch_raw_calendar_events(
 
 def build_calendar_browse_items(
     raw_rows: list[dict[str, Any]],
-    map_url_builder: Callable[[str], str] | None = None,
 ) -> list[dict[str, Any]]:
     """Build device-scoped calendar browse slots from fetched event rows."""
     slot_items: list[dict[str, Any]] = []
@@ -336,9 +336,8 @@ def build_calendar_browse_items(
         time_label = str(row["time_label"] or "")
         title = str(row["title"] or "")
         location = str(row["location"] or "")
-        map_url = map_url_builder(location) if (location and callable(map_url_builder)) else ""
         encoded_id = "|".join(
-            escape_v3_subfield(part) for part in (time_label, title, location, map_url)
+            escape_v3_subfield(part) for part in (time_label, title, location)
         )
         slot_items.append(
             {
@@ -350,7 +349,6 @@ def build_calendar_browse_items(
                 "start": row["start"],
                 "end": row["end"],
                 "location": location,
-                "map_url": map_url,
             }
         )
     return slot_items
@@ -361,13 +359,12 @@ async def async_fetch_calendar_agenda(
     calendar_entities: list[str],
     days: int = _DEFAULT_AGENDA_DAYS,
     max_events: int = MAX_AGENDA_EVENTS,
-    map_url_builder: Callable[[str], str] | None = None,
 ) -> tuple[V3Records, list[dict[str, Any]]]:
     """Fetch upcoming events across calendars with `calendar.get_events`."""
     records, raw_rows = await async_fetch_raw_calendar_events(
         hass, calendar_entities, days=days, max_events=max_events
     )
-    return records, build_calendar_browse_items(raw_rows, map_url_builder=map_url_builder)
+    return records, build_calendar_browse_items(raw_rows)
 
 
 def _resolve_hass_temp_unit(hass: HomeAssistant | None, raw_attr: Any = None) -> str:

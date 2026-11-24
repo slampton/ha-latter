@@ -60,10 +60,14 @@ export function isCatalogItemSupported(
       return caps.has_display !== false && caps.has_imu !== false;
     case "display":
       return caps.has_display !== false;
+    case "display_or_audio":
+      return caps.has_display !== false || caps.has_audio !== false;
     case "battery":
       return caps.has_battery !== false;
     case "display_battery":
       return caps.has_display !== false && caps.has_battery !== false;
+    case "beacon":
+      return caps.has_ble_beacon !== false;
     case "beacon_battery":
       return caps.has_ble_beacon !== false && caps.has_battery !== false;
     case "mic":

@@ -93,6 +93,10 @@ describe("i18n catalogs, UTF-8 byte bounds, locale formatters & telemetry parser
     };
 
     assert.equal(t("action.cancel"), "Cancel");
+    assert.equal(t("support.core_rev"), "Minimum firmware core");
+    assert.equal(t("status.firmware_update_required"), "Firmware update required");
+    assert.equal(t("dev_tools.firmware_core"), "Firmware core");
+    assert.equal(t("sys_overview.screenless_one"), "1 screenless");
     assert.equal(
       t("dev_tools.profiler_desc"),
       "Streams frame, power, and link diagnostics to ESPHome logs. Automatically turns off after 24 hours.",
@@ -118,6 +122,7 @@ describe("i18n catalogs, UTF-8 byte bounds, locale formatters & telemetry parser
     assert.equal(tPrefLabel("camera_doorbell_popup"), "Doorbell ring popup");
     assert.equal(tPrefLabel("do_not_disturb"), "Do not disturb");
     assert.equal(tPrefLabel("music_auto_open"), "Auto-open on play");
+    assert.equal(tPrefLabel("glass_style"), "Glass style");
     assert.equal(tPrefLabel("custom_unknown_pref"), "Custom unknown pref");
     assert.equal(tPrefLabel("", "Fallback label"), "Fallback label");
 
@@ -135,6 +140,9 @@ describe("i18n catalogs, UTF-8 byte bounds, locale formatters & telemetry parser
     assert.equal(tPrefOption("music_auto_open", "Now Playing"), "Now playing");
     assert.equal(tPrefOption("music_auto_open", "Lyrics"), "Lyrics");
     assert.equal(tPrefOption("music_auto_open", "Off"), "Off");
+    assert.equal(tPrefOption("glass_style", "Auto"), "Auto");
+    assert.equal(tPrefOption("glass_style", "Clear"), "Clear");
+    assert.equal(tPrefOption("glass_style", "Dark"), "Dark");
   });
 
   it("truncates UTF-8 strings strictly on codepoint boundaries across ASCII, Latin, CJK, and surrogates", () => {
@@ -250,7 +258,7 @@ describe("i18n catalogs, UTF-8 byte bounds, locale formatters & telemetry parser
         },
       },
       localize: (key: string, ...args: unknown[]) => {
-        if (key === "component.latter.issues.sdk_mismatch.description") {
+        if (key === "component.latter.issues.outdated_firmware.description") {
           const vars = (args[0] || {}) as Record<string, string>;
           return `Update firmware (${vars.detail || "outdated"})`;
         }
@@ -260,8 +268,21 @@ describe("i18n catalogs, UTF-8 byte bounds, locale formatters & telemetry parser
     } as unknown as HomeAssistant;
 
     assert.equal(
-      issueMessage({ kind: "sdk_mismatch", detail: "rev 2026112007" }, repairHass),
-      "Update firmware (rev 2026112007)",
+      issueMessage(
+        { kind: "outdated_firmware", detail: "Core rev 2026112202 < 2026112303" },
+        repairHass,
+      ),
+      "Update firmware (Core rev 2026112202 < 2026112303)",
+    );
+    assert.equal(
+      localizeRepairIssue(null, "outdated_firmware", {
+        detail: "Core rev 2026112202 < 2026112303",
+      }),
+      "Firmware update required (Core rev 2026112202 < 2026112303). Update the Device firmware in ESPHome.",
+    );
+    assert.equal(
+      localizeRepairIssue(null, "outdated_firmware"),
+      "Firmware core revision is below the minimum required by this Latter release. Update the Device firmware in ESPHome.",
     );
     assert.equal(
       localizeRepairIssue(null, "ble_no_proxies"),

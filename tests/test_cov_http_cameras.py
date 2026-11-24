@@ -14,10 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from aiohttp import MultipartReader, web
 from homeassistant.components import camera as ha_camera, ffmpeg as ha_ffmpeg
-from homeassistant.helpers import (
-    aiohttp_client as ha_aiohttp_client,
-    entity_registry as er,
-)
+from homeassistant.helpers import aiohttp_client as ha_aiohttp_client
 from homeassistant.setup import async_setup_component
 from PIL import Image, ImageDraw, ImageFont
 import pytest
@@ -1269,19 +1266,8 @@ async def test_camera_views_snapshot_stream_grid_and_audio(
         assert r_empty_audio.status == 404
 
         # Headless display=0 manifest -> video_max_dims == (0, 0) -> 400
-        ent_reg = er.async_get(hass)
-        hw_eid = next(
-            e.entity_id
-            for e in er.async_entries_for_device(ent_reg, coord.esphome_device_id)
-            if e.entity_id.endswith("_system_hardware_manifest")
-        )
-        orig_hw = hass.states.get(hw_eid)
-        orig_hw_state = orig_hw.state if orig_hw is not None else "{}"
         orig_hello_manifest = coord._runtime.hello_manifest
-        coord._runtime.hello_manifest = None
-        hass.states.async_set(
-            hw_eid, json.dumps({"v": 2, "contract": 3, "display": 0, "w": 0, "h": 0})
-        )
+        coord._runtime.hello_manifest = {"v": 2, "contract": 3, "display": 0, "w": 0, "h": 0}
         headless_max_w, headless_max_h = coord.video_max_dims
         assert (headless_max_w, headless_max_h) == (0, 0)
         headless_sig = coord.sign_payload_resource(
@@ -1296,7 +1282,6 @@ async def test_camera_views_snapshot_stream_grid_and_audio(
         )
         assert r_headless.status == 400
         coord._runtime.hello_manifest = orig_hello_manifest
-        hass.states.async_set(hw_eid, orig_hw_state)
 
         # _build_camera_audio_ffmpeg_cmd variants (RTSP/FLAC vs HTTP/WAV)
         cfg_rtsp = _AudioStreamConfig(

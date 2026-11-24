@@ -37,14 +37,6 @@ from .presence.ble_registry import (
 PARALLEL_UPDATES = 0
 EVENT_FLOOR_REGISTRY_UPDATED = "floor_registry_updated"
 MAX_OCCUPANTS_STATE_CHARS = 250
-_REMOVED_DIAGNOSTIC_SENSOR_SUFFIXES: tuple[str, ...] = (
-    "active_media",
-    "weather_forecast",
-    "area_context",
-    "calendar_agenda",
-    "remote_config",
-    "device_prefs",
-)
 
 
 @dataclass
@@ -85,7 +77,6 @@ def _entry_coordinators(
 
 
 def _setup_device_sensors(
-    ent_reg: er.EntityRegistry,
     coordinators: list[LatterCoordinator],
     tracking: _EntrySensorTracking,
     *,
@@ -93,13 +84,6 @@ def _setup_device_sensors(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     for coordinator in coordinators:
-        for sfx in _REMOVED_DIAGNOSTIC_SENSOR_SUFFIXES:
-            orphan_eid = ent_reg.async_get_entity_id(
-                "sensor", DOMAIN, f"{coordinator.subentry_id}_{sfx}"
-            )
-            if orphan_eid is not None:
-                ent_reg.async_remove(orphan_eid)
-
         dev_entities: list[SensorEntity] = [
             LatterCurrentAreaSensor(coordinator),
             LatterBleDistanceSensor(coordinator),
@@ -231,7 +215,6 @@ async def async_setup_entry(
     )
 
     _setup_device_sensors(
-        er.async_get(hass),
         coordinators,
         tracking,
         floors_initially_enabled=has_configured_floors(hass),

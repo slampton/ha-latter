@@ -1139,6 +1139,13 @@
           "cpp_enum": "MUSIC_AUTO_OPEN",
           "type": "string",
           "description": "Auto-open Music view when default speaker starts playing (Now Playing|Lyrics|Off)"
+        },
+        {
+          "index": 72,
+          "name": "glass_style",
+          "cpp_enum": "GLASS_STYLE",
+          "type": "string",
+          "description": "Glass chrome surface style (Auto|Clear|Dark); Auto adapts contrast over bright backdrops"
         }
       ]
     },
@@ -2010,646 +2017,11 @@
       ]
     }
   },
-  "ha_services": {
-    "notify": {
-      "description": "Show an on-screen notification, with an optional chime and an optional camera snapshot, on a specific device, the devices in occupied Areas ('occupied_areas'), the devices assigned to a person ('person.<slug>'), or all displays ('all').",
-      "fields": [
-        "target_device",
-        "title",
-        "message",
-        "priority",
-        "duration",
-        "chime",
-        "announce",
-        "camera_entity"
-      ]
-    },
-    "intercom_broadcast": {
-      "description": "Broadcast a TTS announcement or recorded audio clip to configured broadcast speakers, explicitly chosen speakers, the speakers in occupied Areas ('occupied_areas'), or the speakers in a person's current Area ('person.<slug>'), automatically excluding the calling Device and Latter displays in Bedtime Mode or Do Not Disturb.",
-      "fields": [
-        "target_device",
-        "message",
-        "media_url",
-        "target_speakers",
-        "tts_entity"
-      ]
-    },
-    "set_active_area": {
-      "description": "Switch the active area context by area_id or area name. The device's speaker follows to the new area when the device's \"Media follows this Device\" setting is on. On roaming devices with Voice Follows Me enabled, this also moves the device's Home Assistant Area so area-aware Assist commands target it.",
-      "fields": [
-        "area_id",
-        "target_device"
-      ]
-    },
-    "set_active_speaker": {
-      "description": "Change the active target media_player for the ESPHome device and optionally transfer the active playback queue.",
-      "fields": [
-        "entity_id",
-        "transfer_queue",
-        "target_device"
-      ]
-    },
-    "reset_device": {
-      "description": "Reset a Latter device. Device settings erases everything saved on the device (its settings and the Wi-Fi driver's cached data) and restarts it; Wi-Fi credentials and the API key are compiled into the firmware, so it rejoins Home Assistant unchanged. Latter options puts this device's Latter options back to the defaults it got when it was added, keeping its ESPHome binding and its Music Assistant player link.",
-      "fields": [
-        "target_device",
-        "device_settings",
-        "latter_options"
-      ]
-    },
-    "navigate": {
-      "description": "Navigate one or more Latter displays to a canonical UI page or subpage, optionally keeping sleeping displays dark (and always switching silently during Bedtime Mode).",
-      "fields": [
-        "target_device",
-        "route",
-        "wake"
-      ]
-    }
-  },
-  "world_clock_zones": [
-    {
-      "iana": "Etc/GMT+12",
-      "city": "UTC-12",
-      "label": "UTC-12:00 — International Date Line West",
-      "std_off": -720,
-      "dst_off": -720,
-      "std_abbr": "UTC-12",
-      "dst_abbr": "UTC-12",
-      "rule": "none"
-    },
-    {
-      "iana": "Pacific/Pago_Pago",
-      "city": "Pago Pago",
-      "label": "UTC-11:00 — Samoa Standard Time (SST)",
-      "std_off": -660,
-      "dst_off": -660,
-      "std_abbr": "SST",
-      "dst_abbr": "SST",
-      "rule": "none"
-    },
-    {
-      "iana": "Pacific/Honolulu",
-      "city": "Honolulu",
-      "label": "UTC-10:00 — Hawaii-Aleutian Standard Time (HST)",
-      "std_off": -600,
-      "dst_off": -600,
-      "std_abbr": "HST",
-      "dst_abbr": "HST",
-      "rule": "none"
-    },
-    {
-      "iana": "Pacific/Marquesas",
-      "city": "Marquesas",
-      "label": "UTC-09:30 — Marquesas Time (MART)",
-      "std_off": -570,
-      "dst_off": -570,
-      "std_abbr": "MART",
-      "dst_abbr": "MART",
-      "rule": "none"
-    },
-    {
-      "iana": "America/Anchorage",
-      "city": "Anchorage",
-      "label": "UTC-09:00 — Alaska Time (AKST/AKDT)",
-      "std_off": -540,
-      "dst_off": -480,
-      "std_abbr": "AKST",
-      "dst_abbr": "AKDT",
-      "rule": "us"
-    },
-    {
-      "iana": "America/Los_Angeles",
-      "city": "Los Angeles",
-      "label": "UTC-08:00 — Pacific Time (PST/PDT)",
-      "std_off": -480,
-      "dst_off": -420,
-      "std_abbr": "PST",
-      "dst_abbr": "PDT",
-      "rule": "us"
-    },
-    {
-      "iana": "Etc/GMT+8",
-      "city": "UTC-8",
-      "label": "UTC-08:00 — Coordinated Universal Time-08 (No DST)",
-      "std_off": -480,
-      "dst_off": -480,
-      "std_abbr": "UTC-8",
-      "dst_abbr": "UTC-8",
-      "rule": "none"
-    },
-    {
-      "iana": "America/Denver",
-      "city": "Denver",
-      "label": "UTC-07:00 — Mountain Time (MST/MDT)",
-      "std_off": -420,
-      "dst_off": -360,
-      "std_abbr": "MST",
-      "dst_abbr": "MDT",
-      "rule": "us"
-    },
-    {
-      "iana": "America/Phoenix",
-      "city": "Phoenix",
-      "label": "UTC-07:00 — Mountain Standard Time (MST, No DST)",
-      "std_off": -420,
-      "dst_off": -420,
-      "std_abbr": "MST",
-      "dst_abbr": "MST",
-      "rule": "none"
-    },
-    {
-      "iana": "America/Chicago",
-      "city": "Chicago",
-      "label": "UTC-06:00 — Central Time (CST/CDT)",
-      "std_off": -360,
-      "dst_off": -300,
-      "std_abbr": "CST",
-      "dst_abbr": "CDT",
-      "rule": "us"
-    },
-    {
-      "iana": "America/Regina",
-      "city": "Regina",
-      "label": "UTC-06:00 — Central Standard Time (CST, No DST)",
-      "std_off": -360,
-      "dst_off": -360,
-      "std_abbr": "CST",
-      "dst_abbr": "CST",
-      "rule": "none"
-    },
-    {
-      "iana": "America/New_York",
-      "city": "New York",
-      "label": "UTC-05:00 — Eastern Time (EST/EDT)",
-      "std_off": -300,
-      "dst_off": -240,
-      "std_abbr": "EST",
-      "dst_abbr": "EDT",
-      "rule": "us"
-    },
-    {
-      "iana": "America/Lima",
-      "city": "Lima",
-      "label": "UTC-05:00 — Eastern Standard Time (EST, No DST)",
-      "std_off": -300,
-      "dst_off": -300,
-      "std_abbr": "EST",
-      "dst_abbr": "EST",
-      "rule": "none"
-    },
-    {
-      "iana": "America/Halifax",
-      "city": "Halifax",
-      "label": "UTC-04:00 — Atlantic Time (AST/ADT)",
-      "std_off": -240,
-      "dst_off": -180,
-      "std_abbr": "AST",
-      "dst_abbr": "ADT",
-      "rule": "us"
-    },
-    {
-      "iana": "America/Puerto_Rico",
-      "city": "Puerto Rico",
-      "label": "UTC-04:00 — Atlantic Standard Time (AST, No DST)",
-      "std_off": -240,
-      "dst_off": -240,
-      "std_abbr": "AST",
-      "dst_abbr": "AST",
-      "rule": "none"
-    },
-    {
-      "iana": "America/St_Johns",
-      "city": "St. John's",
-      "label": "UTC-03:30 — Newfoundland Time (NST/NDT)",
-      "std_off": -210,
-      "dst_off": -150,
-      "std_abbr": "NST",
-      "dst_abbr": "NDT",
-      "rule": "us"
-    },
-    {
-      "iana": "America/Sao_Paulo",
-      "city": "Sao Paulo",
-      "label": "UTC-03:00 — South America Eastern Time (BRT/ART)",
-      "std_off": -180,
-      "dst_off": -180,
-      "std_abbr": "BRT",
-      "dst_abbr": "BRT",
-      "rule": "none"
-    },
-    {
-      "iana": "Etc/GMT+2",
-      "city": "UTC-2",
-      "label": "UTC-02:00 — Coordinated Universal Time-02",
-      "std_off": -120,
-      "dst_off": -120,
-      "std_abbr": "UTC-2",
-      "dst_abbr": "UTC-2",
-      "rule": "none"
-    },
-    {
-      "iana": "Atlantic/Azores",
-      "city": "Azores",
-      "label": "UTC-01:00 — Azores Time (AZOT/AZOST)",
-      "std_off": -60,
-      "dst_off": 0,
-      "std_abbr": "AZOT",
-      "dst_abbr": "AZOST",
-      "rule": "eu"
-    },
-    {
-      "iana": "Atlantic/Cape_Verde",
-      "city": "Cape Verde",
-      "label": "UTC-01:00 — Cape Verde Time (CVT, No DST)",
-      "std_off": -60,
-      "dst_off": -60,
-      "std_abbr": "CVT",
-      "dst_abbr": "CVT",
-      "rule": "none"
-    },
-    {
-      "iana": "Atlantic/Reykjavik",
-      "city": "Reykjavik",
-      "label": "UTC+00:00 — Greenwich Mean Time (GMT, No DST)",
-      "std_off": 0,
-      "dst_off": 0,
-      "std_abbr": "GMT",
-      "dst_abbr": "GMT",
-      "rule": "none"
-    },
-    {
-      "iana": "Europe/London",
-      "city": "London",
-      "label": "UTC+00:00 — Western European Time (GMT/BST)",
-      "std_off": 0,
-      "dst_off": 60,
-      "std_abbr": "GMT",
-      "dst_abbr": "BST",
-      "rule": "eu"
-    },
-    {
-      "iana": "Europe/Berlin",
-      "city": "Berlin",
-      "label": "UTC+01:00 — Central European Time (CET/CEST)",
-      "std_off": 60,
-      "dst_off": 120,
-      "std_abbr": "CET",
-      "dst_abbr": "CEST",
-      "rule": "eu"
-    },
-    {
-      "iana": "Africa/Lagos",
-      "city": "Lagos",
-      "label": "UTC+01:00 — West Africa Time (WAT, No DST)",
-      "std_off": 60,
-      "dst_off": 60,
-      "std_abbr": "WAT",
-      "dst_abbr": "WAT",
-      "rule": "none"
-    },
-    {
-      "iana": "Europe/Athens",
-      "city": "Athens",
-      "label": "UTC+02:00 — Eastern European Time (EET/EEST)",
-      "std_off": 120,
-      "dst_off": 180,
-      "std_abbr": "EET",
-      "dst_abbr": "EEST",
-      "rule": "eu"
-    },
-    {
-      "iana": "Africa/Johannesburg",
-      "city": "Johannesburg",
-      "label": "UTC+02:00 — Central / South Africa Time (CAT/SAST)",
-      "std_off": 120,
-      "dst_off": 120,
-      "std_abbr": "SAST",
-      "dst_abbr": "SAST",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Riyadh",
-      "city": "Riyadh",
-      "label": "UTC+03:00 — Arabia / East Africa Time (AST/EAT)",
-      "std_off": 180,
-      "dst_off": 180,
-      "std_abbr": "AST",
-      "dst_abbr": "AST",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Tehran",
-      "city": "Tehran",
-      "label": "UTC+03:30 — Iran Standard Time (IRST)",
-      "std_off": 210,
-      "dst_off": 210,
-      "std_abbr": "IRST",
-      "dst_abbr": "IRST",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Dubai",
-      "city": "Dubai",
-      "label": "UTC+04:00 — Gulf Standard Time (GST)",
-      "std_off": 240,
-      "dst_off": 240,
-      "std_abbr": "GST",
-      "dst_abbr": "GST",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Kabul",
-      "city": "Kabul",
-      "label": "UTC+04:30 — Afghanistan Time (AFT)",
-      "std_off": 270,
-      "dst_off": 270,
-      "std_abbr": "AFT",
-      "dst_abbr": "AFT",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Karachi",
-      "city": "Karachi",
-      "label": "UTC+05:00 — Pakistan / West Asia Time (PKT)",
-      "std_off": 300,
-      "dst_off": 300,
-      "std_abbr": "PKT",
-      "dst_abbr": "PKT",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Kolkata",
-      "city": "Kolkata",
-      "label": "UTC+05:30 — India / Sri Lanka Standard Time (IST)",
-      "std_off": 330,
-      "dst_off": 330,
-      "std_abbr": "IST",
-      "dst_abbr": "IST",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Kathmandu",
-      "city": "Kathmandu",
-      "label": "UTC+05:45 — Nepal Time (NPT)",
-      "std_off": 345,
-      "dst_off": 345,
-      "std_abbr": "NPT",
-      "dst_abbr": "NPT",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Dhaka",
-      "city": "Dhaka",
-      "label": "UTC+06:00 — Bangladesh / Central Asia Time (BST)",
-      "std_off": 360,
-      "dst_off": 360,
-      "std_abbr": "BST",
-      "dst_abbr": "BST",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Yangon",
-      "city": "Yangon",
-      "label": "UTC+06:30 — Myanmar Time (MMT)",
-      "std_off": 390,
-      "dst_off": 390,
-      "std_abbr": "MMT",
-      "dst_abbr": "MMT",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Bangkok",
-      "city": "Bangkok",
-      "label": "UTC+07:00 — Indochina Time (ICT)",
-      "std_off": 420,
-      "dst_off": 420,
-      "std_abbr": "ICT",
-      "dst_abbr": "ICT",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Singapore",
-      "city": "Singapore",
-      "label": "UTC+08:00 — China / Singapore / AWST (CST/SGT/AWST)",
-      "std_off": 480,
-      "dst_off": 480,
-      "std_abbr": "SGT",
-      "dst_abbr": "SGT",
-      "rule": "none"
-    },
-    {
-      "iana": "Australia/Eucla",
-      "city": "Eucla",
-      "label": "UTC+08:45 — Australian Central Western Time (ACWST)",
-      "std_off": 525,
-      "dst_off": 525,
-      "std_abbr": "ACWST",
-      "dst_abbr": "ACWST",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Tokyo",
-      "city": "Tokyo",
-      "label": "UTC+09:00 — Japan / Korea Standard Time (JST/KST)",
-      "std_off": 540,
-      "dst_off": 540,
-      "std_abbr": "JST",
-      "dst_abbr": "JST",
-      "rule": "none"
-    },
-    {
-      "iana": "Australia/Adelaide",
-      "city": "Adelaide",
-      "label": "UTC+09:30 — Australian Central Time (ACST/ACDT)",
-      "std_off": 570,
-      "dst_off": 630,
-      "std_abbr": "ACST",
-      "dst_abbr": "ACDT",
-      "rule": "au"
-    },
-    {
-      "iana": "Australia/Darwin",
-      "city": "Darwin",
-      "label": "UTC+09:30 — Australian Central Standard Time (ACST, No DST)",
-      "std_off": 570,
-      "dst_off": 570,
-      "std_abbr": "ACST",
-      "dst_abbr": "ACST",
-      "rule": "none"
-    },
-    {
-      "iana": "Australia/Sydney",
-      "city": "Sydney",
-      "label": "UTC+10:00 — Australian Eastern Time (AEST/AEDT)",
-      "std_off": 600,
-      "dst_off": 660,
-      "std_abbr": "AEST",
-      "dst_abbr": "AEDT",
-      "rule": "au"
-    },
-    {
-      "iana": "Australia/Brisbane",
-      "city": "Brisbane",
-      "label": "UTC+10:00 — Australian Eastern Standard Time (AEST, No DST)",
-      "std_off": 600,
-      "dst_off": 600,
-      "std_abbr": "AEST",
-      "dst_abbr": "AEST",
-      "rule": "none"
-    },
-    {
-      "iana": "Australia/Lord_Howe",
-      "city": "Lord Howe",
-      "label": "UTC+10:30 — Lord Howe Time (LHST/LHDT)",
-      "std_off": 630,
-      "dst_off": 660,
-      "std_abbr": "LHST",
-      "dst_abbr": "LHDT",
-      "rule": "au30"
-    },
-    {
-      "iana": "Pacific/Guadalcanal",
-      "city": "Guadalcanal",
-      "label": "UTC+11:00 — Solomon Islands / New Caledonia Time (SBT)",
-      "std_off": 660,
-      "dst_off": 660,
-      "std_abbr": "SBT",
-      "dst_abbr": "SBT",
-      "rule": "none"
-    },
-    {
-      "iana": "Pacific/Auckland",
-      "city": "Auckland",
-      "label": "UTC+12:00 — New Zealand Time (NZST/NZDT)",
-      "std_off": 720,
-      "dst_off": 780,
-      "std_abbr": "NZST",
-      "dst_abbr": "NZDT",
-      "rule": "nz"
-    },
-    {
-      "iana": "Etc/GMT-12",
-      "city": "UTC+12",
-      "label": "UTC+12:00 — Coordinated Universal Time+12 (No DST)",
-      "std_off": 720,
-      "dst_off": 720,
-      "std_abbr": "UTC+12",
-      "dst_abbr": "UTC+12",
-      "rule": "none"
-    },
-    {
-      "iana": "Pacific/Chatham",
-      "city": "Chatham",
-      "label": "UTC+12:45 — Chatham Islands Time (CHAST/CHADT)",
-      "std_off": 765,
-      "dst_off": 825,
-      "std_abbr": "CHAST",
-      "dst_abbr": "CHADT",
-      "rule": "nz"
-    },
-    {
-      "iana": "Pacific/Tongatapu",
-      "city": "Tongatapu",
-      "label": "UTC+13:00 — Tonga / Phoenix Islands Time (TOT)",
-      "std_off": 780,
-      "dst_off": 780,
-      "std_abbr": "TOT",
-      "dst_abbr": "TOT",
-      "rule": "none"
-    },
-    {
-      "iana": "Pacific/Kiritimati",
-      "city": "Kiritimati",
-      "label": "UTC+14:00 — Line Islands Time (LINT)",
-      "std_off": 840,
-      "dst_off": 840,
-      "std_abbr": "LINT",
-      "dst_abbr": "LINT",
-      "rule": "none"
-    }
-  ],
-  "world_clock_aliases": [
-    {
-      "iana": "America/Toronto",
-      "city": "Toronto",
-      "std_off": -300,
-      "dst_off": -240,
-      "std_abbr": "EST",
-      "dst_abbr": "EDT",
-      "rule": "us"
-    },
-    {
-      "iana": "America/Argentina/Buenos_Aires",
-      "city": "Buenos Aires",
-      "std_off": -180,
-      "dst_off": -180,
-      "std_abbr": "ART",
-      "dst_abbr": "ART",
-      "rule": "none"
-    },
-    {
-      "iana": "Europe/Paris",
-      "city": "Paris",
-      "std_off": 60,
-      "dst_off": 120,
-      "std_abbr": "CET",
-      "dst_abbr": "CEST",
-      "rule": "eu"
-    },
-    {
-      "iana": "Europe/Zurich",
-      "city": "Zurich",
-      "std_off": 60,
-      "dst_off": 120,
-      "std_abbr": "CET",
-      "dst_abbr": "CEST",
-      "rule": "eu"
-    },
-    {
-      "iana": "Africa/Cairo",
-      "city": "Cairo",
-      "std_off": 120,
-      "dst_off": 180,
-      "std_abbr": "EET",
-      "dst_abbr": "EEST",
-      "rule": "eg"
-    },
-    {
-      "iana": "Asia/Hong_Kong",
-      "city": "Hong Kong",
-      "std_off": 480,
-      "dst_off": 480,
-      "std_abbr": "HKT",
-      "dst_abbr": "HKT",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Shanghai",
-      "city": "Shanghai",
-      "std_off": 480,
-      "dst_off": 480,
-      "std_abbr": "CST",
-      "dst_abbr": "CST",
-      "rule": "none"
-    },
-    {
-      "iana": "Asia/Seoul",
-      "city": "Seoul",
-      "std_off": 540,
-      "dst_off": 540,
-      "std_abbr": "KST",
-      "dst_abbr": "KST",
-      "rule": "none"
-    }
-  ],
   "device_pref_specs": [
     {
       "key": "wake_word_mode",
-      "label": "Wake Word Mode",
       "domain": "select",
       "default": "Docked Only",
-      "section": "audio",
-      "group_tier": "behavior",
       "options": [
         "Docked Only",
         "Always On",
@@ -2658,16 +2030,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "mic"
     },
     {
       "key": "tap_to_wake",
-      "label": "Tap to Wake",
       "domain": "select",
       "default": "Docked Only",
-      "section": "power",
-      "group_tier": "behavior",
       "options": [
         "Single Tap",
         "Double Tap",
@@ -2677,16 +2045,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "pickup_to_wake",
-      "label": "Pickup to Wake",
       "domain": "select",
       "default": "Docked Only",
-      "section": "power",
-      "group_tier": "behavior",
       "options": [
         "Always On",
         "Docked Only",
@@ -2695,16 +2059,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display_imu"
     },
     {
       "key": "battery_screen_timeout",
-      "label": "Battery Screen Timeout",
       "domain": "select",
       "default": "30s",
-      "section": "power",
-      "group_tier": "behavior",
       "options": [
         "10s",
         "15s",
@@ -2716,16 +2076,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display_battery"
     },
     {
       "key": "docked_idle_timeout",
-      "label": "Docked Idle Timeout",
       "domain": "select",
       "default": "1 min",
-      "section": "display",
-      "group_tier": "behavior",
       "options": [
         "10s",
         "15s",
@@ -2738,16 +2094,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "battery_hibernate_timeout",
-      "label": "Battery Hibernate Timeout",
       "domain": "select",
       "default": "15 min",
-      "section": "power",
-      "group_tier": "behavior",
       "options": [
         "5 min",
         "10 min",
@@ -2758,16 +2110,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display_battery"
     },
     {
       "key": "screensaver_mode",
-      "label": "Screensaver mode",
       "domain": "select",
       "default": "Docked Only",
-      "section": "display",
-      "group_tier": "behavior",
       "options": [
         "Docked Only",
         "Always",
@@ -2776,16 +2124,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "screensaver_style",
-      "label": "Screensaver Style",
       "domain": "select",
       "default": "Ambient Clock",
-      "section": "display",
-      "group_tier": "display",
       "options": [
         "Ambient Clock",
         "Photo Frame",
@@ -2797,16 +2141,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "auto_brightness_mode",
-      "label": "Auto Brightness Mode",
       "domain": "select",
       "default": "Sun Synchronized",
-      "section": "display",
-      "group_tier": "behavior",
       "options": [
         "Disabled",
         "Sun Synchronized",
@@ -2816,86 +2156,62 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "manual_brightness",
-      "label": "Manual Brightness",
       "domain": "number",
       "default": 80,
-      "section": "display",
-      "group_tier": "behavior",
       "options": [],
       "min": 1,
       "max": 100,
       "step": 1,
-      "unit": "%",
       "capability": "display"
     },
     {
       "key": "day_brightness",
-      "label": "Day Brightness",
       "domain": "number",
       "default": 90,
-      "section": "display",
-      "group_tier": "behavior",
       "options": [],
       "min": 1,
       "max": 100,
       "step": 1,
-      "unit": "%",
       "capability": "display"
     },
     {
       "key": "night_brightness",
-      "label": "Night Brightness",
       "domain": "number",
       "default": 35,
-      "section": "display",
-      "group_tier": "behavior",
       "options": [],
       "min": 1,
       "max": 100,
       "step": 1,
-      "unit": "%",
       "capability": "display"
     },
     {
       "key": "day_start_hour",
-      "label": "Day Start Hour",
       "domain": "number",
       "default": 7,
-      "section": "display",
-      "group_tier": "behavior",
       "options": [],
       "min": 0,
       "max": 23,
       "step": 1,
-      "unit": ":00",
       "capability": "display"
     },
     {
       "key": "night_start_hour",
-      "label": "Night Start Hour",
       "domain": "number",
       "default": 20,
-      "section": "display",
-      "group_tier": "behavior",
       "options": [],
       "min": 0,
       "max": 23,
       "step": 1,
-      "unit": ":00",
       "capability": "display"
     },
     {
       "key": "color_profile",
-      "label": "Color Profile",
       "domain": "select",
       "default": "Steel Blue",
-      "section": "display",
-      "group_tier": "display",
       "options": [
         "Steel Blue",
         "Pink",
@@ -2906,16 +2222,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "va_visual_profile",
-      "label": "Visual Profile",
       "domain": "select",
       "default": "Nebula",
-      "section": "display",
-      "group_tier": "display",
       "options": [
         "Nebula",
         "Solaris",
@@ -2926,30 +2238,22 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "home_screen_enabled",
-      "label": "Enable Home Screen",
       "domain": "switch",
       "default": true,
-      "section": "interface",
-      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "start_screen",
-      "label": "Start Screen",
       "domain": "select",
       "default": "Home",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Home",
         "Pinned",
@@ -2968,16 +2272,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "return_to_home_timeout",
-      "label": "Return to Home Timeout",
       "domain": "select",
       "default": "2 min",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "15s",
         "30s",
@@ -2990,16 +2290,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "clock_face",
-      "label": "Clock Face",
       "domain": "select",
       "default": "Minimal Digital",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Minimal Digital",
         "Modern Analog",
@@ -3008,16 +2304,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "time_format",
-      "label": "Time Format",
       "domain": "select",
       "default": "12-Hour (AM/PM)",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "12-Hour (AM/PM)",
         "24-Hour"
@@ -3025,72 +2317,52 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "weather_background",
-      "label": "Weather Background",
       "domain": "switch",
       "default": true,
-      "section": "interface",
-      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "home_sun",
-      "label": "Sun",
       "domain": "switch",
       "default": true,
-      "section": "interface",
-      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "home_moon",
-      "label": "Moon",
       "domain": "switch",
       "default": true,
-      "section": "interface",
-      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "wake_greeting",
-      "label": "Wake Greeting",
       "domain": "switch",
       "default": true,
-      "section": "interface",
-      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "album_art_style",
-      "label": "Album Art Style",
       "domain": "select",
       "default": "Full Screen",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Full Screen",
         "Letterbox",
@@ -3100,16 +2372,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "music_overlay_style",
-      "label": "Overlay Style",
       "domain": "select",
       "default": "Art + Metadata",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Art Only",
         "Art + Metadata",
@@ -3118,16 +2386,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "music_auto_open",
-      "label": "Auto-open on play",
       "domain": "select",
       "default": "Now Playing",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Now Playing",
         "Lyrics",
@@ -3136,16 +2400,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "album_sort_order",
-      "label": "Album Sort Order",
       "domain": "select",
       "default": "Alphabetical",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Alphabetical",
         "Newest on Top",
@@ -3154,16 +2414,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "artist_album_sort_order",
-      "label": "Artist Album Sort Order",
       "domain": "select",
       "default": "Oldest on Top",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Oldest on Top",
         "Newest on Top",
@@ -3172,16 +2428,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "podcast_sort_order",
-      "label": "Podcast Sort Order",
       "domain": "select",
       "default": "Newest on Top",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Newest on Top",
         "Oldest on Top"
@@ -3189,16 +2441,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "ww_sens_okay_nabu",
-      "label": "Okay Nabu Sensitivity",
       "domain": "select",
       "default": "Moderately sensitive",
-      "section": "audio",
-      "group_tier": "behavior",
       "options": [
         "Slightly sensitive",
         "Moderately sensitive",
@@ -3207,16 +2455,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "mic"
     },
     {
       "key": "ww_sens_hey_luna",
-      "label": "Hey Luna Sensitivity",
       "domain": "select",
       "default": "Moderately sensitive",
-      "section": "audio",
-      "group_tier": "behavior",
       "options": [
         "Slightly sensitive",
         "Moderately sensitive",
@@ -3225,16 +2469,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "mic"
     },
     {
       "key": "ww_sens_hey_jarvis",
-      "label": "Hey Jarvis Sensitivity",
       "domain": "select",
       "default": "Moderately sensitive",
-      "section": "audio",
-      "group_tier": "behavior",
       "options": [
         "Slightly sensitive",
         "Moderately sensitive",
@@ -3243,16 +2483,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "mic"
     },
     {
       "key": "ww_sens_hey_mycroft",
-      "label": "Hey Mycroft Sensitivity",
       "domain": "select",
       "default": "Moderately sensitive",
-      "section": "audio",
-      "group_tier": "behavior",
       "options": [
         "Slightly sensitive",
         "Moderately sensitive",
@@ -3261,16 +2497,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "mic"
     },
     {
       "key": "ww_sens_alexa",
-      "label": "Alexa Sensitivity",
       "domain": "select",
       "default": "Moderately sensitive",
-      "section": "audio",
-      "group_tier": "behavior",
       "options": [
         "Slightly sensitive",
         "Moderately sensitive",
@@ -3279,72 +2511,52 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "mic"
     },
     {
       "key": "wake_screen_on_assist",
-      "label": "Wake Screen on Assist",
       "domain": "switch",
       "default": true,
-      "section": "audio",
-      "group_tier": "behavior",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "alert_volume",
-      "label": "Alert Volume",
       "domain": "number",
       "default": 80,
-      "section": "audio",
-      "group_tier": "behavior",
       "options": [],
       "min": 20,
       "max": 100,
       "step": 5,
-      "unit": "%",
       "capability": "speaker"
     },
     {
       "key": "volume_step_size",
-      "label": "Volume Step Size",
       "domain": "number",
       "default": 5,
-      "section": "audio",
-      "group_tier": "behavior",
       "options": [],
       "min": 1,
       "max": 10,
       "step": 1,
-      "unit": "%",
       "capability": "speaker"
     },
     {
       "key": "game_sound_effects",
-      "label": "Game Sound Effects",
       "domain": "switch",
       "default": true,
-      "section": "audio",
-      "group_tier": "behavior",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "ble_beacon_mode",
-      "label": "BLE Beacon Mode",
       "domain": "select",
       "default": "Handheld Only",
-      "section": "presence",
-      "group_tier": "behavior",
       "options": [
         "Handheld Only",
         "Handheld + Screen Off",
@@ -3353,16 +2565,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "beacon_battery"
     },
     {
       "key": "weather_sim_condition",
-      "label": "Weather Simulation",
       "domain": "select",
       "default": "Live (Home Assistant)",
-      "section": "developer",
-      "group_tier": null,
       "options": [
         "Live (Home Assistant)",
         "Clear Night",
@@ -3385,16 +2593,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "home_clock_tap_action",
-      "label": "Home Time Tap",
       "domain": "select",
       "default": "Time App",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Time App",
         "Clock Face"
@@ -3402,16 +2606,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "home_date_tap_action",
-      "label": "Home Date Tap",
       "domain": "select",
       "default": "Overview",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Day View",
         "Overview"
@@ -3419,86 +2619,62 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "local_clock_label",
-      "label": "Local Clock Label",
       "domain": "text",
       "default": "",
-      "section": "time",
-      "group_tier": null,
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "show_utc_clock",
-      "label": "Show UTC Clock",
       "domain": "switch",
       "default": false,
-      "section": "interface",
-      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "world_clocks",
-      "label": "World Clocks",
       "domain": "text",
       "default": "",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "alarms_summary",
-      "label": "Alarms",
       "domain": "text",
       "default": "07:00|0|1;08:30|0|2;09:00|0|2",
-      "section": "time",
-      "group_tier": null,
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "calendar_lookahead_days",
-      "label": "Overview Lookahead",
       "domain": "number",
       "default": 30,
-      "section": "interface",
-      "group_tier": "interface",
       "options": [],
       "min": 7,
       "max": 60,
       "step": 1,
-      "unit": "d",
       "capability": "display"
     },
     {
       "key": "calendar_week_start",
-      "label": "Start Week On",
       "domain": "select",
       "default": "Sunday",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Sunday",
         "Monday"
@@ -3506,30 +2682,22 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "bedtime_active",
-      "label": "Bedtime Mode",
       "domain": "switch",
       "default": false,
-      "section": "power",
-      "group_tier": null,
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "bedtime_display",
-      "label": "Idle Display in Bedtime",
       "domain": "select",
       "default": "Screen Off",
-      "section": "power",
-      "group_tier": "behavior",
       "options": [
         "Screen Off",
         "Ambient Clock"
@@ -3537,72 +2705,52 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "bedtime_schedule",
-      "label": "Bedtime Schedule",
       "domain": "switch",
       "default": false,
-      "section": "power",
-      "group_tier": "behavior",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "bedtime_start_hour",
-      "label": "Bedtime Starts",
       "domain": "number",
       "default": 22,
-      "section": "power",
-      "group_tier": "behavior",
       "options": [],
       "min": 0,
       "max": 23,
       "step": 1,
-      "unit": ":00",
       "capability": "display"
     },
     {
       "key": "bedtime_end_hour",
-      "label": "Bedtime Ends",
       "domain": "number",
       "default": 7,
-      "section": "power",
-      "group_tier": "behavior",
       "options": [],
       "min": 0,
       "max": 23,
       "step": 1,
-      "unit": ":00",
       "capability": "display"
     },
     {
       "key": "bedtime_brightness",
-      "label": "Bedtime Brightness",
       "domain": "number",
       "default": 15,
-      "section": "power",
-      "group_tier": "behavior",
       "options": [],
       "min": 1,
       "max": 100,
       "step": 1,
-      "unit": "%",
       "capability": "display"
     },
     {
       "key": "camera_default_view",
-      "label": "Default camera view",
       "domain": "select",
       "default": "Grid",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Grid",
         "Single",
@@ -3611,16 +2759,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "camera_carousel_interval",
-      "label": "Carousel interval",
       "domain": "select",
       "default": "15s",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "10s",
         "15s",
@@ -3630,16 +2774,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "camera_framing",
-      "label": "Camera framing",
       "domain": "select",
       "default": "Uncropped",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Uncropped",
         "Fill"
@@ -3647,16 +2787,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "camera_stream_mode",
-      "label": "Camera stream mode",
       "domain": "select",
       "default": "Auto",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Auto",
         "Low Bandwidth",
@@ -3665,16 +2801,12 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "camera_doorbell_popup",
-      "label": "Doorbell ring popup",
       "domain": "select",
       "default": "Snapshot",
-      "section": "interface",
-      "group_tier": "interface",
       "options": [
         "Snapshot",
         "Live Video"
@@ -3682,107 +2814,51 @@
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "hw_jpeg"
     },
     {
       "key": "screensaver_photo_clock",
-      "label": "Show subtle clock",
       "domain": "switch",
       "default": false,
-      "section": "display",
-      "group_tier": "display",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "weather_app_background",
-      "label": "Weather app background",
       "domain": "switch",
       "default": true,
-      "section": "interface",
-      "group_tier": "interface",
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
       "capability": "display"
     },
     {
       "key": "do_not_disturb",
-      "label": "Do not disturb",
       "domain": "switch",
       "default": false,
-      "section": "power",
-      "group_tier": null,
       "options": [],
       "min": null,
       "max": null,
       "step": null,
-      "unit": "",
+      "capability": "display_or_audio"
+    },
+    {
+      "key": "glass_style",
+      "domain": "select",
+      "default": "Auto",
+      "options": [
+        "Auto",
+        "Clear",
+        "Dark"
+      ],
+      "min": null,
+      "max": null,
+      "step": null,
       "capability": "display"
     }
-  ],
-  "studio_contract": {
-    "studio_rev": 47,
-    "allowed_device_actions": [
-      "restart",
-      "find_my",
-      "activate_screensaver",
-      "deactivate_screensaver",
-      "wake_screen",
-      "screen_off",
-      "set_profiler_on",
-      "set_profiler_off",
-      "request_telemetry",
-      "trigger_va",
-      "dismiss_ringing",
-      "cancel_timer",
-      "reset_stopwatch"
-    ],
-    "system_commands": [
-      "set_ble_scanner_offset",
-      "set_area_fusion",
-      "set_area_illuminance",
-      "calibrate_area_illuminance",
-      "capture_ble_area_signature",
-      "clear_ble_area_signature",
-      "send_announcement",
-      "check_system_updates",
-      "clear_internal_logs",
-      "remove_device",
-      "add_latter_device",
-      "ignore_discovered_device",
-      "unignore_discovered_device",
-      "add_ble_device",
-      "create_device_group",
-      "delete_device_group",
-      "update_group_baseline",
-      "apply_batch_device_setting",
-      "test_doorbell_speaker",
-      "mint_camera_preview_url",
-      "delete_photo",
-      "create_photo_collection",
-      "rename_photo_collection",
-      "delete_photo_collection",
-      "update_photo_metadata",
-      "bulk_update_photos",
-      "browse_media_folder",
-      "import_media_photos",
-      "save_system_config",
-      "rotate_signing_key",
-      "set_security_pin"
-    ],
-    "device_commands": [
-      "esphome_entity_action",
-      "device_action",
-      "set_device_photo_pool",
-      "save_device_config"
-    ]
-  }
+  ]
 }

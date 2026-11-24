@@ -5,9 +5,10 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { renderFirmwareOutdatedBanner } from "../../src/components/controls/device-banners.js";
 import { buildOrderedPillItems } from "../../src/components/dialogs/app-config.js";
-import { GAMES_ITEMS_CATALOG } from "../../src/constants.js";
-import type { ReactiveController, ReactiveControllerHost } from "../../src/lib/lit.js";
+import { DEVICE_PREF_SPECS_MAP, GAMES_ITEMS_CATALOG } from "../../src/constants.js";
+import { nothing, type ReactiveController, type ReactiveControllerHost } from "../../src/lib/lit.js";
 import {
   DEFAULT_GAMES_ITEMS,
   DEVICE_PREF_SPECS_CATALOG,
@@ -36,12 +37,18 @@ import type {
   StudioStatePayload,
   SystemDeviceEntry,
 } from "../../src/types.js";
+import { renderDeviceDisplayView } from "../../src/views/device-display-view.js";
+import { renderDeviceOverviewView } from "../../src/views/device-overview-view.js";
 import {
   DEV_TELEMETRY_REFRESH_DEBOUNCE_MS,
   handleDeveloperTelemetryDrawerToggle,
   renderDeviceToolsView,
 } from "../../src/views/device-tools-view.js";
-import { deriveGroupCapabilities } from "../../src/views/groups/group-baseline-drawer.js";
+import {
+  deriveGroupCapabilities,
+  renderGroupBaselineDrawer,
+} from "../../src/views/groups/group-baseline-drawer.js";
+import { renderSystemOverviewView } from "../../src/views/system-overview-view.js";
 
 interface HeadlessStoreHarness {
   store: StudioStore;
@@ -135,6 +142,12 @@ function createHeadlessStore(initialPayload?: Partial<StudioStatePayload>): Head
     studio_rev: STUDIO_REV,
     system_config_rev: 3,
     device_config_rev: 7,
+    system_info: {
+      ha_version: "2026.11.2",
+      integration_version: "3.0.0",
+      min_firmware_core_rev: 2026112303,
+      studio_rev: STUDIO_REV,
+    },
     internal_logs: [],
     system_devices: [
       {
@@ -437,7 +450,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.equal(store.currentViewId, "photos");
   });
 
-  it("constructs STUDIO_REV=47 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
+  it("constructs STUDIO_REV=48 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
     const { store, wsLog } = createHeadlessStore();
     store.applyRoute({ prefix: "/latter", path: "devices/sub_desk/overview" });
 
@@ -455,10 +468,10 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { do_not_disturb: true },
         expected_config_rev: 7,
       },
-      studio_rev: 47,
+      studio_rev: 48,
     });
 
-    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 47`
+    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 48`
     wsLog.length = 0;
     store.applyRoute({ prefix: "/latter", path: "system/presence" });
     store.entity.stageSystemSetting("ble_away_timeout_s", 240, undefined, 60_000);
@@ -472,7 +485,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { ble_away_timeout_s: 240 },
         expected_config_rev: 3,
       },
-      studio_rev: 47,
+      studio_rev: 48,
     });
 
     // `version_mismatch` sets `studioRevMismatch = true`
@@ -974,5 +987,285 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     offlineToggle({ currentTarget: { open: true } } as unknown as Event);
     await new Promise<void>((r) => setTimeout(r, 0));
     assert.equal(renderWs.length, 1);
+  });
+
+  it("renders core_rev, firmware_outdated warning banner/badges, and screenless System overview counts", () => {
+    const flattenTemplate = (node: unknown): string => {
+      if (node === null || node === undefined || node === nothing) return "";
+      if (typeof node === "string" || typeof node === "number" || typeof node === "boolean") {
+        return String(node);
+      }
+      if (Array.isArray(node)) {
+        return node.map(flattenTemplate).join("");
+      }
+      if (typeof node === "object") {
+        const tpl = node as { strings?: readonly string[]; values?: readonly unknown[] };
+        if (Array.isArray(tpl.strings)) {
+          let out = "";
+          for (let i = 0; i < tpl.strings.length; i += 1) {
+            out += tpl.strings[i] ?? "";
+            if (Array.isArray(tpl.values) && i < tpl.values.length) {
+              out += flattenTemplate(tpl.values[i]);
+            }
+          }
+          return out;
+        }
+      }
+      return "";
+    };
+
+    const { store: currentStore } = createHeadlessStore({
+      live: { core_rev: "2026112303", firmware_outdated: false },
+    });
+    currentStore.applyRoute({ prefix: "/latter", path: "devices/sub_desk/overview" });
+    const summaryText = currentStore.tools.formatSystemInfoSummary();
+    assert.ok(summaryText.includes("Minimum firmware core: 2026112303"));
+    assert.equal(summaryText.includes("SDK"), false);
+    assert.equal(renderFirmwareOutdatedBanner(currentStore), nothing);
+    const currentToolsHtml = flattenTemplate(renderDeviceToolsView(currentStore));
+    assert.ok(currentToolsHtml.includes("diag-core-rev"));
+    assert.ok(currentToolsHtml.includes("2026112303"));
+    assert.equal(currentToolsHtml.includes("diag-firmware-outdated-badge"), false);
+
+    // Outdated firmware renders warning banner on Overview & Tools and badge on Diagnostics & Status card
+    const { store: outdatedStore } = createHeadlessStore({
+      live: { core_rev: "2026112202", firmware_outdated: true },
+    });
+    outdatedStore.applyRoute({ prefix: "/latter", path: "devices/sub_desk/overview" });
+    const bannerHtml = flattenTemplate(renderFirmwareOutdatedBanner(outdatedStore));
+    assert.ok(bannerHtml.includes("device-firmware-outdated-banner"));
+    assert.ok(bannerHtml.includes("alert-warning"));
+    assert.ok(bannerHtml.includes("Firmware update required"));
+    assert.ok(bannerHtml.includes("2026112202"));
+    assert.ok(bannerHtml.includes("2026112303"));
+
+    const overviewHtml = flattenTemplate(renderDeviceOverviewView(outdatedStore));
+    assert.ok(overviewHtml.includes("device-firmware-outdated-banner"));
+    assert.ok(overviewHtml.includes("Firmware update required"));
+
+    const outdatedToolsHtml = flattenTemplate(renderDeviceToolsView(outdatedStore));
+    assert.ok(outdatedToolsHtml.includes("device-firmware-outdated-banner"));
+    assert.ok(outdatedToolsHtml.includes("diag-core-rev"));
+    assert.ok(outdatedToolsHtml.includes("diag-firmware-outdated-badge"));
+    assert.ok(outdatedToolsHtml.includes("2026112202"));
+
+    // BLE tags never show firmware outdated banners
+    const { store: bleStore } = createHeadlessStore({
+      config: { kind: "ble_tag", device_slug: "alex_phone" },
+      live: { firmware_outdated: true },
+    });
+    assert.equal(renderFirmwareOutdatedBanner(bleStore), nothing);
+
+    // System overview reports screenless devices cleanly without hardcoding "audio"
+    const { store: screenlessStore } = createHeadlessStore({
+      system_devices: [
+        {
+          subentry_id: "sub_relay",
+          device_slug: "hallway_node",
+          title: "Hallway Node",
+          model_label: "Latter Node",
+          area_id: "hallway",
+          has_assigned_area: true,
+          area_label: "Hallway",
+          status_code: "online",
+          status_label: "Online",
+          is_online: true,
+          kind: "device",
+          has_display: false,
+          has_battery: false,
+          is_roaming: false,
+          device_group: "custom",
+          device_remote_group: "area_auto",
+          device_group_name: "Custom",
+          assigned_person: "",
+          active_area_name: "Hallway",
+          is_latter_native: true,
+          battery_level: null,
+          is_charging: false,
+          is_usb_connected: true,
+          wifi_rssi: -52,
+          ip_address: "192.168.10.40",
+          has_ble: true,
+          ble_tracked: false,
+          ble_survey_rows: [],
+          ble_packets_seen: 0,
+          is_current: true,
+        },
+      ],
+    });
+    const sysOvHtml = flattenTemplate(renderSystemOverviewView(screenlessStore));
+    assert.ok(sysOvHtml.includes("1 screenless"));
+    assert.equal(sysOvHtml.includes("1 audio"), false);
+  });
+
+  it("wires 3-way glass_style across Display view, Group baselines, Batch controls, and capability gates", async () => {
+    const flattenTemplate = (node: unknown): string => {
+      if (node === null || node === undefined || node === nothing) return "";
+      if (typeof node === "string" || typeof node === "number" || typeof node === "boolean") {
+        return String(node);
+      }
+      if (Array.isArray(node)) {
+        return node.map(flattenTemplate).join("");
+      }
+      if (typeof node === "object") {
+        const tpl = node as { strings?: readonly string[]; values?: readonly unknown[] };
+        if (Array.isArray(tpl.strings)) {
+          let out = "";
+          for (let i = 0; i < tpl.strings.length; i += 1) {
+            out += tpl.strings[i] ?? "";
+            if (Array.isArray(tpl.values) && i < tpl.values.length) {
+              out += flattenTemplate(tpl.values[i]);
+            }
+          }
+          return out;
+        }
+      }
+      return "";
+    };
+
+    // Capability gating for `glass_style` (`display`) and `do_not_disturb` (`display_or_audio`)
+    assert.equal(isCatalogItemSupported(DEVICE_PREF_SPECS_MAP.glass_style!, { has_display: true }), true);
+    assert.equal(isCatalogItemSupported(DEVICE_PREF_SPECS_MAP.glass_style!, { has_display: false }), false);
+    assert.equal(
+      isCatalogItemSupported(DEVICE_PREF_SPECS_MAP.do_not_disturb!, {
+        has_display: false,
+        has_audio: true,
+      }),
+      true,
+    );
+    assert.equal(
+      isCatalogItemSupported(DEVICE_PREF_SPECS_MAP.do_not_disturb!, {
+        has_display: true,
+        has_audio: false,
+      }),
+      true,
+    );
+    assert.equal(
+      isCatalogItemSupported(DEVICE_PREF_SPECS_MAP.do_not_disturb!, {
+        has_display: false,
+        has_audio: false,
+      }),
+      false,
+    );
+
+    const glassPref = {
+      key: "glass_style",
+      label: "Glass Style",
+      section: "display",
+      group_tier: "display",
+      domain: "select",
+      value: "Auto",
+      options: ["Auto", "Clear", "Dark"],
+    };
+    const glassBatchCtrl: SharedControlItem = {
+      key: "display:select:glass_style",
+      pref_key: "glass_style",
+      tier: "display",
+      section: "display",
+      section_title: "Display",
+      name: "Glass Style",
+      domain: "select",
+      options: ["Auto", "Clear", "Dark"],
+      targets: [
+        {
+          subentry_id: "sub_desk",
+          device_slug: "desk_assistant",
+          device_group: "wall_panels",
+          is_online: true,
+          is_roaming: false,
+          pref_key: "glass_style",
+          state: "Auto",
+        },
+        {
+          subentry_id: "sub_pocket",
+          device_slug: "pocket_assistant",
+          device_group: "pocket_carry",
+          is_online: false,
+          is_roaming: true,
+          pref_key: "glass_style",
+          state: "Clear",
+        },
+      ],
+    };
+
+    const { store, wsLog } = createHeadlessStore({
+      config: {
+        device_slug: "desk_assistant",
+        kind: "device",
+        is_roaming: false,
+        device_group: "wall_panels",
+        glass_style: "Auto",
+      },
+      device_prefs: [glassPref],
+      system_controls: [glassBatchCtrl],
+    });
+    store.applyRoute({ prefix: "/latter", path: "devices/sub_desk/display" });
+
+    // 1. Device -> Display renders `#cfg-glass_style` with Auto / Clear / Dark & description
+    const displayHtml = flattenTemplate(renderDeviceDisplayView(store));
+    assert.ok(displayHtml.includes("cfg-glass_style"));
+    assert.ok(displayHtml.includes("Glass style"));
+    assert.ok(displayHtml.includes("Auto adapts contrast over bright backdrops"));
+    assert.ok(displayHtml.includes("Clear"));
+    assert.ok(displayHtml.includes("Dark"));
+
+    // Staging `glass_style` flushes cleanly via `save_device_config`
+    store.entity.stageDeviceSetting("glass_style", "Dark", "cfg-glass_style", 60_000);
+    await store.entity.flushDeviceBucket("sub_desk");
+    assert.equal(wsLog.length, 1);
+    assert.deepEqual((wsLog[0]?.payload as Record<string, unknown>)?.config, {
+      glass_style: "Dark",
+    });
+
+    // Non-display capabilities omit `#cfg-glass_style`
+    const { store: headlessStore } = createHeadlessStore({
+      capabilities: { has_display: false, has_audio: true },
+    });
+    const headlessDisplayHtml = flattenTemplate(renderDeviceDisplayView(headlessStore));
+    assert.equal(headlessDisplayHtml.includes("cfg-glass_style"), false);
+
+    // 2. Group Baseline Drawer renders `Glass style` under Display tier when `include_display: true`
+    const displayGroup: DeviceGroup = {
+      id: "custom_display",
+      name: "Bright Areas",
+      description: "Display group",
+      builtin: false,
+      include_display: true,
+      include_interface: false,
+      device_config: { glass_style: "Clear", color_profile: "Steel Blue" },
+    };
+    store.openGroupIds.add("custom_display");
+    const deskMember = store.state!.system_devices.find((d) => d.subentry_id === "sub_desk")!;
+    const groupDrawerHtml = flattenTemplate(
+      renderGroupBaselineDrawer(store, displayGroup, [deskMember], [deskMember]),
+    );
+    assert.ok(groupDrawerHtml.includes("Glass style"));
+    assert.ok(groupDrawerHtml.includes("Glass style for Bright Areas"));
+
+    // Screenless custom group omits `Glass style` in Display tier
+    const screenlessMember: SystemDeviceEntry = { ...deskMember, has_display: false };
+    const screenlessGroupHtml = flattenTemplate(
+      renderGroupBaselineDrawer(store, displayGroup, [screenlessMember], [screenlessMember]),
+    );
+    assert.equal(screenlessGroupHtml.includes("Glass style"), false);
+
+    // Group overlay respects `include_display` for `glass_style` (`group_tier: "display"`)
+    const payloadWithDisplayGrp = structuredClone(store.state!);
+    payloadWithDisplayGrp.device_groups = [displayGroup];
+    payloadWithDisplayGrp.config.device_group = "custom_display";
+    payloadWithDisplayGrp.config.glass_style = "Clear";
+    overlayDevicePrefsOnSections(payloadWithDisplayGrp, { glass_style: "Dark" });
+    assert.equal(payloadWithDisplayGrp.config.device_group, "custom");
+    overlayDevicePrefsOnSections(payloadWithDisplayGrp, { device_group: "custom_display" });
+    assert.equal(payloadWithDisplayGrp.config.glass_style, "Clear");
+
+    // 3. BatchController detects Mixed `glass_style` values, stages `"Dark"`, and previews detachment
+    const effBefore = store.groups.getEffectiveBatchValue(glassBatchCtrl);
+    assert.equal(effBefore.mixed, true);
+    store.groups.stageBatchSetting("glass_style", "Dark");
+    const effAfter = store.groups.getEffectiveBatchValue(glassBatchCtrl);
+    assert.equal(effAfter.staged, true);
+    assert.equal(effAfter.value, "Dark");
+    assert.equal(store.groups.previewBatchDetachmentCount(), 2);
   });
 });

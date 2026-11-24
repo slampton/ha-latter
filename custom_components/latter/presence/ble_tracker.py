@@ -25,7 +25,7 @@ from ..const import (
     DEFAULT_BLE_MAX_VELOCITY_MPS,
 )
 from ..hub_registry import peek_domain_data
-from ..identity import get_bound_esphome_device, read_device_hardware_manifest
+from ..identity import get_bound_esphome_device
 from .ble_math import (
     CORROBORATION_BONUS_DB,
     CORROBORATION_MIN_DBM,
@@ -859,14 +859,6 @@ class LatterNativeBleTracker:
         if self._explicit_major is not None or self._explicit_minor is not None:
             return self._explicit_major, self._explicit_minor
         beacon_cfg = self._manifest_beacon
-        if not beacon_cfg:
-            hw = read_device_hardware_manifest(self.hass, self._esphome_device_id)
-            if isinstance(hw.get("beacon"), dict):
-                beacon_cfg = hw["beacon"]
-                self._manifest_beacon = dict(beacon_cfg)
-            elif hw.get("minor") is not None:
-                beacon_cfg = {"major": hw.get("major", 1), "minor": hw["minor"]}
-                self._manifest_beacon = dict(beacon_cfg)
         major_val = coerce_uint16(beacon_cfg.get("major")) if isinstance(beacon_cfg, dict) else None
         minor_val = coerce_uint16(beacon_cfg.get("minor")) if isinstance(beacon_cfg, dict) else None
         return major_val, minor_val

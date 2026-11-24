@@ -150,6 +150,7 @@ from ..const import (
     EVENT_LATTER,
     GLOBAL_CONFIG_KEYS,
     INTEGRATION_VERSION,
+    MIN_FIRMWARE_CORE_REV,
     SUBENTRY_BLE_TAG,
     WALLPAPER_MAX_DIM,
     derive_device_beacon_uuid,
@@ -241,10 +242,13 @@ from ..remotes import (
 )
 from ..repairs import async_audit_coordinator_health
 from ..repairs_keys import (
+    ISSUE_OUTDATED_FIRMWARE,
     ISSUE_ROLLED_BACK,
     device_health_issue_id,
     evaluate_device_health,
+    outdated_firmware_issue_id,
     parse_device_health,
+    parse_firmware_core_rev,
 )
 from ..studio.settings_cleaners import clean_device_settings
 from ..wallpapers.pools import resolve_photo_pool
@@ -278,6 +282,28 @@ _RPC_OUTBOX_SUFFIXES: tuple[str, ...] = ("_system_rpc_outbox", "_rpc_outbox")
 _RPC_OUTBOX_NAMES: tuple[str, ...] = ("System: RPC Outbox", "RPC Outbox")
 _RPC_OUTBOX_UID_SUFFIXES: tuple[str, ...] = ("/text_sensor/System: RPC Outbox",)
 _MIN_ALERT_DURATION_S = 2
+_RECONNECT_SYNC_DEDUP_S = 5.0
+_DISPLAY_SHAPE_MAP: dict[str, str] = {
+    "circle": "circle",
+    "square": "square",
+    "rect": "square",
+    "rectangle": "square",
+    "none": "none",
+}
+_CAPABILITY_GATED_ENTITIES: tuple[tuple[str, str, str], ...] = (
+    ("sensor", "timer_remaining", "display"),
+    ("binary_sensor", "timer_active", "display"),
+    ("binary_sensor", "alarm_ringing", "display"),
+    ("light", "screen", "display"),
+    ("button", "dismiss_alert", "display"),
+    ("select", "glass_style", "display"),
+    ("switch", "bedtime_mode", "display"),
+    ("switch", "screensaver", "display"),
+    ("select", "wake_word_mode", "mic"),
+    ("button", "find_my_device", "speaker"),
+    ("number", "alert_volume", "speaker"),
+    ("switch", "do_not_disturb", "display_or_speaker"),
+)
 _MAX_ALERT_DURATION_S = 60
 _MAX_REMOTE_SLOTS = 10
 
@@ -398,6 +424,7 @@ class LatterCoordinator:
         self._unsub_link_report_state: Callable[[], None] | None = None
         self._unsub_ble_radio_state: Callable[[], None] | None = None
         self._unsub_reconnect_post_delay: Callable[[], None] | None = None
+        self._transport_reconnect_sync_mono: float = 0.0
 
     def _init_telemetry_and_ble(self) -> None:
         self._entered_hibernate: bool = False
@@ -1218,9 +1245,25 @@ class LatterCoordinator:
         return resolve_effective_device_group(self.hass, self)
 
     @property
+    def core_rev(self) -> str:
+        """Return the reported Latter Core revision string from `device_hello`, or `''`."""
+        raw = self.hardware_manifest.get("core_rev")
+        return str(raw) if raw not in (None, "") else ""
+
+    @property
+    def firmware_outdated(self) -> bool:
+        """Return True when the Device reports a positive `core_rev` below `MIN_FIRMWARE_CORE_REV`."""
+        if self.is_ble_tag:
+            return False
+        rev = parse_firmware_core_rev(self.hardware_manifest)
+        return rev is not None and 0 < rev < MIN_FIRMWARE_CORE_REV
+
+    @property
     def display_shape(self) -> str:
+        if not self.has_display:
+            return _DISPLAY_SHAPE_MAP["none"]
         hw_shape = str(self.hardware_manifest.get("shape") or "").strip().lower()
-        return hw_shape if hw_shape in ("circle", "square") else DEFAULT_DISPLAY_SHAPE
+        return _DISPLAY_SHAPE_MAP.get(hw_shape, DEFAULT_DISPLAY_SHAPE)
 
     @property
     def list_slot_capacity(self) -> int:
@@ -2802,7 +2845,7 @@ class LatterCoordinator:
         reported_at = dt_util.now().isoformat(timespec="seconds")
         self.last_device_health = {
             "boot_id": boot_id,
-            "sdk": health.sdk,
+            "core_rev": health.core_rev,
             "reset": health.reset,
             "crash": health.crash,
             "rollback": health.rollback,
@@ -3051,6 +3094,87 @@ class LatterCoordinator:
         self.prefs_seq = new_seq
         return ble_tracking_changed
 
+    @callback
+    def _sync_outdated_firmware_issue(self) -> None:
+        """Create or auto-clear the non-blocking outdated firmware HA Repair for this Device."""
+        if self.is_ble_tag:
+            return
+        issue_id = outdated_firmware_issue_id(self.subentry_id)
+        rev = parse_firmware_core_rev(self.hardware_manifest)
+        if rev is not None and 0 < rev < MIN_FIRMWARE_CORE_REV:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key=ISSUE_OUTDATED_FIRMWARE,
+                translation_placeholders={
+                    "device": self.device_title,
+                    "core_rev": str(rev),
+                    "min_core_rev": str(MIN_FIRMWARE_CORE_REV),
+                },
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+
+    def _capability_fingerprint(self) -> tuple[bool, bool, bool, bool, bool]:
+        return (
+            self.has_display,
+            self.has_mic,
+            self.has_speaker,
+            self.has_imu,
+            self.has_battery,
+        )
+
+    def _supports_entity_capability(self, cap: str) -> bool:
+        if cap == "display":
+            return self.has_display
+        if cap == "mic":
+            return self.has_mic
+        if cap == "speaker":
+            return self.has_speaker
+        if cap == "display_or_speaker":
+            return self.has_display or self.has_speaker
+        return True
+
+    @callback
+    def reconcile_capability_entities(self) -> list[str]:
+        """Prune stale capability-gated Latter entities once `device_hello` reports real capabilities."""
+        if self.is_ble_tag or not self.hardware_manifest:
+            return []
+        ent_reg = er.async_get(self.hass)
+        pruned: list[str] = []
+        for domain, suffix, cap in _CAPABILITY_GATED_ENTITIES:
+            if self._supports_entity_capability(cap):
+                continue
+            eid = ent_reg.async_get_entity_id(
+                domain, DOMAIN, f"{self.subentry_id}_{suffix}"
+            )
+            if eid is not None:
+                ent_reg.async_remove(eid)
+                pruned.append(eid)
+        return pruned
+
+    @callback
+    def on_transport_disconnected(self) -> None:
+        """Handle bound ESPHome outbox transitioning to `unavailable`."""
+        self._transport_reconnect_sync_mono = 0.0
+        self.clear_last_pushed_v3()
+        self.async_update_listeners()
+
+    @callback
+    def on_transport_reconnected(self) -> None:
+        """Handle bound ESPHome outbox recovering from `unavailable` without a simultaneous `device_hello`."""
+        self._transport_reconnect_sync_mono = time.monotonic()
+        self.clear_last_pushed_v3()
+        self.create_background_task(
+            self.async_provision_pin_session_key(),
+            f"latter_pin_key_{self.device_slug}",
+        )
+        self.force_republish_all_domains()
+        self.async_update_listeners()
+
     async def async_handle_device_hello(
         self,
         boot_id: str,
@@ -3060,11 +3184,28 @@ class LatterCoordinator:
     ) -> None:
         """Process firmware `device_hello`, reset boot-scoped timers on reboot, and converge prefs."""
         self._entered_hibernate = False
+        had_manifest = bool(self.hardware_manifest)
+        prev_caps = self._capability_fingerprint()
         is_new_boot, parsed = self._runtime.apply_device_hello(boot_id, manifest_raw)
         if parsed is not None:
             if self._ble_tracker is not None:
-                self._ble_tracker.update_manifest_beacon(parsed.get("beacon"))
+                manifest_beacon = parsed.get("beacon")
+                if not isinstance(manifest_beacon, dict) and parsed.get("minor") is not None:
+                    manifest_beacon = {
+                        "major": parsed.get("major", 1),
+                        "minor": parsed["minor"],
+                    }
+                self._ble_tracker.update_manifest_beacon(manifest_beacon)
             self._apply_device_health(parsed, str(boot_id or "").strip())
+            self._sync_outdated_firmware_issue()
+            self.reconcile_capability_entities()
+            if had_manifest and any(
+                now_has and not prev_has
+                for prev_has, now_has in zip(
+                    prev_caps[:3], self._capability_fingerprint()[:3], strict=True
+                )
+            ):
+                self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
         if is_new_boot:
             self._local_needs_cold_resume = True
             self.handle_timer_alarm_state(False, False, 0, False)
@@ -3078,9 +3219,16 @@ class LatterCoordinator:
 
         self._cached_prefs_payload = None
         self.schedule_persist_runtime_state()
-        self._last_pushed_v3.clear()
-        await self.async_provision_pin_session_key()
-        self.force_republish_all_domains()
+        transport_just_synced = (
+            self._transport_reconnect_sync_mono > 0.0
+            and (time.monotonic() - self._transport_reconnect_sync_mono)
+            < _RECONNECT_SYNC_DEDUP_S
+        )
+        self._transport_reconnect_sync_mono = 0.0
+        if not transport_just_synced:
+            self._last_pushed_v3.clear()
+            await self.async_provision_pin_session_key()
+            self.force_republish_all_domains()
         await self.async_push_beacon_uuid()
         await self._async_handle_reconnect()
         await self.async_sync_presence_beacon("hello")
@@ -3446,13 +3594,19 @@ class LatterCoordinator:
             _LOGGER.debug("esphome.%s failed: %s", svc, err)
 
     def _collect_domain_payload_pairs(self) -> tuple[tuple[str, str], ...]:
+        prefs_pair = (
+            "device_prefs",
+            str(self.get_device_prefs_payload()[1].get("payload") or ""),
+        )
+        if not self.has_display:
+            return (prefs_pair,)
         return (
             ("active_media", str(self.get_active_media_payload()[1].get("payload") or "")),
             ("weather_forecast", str(self.weather_attributes.get("payload") or "")),
             ("area_context", str(self.get_area_context_payload()[1].get("payload") or "")),
             ("calendar_agenda", str(self.get_calendar_agenda_payload()[1].get("payload") or "")),
             ("remote_config", str(self.get_remote_config_payload()[1].get("payload") or "")),
-            ("device_prefs", str(self.get_device_prefs_payload()[1].get("payload") or "")),
+            prefs_pair,
         )
 
     async def _async_push_shortcuts_frames(
@@ -3507,8 +3661,9 @@ class LatterCoordinator:
                     self._last_pushed_v3.clear()
                     return
 
-        _, shortcuts_frames = self.get_shortcuts_payload()
-        await self._async_push_shortcuts_frames(svc, shortcuts_frames)
+        if self.has_display:
+            _, shortcuts_frames = self.get_shortcuts_payload()
+            await self._async_push_shortcuts_frames(svc, shortcuts_frames)
 
     @callback
     def force_republish_all_domains(self) -> None:
@@ -3806,7 +3961,11 @@ class LatterCoordinator:
             saved_health if isinstance(saved_health, dict) else None
         )
         saved_manifest = stored.get("hello_manifest")
-        if isinstance(saved_manifest, dict) and "w" in saved_manifest and "h" in saved_manifest:
+        if isinstance(saved_manifest, dict) and (
+            ("w" in saved_manifest and "h" in saved_manifest)
+            or "core_rev" in saved_manifest
+            or "display" in saved_manifest
+        ):
             self._runtime.hello_manifest = dict(saved_manifest)
         if saved_boot_id := str(stored.get("last_boot_id") or "").strip():
             self._runtime.last_boot_id = saved_boot_id
@@ -3924,6 +4083,8 @@ class LatterCoordinator:
 
         await self._url_signer.async_prime_lan_base_url()
         self._apply_stored_runtime(await self._runtime.async_load())
+        self._sync_outdated_firmware_issue()
+        self.reconcile_capability_entities()
         self._structural_snapshot = self._capture_structural_snapshot()
         self._runtime.seed_snapshot(self._build_persisted_snapshot())
         self._init_startup_speaker_and_area()
@@ -4238,6 +4399,10 @@ class LatterCoordinator:
         self._notify_debouncer.async_cancel()
         self.cancel_background_tasks()
         self._area_follow.cancel()
+        if not self.is_ble_tag:
+            ir.async_delete_issue(
+                self.hass, DOMAIN, outdated_firmware_issue_id(self.subentry_id)
+            )
         if self._rpc_receiver is not None:
             self._rpc_receiver.stop()
         if self._doorbell_reply_task is not None and not self._doorbell_reply_task.done():

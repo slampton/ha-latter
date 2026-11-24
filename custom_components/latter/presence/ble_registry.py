@@ -66,7 +66,6 @@ _IBEACON_ENTITY_PREFIX_RE: Final = re.compile(
     re.IGNORECASE,
 )
 TRAILING_ROTATING_HEX4_RE: Final = re.compile(r"\s+[0-9A-Fa-f]{4}$")
-_TRAILING_ROTATING_HEX4_RE = TRAILING_ROTATING_HEX4_RE
 
 
 def iter_devices(dev_reg: dr.DeviceRegistry) -> list[dr.DeviceEntry]:
@@ -74,23 +73,14 @@ def iter_devices(dev_reg: dr.DeviceRegistry) -> list[dr.DeviceEntry]:
     return list(dev_reg.devices)
 
 
-_iter_devices = iter_devices
-
-
 def iter_entities(ent_reg: er.EntityRegistry) -> list[er.RegistryEntry]:
     """Return active `RegistryEntry` objects in the Home Assistant `EntityRegistry`."""
     return list(ent_reg.entities.values())
 
 
-_iter_entities = iter_entities
-
-
 def normalize_uuid_hex(uuid_str: str) -> str:
     """Normalize a UUID string to 32 lowercase hex chars without dashes."""
     return uuid_str.strip().lower().replace("-", "")
-
-
-_normalize_uuid_hex = normalize_uuid_hex
 
 
 def format_uuid_dashed(uuid_hex: str) -> str:
@@ -99,9 +89,6 @@ def format_uuid_dashed(uuid_hex: str) -> str:
     if len(clean) != _UUID_HEX_LEN:
         return uuid_hex.strip()
     return f"{clean[0:8]}-{clean[8:12]}-{clean[12:16]}-{clean[16:20]}-{clean[20:32]}"
-
-
-_format_uuid_dashed = format_uuid_dashed
 
 
 def coerce_uint16(val: object) -> int | None:
@@ -117,9 +104,6 @@ def coerce_uint16(val: object) -> int | None:
     return parsed if 0 <= parsed <= _MAX_UINT16 else None
 
 
-_coerce_uint16 = coerce_uint16
-
-
 def mac_to_int(mac_str: str) -> int | None:
     """Convert a 12-hex-char MAC address into an integer for ESP32 Wi-Fi/BLE `+/-2` comparison."""
     clean = mac_str.strip().lower().replace(":", "").replace("-", "").replace("_", "")
@@ -131,16 +115,10 @@ def mac_to_int(mac_str: str) -> int | None:
         return None
 
 
-_mac_to_int = mac_to_int
-
-
 def int_to_mac(mac_int: int) -> str:
     """Format a 48-bit integer as an uppercase colon-delimited MAC string."""
     hex_str = f"{mac_int:012X}"
     return ":".join(hex_str[i : i + 2] for i in range(0, _MAC_HEX_LEN, 2))
-
-
-_int_to_mac = int_to_mac
 
 
 def _get_floor_registry(hass: HomeAssistant) -> Any | None:
@@ -258,9 +236,6 @@ def extract_ibeacon_entity_identity(
     return None
 
 
-_extract_ibeacon_entity_identity = extract_ibeacon_entity_identity
-
-
 def extract_uuid16(raw_uuid: str) -> str:
     """Extract lowercase 4-hex Bluetooth SIG 16-bit UUID from 16/32/128-bit representations."""
     u = str(raw_uuid or "").strip().lower()
@@ -278,9 +253,6 @@ def extract_uuid16(raw_uuid: str) -> str:
     return ""
 
 
-_extract_uuid16 = extract_uuid16
-
-
 def normalize_mfg_map(mfg_data: Mapping[int, bytes] | None) -> dict[int, bytes]:
     """Normalize `manufacturer_data` dictionary keys to `int` and payloads to `bytes`."""
     out: dict[int, bytes] = {}
@@ -293,9 +265,6 @@ def normalize_mfg_map(mfg_data: Mapping[int, bytes] | None) -> dict[int, bytes]:
             continue
         out[cid] = bytes(raw_v)
     return out
-
-
-_normalize_mfg_map = normalize_mfg_map
 
 
 def _classify_private_ble_adv(
@@ -426,9 +395,6 @@ def extract_adv_ref_power_dbm(
                 if _MIN_REF_DBM <= val_1m_f <= _MAX_REF_DBM:
                     return val_1m_f
     return None
-
-
-_extract_adv_ref_power_dbm = extract_adv_ref_power_dbm
 
 
 def current_ble_scanners(hass: HomeAssistant) -> list[Any]:
@@ -626,9 +592,6 @@ def resolve_scanner_area_id(hass: HomeAssistant, scanner_source: str) -> str | N
         cache[scanner_source] = resolved if resolved else _UNMAPPED
         return resolved
     return _resolve_scanner_area_id_uncached(hass, scanner_source)
-
-
-_resolve_scanner_area_id = resolve_scanner_area_id
 
 
 def get_ble_proxy_area_ids(hass: HomeAssistant) -> set[str]:

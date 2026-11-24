@@ -95,6 +95,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libturbojpeg0-dev
       - name: Install Home Assistant 2026.11 and test dependencies
         run: pip install --upgrade pip && pip install --group test
+      - name: Verify Studio contract and protocol-schema.ts parity
+        run: python tools/gen_studio_schema.py --check
       - name: Verify static architecture, security, and Studio guardrails
         run: python tools/verify_ha.py --fast
       - name: Run ruff static analysis

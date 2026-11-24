@@ -20,7 +20,7 @@ from .rpc_dispatcher import async_dispatch_bound_rpc
 
 _LOGGER = logging.getLogger(__name__)
 
-MAX_RPC_PARTS: int = 16
+MAX_RPC_PARTS: int = 32
 MAX_RPC_BYTES: int = 8192
 PARTIAL_TTL_SECONDS: float = 15.0
 DEDUP_HISTORY_LIMIT: int = 64
@@ -183,8 +183,12 @@ class RpcReassembler:
         self._record_completed(msg_key)
         return _decode_envelope(assembled)
 
-    def seed_silent(self, raw: str | None) -> None:
-        """Seed current `(boot_id, seq)` silently on `rebind()` without dispatching."""
+    def seed_silent(self, raw: str | None, *, now_mono: float | None = None) -> None:
+        """Seed current `(boot_id, seq)` silently on `rebind()` without dispatching.
+
+        Only final frames (`part == total`) mark `(boot_id, seq)` completed; mid-multipart
+        slices (`part < total`) are staged in `_inflight` so remaining parts still reassemble.
+        """
         frame = parse_rpc_frame(raw)
         if frame is None:
             return
@@ -192,8 +196,14 @@ class RpcReassembler:
             self._inflight.clear()
             self._completed.clear()
         self._last_boot_id = frame.boot_id
-        if (frame.boot_id, frame.seq) not in self._completed:
-            self._record_completed((frame.boot_id, frame.seq))
+        msg_key = (frame.boot_id, frame.seq)
+        if msg_key in self._completed:
+            return
+        if frame.part < frame.total:
+            now = time.monotonic() if now_mono is None else float(now_mono)
+            self._ingest_multipart(frame, msg_key, now)
+            return
+        self._record_completed(msg_key)
 
     def _record_completed(self, key: tuple[str, int]) -> None:
         self._completed[key] = None
@@ -326,39 +336,41 @@ class LatterRpcReceiver:
                     "Latter device '%s' is unavailable",
                     self.coordinator.device_slug,
                 )
-            self.coordinator.clear_last_pushed_v3()
-            self.coordinator.async_update_listeners()
+            self.coordinator.on_transport_disconnected()
             return
         was_unavail = self._was_unavailable or (
             old_state is not None and old_state.state == STATE_UNAVAILABLE
         )
+        decoded: tuple[str, dict[str, object]] | None = None
+        if new_state.state not in (STATE_UNKNOWN, ""):
+            decoded = self._reassembler.feed(new_state.state)
         if was_unavail:
             self._was_unavailable = False
             _LOGGER.info(
                 "Latter device '%s' reconnected",
                 self.coordinator.device_slug,
             )
-            self.coordinator.clear_last_pushed_v3()
-            self.coordinator.create_background_task(
-                self.coordinator.async_provision_pin_session_key(),
-                f"latter_pin_key_{self.coordinator.device_slug}",
-            )
-            self.coordinator.force_republish_all_domains()
-            self.coordinator.async_update_listeners()
-        if new_state.state in (STATE_UNKNOWN, ""):
-            return
-        self._ingest_raw_state(new_state.state)
+            if decoded is not None and decoded[0] == "device_hello":
+                self.coordinator.clear_last_pushed_v3()
+                self.coordinator.async_update_listeners()
+            else:
+                self.coordinator.on_transport_reconnected()
+        if decoded is not None:
+            self._dispatch_decoded(decoded)
 
     @callback
-    def _ingest_raw_state(self, raw: str) -> None:
-        decoded = self._reassembler.feed(raw)
-        if decoded is None:
-            return
+    def _dispatch_decoded(self, decoded: tuple[str, dict[str, object]]) -> None:
         svc_name, data = decoded
         self.coordinator.create_background_task(
             self._async_safe_dispatch(svc_name, data),
             f"latter_rpc_{self.coordinator.device_slug}_{svc_name}",
         )
+
+    @callback
+    def _ingest_raw_state(self, raw: str) -> None:
+        decoded = self._reassembler.feed(raw)
+        if decoded is not None:
+            self._dispatch_decoded(decoded)
 
     async def _async_safe_dispatch(
         self,

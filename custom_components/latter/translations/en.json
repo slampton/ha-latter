@@ -166,6 +166,9 @@
       },
       "wake_word_mode": {
         "name": "Wake word mode"
+      },
+      "glass_style": {
+        "name": "Glass style"
       }
     },
     "number": {
@@ -258,7 +261,7 @@
         "step": {
           "confirm": {
             "title": "{device} crashed",
-            "description": "**{device}** reported a crash reset (**{reason}**) when it booted at {time} (Latter SDK rev {sdk}). Open the device's logs in ESPHome Device Builder before it restarts again: the decoded backtrace is shown there. Decoding needs the build the device is running. Confirm to dismiss; a new crash raises this again."
+            "description": "**{device}** reported a crash reset (**{reason}**) when it booted at {time} (Latter Core rev {core_rev}). Open the device's logs in ESPHome Device Builder before it restarts again: the decoded backtrace is shown there. Decoding needs the build the device is running. Confirm to dismiss; a new crash raises this again."
           }
         }
       }
@@ -269,7 +272,7 @@
         "step": {
           "confirm": {
             "title": "{device} lost power briefly",
-            "description": "**{device}** reported a brownout reset when it booted at {time} (Latter SDK rev {sdk}): its supply voltage sagged below the safe level. Check the power supply, the USB cable, or the battery. Confirm to dismiss; a new brownout raises this again."
+            "description": "**{device}** reported a brownout reset when it booted at {time} (Latter Core rev {core_rev}): its supply voltage sagged below the safe level. Check the power supply, the USB cable, or the battery. Confirm to dismiss; a new brownout raises this again."
           }
         }
       }
@@ -280,10 +283,14 @@
         "step": {
           "confirm": {
             "title": "{device} rolled back its firmware",
-            "description": "The last firmware update on **{device}** failed to boot, so the device went back to the previous firmware (Latter SDK rev {sdk}, reported at {time}). Check the build logs, then install the update again. This clears after a successful update."
+            "description": "The last firmware update on **{device}** failed to boot, so the device went back to the previous firmware (Latter Core rev {core_rev}, reported at {time}). Check the build logs, then install the update again. This clears after a successful update."
           }
         }
       }
+    },
+    "outdated_firmware": {
+      "title": "Firmware update required for {device}",
+      "description": "**{device}** is running Latter Core rev **{core_rev}**, which is older than the minimum rev **{min_core_rev}** expected by this version of Latter. Domain sync continues on a best-effort basis, but some features may be unavailable until you update its firmware in ESPHome Device Builder. This warning clears automatically once updated firmware connects."
     }
   },
   "exceptions": {
@@ -306,7 +313,7 @@
       "message": "Target Latter device {target_device} could not be resolved."
     },
     "factory_reset_unsupported": {
-      "message": "{device} doesn't offer Reset to defaults. Update its firmware to Latter SDK rev {sdk_rev} or later."
+      "message": "{device} doesn't offer Reset to defaults. Update its firmware to Latter Core rev {core_rev} or later."
     },
     "factory_reset_failed": {
       "message": "{device} didn't accept Reset to defaults: {error}"

@@ -140,11 +140,13 @@ export function renderOverviewStatusCard(
   const hasAvailableUpdateEntity = Boolean(
     fwEntityId && fwEntityState && fwEntityState !== "unavailable" && fwEntityState !== "unknown",
   );
-  const fwMeta = live.fw_update_available
-    ? store.t("status.update")
-    : hasAvailableUpdateEntity
-      ? store.t("status.up_to_date")
-      : store.t("common.unknown");
+  const fwMeta = live.firmware_outdated
+    ? store.t("status.firmware_update_required")
+    : live.fw_update_available
+      ? store.t("status.update")
+      : hasAvailableUpdateEntity
+        ? store.t("status.up_to_date")
+        : store.t("common.unknown");
 
   let statusChipClass = "chip";
   let statusDotClass = "status-dot";
@@ -165,6 +167,10 @@ export function renderOverviewStatusCard(
     } else if (curDevEntry?.status_label) {
       statusLabel = curDevEntry.status_label;
     }
+  } else if (curDevEntry?.is_online && live.firmware_outdated) {
+    statusChipClass = "chip chip-warning";
+    statusDotClass = "status-dot update";
+    statusLabel = store.t("status.firmware_update_required");
   } else if (curDevEntry?.is_online && live.fw_update_available) {
     statusChipClass = "chip chip-warning";
     statusDotClass = "status-dot update";

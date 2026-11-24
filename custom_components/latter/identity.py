@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-import json
 from typing import Any, Final
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import (
     area_registry as ar,
@@ -44,15 +42,9 @@ def iter_devices(dev_reg: dr.DeviceRegistry) -> Iterable[dr.DeviceEntry]:
     return dev_reg.devices
 
 
-_iter_devices = iter_devices
-
-
 def iter_entities(ent_reg: er.EntityRegistry) -> Iterable[er.RegistryEntry]:
     """Iterate active `RegistryEntry` objects in the Home Assistant `EntityRegistry`."""
     return ent_reg.entities.values()
-
-
-_iter_entities = iter_entities
 
 
 def device_mac(dev: dr.DeviceEntry) -> str:
@@ -63,16 +55,10 @@ def device_mac(dev: dr.DeviceEntry) -> str:
     return ""
 
 
-_device_mac = device_mac
-
-
 def device_unique_id(dev: dr.DeviceEntry) -> str:
     """Return the subentry `unique_id` for an ESPHome device: its MAC, else its device ID."""
     mac = device_mac(dev)
     return f"{DOMAIN}_{mac}" if mac else f"{DOMAIN}_{dev.id}"
-
-
-_device_unique_id = device_unique_id
 
 
 def ble_unique_id(slug: str) -> str:
@@ -80,15 +66,9 @@ def ble_unique_id(slug: str) -> str:
     return f"{DOMAIN}_ble_{slug}"
 
 
-_ble_unique_id = ble_unique_id
-
-
 def device_title(dev: dr.DeviceEntry) -> str:
     """Return the friendly name of the bound ESPHome device."""
     return str(dev.name_by_user or dev.name or dev.id).strip()
-
-
-_device_title = device_title
 
 
 def bound_elsewhere(
@@ -107,9 +87,6 @@ def bound_elsewhere(
         ):
             return True
     return False
-
-
-_bound_elsewhere = bound_elsewhere
 
 
 # ---------------------------------------------------------------------------
@@ -149,13 +126,19 @@ def manifest_has_display(manifest: Mapping[str, Any]) -> bool:
 
 
 def manifest_has_mic(manifest: Mapping[str, Any]) -> bool:
-    """Return False only when the manifest reports `mic == 0`."""
-    return manifest_flag(manifest, "mic") != 0
+    """Return False when the manifest reports `mic == 0`, or omits `mic` with `audio == 0`."""
+    mic_flag = manifest_flag(manifest, "mic")
+    if mic_flag is not None:
+        return mic_flag != 0
+    return manifest_flag(manifest, "audio") != 0
 
 
 def manifest_has_speaker(manifest: Mapping[str, Any]) -> bool:
-    """Return False only when the manifest reports `spk == 0`."""
-    return manifest_flag(manifest, "spk") != 0
+    """Return False when the manifest reports `spk == 0`, or omits `spk` with `audio == 0`."""
+    spk_flag = manifest_flag(manifest, "spk")
+    if spk_flag is not None:
+        return spk_flag != 0
+    return manifest_flag(manifest, "audio") != 0
 
 
 def manifest_has_audio(manifest: Mapping[str, Any]) -> bool:
@@ -427,33 +410,15 @@ def read_device_hardware_manifest(
     device_or_id: dr.DeviceEntry | str | None,
     cached_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Read and merge the parsed JSON hardware manifest from `device_hello` and the manifest sensor."""
-    merged: dict[str, Any] = {}
-    manifest_ent_id = find_device_entity_by_suffix(
-        hass,
-        device_or_id,
-        "sensor",
-        ("_system_hardware_manifest",),
-        original_names=("System: Hardware Manifest",),
-        unique_id_suffixes=("/text_sensor/System: Hardware Manifest",),
-    )
-    if manifest_ent_id:
-        st = hass.states.get(manifest_ent_id)
-        if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
-            try:
-                parsed = json.loads(st.state)
-                if isinstance(parsed, dict) and "w" in parsed and "h" in parsed:
-                    merged.update(parsed)
-            except (ValueError, TypeError):
-                pass
-
+    """Return the validated hardware manifest received via `device_hello`."""
+    _ = hass, device_or_id
     if isinstance(cached_manifest, dict) and (
         ("w" in cached_manifest and "h" in cached_manifest)
-        or "sdk" in cached_manifest
+        or "core_rev" in cached_manifest
+        or "display" in cached_manifest
     ):
-        merged.update(cached_manifest)
-
-    return merged
+        return dict(cached_manifest)
+    return {}
 
 
 # ---------------------------------------------------------------------------

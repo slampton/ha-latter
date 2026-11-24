@@ -17,7 +17,7 @@ from custom_components.latter.const import (
     CONF_SYSTEM_BLE_UUID,
     DEFAULT_BLE_BEACON_UUID,
     DOMAIN,
-    MIN_FIRMWARE_SDK_REV,
+    MIN_FIRMWARE_CORE_REV,
     SUBENTRY_DEVICE,
     derive_device_beacon_uuid,
 )
@@ -44,6 +44,7 @@ from tests.helpers import (
     prepare_latter_dependencies,
     register_entity,
     seed_ble_proxies,
+    seed_device_hello_manifest,
 )
 
 
@@ -198,7 +199,7 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
         "42",
         '{"v":2,"contract":3,"board":"waveshare_s3_175c","w":466,"h":466,"shape":"circle",'
         '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":1,"battery":1,"stationary":0,"wearable":0,'
-        f'"beacon":{{"uuid":"{DEFAULT_BLE_BEACON_UUID}","major":1,"minor":1}},"sdk":{MIN_FIRMWARE_SDK_REV}}}',
+        f'"beacon":{{"uuid":"{DEFAULT_BLE_BEACON_UUID}","major":1,"minor":1}},"core_rev":{MIN_FIRMWARE_CORE_REV}}}',
     )
     assert tracker._target_uuid_hex == expected_dev_uuid.replace("-", "").lower()
 
@@ -365,12 +366,32 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
         area_id="garage",
         stationary=0,
     )
-    # Compact 255-char System: Hardware Manifest has top-level `minor` (no nested `beacon` dict)
-    hass.states.async_set(
-        "sensor.remote_assistant_system_hardware_manifest",
-        '{"v":2,"contract":3,"board":"waveshare_p4_35","w":320,"h":480,"shape":"square",'
-        '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":0,"battery":1,'
-        '"stationary":0,"wearable":0,"ips":1,"chip":"ESP32-P4","psram_mb":32,"minor":4}',
+    # Compact persisted device_hello manifest has top-level `minor` (no nested `beacon` dict)
+    await seed_device_hello_manifest(
+        hass,
+        "sub_remote_p4",
+        {
+            "v": 2,
+            "contract": 3,
+            "board": "waveshare_p4_35",
+            "w": 320,
+            "h": 480,
+            "shape": "square",
+            "display": 1,
+            "touch": 1,
+            "audio": 1,
+            "mic": 1,
+            "spk": 1,
+            "imu": 0,
+            "battery": 1,
+            "stationary": 0,
+            "wearable": 0,
+            "ips": 1,
+            "chip": "ESP32-P4",
+            "psram_mb": 32,
+            "minor": 4,
+            "core_rev": MIN_FIRMWARE_CORE_REV,
+        },
     )
     register_entity(
         hass,
@@ -441,7 +462,7 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
         "2053920193",
         '{"v":2,"contract":3,"board":"waveshare_p4_35","w":320,"h":480,"shape":"square",'
         '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":0,"battery":1,"stationary":0,"wearable":0,'
-        f'"beacon":{{"uuid":"4C415454-4552-434F-5245-000000000220","major":1,"minor":4}},"sdk":{MIN_FIRMWARE_SDK_REV}}}',
+        f'"beacon":{{"uuid":"4C415454-4552-434F-5245-000000000220","major":1,"minor":4}},"core_rev":{MIN_FIRMWARE_CORE_REV}}}',
     )
     hass.states.async_set("binary_sensor.remote_assistant_ble_radio_active", "on")
     await hass.async_block_till_done()

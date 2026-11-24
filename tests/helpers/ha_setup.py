@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterable, Mapping
-import json
 from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
@@ -19,12 +18,15 @@ from homeassistant.helpers import (
     entity_registry as er,
     floor_registry as fr,
 )
+from homeassistant.helpers.storage import Store
 from homeassistant.setup import async_setup_component
 from homeassistant.util import slugify
 
 from custom_components.latter.const import (
     DOMAIN,
-    MIN_FIRMWARE_SDK_REV,
+    MIN_FIRMWARE_CORE_REV,
+    STORAGE_KEY_PREFIX,
+    STORAGE_VERSION,
     SUBENTRY_DEVICE,
 )
 from tests.helpers.paths import (
@@ -114,7 +116,7 @@ def add_mock_entry(
     entry_id: str | None = None,
     unique_id: str | None = None,
     subentries_data: Iterable[Mapping[str, Any] | ConfigSubentry] | None = None,
-    version: int = 2,
+    version: int = 1,
     source: str = "user",
 ) -> Any:
     """Create a `MockConfigEntry`, normalize `subentries_data`, add it to `hass`, and return it."""
@@ -527,6 +529,66 @@ async def prepare_latter_dependencies(hass: HomeAssistant) -> None:
         await async_setup_component(hass, "websocket_api", {})
 
 
+def build_test_manifest(
+    *,
+    slug: str = "pocket_assistant",
+    stationary: int = 0,
+    wearable: int = 0,
+    display: int = 1,
+    w: int = 466,
+    h: int = 466,
+    shape: str = "circle",
+    core_rev: int = MIN_FIRMWARE_CORE_REV,
+    audio: int = 1,
+    mic: int = 1,
+    spk: int = 1,
+    imu: int = 1,
+    battery: int | None = None,
+    minor: int = 1,
+    extra: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a canonical `device_hello` hardware manifest dictionary for tests."""
+    manifest: dict[str, Any] = {
+        "v": 2,
+        "contract": 3,
+        "board": f"{slug}_board",
+        "w": w,
+        "h": h,
+        "shape": shape,
+        "display": display,
+        "touch": 1 if display else 0,
+        "audio": audio,
+        "mic": mic,
+        "spk": spk,
+        "imu": imu,
+        "battery": (1 - stationary) if battery is None else battery,
+        "stationary": stationary,
+        "wearable": wearable,
+        "ips": 1 if display else 0,
+        "minor": minor,
+        "core_rev": core_rev,
+    }
+    if extra:
+        manifest.update(extra)
+    return manifest
+
+
+def get_test_manifest(hass: HomeAssistant, device_id: str) -> dict[str, Any]:
+    """Return the seeded `device_hello` hardware manifest dictionary for `device_id`."""
+    store: dict[str, dict[str, Any]] = hass.data.get("_latter_test_manifests", {})
+    return dict(store.get(device_id, {}))
+
+
+async def seed_device_hello_manifest(
+    hass: HomeAssistant, subentry_id: str, manifest: Mapping[str, Any]
+) -> None:
+    """Persist `hello_manifest` into the device runtime Store prior to entry setup."""
+    store: Store[dict[str, Any]] = Store(
+        hass, STORAGE_VERSION, f"{STORAGE_KEY_PREFIX}.{subentry_id}"
+    )
+    await store.async_save({"hello_manifest": dict(manifest)})
+
+
 def seed_esphome_device(
     hass: HomeAssistant,
     *,
@@ -540,7 +602,7 @@ def seed_esphome_device(
     w: int = 466,
     h: int = 466,
     shape: str = "circle",
-    sdk: int = MIN_FIRMWARE_SDK_REV,
+    core_rev: int = MIN_FIRMWARE_CORE_REV,
     with_speaker: bool = True,
 ) -> tuple[dr.DeviceEntry, str]:
     """Create a realistic ESPHome config entry, device, entities, and Latter contract actions."""
@@ -564,40 +626,17 @@ def seed_esphome_device(
         sw_version="3.0.0",
         area_id=area_id,
     )
-    manifest_json = json.dumps(
-        {
-            "v": 2,
-            "contract": 3,
-            "board": f"{slug}_board",
-            "w": w,
-            "h": h,
-            "shape": shape,
-            "display": display,
-            "touch": 1,
-            "audio": 1,
-            "mic": 1,
-            "spk": 1,
-            "imu": 1,
-            "battery": 1 - stationary,
-            "stationary": stationary,
-            "wearable": wearable,
-            "ips": 1,
-            "minor": 1,
-            "sdk": sdk,
-        },
-        separators=(",", ":"),
+    manifest = build_test_manifest(
+        slug=slug,
+        stationary=stationary,
+        wearable=wearable,
+        display=display,
+        w=w,
+        h=h,
+        shape=shape,
+        core_rev=core_rev,
     )
-    hw_eid = f"sensor.{slug}_system_hardware_manifest"
-    register_entity(
-        hass,
-        hw_eid,
-        platform="esphome",
-        config_entry=esp_entry,
-        device_id=dev.id,
-        original_name="System: Hardware Manifest",
-        unique_id=f"{mac.upper()}/0/text_sensor/System: Hardware Manifest",
-    )
-    hass.states.async_set(hw_eid, manifest_json)
+    hass.data.setdefault("_latter_test_manifests", {})[dev.id] = manifest
 
     rpc_eid = f"sensor.{slug}_system_rpc_outbox"
     register_entity(

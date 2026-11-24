@@ -36,6 +36,7 @@ from .repairs_keys import (
     DEVICE_ISSUE_KINDS,
     ISSUE_BROWNOUT,
     ISSUE_CRASHED,
+    ISSUE_OUTDATED_FIRMWARE,
     ISSUE_ROLLED_BACK,
     DeviceHealth,
     HealthActions,
@@ -45,8 +46,10 @@ from .repairs_keys import (
     evaluate_device_health,
     link_ma_player_issue_id,
     missing_mapped_entity_issue_id,
+    outdated_firmware_issue_id,
     parse_device_health,
     parse_device_issue_id,
+    parse_firmware_core_rev,
     slot_push_failing_issue_id,
 )
 
@@ -277,6 +280,7 @@ __all__ = [
     "DEVICE_ISSUE_KINDS",
     "ISSUE_BROWNOUT",
     "ISSUE_CRASHED",
+    "ISSUE_OUTDATED_FIRMWARE",
     "ISSUE_ROLLED_BACK",
     "CoordinatorHealthTarget",
     "DeviceHealth",
@@ -291,7 +295,9 @@ __all__ = [
     "evaluate_device_health",
     "link_ma_player_issue_id",
     "missing_mapped_entity_issue_id",
+    "outdated_firmware_issue_id",
     "parse_device_health",
     "parse_device_issue_id",
+    "parse_firmware_core_rev",
     "slot_push_failing_issue_id",
 ]

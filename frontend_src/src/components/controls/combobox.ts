@@ -49,14 +49,6 @@ function getComboboxState(id: string): ComboboxUiState {
   return st;
 }
 
-export function resetComboboxState(id?: string): void {
-  if (id) {
-    COMBOBOX_STATE.delete(id);
-  } else {
-    COMBOBOX_STATE.clear();
-  }
-}
-
 function isOrderedSubsequence(needle: string, haystack: string): boolean {
   if (!needle) return true;
   if (needle.length > haystack.length) return false;

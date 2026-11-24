@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, Final
 
 from PIL import Image, ImageOps
 
-from ..http.signing import register_crop_hash_resolver
 from ..media_cache import evict_wallpaper_lru_cache, validate_pil_image_dimensions
 from .models import (
     COLLECTION_ID_RE,
@@ -894,8 +893,3 @@ def restore_photo_library_metadata(
 
     for pid in evict_ids:
         evict_wallpaper_lru_cache(pid)
-
-
-register_crop_hash_resolver(
-    lambda src: get_photo_crop_hash(src) if parse_photo_source(src) else ""
-)

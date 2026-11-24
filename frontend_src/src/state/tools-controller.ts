@@ -246,8 +246,8 @@ export class ToolsController implements ToolsControllerContract {
     const info = this.store.state?.system_info;
     const haVer = info?.ha_version || this.store.hass?.config?.version || "—";
     const intVer = info?.integration_version || this.store.state?.version || "—";
-    const sdkRev = info?.min_firmware_sdk_rev
-      ? String(info.min_firmware_sdk_rev)
+    const coreRev = info?.min_firmware_core_rev
+      ? String(info.min_firmware_core_rev)
       : "—";
     const studioRev = String(info?.studio_rev ?? STUDIO_REV);
     const devs = this.store.state?.system_devices || [];
@@ -256,7 +256,7 @@ export class ToolsController implements ToolsControllerContract {
     return [
       `Home Assistant: ${haVer}`,
       `Latter integration: v${intVer}`,
-      `Minimum firmware SDK: ${sdkRev}`,
+      `Minimum firmware core: ${coreRev}`,
       `Studio contract: rev ${studioRev}`,
       `Managed Devices: ${devs.length} (${displayCount} displays, ${bleTagCount} BLE trackers)`,
     ].join("\n");

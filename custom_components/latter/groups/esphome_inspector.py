@@ -11,8 +11,6 @@ from homeassistant.util import slugify
 from ..areas.registry import apply_ha_display_precision
 from ..identity import device_entities, esphome_node_name, get_bound_esphome_device
 
-_apply_ha_display_precision = apply_ha_display_precision
-
 ASSIST_SATELLITE_TRANSLATION_KEYS: Final[frozenset[str]] = frozenset(
     {"pipeline", "pipeline_n", "vad_sensitivity", "wake_word", "wake_word_n"}
 )

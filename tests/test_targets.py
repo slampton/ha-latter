@@ -168,7 +168,7 @@ class ServiceSourceTests(unittest.TestCase):
         helper_body = self.SRC.split("def _resolve_occupied_area_ids(", 1)[1].split("\nasync def ", 1)[0]
         self.assertIn("resolve_person_area_and_distance(hass, target_low)", helper_body)
         body = self.SRC.split("async def _async_execute_intercom_broadcast", 1)[1].split("\ndef ", 1)[0]
-        self.assertIn("_resolve_coordinator_by_target(hass, raw_target)", body)
+        self.assertIn("resolve_coordinator_by_target(hass, raw_target)", body)
         self.assertIn('scoped_mode = kind in ("occupied_areas", "person")', body)
         self.assertIn("_resolve_occupied_area_ids(", body)
 

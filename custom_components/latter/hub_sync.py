@@ -41,7 +41,6 @@ from .hub_registry import (
     get_system_config_lock,
     get_system_config_rev,
     iter_coordinators,
-    peek_domain_data,
     register_hub_hooks,
 )
 from .protocol_codec import V3Records
@@ -66,23 +65,15 @@ def _safe_hour(val: Any, default: int) -> int:
         return default
 
 
-def _live_global_config(sys_obj: LatterSystemHub) -> dict[str, Any]:
-    """Return the live System-Wide configuration dict."""
-    domain_data = peek_domain_data(sys_obj.hass)
-    if domain_data is not None:
-        sys_obj.config = domain_data.global_config
-    return sys_obj.config
-
-
 def _hub_weather_entity(sys_obj: LatterSystemHub) -> str | None:
     """Return the configured System-Wide weather entity_id."""
-    val = _live_global_config(sys_obj).get(CONF_WEATHER_ENTITY)
+    val = sys_obj.live_global_config().get(CONF_WEATHER_ENTITY)
     return str(val).strip() if val and str(val).strip() else None
 
 
 def _hub_calendar_entities(sys_obj: LatterSystemHub) -> list[str]:
     """Return the configured System-Wide calendar entity_ids."""
-    val = _live_global_config(sys_obj).get(CONF_CALENDAR_ENTITIES, [])
+    val = sys_obj.live_global_config().get(CONF_CALENDAR_ENTITIES, [])
     return (
         [str(x).strip() for x in val if str(x or "").strip()]
         if isinstance(val, (list, tuple))
@@ -150,7 +141,7 @@ async def async_rotate_hub_hmac_secret(sys_obj: LatterSystemHub) -> None:
         sys_obj.url_signer = signer
         await signer.async_prime_lan_base_url()
         get_domain_data(sys_obj.hass).hmac_secret = new_secret
-        global_cfg = _live_global_config(sys_obj)
+        global_cfg = sys_obj.live_global_config()
         global_cfg["hmac_secret_hex"] = new_hex
         await sys_obj.store.async_save(global_cfg)
     for coord in list(sys_obj.coordinators.values()):

@@ -81,7 +81,9 @@ class LatterDeviceRuntime:
             try:
                 parsed = json.loads(manifest_raw)
                 if isinstance(parsed, dict) and (
-                    ("w" in parsed and "h" in parsed) or "sdk" in parsed
+                    ("w" in parsed and "h" in parsed)
+                    or "core_rev" in parsed
+                    or "display" in parsed
                 ):
                     self.hello_manifest = parsed
                     parsed_manifest = parsed

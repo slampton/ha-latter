@@ -17,7 +17,7 @@ from custom_components.latter.const import (
     CONF_SYSTEM_BLE_UUID,
     DEFAULT_BLE_BEACON_UUID,
     DOMAIN,
-    MIN_FIRMWARE_SDK_REV,
+    MIN_FIRMWARE_CORE_REV,
     SUBENTRY_BLE_TAG,
     SUBENTRY_DEVICE,
     derive_device_beacon_uuid,
@@ -44,6 +44,7 @@ from tests.helpers import (
     register_device,
     register_entity,
     seed_ble_proxies,
+    seed_device_hello_manifest,
 )
 
 
@@ -752,7 +753,7 @@ async def test_derive_device_beacon_uuid_rotation_and_override_precedence(
         "77",
         '{"v":2,"contract":3,"board":"waveshare_s3_175c","w":466,"h":466,"shape":"circle",'
         '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":1,"battery":1,"stationary":0,"wearable":0,'
-        f'"beacon":{{"uuid":"{sys_uuid_a}","major":1,"minor":1}},"sdk":{MIN_FIRMWARE_SDK_REV}}}',
+        f'"beacon":{{"uuid":"{sys_uuid_a}","major":1,"minor":1}},"core_rev":{MIN_FIRMWARE_CORE_REV}}}',
     )
     assert c1.ble_tracker._target_uuid_hex == c1.ble_beacon_uuid.replace("-", "").lower()
 
@@ -1068,13 +1069,30 @@ async def test_identical_p4_c6_devices_isolated_by_derived_uuid_and_suppressed_f
     esp_2, _ = make_esphome_device(
         hass, slug="remote_two", mac=p4_mac_2, name="Remote Two", area_id="kitchen", stationary=0
     )
-    for slug in ("remote_one", "remote_two"):
-        hass.states.async_set(
-            f"sensor.{slug}_system_hardware_manifest",
-            '{"v":2,"contract":3,"board":"waveshare_p4_35","w":320,"h":480,"shape":"square",'
-            '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":0,"battery":1,'
-            '"stationary":0,"wearable":0,"ips":1,"chip":"ESP32-P4","psram_mb":32,"minor":4}',
-        )
+    p4_manifest = {
+        "v": 2,
+        "contract": 3,
+        "board": "waveshare_p4_35",
+        "w": 320,
+        "h": 480,
+        "shape": "square",
+        "display": 1,
+        "touch": 1,
+        "audio": 1,
+        "mic": 1,
+        "spk": 1,
+        "imu": 0,
+        "battery": 1,
+        "stationary": 0,
+        "wearable": 0,
+        "ips": 1,
+        "chip": "ESP32-P4",
+        "psram_mb": 32,
+        "minor": 4,
+        "core_rev": MIN_FIRMWARE_CORE_REV,
+    }
+    for sub_id in ("sub_r1", "sub_r2"):
+        await seed_device_hello_manifest(hass, sub_id, p4_manifest)
 
     assert await async_setup_component(hass, DOMAIN, {}) is True
     entry = add_mock_entry(

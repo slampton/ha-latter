@@ -1,5 +1,5 @@
 /**
- * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 45`).
+ * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 48`).
  */
 
 import type {
@@ -353,6 +353,7 @@ export interface DeviceConfig {
   area_follow_dwell_s?: number;
   area_handoff?: boolean;
   device_custom_color?: string;
+  glass_style?: string;
   dock_items?: ShortcutItem[];
   pinned_items?: ShortcutItem[];
   area_categories?: string;
@@ -642,7 +643,8 @@ export interface LiveDeviceTelemetry {
   ble_transmitter_status?: BleTransmitterStatus | null;
   area_presence_grid?: AreaPresenceRow[];
   device_sw_version?: string;
-  sdk_rev?: string;
+  core_rev?: string;
+  firmware_outdated?: boolean;
   fw_update_entity?: string;
   fw_update_available?: boolean;
   effective_security_pin_policy?: string;
@@ -688,7 +690,7 @@ interface DeviceLinks {
 export interface SystemInfo {
   ha_version: string;
   integration_version: string;
-  min_firmware_sdk_rev: number;
+  min_firmware_core_rev: number;
   studio_rev: number;
 }
 

@@ -549,8 +549,6 @@ class LatterSystemHub:
             self.config = domain_data.global_config
         return self.config
 
-    _live_global_config = live_global_config
-
     @property
     def weather_entity(self) -> str | None:
         """Return the configured System-Wide weather `entity_id`."""
@@ -649,7 +647,6 @@ class LatterDomainData:
     global_config: dict[str, Any] = field(default_factory=dict)
     hmac_secret: bytes = b""
     system_config_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    pending_builtin_group_preset_upgrade: bool = False
     system_hub: LatterSystemHub | None = None
 
     views_registered: bool = False

@@ -491,7 +491,7 @@ async def _async_execute_intercom_broadcast(
         resolve_coordinator(hass, caller_subentry_id) if caller_subentry_id else None
     )
     if kind == "device":
-        resolved_target_coord = _resolve_coordinator_by_target(hass, raw_target)
+        resolved_target_coord = resolve_coordinator_by_target(hass, raw_target)
         if caller_coord is None:
             caller_coord = resolved_target_coord
 
@@ -551,10 +551,12 @@ async def _async_execute_intercom_broadcast(
 
 
 def is_coord_in_quiet_mode(coord: LatterCoordinator) -> bool:
-    """Return True when a display Device is in Bedtime Mode or Do Not Disturb."""
-    if coord.is_ble_tag or not coord.has_display:
+    """Return True when a Device is in Bedtime Mode (display) or Do Not Disturb (display/speaker)."""
+    if coord.is_ble_tag:
         return False
-    return bool(coord.get_device_pref("bedtime_active")) or coord.do_not_disturb
+    if coord.has_display and bool(coord.get_device_pref("bedtime_active")):
+        return True
+    return bool((coord.has_display or coord.has_speaker) and coord.do_not_disturb)
 
 
 async def async_push_calendar_window(
@@ -818,13 +820,5 @@ async def async_execute_calendar_delete_event(
     )
 
 
-_parse_bool = parse_bool
-_parse_int = parse_int
-_parse_opt_float = parse_opt_float
-_resolve_coordinator_by_target = resolve_coordinator_by_target
-_resolve_coordinator_from_call = resolve_coordinator_from_call
-_require_admin_if_user_call = require_admin_if_user_call
 resolve_occupied_area_ids = _resolve_occupied_area_ids
-_is_coord_in_quiet_mode = is_coord_in_quiet_mode
 async_execute_intercom_broadcast = _async_execute_intercom_broadcast
-_async_push_calendar_window = async_push_calendar_window

@@ -103,7 +103,9 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
   const bleTagOnlyCount = allDevices.filter(
     (d) => d.kind === "ble_tag" && d.ble_category !== "phone",
   ).length;
-  const audioOnlyCount = allDevices.filter((d) => d.kind !== "ble_tag" && !d.has_display).length;
+  const screenlessCount = allDevices.filter(
+    (d) => d.kind !== "ble_tag" && !d.has_display,
+  ).length;
   const bleTrackedCount = allDevices.filter((d) => d.ble_tracked || d.kind === "ble_tag").length;
   const assignedPeopleCount = allDevices.filter((d) => Boolean(d.assigned_person)).length;
 
@@ -207,13 +209,24 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
       );
     }
     if (!hasNonOnlineState) {
-      devMetaParts.push(
-        displayCount === 1
-          ? store.t("sys_overview.displays_one")
-          : store.t("sys_overview.displays_many", {
-              count: fmtNumber(displayCount, store.hass, 0),
-            }),
-      );
+      if (displayCount > 0 || screenlessCount === 0) {
+        devMetaParts.push(
+          displayCount === 1
+            ? store.t("sys_overview.displays_one")
+            : store.t("sys_overview.displays_many", {
+                count: fmtNumber(displayCount, store.hass, 0),
+              }),
+        );
+      }
+      if (screenlessCount > 0) {
+        devMetaParts.push(
+          screenlessCount === 1
+            ? store.t("sys_overview.screenless_one")
+            : store.t("sys_overview.screenless_many", {
+                count: fmtNumber(screenlessCount, store.hass, 0),
+              }),
+        );
+      }
       if (phoneCount > 0) {
         devMetaParts.push(
           phoneCount === 1
@@ -228,10 +241,6 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
             : store.t("sys_overview.ble_tags_many", {
                 count: fmtNumber(bleTagOnlyCount, store.hass, 0),
               }),
-        );
-      } else if (phoneCount === 0 && audioOnlyCount > 0) {
-        devMetaParts.push(
-          store.t("sys_overview.audio_count", { count: fmtNumber(audioOnlyCount, store.hass, 0) }),
         );
       }
     }

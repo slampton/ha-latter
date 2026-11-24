@@ -38,7 +38,6 @@ _SEARCH_ALBUM_IDX: Final[int] = 3
 _FRAC_TWO_DIGITS: Final[int] = 2
 
 BROWSE_LYRICS_BIO_CACHE: OrderedDict[str, dict[str, Any]] = OrderedDict()
-_LYRICS_BIO_CACHE = BROWSE_LYRICS_BIO_CACHE
 _LRC_TAG_RE: Final = re.compile(r"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]")
 _LRC_WORD_TAG_RE: Final = re.compile(r"<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>")
 _LRC_META_TAG_RE: Final = re.compile(
@@ -81,32 +80,26 @@ _ITEM_DICT_ATTRS: Final[tuple[str, ...]] = (
 
 def clear_lyrics_cache() -> None:
     """Clear the bounded 64-entry LRU lyrics and artist/album metadata cache."""
-    _LYRICS_BIO_CACHE.clear()
+    BROWSE_LYRICS_BIO_CACHE.clear()
 
 
 def cache_get(cache_key: str) -> dict[str, Any] | None:
     """Fetch an entry from the bounded 64-entry LRU lyrics/bio cache."""
-    cached = _LYRICS_BIO_CACHE.get(cache_key)
+    cached = BROWSE_LYRICS_BIO_CACHE.get(cache_key)
     if cached is not None:
-        _LYRICS_BIO_CACHE.move_to_end(cache_key)
+        BROWSE_LYRICS_BIO_CACHE.move_to_end(cache_key)
     return cached
-
-
-_cache_get = cache_get
 
 
 def cache_put(cache_key: str, entry: dict[str, Any] | None = None) -> dict[str, Any]:
     """Insert or touch an entry in the bounded 64-entry LRU lyrics/bio cache."""
     if entry is not None:
-        _LYRICS_BIO_CACHE[cache_key] = entry
-    bucket = _LYRICS_BIO_CACHE.setdefault(cache_key, {})
-    _LYRICS_BIO_CACHE.move_to_end(cache_key)
-    while len(_LYRICS_BIO_CACHE) > _MAX_LYRICS_CACHE_ENTRIES:
-        _LYRICS_BIO_CACHE.popitem(last=False)
+        BROWSE_LYRICS_BIO_CACHE[cache_key] = entry
+    bucket = BROWSE_LYRICS_BIO_CACHE.setdefault(cache_key, {})
+    BROWSE_LYRICS_BIO_CACHE.move_to_end(cache_key)
+    while len(BROWSE_LYRICS_BIO_CACHE) > _MAX_LYRICS_CACHE_ENTRIES:
+        BROWSE_LYRICS_BIO_CACHE.popitem(last=False)
     return bucket
-
-
-_cache_put = cache_put
 
 
 def extract_item_dict(raw: Any) -> dict[str, Any]:
@@ -132,9 +125,6 @@ def extract_item_dict(raw: Any) -> dict[str, Any]:
                 val = val.value
             result[attr] = val
     return result
-
-
-_extract_item_dict = extract_item_dict
 
 
 def extract_artist_name(item: dict[str, Any]) -> str:
@@ -475,7 +465,7 @@ async def async_fetch_track_lyrics(
 
     cap = max(1, int(max_lines))
     now_m = time.monotonic()
-    if (cached := _cache_get(cache_key)) is not None:
+    if (cached := cache_get(cache_key)) is not None:
         if isinstance(payload := cached.get("lyrics_payload"), dict):
             return track_key, bool(payload.get("synced")), list(payload.get("lines") or [])[:cap]
         if now_m < float(cached.get("lyrics_miss_until") or 0.0):
@@ -497,7 +487,7 @@ async def async_fetch_track_lyrics(
             raw_lyrics = ctrl_lyr
 
     synced, parsed_lines = parse_lrc_lyrics(raw_lyrics, max_lines=MAX_LYRIC_LINES)
-    cache_entry = _cache_put(cache_key)
+    cache_entry = cache_put(cache_key)
     if parsed_lines:
         cache_entry.pop("lyrics_miss_until", None)
         cache_entry["lyrics_payload"] = {"synced": synced, "lines": parsed_lines}
@@ -588,7 +578,7 @@ def _format_and_cache_bio_lines(
             + (f" — {clean_album}" if clean_album else "")
         ]
 
-    cache_entry = _cache_put(cache_key)
+    cache_entry = cache_put(cache_key)
     if rich_paragraphs:
         cache_entry.pop("bio_miss_until", None)
         cache_entry.pop("bio_fallback", None)
@@ -635,7 +625,7 @@ async def browse_track_lyrics_or_bio(
         hass, speaker, search, (fallback_title, fallback_artist, fallback_album)
     )
     now_m = time.monotonic()
-    if (cached := _cache_get(cache_key)) is not None:
+    if (cached := cache_get(cache_key)) is not None:
         if cached.get("bio"):
             return _text_rows(cached["bio"])
         if now_m < float(cached.get("bio_miss_until") or 0.0) and isinstance(
@@ -659,9 +649,6 @@ async def browse_track_lyrics_or_bio(
         (raw_artist_bio, raw_album_bio, release_year, raw_lyrics),
     )
     return _text_rows(bio_lines)
-
-
-_browse_track_lyrics_or_bio = browse_track_lyrics_or_bio
 
 
 async def async_push_music_lyrics(

@@ -37,16 +37,12 @@ from .const import (
 )
 from .protocol_specs import ShortcutItemDict, default_dock_items
 
-BUILTIN_GROUP_PRESET_VERSION: Final = 4
-CONF_BUILTIN_GROUP_PRESET_VERSION: Final = "builtin_group_preset_version"
-
 DEFAULT_DEVICE_GROUPS: Final[list[dict[str, Any]]] = [
     {
         "id": "pocket_carry",
         "name": "Pocket Carry",
         "description": "Compact pocket-carried displays with docked-only tap/wake-word, pickup wake disabled, and 15 min battery hibernate",
         "builtin": True,
-        "preset_version": BUILTIN_GROUP_PRESET_VERSION,
         "include_display": False,
         "include_interface": False,
         "device_config": {
@@ -74,7 +70,6 @@ DEFAULT_DEVICE_GROUPS: Final[list[dict[str, Any]]] = [
         "name": "Handhelds",
         "description": "Battery-powered roaming displays with pickup and single-tap wake",
         "builtin": True,
-        "preset_version": BUILTIN_GROUP_PRESET_VERSION,
         "include_display": False,
         "include_interface": False,
         "device_config": {
@@ -102,7 +97,6 @@ DEFAULT_DEVICE_GROUPS: Final[list[dict[str, Any]]] = [
         "name": "Wearables",
         "description": "Compact wearable displays with double-tap wake on battery and 15s screen timeout",
         "builtin": True,
-        "preset_version": BUILTIN_GROUP_PRESET_VERSION,
         "include_display": False,
         "include_interface": False,
         "device_config": {
@@ -130,7 +124,6 @@ DEFAULT_DEVICE_GROUPS: Final[list[dict[str, Any]]] = [
         "name": "Wall & Desk Panels",
         "description": "Stationary mains-powered panels with always-on Home screen, Always-On wake word, and no battery hibernate",
         "builtin": True,
-        "preset_version": BUILTIN_GROUP_PRESET_VERSION,
         "include_display": False,
         "include_interface": False,
         "device_config": {
@@ -180,7 +173,8 @@ def compute_hardware_defaults(
     """Compute onboarding defaults purely from hardware manifest traits and Area/slot flags."""
     m = manifest or {}
     clean_area = str(esp_area_id or "").strip()
-    if m and "w" in m and "h" in m:
+    has_display = _manifest_int(m, "display") != 0 if "display" in m else True
+    if m and has_display and _manifest_int(m, "w") > 0 and _manifest_int(m, "h") > 0:
         is_stationary = _manifest_int(m, "stationary") == 1
         is_wearable = _manifest_int(m, "wearable") == 1
         is_round_battery = (
@@ -212,7 +206,7 @@ def compute_hardware_defaults(
             CONF_GAMES_ITEMS: DEFAULT_GAMES_ITEMS,
         }
 
-    if has_native_slots:
+    if has_native_slots and has_display:
         return {
             CONF_DEVICE_GROUP: "handhelds",
             CONF_NATIVE_BLE_TRACKING: True,

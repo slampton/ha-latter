@@ -45,11 +45,11 @@ Selects `entity_id` (`media_player.*`, required) as the device's active speaker.
 
 ### `latter.reset_device`
 Admin-only action that resets `target_device` (**required**; never falls back to a default device):
-- `device_settings` (`true` default): calls `esphome.<node>_latter_factory_reset` (erases saved on-device NVS preferences and restarts while keeping compiled Wi-Fi and API pairing; requires firmware SDK rev `2026112007+`).
+- `device_settings` (`true` default): calls `esphome.<node>_latter_factory_reset` (erases saved on-device NVS preferences and restarts while keeping compiled Wi-Fi and API pairing; requires firmware core rev `2026112007+`).
 - `latter_options` (`true` default): resets Studio per-device settings back to onboarding defaults while preserving the bound ESPHome device, MAC, slug, and Music Assistant player link.
 
 ### `latter.navigate`
-Switches one or more Latter displays to any canonical Protocol v3 page or subpage route (`home`, `app:home`, `app:settings`, `quick_actions`, or any route token from `catalogs.shortcut_routes` such as `cameras:grid`, `weather:forecast`, `music:lyrics`, `home_hub:thermostat`, `area:light`, or `time:timers`; requires firmware SDK rev `2026112201+`).
+Switches one or more Latter displays to any canonical Protocol v3 page or subpage route (`home`, `app:home`, `app:settings`, `quick_actions`, or any route token from `catalogs.shortcut_routes` such as `cameras:grid`, `weather:forecast`, `music:lyrics`, `home_hub:thermostat`, `area:light`, or `time:timers`; requires firmware core rev `2026112201+`).
 
 | Field | Type | Default | Notes |
 | :--- | :--- | :--- | :--- |

@@ -237,6 +237,7 @@ def _check_service_schema_parity(latter_dir: Path, failures: list[str]) -> None:
     services_yaml = latter_dir / "services.yaml"
     const_path = latter_dir / "const.py"
     proto_path = latter_dir / "protocol_v3.json"
+    studio_contract_path = latter_dir / "studio_contract.json"
 
     if not services_yaml.is_file():
         failures.append("[HA QUALITY] custom_components/latter/services.yaml is missing")
@@ -269,15 +270,20 @@ def _check_service_schema_parity(latter_dir: Path, failures: list[str]) -> None:
             f"canonical 6 PUBLIC_SERVICES ({sorted(EXPECTED_PUBLIC_SERVICES)})"
         )
 
-    if proto_path.is_file():
-        proto_data = json.loads(proto_path.read_text(encoding="utf-8"))
-        proto_ha_svcs = set(proto_data.get("ha_services", {}).keys())
-        proto_rpcs = set(proto_data.get("rpc_methods", {}).keys())
-        if proto_ha_svcs != EXPECTED_PUBLIC_SERVICES:
+    if not studio_contract_path.is_file():
+        failures.append("[STUDIO CONTRACT] custom_components/latter/studio_contract.json is missing")
+    else:
+        studio_data = json.loads(studio_contract_path.read_text(encoding="utf-8"))
+        studio_ha_svcs = set(studio_data.get("ha_services", {}).keys())
+        if studio_ha_svcs != EXPECTED_PUBLIC_SERVICES:
             failures.append(
-                f"[PUBLIC SERVICES] protocol_v3.json ha_services ({sorted(proto_ha_svcs)}) != "
+                f"[PUBLIC SERVICES] studio_contract.json ha_services ({sorted(studio_ha_svcs)}) != "
                 f"PUBLIC_SERVICES ({sorted(EXPECTED_PUBLIC_SERVICES)})"
             )
+
+    if proto_path.is_file():
+        proto_data = json.loads(proto_path.read_text(encoding="utf-8"))
+        proto_rpcs = set(proto_data.get("rpc_methods", {}).keys())
         if const_rpcs != proto_rpcs:
             failures.append(
                 "[RPC DISPATCHER] const.py RPC_* constants != protocol_v3.json rpc_methods "
@@ -435,6 +441,39 @@ def _check_hass_data_and_entity_naming(
                 )
 
 
+def _check_no_dead_private_aliases(
+    parsed_trees: dict[str, ast.Module],
+    failures: list[str],
+) -> None:
+    """Forbid dead `_foo = foo` module-level and class-level compatibility aliases."""
+    for rel, tree in sorted(parsed_trees.items()):
+        scopes: list[tuple[str, list[ast.stmt]]] = [("", tree.body)]
+        scopes.extend(
+            (f"{node.name}.", node.body)
+            for node in tree.body
+            if isinstance(node, ast.ClassDef)
+        )
+        for prefix, stmts in scopes:
+            for stmt in stmts:
+                if (
+                    isinstance(stmt, ast.Assign)
+                    and len(stmt.targets) == 1
+                    and isinstance(stmt.targets[0], ast.Name)
+                    and isinstance(stmt.value, ast.Name)
+                ):
+                    target_name = stmt.targets[0].id
+                    value_name = stmt.value.id
+                    if (
+                        target_name.startswith("_")
+                        and not target_name.startswith("__")
+                        and target_name[1:] == value_name
+                    ):
+                        failures.append(
+                            f"[NO DEAD ALIASES] {rel}:{stmt.lineno} defines forbidden "
+                            f"alias {prefix}{target_name} = {value_name}"
+                        )
+
+
 def check_ast_and_runtime_invariants(
     root: Path,
     parsed_trees: dict[str, ast.Module],
@@ -470,6 +509,7 @@ def check_ast_and_runtime_invariants(
             elif isinstance(node, ast.Call):
                 _check_call_node(rel, node, exception_keys, failures)
 
+    _check_no_dead_private_aliases(parsed_trees, failures)
     _check_hass_data_and_entity_naming(parsed_trees, failures)
     _check_area_sync_and_verbs(latter_dir, parsed_trees, failures)
     _check_diagnostics_redaction(parsed_trees, failures)

@@ -73,6 +73,17 @@ function buildSystemControls(hub: MockHubState): SharedControlItem[] {
       targets: makeTargets("auto_brightness_mode"),
     },
     {
+      key: "display:select:glass_style",
+      pref_key: "glass_style",
+      tier: "display",
+      section: "display",
+      section_title: "Display",
+      name: "Glass Style",
+      domain: "select",
+      options: ["Auto", "Clear", "Dark"],
+      targets: makeTargets("glass_style"),
+    },
+    {
       key: "interface:pills:area_categories",
       pref_key: "area_categories",
       tier: "interface",
@@ -124,7 +135,7 @@ export function buildPayloadFromHub(
     system_info: {
       ha_version: "2026.11.2",
       integration_version: "3.0.0",
-      min_firmware_sdk_rev: 2026112007,
+      min_firmware_core_rev: 2026112303,
       studio_rev: hub.studioRev,
     },
     internal_logs: includeLogs

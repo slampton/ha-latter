@@ -13,6 +13,7 @@ from typing import Final
 ISSUE_CRASHED: Final = "device_crashed"
 ISSUE_BROWNOUT: Final = "device_brownout"
 ISSUE_ROLLED_BACK: Final = "firmware_rolled_back"
+ISSUE_OUTDATED_FIRMWARE: Final = "outdated_firmware"
 
 DEVICE_HEALTH_ISSUE_KINDS: Final[tuple[str, ...]] = (
     ISSUE_CRASHED,
@@ -25,6 +26,7 @@ DEVICE_ISSUE_KINDS: Final[tuple[str, ...]] = (
     "missing_mapped_entity",
     "ble_no_proxies",
     "slot_push_failing",
+    ISSUE_OUTDATED_FIRMWARE,
     *DEVICE_HEALTH_ISSUE_KINDS,
 )
 
@@ -57,6 +59,11 @@ def slot_push_failing_issue_id(subentry_id: str) -> str:
     return f"slot_push_failing_{subentry_id}"
 
 
+def outdated_firmware_issue_id(subentry_id: str) -> str:
+    """Issue: the Device firmware core_rev is older than MIN_FIRMWARE_CORE_REV."""
+    return f"outdated_firmware_{subentry_id}"
+
+
 def device_health_issue_id(kind: str, subentry_id: str) -> str:
     """Issue: a device health problem (`device_crashed`, `device_brownout`, `firmware_rolled_back`)."""
     return f"{kind}_{subentry_id}"
@@ -69,6 +76,7 @@ def device_issue_ids(subentry_id: str) -> list[str]:
         missing_mapped_entity_issue_id(subentry_id),
         ble_no_proxies_issue_id(subentry_id),
         slot_push_failing_issue_id(subentry_id),
+        outdated_firmware_issue_id(subentry_id),
         *(device_health_issue_id(kind, subentry_id) for kind in DEVICE_HEALTH_ISSUE_KINDS),
     ]
 
@@ -93,7 +101,7 @@ def parse_device_issue_id(
 class DeviceHealth:
     """Health fields of one `device_hello` manifest (`None` when the firmware didn't report them)."""
 
-    sdk: int | None
+    core_rev: int | None
     reset: str | None
     crash: bool | None
     rollback: bool | None
@@ -120,6 +128,13 @@ def _int_or_none(value: object) -> int | None:
     return None
 
 
+def parse_firmware_core_rev(manifest: Mapping[str, object] | None) -> int | None:
+    """Return the parsed integer `core_rev` from a `device_hello` manifest, or `None`."""
+    if not manifest:
+        return None
+    return _int_or_none(manifest.get("core_rev"))
+
+
 def parse_device_health(manifest: Mapping[str, object] | None) -> DeviceHealth:
     """Extract the health fields from a `device_hello` manifest."""
     m = manifest or {}
@@ -132,7 +147,7 @@ def parse_device_health(manifest: Mapping[str, object] | None) -> DeviceHealth:
     crash = _int_or_none(m.get("crash"))
     rollback = _int_or_none(m.get("rollback"))
     return DeviceHealth(
-        sdk=_int_or_none(m.get("sdk")),
+        core_rev=_int_or_none(m.get("core_rev")),
         reset=reset,
         crash=None if crash is None else crash == 1,
         rollback=None if rollback is None else rollback == 1,
@@ -143,7 +158,7 @@ def evaluate_device_health(health: DeviceHealth) -> HealthActions:
     """Decide which health repairs one boot's hello raises or clears."""
     raise_issues: dict[str, dict[str, str]] = {}
     delete: set[str] = set()
-    sdk = str(health.sdk) if health.sdk is not None else "unknown"
+    core_rev = str(health.core_rev) if health.core_rev is not None else "unknown"
 
     if health.reset in CRASH_RESETS or health.crash is True:
         reason = (
@@ -151,16 +166,16 @@ def evaluate_device_health(health: DeviceHealth) -> HealthActions:
             if health.reset in CRASH_RESETS
             else (health.reset or "crash")
         )
-        raise_issues[ISSUE_CRASHED] = {"reason": reason, "sdk": sdk}
+        raise_issues[ISSUE_CRASHED] = {"reason": reason, "core_rev": core_rev}
         if health.reset == BROWNOUT_RESET:
-            raise_issues[ISSUE_BROWNOUT] = {"sdk": sdk}
+            raise_issues[ISSUE_BROWNOUT] = {"core_rev": core_rev}
     elif health.reset == BROWNOUT_RESET:
-        raise_issues[ISSUE_BROWNOUT] = {"sdk": sdk}
+        raise_issues[ISSUE_BROWNOUT] = {"core_rev": core_rev}
     elif health.reset in CLEAN_RESETS:
         delete.update({ISSUE_CRASHED, ISSUE_BROWNOUT})
 
     if health.rollback is True:
-        raise_issues[ISSUE_ROLLED_BACK] = {"sdk": sdk}
+        raise_issues[ISSUE_ROLLED_BACK] = {"core_rev": core_rev}
     elif health.rollback is False:
         delete.add(ISSUE_ROLLED_BACK)
 

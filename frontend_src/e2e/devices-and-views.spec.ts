@@ -93,6 +93,13 @@ test.describe("Devices List & Per-Device Views E2E", () => {
     await expect(pickerModal).toContainText("Harbor Sunset");
     await pickerModal.getByRole("button", { name: "Cancel" }).click();
 
+    // Glass style 3-way selector (`Auto` | `Clear` | `Dark`) stages `save_device_config`
+    const glassSelect = page.locator("#cfg-glass_style");
+    await expect(glassSelect).toBeVisible();
+    await expect(glassSelect).toHaveValue("Auto");
+    await glassSelect.selectOption("Dark");
+    await expect(glassSelect).toHaveValue("Dark");
+
     // Switching `screensaver_mode` to "Never" hides Photo Frame section & style select
     await page
       .locator("#card-screensaver select[aria-label='Screensaver mode']")
@@ -207,7 +214,7 @@ test.describe("Devices List & Per-Device Views E2E", () => {
 
     // Navigate to Tools -> expand Developer & telemetry drawer and verify live `device_telemetry` rows
     await page.locator("a[data-view='tools']").click();
-    await expect(page.locator("#diag-sdk-rev")).toHaveText("2026112007");
+    await expect(page.locator("#diag-core-rev")).toHaveText("2026112303");
     const devDrawer = page.locator("#card-device-diagnostics details.sub-collapsible");
     await devDrawer.locator("summary").click();
     await expect(devDrawer).toContainText("212 / 168 / 128 KB");
@@ -231,5 +238,25 @@ test.describe("Devices List & Per-Device Views E2E", () => {
           (m.payload as Record<string, unknown>)?.action === "request_telemetry",
       ),
     ).toBe(true);
+
+    // Outdated firmware renders warning banner & badge on Device Overview and Tools
+    await mountStudio(page, {
+      path: "/latter/devices/sub_desk/overview",
+      customizeHub: (hub) => {
+        hub.devices["sub_desk"]!.live.core_rev = "2026112202";
+        hub.devices["sub_desk"]!.live.firmware_outdated = true;
+      },
+    });
+    await expect(page.locator("#device-firmware-outdated-banner")).toBeVisible();
+    await expect(page.locator("#device-firmware-outdated-banner")).toContainText(
+      "Firmware update required",
+    );
+    await expect(page.locator("#st-status-chip")).toContainText("Firmware update required");
+    await page.locator("a[data-view='tools']").click();
+    await expect(page.locator("#device-firmware-outdated-banner")).toBeVisible();
+    await expect(page.locator("#diag-core-rev")).toHaveText("2026112202");
+    await expect(page.locator("#diag-firmware-outdated-badge")).toContainText(
+      "Firmware update required",
+    );
   });
 });

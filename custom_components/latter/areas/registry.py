@@ -145,9 +145,6 @@ def apply_ha_display_precision(
     return round(raw_val, prec)
 
 
-_apply_ha_display_precision = apply_ha_display_precision
-
-
 def match_area_by_name_or_id(hass: HomeAssistant, raw_value: str) -> str | None:
     """Match an Area name, slug, or `area_id` to a valid HA `area_id` (exact match only)."""
     val = raw_value.strip()

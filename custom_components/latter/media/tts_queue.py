@@ -71,9 +71,6 @@ def is_ephemeral_announcement_uri(uri: str) -> bool:
     )
 
 
-_is_ephemeral_announcement_uri = is_ephemeral_announcement_uri
-
-
 def parse_media_uri_type(media_id: str) -> str:
     """Extract canonical `media_type` from a `provider://type/id` URI without substring guessing."""
     raw = str(media_id or "").strip()

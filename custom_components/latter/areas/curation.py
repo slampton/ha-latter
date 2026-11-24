@@ -111,9 +111,6 @@ def is_curated_area_entity(
     )
 
 
-_is_curated_area_entity = is_curated_area_entity
-
-
 def get_entity_level(state_obj: State) -> int:
     """Return `0..100` for slider-capable domains (`light`, `cover`, `fan`) or `-1` for others."""
     domain = state_obj.domain
@@ -192,9 +189,6 @@ def extract_climate_temps(state_obj: State) -> tuple[int | float | None, float |
     if cur_f is not None:
         cur_out = round(cur_f, 1)
     return tgt_out, cur_out
-
-
-_extract_climate_temps = extract_climate_temps
 
 
 def compute_alarm_caps(state_obj: State | None) -> int:

@@ -209,9 +209,17 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             self.assertNotIn(retired_key, studio_scope.DEVICE_SETTING_KEYS)
             with self.assertRaises(studio_scope.SettingsScopeError):
                 studio_scope.clean_device_settings({retired_key: "1"})
-        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 64)
+        self.assertEqual(len(studio_scope.DEVICE_PREF_SPECS), 65)
         dnd_spec = studio_scope.DEVICE_PREF_SPEC_MAP["do_not_disturb"]
-        self.assertEqual((dnd_spec.domain, dnd_spec.section, dnd_spec.group_tier), ("switch", "power", None))
+        self.assertEqual(
+            (dnd_spec.domain, dnd_spec.section, dnd_spec.group_tier, dnd_spec.capability),
+            ("switch", "power", None, "display_or_audio"),
+        )
+        glass_spec = studio_scope.DEVICE_PREF_SPEC_MAP["glass_style"]
+        self.assertEqual(
+            (glass_spec.domain, glass_spec.section, glass_spec.group_tier, glass_spec.default, glass_spec.options),
+            ("select", "display", "display", "Auto", ("Auto", "Clear", "Dark")),
+        )
         mao_spec = studio_scope.DEVICE_PREF_SPEC_MAP["music_auto_open"]
         self.assertEqual(
             (mao_spec.domain, mao_spec.section, mao_spec.group_tier, mao_spec.default),
@@ -277,7 +285,7 @@ class TestDevicePrefsProtocol(unittest.TestCase):
             ]
         )
         self.assertEqual(len(srcs), 2)
-        self.assertEqual(srcs[0], ("calendar.family", "Family / Shared", "0", "1", "1"))
+        self.assertEqual(srcs[0], ("calendar.family", "Family \\p Shared", "0", "1", "1"))
         self.assertEqual(srcs[1], ("calendar.holidays", "Holidays", "3", "0", "0"))
 
         locs = _PAYLOADS_MOD.calendar_locations_records(["Home", "Downtown HQ", "home", "", "  Gym  "])

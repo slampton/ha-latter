@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tomllib
 from typing import Final
 
@@ -34,7 +35,7 @@ TEXT_EXTS: Final[frozenset[str]] = frozenset(
     {".py", ".json", ".yaml", ".yml", ".js", ".ts", ".mjs", ".md", ".toml"}
 )
 
-MIN_SDK_REV_FLOOR: Final = 2026112201
+MIN_CORE_REV_FLOOR: Final = 2026112303
 MIN_OPEN_ARGS: Final = 2
 
 BANNED_MOCK_SHIMS: Final[tuple[str, ...]] = (
@@ -283,7 +284,7 @@ def check_translations_and_quality(
 def _check_sibling_core_lockstep(
     sibling_core: Path,
     ha_ver: str,
-    ha_sdk_rev: int,
+    ha_core_rev: int,
     failures: list[str],
 ) -> None:
     sibling_inc = sibling_core / "include"
@@ -292,14 +293,14 @@ def _check_sibling_core_lockstep(
             int(m_rev.group(1))
             for hfile in sorted(sibling_inc.rglob("*.h"))
             for m_rev in re.finditer(
-                r"(?m)^\s*#\s*define\s+LATTER_SDK_REV\s+(\d+)L?\b",
+                r"(?m)^\s*#\s*define\s+LATTER_CORE_REV\s+(\d+)L?\b",
                 hfile.read_text(encoding="utf-8", errors="replace"),
             )
         ]
-        if core_revs and set(core_revs) != {ha_sdk_rev}:
+        if core_revs and set(core_revs) != {ha_core_rev}:
             failures.append(
-                f"[VERSION LOCKSTEP] MIN_FIRMWARE_SDK_REV ({ha_sdk_rev}) != "
-                f"esphome-latter-core LATTER_SDK_REV ({sorted(set(core_revs))})"
+                f"[VERSION LOCKSTEP] MIN_FIRMWARE_CORE_REV ({ha_core_rev}) != "
+                f"esphome-latter-core LATTER_CORE_REV ({sorted(set(core_revs))})"
             )
 
     sibling_base = sibling_core / "modules" / "base.yaml"
@@ -368,20 +369,20 @@ def _check_version_and_sdk_lockstep(
                 "(expected 'Apache-2.0')"
             )
 
-    m_sdk = re.search(
-        r"(?m)^\s*MIN_FIRMWARE_SDK_REV(?:\s*:\s*[^=\r\n]+)?\s*=\s*(\d+)\b", const_txt
+    m_core = re.search(
+        r"(?m)^\s*MIN_FIRMWARE_CORE_REV(?:\s*:\s*[^=\r\n]+)?\s*=\s*(\d+)\b", const_txt
     )
-    if not m_sdk:
-        failures.append("[VERSION LOCKSTEP] const.py missing MIN_FIRMWARE_SDK_REV")
+    if not m_core:
+        failures.append("[VERSION LOCKSTEP] const.py missing MIN_FIRMWARE_CORE_REV")
         return
 
-    ha_sdk_rev = int(m_sdk.group(1))
-    if ha_sdk_rev < MIN_SDK_REV_FLOOR:
+    ha_core_rev = int(m_core.group(1))
+    if ha_core_rev < MIN_CORE_REV_FLOOR:
         failures.append(
-            f"[VERSION LOCKSTEP] MIN_FIRMWARE_SDK_REV ({ha_sdk_rev}) < "
-            f"floor ({MIN_SDK_REV_FLOOR})"
+            f"[VERSION LOCKSTEP] MIN_FIRMWARE_CORE_REV ({ha_core_rev}) < "
+            f"floor ({MIN_CORE_REV_FLOOR})"
         )
-    _check_sibling_core_lockstep(root.parent / "esphome-latter-core", ha_ver, ha_sdk_rev, failures)
+    _check_sibling_core_lockstep(root.parent / "esphome-latter-core", ha_ver, ha_core_rev, failures)
 
 
 def _extract_css_blocks(source: str) -> list[str]:
@@ -655,6 +656,21 @@ def _check_tests_and_frontend_build(root: Path, failures: list[str]) -> None:
             )
 
 
+def _check_studio_schema_generator(root: Path, failures: list[str]) -> None:
+    gen_script = root / "tools" / "gen_studio_schema.py"
+    if not gen_script.is_file():
+        failures.append("[STUDIO SCHEMA] tools/gen_studio_schema.py is missing")
+        return
+    proc = _run_trusted_cmd([sys.executable, str(gen_script), "--check"], root)
+    if proc.returncode != 0:
+        detail = "\n    ".join(
+            p.strip() for p in (proc.stdout, proc.stderr) if p and p.strip()
+        )
+        failures.append(
+            f"[STUDIO SCHEMA DRIFT] tools/gen_studio_schema.py --check failed:\n    {detail}"
+        )
+
+
 def check_repo_meta_and_studio(
     root: Path,
     manifest: dict[str, object],
@@ -662,6 +678,7 @@ def check_repo_meta_and_studio(
 ) -> None:
     """Run lockstep, workflow gate, Studio, test-clock, and frontend build checks."""
     _check_version_and_sdk_lockstep(root, manifest, failures)
+    _check_studio_schema_generator(root, failures)
     val_yml_path = root / ".github" / "workflows" / "validate.yml"
     val_yml = val_yml_path.read_text(encoding="utf-8") if val_yml_path.is_file() else ""
     if "\n  promote:" not in val_yml or "refs/heads/main" not in val_yml:

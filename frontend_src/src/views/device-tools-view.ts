@@ -9,6 +9,7 @@ import {
   renderCard,
   renderDeviceEntityRow,
   renderDeviceOfflineBanner,
+  renderFirmwareOutdatedBanner,
   renderPrefControlRow,
   renderSelectRow,
   renderSettingsRow,
@@ -59,8 +60,8 @@ const SUMMARY_DUPLICATE_KEYS = new Set([
   "ip_address",
   "mac_address",
   "firmware_version",
-  "latter_sdk",
-  "sdk_rev",
+  "latter_core",
+  "core_rev",
 ]);
 
 function isSummaryDuplicateNetworkEntity(it: EspHomeEntityItem): boolean {
@@ -557,6 +558,7 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
 
   return html`<section id="view-tools">
     ${renderDeviceOfflineBanner(store)}
+    ${renderFirmwareOutdatedBanner(store)}
 
     <div class="columns">
       <div class="column">
@@ -603,11 +605,19 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                       <strong>${fwVersionText}</strong>
                     </div>
                     <div class="kv-row">
-                      <span>${store.t("dev_tools.latter_sdk")}</span>
-                      <strong id="diag-sdk-rev">
-                        ${live.sdk_rev || store.t("common.unknown")}
+                      <span>${store.t("dev_tools.firmware_core")}</span>
+                      <strong id="diag-core-rev">
+                        ${live.core_rev || store.t("common.unknown")}
                       </strong>
                     </div>
+                    ${live.firmware_outdated
+                      ? html`<div class="kv-row">
+                          <span>${store.t("dev_tools.firmware_status")}</span>
+                          <span id="diag-firmware-outdated-badge" class="chip chip-warning">
+                            ${store.t("status.firmware_update_required")}
+                          </span>
+                        </div>`
+                      : nothing}
                     <div class="kv-row">
                       <span>${store.t("dev_tools.wifi_signal")}</span>
                       <strong>${signalText}</strong>

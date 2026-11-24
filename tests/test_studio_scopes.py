@@ -123,7 +123,8 @@ class TestShortcutPolicy(unittest.TestCase):
             self.assertEqual(settings.SHORTCUT_ROUTE_MAP[music_tok]["label"], music_lbl)
             self.assertIn(f'token: "{music_tok}", label: "{music_lbl}"', protocol_ts)
             self.assertIn(f'"{music_tok}"', bundle_js)
-        self.assertNotIn("shortcut_action", protocol_json["ha_services"])
+        studio_contract = json.loads((LATTER_DIR / "studio_contract.json").read_text(encoding="utf-8"))
+        self.assertNotIn("shortcut_action", studio_contract["ha_services"])
         self.assertEqual(
             protocol_json["rpc_methods"]["shortcut_action"]["fields"],
             ["entity_id", "action", "code"],
@@ -137,8 +138,9 @@ class TestShortcutPolicy(unittest.TestCase):
 
     def test_media_handoff_is_one_latter_setting(self) -> None:
         protocol_json = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
+        studio_contract = json.loads((LATTER_DIR / "studio_contract.json").read_text(encoding="utf-8"))
         self.assertNotIn(
-            "handoff_media", protocol_json["ha_services"]["set_active_area"]["fields"]
+            "handoff_media", studio_contract["ha_services"]["set_active_area"]["fields"]
         )
         for rpc in ("set_active_area", "area_browse"):
             self.assertNotIn("handoff_media", protocol_json["rpc_methods"][rpc]["fields"])

@@ -29,10 +29,6 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
-from .config_defaults import (
-    BUILTIN_GROUP_PRESET_VERSION,
-    CONF_BUILTIN_GROUP_PRESET_VERSION,
-)
 from .const import (
     CONF_ESPHOME_DEVICE_ID,
     CONF_SYSTEM_BLE_UUID,
@@ -45,10 +41,6 @@ from .const import (
     STORAGE_VERSION,
 )
 from .coordinator import LatterCoordinator, register_rpc_receiver_factory
-from .groups.device_groups import (
-    async_sync_coordinators_to_builtin_presets,
-    upgrade_stored_builtin_groups,
-)
 from .http.camera_views import (
     LatterCameraAudioStreamView,
     LatterCameraGridView,
@@ -159,29 +151,18 @@ async def _async_ensure_global_store(hass: HomeAssistant) -> dict[str, Any]:
     """Load or initialize the shared Site configuration store (`.storage/latter.site`)."""
     async with get_system_config_lock(hass):
         domain_data = get_domain_data(hass)
-        had_existing_store = bool(
-            domain_data.global_store is not None and domain_data.global_config
-        )
         if domain_data.global_store is None:
             store: Store[dict[str, Any]] = Store(
                 hass, STORAGE_VERSION, GLOBAL_STORAGE_KEY
             )
             domain_data.global_store = store
             loaded = await store.async_load()
-            had_existing_store = isinstance(loaded, dict) and bool(loaded)
             domain_data.global_config.clear()
             if isinstance(loaded, dict):
                 domain_data.global_config.update(loaded)
 
         global_cfg = domain_data.global_config
         changed = False
-        if global_cfg.get(CONF_BUILTIN_GROUP_PRESET_VERSION) != BUILTIN_GROUP_PRESET_VERSION:
-            if had_existing_store:
-                upgrade_stored_builtin_groups(global_cfg)
-                domain_data.pending_builtin_group_preset_upgrade = True
-            else:
-                global_cfg[CONF_BUILTIN_GROUP_PRESET_VERSION] = BUILTIN_GROUP_PRESET_VERSION
-            changed = True
         secret_hex = str(global_cfg.get("hmac_secret_hex") or "").strip()
         if len(secret_hex) != _SECRET_HEX_LEN:
             secret_hex = secrets.token_hex(32)
@@ -523,12 +504,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bo
     await _async_init_entry_coordinators(
         hass, entry, sys_obj, domain_data.hmac_secret
     )
-
-    if domain_data.pending_builtin_group_preset_upgrade:
-        domain_data.pending_builtin_group_preset_upgrade = False
-        await async_sync_coordinators_to_builtin_presets(
-            hass, list(sys_obj.coordinators.values())
-        )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

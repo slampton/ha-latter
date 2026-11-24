@@ -72,9 +72,6 @@ def safe_rssi_int(val: object) -> int | None:
         return None
 
 
-_safe_rssi_int = safe_rssi_int
-
-
 def resolve_companion_tx_ref_power_dbm(
     measured_power: object, tx_power_level: object
 ) -> float | None:
@@ -184,18 +181,12 @@ def continuous_distance_m(norm_dbm: float, attenuation: float) -> float:
     return max(_MIN_CONTINUOUS_DIST_M, min(_MAX_CONTINUOUS_DIST_M, raw_dist))
 
 
-_continuous_distance_m = continuous_distance_m
-
-
 def distance_m_to_norm_dbm(dist_m: float, attenuation: float) -> float:
     """Return the analytical inverse of `continuous_distance_m` in normalized 1 m-equivalent dBm."""
     eff_n = max(1.0, float(attenuation))
     return TX_POWER_1M_DBM - (
         _PATH_LOSS_SCALE * eff_n * math.log10(max(_MIN_CONTINUOUS_DIST_M, float(dist_m)))
     )
-
-
-_distance_m_to_norm_dbm = distance_m_to_norm_dbm
 
 
 @dataclass

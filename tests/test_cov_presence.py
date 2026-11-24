@@ -1381,13 +1381,9 @@ async def test_ble_tracker_targets_matching_rpa_pruning_and_entity_fallbacks(
         trk_pool.async_stop()
         unsub_occ()
 
-    # ESPHome hardware manifest beacon loading (nested beacon dict + top-level minor) & maybe_discover_bound_macs
+    # Manifest beacon loading (nested beacon dict + normalized major/minor) & maybe_discover_bound_macs
     esp_dev_a, _ = make_esphome_device(
         hass, slug="manifest_nested", mac="aa:bb:cc:dd:ee:21", area_id="kitchen"
-    )
-    hass.states.async_set(
-        "sensor.manifest_nested_system_hardware_manifest",
-        '{"v":2,"w":466,"h":466,"beacon":{"major":2,"minor":9}}',
     )
     trk_nested = LatterNativeBleTracker(
         hass,
@@ -1395,6 +1391,7 @@ async def test_ble_tracker_targets_matching_rpa_pruning_and_entity_fallbacks(
         device_slug="manifest_nested",
         on_area_detected=lambda _a, _s: None,
         esphome_device_id=esp_dev_a.id,
+        manifest_beacon={"major": 2, "minor": 9},
     )
     assert trk_nested._resolve_beacon_major_minor() == (2, 9)
     trk_nested.update_manifest_beacon({"major": 2, "minor": 9, "ref_power": -63})
@@ -1403,16 +1400,13 @@ async def test_ble_tracker_targets_matching_rpa_pruning_and_entity_fallbacks(
     esp_dev_b, _ = make_esphome_device(
         hass, slug="manifest_flat", mac="aa:bb:cc:dd:ee:31", area_id="kitchen"
     )
-    hass.states.async_set(
-        "sensor.manifest_flat_system_hardware_manifest",
-        '{"v":2,"w":466,"h":466,"minor":7}',
-    )
     trk_flat = LatterNativeBleTracker(
         hass,
         beacon_uuid=DEFAULT_BLE_BEACON_UUID,
         device_slug="manifest_flat",
         on_area_detected=lambda _a, _s: None,
         esphome_device_id=esp_dev_b.id,
+        manifest_beacon={"major": 1, "minor": 7},
     )
     assert trk_flat._resolve_beacon_major_minor() == (1, 7)
 

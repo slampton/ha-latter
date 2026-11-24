@@ -231,7 +231,7 @@ async def test_calendar_feeds_and_doorbell_ring_reflex(
     assert len(records) == 2  # Duplicate deduplicated!
     assert len(slots) == 2
     assert slots[0]["location"] == "Downtown HQ"
-    assert slots[0]["map_url"] == ""
+    assert "map_url" not in slots[0]
     assert not hasattr(coord, "build_map_snapshot_url")
 
     # Doorbell device with camera, speaker, lock, ring sensor, AND motion sensor

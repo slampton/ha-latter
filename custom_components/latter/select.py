@@ -12,6 +12,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import (
     CONF_DEVICE_GROUP,
+    CONF_GLASS_STYLE,
     DEFAULT_DEVICE_GROUP,
     DOMAIN,
 )
@@ -21,7 +22,7 @@ from .groups.device_groups import (
     get_device_groups,
 )
 from .hub_registry import LatterSystemHub, get_latter_system
-from .protocol_specs import WAKE_WORD_MODE_OPTIONS
+from .protocol_specs import GLASS_STYLE_OPTIONS, WAKE_WORD_MODE_OPTIONS
 
 PARALLEL_UPDATES = 0
 
@@ -45,6 +46,8 @@ async def async_setup_entry(
         dev_entities: list[SelectEntity] = [LatterDeviceGroupSelect(coordinator)]
         if coordinator.has_mic:
             dev_entities.append(LatterWakeWordModeSelect(coordinator))
+        if coordinator.has_display:
+            dev_entities.append(LatterGlassStyleSelect(coordinator))
         async_add_entities(dev_entities, config_subentry_id=coordinator.subentry_id)
 
 
@@ -174,3 +177,11 @@ class LatterWakeWordModeSelect(_BaseLatterSelect):
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize Wake Word Mode select."""
         super().__init__(coordinator, "wake_word_mode", WAKE_WORD_MODE_OPTIONS)
+
+
+class LatterGlassStyleSelect(_BaseLatterSelect):
+    """Exposes `select.<device_slug>_glass_style`."""
+
+    def __init__(self, coordinator: LatterCoordinator) -> None:
+        """Initialize Glass Style select."""
+        super().__init__(coordinator, CONF_GLASS_STYLE, GLASS_STYLE_OPTIONS)

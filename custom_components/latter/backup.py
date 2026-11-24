@@ -370,7 +370,7 @@ async def async_restore_backup_bundle(
                     await _async_apply_device_snapshot_to_coordinator(hass, coord, snap, preserve_slug=True)
                     restored_devices += 1
                 await coord.async_on_global_config_updated()
-        return {"scope": "system", "restored_devices": restored_devices, "restored_controls": 0}
+        return {"scope": "system", "restored_devices": restored_devices}
 
     dev_snap = bundle.get("device")
     if not isinstance(dev_snap, dict):
@@ -382,5 +382,4 @@ async def async_restore_backup_bundle(
         "scope": "device",
         "target_device": target_coordinator.device_slug,
         "restored_devices": 1,
-        "restored_controls": 0,
     }

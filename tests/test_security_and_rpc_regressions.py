@@ -34,8 +34,8 @@ from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.media_cache import (
     _ARTWORK_LRU_CACHE,
     _THUMB_LRU_CACHE,
-    _cache_get,
-    _cache_put,
+    cache_get,
+    cache_put,
     evict_wallpaper_lru_cache,
     get_circular_mask_surfaces,
 )
@@ -342,10 +342,10 @@ def test_multithreaded_lru_cache_and_mask_concurrency_stress() -> None:
             barrier.wait(timeout=5.0)
             for i in range(250):
                 key = (f"upload:photo_{i % 48}.jpg", 240, 240, tid % 2 == 0, 1.0)
-                _cache_put(_ARTWORK_LRU_CACHE, key, b"\xff\xd8\xff\xd9", limit=24)
-                _cache_put(_THUMB_LRU_CACHE, key, b"\xff\xd8\xff\xd9", limit=32)
-                _ = _cache_get(_ARTWORK_LRU_CACHE, key)
-                _ = _cache_get(_THUMB_LRU_CACHE, key)
+                cache_put(_ARTWORK_LRU_CACHE, key, b"\xff\xd8\xff\xd9", limit=24)
+                cache_put(_THUMB_LRU_CACHE, key, b"\xff\xd8\xff\xd9", limit=32)
+                _ = cache_get(_ARTWORK_LRU_CACHE, key)
+                _ = cache_get(_THUMB_LRU_CACHE, key)
                 if i % 7 == 0:
                     evict_wallpaper_lru_cache(f"upload:photo_{i % 48}.jpg")
                 if i % 19 == 0:

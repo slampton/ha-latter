@@ -350,24 +350,24 @@ class TestDeviceHealthAndIssues(unittest.TestCase):
             {
                 "link_ma_player_sub_a", "missing_mapped_entity_sub_a", "ble_no_proxies_sub_a",
                 "slot_push_failing_sub_a", "device_crashed_sub_a", "device_brownout_sub_a",
-                "firmware_rolled_back_sub_a",
+                "firmware_rolled_back_sub_a", "outdated_firmware_sub_a",
             },
         )
         for reason in ("panic", "int-wdt", "task-wdt", "wdt", "stall"):
             acts = health.evaluate_device_health(
-                health.parse_device_health({"sdk": 41, "reset": reason, "crash": 1, "rollback": 0})
+                health.parse_device_health({"core_rev": 41, "reset": reason, "crash": 1, "rollback": 0})
             )
-            self.assertEqual(acts.raise_issues, {"device_crashed": {"reason": reason, "sdk": "41"}})
+            self.assertEqual(acts.raise_issues, {"device_crashed": {"reason": reason, "core_rev": "41"}})
             self.assertEqual(acts.delete_issues, {"firmware_rolled_back"})
 
         brownout = health.evaluate_device_health(
-            health.parse_device_health({"sdk": 41, "reset": "brownout", "crash": 0})
+            health.parse_device_health({"core_rev": 41, "reset": "brownout", "crash": 0})
         )
-        self.assertEqual(brownout.raise_issues, {"device_brownout": {"sdk": "41"}})
+        self.assertEqual(brownout.raise_issues, {"device_brownout": {"core_rev": "41"}})
 
         for reason in ("power-on", "external", "software", "deep-sleep"):
             clean = health.evaluate_device_health(
-                health.parse_device_health({"sdk": 41, "reset": reason, "crash": 0, "rollback": 0})
+                health.parse_device_health({"core_rev": 41, "reset": reason, "crash": 0, "rollback": 0})
             )
             self.assertEqual(clean.raise_issues, {})
             self.assertEqual(clean.delete_issues, {"device_crashed", "device_brownout", "firmware_rolled_back"})

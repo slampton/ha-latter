@@ -18,6 +18,7 @@ import unittest
 
 COMP = Path(__file__).resolve().parent.parent / "custom_components" / "latter"
 SCHEMA = json.loads((COMP / "protocol_v3.json").read_text(encoding="utf-8"))
+STUDIO_CONTRACT = json.loads((COMP / "studio_contract.json").read_text(encoding="utf-8"))
 
 EXPECTED_PUBLIC_SERVICES = {
     "notify",
@@ -211,12 +212,12 @@ class TestProtocolUsage(unittest.TestCase):
         registered = _registered_schema_keys()
         documented = _services_yaml_fields()
 
-        self.assertEqual(set(SCHEMA["ha_services"]), EXPECTED_PUBLIC_SERVICES)
+        self.assertEqual(set(STUDIO_CONTRACT["ha_services"]), EXPECTED_PUBLIC_SERVICES)
         self.assertEqual(public_tuple, EXPECTED_PUBLIC_SERVICES)
         self.assertEqual(set(registered), EXPECTED_PUBLIC_SERVICES)
         self.assertEqual(set(documented), EXPECTED_PUBLIC_SERVICES)
 
-        for svc, spec in SCHEMA["ha_services"].items():
+        for svc, spec in STUDIO_CONTRACT["ha_services"].items():
             with self.subTest(service=svc):
                 want_fields = set(spec.get("fields", []))
                 self.assertEqual(want_fields - registered[svc], set())

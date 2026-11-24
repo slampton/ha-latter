@@ -78,9 +78,6 @@ def get_circular_mask_surfaces(
     return mask, black_bg
 
 
-_get_circular_mask_surfaces = get_circular_mask_surfaces
-
-
 def transcode_to_baseline_jpeg(
     raw_bytes: bytes,
     width: int,
@@ -129,9 +126,6 @@ def transcode_to_baseline_jpeg(
         return out.getvalue()
 
 
-_transcode_to_baseline_jpeg = transcode_to_baseline_jpeg
-
-
 def cache_for_dims(
     width: int, height: int
 ) -> tuple[OrderedDict[ImageCacheKey, bytes], int]:
@@ -139,9 +133,6 @@ def cache_for_dims(
     if max(int(width), int(height)) <= THUMB_CACHE_MAX_DIM:
         return _THUMB_LRU_CACHE, MAX_THUMB_CACHE_ENTRIES
     return _ARTWORK_LRU_CACHE, MAX_ART_CACHE_ENTRIES
-
-
-_cache_for_dims = cache_for_dims
 
 
 def cache_get(
@@ -156,9 +147,6 @@ def cache_get(
         return val
 
 
-_cache_get = cache_get
-
-
 def cache_put(
     bucket: OrderedDict[ImageCacheKey, bytes],
     key: ImageCacheKey,
@@ -170,9 +158,6 @@ def cache_put(
         bucket[key] = value
         while len(bucket) > limit:
             bucket.popitem(last=False)
-
-
-_cache_put = cache_put
 
 
 def evict_wallpaper_lru_cache(source_id: str) -> None:

@@ -169,6 +169,11 @@ export function localizeRepairIssue(
       ? t("issue.device_crashed_detail", { detail })
       : t("issue.device_crashed");
   }
+  if (cleanKey === "outdated_firmware") {
+    return detail
+      ? t("issue.outdated_firmware_detail", { detail })
+      : t("issue.outdated_firmware");
+  }
   const catalogKey = `issue.${cleanKey}` as StudioTranslationKey;
   if (catalogKey in EN_STRINGS) {
     return t(catalogKey, placeholders);

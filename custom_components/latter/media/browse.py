@@ -20,10 +20,10 @@ from .linking import (
     safe_int,
 )
 from .lyrics import (
-    BROWSE_LYRICS_BIO_CACHE,
+    BROWSE_LYRICS_BIO_CACHE as BROWSE_LYRICS_BIO_CACHE,
     browse_track_lyrics_or_bio,
-    cache_get,
-    cache_put,
+    cache_get as cache_get,
+    cache_put as cache_put,
     call_ma_get_library,
     clear_lyrics_cache,
     extract_artist_name,
@@ -33,11 +33,6 @@ from .lyrics import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-_extract_item_dict = extract_item_dict
-_BROWSE_LYRICS_BIO_CACHE = BROWSE_LYRICS_BIO_CACHE
-_cache_get = cache_get
-_cache_put = cache_put
 
 ARTIST_SEPARATOR: Final = " - "
 MAX_BROWSE_CACHE_ENTRIES: Final[int] = 64

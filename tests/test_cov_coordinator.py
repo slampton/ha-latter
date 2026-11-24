@@ -68,7 +68,7 @@ from custom_components.latter.const import (
     DEFAULT_SCREENSAVER_CYCLE_MINUTES,
     DEFAULT_TOOLS_ITEMS,
     DOMAIN,
-    MIN_FIRMWARE_SDK_REV,
+    MIN_FIRMWARE_CORE_REV,
 )
 from custom_components.latter.coordinator.area_follow import LatterAreaFollowController
 from custom_components.latter.coordinator.core import (
@@ -733,7 +733,7 @@ async def test_area_ble_registry_sync_rename_and_reconnect_flows(
         {
             "w": 466,
             "h": 466,
-            "sdk": MIN_FIRMWARE_SDK_REV,
+            "core_rev": MIN_FIRMWARE_CORE_REV,
             "reset": "panic",
             "crash": 1,
             "rollback": 1,
@@ -749,7 +749,7 @@ async def test_area_ble_registry_sync_rename_and_reconnect_flows(
         {
             "w": 466,
             "h": 466,
-            "sdk": MIN_FIRMWARE_SDK_REV,
+            "core_rev": MIN_FIRMWARE_CORE_REV,
             "reset": "power-on",
             "crash": 0,
             "rollback": 0,
@@ -799,7 +799,7 @@ async def test_telemetry_prefs_timer_commands_v3_transport_and_target_matching(
     ble_coord = next(c for c in sys_obj.coordinators.values() if c.is_ble_tag)
     slug = coord.device_slug
     outbox_eid = f"sensor.{slug}_system_rpc_outbox"
-    manifest_raw = hass.states.get(f"sensor.{slug}_system_hardware_manifest").state
+    manifest_raw = json.dumps(coord.hardware_manifest)
 
     # 1) PIN session key guard for BLE tag
     assert await ble_coord.async_provision_pin_session_key() is False

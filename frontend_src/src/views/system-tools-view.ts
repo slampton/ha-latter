@@ -34,8 +34,8 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
   const haVer = sysInfo?.ha_version || store.hass?.config?.version || store.t("common.unknown");
   const rawIntVer = sysInfo?.integration_version || data?.version || "";
   const intVer = rawIntVer ? `v${rawIntVer}` : store.t("common.unknown");
-  const sdkRev = sysInfo?.min_firmware_sdk_rev
-    ? String(sysInfo.min_firmware_sdk_rev)
+  const coreRev = sysInfo?.min_firmware_core_rev
+    ? String(sysInfo.min_firmware_core_rev)
     : store.t("common.unknown");
   const studioRev = `rev ${String(sysInfo?.studio_rev ?? STUDIO_REV)}`;
 
@@ -551,8 +551,8 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                 <strong>${intVer}</strong>
               </div>
               <div class="kv-row">
-                <span>${store.t("support.sdk_rev")}</span>
-                <strong>${sdkRev}</strong>
+                <span>${store.t("support.core_rev")}</span>
+                <strong>${coreRev}</strong>
               </div>
               <div class="kv-row">
                 <span>${store.t("support.studio_rev")}</span>

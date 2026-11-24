@@ -25,7 +25,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify mandatory studio_rev=47 schema validation, non-admin rejection, and studio_rev_mismatch on all 9 WS endpoints."""
-    assert STUDIO_REV == 47
+    assert STUDIO_REV == 48
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     ensure_area(hass, "Living Room", area_id="living_room")
 
@@ -127,10 +127,10 @@ async def test_discovered_latter_devices_and_add_latter_device_command(
     assert discovered[0]["esphome_device_id"] == unbound_dev.id
     assert discovered[0]["node_name"] == "kitchen_panel"
     assert discovered[0]["title"] == "Kitchen Panel"
-    assert "480" in discovered[0]["model_label"]
+    assert discovered[0]["model_label"] == "Kitchen Panel Board"
     assert "kitchen_panel-board" not in discovered[0]["model_label"]
     assert discovered[0]["area_name"] == "Kitchen"
-    assert discovered[0]["default_group"] == "wall_panels"
+    assert discovered[0]["default_group"] == "handhelds"
 
     # Ignore / unignore discovered ESPHome Latter device (`D-066`)
     await call_ws(

@@ -134,11 +134,6 @@ def safe_int(val: Any, default: int = 0) -> int:
     return round(parsed) if (parsed := safe_opt_float(val)) is not None else default
 
 
-_safe_opt_float = safe_opt_float
-_safe_float = safe_float
-_safe_int = safe_int
-
-
 def interpolate_speaker_position(state_obj: Any) -> float:
     """Calculate the live interpolated playback position in seconds for a `media_player` state."""
     if state_obj is None:

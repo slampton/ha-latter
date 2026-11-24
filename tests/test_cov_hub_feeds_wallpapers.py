@@ -87,10 +87,12 @@ from tests.helpers.ha_setup import (
     add_mock_entry,
     ensure_area,
     flush_debouncers,
+    get_test_manifest,
     make_subentry_dict,
     prepare_latter_dependencies,
     register_device,
     register_entity,
+    seed_device_hello_manifest,
 )
 from tests.helpers.service_mocks import mock_service
 
@@ -835,12 +837,6 @@ async def test_device_groups_and_config_defaults_edge_cases(
     assert device_groups.resolve_behavior_key_value({"custom_extra": 99}, "custom_extra") == 99
     assert device_groups._same_control_val("on", True) is True
     assert device_groups._same_control_val("off", False) is True
-    assert (
-        device_groups.upgrade_stored_builtin_groups(
-            {device_groups.CONF_BUILTIN_GROUP_PRESET_VERSION: device_groups.BUILTIN_GROUP_PRESET_VERSION}
-        )
-        is False
-    )
 
     # Set up one real Latter hub with 4 real subentries: round pocket, square panel, headless node, BLE tag
     await prepare_latter_dependencies(hass)
@@ -918,6 +914,9 @@ async def test_device_groups_and_config_defaults_edge_cases(
             ),
         ],
     )
+    await seed_device_hello_manifest(hass, "sub_pocket", get_test_manifest(hass, esp_pocket.id))
+    await seed_device_hello_manifest(hass, "sub_square", get_test_manifest(hass, esp_square.id))
+    await seed_device_hello_manifest(hass, "sub_headless", get_test_manifest(hass, esp_headless.id))
     assert await hass.config_entries.async_setup(entry.entry_id) is True
     await flush_debouncers(hass)
 
@@ -1210,9 +1209,14 @@ async def test_hub_registry_and_identity_edge_cases(
     assert found_by_mac is not None and found_by_mac.id == esp_dev.id
     assert identity_mod.find_esphome_device_by_mac(hass, "ff:ee:dd:cc:bb:aa") is None
 
-    # Corrupt JSON in hardware manifest sensor (lines 447-448)
-    hass.states.async_set("sensor.pocket_assistant_system_hardware_manifest", "{broken-json")
+    # Missing or invalid cached hardware manifest returns {}
     assert identity_mod.read_device_hardware_manifest(hass, esp_dev.id) == {}
+    assert (
+        identity_mod.read_device_hardware_manifest(
+            hass, esp_dev.id, cached_manifest={"bad": 1}
+        )
+        == {}
+    )
 
     # Manifest beacon dict detection (line 476)
     assert (
@@ -1238,7 +1242,6 @@ async def test_init_lifecycle_discovery_and_rollback_edge_cases(
         {
             "hmac_secret_hex": "z" * 64,
             CONF_SYSTEM_BLE_UUID: "not-a-valid-uuid",
-            config_defaults.CONF_BUILTIN_GROUP_PRESET_VERSION: config_defaults.BUILTIN_GROUP_PRESET_VERSION,
             "extra_preserved": "ok",
         }
     )
@@ -1403,19 +1406,8 @@ async def test_backup_sensor_and_binary_sensor_edge_cases(
     # Pre-backup before domain data exists returns cleanly (backup.py line 141)
     await backup_mod.async_pre_backup(hass)
 
-    # Pre-register an orphan legacy diagnostic sensor so sensor.py removes it during setup (sensor.py line 101)
-    ent_reg = er.async_get(hass)
-    orphan_ent = ent_reg.async_get_or_create(
-        "sensor",
-        DOMAIN,
-        "sub_pocket_active_media",
-        suggested_object_id="pocket_assistant_active_media",
-    )
-    orphan_eid = orphan_ent.entity_id
-
     entry, sys_obj, coord = await setup_latter_hub(hass, with_device=True, with_ble_tag=True)
     assert coord is not None
-    assert ent_reg.async_get(orphan_eid) is None
 
     # backup.py: _serialize_device_snapshot tools/games fallback (168, 170) & device backup validation (225)
     dev_snap = backup_mod._serialize_device_snapshot(hass, coord)

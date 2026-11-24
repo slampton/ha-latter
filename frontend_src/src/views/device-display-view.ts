@@ -24,7 +24,7 @@ import {
   resolveCollectionDisplayName,
   resolvePoolPhotos,
 } from "../state/photo-ops.js";
-import type { StudioStore } from "../state/store.js";
+import { isCatalogItemSupported, type StudioStore } from "../state/store.js";
 import type { PhotoItem } from "../types.js";
 import { defaultThemeHex, fmtNumber, isValidHexColor } from "../utils/format.js";
 
@@ -225,8 +225,24 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     return true;
   });
 
-  // Column 2: Colors card (`isValidHexColor` validation)
+  // Column 2: Colors card (`isValidHexColor` validation) & Glass style
+  const caps = data?.capabilities || {};
   const colorProfilePref = store.entity.getPref("color_profile");
+  const glassStyleSpec = store.entity.getPrefSpec("glass_style");
+  const glassStyleSupported = !glassStyleSpec || isCatalogItemSupported(glassStyleSpec, caps);
+  const glassStylePref = glassStyleSupported ? store.entity.getPref("glass_style") : undefined;
+  const glassStyleOptions =
+    glassStylePref?.options && glassStylePref.options.length > 0
+      ? glassStylePref.options
+      : glassStyleSpec?.options && glassStyleSpec.options.length > 0
+        ? glassStyleSpec.options
+        : ["Auto", "Clear", "Dark"];
+  const rawGlassStyle = String(
+    glassStylePref?.value ?? cfg.glass_style ?? glassStyleSpec?.default ?? "Auto",
+  );
+  const glassStyleValue = glassStyleOptions.includes(rawGlassStyle)
+    ? rawGlassStyle
+    : String(glassStyleSpec?.default ?? "Auto");
   const rawThemeHex = defaultThemeHex(store.host);
   const safeThemeHex = isValidHexColor(rawThemeHex)
     ? rawThemeHex.toUpperCase()
@@ -519,7 +535,30 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                 >
                   ${store.t("dev_display.add_color_btn")}
                 </button>`,
-            })}`,
+            })}
+            ${glassStyleSupported && (glassStylePref || glassStyleSpec)
+              ? renderSettingsRow({
+                  label: store.tPrefLabel("glass_style", glassStyleSpec?.label),
+                  forId: "cfg-glass_style",
+                  description: store.t("dev_display.glass_style_desc"),
+                  control: html`<select
+                    id="cfg-glass_style"
+                    .value=${live(glassStyleValue)}
+                    @change=${(ev: Event) =>
+                      store.entity.stageDeviceSetting(
+                        "glass_style",
+                        (ev.currentTarget as HTMLSelectElement).value,
+                        "cfg-glass_style",
+                      )}
+                  >
+                    ${glassStyleOptions.map(
+                      (opt) => html`<option value=${opt} .selected=${live(opt === glassStyleValue)}>
+                        ${store.tPrefOption("glass_style", opt)}
+                      </option>`,
+                    )}
+                  </select>`,
+                })
+              : nothing}`,
         })}
 
         ${renderCard({

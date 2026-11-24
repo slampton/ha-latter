@@ -105,7 +105,11 @@ async def _async_deliver_notify_to_coord(
         and coord.has_display
         and coord.get_device_pref("bedtime_active")
     )
-    in_dnd = bool(not coord.is_ble_tag and coord.has_display and coord.do_not_disturb)
+    in_dnd = bool(
+        not coord.is_ble_tag
+        and (coord.has_display or coord.has_speaker)
+        and coord.do_not_disturb
+    )
     if in_dnd and env.priority in ("normal", "warning"):
         return
 

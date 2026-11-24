@@ -49,6 +49,7 @@ from tests.helpers import (
     ensure_bluetooth_manager,
     ensure_floor,
     flush_debouncers,
+    get_test_manifest,
     inject_ble_adv,
     make_ibeacon_service_info,
     make_subentry_dict,
@@ -265,7 +266,10 @@ async def test_static_assigned_area_startup_healing_live_reassignment_and_two_wa
         stationary=1,
     )
     await Store(hass, STORAGE_VERSION, f"{STORAGE_KEY_PREFIX}.sub_desk").async_save(
-        {"active_area_id": "garage"}
+        {
+            "active_area_id": "garage",
+            "hello_manifest": get_test_manifest(hass, esp_dev.id),
+        }
     )
 
     assert await async_setup_component(hass, DOMAIN, {}) is True
