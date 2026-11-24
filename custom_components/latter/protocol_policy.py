@@ -115,7 +115,9 @@ def _resolve_known_domain_live_state(dom: str, st: str) -> int:
     return 1 if st == "on" else 0
 
 
-def resolve_shortcut_live_state(domain: str, raw_state: str | None) -> int:
+def resolve_shortcut_live_state(
+    domain: str, raw_state: str | None, *, action: str = ""
+) -> int:
     """Map an HA entity state to compact shortcut wire state (`-1` stateless, `0` off, `1` on, `2` unavailable)."""
     if raw_state is None:
         return 2
@@ -123,7 +125,10 @@ def resolve_shortcut_live_state(domain: str, raw_state: str | None) -> int:
     if st == "unavailable":
         return 2
     dom = str(domain or "").strip().lower()
-    if dom in _STATELESS_SHORTCUT_DOMAINS:
+    act = str(action or "").strip().lower()
+    if dom in _STATELESS_SHORTCUT_DOMAINS or (
+        dom == "automation" and act not in ("toggle", "turn_on", "turn_off")
+    ):
         return -1
     if st in ("", "unknown"):
         return 0 if dom in ("script", "automation") else -1

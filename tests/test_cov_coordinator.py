@@ -983,6 +983,29 @@ async def test_telemetry_prefs_timer_commands_v3_transport_and_target_matching(
     second_sc = coord.get_shortcuts_payload()
     assert second_sc is first_sc
 
+    # 11b) `_resolve_shortcut_wire_items` keeps automation trigger stateless (-1) and toggle stateful (1)
+    hass.states.async_set("automation.bear", "on", {"friendly_name": "Bear"})
+    resolved_auto = coord._resolve_shortcut_wire_items(
+        [
+            {
+                "kind": "entity",
+                "target": "automation.bear",
+                "action": "trigger",
+                "icon": "mdi:teddy-bear",
+                "confirm": True,
+            },
+            {
+                "kind": "entity",
+                "target": "automation.bear",
+                "action": "toggle",
+                "icon": "mdi:teddy-bear",
+            },
+        ],
+        max_len=8,
+    )
+    assert resolved_auto[0]["state"] == -1
+    assert resolved_auto[1]["state"] == 1
+
     # 12) `_apply_stored_runtime` restores area, wallpaper, & screensaver photo
     coord.active_area_id = None
     coord._apply_stored_runtime(

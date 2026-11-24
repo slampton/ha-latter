@@ -605,6 +605,37 @@ def test_protocol_policy_icons_states_pin_wrap_lockout_and_verify() -> None:
     assert protocol_policy.resolve_shortcut_live_state("water_heater", "eco") == 1
     assert protocol_policy.resolve_shortcut_live_state("script", "unknown") == 0
     assert protocol_policy.resolve_shortcut_live_state("light", "unknown") == -1
+    assert protocol_policy.resolve_shortcut_live_state("automation", "on") == -1
+    assert (
+        protocol_policy.resolve_shortcut_live_state(
+            "automation", "on", action="trigger"
+        )
+        == -1
+    )
+    assert (
+        protocol_policy.resolve_shortcut_live_state(
+            "automation", "unavailable", action="trigger"
+        )
+        == 2
+    )
+    assert (
+        protocol_policy.resolve_shortcut_live_state(
+            "automation", "on", action="toggle"
+        )
+        == 1
+    )
+    assert (
+        protocol_policy.resolve_shortcut_live_state(
+            "automation", "off", action="toggle"
+        )
+        == 0
+    )
+    assert (
+        protocol_policy.resolve_shortcut_live_state(
+            "automation", "unknown", action="toggle"
+        )
+        == 0
+    )
 
     recs = protocol_policy.shortcut_records(
         [

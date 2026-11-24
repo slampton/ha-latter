@@ -3752,7 +3752,9 @@ class LatterCoordinator:
             domain = target.split(".", 1)[0] if "." in target else ""
             st = self.hass.states.get(target)
             raw_state = st.state if st is not None else None
-            live_state = resolve_shortcut_live_state(domain, raw_state)
+            live_state = resolve_shortcut_live_state(
+                domain, raw_state, action=str(item.get("action") or "")
+            )
             eff_label = str(item.get("label") or "") or sanitize_shortcut_label(
                 (st.attributes.get("friendly_name") if st is not None else None)
                 or target
