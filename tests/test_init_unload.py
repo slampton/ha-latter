@@ -15,8 +15,10 @@ from custom_components.latter import (
     async_setup,
 )
 from custom_components.latter.backup import async_post_backup, async_pre_backup
+from custom_components.latter.binary_sensor import LatterAreaOccupancyBinarySensor
 from custom_components.latter.cameras.stream_hub import _CameraIngest, get_camera_stream_hub
 from custom_components.latter.const import (
+    CONF_ASSIGNED_PERSON,
     CONF_DEFAULT_AREA,
     CONF_DEFAULT_SPEAKER,
     CONF_DEVICE_SLUG,
@@ -24,7 +26,13 @@ from custom_components.latter.const import (
     DOMAIN,
     SUBENTRY_DEVICE,
 )
-from custom_components.latter.hub_registry import get_domain_data
+from custom_components.latter.device_tracker import LatterBleDeviceTracker
+from custom_components.latter.hub_registry import (
+    get_domain_data,
+    notify_studio_subscribers,
+    prune_own_area_writes,
+    register_studio_subscriber,
+)
 from custom_components.latter.media.state_payload import build_active_media_payload
 from custom_components.latter.repairs import (
     LinkMaPlayerRepairFlow,
@@ -33,6 +41,9 @@ from custom_components.latter.repairs import (
 )
 from custom_components.latter.sensor import (
     LatterAreaOccupantsSensor,
+    LatterCurrentAreaSensor,
+    LatterPersonCurrentAreaSensor,
+    LatterPersonCurrentFloorSensor,
     format_bounded_occupant_names,
 )
 from custom_components.latter.studio.payload import build_studio_state_payload
@@ -169,7 +180,11 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     assert await hass.config_entries.async_unload(entry.entry_id) is True
     await hass.async_block_till_done()
     assert dummy_task.cancelled() or dummy_task.done()
-    assert get_domain_data(hass).registered_panel_url is None
+    domain_data = get_domain_data(hass)
+    assert domain_data.registered_panel_url is None
+    assert domain_data.system_hub is None
+    assert domain_data.own_area_writes == {}
+    assert domain_data.bound_esphome_ids_cache is None
     assert "latter" not in get_registered_panels(hass)
     # Keep latter-icons.js registered across config-entry reloads; remove only when the entry is deleted.
     assert len(get_extra_js_urls(hass)) == 1
@@ -472,3 +487,77 @@ async def test_sidebar_icon_module_registered_early_and_persists_across_reload(
     await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
     assert len(get_extra_js_urls(hass)) == 0
+
+
+async def test_recorder_unrecorded_attributes_person_cleanup_studio_subs_and_own_writes(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify Recorder attribute exclusions, Person floor attributes & orphan cleanup, Studio hooks, and own_area_writes pruning."""
+    expected_unrecorded = frozenset(
+        {
+            "distance_m",
+            "rssi",
+            "raw_rssi",
+            "winning_rssi",
+            "closest_distance_m",
+            "confidence_pct",
+            "ref_power_dbm",
+        }
+    )
+    for cls in (
+        LatterCurrentAreaSensor,
+        LatterPersonCurrentAreaSensor,
+        LatterPersonCurrentFloorSensor,
+        LatterAreaOccupantsSensor,
+        LatterAreaOccupancyBinarySensor,
+        LatterBleDeviceTracker,
+    ):
+        assert expected_unrecorded.issubset(cls._unrecorded_attributes), cls.__name__
+
+    # Verify Studio subscriber registry hook & own_area_writes TTL pruning
+    hits: list[int] = []
+    unsub_studio = register_studio_subscriber(hass, lambda: hits.append(1))
+    notify_studio_subscribers(hass)
+    assert hits == [1]
+    unsub_studio()
+    notify_studio_subscribers(hass)
+    assert hits == [1]
+
+    own_writes = {"dev_old": ("living_room", 100.0), "dev_fresh": ("kitchen", 125.0)}
+    prune_own_area_writes(own_writes, now_mono=140.0, max_age_s=30.0)
+    assert "dev_old" not in own_writes
+    assert "dev_fresh" in own_writes
+
+    # Verify LatterPersonCurrentFloorSensor omits `distance_m` and orphaned Person sensors detach/remove on reassignment
+    hass.states.async_set("person.alex", "home", {"friendly_name": "Alex"})
+    hass.states.async_set("person.sam", "home", {"friendly_name": "Sam"})
+    ensure_floor(hass, "Ground Level", floor_id="floor_1")
+    ensure_area(hass, "Living Room", area_id="living_room", floor_id="floor_1")
+    entry, _sys_obj, coord = await setup_latter_hub(
+        hass,
+        with_device=True,
+        extra_device_data={CONF_ASSIGNED_PERSON: "person.alex"},
+    )
+    await hass.async_block_till_done()
+
+    ent_reg = er.async_get(hass)
+    alex_area_eid = ent_reg.async_get_entity_id("sensor", DOMAIN, f"{DOMAIN}_person_alex_current_area")
+    alex_floor_eid = ent_reg.async_get_entity_id("sensor", DOMAIN, f"{DOMAIN}_person_alex_current_floor")
+    assert alex_area_eid is not None
+    assert alex_floor_eid is not None
+    alex_floor_state = hass.states.get(alex_floor_eid)
+    assert alex_floor_state is not None
+    assert "distance_m" not in alex_floor_state.attributes
+
+    # Reassign coordinator from person.alex -> person.sam: orphaned Alex sensors are removed and Sam sensors created
+    coord.update_device_config({**coord.device_data, CONF_ASSIGNED_PERSON: "person.sam"})
+    coord.async_notify_listeners()
+    await flush_debouncers(hass)
+    await hass.async_block_till_done()
+
+    assert ent_reg.async_get_entity_id("sensor", DOMAIN, f"{DOMAIN}_person_alex_current_area") is None
+    assert ent_reg.async_get_entity_id("sensor", DOMAIN, f"{DOMAIN}_person_alex_current_floor") is None
+    assert ent_reg.async_get_entity_id("sensor", DOMAIN, f"{DOMAIN}_person_sam_current_area") is not None
+    assert ent_reg.async_get_entity_id("sensor", DOMAIN, f"{DOMAIN}_person_sam_current_floor") is not None
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

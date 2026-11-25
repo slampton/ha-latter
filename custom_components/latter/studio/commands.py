@@ -7,11 +7,12 @@ Studio's selected Device (a System command that acts on one Device names it in i
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-import copy
+from collections.abc import Callable, Collection, Mapping
+from dataclasses import dataclass, field
 import logging
 import time
 from typing import Any, Final
+from weakref import WeakKeyDictionary
 
 from homeassistant.components.websocket_api import async_register_command
 from homeassistant.components.websocket_api.connection import ActiveConnection
@@ -34,21 +35,26 @@ import probatio as vol
 
 from ..backup import async_restore_backup_bundle, build_backup_bundle
 from ..const import (
-    CONF_BLE_AREA_SIGNATURES,
     INTEGRATION_VERSION,
     STUDIO_REV,
 )
 from ..coordinator import LatterCoordinator
 from ..groups.device_groups import async_reset_device
 from ..hub_registry import (
+    _is_irrelevant_registry_update,
     get_domain_data,
     get_latter_system,
+    get_system_config_rev,
     iter_coordinators,
     peek_global_config,
+    register_studio_subscriber,
 )
 from ..identity import device_entities
-from ..presence.ble_fabric import get_all_areas_presence_summary, get_ble_fabric
-from ..presence.ble_registry import get_area_signatures_summary
+from ..presence.ble_fabric import (
+    build_survey_delta_payload,
+    get_all_areas_presence_summary,
+    get_ble_fabric,
+)
 from ..wallpapers.store import wallpaper_snapshot_token
 from .device_commands import (
     DEVICE_COMMAND_HANDLERS,
@@ -58,30 +64,43 @@ from .device_commands import (
 from .payload import (
     STUDIO_BULK_CONTROL_DOMAINS,
     StudioCommandError,
+    build_entity_catalog,
     build_studio_state_payload,
+    build_system_section,
+    compute_controls_signature,
     log_studio_event,
     resolve_target_coordinator,
+    studio_language,
+    studio_locales_loaded,
 )
 from .settings_cleaners import SettingsScopeError
 from .state_gates import (
+    HASH_GATED_SECTIONS,
+    HEAVY_SUBSCRIPTION_SECTIONS,
     CatalogGate,
     Scope,
     SectionHashGate,
+    SectionTokenGate,
+    SubscriptionTokenSnapshot,
     TargetNotAllowed,
     UnknownStudioCommand,
     command_scope,
-    find_by_subentry_id,
 )
 from .system_commands import SYSTEM_COMMAND_HANDLERS, SYSTEM_COMMAND_SCHEMAS
 
 _LOGGER = logging.getLogger(__name__)
 _SURVEY_COALESCE_INTERVAL_S: Final = 0.25
-_MIN_SURVEY_DELAY_S: Final = 0.05
 _PUSH_DEBOUNCE_S: Final = 0.4
+_SHARED_SNAPSHOT_TTL_S: Final = 0.05
+_MAX_MEMO_ENTRIES: Final = 16
+_SECONDS_PER_DAY: Final = 86400
 
-_STUDIO_STATUS_WATCH_SUFFIXES: Final[tuple[str, ...]] = (
+_EXCLUDED_STATUS_WATCH_SUFFIXES: Final[tuple[str, ...]] = (
     "_system_rpc_outbox",
     "_rpc_outbox",
+)
+
+_STUDIO_STATUS_WATCH_SUFFIXES: Final[tuple[str, ...]] = (
     "_system_wi_fi_signal",
     "_wi_fi_signal",
     "_ip_address",
@@ -90,6 +109,146 @@ _STUDIO_STATUS_WATCH_SUFFIXES: Final[tuple[str, ...]] = (
     "_usb_power_connected",
     "_project_firmware",
 )
+
+_COMMAND_BASE_SKIP_SECTIONS: Final[frozenset[str]] = frozenset(
+    HEAVY_SUBSCRIPTION_SECTIONS
+)
+
+_COMMAND_KEEP_SECTIONS: Final[dict[str, frozenset[str]]] = {
+    "save_device_config": frozenset({"system_controls"}),
+    "device_action": frozenset({"system_controls"}),
+    "set_device_photo_pool": frozenset({"wallpapers", "system_controls"}),
+    "save_system_config": frozenset({"system_controls"}),
+    "create_device_group": frozenset({"system_controls"}),
+    "delete_device_group": frozenset({"system_controls"}),
+    "update_group_baseline": frozenset({"system_controls", "wallpapers"}),
+    "apply_batch_device_setting": frozenset({"system_controls", "wallpapers"}),
+    "capture_ble_area_signature": frozenset({"ble_area_signatures"}),
+    "clear_ble_area_signature": frozenset({"ble_area_signatures"}),
+    "set_ble_scanner_offset": frozenset({"ble_area_signatures"}),
+    "ignore_discovered_device": frozenset(
+        {"discovered_latter_devices", "ignored_latter_devices"}
+    ),
+    "unignore_discovered_device": frozenset(
+        {"discovered_latter_devices", "ignored_latter_devices"}
+    ),
+    "add_latter_device": frozenset(
+        {
+            "discovered_latter_devices",
+            "ignored_latter_devices",
+            "system_controls",
+            "wallpapers",
+        }
+    ),
+    "add_ble_device": frozenset({"discovered_ble_devices"}),
+    "remove_device": frozenset(
+        {
+            "discovered_latter_devices",
+            "discovered_ble_devices",
+            "system_controls",
+        }
+    ),
+    "create_photo_collection": frozenset({"photo_collections", "system_controls"}),
+    "rename_photo_collection": frozenset({"photo_collections", "system_controls"}),
+    "delete_photo_collection": frozenset(
+        {"photo_collections", "system_wallpapers", "wallpapers", "system_controls"}
+    ),
+    "update_photo_metadata": frozenset(
+        {"photo_collections", "system_wallpapers", "wallpapers", "system_controls"}
+    ),
+    "bulk_update_photos": frozenset(
+        {"photo_collections", "system_wallpapers", "wallpapers", "system_controls"}
+    ),
+    "delete_photo": frozenset(
+        {"photo_collections", "system_wallpapers", "wallpapers", "system_controls"}
+    ),
+    "import_media_photos": frozenset(
+        {"photo_collections", "system_wallpapers", "wallpapers", "system_controls"}
+    ),
+    "rotate_signing_key": frozenset({"system_wallpapers", "wallpapers"}),
+}
+
+_WALLPAPER_CONFIG_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "device_group",
+        "wallpaper_mode",
+        "wallpaper_source",
+        "wallpaper_collection",
+        "wallpaper_favorites",
+    }
+)
+
+_RESTORE_OR_RESET_SKIP_SECTIONS: Final[frozenset[str]] = frozenset(
+    {
+        "locale_strings",
+        "pref_specs",
+        "world_clock_zones",
+        "discovered_ble_devices",
+        "discovered_latter_devices",
+        "ignored_latter_devices",
+    }
+)
+
+
+@dataclass(slots=True)
+class _SharedSystemMemo:
+    """Per-`hass` short-lived memo sharing System/Catalog builds across concurrent Studio tabs."""
+
+    generation: int = 0
+    registry_rev: int = 0
+    ble_dirty_rev: int = 0
+    last_registry_event: Any = None
+    system_cache: dict[tuple[Any, ...], tuple[float, dict[str, Any]]] = field(
+        default_factory=dict
+    )
+    presence_cache: dict[tuple[Any, ...], tuple[float, list[dict[str, Any]]]] = field(
+        default_factory=dict
+    )
+    catalog_cache: dict[tuple[Any, ...], tuple[float, dict[str, Any]]] = field(
+        default_factory=dict
+    )
+
+    def invalidate_if_populated(self) -> None:
+        if self.system_cache or self.presence_cache or self.catalog_cache:
+            self.invalidate()
+
+    def invalidate(self) -> None:
+        self.generation += 1
+        self.system_cache.clear()
+        self.presence_cache.clear()
+        self.catalog_cache.clear()
+
+    def record_registry_event(self, event: Any) -> None:
+        if event is not self.last_registry_event:
+            self.last_registry_event = event
+            self.registry_rev += 1
+            self.ble_dirty_rev += 1
+            self.invalidate()
+
+
+_SHARED_SYSTEM_MEMOS: WeakKeyDictionary[HomeAssistant, _SharedSystemMemo] = (
+    WeakKeyDictionary()
+)
+
+
+def _get_shared_memo(hass: HomeAssistant) -> _SharedSystemMemo:
+    memo = _SHARED_SYSTEM_MEMOS.get(hass)
+    if memo is None:
+        memo = _SharedSystemMemo()
+        _SHARED_SYSTEM_MEMOS[hass] = memo
+    return memo
+
+
+def _command_response_skip_sections(
+    cmd: str, body: Mapping[str, Any]
+) -> frozenset[str]:
+    """Return heavy unmutated sections to skip in a command response while keeping D-064 revs."""
+    keep = _COMMAND_KEEP_SECTIONS.get(cmd, frozenset())
+    if cmd == "save_device_config":
+        raw_cfg = body.get("config")
+        if isinstance(raw_cfg, Mapping) and (raw_cfg.keys() & _WALLPAPER_CONFIG_KEYS):
+            keep = keep | {"wallpapers"}
+    return _COMMAND_BASE_SKIP_SECTIONS - keep
 
 
 def _check_studio_rev(
@@ -205,112 +364,199 @@ def _register_ble_survey_listener(
     survey_sub_id: str,
     ble_fabric: Any,
 ) -> tuple[Callable[[], None], Callable[[], None]]:
-    """Attach a 4 Hz coalesced BLE survey listener and return `(unsub, cancel_timer)`."""
+    """Attach a scoped 4 Hz coalesced BLE survey listener and return `(unsub, cancel_timer)`."""
     survey_timer_cancel: list[Any] = [None]
-    last_survey_sent_mono: list[float] = [0.0]
-    pending_survey_event: list[dict[str, Any] | None] = [None]
+    pending_tracker: list[Any] = [None]
 
     @callback
     def _flush_pending_survey(_now: Any = None) -> None:
         survey_timer_cancel[0] = None
-        ev = pending_survey_event[0]
-        pending_survey_event[0] = None
-        if ev is not None:
-            last_survey_sent_mono[0] = time.monotonic()
-            connection.send_message(event_message(msg_id, ev))
+        tracker = pending_tracker[0]
+        pending_tracker[0] = None
+        if tracker is None or hass.is_stopping:
+            return
+        delta = build_survey_delta_payload(tracker)
+        connection.send_message(event_message(msg_id, delta))
 
     @callback
-    def _on_survey_delta(delta: dict[str, Any]) -> None:
+    def _on_survey_delta(tracker: Any) -> None:
         if hass.is_stopping:
             return
-        target_coord = find_by_subentry_id(iter_coordinators(hass), survey_sub_id)
-        tracker = target_coord.ble_tracker if target_coord is not None else None
-        if target_coord is None or tracker is None:
-            return
-        tracker_slug = str(getattr(tracker, "raw_slug", target_coord.device_slug) or "")
-        if str(delta.get("device_slug") or "") != tracker_slug:
-            return
-        raw_packets = delta.get("packets_seen")
-        ev_payload = {
-            "type": "ble_survey_delta",
-            "subentry_id": target_coord.subentry_id,
-            "ble_packets_seen": int(
-                raw_packets if raw_packets is not None else tracker.packets_seen
-            ),
-            "ble_closest_proxy": str(
-                delta.get("closest_scanner")
-                if delta.get("closest_scanner") is not None
-                else tracker.closest_scanner
-            ),
-            "ble_survey_rows": (
-                delta["calibration"]
-                if isinstance(delta.get("calibration"), list)
-                else tracker.get_scanner_calibration_telemetry()
-            ),
-            "ble_area_signatures": (
-                delta["area_signatures"]
-                if isinstance(delta.get("area_signatures"), list)
-                else get_area_signatures_summary(hass)
-            ),
-            "area_presence_grid": get_all_areas_presence_summary(hass),
-        }
-        now_m = time.monotonic()
-        elapsed = now_m - last_survey_sent_mono[0]
-        if elapsed >= _SURVEY_COALESCE_INTERVAL_S and survey_timer_cancel[0] is None:
-            last_survey_sent_mono[0] = now_m
-            connection.send_message(event_message(msg_id, ev_payload))
-        else:
-            pending_survey_event[0] = ev_payload
-            if survey_timer_cancel[0] is None:
-                delay = max(_MIN_SURVEY_DELAY_S, _SURVEY_COALESCE_INTERVAL_S - max(0.0, elapsed))
-                survey_timer_cancel[0] = async_call_later(hass, delay, _flush_pending_survey)
+        pending_tracker[0] = tracker
+        if survey_timer_cancel[0] is None:
+            survey_timer_cancel[0] = async_call_later(
+                hass, _SURVEY_COALESCE_INTERVAL_S, _flush_pending_survey
+            )
 
     @callback
     def _cancel_timer() -> None:
         if callable(survey_timer_cancel[0]):
             survey_timer_cancel[0]()
             survey_timer_cancel[0] = None
-        pending_survey_event[0] = None
+        pending_tracker[0] = None
 
-    return ble_fabric.register_survey_listener(_on_survey_delta), _cancel_timer
+    return (
+        ble_fabric.register_survey_listener(
+            _on_survey_delta, subentry_id=survey_sub_id
+        ),
+        _cancel_timer,
+    )
 
 
-def _compute_subscribe_skip_sections(
+def _memo_get[T](
+    cache: Mapping[tuple[Any, ...], tuple[float, T]],
+    key: tuple[Any, ...],
+    now: float,
+) -> T | None:
+    """Return a cached value when still within `_SHARED_SNAPSHOT_TTL_S`."""
+    hit = cache.get(key)
+    if hit is not None and (now - hit[0]) <= _SHARED_SNAPSHOT_TTL_S:
+        return hit[1]
+    return None
+
+
+def _memo_put[T](
+    cache: dict[tuple[Any, ...], tuple[float, T]],
+    key: tuple[Any, ...],
+    now: float,
+    value: T,
+) -> T:
+    """Store `value` in a bounded short-lived memo cache."""
+    if len(cache) >= _MAX_MEMO_ENTRIES:
+        cache.clear()
+    cache[key] = (now, value)
+    return value
+
+
+def _capture_token_snapshot(
     hass: HomeAssistant,
-    section_gate: SectionHashGate,
-    tokens: list[Any],
+    all_coords: list[LatterCoordinator],
+    target: LatterCoordinator | None,
     *,
-    ble_is_dirty: bool,
-) -> set[str]:
-    """Determine unchanged system sections to omit before building a subscription push."""
+    memo: _SharedSystemMemo,
+) -> tuple[SubscriptionTokenSnapshot, dict[str, bool], dict[str, Any]]:
+    """Capture O(1) section invalidation tokens and reusable per-device lookups."""
     cur_sys = get_latter_system(hass)
-    cur_wp_tok = wallpaper_snapshot_token()
-    cur_hmac = cur_sys.hmac_secret if cur_sys is not None else b""
-    cur_raw_cfg = peek_global_config(hass)
-    cur_sigs = cur_raw_cfg.get(CONF_BLE_AREA_SIGNATURES)
+    controls_sig, online_by_sub, lookups = compute_controls_signature(hass, all_coords)
+    snap = SubscriptionTokenSnapshot(
+        wallpaper_token=wallpaper_snapshot_token(),
+        hmac_secret=cur_sys.hmac_secret if cur_sys is not None else b"",
+        utc_day=int(time.time() // _SECONDS_PER_DAY),
+        system_config_rev=get_system_config_rev(hass),
+        subentry_id=target.subentry_id if target is not None else "",
+        device_config_rev=target.device_config_rev if target is not None else 0,
+        active_wallpaper_id=target.current_wallpaper if target is not None else "",
+        display_shape=target.display_shape if target is not None else "",
+        language=studio_language(hass),
+        locales_loaded=studio_locales_loaded(),
+        registry_rev=memo.registry_rev,
+        ble_dirty_rev=memo.ble_dirty_rev,
+        coordinator_ids=tuple(c.subentry_id for c in all_coords),
+        controls_signature=controls_sig,
+    )
+    return snap, online_by_sub, lookups
 
-    skip: set[str] = set()
-    if not ble_is_dirty and section_gate.has_sent("discovered_ble_devices"):
-        skip.add("discovered_ble_devices")
-    if (
-        cur_wp_tok == tokens[0]
-        and cur_hmac == tokens[1]
-        and section_gate.has_sent("system_wallpapers")
-        and section_gate.has_sent("photo_collections")
-    ):
-        skip.update(("system_wallpapers", "photo_collections"))
-    else:
-        tokens[0] = cur_wp_tok
-        tokens[1] = cur_hmac
-    if (
-        not ble_is_dirty
-        and cur_sigs == tokens[2]
-        and section_gate.has_sent("ble_area_signatures")
-    ):
-        skip.add("ble_area_signatures")
-    else:
-        tokens[2] = copy.deepcopy(cur_sigs)
-    return skip
+
+def _build_shared_subscribe_payload(
+    hass: HomeAssistant,
+    target: LatterCoordinator | None,
+    *,
+    all_coords: list[LatterCoordinator],
+    snap: SubscriptionTokenSnapshot,
+    memo: _SharedSystemMemo,
+    include_catalog: bool,
+    include_logs: bool,
+    skip_sections: Collection[str],
+    online_by_sub: Mapping[str, bool],
+    lookups_by_sub: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build a subscription state payload sharing System/Catalog sections across concurrent tabs."""
+    now = time.monotonic()
+    sys_skip = frozenset(
+        s
+        for s in skip_sections
+        if s not in ("wallpapers", "pref_specs", "world_clock_zones")
+    )
+    sys_key = (
+        memo.generation,
+        snap.system_config_rev,
+        snap.wallpaper_token,
+        snap.hmac_secret,
+        snap.utc_day,
+        snap.ble_dirty_rev,
+        snap.registry_rev,
+        snap.coordinator_ids,
+        snap.controls_signature,
+        snap.language,
+        snap.locales_loaded,
+        include_logs,
+        sys_skip,
+    )
+    sys_section = _memo_get(memo.system_cache, sys_key, now)
+    if sys_section is None:
+        sys_section = _memo_put(
+            memo.system_cache,
+            sys_key,
+            now,
+            build_system_section(
+                hass,
+                target.subentry_id if target is not None else "",
+                all_coords=all_coords,
+                include_logs=include_logs,
+                skip_sections=skip_sections,
+                online_by_sub=online_by_sub,
+                lookups_by_sub=lookups_by_sub,
+            ),
+        )
+
+    pres_key = (
+        memo.generation,
+        snap.system_config_rev,
+        snap.ble_dirty_rev,
+        snap.registry_rev,
+        snap.coordinator_ids,
+    )
+    presence_grid = _memo_get(memo.presence_cache, pres_key, now)
+    if presence_grid is None:
+        presence_grid = _memo_put(
+            memo.presence_cache,
+            pres_key,
+            now,
+            get_all_areas_presence_summary(hass),
+        )
+
+    catalog_override: dict[str, Any] | None = None
+    if include_catalog:
+        local_spk = target.local_speaker if target is not None else ""
+        local_ma = target.local_ma_speaker if target is not None else ""
+        cat_key = (
+            memo.generation,
+            snap.registry_rev,
+            snap.system_config_rev,
+            local_spk,
+            local_ma,
+        )
+        catalog_override = _memo_get(memo.catalog_cache, cat_key, now)
+        if catalog_override is None:
+            catalog_override = _memo_put(
+                memo.catalog_cache,
+                cat_key,
+                now,
+                build_entity_catalog(hass, target, all_coords=all_coords),
+            )
+
+    return build_studio_state_payload(
+        hass,
+        target,
+        include_catalog=include_catalog,
+        include_logs=include_logs,
+        skip_sections=skip_sections,
+        online_by_sub=online_by_sub,
+        lookups_by_sub=lookups_by_sub,
+        system_section_override=sys_section,
+        presence_grid_override=presence_grid,
+        catalog_override=catalog_override,
+    )
 
 
 def _sync_subscribed_coordinators(
@@ -351,10 +597,13 @@ def _rebind_subscribed_entity_states(
         e.entity_id
         for c in iter_coordinators(hass)
         for e in device_entities(hass, c.esphome_device_id)
-        if (target is not None and c is target)
-        or e.domain in STUDIO_BULK_CONTROL_DOMAINS
-        or e.domain == "update"
-        or e.entity_id.endswith(_STUDIO_STATUS_WATCH_SUFFIXES)
+        if not e.entity_id.endswith(_EXCLUDED_STATUS_WATCH_SUFFIXES)
+        and (
+            (target is not None and c is target)
+            or e.domain in STUDIO_BULK_CONTROL_DOMAINS
+            or e.domain == "update"
+            or e.entity_id.endswith(_STUDIO_STATUS_WATCH_SUFFIXES)
+        )
     })
 
     @callback
@@ -402,8 +651,10 @@ def _bind_subscription_cleanup(
     @callback
     def _cleanup_all() -> None:
         if callable(stop_unsub[0]):
-            stop_unsub[0]()
+            unsub_fn = stop_unsub[0]
             stop_unsub[0] = None
+            if not hass.is_stopping:
+                unsub_fn()
         _cleanup_subscription_handles(
             debounce_cancel, state_unsub, coord_unsubs, unsubs
         )
@@ -417,6 +668,34 @@ def _bind_subscription_cleanup(
 
     stop_unsub[0] = hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _on_ha_stop)
     return _cleanup_all
+
+
+def _attach_subscription_listeners(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg_id: int,
+    survey_sub_id: str,
+    schedule_push: Callable[[], None],
+    registry_changed: Callable[[Any], None],
+    unsubs: list[Any],
+) -> None:
+    """Attach occupancy, Studio subscriber, optional 4 Hz BLE survey, and registry listeners."""
+    ble_fabric = get_ble_fabric(hass)
+    unsubs.append(ble_fabric.register_occupancy_listener(schedule_push))
+    unsubs.append(register_studio_subscriber(hass, schedule_push))
+    if survey_sub_id:
+        unsubs.extend(
+            _register_ble_survey_listener(
+                hass, connection, msg_id, survey_sub_id, ble_fabric
+            )
+        )
+    unsubs.extend(
+        (
+            hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, registry_changed),
+            hass.bus.async_listen(dr.EVENT_DEVICE_REGISTRY_UPDATED, registry_changed),
+            hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, registry_changed),
+        )
+    )
 
 
 @require_admin
@@ -443,84 +722,85 @@ async def ws_handle_subscribe(
     debounce_cancel: list[Any] = [None]
     state_unsub: list[Any] = [None]
     coord_unsubs: dict[int, Any] = {}
-    ble_dirty: list[bool] = [False]
+    memo = _get_shared_memo(hass)
     catalog_gate = CatalogGate()
+    token_gate = SectionTokenGate()
     section_gate = SectionHashGate()
 
-    init_sys = get_latter_system(hass)
-    init_raw_cfg = peek_global_config(hass)
-    tokens: list[Any] = [
-        wallpaper_snapshot_token(),
-        init_sys.hmac_secret if init_sys is not None else b"",
-        copy.deepcopy(init_raw_cfg.get(CONF_BLE_AREA_SIGNATURES)),
-    ]
+    init_coords = list(iter_coordinators(hass))
+    init_target = resolve_target_coordinator(hass, sub_id)
+    init_snap, init_online, init_lookups = _capture_token_snapshot(
+        hass, init_coords, init_target, memo=memo
+    )
     initial_payload = build_studio_state_payload(
         hass,
-        resolve_target_coordinator(hass, sub_id),
+        init_target,
         include_catalog=True,
         include_logs=include_logs,
+        online_by_sub=init_online,
+        lookups_by_sub=init_lookups,
     )
-    section_gate.record_initial(initial_payload)
+    token_gate.record_initial(init_snap, initial_payload)
+    section_gate.record_initial(initial_payload, keys=HASH_GATED_SECTIONS)
 
     @callback
     def _push_now(_now: Any = None) -> None:
         debounce_cancel[0] = None
-        skip = _compute_subscribe_skip_sections(
-            hass, section_gate, tokens, ble_is_dirty=ble_dirty[0]
+        all_coords = list(iter_coordinators(hass))
+        target = resolve_target_coordinator(hass, sub_id)
+        snap, online_by_sub, lookups_by_sub = _capture_token_snapshot(
+            hass, all_coords, target, memo=memo
         )
-        ble_dirty[0] = False
-        payload = build_studio_state_payload(
+        skip = token_gate.compute_skip_sections(snap)
+        payload = _build_shared_subscribe_payload(
             hass,
-            resolve_target_coordinator(hass, sub_id),
+            target,
+            all_coords=all_coords,
+            snap=snap,
+            memo=memo,
             include_catalog=catalog_gate.take(),
             include_logs=include_logs,
             skip_sections=skip,
+            online_by_sub=online_by_sub,
+            lookups_by_sub=lookups_by_sub,
         )
-        section_gate.filter_sections(payload)
+        section_gate.filter_sections(payload, keys=HASH_GATED_SECTIONS)
+        token_gate.commit(snap, skip, payload_keys=payload.keys())
         connection.send_message(event_message(msg["id"], payload))
 
     @callback
     def _schedule_push() -> None:
         if hass.is_stopping:
             return
+        memo.invalidate_if_populated()
         if debounce_cancel[0] is None:
             debounce_cancel[0] = async_call_later(hass, _PUSH_DEBOUNCE_S, _push_now)
 
     @callback
     def _track_coordinators() -> None:
-        if _sync_subscribed_coordinators(hass, coord_unsubs, _schedule_push):
-            ble_dirty[0] = True
+        _sync_subscribed_coordinators(hass, coord_unsubs, _schedule_push)
 
     @callback
     def _track_device_states() -> None:
         _rebind_subscribed_entity_states(hass, sub_id, state_unsub, _schedule_push)
 
     @callback
-    def _registry_changed(_event: Any) -> None:
+    def _registry_changed(event: Any) -> None:
+        if _is_irrelevant_registry_update(
+            str(getattr(event, "event_type", "") or ""),
+            getattr(event, "data", None),
+        ):
+            return
+        memo.record_registry_event(event)
         catalog_gate.mark_dirty()
-        ble_dirty[0] = True
         _track_coordinators()
         _track_device_states()
         _schedule_push()
 
     _track_coordinators()
-    ble_dirty[0] = False
     _track_device_states()
-
-    ble_fabric = get_ble_fabric(hass)
-    unsubs.append(ble_fabric.register_occupancy_listener(_schedule_push))
-    if survey_sub_id:
-        unsubs.extend(
-            _register_ble_survey_listener(
-                hass, connection, msg["id"], survey_sub_id, ble_fabric
-            )
-        )
-    unsubs.extend(
-        (
-            hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, _registry_changed),
-            hass.bus.async_listen(dr.EVENT_DEVICE_REGISTRY_UPDATED, _registry_changed),
-            hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, _registry_changed),
-        )
+    _attach_subscription_listeners(
+        hass, connection, msg["id"], survey_sub_id, _schedule_push, _registry_changed, unsubs
     )
 
     connection.subscriptions[msg["id"]] = _bind_subscription_cleanup(
@@ -528,6 +808,19 @@ async def ws_handle_subscribe(
     )
     connection.send_result(msg["id"], {"subscribed": True})
     connection.send_message(event_message(msg["id"], initial_payload))
+
+
+def _resolve_post_command_target(
+    hass: HomeAssistant,
+    selected: LatterCoordinator | None,
+    extra: Mapping[str, Any],
+) -> LatterCoordinator | None:
+    """Resolve the post-command selected coordinator after device removal or adoption."""
+    if selected is not None and extra.get("removed_subentry_id") == selected.subentry_id:
+        return None
+    if selected is None and extra.get("adopted_subentry_id"):
+        return resolve_target_coordinator(hass, str(extra["adopted_subentry_id"]))
+    return selected
 
 
 async def _async_handle_ws_command_impl(
@@ -569,18 +862,20 @@ async def _async_handle_ws_command_impl(
         connection.send_result(msg["id"], extra)
         return
 
-    if selected is not None and extra.get("removed_subentry_id") == selected.subentry_id:
-        selected = None
-    elif selected is None and extra.get("adopted_subentry_id"):
-        selected = resolve_target_coordinator(hass, str(extra["adopted_subentry_id"]))
+    _get_shared_memo(hass).invalidate()
+    post_selected = _resolve_post_command_target(hass, selected, extra)
+    skip_sections = _command_response_skip_sections(cmd, body)
+    if post_selected is not selected:
+        skip_sections = skip_sections - {"wallpapers"}
     connection.send_result(
         msg["id"],
         {
             **build_studio_state_payload(
                 hass,
-                selected,
+                post_selected,
                 include_catalog=False,
                 include_logs=(cmd == "clear_internal_logs"),
+                skip_sections=skip_sections,
             ),
             **extra,
         },
@@ -692,12 +987,14 @@ async def _async_restore_bundle(
     except ValueError as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
         return
+    _get_shared_memo(hass).invalidate()
     connection.send_result(
         msg["id"],
         build_studio_state_payload(
             hass,
             resolve_target_coordinator(hass, msg.get("subentry_id")),
             include_catalog=False,
+            skip_sections=_RESTORE_OR_RESET_SKIP_SECTIONS,
         ),
     )
 
@@ -805,8 +1102,15 @@ async def ws_handle_device_reset(
     log_studio_event(
         hass, "INFO", coord.device_slug, f"Reset to defaults ({', '.join(parts)})"
     )
+    _get_shared_memo(hass).invalidate()
     connection.send_result(
-        msg["id"], build_studio_state_payload(hass, coord, include_catalog=False)
+        msg["id"],
+        build_studio_state_payload(
+            hass,
+            coord,
+            include_catalog=False,
+            skip_sections=_RESTORE_OR_RESET_SKIP_SECTIONS,
+        ),
     )
 
 

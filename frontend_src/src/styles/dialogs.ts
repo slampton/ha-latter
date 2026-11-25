@@ -711,8 +711,12 @@ export const DIALOG_STYLES = css`
     border-color: var(--studio-primary);
   }
   .pinned-grid-tile.is-dragging {
-    opacity: 0.45;
+    opacity: 0.65;
     cursor: grabbing;
+    z-index: 5;
+    transform: translate3d(var(--drag-x, 0px), var(--drag-y, 0px), 0);
+    will-change: transform;
+    transition: none;
   }
   .pinned-grid-tile.tile-accent-primary {
     border-color: var(--studio-badge-glass-primary-border);

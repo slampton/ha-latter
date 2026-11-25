@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+import contextlib
 from datetime import UTC, datetime
 import hashlib
+import os
 from pathlib import Path
+import secrets
+import stat
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
@@ -32,7 +36,8 @@ from .store import (
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-type _PreparedItem = tuple[str, str, Path, str, tuple[bytes, int, int] | None]
+type _StagedOriginal = tuple[Path, int, int]
+type _PreparedItem = tuple[str, str, Path, str, _StagedOriginal | None]
 
 
 def _normalize_media_relpath(relpath: str) -> str | None:
@@ -88,6 +93,44 @@ def _discover_valid_media_roots(
     return roots, valid_dirs
 
 
+def _classify_symlink_entry(
+    entry: os.DirEntry[str], root_dir: Path
+) -> tuple[bool, int] | None:
+    """Resolve and confine a symlinked directory entry strictly inside `root_dir`."""
+    resolved = Path(entry.path).resolve(strict=True)
+    if not resolved.is_relative_to(root_dir):
+        return None
+    st = entry.stat(follow_symlinks=True)
+    if stat.S_ISDIR(st.st_mode):
+        return True, 0
+    if (
+        stat.S_ISREG(st.st_mode)
+        and os.path.splitext(entry.name)[1].lower() in IMAGE_SUFFIXES
+        and st.st_size > 0
+    ):
+        return False, st.st_size
+    return None
+
+
+def _classify_media_scandir_entry(
+    entry: os.DirEntry[str], root_dir: Path
+) -> tuple[bool, int] | None:
+    """Classify one `os.scandir` entry with symlink confinement and minimal `stat()` calls."""
+    try:
+        if entry.is_symlink():
+            return _classify_symlink_entry(entry, root_dir)
+        if entry.is_dir(follow_symlinks=False):
+            return True, 0
+        if os.path.splitext(entry.name)[1].lower() not in IMAGE_SUFFIXES:
+            return None
+        if not entry.is_file(follow_symlinks=False):
+            return None
+        size_bytes = entry.stat(follow_symlinks=False).st_size
+        return (False, size_bytes) if size_bytes > 0 else None
+    except OSError:
+        return None
+
+
 def _scan_media_directory_entries(
     target_dir: Path,
     root_dir: Path,
@@ -97,24 +140,18 @@ def _scan_media_directory_entries(
 ) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
     folders: list[dict[str, str]] = []
     images: list[dict[str, Any]] = []
-    for entry in sorted(target_dir.iterdir(), key=lambda p: p.name.lower()):
-        if entry.name.startswith("."):
-            continue
-        try:
-            resolved = entry.resolve(strict=True)
-        except OSError:
-            continue
-        if not resolved.is_relative_to(root_dir):
-            continue
-        rel_posix = f"{norm_sub}/{entry.name}" if norm_sub else entry.name
-        if resolved.is_dir():
-            folders.append({"name": entry.name, "subpath": rel_posix})
-        elif resolved.is_file() and entry.suffix.lower() in IMAGE_SUFFIXES:
-            try:
-                size_bytes = resolved.stat().st_size
-            except OSError:
+    with os.scandir(target_dir) as scan_it:
+        for entry in scan_it:
+            if entry.name.startswith("."):
                 continue
-            if size_bytes > 0:
+            classified = _classify_media_scandir_entry(entry, root_dir)
+            if classified is None:
+                continue
+            is_dir, size_bytes = classified
+            rel_posix = f"{norm_sub}/{entry.name}" if norm_sub else entry.name
+            if is_dir:
+                folders.append({"name": entry.name, "subpath": rel_posix})
+            else:
                 images.append(
                     {
                         "name": entry.name,
@@ -124,6 +161,8 @@ def _scan_media_directory_entries(
                         "already_imported": f"{selected_root}/{rel_posix}" in imported_paths,
                     }
                 )
+    folders.sort(key=lambda item: item["name"].lower())
+    images.sort(key=lambda item: str(item["name"]).lower())
     return folders, images
 
 
@@ -193,10 +232,32 @@ def _validate_media_import_source(
         return None, str(err)
 
 
+def _cleanup_staged_paths(paths: Iterable[Path]) -> None:
+    """Best-effort unlink of unused staged import files."""
+    for path in paths:
+        with contextlib.suppress(OSError):
+            path.unlink(missing_ok=True)
+
+
+def _stage_encoded_original(orig_dir: Path, jpeg_bytes: bytes) -> Path:
+    """Atomically write an encoded original JPEG to a hidden staged file inside `orig_dir`."""
+    tmp_path = orig_dir / f".import_{secrets.token_hex(8)}.tmp"
+    staged_path = orig_dir / f".staged_{secrets.token_hex(8)}.jpg"
+    try:
+        tmp_path.write_bytes(jpeg_bytes)
+        os.replace(tmp_path, staged_path)
+    except Exception:
+        with contextlib.suppress(OSError):
+            tmp_path.unlink(missing_ok=True)
+        raise
+    return staged_path
+
+
 def _prepare_single_media_item(
     media_dirs: Mapping[str, str],
     root_key: str,
     relpath: str,
+    orig_dir: Path,
     dedup_state: tuple[bool, set[str], set[str]],
 ) -> tuple[_PreparedItem | None, str | None]:
     deduplicate, initial_shas, batch_seen_sha = dedup_state
@@ -209,12 +270,76 @@ def _prepare_single_media_item(
         return (relpath, norm_rel, resolved, content_sha256, None), None
 
     try:
-        encoded_triplet = encode_original_jpeg(raw_bytes)
+        jpeg_bytes, width, height = encode_original_jpeg(raw_bytes)
+        staged_path = _stage_encoded_original(orig_dir, jpeg_bytes)
     except Exception as err:  # noqa: BLE001
         return None, f"Invalid image: {err}"
     if deduplicate:
         batch_seen_sha.add(content_sha256)
-    return (relpath, norm_rel, resolved, content_sha256, encoded_triplet), None
+    return (relpath, norm_rel, resolved, content_sha256, (staged_path, width, height)), None
+
+
+def _tag_existing_duplicate_photo(
+    new_photos: dict[str, PhotoRecord], existing_pid: str, cid: str
+) -> bool:
+    ex_rec = new_photos[existing_pid]
+    if not cid or cid in ex_rec.collections:
+        return False
+    new_photos[existing_pid] = PhotoRecord(
+        id=ex_rec.id,
+        filename=ex_rec.filename,
+        name=ex_rec.name,
+        width=ex_rec.width,
+        height=ex_rec.height,
+        crop=ex_rec.crop,
+        collections=(*ex_rec.collections, cid),
+        content_sha256=ex_rec.content_sha256,
+        source_kind=ex_rec.source_kind,
+        media_source_path=ex_rec.media_source_path,
+        added_at=ex_rec.added_at,
+    )
+    return True
+
+
+def _finalize_staged_original(
+    orig_dir: Path,
+    resolved: Path,
+    opt_staged: _StagedOriginal | None,
+    out_name: str,
+    staged_to_clean: set[Path],
+) -> tuple[int, int]:
+    """Promote a pre-staged original (or late-encode atomically) to `orig_dir / out_name`."""
+    dest_path = orig_dir / out_name
+    if opt_staged is not None:
+        staged_path, width, height = opt_staged
+        os.replace(staged_path, dest_path)
+        staged_to_clean.discard(staged_path)
+        return width, height
+
+    jpeg_bytes, width, height = encode_original_jpeg(resolved.read_bytes())
+    tmp_staged = _stage_encoded_original(orig_dir, jpeg_bytes)
+    try:
+        os.replace(tmp_staged, dest_path)
+    except Exception:
+        _cleanup_staged_paths((tmp_staged,))
+        raise
+    return width, height
+
+
+def _photo_record_response(rec: PhotoRecord) -> dict[str, Any]:
+    return {
+        "id": rec.id,
+        "filename": rec.filename,
+        "name": rec.name,
+        "kind": "uploaded",
+        "width": rec.width,
+        "height": rec.height,
+        "crop": rec.crop.as_dict(),
+        "collections": list(rec.collections),
+        "source_kind": rec.source_kind,
+        "media_source_path": rec.media_source_path,
+        "added_at": rec.added_at,
+    }
 
 
 def _commit_prepared_media_batch(
@@ -229,94 +354,72 @@ def _commit_prepared_media_batch(
     skipped = 0
     commit_failures: list[dict[str, str]] = []
     created_photos: list[dict[str, Any]] = []
+    staged_to_clean: set[Path] = {
+        opt_staged[0] for *_rest, opt_staged in prepared_items if opt_staged is not None
+    }
 
-    with LIBRARY_LOCK:
-        snap = ensure_loaded_locked(wp_root)
-        if cid and cid not in {c.id for c in snap.collections}:
-            raise ValueError(f"Unknown collection '{cid}'")
-        new_photos = dict(snap.photos)
-        new_order = list(snap.photo_order)
-        sha_to_pid = {rec.content_sha256: pid for pid, rec in new_photos.items() if rec.content_sha256}
-        mutated = False
+    try:
+        with LIBRARY_LOCK:
+            snap = ensure_loaded_locked(wp_root)
+            if cid and cid not in {c.id for c in snap.collections}:
+                raise ValueError(f"Unknown collection '{cid}'")
+            new_photos = dict(snap.photos)
+            new_order = list(snap.photo_order)
+            sha_to_pid = {
+                rec.content_sha256: pid
+                for pid, rec in new_photos.items()
+                if rec.content_sha256
+            }
+            mutated = False
 
-        for relpath, norm_rel, resolved, content_sha256, opt_triplet in prepared_items:
-            existing_pid = sha_to_pid.get(content_sha256) if deduplicate else None
-            if existing_pid is not None and existing_pid in new_photos:
-                skipped += 1
-                ex_rec = new_photos[existing_pid]
-                if cid and cid not in ex_rec.collections:
-                    new_photos[existing_pid] = PhotoRecord(
-                        id=ex_rec.id,
-                        filename=ex_rec.filename,
-                        name=ex_rec.name,
-                        width=ex_rec.width,
-                        height=ex_rec.height,
-                        crop=ex_rec.crop,
-                        collections=(*ex_rec.collections, cid),
-                        content_sha256=ex_rec.content_sha256,
-                        source_kind=ex_rec.source_kind,
-                        media_source_path=ex_rec.media_source_path,
-                        added_at=ex_rec.added_at,
-                    )
-                    mutated = True
-                continue
+            for relpath, norm_rel, resolved, content_sha256, opt_staged in prepared_items:
+                existing_pid = sha_to_pid.get(content_sha256) if deduplicate else None
+                if existing_pid is not None and existing_pid in new_photos:
+                    skipped += 1
+                    mutated = _tag_existing_duplicate_photo(new_photos, existing_pid, cid) or mutated
+                    continue
 
-            if opt_triplet is None:
+                photo_id, out_name = mint_unique_photo_id(resolved.stem, new_photos)
                 try:
-                    triplet = encode_original_jpeg(resolved.read_bytes())
+                    width, height = _finalize_staged_original(
+                        orig_dir, resolved, opt_staged, out_name, staged_to_clean
+                    )
                 except Exception as err:  # noqa: BLE001
                     commit_failures.append({"path": relpath, "error": f"Invalid image: {err}"})
                     continue
-            else:
-                triplet = opt_triplet
 
-            jpeg_bytes, width, height = triplet
-            photo_id, out_name = mint_unique_photo_id(resolved.stem, new_photos)
-            (orig_dir / out_name).write_bytes(jpeg_bytes)
-            rec = PhotoRecord(
-                id=photo_id,
-                filename=out_name,
-                name=humanize_filename_stem(resolved.name),
-                width=width,
-                height=height,
-                crop=PhotoCrop(),
-                collections=(cid,) if cid else (),
-                content_sha256=content_sha256,
-                source_kind="media_import",
-                media_source_path=f"{root_key}/{norm_rel}",
-                added_at=datetime.now(UTC).isoformat(timespec="seconds"),
-            )
-            new_photos[photo_id] = rec
-            new_order.append(photo_id)
-            sha_to_pid[content_sha256] = photo_id
-            imported += 1
-            mutated = True
-            created_photos.append(
-                {
-                    "id": rec.id,
-                    "filename": rec.filename,
-                    "name": rec.name,
-                    "kind": "uploaded",
-                    "width": rec.width,
-                    "height": rec.height,
-                    "crop": rec.crop.as_dict(),
-                    "collections": list(rec.collections),
-                    "source_kind": rec.source_kind,
-                    "media_source_path": rec.media_source_path,
-                    "added_at": rec.added_at,
-                }
-            )
+                rec = PhotoRecord(
+                    id=photo_id,
+                    filename=out_name,
+                    name=humanize_filename_stem(resolved.name),
+                    width=width,
+                    height=height,
+                    crop=PhotoCrop(),
+                    collections=(cid,) if cid else (),
+                    content_sha256=content_sha256,
+                    source_kind="media_import",
+                    media_source_path=f"{root_key}/{norm_rel}",
+                    added_at=datetime.now(UTC).isoformat(timespec="seconds"),
+                )
+                new_photos[photo_id] = rec
+                new_order.append(photo_id)
+                sha_to_pid[content_sha256] = photo_id
+                imported += 1
+                mutated = True
+                created_photos.append(_photo_record_response(rec))
 
-        if mutated:
-            commit_snapshot_locked(
-                wp_root,
-                PhotoLibrarySnapshot(
-                    snap.collections,
-                    MappingProxyType(new_photos),
-                    tuple(new_order),
-                    snap.preset_collections,
-                ),
-            )
+            if mutated:
+                commit_snapshot_locked(
+                    wp_root,
+                    PhotoLibrarySnapshot(
+                        snap.collections,
+                        MappingProxyType(new_photos),
+                        tuple(new_order),
+                        snap.preset_collections,
+                    ),
+                )
+    finally:
+        _cleanup_staged_paths(staged_to_clean)
     return imported, skipped, commit_failures, created_photos
 
 
@@ -328,7 +431,7 @@ def import_media_photos_sync(
     collection_id: str | None = None,
     deduplicate: bool = True,
 ) -> dict[str, Any]:
-    """Batch-import images from HA `/media` into the Photo Library with lock-free PIL decode."""
+    """Batch-import images from HA `/media` into the Photo Library with lock-free staged disk writes."""
     root_key = str(root or "").strip()
     if not isinstance(media_dirs, Mapping) or root_key not in media_dirs:
         raise ValueError(f"Unknown media folder root '{root_key}'")
@@ -339,7 +442,8 @@ def import_media_photos_sync(
         raise ValueError(f"Cannot import more than {MAX_MEDIA_IMPORT_BATCH} photos in one batch")
 
     wp_root = get_wallpaper_root(hass)
-    originals_dir(wp_root).mkdir(parents=True, exist_ok=True)
+    orig_dir = originals_dir(wp_root)
+    orig_dir.mkdir(parents=True, exist_ok=True)
     cid = str(collection_id or "").strip()
 
     with LIBRARY_LOCK:
@@ -353,14 +457,20 @@ def import_media_photos_sync(
     failed: list[dict[str, str]] = []
     prepared_items: list[_PreparedItem] = []
     batch_seen_sha: set[str] = set()
-    for relpath in path_list:
-        item, err_msg = _prepare_single_media_item(
-            media_dirs, root_key, relpath, (deduplicate, initial_shas, batch_seen_sha)
+    try:
+        for relpath in path_list:
+            item, err_msg = _prepare_single_media_item(
+                media_dirs, root_key, relpath, orig_dir, (deduplicate, initial_shas, batch_seen_sha)
+            )
+            if err_msg is not None:
+                failed.append({"path": relpath, "error": err_msg})
+            elif item is not None:
+                prepared_items.append(item)
+    except BaseException:
+        _cleanup_staged_paths(
+            opt_staged[0] for *_rest, opt_staged in prepared_items if opt_staged is not None
         )
-        if err_msg is not None:
-            failed.append({"path": relpath, "error": err_msg})
-        elif item is not None:
-            prepared_items.append(item)
+        raise
 
     if not prepared_items:
         return {"imported": 0, "skipped": 0, "failed": failed, "photos": []}

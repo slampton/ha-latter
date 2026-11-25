@@ -221,9 +221,16 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         self.assertIn("LatterBleDistanceSensor(coordinator)", sensor_src)
         self.assertIn(
             "if not coordinator.is_ble_tag and coordinator.has_display:\n"
-            "            dev_entities.append(LatterTimerRemainingSensor(coordinator))",
+            "            dev_entities.append(LatterTimerEndsSensor(coordinator))",
             sensor_src,
         )
+        self.assertNotIn("LatterTimerRemainingSensor", sensor_src)
+        # Recorder protection: high-churn BLE/presence attributes are excluded from HA Recorder
+        bs_src = (LATTER_DIR / "binary_sensor.py").read_text(encoding="utf-8")
+        dt_src = (LATTER_DIR / "device_tracker.py").read_text(encoding="utf-8")
+        self.assertIn("_unrecorded_attributes", sensor_src)
+        self.assertIn("_unrecorded_attributes", bs_src)
+        self.assertIn("_unrecorded_attributes", dt_src)
 
         coord_src = read_py_tree("coordinator")
         self.assertNotIn("DataUpdateCoordinator", coord_src)

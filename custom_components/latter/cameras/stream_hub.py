@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator, Mapping
 import contextlib
+from dataclasses import dataclass, field
 from functools import partial
 import logging
 import shutil
@@ -17,7 +18,6 @@ from ..hub_registry import get_domain_data, peek_domain_data
 from .transcode import (
     FFMPEG_READ_CHUNK_BYTES,
     FFMPEG_READ_TIMEOUT_SECONDS,
-    GRID_GUTTER_PX,
     GRID_STALE_FRAME_SECONDS,
     MAX_CONCURRENT_VIDEO_INGESTS,
     MAX_RTSP_EMPTY_RETRIES,
@@ -39,6 +39,7 @@ from .transcode import (
     align16,
     build_ffmpeg_video_cmd,
     compose_grid_frame,
+    compute_grid_cell_size,
     format_mjpeg_chunk,
     inspect_jpeg_header,
     normalize_fit_mode,
@@ -51,6 +52,7 @@ _LOGGER = logging.getLogger(__name__)
 _MACROBLOCK_ALIGN: Final[int] = 16
 _FULL_CIRCLE_DEG: Final[int] = 360
 _MAX_GRID_SLOTS: Final[int] = 4
+_MAX_CONCURRENT_GRID_COMPOSES: Final[int] = 2
 _SEMAPHORE_ACQUIRE_TIMEOUT_S: Final[float] = 0.25
 _PROC_TERM_TIMEOUT_S: Final[float] = 1.5
 _PROC_KILL_WAIT_S: Final[float] = 1.0
@@ -58,6 +60,51 @@ _SNAPSHOT_TIMEOUT_S: Final[int] = 8
 _MIN_SLEEP_THRESHOLD_S: Final[float] = 0.005
 _TIER_RETRY_BACKOFF_S: Final[float] = 0.5
 _GRID_FIRST_FRAME_CAP_S: Final[float] = 1.5
+
+type _GridProducerKey = tuple[tuple[str, ...], int, int, int, str, tuple[str, ...]]
+type _GridDirtySig = tuple[tuple[int, ...], tuple[bool, ...]]
+
+
+@dataclass
+class _GridProducer:
+    """Shared 2x2 grid compositor fanning out one Pillow encode to N subscribers."""
+
+    key: _GridProducerKey
+    cams: tuple[str, ...]
+    labels: tuple[str, ...]
+    out_w: int
+    out_h: int
+    fps: int
+    fit_mode: str
+    stale_after_s: float
+    subscribers: set[object] = field(default_factory=set)
+    attached: list[tuple[_CameraIngest, _CameraSubscriber] | None] = field(
+        default_factory=list
+    )
+    latest_frame: bytes | None = None
+    latest_seq: int = 0
+    latest_error: Exception | None = None
+    last_dirty_sig: _GridDirtySig | None = None
+    next_frame_event: asyncio.Event = field(default_factory=asyncio.Event)
+    task: asyncio.Task[None] | None = None
+    closed: bool = False
+
+    def publish(self, frame: bytes, dirty_sig: _GridDirtySig) -> None:
+        """Store latest composited grid JPEG and wake all grid subscribers."""
+        self.latest_frame = frame
+        self.latest_seq += 1
+        self.last_dirty_sig = dirty_sig
+        self.latest_error = None
+        prev = self.next_frame_event
+        self.next_frame_event = asyncio.Event()
+        prev.set()
+
+    def publish_error(self, err: Exception) -> None:
+        """Record a grid compositor error and wake all waiting subscribers."""
+        self.latest_error = err
+        prev = self.next_frame_event
+        self.next_frame_event = asyncio.Event()
+        prev.set()
 
 
 class LatterCameraStreamHub:
@@ -75,8 +122,11 @@ class LatterCameraStreamHub:
         self._max_concurrent_ingests = max(1, int(max_concurrent_ingests))
         self._idle_timeout_s = max(0.05, float(idle_timeout_s))
         self._video_semaphore = asyncio.Semaphore(self._max_concurrent_ingests)
+        self._grid_compose_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_GRID_COMPOSES)
         self._ingests: dict[str, _CameraIngest] = {}
         self._subscribe_locks: dict[str, asyncio.Lock] = {}
+        self._grid_producers: dict[_GridProducerKey, _GridProducer] = {}
+        self._grid_locks: dict[_GridProducerKey, asyncio.Lock] = {}
         self._stream_source_cache: dict[str, tuple[float, str | None]] = {}
         self._ffmpeg_bin_checked: bool = False
         self._cached_ffmpeg_bin: str | None = None
@@ -85,6 +135,11 @@ class LatterCameraStreamHub:
     def active_ingest_count(self) -> int:
         """Return the number of currently active `_CameraIngest` entries."""
         return len(self._ingests)
+
+    @property
+    def active_grid_producer_count(self) -> int:
+        """Return the number of currently active shared `_GridProducer` compositors."""
+        return len(self._grid_producers)
 
     def get_ingest(self, entity_id: str) -> _CameraIngest | None:
         """Return the active `_CameraIngest` for `entity_id`, if any."""
@@ -242,7 +297,13 @@ class LatterCameraStreamHub:
         prev.set()
 
     async def async_shutdown(self) -> None:
-        """Cancel and terminate all active camera ingests cleanly on integration unload."""
+        """Cancel and terminate all active grid producers and camera ingests cleanly on unload."""
+        grid_producers = list(self._grid_producers.values())
+        self._grid_producers.clear()
+        for producer in grid_producers:
+            await self._async_stop_grid_producer(producer)
+        self._grid_locks.clear()
+
         ingests = list(self._ingests.values())
         self._ingests.clear()
         for ingest in ingests:
@@ -828,6 +889,205 @@ class LatterCameraStreamHub:
             attached.append(pair)
         return attached, limit_err
 
+    def _release_grid_attachments(self, producer: _GridProducer) -> None:
+        attached, producer.attached = producer.attached, []
+        for pair in attached:
+            if pair is not None:
+                self._unsubscribe(pair[0], pair[1])
+
+    @staticmethod
+    def _build_grid_slot_snapshot(
+        producer: _GridProducer, now_mono: float
+    ) -> tuple[list[bytes | None], _GridDirtySig]:
+        slot_frames: list[bytes | None] = []
+        tile_seqs: list[int] = []
+        stale_flags: list[bool] = []
+        for pair in producer.attached:
+            is_fresh = (
+                pair is not None
+                and pair[0].latest_frame is not None
+                and (now_mono - pair[0].latest_frame_ts) <= producer.stale_after_s
+            )
+            if is_fresh and pair is not None:
+                slot_frames.append(pair[0].latest_frame)
+                tile_seqs.append(pair[0].latest_seq)
+                stale_flags.append(False)
+            else:
+                slot_frames.append(None)
+                tile_seqs.append(0)
+                stale_flags.append(True)
+        return slot_frames, (tuple(tile_seqs), tuple(stale_flags))
+
+    @staticmethod
+    async def _async_wait_grid_slot_events(
+        producer: _GridProducer, timeout_s: float
+    ) -> None:
+        active_ingests = [pair[0] for pair in producer.attached if pair is not None]
+        if not active_ingests:
+            await asyncio.sleep(timeout_s)
+            return
+        waiters = [
+            asyncio.create_task(ing.next_frame_event.wait()) for ing in active_ingests
+        ]
+        try:
+            await asyncio.wait(
+                waiters,
+                timeout=timeout_s,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        finally:
+            for p in waiters:
+                if not p.done():
+                    p.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await p
+
+    async def _async_compose_grid_bounded(
+        self, slot_frames: list[bytes | None], producer: _GridProducer
+    ) -> bytes:
+        async with self._grid_compose_semaphore:
+            out: bytes = await self.hass.async_add_executor_job(
+                partial(
+                    compose_grid_frame,
+                    slot_frames,
+                    list(producer.labels),
+                    producer.out_w,
+                    producer.out_h,
+                    fit=producer.fit_mode,
+                )
+            )
+            return out
+
+    async def _async_run_grid_producer(self, producer: _GridProducer) -> None:
+        interval = 1.0 / float(producer.fps)
+        try:
+            active_ingests = [pair[0] for pair in producer.attached if pair is not None]
+            if active_ingests and not any(
+                ing.latest_frame is not None for ing in active_ingests
+            ):
+                await self._async_wait_grid_slot_events(
+                    producer, min(_GRID_FIRST_FRAME_CAP_S, interval * 2.0)
+                )
+
+            while not producer.closed:
+                t0 = time.monotonic()
+                slot_frames, dirty_sig = self._build_grid_slot_snapshot(producer, t0)
+                if (
+                    producer.latest_frame is not None
+                    and dirty_sig == producer.last_dirty_sig
+                ):
+                    await self._async_wait_grid_slot_events(producer, interval)
+                    continue
+                jpeg_bytes = await self._async_compose_grid_bounded(
+                    slot_frames, producer
+                )
+                if producer.closed:
+                    return
+                producer.publish(jpeg_bytes, dirty_sig)
+                sleep_for = interval - (time.monotonic() - t0)
+                if sleep_for > _MIN_SLEEP_THRESHOLD_S:
+                    await asyncio.sleep(sleep_for)
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Grid producer loop ended for %s: %s", producer.cams, err)
+            producer.publish_error(err)
+        finally:
+            if self._grid_producers.get(producer.key) is producer:
+                self._grid_producers.pop(producer.key, None)
+            self._release_grid_attachments(producer)
+
+    async def _subscribe_grid(
+        self,
+        cams: tuple[str, ...],
+        labels: tuple[str, ...],
+        out_w: int,
+        out_h: int,
+        target_fps: int,
+        fit_mode: str,
+        stale_after_s: float,
+    ) -> tuple[_GridProducer, object]:
+        key: _GridProducerKey = (cams, out_w, out_h, target_fps, fit_mode, labels)
+        grid_lock = self._grid_locks.setdefault(key, asyncio.Lock())
+        token = object()
+        async with grid_lock:
+            producer = self._grid_producers.get(key)
+            if producer is not None and not producer.closed:
+                producer.subscribers.add(token)
+                return producer, token
+
+            quad_w, quad_h = compute_grid_cell_size(out_w, out_h)
+            attached, limit_err = await self._async_subscribe_grid_slots(
+                list(cams), (quad_w, quad_h, target_fps), fit_mode
+            )
+            active_ingests = [pair[0] for pair in attached if pair is not None]
+            if not active_ingests and limit_err is not None:
+                raise limit_err
+
+            producer = _GridProducer(
+                key=key,
+                cams=cams,
+                labels=labels,
+                out_w=out_w,
+                out_h=out_h,
+                fps=target_fps,
+                fit_mode=fit_mode,
+                stale_after_s=stale_after_s,
+                attached=attached,
+            )
+            producer.subscribers.add(token)
+            self._grid_producers[key] = producer
+            producer.task = self.hass.async_create_background_task(
+                self._async_run_grid_producer(producer),
+                name=f"latter_camera_grid_{out_w}x{out_h}_{len(cams)}",
+            )
+            return producer, token
+
+    async def _async_stop_grid_producer(self, producer: _GridProducer) -> None:
+        producer.closed = True
+        if self._grid_producers.get(producer.key) is producer:
+            self._grid_producers.pop(producer.key, None)
+        task, producer.task = producer.task, None
+        if task is not None and not task.done() and task is not asyncio.current_task():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+        self._release_grid_attachments(producer)
+        prev = producer.next_frame_event
+        producer.next_frame_event = asyncio.Event()
+        prev.set()
+
+    async def _async_unsubscribe_grid(
+        self, producer: _GridProducer, token: object
+    ) -> None:
+        grid_lock = self._grid_locks.get(producer.key)
+        if grid_lock is None:
+            producer.subscribers.discard(token)
+            if not producer.subscribers and not producer.closed:
+                await self._async_stop_grid_producer(producer)
+            return
+        async with grid_lock:
+            producer.subscribers.discard(token)
+            if not producer.subscribers and not producer.closed:
+                await self._async_stop_grid_producer(producer)
+
+    @staticmethod
+    async def _async_wait_next_grid_frame(
+        producer: _GridProducer, wait_timeout_s: float
+    ) -> bytes | None:
+        ev = producer.next_frame_event
+        try:
+            await asyncio.wait_for(ev.wait(), timeout=wait_timeout_s)
+        except TimeoutError as err:
+            if producer.latest_frame is not None:
+                return producer.latest_frame
+            if producer.latest_error is not None:
+                raise CameraFetchError(str(producer.latest_error)) from err
+            return None
+        if producer.latest_frame is None and producer.latest_error is not None:
+            raise CameraFetchError(str(producer.latest_error)) from producer.latest_error
+        return None
+
     async def async_iter_grid_frames(
         self,
         entity_ids: list[str],
@@ -838,62 +1098,36 @@ class LatterCameraStreamHub:
         fit: str = "contain",
         stale_after_s: float = GRID_STALE_FRAME_SECONDS,
         label_overrides: Mapping[str, str] | None = None,
+        wait_timeout_s: float = STREAM_WAIT_TIMEOUT_SECONDS,
     ) -> AsyncIterator[bytes]:
-        """Subscribe to up to 4 shared camera ingests and yield composited 2x2 Baseline JPEG frames."""
-        cams = [c.strip() for c in entity_ids if c and c.strip()][:_MAX_GRID_SLOTS]
+        """Subscribe to a shared 2x2 grid producer and yield composited Baseline JPEG frames."""
+        cams = tuple(c.strip() for c in entity_ids if c and c.strip())[:_MAX_GRID_SLOTS]
         out_w, out_h = align16(width), align16(height)
         target_fps = normalize_fps(fps, default=5)
         fit_mode = normalize_fit_mode(fit)
-        quad_w, quad_h = align16((out_w - GRID_GUTTER_PX) // 2), align16((out_h - GRID_GUTTER_PX) // 2)
-        labels = self._resolve_grid_labels(cams, label_overrides or {})
-        interval = 1.0 / float(target_fps)
+        labels = tuple(self._resolve_grid_labels(list(cams), label_overrides or {}))
 
-        attached: list[tuple[_CameraIngest, _CameraSubscriber] | None] = []
+        producer, token = await self._subscribe_grid(
+            cams, labels, out_w, out_h, target_fps, fit_mode, stale_after_s
+        )
+        last_seq = 0
         try:
-            attached, limit_err = await self._async_subscribe_grid_slots(
-                cams, (quad_w, quad_h, target_fps), fit_mode
-            )
-            active_ingests = [pair[0] for pair in attached if pair is not None]
-            if not active_ingests and limit_err is not None:
-                raise limit_err
-
-            if active_ingests and not any(ing.latest_frame is not None for ing in active_ingests):
-                waiters = [asyncio.create_task(ing.next_frame_event.wait()) for ing in active_ingests]
-                try:
-                    await asyncio.wait(
-                        waiters,
-                        timeout=min(_GRID_FIRST_FRAME_CAP_S, interval * 2.0),
-                        return_when=asyncio.FIRST_COMPLETED,
-                    )
-                finally:
-                    for p in waiters:
-                        if not p.done():
-                            p.cancel()
-                            with contextlib.suppress(asyncio.CancelledError, Exception):
-                                await p
-
-            while True:
-                t0 = time.monotonic()
-                slot_frames = [
-                    pair[0].latest_frame
-                    if (
-                        pair is not None
-                        and pair[0].latest_frame is not None
-                        and (t0 - pair[0].latest_frame_ts) <= stale_after_s
-                    )
-                    else None
-                    for pair in attached
-                ]
-                yield await self.hass.async_add_executor_job(
-                    partial(compose_grid_frame, slot_frames, labels, out_w, out_h, fit=fit_mode)
+            while not producer.closed:
+                if producer.latest_seq > last_seq and producer.latest_frame is not None:
+                    frame, last_seq = producer.latest_frame, producer.latest_seq
+                    yield frame
+                    continue
+                if producer.latest_frame is None and producer.latest_error is not None:
+                    raise CameraFetchError(
+                        str(producer.latest_error)
+                    ) from producer.latest_error
+                keepalive = await self._async_wait_next_grid_frame(
+                    producer, wait_timeout_s
                 )
-                sleep_for = interval - (time.monotonic() - t0)
-                if sleep_for > _MIN_SLEEP_THRESHOLD_S:
-                    await asyncio.sleep(sleep_for)
+                if keepalive is not None:
+                    yield keepalive
         finally:
-            for pair in attached:
-                if pair is not None:
-                    self._unsubscribe(pair[0], pair[1])
+            await self._async_unsubscribe_grid(producer, token)
 
     async def async_iter_grid_mjpeg_chunks(
         self,

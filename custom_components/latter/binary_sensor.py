@@ -161,6 +161,17 @@ class LatterAreaOccupancyBinarySensor(BinarySensorEntity):
     _attr_should_poll = False
     _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
     _attr_translation_key = "area_occupancy"
+    _unrecorded_attributes = frozenset(
+        {
+            "distance_m",
+            "rssi",
+            "raw_rssi",
+            "winning_rssi",
+            "closest_distance_m",
+            "confidence_pct",
+            "ref_power_dbm",
+        }
+    )
 
     def __init__(
         self,

@@ -578,5 +578,75 @@ async def test_studio_ws_get_state_and_subscribe_catalog_diet(
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 
+async def test_studio_ws_multi_tab_shared_system_snapshot(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify concurrent Studio tabs share a single `build_system_section` build per tick while preserving per-tab `is_current`."""
+    from datetime import timedelta
+    from unittest.mock import patch
+
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant.common import async_fire_time_changed
+
+    from custom_components.latter.const import STUDIO_REV
+    from custom_components.latter.studio import commands as studio_cmds
+    from custom_components.latter.studio.payload import build_system_section
+    from tests.helpers.ble_and_ws import call_ws, make_ws_connection
+    from tests.helpers.ha_setup import flush_debouncers
+
+    entry, sys_obj, coord = await setup_latter_hub(hass, with_device=True, with_ble_tag=True)
+    assert coord is not None
+    tag_coord = sys_obj.coordinators["sub_tag"]
+
+    conn_a = make_ws_connection(hass)
+    conn_b = make_ws_connection(hass)
+    await call_ws(
+        hass,
+        conn_a,
+        101,
+        "latter/system/subscribe",
+        subentry_id=coord.subentry_id,
+        studio_rev=STUDIO_REV,
+    )
+    await call_ws(
+        hass,
+        conn_b,
+        102,
+        "latter/system/subscribe",
+        subentry_id=tag_coord.subentry_id,
+        studio_rev=STUDIO_REV,
+    )
+    await hass.async_block_till_done()
+    conn_a.sent.clear()
+    conn_b.sent.clear()
+
+    sys_build_calls = 0
+
+    def _spy_build_sys(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        nonlocal sys_build_calls
+        sys_build_calls += 1
+        return build_system_section(*args, **kwargs)
+
+    with patch.object(studio_cmds, "build_system_section", side_effect=_spy_build_sys):
+        coord.async_update_listeners()
+        await flush_debouncers(hass)
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+        await hass.async_block_till_done()
+
+    assert sys_build_calls == 1
+    ev_a = next(m["event"] for m in conn_a.sent if m.get("id") == 101 and m.get("type") == "event")
+    ev_b = next(m["event"] for m in conn_b.sent if m.get("id") == 102 and m.get("type") == "event")
+    cur_a = {d["subentry_id"]: d["is_current"] for d in ev_a["system_devices"]}
+    cur_b = {d["subentry_id"]: d["is_current"] for d in ev_b["system_devices"]}
+    assert cur_a[coord.subentry_id] is True
+    assert cur_a[tag_coord.subentry_id] is False
+    assert cur_b[tag_coord.subentry_id] is True
+    assert cur_b[coord.subentry_id] is False
+
+    conn_a.subscriptions.pop(101)()
+    conn_b.subscriptions.pop(102)()
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
 if __name__ == "__main__":
     unittest.main()

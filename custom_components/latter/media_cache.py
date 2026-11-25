@@ -90,6 +90,9 @@ def transcode_to_baseline_jpeg(
     """Decode any image format, resize to `(width, height)`, and encode non-progressive Baseline JPEG."""
     with TRANSCODE_SEMAPHORE, Image.open(io.BytesIO(raw_bytes)) as img:
         validate_pil_image_dimensions(img)
+        if img.format == "JPEG":
+            draft_dim = max(int(width), int(height)) * 2
+            img.draft("RGB", (draft_dim, draft_dim))
         img_rgb = img.convert("RGB")
         if rotate_deg == _ROT_90:
             img_rgb = img_rgb.transpose(Image.Transpose.ROTATE_270)

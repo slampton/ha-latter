@@ -137,6 +137,18 @@ async def test_state_gates_panel_and_pure_studio_helpers(
         mp.setattr(studio_panel, "content_digest", _raise_os_err)
         assert await async_register_studio_icon_module(hass) is None
 
+    # Failed static path registration must NOT poison `studio_static_prefixes`
+    domain_data.studio_static_prefixes.clear()
+
+    async def _fail_static_paths(_configs: list[Any]) -> None:
+        raise RuntimeError("http busy")
+
+    with monkeypatch.context() as mp:
+        mp.setattr(hass.http, "async_register_static_paths", _fail_static_paths)
+        with pytest.raises(RuntimeError, match="http busy"):
+            await studio_panel._async_ensure_static_dir(hass)
+    assert not domain_data.studio_static_prefixes
+
     # Stale prev_icon_url removal succeeds, then fails cleanly
     stale_url_1 = "/latter_ui_old/latter-icons.js?v=old1"
     frontend.add_extra_js_url(hass, stale_url_1)
@@ -145,6 +157,11 @@ async def test_state_gates_panel_and_pure_studio_helpers(
     assert first_icon_url is not None
     assert stale_url_1 not in get_extra_js_urls(hass)
     assert first_icon_url in get_extra_js_urls(hass)
+
+    # Repeat call when `studio_icon_js_url` already matches current prefix returns early without re-hashing
+    with monkeypatch.context() as mp:
+        mp.setattr(studio_panel, "content_digest", _raise_os_err)
+        assert await async_register_studio_icon_module(hass) == first_icon_url
 
     stale_url_2 = "/latter_ui_old/latter-icons.js?v=old2"
     domain_data.studio_icon_js_url = stale_url_2
@@ -727,19 +744,27 @@ async def test_commands_subscribe_survey_flush_stopping_and_remove_device(
     conn.messages.clear()
     conn_missing.messages.clear()
 
-    # Rapid survey burst: leading edge sends immediately, 2nd schedules timer, time advance flushes (178-183)
-    # conn_missing ignores delta cleanly (192)
+    # Rapid survey burst: zero pre-coalesce work, time advance flushes single compact delta
+    # conn_missing ignores delta cleanly
     assert coord._ble_tracker is not None
     fabric.emit_survey_delta(coord._ble_tracker)
     fabric.emit_survey_delta(coord._ble_tracker)
     assert conn_missing.messages == []
-    assert sum(1 for m in conn.messages if m["event"].get("type") == "ble_survey_delta") == 1
+    assert conn.messages == []
 
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
     await hass.async_block_till_done()
-    assert sum(1 for m in conn.messages if m["event"].get("type") == "ble_survey_delta") == 2
+    assert [
+        m for m in conn_missing.messages if m["event"].get("type") == "ble_survey_delta"
+    ] == []
+    survey_evts = [
+        m["event"] for m in conn.messages if m["event"].get("type") == "ble_survey_delta"
+    ]
+    assert len(survey_evts) == 1
+    assert "ble_area_signatures" not in survey_evts[0]
+    assert "area_presence_grid" not in survey_evts[0]
 
-    # CoreState.stopping suppresses survey deltas (188) and scheduled state pushes (448)
+    # CoreState.stopping suppresses survey deltas and scheduled state pushes
     conn.messages.clear()
     orig_state = hass.state
     hass.state = CoreState.stopping
@@ -750,8 +775,8 @@ async def test_commands_subscribe_survey_flush_stopping_and_remove_device(
         hass.state = orig_state
     assert conn.messages == []
 
-    # Rotate signing key so HMAC token changes -> _compute_subscribe_skip_sections refreshes (266-267)
-    # Watched entity state mutation invokes _entity_changed -> schedule_push (325)
+    # Rotate signing key so HMAC token changes -> SectionTokenGate refreshes signed wallpaper sections
+    # `_system_rpc_outbox` is NO LONGER watched (avoids RPC frame push spam); watched entity mutation triggers push
     await call_ws(
         hass,
         conn,
@@ -762,14 +787,28 @@ async def test_commands_subscribe_survey_flush_stopping_and_remove_device(
         studio_rev=STUDIO_REV,
     )
     assert not conn.errors
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
+    rotated_events = [m["event"] for m in conn.messages if m["event"].get("type") == "state"]
+    assert rotated_events
+    assert "system_wallpapers" in rotated_events[-1]
+    assert "wallpapers" in rotated_events[-1]
+
     conn.messages.clear()
     hass.states.async_set(f"sensor.{coord.device_slug}_system_rpc_outbox", "frame_1")
     await hass.async_block_till_done()
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=2))
     await hass.async_block_till_done()
+    assert [m for m in conn.messages if m["event"].get("type") == "state"] == []
+
+    hass.states.async_set(f"media_player.{coord.device_slug}_music", "playing")
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=4))
+    await hass.async_block_till_done()
     state_events = [m["event"] for m in conn.messages if m["event"].get("type") == "state"]
     assert state_events
-    assert "system_wallpapers" in state_events[-1]
+    assert "system_wallpapers" not in state_events[-1]
+    assert "wallpapers" not in state_events[-1]
 
     # remove_device: missing subentry -> not_found (system_commands 1538-1544)
     await call_ws(
@@ -1183,8 +1222,8 @@ async def test_system_commands_photos_collections_pruning_and_media_errors(
         assert res_msg is not None
         return res_msg
 
-    # Empty deleted_ids early return (line 757)
-    _prune_deleted_photos_from_coordinators(hass, set())
+    # Empty deleted_ids early return
+    await _prune_deleted_photos_from_coordinators(hass, set())
 
     # Collection CRUD validation & error branches (818, 821-822, 837, 844-846, 860, 863)
     await _sys("create_photo_collection", {"name": ""})

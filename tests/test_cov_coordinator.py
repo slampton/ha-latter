@@ -18,7 +18,11 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr, issue_registry as ir
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.util import dt as dt_util
 import pytest
 
@@ -37,6 +41,7 @@ from custom_components.latter.const import (
     CONF_BROADCAST_PHRASES,
     CONF_CUSTOM_PALETTES,
     CONF_DEFAULT_AREA,
+    CONF_DEVICE_GROUPS,
     CONF_GAMES_ITEMS,
     CONF_HOME_CATEGORIES,
     CONF_MA_PLAYER_ENTITY,
@@ -79,7 +84,10 @@ from custom_components.latter.coordinator.core import (
     match_coordinator_target,
 )
 from custom_components.latter.coordinator.runtime import LatterDeviceRuntime
-from custom_components.latter.hub_registry import get_global_config
+from custom_components.latter.groups.device_groups import get_device_groups
+from custom_components.latter.hub_registry import get_area_state_index, get_global_config
+from custom_components.latter.hub_sync import async_save_and_broadcast_global_config
+from custom_components.latter.identity import _esphome_entry_for_device
 from custom_components.latter.repairs_keys import (
     ISSUE_CRASHED,
     ISSUE_ROLLED_BACK,
@@ -894,35 +902,24 @@ async def test_telemetry_prefs_timer_commands_v3_transport_and_target_matching(
     assert coord.prefs_seq == seq_before_empty
     await hass.async_block_till_done()
 
-    # 6) `_sync_timer_tick` 1 Hz callback running -> expiry stop
-    timer_ticks: list[Callable[[datetime], None]] = []
+    # 6) Timestamp-based timer anchor (`timer_ends_at_dt`) without any 1 Hz HA timer tick
+    assert not hasattr(coord, "_unsub_timer_tick")
+    coord.handle_timer_alarm_state(True, False, 10, False)
+    assert isinstance(coord.timer_ends_at_dt, datetime)
+    assert coord.timer_ends_at_dt.tzinfo is not None
+    assert coord.timer_ends_at_utc != ""
 
-    def _capture_timer_interval(
-        _hass: Any, action: Callable[[datetime], None], _delta: Any
-    ) -> Callable[[], None]:
-        timer_ticks.append(action)
-        return lambda: None
+    coord._timer_anchor_mono = time.monotonic() - 25.0
+    assert coord.current_timer_remaining_sec == 0
 
-    tick_hits: list[int] = []
-    unsub_tick = coord.async_add_timer_tick_listener(lambda: tick_hits.append(1))
-    try:
-        with patch(
-            "custom_components.latter.coordinator.core.async_track_time_interval",
-            side_effect=_capture_timer_interval,
-        ):
-            coord.handle_timer_alarm_state(True, False, 10, False)
-        assert len(timer_ticks) == 1
-        tick_hits.clear()
-        timer_ticks[0](dt_util.utcnow())
-        assert len(tick_hits) == 1
-        assert coord._unsub_timer_tick is not None
+    coord.handle_timer_alarm_state(False, True, 8, False)
+    assert coord.timer_ends_at_dt is None
+    assert coord.timer_ends_at_utc == ""
+    assert coord.current_timer_remaining_sec == 8
 
-        coord._timer_anchor_mono = time.monotonic() - 25.0
-        timer_ticks[0](dt_util.utcnow())
-        assert len(tick_hits) == 2
-        assert coord._unsub_timer_tick is None
-    finally:
-        unsub_tick()
+    coord.handle_timer_alarm_state(False, False, 0, False)
+    assert coord.timer_ends_at_dt is None
+    assert coord.current_timer_remaining_sec == 0
 
     # 7) `async_set_screen_light(turn_on=True, brightness_pct=None)` sends `wake_screen`
     calls = get_service_calls(hass)
@@ -1115,4 +1112,111 @@ async def test_telemetry_prefs_timer_commands_v3_transport_and_target_matching(
     assert coord.rpc_receiver is not None
 
     await flush_debouncers(hass)
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_coordinator_runtime_write_gating_options_race_and_caches(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify runtime snapshot write gating, options race fix, entity cache, hub_sync no-op, and device group cache."""
+    entry, _sys_obj, coord = await setup_latter_hub(hass, with_device=True)
+    slug = coord.device_slug
+
+    # 1) Runtime snapshot omits volatile `rev` and does not churn on live `last_media_position` ticks or `sun.sun` / weather refreshes
+    snap_initial = coord._build_persisted_snapshot()
+    assert "rev" not in snap_initial
+    coord._runtime.seed_snapshot(snap_initial)
+    with patch.object(coord._runtime.store, "async_delay_save") as delay_save_spy:
+        coord.last_media_position = 42.0
+        coord.apply_weather_snapshot(None, None)
+        coord.async_notify_listeners()
+        assert coord._build_persisted_snapshot()["last_media_position"] == snap_initial["last_media_position"]
+        assert delay_save_spy.call_count == 0
+
+        coord.sync_persisted_media_position()
+        assert coord._build_persisted_snapshot()["last_media_position"] == 42.0
+        coord.schedule_persist_runtime_state()
+        assert delay_save_spy.call_count == 1
+
+    # 2) `update_device_config` short-circuits identical writes without mutating subentry
+    coord.update_device_config(dict(coord.device_data))
+    await hass.async_block_till_done()
+    with patch.object(
+        hass.config_entries,
+        "async_update_subentry",
+        wraps=hass.config_entries.async_update_subentry,
+    ) as sub_spy:
+        coord.update_device_config(dict(coord.device_data))
+        assert sub_spy.call_count == 0
+
+    # 3) `async_update_device_prefs` refreshes `_applied_options_snapshot` so `_async_update_listener`
+    # does not trigger a redundant full `async_apply_options()` rebind on non-structural prefs.
+    with patch.object(
+        coord, "async_apply_options", wraps=coord.async_apply_options
+    ) as apply_spy:
+        await coord.async_update_device_prefs({"bedtime_active": True})
+        await hass.async_block_till_done()
+        assert coord._applied_options_snapshot == coord._capture_options_snapshot()
+        assert apply_spy.call_count == 0
+
+    # 4) Bound ESPHome entity map caches across repeated lookups and invalidates on registry_rev bump
+    idx = get_area_state_index(hass)
+    coord.invalidate_bound_entity_cache()
+    with patch.object(
+        er, "async_entries_for_device", wraps=er.async_entries_for_device
+    ) as er_spy:
+        _ = coord.device_entity("sensor", "system_rpc_outbox")
+        _ = coord.device_state("sensor", "system_rpc_outbox")
+        _ = coord.is_device_online()
+        assert er_spy.call_count == 1
+        idx.rebuild()
+        _ = coord.device_entity("sensor", "system_rpc_outbox")
+        assert er_spy.call_count == 2
+
+    # 5) `_esphome_entry_for_device` resolves bound ESPHome entry in O(1) without device-registry scans
+    esp_dev = dr.async_get(hass).async_get(coord.esphome_device_id)
+    assert esp_dev is not None
+    with patch.object(
+        dr, "async_entries_for_config_entry", wraps=dr.async_entries_for_config_entry
+    ) as dr_spy:
+        found_entry = _esphome_entry_for_device(hass, esp_dev)
+        assert found_entry is not None
+        assert found_entry.domain == "esphome"
+        assert dr_spy.call_count == 0
+
+    # 6) `async_save_and_broadcast_global_config` short-circuits when values are unchanged
+    await async_save_and_broadcast_global_config(
+        hass, {CONF_BROADCAST_PHRASES: ["Dinner is ready"]}
+    )
+    with patch.object(
+        coord, "async_on_global_config_updated", new_callable=AsyncMock
+    ) as broadcast_spy:
+        await async_save_and_broadcast_global_config(
+            hass, {CONF_BROADCAST_PHRASES: ["Dinner is ready"]}
+        )
+        assert broadcast_spy.await_count == 0
+
+    # 7) `get_device_groups` caches normalized groups, isolates caller mutations, and tracks updates
+    groups_a = get_device_groups(hass)
+    assert groups_a
+    first_id = groups_a[0]["id"]
+    groups_a[0]["name"] = "Mutated In Caller"
+    groups_b = get_device_groups(hass)
+    assert groups_b[0]["id"] == first_id
+    assert groups_b[0]["name"] != "Mutated In Caller"
+
+    custom_group = {
+        "id": "custom_bench",
+        "name": "Custom Bench",
+        "icon": "mdi:desktop-classic",
+        "device_config": {},
+    }
+    await async_save_and_broadcast_global_config(
+        hass, {CONF_DEVICE_GROUPS: [*groups_b, custom_group]}
+    )
+    groups_c = get_device_groups(hass)
+    assert any(g["id"] == "custom_bench" for g in groups_c)
+
+    # Confirm `slug` sensor identity stayed intact through all checks
+    assert hass.states.get(f"sensor.{slug}_timer_ends") is not None
     assert await hass.config_entries.async_unload(entry.entry_id) is True

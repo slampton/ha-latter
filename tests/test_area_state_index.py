@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 from homeassistant.core import SupportsResponse
@@ -39,6 +40,7 @@ from custom_components.latter.http.camera_views import (
 )
 from custom_components.latter.hub_registry import (
     get_area_state_index,
+    get_domain_data,
     get_global_config,
     is_media_position_only_tick,
 )
@@ -475,5 +477,58 @@ async def test_area_icon_resolution_wire_packing_and_live_registry_update(
     assert unassigned_state == "Unassigned"
     assert unassigned_attrs["area_icon"] == ""
     assert unassigned_attrs["payload"].split("\x1f")[35] == ""
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_area_state_index_coalesces_back_to_back_registry_updates(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify consecutive registry events coalesce into one rebuild, bump registry_rev, and keep sync reads fresh."""
+    entry, _sys_obj, _coord = await setup_latter_hub(hass)
+    idx = get_area_state_index(hass)
+    domain_data = get_domain_data(hass)
+    dev_reg = dr.async_get(hass)
+
+    ensure_area(hass, "Den", area_id="den")
+    ensure_area(hass, "Study", area_id="study")
+    dev = register_device(
+        hass,
+        config_entry_id="ce_coalesce",
+        identifiers={("test", "coalesce_dev")},
+        name="Coalesce Lamp",
+        area_id="den",
+    )
+    register_entity(
+        hass,
+        "light.coalesce_lamp",
+        platform="hue",
+        config_entry_id="ce_coalesce",
+        device_id=dev.id,
+    )
+    hass.states.async_set("light.coalesce_lamp", "on")
+    await hass.async_block_till_done()
+    assert "light.coalesce_lamp" in {s.entity_id for s in idx.entities_in_area("den")}
+
+    # 1) Back-to-back device updates coalesce into a SINGLE rebuild on next tick & invalidate bound_esphome_ids_cache
+    domain_data.bound_esphome_ids_cache = {"cached_esp"}
+    rev_before = idx.registry_rev
+    with patch.object(idx, "rebuild", wraps=idx.rebuild) as rebuild_spy:
+        dev_reg.async_update_device(dev.id, area_id="study")
+        dev_reg.async_update_device(dev.id, area_id="den")
+        assert domain_data.bound_esphome_ids_cache is None
+        assert idx.registry_rev > rev_before
+        await hass.async_block_till_done()
+        assert rebuild_spy.call_count == 1
+
+    # 2) Immediate synchronous read after registry event rebuilds on demand without duplicate deferred rebuild
+    with patch.object(idx, "rebuild", wraps=idx.rebuild) as sync_spy:
+        dev_reg.async_update_device(dev.id, area_id="study")
+        assert "light.coalesce_lamp" in {
+            s.entity_id for s in idx.entities_in_area("study")
+        }
+        assert sync_spy.call_count == 1
+        await hass.async_block_till_done()
+        assert sync_spy.call_count == 1
 
     assert await hass.config_entries.async_unload(entry.entry_id) is True

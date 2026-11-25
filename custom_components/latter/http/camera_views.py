@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+import contextlib
 from dataclasses import dataclass
 from http import HTTPStatus
 import io
 import logging
 import shutil
+from typing import Final
 import wave
 
 from aiohttp import web
@@ -59,8 +61,14 @@ _DEFAULT_SAMPLE_RATE = 48000
 _STEREO_CHANNELS = 2
 _MAX_GRID_CAMERAS = 4
 _AUDIO_READ_CHUNK = 4096
+_AUDIO_READ_TIMEOUT_S: Final[float] = 15.0
+_AUDIO_PREV_PROC_TERM_TIMEOUT_S: Final[float] = 1.5
+_AUDIO_SEM_ACQUIRE_TIMEOUT_S: Final[float] = 0.25
+_PROC_KILL_WAIT_S: Final[float] = 1.0
 _SYSTEM_PREVIEW_W = 320
 _SYSTEM_PREVIEW_H = 180
+_CACHED_FFMPEG_BIN: str | None = None
+_FFMPEG_BIN_CHECKED: bool = False
 
 
 @dataclass(slots=True)
@@ -112,10 +120,12 @@ async def _terminate_ffmpeg_process(
         proc.terminate()
         await asyncio.wait_for(proc.wait(), timeout=timeout_s)
     except TimeoutError:
-        proc.kill()
-        await proc.wait()
-    except ProcessLookupError:
-        pass
+        with contextlib.suppress(ProcessLookupError, OSError):
+            proc.kill()
+        with contextlib.suppress(TimeoutError, ProcessLookupError, OSError):
+            await asyncio.wait_for(proc.wait(), timeout=_PROC_KILL_WAIT_S)
+    except (ProcessLookupError, OSError):
+        return
 
 
 async def async_shutdown_doorbell_streams(hass: HomeAssistant | None = None) -> None:
@@ -605,6 +615,22 @@ def _validate_camera_audio_request(
     )
 
 
+async def _async_resolve_ffmpeg_binary(hass: HomeAssistant) -> str | None:
+    """Resolve FFmpeg binary via HA ffmpeg manager or cached off-loop `shutil.which`."""
+    global _CACHED_FFMPEG_BIN, _FFMPEG_BIN_CHECKED
+    try:
+        from homeassistant.components.ffmpeg import get_ffmpeg_manager
+
+        if binary := get_ffmpeg_manager(hass).binary:
+            return str(binary)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("FFmpeg manager lookup fell back to PATH: %s", err)
+    if not _FFMPEG_BIN_CHECKED:
+        _CACHED_FFMPEG_BIN = await hass.async_add_executor_job(shutil.which, "ffmpeg")
+        _FFMPEG_BIN_CHECKED = True
+    return _CACHED_FFMPEG_BIN
+
+
 async def _async_resolve_stream_and_ffmpeg(
     hass: HomeAssistant, cam_ent: str
 ) -> tuple[str | None, str | None]:
@@ -617,12 +643,7 @@ async def _async_resolve_stream_and_ffmpeg(
     except Exception as err:  # noqa: BLE001
         _LOGGER.debug("camera.async_get_stream_source(%s) failed: %s", cam_ent, err)
 
-    try:
-        from homeassistant.components.ffmpeg import get_ffmpeg_manager
-
-        ffmpeg_bin: str | None = get_ffmpeg_manager(hass).binary
-    except Exception:  # noqa: BLE001
-        ffmpeg_bin = shutil.which("ffmpeg")
+    ffmpeg_bin = await _async_resolve_ffmpeg_binary(hass)
     return stream_url, ffmpeg_bin
 
 
@@ -670,13 +691,18 @@ def _build_camera_audio_ffmpeg_cmd(
     return cmd
 
 
+async def _async_stop_active_device_audio(subentry_id: str) -> None:
+    """Stop and reap any existing camera audio subprocess tracked for `subentry_id`."""
+    prev_proc = _ACTIVE_DEVICE_STREAMS.pop(subentry_id, None)
+    if prev_proc is not None:
+        await _terminate_ffmpeg_process(prev_proc, _AUDIO_PREV_PROC_TERM_TIMEOUT_S)
+
+
 async def _async_pipe_ffmpeg_audio(
     request: web.Request, cfg: _AudioStreamConfig, cmd: list[str]
 ) -> web.StreamResponse:
     """Run FFmpeg audio transcode under `_FFMPEG_STREAM_SEMAPHORE` and pipe stdout to `request`."""
-    prev_proc = _ACTIVE_DEVICE_STREAMS.pop(cfg.coord.subentry_id, None)
-    if prev_proc is not None:
-        await _terminate_ffmpeg_process(prev_proc, 1.5)
+    await _async_stop_active_device_audio(cfg.coord.subentry_id)
 
     content_type = "audio/flac" if cfg.fmt == "flac" else "audio/wav"
     resp = web.StreamResponse(
@@ -698,12 +724,15 @@ async def _async_pipe_ffmpeg_audio(
         _ACTIVE_DEVICE_STREAMS[cfg.coord.subentry_id] = proc
         if proc.stdout is not None:
             while True:
-                chunk = await proc.stdout.read(_AUDIO_READ_CHUNK)
+                async with asyncio.timeout(_AUDIO_READ_TIMEOUT_S):
+                    chunk = await proc.stdout.read(_AUDIO_READ_CHUNK)
                 if not chunk:
                     break
                 await resp.write(chunk)
     except (asyncio.CancelledError, ConnectionResetError):
         pass
+    except TimeoutError:
+        _LOGGER.debug("Camera audio stream read timed out for %s", cfg.cam_ent)
     except Exception as err:  # noqa: BLE001
         _LOGGER.debug("Camera audio stream ended for %s: %s", cfg.cam_ent, err)
     finally:
@@ -744,8 +773,15 @@ class LatterCameraAudioStreamView(HomeAssistantView):
                 content_type="audio/wav",
             )
 
+        # Reap this client's previous audio stream BEFORE acquiring the semaphore
+        # so rapid camera switching cannot self-deadlock on its own occupied slot.
+        await _async_stop_active_device_audio(cfg.coord.subentry_id)
+
         try:
-            await asyncio.wait_for(_FFMPEG_STREAM_SEMAPHORE.acquire(), timeout=0.25)
+            await asyncio.wait_for(
+                _FFMPEG_STREAM_SEMAPHORE.acquire(),
+                timeout=_AUDIO_SEM_ACQUIRE_TIMEOUT_S,
+            )
         except TimeoutError:
             return web.Response(
                 status=HTTPStatus.TOO_MANY_REQUESTS,

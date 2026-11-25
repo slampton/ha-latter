@@ -251,12 +251,18 @@ export class SubscriptionController {
     );
     let nextDevices = this.store.state.system_devices;
     let nextLive = this.store.state.live;
+    let hasRowUpdate = false;
+    let hasLiveUpdate = false;
+    const hasSigUpdate = Array.isArray(delta.ble_area_signatures);
+
     if (Array.isArray(delta.ble_survey_rows)) {
       const nextRows: BleSurveyRow[] = delta.ble_survey_rows;
       const winRow = nextRows.find((r) => r.is_winner);
       if (Array.isArray(nextDevices) && targetId) {
+        let deviceMatched = false;
         nextDevices = nextDevices.map((dev) => {
           if (dev.subentry_id !== targetId) return dev;
+          deviceMatched = true;
           return {
             ...dev,
             ble_survey_rows: nextRows,
@@ -267,6 +273,7 @@ export class SubscriptionController {
             active_area_name: winRow?.area_name || dev.active_area_name,
           };
         });
+        hasRowUpdate = deviceMatched;
       }
       if (
         this.store.state.subentry_id === targetId &&
@@ -277,6 +284,7 @@ export class SubscriptionController {
           ...nextLive,
           ble_closest_proxy: delta.ble_closest_proxy,
         };
+        hasLiveUpdate = true;
       }
     }
     if (Array.isArray(delta.area_presence_grid) && nextLive) {
@@ -284,11 +292,15 @@ export class SubscriptionController {
         ...nextLive,
         area_presence_grid: delta.area_presence_grid as AreaPresenceRow[],
       };
+      hasLiveUpdate = true;
+    }
+    if (!hasRowUpdate && !hasLiveUpdate && !hasSigUpdate) {
+      return;
     }
     this.store.state = {
       ...this.store.state,
       system_devices: nextDevices,
-      ble_area_signatures: Array.isArray(delta.ble_area_signatures)
+      ble_area_signatures: hasSigUpdate
         ? (delta.ble_area_signatures as BleAreaSignatureSummary[])
         : this.store.state.ble_area_signatures,
       live: nextLive,
@@ -324,6 +336,18 @@ export class SubscriptionController {
     const prev = this.store.state;
     const prevSysConfig = prev?.system_config;
 
+    const mergedLocaleStrings = incoming.locale_strings ?? prev?.locale_strings;
+    const mergedSystemControls = incoming.system_controls ?? prev?.system_controls ?? [];
+    const mergedDiscoveredLatter =
+      incoming.discovered_latter_devices ?? prev?.discovered_latter_devices ?? [];
+    const mergedIgnoredLatter =
+      incoming.ignored_latter_devices ?? prev?.ignored_latter_devices ?? [];
+    const mergedWallpapers =
+      incoming.wallpapers ??
+      (prev && prev.subentry_id === incoming.subentry_id ? (prev.wallpapers ?? []) : []);
+    const mergedSystemInfo = incoming.system_info ?? prev?.system_info;
+    const mergedStudioRev = incoming.studio_rev ?? prev?.studio_rev;
+    const mergedHasSecurityPin = incoming.has_security_pin ?? prev?.has_security_pin;
     const mergedCatalog = incoming.catalog ?? prev?.catalog;
     const mergedPrefSpecs = incoming.pref_specs ?? prev?.pref_specs;
     const mergedWorldClockZones = incoming.world_clock_zones ?? prev?.world_clock_zones;
@@ -356,10 +380,18 @@ export class SubscriptionController {
     ) {
       const sysOnly: StudioStatePayload = {
         ...incoming,
+        studio_rev: mergedStudioRev,
+        system_info: mergedSystemInfo,
+        locale_strings: mergedLocaleStrings,
+        has_security_pin: mergedHasSecurityPin,
         system_devices: mergedSystemDevices,
+        discovered_latter_devices: mergedDiscoveredLatter,
+        ignored_latter_devices: mergedIgnoredLatter,
         discovered_ble_devices: mergedDiscoveredBle,
+        system_controls: mergedSystemControls,
         photo_collections: mergedPhotoCollections,
         system_wallpapers: mergedSystemWallpapers,
+        wallpapers: mergedWallpapers,
         ble_area_signatures: mergedBleSignatures,
         catalog: mergedCatalog,
         pref_specs: mergedPrefSpecs,
@@ -389,23 +421,22 @@ export class SubscriptionController {
       const sysMerged: StudioStatePayload = {
         ...(keepPrevDevice ? prev : incoming),
         version: incoming.version,
-        studio_rev: incoming.studio_rev ?? prev?.studio_rev,
+        studio_rev: mergedStudioRev,
         system_config_rev: incoming.system_config_rev,
-        system_info: incoming.system_info ?? prev?.system_info,
-        locale_strings: incoming.locale_strings ?? prev?.locale_strings,
+        system_info: mergedSystemInfo,
+        locale_strings: mergedLocaleStrings,
         internal_logs: mergedLogs,
         system_devices: mergedSystemDevices,
         issues: incoming.issues,
         ble_proxy_count: incoming.ble_proxy_count,
         ble_area_signatures: mergedBleSignatures,
-        discovered_latter_devices: incoming.discovered_latter_devices,
-        ignored_latter_devices:
-          incoming.ignored_latter_devices ?? prev?.ignored_latter_devices,
+        discovered_latter_devices: mergedDiscoveredLatter,
+        ignored_latter_devices: mergedIgnoredLatter,
         discovered_ble_devices: mergedDiscoveredBle,
-        system_controls: incoming.system_controls,
+        system_controls: mergedSystemControls,
         device_groups: incoming.device_groups,
         system_config: incoming.system_config,
-        has_security_pin: incoming.has_security_pin,
+        has_security_pin: mergedHasSecurityPin,
         photo_collections: mergedPhotoCollections,
         system_wallpapers: mergedSystemWallpapers,
         catalog: mergedCatalog,
@@ -461,10 +492,18 @@ export class SubscriptionController {
     this.store.deviceLoading = false;
     const merged: StudioStatePayload = {
       ...incoming,
+      studio_rev: mergedStudioRev,
+      system_info: mergedSystemInfo,
+      locale_strings: mergedLocaleStrings,
+      has_security_pin: mergedHasSecurityPin,
       system_devices: mergedSystemDevices,
+      discovered_latter_devices: mergedDiscoveredLatter,
+      ignored_latter_devices: mergedIgnoredLatter,
       discovered_ble_devices: mergedDiscoveredBle,
+      system_controls: mergedSystemControls,
       photo_collections: mergedPhotoCollections,
       system_wallpapers: mergedSystemWallpapers,
+      wallpapers: mergedWallpapers,
       ble_area_signatures: mergedBleSignatures,
       catalog: mergedCatalog,
       pref_specs: mergedPrefSpecs,

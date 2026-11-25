@@ -57,6 +57,8 @@ export class LatterStudio extends LitElement {
   readonly store: StudioStore;
 
   private _narrow = false;
+  private _dark: boolean | null = null;
+  private _showMenu: boolean | null = null;
   private _route: HassRoute | null = null;
   private _panel: Record<string, unknown> | null = null;
   private _routeInitialized = false;
@@ -78,11 +80,18 @@ export class LatterStudio extends LitElement {
 
   private _syncShowMenu(h: HomeAssistant | null): void {
     const show = this._narrow || h?.dockedSidebar === "always_hidden";
-    this.toggleAttribute("show-menu", show);
+    if (this._showMenu !== show) {
+      this._showMenu = show;
+      this.toggleAttribute("show-menu", show);
+    }
   }
 
   set hass(h: HomeAssistant | null) {
-    this.toggleAttribute("dark", Boolean(h?.themes?.darkMode));
+    const dark = Boolean(h?.themes?.darkMode);
+    if (this._dark !== dark) {
+      this._dark = dark;
+      this.toggleAttribute("dark", dark);
+    }
     this._syncShowMenu(h);
     this.store.setHass(h);
   }

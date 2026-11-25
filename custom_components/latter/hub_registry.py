@@ -6,7 +6,9 @@ import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+import logging
 import secrets
+import time
 from typing import Any, Final
 
 from homeassistant.const import EVENT_STATE_CHANGED
@@ -29,6 +31,9 @@ from .const import (
 )
 from .protocol_codec import V3Records
 from .protocol_policy import PinLockoutTracker
+
+_LOGGER = logging.getLogger(__name__)
+_OWN_AREA_WRITE_TTL_S: Final = 30.0
 
 # ---------------------------------------------------------------------------
 # Reactive O(1) Per-Area & Per-Domain Entity State Index
@@ -136,17 +141,26 @@ class AreaStateIndex:
         self.hass = hass
         self._started = False
         self._dirty_registry = True
+        self._registry_rev: int = 0
         self._entity_area: dict[str, str] = {}
         self._area_entities: dict[str, set[str]] = {}
         self._area_domain_entities: dict[tuple[str, str], set[str]] = {}
         self._domain_entities: dict[str, set[str]] = {}
         self._area_listeners: dict[str, list[Callable[[str], None]]] = {}
         self._unsubs: list[Callable[[], None]] = []
+        self._pending_rebuild_handle: asyncio.Handle | None = None
+        self._pending_prev_area_entities: dict[str, set[str]] | None = None
+        self._pending_registry_events: list[tuple[str, object]] = []
 
     @property
     def started(self) -> bool:
         """Return True when bus listeners are active."""
         return self._started
+
+    @property
+    def registry_rev(self) -> int:
+        """Return monotonic registry revision counter incremented on registry mutations."""
+        return self._registry_rev
 
     @callback
     def start(self) -> None:
@@ -177,6 +191,11 @@ class AreaStateIndex:
     @callback
     def stop(self) -> None:
         """Unsubscribe all bus listeners and clear dynamic listeners."""
+        if self._pending_rebuild_handle is not None:
+            self._pending_rebuild_handle.cancel()
+            self._pending_rebuild_handle = None
+        self._pending_prev_area_entities = None
+        self._pending_registry_events.clear()
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -231,6 +250,10 @@ class AreaStateIndex:
         self._area_domain_entities = area_domain_entities
         self._domain_entities = domain_entities
         self._dirty_registry = False
+        self._registry_rev += 1
+        domain_data = peek_domain_data(self.hass)
+        if domain_data is not None:
+            domain_data.bound_esphome_ids_cache = None
 
     def _ensure_ready(self) -> None:
         if self._dirty_registry:
@@ -263,19 +286,55 @@ class AreaStateIndex:
         }
 
     @callback
+    def _flush_registry_rebuild(self) -> None:
+        """Execute a single coalesced rebuild and notify Areas whose membership changed."""
+        self._pending_rebuild_handle = None
+        pending_events = list(self._pending_registry_events)
+        self._pending_registry_events.clear()
+        prev_area_entities = (
+            self._pending_prev_area_entities
+            if self._pending_prev_area_entities is not None
+            else {k: set(v) for k, v in self._area_entities.items()}
+        )
+        self._pending_prev_area_entities = None
+        if not pending_events:
+            return
+        if self._dirty_registry:
+            self.rebuild()
+        affected: set[str] = set()
+        for event_type, data in pending_events:
+            affected.update(
+                self._affected_areas_for_event(event_type, data, prev_area_entities)
+            )
+        for area_id in affected:
+            for cb in list(self._area_listeners.get(area_id, ())):
+                cb("")
+
+    @callback
     def _on_registry_updated(self, event: Event[Any] | Any = None) -> None:
-        """Rebuild registry maps and notify subscribed Areas whose membership changed."""
+        """Mark index dirty, invalidate bound-device cache, and coalesce rebuild/notifications."""
         data = getattr(event, "data", None)
         event_type = str(getattr(event, "event_type", "") or "")
         if _is_irrelevant_registry_update(event_type, data):
             return
-        prev_area_entities = {k: set(v) for k, v in self._area_entities.items()}
-        self.rebuild()
-        for area_id in self._affected_areas_for_event(
-            event_type, data, prev_area_entities
-        ):
-            for cb in list(self._area_listeners.get(area_id, ())):
-                cb("")
+        self._registry_rev += 1
+        domain_data = peek_domain_data(self.hass)
+        if domain_data is not None:
+            domain_data.bound_esphome_ids_cache = None
+        if self._pending_prev_area_entities is None:
+            self._pending_prev_area_entities = {
+                k: set(v) for k, v in self._area_entities.items()
+            }
+        self._pending_registry_events.append((event_type, data))
+        self._dirty_registry = True
+        if self._pending_rebuild_handle is None:
+            loop = getattr(self.hass, "loop", None)
+            if loop is not None:
+                self._pending_rebuild_handle = loop.call_soon(
+                    self._flush_registry_rebuild
+                )
+            else:
+                self._flush_registry_rebuild()
 
     @callback
     def _on_state_changed(self, event: Event[Any] | Any) -> None:
@@ -656,6 +715,10 @@ class LatterDomainData:
     studio_icon_js_url: str | None = None
     registered_panel_url: str | None = None
     internal_logs: list[dict[str, str]] = field(default_factory=list)
+    studio_subscribers: list[Callable[[], None]] = field(default_factory=list)
+    bound_esphome_ids_cache: set[str] | None = None
+    bound_esphome_ids_cache_rev: int = -1
+    device_groups_cache: tuple[int, int, Any, int, list[dict[str, Any]]] | None = None
 
     created_area_occupancy_ids: set[str] = field(default_factory=set)
     created_area_occupants_ids: set[str] = field(default_factory=set)
@@ -793,3 +856,54 @@ def get_system_device_info() -> DeviceInfo:
         sw_version=INTEGRATION_VERSION,
         configuration_url="homeassistant://latter",
     )
+
+
+def prune_own_area_writes(
+    own_writes: dict[str, tuple[str, float]],
+    *,
+    now_mono: float | None = None,
+    max_age_s: float = _OWN_AREA_WRITE_TTL_S,
+) -> None:
+    """Prune stale Voice Follows Me suppression records older than `max_age_s`."""
+    if not own_writes:
+        return
+    now = time.monotonic() if now_mono is None else now_mono
+    expired = [
+        dev_id
+        for dev_id, (_area, write_ts) in own_writes.items()
+        if (now - float(write_ts)) > max_age_s
+    ]
+    for dev_id in expired:
+        own_writes.pop(dev_id, None)
+
+
+@callback
+def register_studio_subscriber(
+    hass: HomeAssistant, callback_fn: Callable[[], None]
+) -> Callable[[], None]:
+    """Register a Studio live push callback and return an unsubscribe callable."""
+    domain_data = get_domain_data(hass)
+    if callback_fn not in domain_data.studio_subscribers:
+        domain_data.studio_subscribers.append(callback_fn)
+
+    @callback
+    def _unsub() -> None:
+        cur = peek_domain_data(hass)
+        if cur is not None and callback_fn in cur.studio_subscribers:
+            cur.studio_subscribers.remove(callback_fn)
+
+    unsub: Callable[[], None] = _unsub
+    return unsub
+
+
+@callback
+def notify_studio_subscribers(hass: HomeAssistant) -> None:
+    """Invoke all registered Studio live push subscribers safely."""
+    domain_data = peek_domain_data(hass)
+    if domain_data is None or not domain_data.studio_subscribers:
+        return
+    for cb in list(domain_data.studio_subscribers):
+        try:
+            cb()
+        except Exception:
+            _LOGGER.debug("Studio subscriber callback failed", exc_info=True)

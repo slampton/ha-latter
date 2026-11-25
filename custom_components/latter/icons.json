@@ -84,8 +84,8 @@
       "person_current_floor": {
         "default": "mdi:layers-outline"
       },
-      "timer_remaining": {
-        "default": "mdi:timer-sand"
+      "timer_ends": {
+        "default": "mdi:timer-outline"
       }
     },
     "switch": {

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime, timedelta
-import inspect
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -651,39 +650,71 @@ async def test_wallpapers_media_import_edge_cases(
         assert empty_res["roots"] == []
         assert empty_res["images"] == []
 
-        # list_media_folder_sync with broken symlink (105-106) and stat OSError (115-116)
-        symlink_ok = False
-        try:
-            os.symlink(tmp_path / "dangling_target.jpg", media_dir / "broken_link.jpg")
-            symlink_ok = True
-        except OSError:
-            symlink_ok = False
+        # list_media_folder_sync via os.scandir with stat OSError and symlink confinement branches
+        sub_inside = media_dir / "nested_album"
+        sub_inside.mkdir(parents=True, exist_ok=True)
+        outside_file = tmp_path / "outside_escape.jpg"
+        outside_file.write_bytes(valid_bytes)
 
-        orig_stat = Path.stat
+        orig_scandir = wp_import.os.scandir
         orig_resolve = Path.resolve
 
-        def _flaky_stat(self: Path, *args: Any, **kwargs: Any) -> Any:
-            if self.name == "stat_fail.jpg":
-                frame = inspect.currentframe()
-                caller = frame.f_back.f_code.co_name if frame and frame.f_back else ""
-                if caller == "_scan_media_directory_entries":
+        class _WrappedEntry:
+            def __init__(self, inner: os.DirEntry[str], *, force_symlink: bool = False) -> None:
+                self._inner = inner
+                self.name = inner.name
+                self.path = inner.path
+                self._force_symlink = force_symlink
+
+            def is_symlink(self) -> bool:
+                return self._force_symlink or self._inner.is_symlink()
+
+            def is_dir(self, *, follow_symlinks: bool = True) -> bool:
+                return self._inner.is_dir(follow_symlinks=follow_symlinks)
+
+            def is_file(self, *, follow_symlinks: bool = True) -> bool:
+                return self._inner.is_file(follow_symlinks=follow_symlinks)
+
+            def stat(self, *, follow_symlinks: bool = True) -> os.stat_result:
+                if self.name == "stat_fail.jpg":
                     raise OSError("stat denied")
-            return orig_stat(self, *args, **kwargs)
+                return self._inner.stat(follow_symlinks=follow_symlinks)
+
+        class _WrappedScandir:
+            def __init__(self, path: os.PathLike[str] | str) -> None:
+                self._cm = orig_scandir(path)
+
+            def __enter__(self) -> list[_WrappedEntry]:
+                raw_entries = list(self._cm.__enter__())
+                return [
+                    _WrappedEntry(
+                        e,
+                        force_symlink=(e.name in ("corrupt.jpg", "nested_album", "read_fail.jpg")),
+                    )
+                    for e in raw_entries
+                ]
+
+            def __exit__(self, *args: Any) -> None:
+                self._cm.__exit__(*args)
 
         def _flaky_resolve(self: Path, strict: bool = False) -> Path:
-            if not symlink_ok and strict and self.name == "corrupt.jpg":
+            if strict and self.name == "corrupt.jpg":
                 raise OSError("broken link simulated")
+            if strict and self.name == "read_fail.jpg":
+                return outside_file.resolve()
             return orig_resolve(self, strict=strict)
 
         with monkeypatch.context() as mp:
-            mp.setattr(Path, "stat", _flaky_stat)
-            if not symlink_ok:
-                mp.setattr(Path, "resolve", _flaky_resolve)
+            mp.setattr(wp_import.os, "scandir", lambda p: _WrappedScandir(p))
+            mp.setattr(Path, "resolve", _flaky_resolve)
             listed = wp_import.list_media_folder_sync(media_dirs, "local", "")
         listed_names = [im["name"] for im in listed["images"]]
+        listed_folders = [f["name"] for f in listed["folders"]]
         assert "valid.jpg" in listed_names
         assert "stat_fail.jpg" not in listed_names
-        assert "broken_link.jpg" not in listed_names
+        assert "corrupt.jpg" not in listed_names
+        assert "read_fail.jpg" not in listed_names
+        assert "nested_album" in listed_folders
 
         # list_media_folder_sync pointing subpath to a file raises ValueError (line 158)
         with pytest.raises(ValueError, match="does not exist or is outside"):
@@ -746,9 +777,43 @@ async def test_wallpapers_media_import_edge_cases(
             col_b["id"],
         }
 
-        # _commit_prepared_media_batch unknown collection (236) and opt_triplet=None encode + error (265-269)
+        # _commit_prepared_media_batch unknown collection cleans up staged files,
+        # dedup skip cleans up unused staged file, and opt_staged=None late-encode + error
+        orig_dir = wp_store.originals_dir(wp_root)
+        staged_orphan = wp_import._stage_encoded_original(orig_dir, valid_bytes)
+        assert staged_orphan.is_file()
         with pytest.raises(ValueError, match="Unknown collection"):
-            wp_import._commit_prepared_media_batch(wp_root, "local", "col_nope", True, [])
+            wp_import._commit_prepared_media_batch(
+                wp_root,
+                "local",
+                "col_nope",
+                True,
+                [("valid.jpg", "valid.jpg", media_dir / "valid.jpg", "sha_x", (staged_orphan, 100, 80))],
+            )
+        assert not staged_orphan.exists()
+
+        # Unused staged file for an already-imported SHA is unlinked during dedup skip
+        valid_sha = wp_store.get_photo_library_snapshot().photos[imported_pid].content_sha256
+        staged_dup = wp_import._stage_encoded_original(orig_dir, valid_bytes)
+        imp_dup, skip_dup, _, _ = wp_import._commit_prepared_media_batch(
+            wp_root,
+            "local",
+            col_a["id"],
+            True,
+            [("valid.jpg", "valid.jpg", media_dir / "valid.jpg", valid_sha, (staged_dup, 100, 80))],
+        )
+        assert (imp_dup, skip_dup) == (0, 1)
+        assert not staged_dup.exists()
+
+        # _stage_encoded_original cleans up .tmp file on os.replace failure
+        with monkeypatch.context() as mp:
+            def _fail_replace(_src: Any, _dst: Any) -> None:
+                raise OSError("rename failed")
+
+            mp.setattr(wp_import.os, "replace", _fail_replace)
+            with pytest.raises(OSError, match="rename failed"):
+                wp_import._stage_encoded_original(orig_dir, valid_bytes)
+        assert [p.name for p in orig_dir.iterdir() if p.name.startswith(".")] == []
 
         fresh_bytes = make_jpeg_bytes(90, 90, (200, 60, 120))
         fresh_path = media_dir / "late_decode.jpg"
@@ -769,6 +834,28 @@ async def test_wallpapers_media_import_edge_cases(
         assert len(created) == 1
         assert len(commit_fails) == 1
         assert commit_fails[0]["path"] == "corrupt.jpg"
+
+        # Verify LatterDeviceRuntime.schedule_save uses 45s delay and deduplicates unchanged snapshots
+        assert coordinator_runtime.RUNTIME_SAVE_DELAY_SECONDS == 45.0
+        rt_store = coordinator_runtime.LatterDeviceRuntime(hass, "sub_delay_test")
+        delay_calls: list[float] = []
+        flush_calls: list[dict[str, Any]] = []
+
+        def _spy_delay_save(_fn: Any, *, delay: float) -> None:
+            delay_calls.append(delay)
+
+        async def _spy_save(data: dict[str, Any]) -> None:
+            flush_calls.append(dict(data))
+
+        with monkeypatch.context() as mp:
+            mp.setattr(rt_store.store, "async_delay_save", _spy_delay_save)
+            mp.setattr(rt_store.store, "async_save", _spy_save)
+            rt_store.schedule_save(lambda: {"k": 1})
+            rt_store.schedule_save(lambda: {"k": 1})  # unchanged -> skipped
+            rt_store.schedule_save(lambda: {"k": 2})
+            await rt_store.async_flush({"k": 3})
+        assert delay_calls == [45.0, 45.0]
+        assert flush_calls == [{"k": 3}]
     finally:
         wp_store._PHOTO_LIBRARY_SNAPSHOT = orig_snap
         wp_store._LOADED_WALLPAPER_ROOT = orig_root

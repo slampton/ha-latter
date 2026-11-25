@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable, Mapping
+import copy
 import logging
 from typing import TYPE_CHECKING, Any, Final
 
@@ -67,7 +69,11 @@ from ..const import (
     DOMAIN,
     MIN_FIRMWARE_CORE_REV,
 )
-from ..hub_registry import peek_global_config
+from ..hub_registry import (
+    get_domain_data,
+    get_system_config_rev,
+    peek_global_config,
+)
 from ..identity import (
     esphome_service,
     find_device_entity_by_suffix,
@@ -493,12 +499,31 @@ def reset_builtin_group_entry(group_id: str) -> dict[str, Any] | None:
     return _normalize_group_entry(bdef) if bdef is not None else None
 
 
-def get_device_groups(hass: HomeAssistant) -> list[dict[str, Any]]:
-    """Return the normalized named Device Groups list from Global System Config."""
+_DEFAULT_NORMALIZED_GROUPS: Final[list[dict[str, Any]]] = [
+    _normalize_group_entry(g) for g in DEFAULT_DEVICE_GROUPS
+]
+
+
+def _get_device_groups_readonly(hass: HomeAssistant) -> list[dict[str, Any]]:
+    """Return cached normalized Device Groups for read-only callers without copying."""
     global_cfg = peek_global_config(hass)
     raw_groups = global_cfg.get(CONF_DEVICE_GROUPS)
     if not isinstance(raw_groups, list) or not raw_groups:
-        return [_normalize_group_entry(g) for g in DEFAULT_DEVICE_GROUPS]
+        return _DEFAULT_NORMALIZED_GROUPS
+
+    rev = get_system_config_rev(hass)
+    cfg_id = id(global_cfg)
+    raw_len = len(raw_groups)
+    domain_data = get_domain_data(hass)
+    cached = domain_data.device_groups_cache
+    if (
+        cached is not None
+        and cached[0] == cfg_id
+        and cached[1] == rev
+        and cached[2] is raw_groups
+        and cached[3] == raw_len
+    ):
+        return cached[4]
 
     by_id: dict[str, dict[str, Any]] = {}
     custom_order: list[str] = []
@@ -514,9 +539,18 @@ def get_device_groups(hass: HomeAssistant) -> list[dict[str, Any]]:
         if gid not in _BUILTIN_GROUPS_BY_ID and gid not in custom_order:
             custom_order.append(gid)
 
-    out = [by_id.get(bdef["id"]) or _normalize_group_entry(bdef) for bdef in DEFAULT_DEVICE_GROUPS]
+    out = [
+        by_id.get(bdef["id"]) or _normalize_group_entry(bdef)
+        for bdef in DEFAULT_DEVICE_GROUPS
+    ]
     out.extend(by_id[cid] for cid in custom_order)
+    domain_data.device_groups_cache = (cfg_id, rev, raw_groups, raw_len, out)
     return out
+
+
+def get_device_groups(hass: HomeAssistant) -> list[dict[str, Any]]:
+    """Return a mutable normalized copy of named Device Groups from Global System Config."""
+    return copy.deepcopy(_get_device_groups_readonly(hass))
 
 
 def _matches_enforced_keys(
@@ -572,7 +606,7 @@ def device_matches_group_baseline(
     ).strip()
     if not grp_id or grp_id == DEFAULT_DEVICE_GROUP:
         return False
-    group_list = groups if groups is not None else get_device_groups(hass)
+    group_list = groups if groups is not None else _get_device_groups_readonly(hass)
     grp = next((g for g in group_list if g.get("id") == grp_id), None)
     base_dev = (grp.get("device_config") or {}) if grp is not None else {}
     if not base_dev or grp is None:
@@ -608,7 +642,7 @@ def resolve_effective_device_group(
         getattr(coordinator, "has_display", True)
     ):
         return DEFAULT_DEVICE_GROUP
-    group_list = groups if groups is not None else get_device_groups(hass)
+    group_list = groups if groups is not None else _get_device_groups_readonly(hass)
     if not device_matches_group_baseline(
         hass, coordinator, group_list, group_id=raw_grp, candidate_data=dev_data
     ):
@@ -689,7 +723,7 @@ def _apply_wallpaper_override_and_timers(coord: Any, merged: Mapping[str, Any], 
             coord.configured_wallpaper_source = wp_val
 
 
-async def _async_apply_group_to_single_coord(
+async def _async_apply_group_to_single_coord_locked(
     coord: Any,
     grp_id: str,
     dev_cfg: Mapping[str, Any],
@@ -716,7 +750,7 @@ async def _async_apply_group_to_single_coord(
     applied_count = 0
     if merged != cur_data or wp_override:
         _apply_wallpaper_override_and_timers(coord, merged, wp_override=wp_override)
-        coord.update_device_config(merged, preserve_group=True)
+        coord.update_device_config(merged, preserve_group=True, defer_apply=True)
         await coord.async_apply_options()
         if hasattr(coord, "bind_wallpaper_cycle_timer"):
             coord.bind_wallpaper_cycle_timer()
@@ -729,25 +763,53 @@ async def _async_apply_group_to_single_coord(
     return applied_count
 
 
+async def _async_apply_group_to_single_coord(
+    coord: Any,
+    grp_id: str,
+    dev_cfg: Mapping[str, Any],
+    enforced_keys: tuple[str, ...],
+) -> int:
+    lock = getattr(coord, "config_lock", None)
+    if lock is not None:
+        async with lock:
+            return await _async_apply_group_to_single_coord_locked(
+                coord, grp_id, dev_cfg, enforced_keys
+            )
+    return await _async_apply_group_to_single_coord_locked(
+        coord, grp_id, dev_cfg, enforced_keys
+    )
+
+
 async def async_apply_group_baseline_to_coordinators(
     _hass: HomeAssistant,
     group: dict[str, Any],
     targets: list[Any],
 ) -> dict[str, int]:
-    """Apply a Device Group's active baseline across one or more target coordinators."""
+    """Apply a Device Group's active baseline concurrently across target coordinators."""
     dev_cfg = group.get("device_config") or {}
     grp_id = str(group.get("id") or "").strip()
     enforced_keys = active_group_keys(group)
-    updated_devices = 0
-    updated_controls = 0
-    for coord in targets:
-        if getattr(coord, "is_ble_tag", False):
-            continue
-        updated_controls += await _async_apply_group_to_single_coord(
-            coord, grp_id, dev_cfg, enforced_keys
+    eligible = [c for c in targets if not getattr(c, "is_ble_tag", False)]
+    if not eligible:
+        return {"updated_devices": 0, "updated_controls": 0}
+    if len(eligible) == 1:
+        counts = [
+            await _async_apply_group_to_single_coord(
+                eligible[0], grp_id, dev_cfg, enforced_keys
+            )
+        ]
+    else:
+        counts = list(
+            await asyncio.gather(
+                *(
+                    _async_apply_group_to_single_coord(
+                        coord, grp_id, dev_cfg, enforced_keys
+                    )
+                    for coord in eligible
+                )
+            )
         )
-        updated_devices += 1
-    return {"updated_devices": updated_devices, "updated_controls": updated_controls}
+    return {"updated_devices": len(eligible), "updated_controls": sum(counts)}
 
 
 def detect_hardware_defaults(
@@ -785,7 +847,10 @@ def device_option_defaults(
     matched_grp = (
         None
         if grp_id in ("", DEFAULT_DEVICE_GROUP)
-        else next((g for g in get_device_groups(hass) if g.get("id") == grp_id), None)
+        else next(
+            (g for g in _get_device_groups_readonly(hass) if g.get("id") == grp_id),
+            None,
+        )
     )
     enforced_keys = active_group_keys(matched_grp) if matched_grp is not None else ()
     default_spk = (
@@ -877,7 +942,9 @@ async def async_reset_device(
                 coordinator.hardware_manifest,
             )
             identity_keys = DEVICE_IDENTITY_KEYS
-        coordinator.update_device_config(reset_subentry_data(current, defaults, identity_keys))
+        coordinator.update_device_config(
+            reset_subentry_data(current, defaults, identity_keys), defer_apply=True
+        )
         await coordinator.async_apply_options()
         coordinator.bind_wallpaper_cycle_timer()
         coordinator.bind_screensaver_cycle_timer()

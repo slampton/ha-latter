@@ -79,6 +79,34 @@ __all__ = [
 
 _AREA_CACHE_TTL_S: Final = 0.15
 _AREA_DEBOUNCE_S: Final = 0.25
+_RELEVANT_AREA_SENSOR_CLASSES: Final[frozenset[str]] = frozenset(
+    {"temperature", "humidity", "illuminance", "battery"}
+)
+_RELEVANT_AREA_SENSOR_UNITS: Final[frozenset[str]] = frozenset({"lx", "lux"})
+
+
+def _is_relevant_area_sensor(
+    hass: HomeAssistant, entity_id: str, configured_lux_ent: str
+) -> bool:
+    """Return True when `entity_id` is an Area climate/illuminance/battery or explicit lux sensor."""
+    if configured_lux_ent != "auto" and entity_id == configured_lux_ent:
+        return True
+    st = hass.states.get(entity_id)
+    if st is None:
+        return False
+    attrs = st.attributes
+    dev_class = str(attrs.get("device_class") or "").strip().lower()
+    if dev_class in _RELEVANT_AREA_SENSOR_CLASSES:
+        return True
+    unit = str(attrs.get("unit_of_measurement") or "").strip().lower()
+    return unit in _RELEVANT_AREA_SENSOR_UNITS
+
+
+@callback
+def _invalidate_area_domain(coordinator: Any) -> None:
+    """Invalidate ONLY the cached `area_context` payload and schedule a debounced push."""
+    coordinator.cached_area_payload = None
+    coordinator.schedule_debounced_notify()
 
 
 def _parse_finite_sensor_float(raw: object) -> float | None:
@@ -425,19 +453,23 @@ def build_area_context_payload(coordinator: Any) -> tuple[str, dict[str, Any]]:
         else ("" if coordinator.is_device_away() else (coordinator.active_area_id or ""))
     )
 
-    entities = get_area_entities(
-        coordinator.hass,
-        area_id=eff_area_id or None,
-        domain_filter="all",
-        local_speaker=coordinator.local_speaker,
-    )
-    avail_domains = get_area_available_domains(
-        coordinator.hass,
-        area_id=eff_area_id or None,
-        local_speaker=coordinator.local_speaker,
-        entities=entities,
-        area_categories=coordinator.area_categories_csv,
-    )
+    if eff_area_id:
+        entities = get_area_entities(
+            coordinator.hass,
+            area_id=eff_area_id,
+            domain_filter="all",
+            local_speaker=coordinator.local_speaker,
+        )
+        avail_domains = get_area_available_domains(
+            coordinator.hass,
+            area_id=eff_area_id,
+            local_speaker=coordinator.local_speaker,
+            entities=entities,
+            area_categories=coordinator.area_categories_csv,
+        )
+    else:
+        entities = []
+        avail_domains = ""
     lights_on = sum(1 for e in entities if e["type"] == "light" and e["active"])
     covers_open = sum(1 for e in entities if e["type"] == "cover" and e["active"])
     climate_telemetry = get_area_climate_telemetry(
@@ -620,7 +652,7 @@ def _build_active_area_listener(
         old_st = event.data.get("old_state")
         if new_st is None or (old_st is not None and new_st.state == old_st.state):
             return
-        coordinator.async_notify_listeners()
+        _invalidate_area_domain(coordinator)
 
     lux_ent = str(
         area_illuminance_settings(coordinator.hass, listen_area_id)["entity_id"]
@@ -630,7 +662,8 @@ def _build_active_area_listener(
         @callback
         def _on_indexed_area_change(changed_eid: str) -> None:
             if changed_eid.startswith("sensor."):
-                coordinator.async_notify_listeners()
+                if _is_relevant_area_sensor(coordinator.hass, changed_eid, lux_ent):
+                    _invalidate_area_domain(coordinator)
                 return
             schedule_area_push()
 
@@ -737,7 +770,7 @@ def bind_coordinator_area_listeners(coordinator: Any) -> None:
 
     @callback
     def _schedule_area_push() -> None:
-        coordinator.async_notify_listeners()
+        _invalidate_area_domain(coordinator)
 
         @callback
         def _push_area_update(_now: datetime) -> None:
@@ -784,11 +817,20 @@ def bind_coordinator_area_listeners(coordinator: Any) -> None:
             ent = slot.get(key)
             if ent and ent not in tracked_rem:
                 tracked_rem.append(ent)
+    @callback
+    def _on_remote_entity_event(event: Event[EventStateChangedData]) -> None:
+        if is_media_position_only_tick(
+            event.data.get("old_state"), event.data.get("new_state")
+        ):
+            return
+        coordinator.cached_remote_payload = None
+        coordinator.schedule_debounced_notify()
+
     remotes_unsub: Callable[[], None] | None = (
         async_track_state_change_event(
             coordinator.hass,
             tracked_rem,
-            lambda _ev: coordinator.async_notify_listeners(),
+            _on_remote_entity_event,
         )
         if tracked_rem
         else None

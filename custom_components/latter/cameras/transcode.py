@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from dataclasses import dataclass, field
+from functools import lru_cache
 import io
 import time
 from typing import Any, Final
@@ -84,6 +85,9 @@ _HEADER_DELIM_LEN: Final[int] = 4
 _EOI_MARKER_LEN: Final[int] = 2
 _MIN_SEG_LEN: Final[int] = 2
 _MIN_SCAN_TAIL: Final[int] = 4
+_SMALL_STREAM_MAX_EDGE: Final[int] = 640
+_MAX_FFMPEG_THREADS: Final[int] = 4
+_TILE_FONT_CACHE_MAXSIZE: Final[int] = 16
 
 
 class CameraFetchError(Exception):
@@ -291,6 +295,15 @@ def transcode_camera_frame(
         return out.getvalue()
 
 
+def compute_grid_cell_size(out_w: int, out_h: int) -> tuple[int, int]:
+    """Return 16px-aligned `(cell_w, cell_h)` matching upstream 2x2 tile decode dimensions."""
+    return (
+        align16((out_w - GRID_GUTTER_PX) // 2, minimum=_MACROBLOCK_ALIGN),
+        align16((out_h - GRID_GUTTER_PX) // 2, minimum=_MACROBLOCK_ALIGN),
+    )
+
+
+@lru_cache(maxsize=_TILE_FONT_CACHE_MAXSIZE)
 def _load_tile_font(size_px: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
     try:
         return ImageFont.load_default(size=size_px)
@@ -351,6 +364,53 @@ def _draw_offline_tile(
         _draw_centered_line(draw, cx, cy, "Offline", title_font)
 
 
+def _fit_grid_tile_image(
+    img_rgb: Image.Image, cell_w: int, cell_h: int, fit_mode: str
+) -> tuple[Image.Image, int, int]:
+    """Fit a decoded tile into `(cell_w, cell_h)` without resizing when dimensions already align."""
+    src_w = max(1, img_rgb.width)
+    src_h = max(1, img_rgb.height)
+    if fit_mode == "fill":
+        if src_w == cell_w and src_h == cell_h:
+            return img_rgb, 0, 0
+        if (
+            src_w >= cell_w
+            and src_h >= cell_h
+            and (src_w - cell_w) <= _MACROBLOCK_ALIGN
+            and (src_h - cell_h) <= _MACROBLOCK_ALIGN
+        ):
+            left = (src_w - cell_w) // 2
+            top = (src_h - cell_h) // 2
+            return img_rgb.crop((left, top, left + cell_w, top + cell_h)), 0, 0
+        tile = ImageOps.fit(
+            img_rgb,
+            (cell_w, cell_h),
+            method=Image.Resampling.BILINEAR,
+            centering=(0.5, 0.5),
+        )
+        return tile, 0, 0
+
+    if (
+        src_w <= cell_w
+        and src_h <= cell_h
+        and (
+            (cell_w - src_w) <= _MACROBLOCK_ALIGN
+            or (cell_h - src_h) <= _MACROBLOCK_ALIGN
+        )
+    ):
+        return img_rgb, (cell_w - src_w) // 2, (cell_h - src_h) // 2
+
+    scale = min(cell_w / float(src_w), cell_h / float(src_h))
+    tw = max(1, min(cell_w, round(src_w * scale)))
+    th = max(1, min(cell_h, round(src_h * scale)))
+    tile = (
+        img_rgb
+        if (img_rgb.width == tw and img_rgb.height == th)
+        else img_rgb.resize((tw, th), resample=Image.Resampling.BILINEAR)
+    )
+    return tile, (cell_w - tw) // 2, (cell_h - th) // 2
+
+
 def _paste_grid_quadrant(
     canvas: Image.Image,
     draw: ImageDraw.ImageDraw,
@@ -371,26 +431,8 @@ def _paste_grid_quadrant(
             if callable(draft_fn):
                 draft_fn("RGB", (cell_w, cell_h))
             img_rgb = img.convert("RGB")
-            if fit_mode == "fill":
-                tile = ImageOps.fit(
-                    img_rgb,
-                    (cell_w, cell_h),
-                    method=Image.Resampling.BILINEAR,
-                    centering=(0.5, 0.5),
-                )
-                canvas.paste(tile, (qx, qy))
-                return
-            src_w = max(1, img_rgb.width)
-            src_h = max(1, img_rgb.height)
-            scale = min(cell_w / float(src_w), cell_h / float(src_h))
-            tw = max(1, min(cell_w, round(src_w * scale)))
-            th = max(1, min(cell_h, round(src_h * scale)))
-            tile = (
-                img_rgb
-                if (img_rgb.width == tw and img_rgb.height == th)
-                else img_rgb.resize((tw, th), resample=Image.Resampling.BILINEAR)
-            )
-            canvas.paste(tile, (qx + (cell_w - tw) // 2, qy + (cell_h - th) // 2))
+            tile, dx, dy = _fit_grid_tile_image(img_rgb, cell_w, cell_h, fit_mode)
+            canvas.paste(tile, (qx + dx, qy + dy))
     except Exception:  # noqa: BLE001
         _draw_offline_tile(draw, rect, label)
 
@@ -412,13 +454,14 @@ def compose_grid_frame(
     canvas = Image.new("RGB", (out_w, out_h), GRID_BG_RGB)
     draw = ImageDraw.Draw(canvas)
 
-    cell_w = max(_MACROBLOCK_ALIGN, (out_w - GRID_GUTTER_PX) // 2)
-    cell_h = max(_MACROBLOCK_ALIGN, (out_h - GRID_GUTTER_PX) // 2)
+    cell_w, cell_h = compute_grid_cell_size(out_w, out_h)
+    margin_x = max(0, (out_w - (cell_w * 2 + GRID_GUTTER_PX)) // 2)
+    margin_y = max(0, (out_h - (cell_h * 2 + GRID_GUTTER_PX)) // 2)
     offsets = (
-        (0, 0),
-        (cell_w + GRID_GUTTER_PX, 0),
-        (0, cell_h + GRID_GUTTER_PX),
-        (cell_w + GRID_GUTTER_PX, cell_h + GRID_GUTTER_PX),
+        (margin_x, margin_y),
+        (margin_x + cell_w + GRID_GUTTER_PX, margin_y),
+        (margin_x, margin_y + cell_h + GRID_GUTTER_PX),
+        (margin_x + cell_w + GRID_GUTTER_PX, margin_y + cell_h + GRID_GUTTER_PX),
     )
 
     for idx in range(_GRID_QUADRANTS):
@@ -446,24 +489,15 @@ def compose_grid_frame(
     return out.getvalue()
 
 
-def build_ffmpeg_video_cmd(
-    ffmpeg_bin: str,
-    stream_url: str,
-    width: int,
-    height: int,
-    fps: int,
-    *,
-    fit: str = "contain",
-    rot: int = 0,
-) -> list[str]:
-    """Build low-latency FFmpeg command producing 16px-aligned Baseline 4:2:0 MJPEG on stdout."""
-    target_w = align16(width)
-    target_h = align16(height)
-    target_fps = normalize_fps(fps)
-    fit_mode = normalize_fit_mode(fit)
-    rot_deg = normalize_rotation(rot)
-
-    vf_parts: list[str] = []
+def _build_video_filtergraph(
+    target_w: int,
+    target_h: int,
+    target_fps: int,
+    fit_mode: str,
+    rot_deg: int,
+) -> str:
+    """Build FFmpeg video filtergraph dropping FPS before transpose/scale."""
+    vf_parts: list[str] = [f"fps={target_fps}"]
     if rot_deg == _ROT_90:
         vf_parts.append("transpose=1")
     elif rot_deg == _ROT_180:
@@ -480,6 +514,26 @@ def build_ffmpeg_video_cmd(
             f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease:"
             "force_divisible_by=16"
         )
+    return ",".join(vf_parts)
+
+
+def build_ffmpeg_video_cmd(
+    ffmpeg_bin: str,
+    stream_url: str,
+    width: int,
+    height: int,
+    fps: int,
+    *,
+    fit: str = "contain",
+    rot: int = 0,
+    threads: int | None = None,
+) -> list[str]:
+    """Build low-latency FFmpeg command producing 16px-aligned Baseline 4:2:0 MJPEG on stdout."""
+    target_w = align16(width)
+    target_h = align16(height)
+    target_fps = normalize_fps(fps)
+    fit_mode = normalize_fit_mode(fit)
+    rot_deg = normalize_rotation(rot)
 
     clean_url = (stream_url or "").strip()
     if (
@@ -489,6 +543,12 @@ def build_ffmpeg_video_cmd(
     ):
         raise ValueError(f"Unsupported camera stream URL scheme: {clean_url[:16]!r}")
 
+    eff_threads = (
+        max(1, min(_MAX_FFMPEG_THREADS, int(threads)))
+        if threads is not None
+        else (1 if max(target_w, target_h) <= _SMALL_STREAM_MAX_EDGE else 2)
+    )
+    vf_chain = _build_video_filtergraph(target_w, target_h, target_fps, fit_mode, rot_deg)
     q_val = 6 if (target_w * target_h > _LARGE_FRAME_PIXELS) else 5
     cmd = [
         ffmpeg_bin,
@@ -514,15 +574,21 @@ def build_ffmpeg_video_cmd(
             "250000",
             "-probesize",
             "200000",
+            "-threads",
+            str(eff_threads),
             "-i",
             clean_url,
             "-an",
             "-sn",
             "-dn",
-            "-r",
-            str(target_fps),
+            "-threads",
+            str(eff_threads),
+            "-filter_threads",
+            "1",
             "-vf",
-            ",".join(vf_parts),
+            vf_chain,
+            "-sws_flags",
+            "fast_bilinear",
             "-pix_fmt",
             "yuvj420p",
             "-c:v",

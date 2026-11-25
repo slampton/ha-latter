@@ -158,17 +158,45 @@ export function resolvePoolPhotos(
   return [];
 }
 
+export interface PhotoImageCacheEvictor {
+  evict(url: string): void;
+  clear(): void;
+}
+
+let photoImageEvictor: PhotoImageCacheEvictor | null = null;
+
+export function registerPhotoImageEvictor(evictor: PhotoImageCacheEvictor | null): void {
+  photoImageEvictor = evictor;
+}
+
+export function evictPhotoImageCache(url: string): void {
+  if (url) {
+    photoImageEvictor?.evict(url);
+  }
+}
+
+export function clearPhotoImageCache(): void {
+  photoImageEvictor?.clear();
+}
+
 function revokeStagedUrls(files: readonly StagedUploadPhoto[]): void {
-  if (typeof URL === "undefined" || typeof URL.revokeObjectURL !== "function") return;
+  const canRevoke = typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function";
   for (const f of files) {
     if (f.objectUrl) {
-      try {
-        URL.revokeObjectURL(f.objectUrl);
-      } catch {
-        // Ignore revoke errors in test shims.
+      evictPhotoImageCache(f.objectUrl);
+      if (canRevoke) {
+        try {
+          URL.revokeObjectURL(f.objectUrl);
+        } catch {
+          // Ignore revoke errors in test shims.
+        }
       }
     }
   }
+}
+
+export function revokeAllStagedPhotoUploads(files: readonly StagedUploadPhoto[]): void {
+  revokeStagedUrls(files);
 }
 
 let stagedUploadSeq = 0;
@@ -352,6 +380,13 @@ export function openPhotoEditModalOp(store: StudioStoreContext, photo: PhotoItem
 
 export function closePhotoEditModalOp(store: StudioStoreContext): void {
   if (store.photoEditModal.busy) return;
+  const photo = (store.state?.system_wallpapers || []).find(
+    (p) => p.id === store.photoEditModal.photoId,
+  );
+  const srcUrl = photo?.orig_url || photo?.thumb_url || photo?.preview_url || "";
+  if (srcUrl) {
+    evictPhotoImageCache(srcUrl);
+  }
   store.photoEditModal = emptyPhotoEditModalState();
   store.host.requestUpdate();
 }
@@ -381,6 +416,10 @@ export async function savePhotoEditModalOp(store: StudioStoreContext): Promise<v
       payload,
       store.activeSubentryId || null,
     );
+    const srcUrl = photo?.orig_url || photo?.thumb_url || photo?.preview_url || "";
+    if (srcUrl) {
+      evictPhotoImageCache(srcUrl);
+    }
     store.photoEditModal = emptyPhotoEditModalState();
     if (res) store.ingestPayload(res, false);
     else store.host.requestUpdate();

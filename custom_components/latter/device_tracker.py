@@ -14,7 +14,6 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import LatterCoordinator
 from .hub_registry import LatterSystemHub, get_latter_system
-from .identity import find_device_entity_by_suffix
 from .presence.ble_fabric import get_ble_fabric
 
 PARALLEL_UPDATES = 0
@@ -47,6 +46,17 @@ class LatterBleDeviceTracker(TrackerEntity):
     _attr_name = None
     _attr_should_poll = False
     _attr_translation_key = "ble_tracker"
+    _unrecorded_attributes = frozenset(
+        {
+            "distance_m",
+            "rssi",
+            "raw_rssi",
+            "winning_rssi",
+            "closest_distance_m",
+            "confidence_pct",
+            "ref_power_dbm",
+        }
+    )
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize the BLE device tracker under its Latter `DeviceEntry`."""
@@ -74,11 +84,11 @@ class LatterBleDeviceTracker(TrackerEntity):
         if tracker is not None and (tracker.packets_seen > 0 or tracker.current_area_id):
             return ["zone.home"]
         if not self.coordinator.is_ble_tag and self.coordinator.esphome_device_id:
-            wifi_ent_id = find_device_entity_by_suffix(
-                self.coordinator.hass,
-                self.coordinator.esphome_device_id,
+            wifi_ent_id = self.coordinator.device_entity(
                 "sensor",
-                ("_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"),
+                "_system_wi_fi_signal",
+                "_wi_fi_signal",
+                "_ip_address",
             )
             wifi_st = (
                 self.coordinator.hass.states.get(wifi_ent_id) if wifi_ent_id else None

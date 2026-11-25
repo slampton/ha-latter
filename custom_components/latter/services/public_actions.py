@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 import logging
 
@@ -190,8 +191,12 @@ async def _async_handle_notify(call: ServiceCall) -> None:
         is_announce=is_announce,
         cam_ent=str(data.get("camera_entity") or "").strip() or None,
     )
-    for coord in target_coords:
-        await _async_deliver_notify_to_coord(hass, coord, env)
+    if len(target_coords) == 1:
+        await _async_deliver_notify_to_coord(hass, target_coords[0], env)
+    else:
+        await asyncio.gather(
+            *(_async_deliver_notify_to_coord(hass, coord, env) for coord in target_coords)
+        )
 
 
 async def _async_handle_intercom_broadcast(call: ServiceCall) -> ServiceResponse:
@@ -257,7 +262,8 @@ async def _async_handle_navigate(call: ServiceCall) -> None:
 
     wake = parse_bool(call.data.get("wake"), default=True)
     is_multi_target = kind in ("all", "occupied_areas", "person")
-    for coord in target_coords:
+
+    async def _nav_one(coord: LatterCoordinator) -> None:
         if not is_multi_target and not coord.is_ble_tag and not coord.has_display:
             raise ServiceValidationError(
                 f"Target Latter device {coord.device_slug} does not have a display.",
@@ -271,6 +277,11 @@ async def _async_handle_navigate(call: ServiceCall) -> None:
         )
         cmd = f"nav_silent:{route}" if (not wake or in_bedtime) else f"nav:{route}"
         await coord.async_send_device_command(cmd, raise_if_offline=not is_multi_target)
+
+    if len(target_coords) == 1:
+        await _nav_one(target_coords[0])
+    else:
+        await asyncio.gather(*(_nav_one(coord) for coord in target_coords))
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:

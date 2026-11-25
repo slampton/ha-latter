@@ -469,13 +469,43 @@ async def test_playback_queue_state_listeners_and_coordinator_commands(
             assert coord.cached_media_payload is None
         await flush_debouncers(hass)
 
-        # 5. resolve_effective_favorite clears optimistic override once raw source updates
+        # 5. resolve_effective_favorite clears BOTH media_uri and title|artist keys once source updates,
+        # and favorite overrides stay bounded at <= 32 entries (FIFO); offline MA TTL is 120s.
+        assert linking_mod._MA_OFFLINE_CACHE_TTL_SECONDS == 120.0
         coord.media_favorite_overrides["library://track/77"] = (True, False)
+        coord.media_favorite_overrides["song|artist"] = (True, False)
         assert (
             resolve_effective_favorite(coord, "Song", "Artist", "library://track/77", True)
             is True
         )
         assert "library://track/77" not in coord.media_favorite_overrides
+        assert "song|artist" not in coord.media_favorite_overrides
+
+        coord.media_favorite_overrides.clear()
+        for idx in range(40):
+            coord.media_favorite_overrides[f"library://track/old_{idx}"] = (True, False)
+        hass.states.async_set(
+            "media_player.pocket_assistant_music",
+            STATE_PLAYING,
+            {
+                "media_title": "Cap Song",
+                "media_artist": "Cap Artist",
+                "media_content_id": "library://track/cap_new",
+            },
+        )
+        coord.active_speaker = "media_player.pocket_assistant_music"
+        await execute_coordinator_media_command(coord, "favorite_toggle")
+        assert len(coord.media_favorite_overrides) <= 32
+        assert "library://track/old_0" not in coord.media_favorite_overrides
+        assert "library://track/cap_new" in coord.media_favorite_overrides
+        fav_add_svc_calls.clear()
+        fav_rem_svc_calls.clear()
+
+        # Pause command syncs persisted media position cleanly
+        coord.last_media_position = 51.0
+        await execute_coordinator_media_command(coord, "pause")
+        assert coord._build_persisted_snapshot()["last_media_position"] == 51.0
+        pause_calls.clear()
 
         # 6. read_live_ma_queue_state: raising pqs.get -> fallback tuple; list items + top-level favorite
         def _boom_get(_qid: str) -> Any:

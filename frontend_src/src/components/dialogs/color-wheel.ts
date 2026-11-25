@@ -51,6 +51,46 @@ function pickWheelHexFromEvent(canvas: HTMLCanvasElement, ev: PointerEvent): str
   return hsvToHex(angle, sat, 1);
 }
 
+interface ColorWheelRafState {
+  rafId: number | null;
+  pendingHex: string | null;
+}
+
+const colorWheelRafByStore = new WeakMap<StudioStore, ColorWheelRafState>();
+
+function getColorWheelRafState(store: StudioStore): ColorWheelRafState {
+  let st = colorWheelRafByStore.get(store);
+  if (!st) {
+    st = { rafId: null, pendingHex: null };
+    colorWheelRafByStore.set(store, st);
+  }
+  return st;
+}
+
+export function cancelColorWheelRaf(store: StudioStore): void {
+  const st = colorWheelRafByStore.get(store);
+  if (!st) return;
+  if (st.rafId !== null && typeof cancelAnimationFrame === "function") {
+    cancelAnimationFrame(st.rafId);
+  }
+  st.rafId = null;
+  st.pendingHex = null;
+}
+
+function flushColorWheelHex(store: StudioStore, st: ColorWheelRafState): void {
+  const nextHex = st.pendingHex;
+  st.pendingHex = null;
+  if (
+    nextHex &&
+    store.colorWheelModal.open &&
+    store.host.isConnected !== false &&
+    nextHex !== store.colorWheelModal.hex
+  ) {
+    store.colorWheelModal = { ...store.colorWheelModal, hex: nextHex };
+    store.host.requestUpdate();
+  }
+}
+
 export function syncColorWheelCanvas(renderRoot: ShadowRoot, store: StudioStore): void {
   if (store.colorWheelModal.open && !store.colorWheelModal.painted) {
     const canvas = renderRoot.getElementById("latter-cw-canvas") as HTMLCanvasElement | null;
@@ -58,8 +98,11 @@ export function syncColorWheelCanvas(renderRoot: ShadowRoot, store: StudioStore)
       paintHsvColorWheel(canvas);
       store.colorWheelModal.painted = true;
     }
-  } else if (!store.colorWheelModal.open && store.colorWheelModal.painted) {
-    store.colorWheelModal.painted = false;
+  } else if (!store.colorWheelModal.open) {
+    cancelColorWheelRaf(store);
+    if (store.colorWheelModal.painted) {
+      store.colorWheelModal.painted = false;
+    }
   }
 }
 
@@ -97,7 +140,8 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
     const canvas = pev.currentTarget as HTMLCanvasElement;
     canvas.setPointerCapture?.(pev.pointerId);
     const hex = pickWheelHexFromEvent(canvas, pev);
-    if (hex) {
+    if (hex && hex !== store.colorWheelModal.hex) {
+      cancelColorWheelRaf(store);
       store.colorWheelModal = { ...store.colorWheelModal, hex };
       store.host.requestUpdate();
     }
@@ -108,9 +152,20 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
     if (pev.buttons === 0) return;
     const canvas = pev.currentTarget as HTMLCanvasElement;
     const hex = pickWheelHexFromEvent(canvas, pev);
-    if (hex) {
-      store.colorWheelModal = { ...store.colorWheelModal, hex };
-      store.host.requestUpdate();
+    if (!hex) return;
+    const st = getColorWheelRafState(store);
+    const currentHex = st.pendingHex ?? store.colorWheelModal.hex;
+    if (hex === currentHex) return;
+    st.pendingHex = hex;
+    if (st.rafId === null) {
+      if (typeof requestAnimationFrame === "function") {
+        st.rafId = requestAnimationFrame(() => {
+          st.rafId = null;
+          flushColorWheelHex(store, st);
+        });
+      } else {
+        flushColorWheelHex(store, st);
+      }
     }
   };
 
@@ -119,6 +174,14 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
     const canvas = pev.currentTarget as HTMLCanvasElement;
     if (canvas.hasPointerCapture?.(pev.pointerId)) {
       canvas.releasePointerCapture(pev.pointerId);
+    }
+    const st = colorWheelRafByStore.get(store);
+    if (st) {
+      if (st.rafId !== null && typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(st.rafId);
+      }
+      st.rafId = null;
+      flushColorWheelHex(store, st);
     }
   };
 
@@ -154,6 +217,7 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
           @pointerdown=${onCwPointerDown}
           @pointermove=${onCwPointerMove}
           @pointerup=${onCwPointerUp}
+          @pointercancel=${onCwPointerUp}
         ></canvas>
       </div>
       <div class="color-hex-row">

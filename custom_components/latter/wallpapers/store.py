@@ -303,6 +303,9 @@ def encode_original_jpeg(raw_bytes: bytes) -> tuple[bytes, int, int]:
     """Decode, EXIF-transpose, downscale to `<= 1600 px` long edge, and encode Baseline JPEG outside lock."""
     with Image.open(io.BytesIO(raw_bytes)) as img:
         validate_pil_image_dimensions(img)
+        if img.format == "JPEG":
+            draft_dim = MAX_ORIGINAL_LONG_EDGE * 2
+            img.draft("RGB", (draft_dim, draft_dim))
         rgb = ImageOps.exif_transpose(img).convert("RGB")
         w, h = rgb.size
         if w <= 0 or h <= 0:

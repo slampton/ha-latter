@@ -180,10 +180,10 @@ class TestEntitySections(unittest.TestCase):
         )
         self.assertEqual(
             entity_sections.classify_esphome_entity_section(
-                "sensor.desk_display_timer_remaining",
-                "Timer Remaining",
+                "sensor.desk_display_timer_ends",
+                "Timer Ends",
                 "sensor",
-                "",
+                "timestamp",
                 "diagnostic",
                 device_object_prefixes=("desk_display",),
             )[0],
@@ -388,6 +388,81 @@ async def test_build_studio_state_payload_device_ble_tag_and_system_scopes(
     sys_payload = build_studio_state_payload(hass, None, include_catalog=True)
     assert "system_config" in sys_payload
     assert "catalog" in sys_payload
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_studio_payload_skip_sections_and_single_pass_optimizations(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify skip_sections omits all 11 heavy sections without HMAC-signing catalogs, computes device_group once per device, and caches BLE tag model lookups."""
+    from unittest.mock import patch
+
+    from custom_components.latter.const import (
+        CONF_SCREENSAVER_PHOTO_IDS,
+        CONF_WALLPAPER_FAVORITES,
+        CONF_WALLPAPER_SOURCE,
+    )
+    from custom_components.latter.studio import payload as payload_mod
+    from custom_components.latter.studio.state_gates import HEAVY_SUBSCRIPTION_SECTIONS
+
+    entry, sys_obj, coord = await setup_latter_hub(hass, with_device=True, with_ble_tag=True)
+    assert coord is not None
+    tag_coord = sys_obj.coordinators["sub_tag"]
+    coord.update_device_config(
+        {
+            **coord.device_data,
+            CONF_WALLPAPER_SOURCE: "preset:ocean_waves",
+            CONF_WALLPAPER_FAVORITES: ["preset:ocean_waves", "missing_photo_id"],
+            CONF_SCREENSAVER_PHOTO_IDS: ["preset:ocean_waves", "missing_ss_id"],
+        }
+    )
+    coord.current_wallpaper = "preset:ocean_waves"
+
+    # 1) Skipping all 11 heavy sections omits them, skips list_wallpaper_catalog entirely,
+    #    yet still computes active thumb URL and cleans favorite/screensaver ID lists.
+    with patch.object(
+        payload_mod, "list_wallpaper_catalog", side_effect=AssertionError("should not be called")
+    ):
+        slim = payload_mod.build_studio_state_payload(
+            hass,
+            coord,
+            include_catalog=True,
+            skip_sections=HEAVY_SUBSCRIPTION_SECTIONS,
+        )
+    for skipped_key in HEAVY_SUBSCRIPTION_SECTIONS:
+        assert skipped_key not in slim
+    assert "catalog" in slim
+    assert slim["config"]["wallpaper_favorites"] == ["preset:ocean_waves"]
+    assert slim["config"]["screensaver_photo_ids"] == ["preset:ocean_waves"]
+    assert "preset%3Aocean_waves" in slim["live"]["active_wallpaper_thumb_url"]
+    assert "&sig=" in slim["live"]["active_wallpaper_thumb_url"]
+
+    # 2) Full payload resolves device_group ONCE per non-BLE-tag coordinator (not 300+ times)
+    from custom_components.latter.groups.device_groups import resolve_effective_device_group
+
+    grp_calls: list[str] = []
+
+    def _spy_resolve_grp(*args: Any, **kwargs: Any) -> str:
+        grp_calls.append(args[1].subentry_id)
+        return resolve_effective_device_group(*args, **kwargs)
+
+    with patch.object(payload_mod, "resolve_effective_device_group", side_effect=_spy_resolve_grp):
+        payload_mod.build_studio_state_payload(hass, coord, include_catalog=False)
+    assert grp_calls == [coord.subentry_id]
+
+    # 3) BLE tag model description is cached across repeated pushes (zero repeated BT scans)
+    payload_mod._BLE_MODEL_CACHE.clear()
+    with patch.object(
+        payload_mod, "describe_ble_target_model", return_value="Apple AirTag"
+    ) as mock_desc:
+        p1 = payload_mod.build_studio_state_payload(hass, tag_coord, include_catalog=False)
+        p2 = payload_mod.build_studio_state_payload(hass, tag_coord, include_catalog=False)
+    assert mock_desc.call_count == 1
+    row1 = next(d for d in p1["system_devices"] if d["subentry_id"] == tag_coord.subentry_id)
+    row2 = next(d for d in p2["system_devices"] if d["subentry_id"] == tag_coord.subentry_id)
+    assert row1["model_label"] == "Apple AirTag"
+    assert row2["model_label"] == "Apple AirTag"
+
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 

@@ -55,7 +55,11 @@ from ..hub_registry import (
     get_system_config_lock,
     peek_domain_data,
 )
-from ..hub_sync import async_refresh_hub_calendar, async_save_and_broadcast_global_config
+from ..hub_sync import (
+    async_broadcast_global_config,
+    async_refresh_hub_calendar,
+    async_save_global_config,
+)
 from ..media.browse import async_browse_media_items
 from ..media.linking import resolve_ma_counterpart_entity
 from ..media.lyrics import async_fetch_and_push_music_lyrics
@@ -932,9 +936,11 @@ class LatterRpcDispatcher:
             else:
                 palettes.insert(0, {"name": name, "hex": raw_hex})
                 palettes = palettes[:_MAX_CUSTOM_PALETTE_ENTRIES]
-            await async_save_and_broadcast_global_config(
+            _, changed_keys = await async_save_global_config(
                 self.hass, {CONF_CUSTOM_PALETTES: palettes}
             )
+        if changed_keys:
+            await async_broadcast_global_config(self.hass, changed_keys)
 
     async def _rpc_shortcut_action(
         self, coord: LatterCoordinator, data: dict[str, object]

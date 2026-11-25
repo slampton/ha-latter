@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
 import logging
 from pathlib import Path
 import re
+import time
 from typing import Any, Final, NotRequired, TypedDict, Unpack
+from urllib.parse import quote
+from weakref import WeakKeyDictionary
 
 import homeassistant.const as ha_const
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -74,6 +78,7 @@ from ..const import (
     INTEGRATION_VERSION,
     MIN_FIRMWARE_CORE_REV,
     STUDIO_REV,
+    normalize_device_slug,
 )
 from ..coordinator import LatterCoordinator
 from ..doorbell import resolve_doorbell_ring_entities
@@ -81,6 +86,7 @@ from ..groups.device_groups import (
     coordinator_supports_pref,
     get_device_groups,
     resolve_behavior_key_value,
+    resolve_effective_device_group,
 )
 from ..groups.esphome_inspector import (
     get_esphome_device_entities,
@@ -122,12 +128,19 @@ from ..protocol_specs import (
 )
 from ..repairs_keys import parse_device_issue_id
 from ..wallpapers.models import (
+    PRESET_BY_ID,
     VIRTUAL_COLLECTION_ALL,
     VIRTUAL_COLLECTION_DEFAULTS,
     VIRTUAL_COLLECTION_UNCATEGORIZED,
     VIRTUAL_COLLECTION_UPLOADS,
+    PhotoLibrarySnapshot,
 )
-from ..wallpapers.pools import list_photo_collections, list_wallpaper_catalog
+from ..wallpapers.pools import (
+    known_wallpaper_ids,
+    list_photo_collections,
+    list_wallpaper_catalog,
+)
+from ..wallpapers.store import get_photo_library_snapshot
 from .settings_cleaners import system_settings_view
 from .state_gates import find_by_subentry_id
 
@@ -193,7 +206,71 @@ _LOCALES_LOADED: bool = False
 _LOCALES_PRELOAD_SCHEDULED: bool = False
 _LOCALES_PRELOAD_TASKS: set[asyncio.Task[None]] = set()
 
-_CoordMeta = list[tuple[LatterCoordinator, bool, bool]]
+_BLE_MODEL_CACHE: WeakKeyDictionary[Any, tuple[str, str, float, str]] = WeakKeyDictionary()
+_BLE_MODEL_TTL_CONCRETE_S: Final = 60.0
+_BLE_MODEL_TTL_FALLBACK_S: Final = 5.0
+_BLE_GENERIC_MODEL_LABELS: Final[frozenset[str]] = frozenset(
+    {"BLE beacon or tag", "Private BLE (phone or watch)"}
+)
+_CONN_SENSOR_SUFFIXES: Final[tuple[str, ...]] = (
+    "_system_wi_fi_signal",
+    "_wi_fi_signal",
+    "_ip_address",
+)
+
+_CoordMeta = list[tuple[LatterCoordinator, bool, bool, str]]
+
+
+@dataclass(slots=True)
+class _DeviceEntityLookup:
+    """Per-push index of a bound ESPHome device's registry entries grouped by domain."""
+
+    all_entries: list[er.RegistryEntry]
+    by_domain: dict[str, list[er.RegistryEntry]]
+
+    @classmethod
+    def for_device(
+        cls, ent_reg: er.EntityRegistry, esphome_device_id: str | None
+    ) -> _DeviceEntityLookup:
+        """Build a per-push domain index with a single `er.async_entries_for_device` scan."""
+        if not esphome_device_id:
+            return cls([], {})
+        all_entries = list(er.async_entries_for_device(ent_reg, esphome_device_id))
+        by_domain: dict[str, list[er.RegistryEntry]] = {}
+        for entry in all_entries:
+            if not entry.disabled_by:
+                by_domain.setdefault(entry.domain, []).append(entry)
+        return cls(all_entries, by_domain)
+
+    def find_entity(self, domain: str, *suffixes: str) -> str | None:
+        """Find the first enabled entity in `domain` matching any suffix in order."""
+        entries = self.by_domain.get(domain)
+        if not entries:
+            return None
+        for sfx in suffixes:
+            for entry in entries:
+                if not sfx or entry.entity_id.endswith(sfx):
+                    return str(entry.entity_id)
+        return None
+
+    def find_state(self, hass: HomeAssistant, domain: str, *suffixes: str) -> Any:
+        """Return live `State` for the first matching enabled entity in `domain`, else `None`."""
+        eid = self.find_entity(domain, *suffixes)
+        return hass.states.get(eid) if eid else None
+
+
+def build_device_entity_lookups(
+    hass: HomeAssistant,
+    coords: list[LatterCoordinator],
+    ent_reg: er.EntityRegistry | None = None,
+) -> dict[str, _DeviceEntityLookup]:
+    """Build per-coordinator `_DeviceEntityLookup` maps with at most one registry scan per device."""
+    reg = ent_reg if ent_reg is not None else er.async_get(hass)
+    return {
+        c.subentry_id: _DeviceEntityLookup.for_device(reg, c.esphome_device_id)
+        for c in coords
+        if not c.is_ble_tag
+    }
 
 
 class StudioCommandError(Exception):
@@ -518,14 +595,24 @@ def _schedule_locale_preload_if_needed(hass: HomeAssistant) -> None:
         task.add_done_callback(_LOCALES_PRELOAD_TASKS.discard)
 
 
-def resolve_studio_locale_strings(hass: HomeAssistant) -> dict[str, str]:
-    """Return cached non-English Studio translation strings for `hass.config.language`, or `{}`."""
-    lang = (
+def studio_language(hass: HomeAssistant) -> str:
+    """Return the normalized Home Assistant language code for Studio localization."""
+    return (
         str(getattr(getattr(hass, "config", None), "language", "") or "en")
         .strip()
         .lower()
         .replace("_", "-")
     )
+
+
+def studio_locales_loaded() -> bool:
+    """Return True once non-English Studio locale overlays have been loaded."""
+    return _LOCALES_LOADED
+
+
+def resolve_studio_locale_strings(hass: HomeAssistant) -> dict[str, str]:
+    """Return cached non-English Studio translation strings for `hass.config.language`, or `{}`."""
+    lang = studio_language(hass)
     if not lang or lang == "en" or lang.startswith("en-"):
         return {}
     if not _LOCALES_LOADED:
@@ -616,10 +703,19 @@ def resolve_target_coordinator(
     return find_by_subentry_id(iter_coordinators(hass), subentry_id)
 
 
-def _has_active_esphome_entity(hass: HomeAssistant, esphome_device_id: str) -> bool:
+def _has_active_esphome_entity(
+    hass: HomeAssistant,
+    esphome_device_id: str,
+    *,
+    entries: list[er.RegistryEntry] | None = None,
+) -> bool:
     """Fallback online check across non-restore ESPHome entities when Wi-Fi/IP sensors are absent."""
-    ent_reg = er.async_get(hass)
-    for e_reg in er.async_entries_for_device(ent_reg, esphome_device_id):
+    reg_entries = (
+        entries
+        if entries is not None
+        else er.async_entries_for_device(er.async_get(hass), esphome_device_id)
+    )
+    for e_reg in reg_entries:
         if e_reg.platform != "esphome" or e_reg.domain in (
             "select",
             "update",
@@ -643,9 +739,27 @@ def _has_active_esphome_entity(hass: HomeAssistant, esphome_device_id: str) -> b
     return False
 
 
+def _probe_conn_sensor_online(
+    hass: HomeAssistant, lookup: _DeviceEntityLookup
+) -> bool | None:
+    """Check Wi-Fi/IP sensors in `lookup`; return True/False if any exist, else None."""
+    saw_conn = False
+    for sfx in _CONN_SENSOR_SUFFIXES:
+        ent_id = lookup.find_entity("sensor", sfx)
+        if not ent_id:
+            continue
+        saw_conn = True
+        st = hass.states.get(ent_id)
+        if st is not None and st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
+            return True
+    return False if saw_conn else None
+
+
 def is_coordinator_online_for_studio(
     hass: HomeAssistant,
     coord: LatterCoordinator,
+    *,
+    lookup: _DeviceEntityLookup | None = None,
 ) -> bool:
     """Return True when `coord` is online using Studio's unified connection state check."""
     if coord.is_ble_tag:
@@ -657,14 +771,61 @@ def is_coordinator_online_for_studio(
         )
     if coord.is_rpc_outbox_unavailable():
         return False
+    if lookup is not None:
+        conn_probe = _probe_conn_sensor_online(hass, lookup)
+        if conn_probe is not None:
+            return conn_probe
+        if coord.is_online:
+            return True
+        c_dev_id = coord.esphome_device_id
+        return (
+            _has_active_esphome_entity(hass, c_dev_id, entries=lookup.all_entries)
+            if c_dev_id
+            else False
+        )
     if coord.is_online:
         return True
-    if coord.device_entity(
-        "sensor", "_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"
-    ):
+    if coord.device_entity("sensor", *_CONN_SENSOR_SUFFIXES):
         return False
     c_dev_id = coord.esphome_device_id
     return _has_active_esphome_entity(hass, c_dev_id) if c_dev_id else False
+
+
+def compute_controls_signature(
+    hass: HomeAssistant,
+    coords: list[LatterCoordinator],
+    *,
+    lookups_by_sub: dict[str, _DeviceEntityLookup] | None = None,
+) -> tuple[
+    tuple[tuple[str, int, bool, bool, bool, str], ...],
+    dict[str, bool],
+    dict[str, _DeviceEntityLookup],
+]:
+    """Compute O(N) `system_controls` token tuple plus reusable per-device online/entity lookups."""
+    lookups = (
+        lookups_by_sub
+        if lookups_by_sub is not None
+        else build_device_entity_lookups(hass, coords)
+    )
+    online_by_sub: dict[str, bool] = {}
+    sig_rows: list[tuple[str, int, bool, bool, bool, str]] = []
+    for coord in coords:
+        is_online = is_coordinator_online_for_studio(
+            hass, coord, lookup=lookups.get(coord.subentry_id)
+        )
+        online_by_sub[coord.subentry_id] = is_online
+        if not coord.is_ble_tag:
+            sig_rows.append(
+                (
+                    coord.subentry_id,
+                    coord.device_config_rev,
+                    is_online,
+                    coord.is_roaming_device,
+                    coord.has_display,
+                    coord.current_wallpaper,
+                )
+            )
+    return tuple(sig_rows), online_by_sub, lookups
 
 
 def build_device_prefs_payload(
@@ -745,11 +906,18 @@ def build_speaker_volume_payload(
 def build_quick_actions_payload(
     hass: HomeAssistant,
     coordinator: LatterCoordinator,
+    *,
+    is_online: bool | None = None,
 ) -> list[dict[str, Any]]:
     """Return quick action buttons outside `esphome.sections`."""
     if coordinator.is_ble_tag:
         return []
-    can_run_cmd = is_coordinator_online_for_studio(hass, coordinator) and bool(
+    online = (
+        is_online
+        if is_online is not None
+        else is_coordinator_online_for_studio(hass, coordinator)
+    )
+    can_run_cmd = online and bool(
         coordinator.is_online
         or esphome_service(hass, coordinator.esphome_device_id, "latter_device_command")
     )
@@ -890,13 +1058,13 @@ def _targets_for_shared_control(
     return [
         {
             "device_slug": coord.device_slug,
-            "device_group": coord.device_group,
+            "device_group": device_group,
             "is_online": is_online,
             "is_roaming": is_roaming,
             "pref_key": conf_key,
             "state": str(state_fn(coord)),
         }
-        for coord, is_online, is_roaming in coord_meta
+        for coord, is_online, is_roaming, device_group in coord_meta
         if (not roaming_only or is_roaming)
         and (not display_only or coord.has_display)
     ]
@@ -913,7 +1081,7 @@ def _append_pref_spec_shared_controls(
         ) or spec.domain not in STUDIO_BULK_CONTROL_DOMAINS:
             continue
         targets: list[dict[str, Any]] = []
-        for coord, is_online, is_roaming in coord_meta:
+        for coord, is_online, is_roaming, device_group in coord_meta:
             if not coordinator_supports_pref(coord, spec):
                 continue
             cur_val = resolve_device_pref_value(coord.device_data, spec.key)
@@ -931,7 +1099,7 @@ def _append_pref_spec_shared_controls(
             targets.append(
                 {
                     "device_slug": coord.device_slug,
-                    "device_group": coord.device_group,
+                    "device_group": device_group,
                     "is_online": is_online,
                     "is_roaming": is_roaming,
                     "pref_key": spec.key,
@@ -1037,6 +1205,45 @@ def _append_behavior_shared_controls(
         )
 
 
+def _build_wallpaper_option_pairs(
+    hass: HomeAssistant,
+) -> tuple[list[str], dict[str, str]]:
+    """Build `(options, option_labels)` for the shared System Wallpaper select."""
+    sys_wps = list_wallpaper_catalog(
+        hass, "system", "", [], sign_resource=None, display_shape="square"
+    )
+    wp_opts: list[str] = [""]
+    wp_labels: dict[str, str] = {"": "None (Weather / Solid)"}
+    for wp in sys_wps:
+        sid = str(wp.get("id") or "").strip()
+        if sid and sid not in wp_labels:
+            wp_opts.append(sid)
+            wp_labels[sid] = str(wp.get("name") or wp.get("label") or sid)
+    return wp_opts, wp_labels
+
+
+def _build_collection_option_pairs() -> tuple[list[str], dict[str, str]]:
+    """Build `(options, option_labels)` for the shared System Photo Collection select."""
+    col_opts = [
+        VIRTUAL_COLLECTION_ALL,
+        VIRTUAL_COLLECTION_DEFAULTS,
+        VIRTUAL_COLLECTION_UPLOADS,
+        VIRTUAL_COLLECTION_UNCATEGORIZED,
+    ]
+    col_labels: dict[str, str] = {
+        VIRTUAL_COLLECTION_ALL: "All photos",
+        VIRTUAL_COLLECTION_DEFAULTS: "Defaults",
+        VIRTUAL_COLLECTION_UPLOADS: "My photos",
+        VIRTUAL_COLLECTION_UNCATEGORIZED: "Uncategorized",
+    }
+    for col in list_photo_collections():
+        cid = str(col.get("id") or "").strip()
+        if cid and cid not in col_labels:
+            col_opts.append(cid)
+            col_labels[cid] = str(col.get("name") or cid)
+    return col_opts, col_labels
+
+
 def _append_display_shared_controls(
     hass: HomeAssistant, controls: list[dict[str, Any]], coord_meta: _CoordMeta
 ) -> None:
@@ -1058,16 +1265,7 @@ def _append_display_shared_controls(
         coord_meta, CONF_WALLPAPER_SOURCE, lambda c: c.wallpaper_source, display_only=True
     )
     if wp_targets:
-        sys_wps = list_wallpaper_catalog(
-            hass, "system", "", [], sign_resource=None, display_shape="square"
-        )
-        wp_opts: list[str] = [""]
-        wp_labels: dict[str, str] = {"": "None (Weather / Solid)"}
-        for wp in sys_wps:
-            sid = str(wp.get("id") or "").strip()
-            if sid and sid not in wp_labels:
-                wp_opts.append(sid)
-                wp_labels[sid] = str(wp.get("name") or wp.get("label") or sid)
+        wp_opts, wp_labels = _build_wallpaper_option_pairs(hass)
         controls.append(
             _make_shared_control(
                 (CONF_WALLPAPER_SOURCE, "display", "display", "select"),
@@ -1104,23 +1302,7 @@ def _append_display_shared_controls(
             )
         )
 
-    col_opts = [
-        VIRTUAL_COLLECTION_ALL,
-        VIRTUAL_COLLECTION_DEFAULTS,
-        VIRTUAL_COLLECTION_UPLOADS,
-        VIRTUAL_COLLECTION_UNCATEGORIZED,
-    ]
-    col_labels: dict[str, str] = {
-        VIRTUAL_COLLECTION_ALL: "All photos",
-        VIRTUAL_COLLECTION_DEFAULTS: "Defaults",
-        VIRTUAL_COLLECTION_UPLOADS: "My photos",
-        VIRTUAL_COLLECTION_UNCATEGORIZED: "Uncategorized",
-    }
-    for col in list_photo_collections():
-        cid = str(col.get("id") or "").strip()
-        if cid and cid not in col_labels:
-            col_opts.append(cid)
-            col_labels[cid] = str(col.get("name") or cid)
+    col_opts, col_labels = _build_collection_option_pairs()
 
     wp_col_targets = _targets_for_shared_control(
         coord_meta, CONF_WALLPAPER_COLLECTION, lambda c: c.wallpaper_collection, display_only=True
@@ -1283,17 +1465,34 @@ def _append_interface_shared_controls(
 def build_system_shared_controls(
     hass: HomeAssistant,
     coords: list[LatterCoordinator] | None = None,
+    *,
+    device_groups: list[dict[str, Any]] | None = None,
+    precomputed_meta: _CoordMeta | None = None,
 ) -> list[dict[str, Any]]:
     """Build tab-aligned shared controls across all onboarded Latter Devices."""
-    all_coords = [
-        c
-        for c in (coords if coords is not None else iter_coordinators(hass))
-        if not c.is_ble_tag
-    ]
-    coord_meta: _CoordMeta = [
-        (c, is_coordinator_online_for_studio(hass, c), c.is_roaming_device)
-        for c in all_coords
-    ]
+    if precomputed_meta is not None:
+        coord_meta = precomputed_meta
+    else:
+        all_coords = [
+            c
+            for c in (coords if coords is not None else iter_coordinators(hass))
+            if not c.is_ble_tag
+        ]
+        groups = (
+            device_groups if device_groups is not None else get_device_groups(hass)
+        )
+        lookups = build_device_entity_lookups(hass, all_coords)
+        coord_meta = [
+            (
+                c,
+                is_coordinator_online_for_studio(
+                    hass, c, lookup=lookups.get(c.subentry_id)
+                ),
+                c.is_roaming_device,
+                resolve_effective_device_group(hass, c, groups),
+            )
+            for c in all_coords
+        ]
     controls: list[dict[str, Any]] = []
     _append_pref_spec_shared_controls(controls, coord_meta)
     _append_behavior_shared_controls(controls, coord_meta)
@@ -1610,22 +1809,98 @@ def _select_primary_fw_update_entity(update_items: list[dict[str, Any]]) -> str:
 
 
 def _has_esphome_firmware_update(
-    hass: HomeAssistant, ent_reg: er.EntityRegistry, coord: LatterCoordinator
+    hass: HomeAssistant,
+    ent_reg: er.EntityRegistry,
+    coord: LatterCoordinator,
+    *,
+    lookup: _DeviceEntityLookup | None = None,
 ) -> bool:
     """Return True when the bound ESPHome device has an active firmware update entity."""
-    c_upd_st = coord.device_state("update", "_project_firmware")
+    c_upd_st = (
+        lookup.find_state(hass, "update", "_project_firmware")
+        if lookup is not None
+        else coord.device_state("update", "_project_firmware")
+    )
     if c_upd_st is not None and c_upd_st.state == "on":
         return True
     c_dev_id = coord.esphome_device_id
     if not c_dev_id:
         return False
+    entries = (
+        lookup.all_entries
+        if lookup is not None
+        else er.async_entries_for_device(ent_reg, c_dev_id)
+    )
     return any(
         e_reg.platform == "esphome"
         and e_reg.domain == "update"
         and (st_e := hass.states.get(e_reg.entity_id)) is not None
         and st_e.state == "on"
-        for e_reg in er.async_entries_for_device(ent_reg, c_dev_id)
+        for e_reg in entries
     )
+
+
+def _cached_ble_target_model(
+    hass: HomeAssistant, coord: LatterCoordinator, target_addr: str
+) -> str:
+    """Return cached BLE tag model label, avoiding redundant full Bluetooth scanner scans."""
+    cur_mac = ""
+    if "." in target_addr:
+        st = hass.states.get(target_addr)
+        if st is not None:
+            cur_mac = str(st.attributes.get("current_address") or "").strip().upper()
+    now_mono = time.monotonic()
+    cached = _BLE_MODEL_CACHE.get(coord)
+    if (
+        cached is not None
+        and cached[0] == target_addr
+        and cached[1] == cur_mac
+        and now_mono < cached[2]
+    ):
+        return cached[3]
+    label = describe_ble_target_model(hass, target_addr)
+    ttl = (
+        _BLE_MODEL_TTL_FALLBACK_S
+        if label in _BLE_GENERIC_MODEL_LABELS
+        else _BLE_MODEL_TTL_CONCRETE_S
+    )
+    try:
+        _BLE_MODEL_CACHE[coord] = (target_addr, cur_mac, now_mono + ttl, label)
+    except TypeError:
+        pass
+    return label
+
+
+def _resolve_ble_tag_model_and_category(
+    hass: HomeAssistant,
+    coord: LatterCoordinator,
+    ent_reg: er.EntityRegistry,
+) -> tuple[str, str]:
+    """Resolve `(model_label, effective_ble_category)` for a BLE tag with a single cached lookup."""
+    addr = coord.ble_target_address
+    model_label = _cached_ble_target_model(hass, coord, addr)
+    cfg_norm = coord.configured_ble_category
+    if cfg_norm in ("phone", "ble_tag"):
+        return model_label, cfg_norm
+    if "." not in addr:
+        return model_label, "ble_tag"
+    ent_entry = ent_reg.async_get(addr)
+    st = hass.states.get(addr)
+    low = addr.lower()
+    uid_low = str(ent_entry.unique_id or "").lower() if ent_entry is not None else ""
+    if (
+        (ent_entry is not None and ent_entry.platform == "mobile_app")
+        or low.endswith(("_ble_transmitter", "_ble_emitter"))
+        or uid_low.endswith("_ble_emitter")
+    ):
+        return model_label, "phone"
+    if (
+        (ent_entry is not None and ent_entry.platform == "private_ble_device")
+        or "private_ble" in low
+        or (st is not None and st.attributes.get("current_address"))
+    ):
+        return model_label, ("ble_tag" if "airpods" in model_label.lower() else "phone")
+    return model_label, "ble_tag"
 
 
 def _resolve_system_device_area(
@@ -1694,13 +1969,16 @@ def _build_system_device_item(
     current_subentry_id: str,
     group_name_map: dict[str, str],
     registries: tuple[ar.AreaRegistry, dr.DeviceRegistry, er.EntityRegistry],
+    *,
+    is_online: bool | None = None,
+    device_group: str | None = None,
+    lookup: _DeviceEntityLookup | None = None,
 ) -> dict[str, Any]:
     """Build one Device/BLE-tag summary dict for `system_devices`."""
     area_reg, dev_reg, ent_reg = registries
     c_area_name = coord.active_area_name
     live_area_state, _ = coord.get_current_area_and_distance()
-    c_ble_cat = coord.effective_ble_category if coord.is_ble_tag else ""
-    c_grp = coord.device_group
+    c_grp = device_group if device_group is not None else coord.device_group
     c_manifest = coord.hardware_manifest
     c_dev_id = coord.esphome_device_id
     c_has_native_svc = bool(
@@ -1714,30 +1992,60 @@ def _build_system_device_item(
         if tracker is not None and hasattr(tracker, "get_scanner_calibration_telemetry")
         else []
     )
-    c_ip_st = coord.device_state("sensor", "_ip_address")
+    got_dev = dev_reg.async_get(c_dev_id) if c_dev_id else None
+    c_dev_entry = got_dev if isinstance(got_dev, dr.DeviceEntry) else None
+    if coord.is_ble_tag:
+        c_model_label, c_ble_cat = _resolve_ble_tag_model_and_category(
+            hass, coord, ent_reg
+        )
+    else:
+        raw_model = str((c_dev_entry.model if c_dev_entry else "") or "").strip()
+        c_model_label = humanize_device_model_label(raw_model, c_manifest)
+        c_ble_cat = ""
+
+    def _state(domain: str, *suffixes: str) -> Any:
+        if lookup is not None:
+            return lookup.find_state(hass, domain, *suffixes)
+        return coord.device_state(domain, *suffixes)
+
+    def _entity(domain: str, *suffixes: str) -> str | None:
+        if lookup is not None:
+            return lookup.find_entity(domain, *suffixes)
+        return coord.device_entity(domain, *suffixes)
+
+    c_ip_st = _state("sensor", "_ip_address")
     c_ip_val = (
         str(c_ip_st.state)
         if (c_ip_st and c_ip_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""))
         else ""
     )
-    got_dev = dev_reg.async_get(c_dev_id) if c_dev_id else None
-    c_dev_entry = got_dev if isinstance(got_dev, dr.DeviceEntry) else None
-    raw_model = str((c_dev_entry.model if c_dev_entry else "") or "").strip()
-    c_model_label = (
-        describe_ble_target_model(hass, coord.ble_target_address)
-        if coord.is_ble_tag
-        else humanize_device_model_label(raw_model, c_manifest)
+    c_is_online = (
+        is_online
+        if is_online is not None
+        else is_coordinator_online_for_studio(hass, coord, lookup=lookup)
     )
-    c_is_online = is_coordinator_online_for_studio(hass, coord)
-    c_has_update = _has_esphome_firmware_update(hass, ent_reg, coord)
+    c_has_update = (
+        False
+        if coord.is_ble_tag
+        else _has_esphome_firmware_update(hass, ent_reg, coord, lookup=lookup)
+    )
     c_area_id, c_area_label, c_has_assigned_area = _resolve_system_device_area(
         area_reg, coord, c_dev_entry, live_area_state, is_online=c_is_online
     )
     c_status_code, c_status_label = _resolve_system_device_status(
         coord, is_online=c_is_online, has_update=c_has_update
     )
-    c_chg_st = coord.device_state("binary_sensor", "_battery_charging")
-    c_usb_st = coord.device_state("binary_sensor", "_usb_power_connected")
+    c_chg_st = _state("binary_sensor", "_battery_charging")
+    c_usb_st = _state("binary_sensor", "_usb_power_connected")
+    c_has_fw_upd_ent = (
+        False if coord.is_ble_tag else (_entity("update", "_project_firmware") is not None)
+    )
+    c_has_ble = bool(
+        coord.native_ble_tracking_enabled
+        or tracker is not None
+        or c_has_native_svc
+        or coord.has_ble_beacon
+    )
 
     return {
         "subentry_id": coord.subentry_id,
@@ -1771,27 +2079,16 @@ def _build_system_device_item(
         "assigned_person": coord.assigned_person,
         "active_area_name": live_area_state if coord.is_ble_tag else c_area_name,
         "is_latter_native": bool(
-            not coord.is_ble_tag
-            and (
-                c_has_native_svc
-                or coord.device_entity("update", "_project_firmware") is not None
-            )
+            not coord.is_ble_tag and (c_has_native_svc or c_has_fw_upd_ent)
         ),
-        "battery_level": _parse_rounded_sensor_int(
-            coord.device_state("sensor", "_battery_level")
-        ),
+        "battery_level": _parse_rounded_sensor_int(_state("sensor", "_battery_level")),
         "is_charging": bool(c_chg_st and c_chg_st.state == "on"),
         "is_usb_connected": bool(c_usb_st and c_usb_st.state == "on"),
         "wifi_rssi": _parse_rounded_sensor_int(
-            coord.device_state("sensor", "_system_wi_fi_signal", "_wi_fi_signal")
+            _state("sensor", "_system_wi_fi_signal", "_wi_fi_signal")
         ),
         "ip_address": c_ip_val,
-        "has_ble": bool(
-            coord.native_ble_tracking_enabled
-            or tracker is not None
-            or c_has_native_svc
-            or coord.has_ble_beacon
-        ),
+        "has_ble": c_has_ble,
         "ble_tracked": bool(coord.is_ble_tag or coord.native_ble_tracking_enabled),
         "ble_survey_rows": c_survey_rows,
         "ble_packets_seen": tracker.packets_seen if tracker is not None else 0,
@@ -1799,66 +2096,32 @@ def _build_system_device_item(
     }
 
 
-def build_system_section(
+def _populate_optional_system_sections(
     hass: HomeAssistant,
-    current_subentry_id: str,
+    section: dict[str, Any],
+    coords: list[LatterCoordinator],
+    raw_global_cfg: Mapping[str, Any],
     *,
-    all_coords: list[LatterCoordinator] | None = None,
-    include_logs: bool = False,
-    skip_sections: Collection[str] = (),
-) -> dict[str, Any]:
-    """Build the System-scoped part of the Studio payload (no Device needed)."""
-    device_groups = get_device_groups(hass)
-    group_name_map = {
-        g["id"]: g["name"]
-        for g in device_groups
-        if isinstance(g, dict) and g.get("id")
-    }
-    registries = (ar.async_get(hass), dr.async_get(hass), er.async_get(hass))
-    coords = all_coords if all_coords is not None else list(iter_coordinators(hass))
-    system_devices = [
-        _build_system_device_item(
-            hass, c, current_subentry_id, group_name_map, registries
-        )
-        for c in coords
-    ]
-    raw_global_cfg = peek_global_config(hass)
-    onboarded_slugs = {c.device_slug for c in coords}
-    sys_obj = get_latter_system(hass)
-    sign_fn = (
-        sys_obj.url_signer.sign_payload_resource if sys_obj is not None else None
-    )
-
-    section: dict[str, Any] = {
-        "internal_logs": (
-            get_combined_system_and_studio_logs(hass) if include_logs else []
-        ),
-        "system_info": {
-            "ha_version": str(
-                getattr(ha_const, "__version__", "")
-                or getattr(getattr(hass, "config", None), "version", "")
-                or ""
-            ),
-            "integration_version": INTEGRATION_VERSION,
-            "min_firmware_core_rev": MIN_FIRMWARE_CORE_REV,
-            "studio_rev": STUDIO_REV,
-        },
-        "locale_strings": resolve_studio_locale_strings(hass),
-        "system_devices": system_devices,
-        "issues": build_issues(hass, coords),
-        "ble_proxy_count": count_area_ble_proxies(hass),
-        "discovered_latter_devices": get_discovered_latter_devices(hass),
-        "ignored_latter_devices": get_discovered_latter_devices(
+    coord_meta: _CoordMeta,
+    skip_sections: Collection[str],
+) -> None:
+    """Populate gated heavy System sections only when absent from `skip_sections`."""
+    if "locale_strings" not in skip_sections:
+        section["locale_strings"] = resolve_studio_locale_strings(hass)
+    if "discovered_latter_devices" not in skip_sections:
+        section["discovered_latter_devices"] = get_discovered_latter_devices(hass)
+    if "ignored_latter_devices" not in skip_sections:
+        section["ignored_latter_devices"] = get_discovered_latter_devices(
             hass, only_ignored=True
-        ),
-        "system_controls": build_system_shared_controls(hass, coords),
-        "device_groups": device_groups,
-        "system_config": system_settings_view(raw_global_cfg),
-        "has_security_pin": bool(raw_global_cfg.get(CONF_SECURITY_PIN_HASH)),
-    }
+        )
+    if "system_controls" not in skip_sections:
+        section["system_controls"] = build_system_shared_controls(
+            hass, coords, precomputed_meta=coord_meta
+        )
     if "ble_area_signatures" not in skip_sections:
         section["ble_area_signatures"] = get_area_signatures_summary(hass)
     if "discovered_ble_devices" not in skip_sections:
+        onboarded_slugs = {c.device_slug for c in coords}
         onboarded_ble_addrs = (
             {c.ble_target_address for c in coords if c.ble_target_address}
             | {
@@ -1878,6 +2141,10 @@ def build_system_section(
     if "photo_collections" not in skip_sections:
         section["photo_collections"] = list_photo_collections()
     if "system_wallpapers" not in skip_sections:
+        sys_obj = get_latter_system(hass)
+        sign_fn = (
+            sys_obj.url_signer.sign_payload_resource if sys_obj is not None else None
+        )
         section["system_wallpapers"] = list_wallpaper_catalog(
             hass,
             "system",
@@ -1886,6 +2153,95 @@ def build_system_section(
             sign_resource=sign_fn,
             display_shape="square",
         )
+
+
+def build_system_section(
+    hass: HomeAssistant,
+    current_subentry_id: str,
+    *,
+    all_coords: list[LatterCoordinator] | None = None,
+    include_logs: bool = False,
+    skip_sections: Collection[str] = (),
+    online_by_sub: Mapping[str, bool] | None = None,
+    lookups_by_sub: Mapping[str, _DeviceEntityLookup] | None = None,
+    registries: tuple[ar.AreaRegistry, dr.DeviceRegistry, er.EntityRegistry] | None = None,
+) -> dict[str, Any]:
+    """Build the System-scoped part of the Studio payload (no Device needed)."""
+    device_groups = get_device_groups(hass)
+    group_name_map = {
+        g["id"]: g["name"]
+        for g in device_groups
+        if isinstance(g, dict) and g.get("id")
+    }
+    regs = (
+        registries
+        if registries is not None
+        else (ar.async_get(hass), dr.async_get(hass), er.async_get(hass))
+    )
+    coords = all_coords if all_coords is not None else list(iter_coordinators(hass))
+    lookups = (
+        lookups_by_sub
+        if lookups_by_sub is not None
+        else build_device_entity_lookups(hass, coords, regs[2])
+    )
+    system_devices: list[dict[str, Any]] = []
+    coord_meta: _CoordMeta = []
+    for coord in coords:
+        lookup = lookups.get(coord.subentry_id)
+        is_online = (
+            online_by_sub[coord.subentry_id]
+            if online_by_sub is not None and coord.subentry_id in online_by_sub
+            else is_coordinator_online_for_studio(hass, coord, lookup=lookup)
+        )
+        dev_grp = (
+            ""
+            if coord.is_ble_tag
+            else resolve_effective_device_group(hass, coord, device_groups)
+        )
+        if not coord.is_ble_tag:
+            coord_meta.append((coord, is_online, coord.is_roaming_device, dev_grp))
+        system_devices.append(
+            _build_system_device_item(
+                hass,
+                coord,
+                current_subentry_id,
+                group_name_map,
+                regs,
+                is_online=is_online,
+                device_group=dev_grp,
+                lookup=lookup,
+            )
+        )
+    raw_global_cfg = peek_global_config(hass)
+    section: dict[str, Any] = {
+        "internal_logs": (
+            get_combined_system_and_studio_logs(hass) if include_logs else []
+        ),
+        "system_info": {
+            "ha_version": str(
+                getattr(ha_const, "__version__", "")
+                or getattr(getattr(hass, "config", None), "version", "")
+                or ""
+            ),
+            "integration_version": INTEGRATION_VERSION,
+            "min_firmware_core_rev": MIN_FIRMWARE_CORE_REV,
+            "studio_rev": STUDIO_REV,
+        },
+        "system_devices": system_devices,
+        "issues": build_issues(hass, coords),
+        "ble_proxy_count": count_area_ble_proxies(hass),
+        "device_groups": device_groups,
+        "system_config": system_settings_view(raw_global_cfg),
+        "has_security_pin": bool(raw_global_cfg.get(CONF_SECURITY_PIN_HASH)),
+    }
+    _populate_optional_system_sections(
+        hass,
+        section,
+        coords,
+        raw_global_cfg,
+        coord_meta=coord_meta,
+        skip_sections=skip_sections,
+    )
     return section
 
 
@@ -1935,6 +2291,10 @@ def _build_device_config_data(
     coordinator: LatterCoordinator,
     clean_wallpaper_favorites: list[str],
     clean_screensaver_photo_ids: list[str],
+    *,
+    dev_reg: dr.DeviceRegistry | None = None,
+    resolved_device_group: str | None = None,
+    resolved_ble_category: str | None = None,
 ) -> dict[str, Any]:
     """Build the Device `config` view dictionary for Studio."""
     local_spk_id = coordinator.local_speaker
@@ -1958,7 +2318,8 @@ def _build_device_config_data(
         and not effective_default_area
         and coordinator.esphome_device_id
     ):
-        esp_entry = dr.async_get(hass).async_get(coordinator.esphome_device_id)
+        reg = dev_reg if dev_reg is not None else dr.async_get(hass)
+        esp_entry = reg.async_get(coordinator.esphome_device_id)
         if esp_entry and esp_entry.area_id:
             effective_default_area = str(esp_entry.area_id).strip()
 
@@ -1967,7 +2328,11 @@ def _build_device_config_data(
         "kind": "ble_tag" if coordinator.is_ble_tag else "device",
         "is_roaming": coordinator.is_roaming_device,
         "display_shape": coordinator.display_shape,
-        CONF_DEVICE_GROUP: coordinator.device_group,
+        CONF_DEVICE_GROUP: (
+            resolved_device_group
+            if resolved_device_group is not None
+            else coordinator.device_group
+        ),
         CONF_DEVICE_REMOTE_GROUP: coordinator.device_remote_group,
         CONF_DEFAULT_SPEAKER: raw_def_spk,
         CONF_MA_PLAYER_ENTITY: str(coordinator.get_opt(CONF_MA_PLAYER_ENTITY, "") or ""),
@@ -1976,7 +2341,11 @@ def _build_device_config_data(
         CONF_BLE_BEACON_UUID: coordinator.ble_beacon_uuid,
         CONF_BLE_TARGET_ADDRESS: coordinator.ble_target_address,
         CONF_BLE_CATEGORY: coordinator.configured_ble_category,
-        "effective_ble_category": coordinator.effective_ble_category,
+        "effective_ble_category": (
+            resolved_ble_category
+            if resolved_ble_category is not None
+            else coordinator.effective_ble_category
+        ),
         CONF_BLE_REF_POWER: (
             round(coordinator.ble_ref_power)
             if coordinator.ble_ref_power is not None
@@ -2031,12 +2400,68 @@ def _build_device_config_data(
     return config_data
 
 
+def _build_single_wallpaper_thumb_url(
+    coordinator: LatterCoordinator,
+    source_id: str,
+    snap: PhotoLibrarySnapshot,
+) -> str:
+    """Sign a single active photo thumbnail URL without building the full wallpaper catalog."""
+    if not source_id:
+        return ""
+    wp_shape = "square" if coordinator.display_shape == "square" else "circle"
+    slug = normalize_device_slug(coordinator.device_slug or "system")
+    preset = PRESET_BY_ID.get(source_id)
+    if preset is not None:
+        mode = "wallpaper" if preset["kind"] == "dynamic_preset" else "screensaver"
+        crop_tag = ""
+    elif (rec := snap.photos.get(source_id)) is not None:
+        mode = "screensaver"
+        crop_tag = rec.crop.crop_hash()
+    else:
+        return ""
+    sig = coordinator.sign_payload_resource(
+        f"wallpaper:{source_id}|240|240|{wp_shape}|{mode}"
+    )
+    v_q = f"&v={crop_tag}" if crop_tag else ""
+    return (
+        f"/api/latter/wallpaper/{slug}"
+        f"?w=240&h=240&shape={wp_shape}&mode={mode}"
+        f"&src={quote(source_id, safe='')}&sig={sig}{v_q}"
+    )
+
+
+def _resolve_active_photo_thumb_urls(
+    coordinator: LatterCoordinator,
+    wallpapers_catalog: list[dict[str, Any]] | None,
+    active_wp_id: str,
+    active_ss_id: str,
+) -> tuple[str, str]:
+    """Return `(active_wallpaper_thumb_url, active_screensaver_photo_thumb_url)`."""
+    if wallpapers_catalog is not None:
+        wp_thumb_by_id = {
+            str(item.get("id") or ""): str(item.get("thumb_url") or "")
+            for item in wallpapers_catalog
+        }
+        return wp_thumb_by_id.get(active_wp_id, ""), wp_thumb_by_id.get(active_ss_id, "")
+    snap = get_photo_library_snapshot()
+    wp_url = _build_single_wallpaper_thumb_url(coordinator, active_wp_id, snap)
+    ss_url = (
+        wp_url
+        if active_ss_id and active_ss_id == active_wp_id
+        else _build_single_wallpaper_thumb_url(coordinator, active_ss_id, snap)
+    )
+    return wp_url, ss_url
+
+
 def _build_device_live_payload(
     hass: HomeAssistant,
     coordinator: LatterCoordinator,
     esphome_inspector: dict[str, Any],
-    wallpapers_catalog: list[dict[str, Any]],
+    wallpapers_catalog: list[dict[str, Any]] | None,
     presence_grid: list[dict[str, Any]],
+    *,
+    lookup: _DeviceEntityLookup | None = None,
+    is_online: bool | None = None,
 ) -> dict[str, Any]:
     """Build the `live` telemetry and status dictionary for the selected Device."""
     all_esp_items: list[dict[str, Any]] = [
@@ -2044,7 +2469,11 @@ def _build_device_live_payload(
         for sec in esphome_inspector.get("sections", [])
         for item in (sec.get("items") or [])
     ]
-    fw_st = coordinator.device_state("sensor", "_firmware_version")
+    fw_st = (
+        lookup.find_state(hass, "sensor", "_firmware_version")
+        if lookup is not None
+        else coordinator.device_state("sensor", "_firmware_version")
+    )
     fw_version = (
         str(fw_st.state)
         if fw_st is not None and fw_st.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN, "")
@@ -2057,14 +2486,13 @@ def _build_device_live_payload(
     ]
     fw_update_entity = _select_primary_fw_update_entity(update_items)
 
-    wp_thumb_by_id = {
-        str(item.get("id") or ""): str(item.get("thumb_url") or "")
-        for item in wallpapers_catalog
-    }
     wp_pool = coordinator.resolve_wallpaper_rotation_pool()
     ss_pool = coordinator.resolve_screensaver_photo_pool()
     active_wp_id = coordinator.wallpaper_source
     active_ss_id = coordinator.screensaver_photo_source
+    active_wp_thumb, active_ss_thumb = _resolve_active_photo_thumb_urls(
+        coordinator, wallpapers_catalog, active_wp_id, active_ss_id
+    )
     active_ambient = (
         resolve_area_ambient_light(hass, coordinator.active_area_id or None)
         if not coordinator.is_ble_tag
@@ -2086,10 +2514,10 @@ def _build_device_live_payload(
 
     live: dict[str, Any] = {
         "active_wallpaper_id": active_wp_id,
-        "active_wallpaper_thumb_url": wp_thumb_by_id.get(active_wp_id, ""),
+        "active_wallpaper_thumb_url": active_wp_thumb,
         "wallpaper_pool_count": len(wp_pool),
         "active_screensaver_photo_id": active_ss_id,
-        "active_screensaver_photo_thumb_url": wp_thumb_by_id.get(active_ss_id, ""),
+        "active_screensaver_photo_thumb_url": active_ss_thumb,
         "screensaver_pool_count": len(ss_pool),
         "active_area_name": active_area_name,
         "active_area_lux_display": active_ambient["lux_display"],
@@ -2123,14 +2551,15 @@ def _build_device_live_payload(
         "is_ble_sleep_expected": bool(coordinator.is_ble_sleep_expected()),
     }
     if not coordinator.is_ble_tag:
+        online_fallback = (
+            is_online
+            if is_online is not None
+            else is_coordinator_online_for_studio(hass, coordinator, lookup=lookup)
+        )
         live.update(
             {
                 "radio_connected": bool(
-                    getattr(
-                        coordinator,
-                        "radio_connected",
-                        is_coordinator_online_for_studio(hass, coordinator),
-                    )
+                    getattr(coordinator, "radio_connected", online_fallback)
                 ),
                 "display_power_state": int(
                     getattr(coordinator, "display_power_state", 0)
@@ -2166,71 +2595,31 @@ def _build_device_live_payload(
     return live
 
 
-def build_studio_state_payload(
+def _resolve_device_wallpapers_and_pools(
     hass: HomeAssistant,
-    coordinator: LatterCoordinator | None,
-    *,
-    include_catalog: bool = True,
-    include_logs: bool = False,
-    skip_sections: Collection[str] = (),
-) -> dict[str, Any]:
-    """Build the Studio payload: the System part always, plus the Device part when a Device is targeted."""
-    all_coords = list(iter_coordinators(hass))
-    base: dict[str, Any] = {
-        "type": "state",
-        "subentry_id": coordinator.subentry_id if coordinator is not None else "",
-        "title": coordinator.device_title if coordinator is not None else "",
-        "version": INTEGRATION_VERSION,
-        "studio_rev": STUDIO_REV,
-        "system_config_rev": get_system_config_rev(hass),
-        "device_config_rev": (
-            coordinator.device_config_rev if coordinator is not None else 0
-        ),
-        **build_system_section(
+    coordinator: LatterCoordinator,
+    skip_wallpapers: bool,
+) -> tuple[list[dict[str, Any]] | None, list[str], list[str]]:
+    """Build or skip the device wallpaper catalog and return clean favorite/screensaver ID lists."""
+    if skip_wallpapers:
+        wallpapers_catalog: list[dict[str, Any]] | None = None
+        valid_wp_ids = known_wallpaper_ids(include_dynamic=True)
+        valid_ss_ids = known_wallpaper_ids(include_dynamic=False)
+    else:
+        wallpapers_catalog = list_wallpaper_catalog(
             hass,
-            coordinator.subentry_id if coordinator is not None else "",
-            all_coords=all_coords,
-            include_logs=include_logs,
-            skip_sections=skip_sections,
-        ),
-    }
-    if include_catalog:
-        base["catalog"] = build_entity_catalog(
-            hass, coordinator, all_coords=all_coords
+            coordinator.device_slug,
+            coordinator.wallpaper_source,
+            coordinator.wallpaper_favorites,
+            sign_resource=coordinator.sign_payload_resource,
+            display_shape=coordinator.display_shape,
         )
-        base["pref_specs"] = build_pref_specs_catalog()
-        base["world_clock_zones"] = list(WORLD_CLOCK_ZONES)
-    presence_grid = get_all_areas_presence_summary(hass)
-    if coordinator is None:
-        return {
-            **base,
-            "capabilities": {},
-            "config": {},
-            "device_prefs": [],
-            "quick_actions": [],
-            "speaker_volume": None,
-            "esphome": {"device": {}, "sections": []},
-            "wallpapers": [],
-            "live": {"area_presence_grid": presence_grid},
+        valid_wp_ids = {str(item.get("id") or "") for item in wallpapers_catalog}
+        valid_ss_ids = {
+            str(item.get("id") or "")
+            for item in wallpapers_catalog
+            if item.get("kind") != "dynamic_preset"
         }
-
-    esphome_inspector = get_esphome_device_entities(
-        hass, coordinator.esphome_device_id, coordinator.device_slug
-    )
-    wallpapers_catalog = list_wallpaper_catalog(
-        hass,
-        coordinator.device_slug,
-        coordinator.wallpaper_source,
-        coordinator.wallpaper_favorites,
-        sign_resource=coordinator.sign_payload_resource,
-        display_shape=coordinator.display_shape,
-    )
-    valid_wp_ids = {str(item.get("id") or "") for item in wallpapers_catalog}
-    valid_ss_ids = {
-        str(item.get("id") or "")
-        for item in wallpapers_catalog
-        if item.get("kind") != "dynamic_preset"
-    }
     clean_wallpaper_favorites = list(
         dict.fromkeys(
             pid for pid in coordinator.wallpaper_favorites if pid in valid_wp_ids
@@ -2241,20 +2630,147 @@ def build_studio_state_payload(
             pid for pid in coordinator.screensaver_photo_ids if pid in valid_ss_ids
         )
     )
+    return wallpapers_catalog, clean_wallpaper_favorites, clean_screensaver_photo_ids
+
+
+def _extract_selected_device_meta(
+    system_devices: Any, subentry_id: str
+) -> tuple[str | None, str | None, bool | None]:
+    """Reuse `(device_group, ble_category, is_online)` already computed in `system_devices`."""
+    if not isinstance(system_devices, list):
+        return None, None, None
+    for row in system_devices:
+        if isinstance(row, Mapping) and row.get("subentry_id") == subentry_id:
+            raw_grp = row.get("device_group")
+            raw_cat = row.get("ble_category")
+            raw_online = row.get("is_online")
+            return (
+                str(raw_grp) if raw_grp is not None else None,
+                str(raw_cat) if raw_cat is not None else None,
+                bool(raw_online) if raw_online is not None else None,
+            )
+    return None, None, None
+
+
+def build_studio_state_payload(
+    hass: HomeAssistant,
+    coordinator: LatterCoordinator | None,
+    *,
+    include_catalog: bool = True,
+    include_logs: bool = False,
+    skip_sections: Collection[str] = (),
+    online_by_sub: Mapping[str, bool] | None = None,
+    lookups_by_sub: Mapping[str, _DeviceEntityLookup] | None = None,
+    system_section_override: Mapping[str, Any] | None = None,
+    presence_grid_override: list[dict[str, Any]] | None = None,
+    catalog_override: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the Studio payload: the System part always, plus the Device part when a Device is targeted."""
+    all_coords = list(iter_coordinators(hass))
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+    lookups = (
+        lookups_by_sub
+        if lookups_by_sub is not None
+        else (
+            {}
+            if system_section_override is not None
+            else build_device_entity_lookups(hass, all_coords, ent_reg)
+        )
+    )
+    target_sub_id = coordinator.subentry_id if coordinator is not None else ""
+    if system_section_override is not None:
+        system_part: dict[str, Any] = dict(system_section_override)
+        if isinstance(system_part.get("system_devices"), list):
+            system_part["system_devices"] = [
+                {**d, "is_current": d.get("subentry_id") == target_sub_id}
+                for d in system_part["system_devices"]
+            ]
+    else:
+        system_part = build_system_section(
+            hass,
+            target_sub_id,
+            all_coords=all_coords,
+            include_logs=include_logs,
+            skip_sections=skip_sections,
+            online_by_sub=online_by_sub,
+            lookups_by_sub=lookups,
+            registries=(ar.async_get(hass), dev_reg, ent_reg),
+        )
+    base: dict[str, Any] = {
+        "type": "state",
+        "subentry_id": target_sub_id,
+        "title": coordinator.device_title if coordinator is not None else "",
+        "version": INTEGRATION_VERSION,
+        "studio_rev": STUDIO_REV,
+        "system_config_rev": get_system_config_rev(hass),
+        "device_config_rev": (
+            coordinator.device_config_rev if coordinator is not None else 0
+        ),
+        **system_part,
+    }
+    if include_catalog:
+        base["catalog"] = (
+            dict(catalog_override)
+            if catalog_override is not None
+            else build_entity_catalog(hass, coordinator, all_coords=all_coords)
+        )
+        if "pref_specs" not in skip_sections:
+            base["pref_specs"] = build_pref_specs_catalog()
+        if "world_clock_zones" not in skip_sections:
+            base["world_clock_zones"] = list(WORLD_CLOCK_ZONES)
+    presence_grid = (
+        presence_grid_override
+        if presence_grid_override is not None
+        else get_all_areas_presence_summary(hass)
+    )
+    if coordinator is None:
+        out_sys: dict[str, Any] = {
+            **base,
+            "capabilities": {},
+            "config": {},
+            "device_prefs": [],
+            "quick_actions": [],
+            "speaker_volume": None,
+            "esphome": {"device": {}, "sections": []},
+            "live": {"area_presence_grid": presence_grid},
+        }
+        if "wallpapers" not in skip_sections:
+            out_sys["wallpapers"] = []
+        return out_sys
+
+    esphome_inspector = get_esphome_device_entities(
+        hass, coordinator.esphome_device_id, coordinator.device_slug
+    )
+    wallpapers_catalog, clean_wp_favs, clean_ss_ids = _resolve_device_wallpapers_and_pools(
+        hass, coordinator, skip_wallpapers=("wallpapers" in skip_sections)
+    )
     sec_ids = present_section_ids(esphome_inspector.get("sections"))
     latter_idents = coordinator.get_device_info()["identifiers"]
-    latter_dev = next(
-        (
-            d
-            for d in dr.async_entries_for_config_entry(
-                dr.async_get(hass), coordinator.entry.entry_id
-            )
-            if d.identifiers & latter_idents
-        ),
-        None,
+    latter_dev = None
+    get_by_ident = getattr(dev_reg, "async_get_device_by_identifier", None)
+    if callable(get_by_ident):
+        for ident in latter_idents:
+            latter_dev = get_by_ident(ident, coordinator.entry.entry_id)
+            if latter_dev is not None:
+                break
+    else:
+        latter_dev = next(
+            (
+                d
+                for d in dr.async_entries_for_config_entry(
+                    dev_reg, coordinator.entry.entry_id
+                )
+                if d.identifiers & latter_idents
+            ),
+            None,
+        )
+    sel_grp, sel_ble_cat, sel_online = _extract_selected_device_meta(
+        base.get("system_devices"), target_sub_id
     )
+    sel_lookup = lookups.get(target_sub_id)
 
-    return {
+    payload: dict[str, Any] = {
         **base,
         "capabilities": _build_device_capabilities(
             coordinator, sec_ids, coordinator.local_speaker
@@ -2262,14 +2778,18 @@ def build_studio_state_payload(
         "config": _build_device_config_data(
             hass,
             coordinator,
-            clean_wallpaper_favorites,
-            clean_screensaver_photo_ids,
+            clean_wp_favs,
+            clean_ss_ids,
+            dev_reg=dev_reg,
+            resolved_device_group=sel_grp,
+            resolved_ble_category=sel_ble_cat,
         ),
         "device_prefs": build_device_prefs_payload(coordinator),
-        "quick_actions": build_quick_actions_payload(hass, coordinator),
+        "quick_actions": build_quick_actions_payload(
+            hass, coordinator, is_online=sel_online
+        ),
         "speaker_volume": build_speaker_volume_payload(hass, coordinator),
         "esphome": esphome_inspector,
-        "wallpapers": wallpapers_catalog,
         "links": {
             "entry_id": coordinator.entry.entry_id,
             "esphome_device_id": coordinator.esphome_device_id or "",
@@ -2281,8 +2801,13 @@ def build_studio_state_payload(
             esphome_inspector,
             wallpapers_catalog,
             presence_grid,
+            lookup=sel_lookup,
+            is_online=sel_online,
         ),
     }
+    if wallpapers_catalog is not None:
+        payload["wallpapers"] = wallpapers_catalog
+    return payload
 
 
 __all__ = [
@@ -2305,6 +2830,7 @@ __all__ = [
     "StudioSpeakerVolumePayload",
     "StudioSystemDeviceItem",
     "StudioSystemInfo",
+    "build_device_entity_lookups",
     "build_device_prefs_payload",
     "build_entity_catalog",
     "build_issues",
@@ -2314,10 +2840,13 @@ __all__ = [
     "build_studio_state_payload",
     "build_system_section",
     "build_system_shared_controls",
+    "compute_controls_signature",
     "get_combined_system_and_studio_logs",
     "is_coordinator_online_for_studio",
     "load_studio_locales_sync",
     "log_studio_event",
     "resolve_studio_locale_strings",
     "resolve_target_coordinator",
+    "studio_language",
+    "studio_locales_loaded",
 ]

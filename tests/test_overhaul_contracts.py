@@ -90,7 +90,7 @@ def test_studio_contract_split_and_pref_ui_merge() -> None:
     proto = json.loads((LATTER_DIR / "protocol_v3.json").read_text(encoding="utf-8"))
     contract = json.loads((LATTER_DIR / "studio_contract.json").read_text(encoding="utf-8"))
 
-    assert STUDIO_REV == 51
+    assert STUDIO_REV == 52
     assert WALLPAPER_MAX_DIM == 1280
     assert contract["studio_contract"]["studio_rev"] == STUDIO_REV
     assert "studio_contract" not in proto
@@ -514,7 +514,7 @@ async def test_headless_display_zero_defaults_runtime_restore_and_capability_pru
 
     # All capability-gated entities exist initially on a full-featured display+audio device
     display_eids = (
-        f"sensor.{slug}_timer_remaining",
+        f"sensor.{slug}_timer_ends",
         f"binary_sensor.{slug}_timer_active",
         f"binary_sensor.{slug}_alarm_ringing",
         f"light.{slug}_screen",

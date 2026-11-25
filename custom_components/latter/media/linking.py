@@ -35,7 +35,7 @@ _STRICT_MAC_RE: Final = re.compile(
     r"^(?:bridge[-_])?((?:[0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}|[0-9a-fA-F]{12})$"
 )
 _MA_RECONNECT_GRACE_SECONDS: Final[float] = 45.0
-_MA_OFFLINE_CACHE_TTL_SECONDS: Final[float] = 5.0
+_MA_OFFLINE_CACHE_TTL_SECONDS: Final[float] = 120.0
 _CACHE_TUPLE_LEN: Final[int] = 3
 type CandidateRow = tuple["RegistryEntry", "DeviceEntry | None", set[str], set[str], set[str]]
 _SPEAKER_REBIND_CALLBACK: Callable[[Any], None] | None = None

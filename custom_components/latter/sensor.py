@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any
+from datetime import datetime
+from typing import Any, Final
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -11,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfLength, UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfLength
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -37,6 +39,17 @@ from .presence.ble_registry import (
 PARALLEL_UPDATES = 0
 EVENT_FLOOR_REGISTRY_UPDATED = "floor_registry_updated"
 MAX_OCCUPANTS_STATE_CHARS = 250
+_PRESENCE_UNRECORDED_ATTRS: Final[frozenset[str]] = frozenset(
+    {
+        "distance_m",
+        "rssi",
+        "raw_rssi",
+        "winning_rssi",
+        "closest_distance_m",
+        "confidence_pct",
+        "ref_power_dbm",
+    }
+)
 
 
 @dataclass
@@ -54,7 +67,12 @@ class _EntrySensorTracking:
     area_entities_by_id: dict[str, LatterAreaOccupantsSensor] = field(
         default_factory=dict
     )
+    person_entities_by_person: dict[str, list[_BaseLatterPersonSensor]] = field(
+        default_factory=dict
+    )
     floor_entities: list[SensorEntity] = field(default_factory=list)
+    last_person_assignments: dict[str, str] = field(default_factory=dict)
+    last_floors_enabled: bool | None = None
 
     @callback
     def cleanup(self) -> None:
@@ -63,7 +81,10 @@ class _EntrySensorTracking:
         self.registered_subentry_floors.difference_update(self.entry_subentry_floors)
         self.registered_person_floors.difference_update(self.entry_person_floors)
         self.area_entities_by_id.clear()
+        self.person_entities_by_person.clear()
         self.floor_entities.clear()
+        self.last_person_assignments.clear()
+        self.last_floors_enabled = None
 
 
 def _entry_coordinators(
@@ -89,7 +110,7 @@ def _setup_device_sensors(
             LatterBleDistanceSensor(coordinator),
         ]
         if not coordinator.is_ble_tag and coordinator.has_display:
-            dev_entities.append(LatterTimerRemainingSensor(coordinator))
+            dev_entities.append(LatterTimerEndsSensor(coordinator))
         if (
             floors_initially_enabled
             and coordinator.subentry_id not in tracking.registered_subentry_floors
@@ -168,35 +189,88 @@ def _handle_area_occupants_registry_change(
 
 
 @callback
+def _prune_orphaned_person_sensors(
+    hass: HomeAssistant,
+    entry: ConfigEntry[LatterSystemHub],
+    tracking: _EntrySensorTracking,
+    active_persons: set[str],
+) -> None:
+    stale_persons = list(tracking.entry_persons - active_persons)
+    if not stale_persons:
+        return
+    reg = er.async_get(hass)
+    for stale_person in stale_persons:
+        tracking.registered_persons.discard(stale_person)
+        tracking.entry_persons.discard(stale_person)
+        tracking.registered_person_floors.discard(stale_person)
+        tracking.entry_person_floors.discard(stale_person)
+        for ent in tracking.person_entities_by_person.pop(stale_person, ()):
+            ent.detach_listeners()
+            if ent in tracking.floor_entities:
+                tracking.floor_entities.remove(ent)
+            if ent.entity_id and reg.async_get(ent.entity_id) is not None:
+                reg.async_remove(ent.entity_id)
+            if ent.hass is not None:
+                entry.async_create_background_task(
+                    hass,
+                    ent.async_remove(),
+                    f"latter_remove_person_{ent.translation_key}_{stale_person}",
+                )
+
+
+@callback
 def _ensure_person_sensors(
     hass: HomeAssistant,
+    entry: ConfigEntry[LatterSystemHub],
     coordinators: list[LatterCoordinator],
     tracking: _EntrySensorTracking,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    new_person_entities: list[SensorEntity] = []
     floors_enabled = has_configured_floors(hass)
-    for coord in coordinators:
-        person_ent = coord.assigned_person
-        if not person_ent or not person_ent.startswith("person."):
-            continue
+    cur_assignments = {
+        coord.subentry_id: (
+            coord.assigned_person
+            if coord.assigned_person and coord.assigned_person.startswith("person.")
+            else ""
+        )
+        for coord in coordinators
+    }
+    if (
+        cur_assignments == tracking.last_person_assignments
+        and floors_enabled == tracking.last_floors_enabled
+    ):
+        return
+    tracking.last_person_assignments = cur_assignments
+    tracking.last_floors_enabled = floors_enabled
+
+    active_persons = {p for p in cur_assignments.values() if p}
+    _prune_orphaned_person_sensors(hass, entry, tracking, active_persons)
+
+    new_person_entities: list[SensorEntity] = []
+    for person_ent in sorted(active_persons):
+        bucket = tracking.person_entities_by_person.setdefault(person_ent, [])
         if person_ent not in tracking.registered_persons:
             tracking.registered_persons.add(person_ent)
             tracking.entry_persons.add(person_ent)
-            new_person_entities.extend(
-                [
-                    LatterPersonCurrentAreaSensor(hass, person_ent),
-                    LatterPersonBleDistanceSensor(hass, person_ent),
-                ]
-            )
+            created: list[_BaseLatterPersonSensor] = [
+                LatterPersonCurrentAreaSensor(hass, person_ent),
+                LatterPersonBleDistanceSensor(hass, person_ent),
+            ]
+            bucket.extend(created)
+            new_person_entities.extend(created)
         if floors_enabled and person_ent not in tracking.registered_person_floors:
             tracking.registered_person_floors.add(person_ent)
             tracking.entry_person_floors.add(person_ent)
             person_floor_ent = LatterPersonCurrentFloorSensor(hass, person_ent)
             tracking.floor_entities.append(person_floor_ent)
+            bucket.append(person_floor_ent)
             new_person_entities.append(person_floor_ent)
     if new_person_entities:
         async_add_entities(new_person_entities)
+
+    for ent_list in tracking.person_entities_by_person.values():
+        for ent in ent_list:
+            ent.sync_coordinator_listeners(coordinators)
 
 
 async def async_setup_entry(
@@ -227,7 +301,7 @@ async def async_setup_entry(
 
     @callback
     def _async_ensure_person_sensors() -> None:
-        _ensure_person_sensors(hass, coordinators, tracking, async_add_entities)
+        _ensure_person_sensors(hass, entry, coordinators, tracking, async_add_entities)
 
     @callback
     def _async_ensure_floor_sensors() -> None:
@@ -306,34 +380,37 @@ class _BaseLatterSensor(SensorEntity):
         self.async_write_ha_state()
 
 
-class LatterTimerRemainingSensor(_BaseLatterSensor):
-    """Exposes `sensor.<device_slug>_timer_remaining` computed locally in HA at 1 Hz while running."""
+class LatterTimerEndsSensor(_BaseLatterSensor):
+    """Exposes `sensor.<device_slug>_timer_ends` as a UTC timestamp while a countdown timer runs."""
 
-    _attr_device_class = SensorDeviceClass.DURATION
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
-        """Initialize timer remaining sensor."""
-        super().__init__(coordinator, "timer_remaining")
-
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to both state transitions and isolated 1 Hz timer ticks."""
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            self.coordinator.async_add_timer_tick_listener(
-                self._handle_coordinator_update
-            )
-        )
+        """Initialize timer ends timestamp sensor."""
+        super().__init__(coordinator, "timer_ends")
 
     @property
-    def native_value(self) -> int:
-        """Return remaining timer seconds (`0` when idle)."""
-        return self.coordinator.current_timer_remaining_sec
+    def native_value(self) -> datetime | None:
+        """Return timezone-aware UTC end timestamp while running, or `None` when paused/idle."""
+        return self.coordinator.timer_ends_at_dt
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return timer lifecycle state and paused remaining seconds."""
+        running = self.coordinator.timer_running
+        paused = self.coordinator.timer_paused
+        state = "running" if running else ("paused" if paused else "idle")
+        remaining = self.coordinator.current_timer_remaining_sec if paused else 0
+        return {
+            "state": state,
+            "paused_remaining_s": remaining,
+        }
 
 
 class LatterCurrentAreaSensor(_BaseLatterSensor):
     """Exposes `sensor.<device_slug>_current_area` with live Area name or `'Away'`."""
+
+    _unrecorded_attributes = _PRESENCE_UNRECORDED_ATTRS
 
     def __init__(self, coordinator: LatterCoordinator) -> None:
         """Initialize current area sensor."""
@@ -425,6 +502,50 @@ class _BaseLatterPersonSensor(SensorEntity):
         ) or self._person_slug.replace("_", " ").title()
         self._attr_translation_placeholders = {"person_name": self._person_friendly}
         self._cached_person: tuple[str, dict[str, Any]] | None = None
+        self._coord_unsubs: dict[str, Callable[[], None]] = {}
+        self._fabric_unsub: Callable[[], None] | None = None
+
+    @callback
+    def detach_listeners(self) -> None:
+        """Unsubscribe from BLE fabric and all coordinator listeners."""
+        if self._fabric_unsub is not None:
+            self._fabric_unsub()
+            self._fabric_unsub = None
+        for unsub in list(self._coord_unsubs.values()):
+            unsub()
+        self._coord_unsubs.clear()
+
+    @callback
+    def sync_coordinator_listeners(
+        self,
+        coordinators: Iterable[LatterCoordinator],
+        *,
+        notify: bool = True,
+    ) -> None:
+        """Keep coordinator subscriptions aligned to devices currently assigned to this person."""
+        if self.hass is None:
+            return
+        target_low = self._person_entity.lower()
+        desired = {
+            coord.subentry_id: coord
+            for coord in coordinators
+            if coord.assigned_person.lower() == target_low
+        }
+        changed = False
+        for stale_id in list(self._coord_unsubs):
+            if stale_id not in desired:
+                unsub = self._coord_unsubs.pop(stale_id, None)
+                if unsub is not None:
+                    unsub()
+                changed = True
+        for sub_id, coord in desired.items():
+            if sub_id not in self._coord_unsubs:
+                self._coord_unsubs[sub_id] = coord.async_add_listener(
+                    self._handle_person_update
+                )
+                changed = True
+        if changed and notify:
+            self._handle_person_update()
 
     @callback
     def invalidate_person_cache(self) -> None:
@@ -445,19 +566,15 @@ class _BaseLatterPersonSensor(SensorEntity):
         return get_system_device_info()
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to real-time updates from the shared BLE Fabric and all device coordinators."""
+        """Subscribe to real-time updates from the shared BLE Fabric and assigned coordinators."""
         await super().async_added_to_hass()
         fabric = get_ble_fabric(self.hass)
         self._cached_person = resolve_person_area_and_distance(
             self.hass, self._person_entity
         )
-        self.async_on_remove(
-            fabric.register_occupancy_listener(self._handle_person_update)
-        )
-        for coord in iter_coordinators(self.hass):
-            self.async_on_remove(
-                coord.async_add_listener(self._handle_person_update)
-            )
+        self._fabric_unsub = fabric.register_occupancy_listener(self._handle_person_update)
+        self.async_on_remove(self.detach_listeners)
+        self.sync_coordinator_listeners(iter_coordinators(self.hass), notify=False)
 
     @callback
     def _handle_person_update(self) -> None:
@@ -472,6 +589,7 @@ class LatterPersonCurrentAreaSensor(_BaseLatterPersonSensor):
     """Exposes `sensor.latter_system_<person>_current_area` under the Latter System service device."""
 
     _attr_translation_key = "person_current_area"
+    _unrecorded_attributes = _PRESENCE_UNRECORDED_ATTRS
 
     def __init__(self, hass: HomeAssistant, person_entity: str) -> None:
         """Initialize person current area sensor."""
@@ -495,6 +613,7 @@ class LatterPersonCurrentFloorSensor(_BaseLatterPersonSensor):
     """Exposes `sensor.latter_system_<person>_current_floor` under the Latter System service device."""
 
     _attr_translation_key = "person_current_floor"
+    _unrecorded_attributes = _PRESENCE_UNRECORDED_ATTRS
 
     def __init__(self, hass: HomeAssistant, person_entity: str) -> None:
         """Initialize person current floor sensor."""
@@ -511,7 +630,7 @@ class LatterPersonCurrentFloorSensor(_BaseLatterPersonSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return person BLE floor and Area tracking attributes."""
         _, attrs = self._get_person_state()
-        return dict(attrs)
+        return {k: v for k, v in attrs.items() if k != "distance_m"}
 
 
 class LatterPersonBleDistanceSensor(_BaseLatterPersonSensor):
@@ -578,6 +697,7 @@ class LatterAreaOccupantsSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_translation_key = "area_occupants"
+    _unrecorded_attributes = _PRESENCE_UNRECORDED_ATTRS
 
     def __init__(
         self,

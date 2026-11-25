@@ -32,6 +32,7 @@ from custom_components.latter.areas.registry import (
     apply_ha_display_precision,
     area_illuminance_sensor_choices,
     area_illuminance_settings,
+    latter_bound_esphome_device_ids,
     normalize_ambient_lux,
     resolve_area_ambient_light,
     resolve_entity_area_id,
@@ -51,6 +52,7 @@ from custom_components.latter.const import (
     CONF_AREA_ILLUMINANCE_CONFIG,
     CONF_BLE_AREA_SIGNATURES,
     CONF_BROADCAST_SPEAKERS,
+    CONF_DEFAULT_AREA,
     CONF_DOCK_ITEMS,
     DEFAULT_BROADCAST_PHRASES,
 )
@@ -1425,10 +1427,12 @@ async def test_areas_telemetry_listeners_fallback_debounce_and_shortcuts(
     await hass.async_block_till_done()
     bind_coordinator_area_listeners(coord)
 
+    coord.cached_area_payload = (0.0, ("Living Room", {}))
+    coord.cached_media_payload = (0.0, ("idle", {}))
     with patch.object(
-        coord, "async_notify_listeners", wraps=coord.async_notify_listeners
+        coord, "schedule_debounced_notify", wraps=coord.schedule_debounced_notify
     ) as notify_spy:
-        # Same state value (attribute-only change) -> ignored at lines 621-622
+        # Same state value (attribute-only change) -> ignored
         hass.states.async_set(
             "sensor.explicit_lux_probe",
             "10.0",
@@ -1441,7 +1445,7 @@ async def test_areas_telemetry_listeners_fallback_debounce_and_shortcuts(
         await hass.async_block_till_done()
         assert notify_spy.call_count == 0
 
-        # Real state change -> notifies coordinator at line 623
+        # Real state change -> invalidates ONLY cached_area_payload and schedules debounced notify
         hass.states.async_set(
             "sensor.explicit_lux_probe",
             "22.5",
@@ -1449,8 +1453,10 @@ async def test_areas_telemetry_listeners_fallback_debounce_and_shortcuts(
         )
         await hass.async_block_till_done()
         assert notify_spy.call_count == 1
+        assert coord.cached_area_payload is None
+        assert coord.cached_media_payload is not None
 
-        # State removed (new_st is None) -> ignored at lines 621-622
+        # State removed (new_st is None) -> ignored
         hass.states.async_remove("sensor.explicit_lux_probe")
         await hass.async_block_till_done()
         assert notify_spy.call_count == 1
@@ -1587,9 +1593,11 @@ async def test_areas_telemetry_listeners_fallback_debounce_and_shortcuts(
         await hass.async_block_till_done()
         push_slots_mock.assert_awaited_once_with(coord)
 
-        # Auto-discovered fallback lux listener fires on state change (lines 663-676)
+        # Auto-discovered fallback lux listener fires targeted debounced area invalidation
+        coord.cached_area_payload = (0.0, ("Living Room", {}))
+        coord.cached_media_payload = (0.0, ("idle", {}))
         with patch.object(
-            coord, "async_notify_listeners", wraps=coord.async_notify_listeners
+            coord, "schedule_debounced_notify", wraps=coord.schedule_debounced_notify
         ) as lux_spy:
             hass.states.async_set(
                 "sensor.lr_auto_lux",
@@ -1598,6 +1606,8 @@ async def test_areas_telemetry_listeners_fallback_debounce_and_shortcuts(
             )
             await hass.async_block_till_done()
             assert lux_spy.call_count == 1
+            assert coord.cached_area_payload is None
+            assert coord.cached_media_payload is not None
 
         # Empty Area with stopped index returns None from _build_active_area_listener (line 686)
         coord.async_set_active_area("empty_zone")
@@ -1606,4 +1616,125 @@ async def test_areas_telemetry_listeners_fallback_debounce_and_shortcuts(
         await hass.async_block_till_done()
 
     idx.start()
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_areas_telemetry_sensor_filter_remotes_tick_away_skip_and_bound_ids_cache(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify noisy sensor filtering, remote tick suppression, Away scan skip, and cached bound ESPHome IDs."""
+    entry, _sys_obj, coord = await setup_latter_hub(hass, with_device=True)
+    idx = get_area_state_index(hass)
+
+    # 1) Indexed Area listener drops noisy `sensor.*` (power/energy) while forwarding temperature sensors
+    register_entity(
+        hass,
+        "sensor.lr_plug_power",
+        platform="mqtt",
+        area_id="living_room",
+        original_device_class="power",
+    )
+    register_entity(
+        hass,
+        "sensor.lr_temp_probe",
+        platform="mqtt",
+        area_id="living_room",
+        original_device_class="temperature",
+    )
+    hass.states.async_set("sensor.lr_plug_power", "12.0", {"device_class": "power"})
+    hass.states.async_set("sensor.lr_temp_probe", "21.5", {"device_class": "temperature"})
+    await hass.async_block_till_done()
+    idx.rebuild()
+    bind_coordinator_area_listeners(coord)
+
+    coord.cached_area_payload = (0.0, ("Living Room", {}))
+    coord.cached_media_payload = (0.0, ("idle", {}))
+    with patch.object(
+        coord, "schedule_debounced_notify", wraps=coord.schedule_debounced_notify
+    ) as area_spy:
+        hass.states.async_set("sensor.lr_plug_power", "18.5", {"device_class": "power"})
+        await hass.async_block_till_done()
+        assert area_spy.call_count == 0
+        assert coord.cached_area_payload is not None
+
+        hass.states.async_set("sensor.lr_temp_probe", "22.0", {"device_class": "temperature"})
+        await hass.async_block_till_done()
+        assert area_spy.call_count == 1
+        assert coord.cached_area_payload is None
+        assert coord.cached_media_payload is not None
+
+    # 2) Remote listener ignores media_position-only ticks and invalidates ONLY cached_remote_payload on real change
+    ensure_area(hass, "Media Den", area_id="media_den")
+    register_entity(hass, "media_player.lr_tv", platform="apple_tv", area_id="media_den")
+    hass.states.async_set(
+        "media_player.lr_tv",
+        "playing",
+        {"media_title": "Movie", "media_position": 10},
+    )
+    await hass.async_block_till_done()
+    with patch.object(
+        coord,
+        "get_remote_slots",
+        return_value=[
+            {
+                "name": "Living Room TV",
+                "remote_entity": "",
+                "media_player_entity": "media_player.lr_tv",
+            }
+        ],
+    ):
+        bind_coordinator_area_listeners(coord)
+
+    coord.cached_remote_payload = (0.0, ("1", {}))
+    coord.cached_area_payload = (0.0, ("Living Room", {}))
+    with patch.object(
+        coord, "schedule_debounced_notify", wraps=coord.schedule_debounced_notify
+    ) as rem_spy:
+        hass.states.async_set(
+            "media_player.lr_tv",
+            "playing",
+            {"media_title": "Movie", "media_position": 11},
+        )
+        await hass.async_block_till_done()
+        assert rem_spy.call_count == 0
+        assert coord.cached_remote_payload is not None
+
+        hass.states.async_set(
+            "media_player.lr_tv",
+            "paused",
+            {"media_title": "Movie", "media_position": 11},
+        )
+        await hass.async_block_till_done()
+        assert rem_spy.call_count == 1
+        assert coord.cached_remote_payload is None
+        assert coord.cached_area_payload is not None
+
+    # 3) Away/Unassigned (`eff_area_id == ""`) skips house-wide `get_area_entities()` scan
+    if coord.esphome_device_id:
+        dr.async_get(hass).async_update_device(coord.esphome_device_id, area_id=None)
+    coord.update_device_config({**coord.device_data, CONF_DEFAULT_AREA: ""})
+    coord._clear_active_area()
+    coord.cached_area_payload = None
+    with patch(
+        "custom_components.latter.areas.telemetry.get_area_entities",
+        side_effect=AssertionError("should not scan house-wide entities when Unassigned"),
+    ):
+        area_name, _area_attrs = build_area_context_payload(coord)
+        assert area_name == "Unassigned"
+
+    # 4) `latter_bound_esphome_device_ids` caches on domain data keyed by `AreaStateIndex.registry_rev`
+    idx.rebuild()
+    with patch.object(
+        hass.config_entries,
+        "async_entries",
+        wraps=hass.config_entries.async_entries,
+    ) as ce_spy:
+        ids_1 = latter_bound_esphome_device_ids(hass)
+        ids_2 = latter_bound_esphome_device_ids(hass)
+        assert ids_1 == ids_2
+        assert ce_spy.call_count == 1
+        idx.rebuild()
+        _ = latter_bound_esphome_device_ids(hass)
+        assert ce_spy.call_count == 2
+
     assert await hass.config_entries.async_unload(entry.entry_id) is True

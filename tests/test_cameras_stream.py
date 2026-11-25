@@ -17,6 +17,7 @@ from custom_components.latter.cameras.stream_hub import LatterCameraStreamHub
 from custom_components.latter.cameras.transcode import (
     MAX_CONCURRENT_VIDEO_INGESTS,
     CameraFetchError,
+    CameraIngest,
     CameraIngestLimitError,
     compose_grid_frame,
     format_mjpeg_chunk,
@@ -524,5 +525,93 @@ async def test_offline_stream_fast_fail_grid_429_and_rtsp_fallback(
                 await orig_sleep(0.01)
             assert hub.get_ingest("camera.flaky").source_tier == "snapshot"
             await g_flaky.aclose()
+    finally:
+        await hub.async_shutdown()
+
+
+async def test_grid_shared_producer_and_dirty_frame_skip(
+    hass: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Multiple clients share 1 grid compositor and unchanged tiles skip redundant Pillow encodes."""
+    compose_calls = 0
+    orig_compose = cameras_mod.compose_grid_frame
+
+    def _spy_compose(*args: Any, **kwargs: Any) -> bytes:
+        nonlocal compose_calls
+        compose_calls += 1
+        return orig_compose(*args, **kwargs)
+
+    monkeypatch.setattr(cameras_mod, "compose_grid_frame", _spy_compose)
+
+    frame_a1 = _make_baseline_420_jpeg(384, 224)
+    frame_a2 = _make_baseline_420_jpeg(384, 224)
+    frame_b1 = _make_baseline_420_jpeg(384, 224)
+
+    hub = LatterCameraStreamHub(hass, idle_timeout_s=5.0)
+    try:
+        ing_a = CameraIngest(
+            entity_id="camera.grid_a", stream_w=384, stream_h=224, stream_fps=15
+        )
+        ing_a.publish(frame_a1, (384, 224, "contain", 0))
+        ing_b = CameraIngest(
+            entity_id="camera.grid_b", stream_w=384, stream_h=224, stream_fps=15
+        )
+        ing_b.publish(frame_b1, (384, 224, "contain", 0))
+        hub._ingests["camera.grid_a"] = ing_a
+        hub._ingests["camera.grid_b"] = ing_b
+
+        gen1 = hub.async_iter_grid_frames(
+            ["camera.grid_a", "camera.grid_b"],
+            800,
+            480,
+            fps=15,
+            fit="contain",
+            wait_timeout_s=0.05,
+        )
+        gen2 = hub.async_iter_grid_frames(
+            ["camera.grid_a", "camera.grid_b"],
+            800,
+            480,
+            fps=15,
+            fit="contain",
+            wait_timeout_s=0.05,
+        )
+        gen3 = hub.async_iter_grid_frames(
+            ["camera.grid_a", "camera.grid_b"],
+            800,
+            480,
+            fps=15,
+            fit="contain",
+            wait_timeout_s=0.05,
+        )
+
+        f1, f2, f3 = await asyncio.gather(anext(gen1), anext(gen2), anext(gen3))
+        assert f1 == f2 == f3
+        assert _jpeg_size(f1) == (800, 480)
+        assert hub.active_grid_producer_count == 1
+        assert compose_calls == 1
+
+        # Wait across multiple 15-FPS ticks with unchanged tile seqs -> dirty-frame skip keeps count at 1
+        await asyncio.sleep(0.18)
+        assert compose_calls == 1
+
+        # Keepalive timeout still serves cached JPEG without re-running Pillow
+        ka = await asyncio.wait_for(anext(gen1), timeout=0.5)
+        assert ka == f1
+        assert compose_calls == 1
+
+        # Advancing one tile seq triggers exactly 1 new grid compose fanned out to all 3 subscribers
+        ing_a.publish(frame_a2, (384, 224, "contain", 0))
+        u1, u2, u3 = await asyncio.wait_for(
+            asyncio.gather(anext(gen1), anext(gen2), anext(gen3)), timeout=1.0
+        )
+        assert u1 == u2 == u3
+        assert compose_calls == 2
+
+        await gen1.aclose()
+        await gen2.aclose()
+        assert hub.active_grid_producer_count == 1
+        await gen3.aclose()
+        assert hub.active_grid_producer_count == 0
     finally:
         await hub.async_shutdown()

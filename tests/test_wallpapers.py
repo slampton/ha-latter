@@ -394,6 +394,42 @@ class TestPhotoLibraryAndCrop(unittest.TestCase):
                     ctx, media_dirs, "local", [f"vacation/p{i}.jpg" for i in range(101)]
                 )
 
+            # Staged atomic writes leave zero leftover temp/staged dotfiles in originals/
+            orig_dir = wp.originals_dir(wp.get_wallpaper_root(ctx))
+            leftover_hidden = [p.name for p in orig_dir.iterdir() if p.name.startswith(".")]
+            self.assertEqual(leftover_hidden, [])
+
+    def test_encode_original_jpeg_uses_dct_draft_and_preserves_exif_orientation(self) -> None:
+        """encode_original_jpeg drafts large JPEGs at 2x MAX_ORIGINAL_LONG_EDGE before EXIF transpose."""
+        from PIL import JpegImagePlugin
+
+        # Build a 3600x1800 JPEG tagged with EXIF Orientation=6 (rotate 90 CW -> 1800x3600 -> 800x1600)
+        buf = io.BytesIO()
+        img = Image.new("RGB", (3600, 1800), (140, 180, 220))
+        exif = img.getexif()
+        exif[274] = 6
+        img.save(buf, format="JPEG", quality=85, exif=exif.tobytes())
+        raw_rotated = buf.getvalue()
+
+        draft_calls: list[tuple[object, object]] = []
+        orig_draft = JpegImagePlugin.JpegImageFile.draft
+
+        def _spy_draft(self_im: JpegImagePlugin.JpegImageFile, mode: object, size: object) -> object:
+            draft_calls.append((mode, size))
+            return orig_draft(self_im, mode, size)  # type: ignore[arg-type]
+
+        JpegImagePlugin.JpegImageFile.draft = _spy_draft  # type: ignore[method-assign]
+        try:
+            encoded, w, h = wp.encode_original_jpeg(raw_rotated)
+        finally:
+            JpegImagePlugin.JpegImageFile.draft = orig_draft  # type: ignore[method-assign]
+
+        expected_draft = wp.MAX_ORIGINAL_LONG_EDGE * 2
+        self.assertEqual(draft_calls, [("RGB", (expected_draft, expected_draft))])
+        self.assertEqual((w, h), (800, 1600))
+        with Image.open(io.BytesIO(encoded)) as decoded:
+            self.assertEqual(decoded.size, (800, 1600))
+
 
 if __name__ == "__main__":
     unittest.main()

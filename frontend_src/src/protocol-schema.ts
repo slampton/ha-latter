@@ -1,7 +1,7 @@
 // AUTO-GENERATED FROM protocol_v3.json + studio_contract.json BY tools/gen_studio_schema.py — DO NOT EDIT MANUALLY.
 
 export const PROTOCOL_CONTRACT_VERSION = 3;
-export const STUDIO_REV = 51;
+export const STUDIO_REV = 52;
 
 export const ALLOWED_DEVICE_ACTIONS: ReadonlyArray<string> = [
   "restart",

@@ -311,3 +311,117 @@ async def test_studio_commands_photo_library_pools_and_media_import(
     assert final_off["config"]["wallpaper_cycle_minutes"] == 0
 
     assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_photo_mutations_notify_studio_subscribers_without_waking_occupancy(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify photo/collection commands notify Studio subscribers without triggering HA Area occupancy listeners, and acquire `coord.config_lock` while pruning."""
+    from datetime import timedelta
+    from unittest.mock import patch
+
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant.common import async_fire_time_changed
+
+    from custom_components.latter.hub_registry import register_studio_subscriber
+    from custom_components.latter.presence.ble_fabric import get_ble_fabric
+
+    entry, _sys_obj, coord = await setup_latter_hub(hass)
+    assert coord is not None
+    conn = make_ws_connection(hass)
+
+    fabric = get_ble_fabric(hass)
+    occ_hits = 0
+    studio_hits = 0
+
+    def _on_occ() -> None:
+        nonlocal occ_hits
+        occ_hits += 1
+
+    def _on_studio() -> None:
+        nonlocal studio_hits
+        studio_hits += 1
+
+    unsub_occ = fabric.register_occupancy_listener(_on_occ)
+    unsub_studio = register_studio_subscriber(hass, _on_studio)
+
+    await call_ws(
+        hass,
+        conn,
+        40,
+        "latter/system/subscribe",
+        subentry_id=coord.subentry_id,
+        studio_rev=STUDIO_REV,
+    )
+    conn.messages.clear()
+
+    # Photo collection mutations wake Studio subscribers, NOT BLE occupancy listeners
+    res_create = await call_ws(
+        hass,
+        conn,
+        41,
+        "latter/system/command",
+        command="create_photo_collection",
+        payload={"name": "Quiet Album"},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    assert res_create is not None and res_create["success"] is True
+    col_id = res_create["result"]["collection"]["id"]
+
+    await call_ws(
+        hass,
+        conn,
+        42,
+        "latter/system/command",
+        command="rename_photo_collection",
+        payload={"collection_id": col_id, "name": "Quiet Album 2"},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    assert occ_hits == 0
+    assert studio_hits >= 2
+
+    # Active Studio subscription receives refreshed `photo_collections` via `register_studio_subscriber`
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
+    pushed = [m["event"] for m in conn.messages if m["event"].get("type") == "state"]
+    assert pushed
+    assert any("photo_collections" in ev for ev in pushed)
+
+    # Assigning collection and deleting it acquires `coord.config_lock` while pruning
+    await call_ws(
+        hass,
+        conn,
+        43,
+        "latter/device/command",
+        subentry_id=coord.subentry_id,
+        command="set_device_photo_pool",
+        payload={"target": "wallpaper", "mode": "collection", "collection_id": col_id},
+        studio_rev=STUDIO_REV,
+    )
+    lock_held_on_prune: list[bool] = []
+    orig_update = coord.update_device_config
+
+    def _spy_update(*args: Any, **kwargs: Any) -> None:
+        lock_held_on_prune.append(coord.config_lock.locked())
+        orig_update(*args, **kwargs)
+
+    with patch.object(coord, "update_device_config", side_effect=_spy_update):
+        await call_ws(
+            hass,
+            conn,
+            44,
+            "latter/system/command",
+            command="delete_photo_collection",
+            payload={"collection_id": col_id},
+            studio_rev=STUDIO_REV,
+        )
+    assert not conn.errors
+    assert occ_hits == 0
+    assert lock_held_on_prune == [True]
+
+    conn.subscriptions.pop(40)()
+    unsub_occ()
+    unsub_studio()
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

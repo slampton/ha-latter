@@ -30,6 +30,7 @@ from ..hub_registry import (
     AreaStateIndex as AreaStateIndex,
     async_stop_area_state_index as async_stop_area_state_index,
     get_area_state_index as get_area_state_index,
+    get_domain_data,
     is_media_position_only_tick as is_media_position_only_tick,
     iter_coordinators,
     peek_global_config,
@@ -108,6 +109,15 @@ def resolve_entity_area_id(
 
 def latter_bound_esphome_device_ids(hass: HomeAssistant) -> set[str]:
     """Return all Device Registry IDs belonging to Latter or its bound ESPHome devices."""
+    idx = get_area_state_index(hass)
+    domain_data = get_domain_data(hass)
+    if (
+        idx.started
+        and domain_data.bound_esphome_ids_cache is not None
+        and domain_data.bound_esphome_ids_cache_rev == idx.registry_rev
+    ):
+        return set(domain_data.bound_esphome_ids_cache)
+
     out: set[str] = set()
     dev_reg = dr.async_get(hass)
     for entry in hass.config_entries.async_entries(DOMAIN):
@@ -123,6 +133,9 @@ def latter_bound_esphome_device_ids(hass: HomeAssistant) -> set[str]:
             )
             if dev_id:
                 out.add(dev_id)
+    if idx.started:
+        domain_data.bound_esphome_ids_cache = set(out)
+        domain_data.bound_esphome_ids_cache_rev = idx.registry_rev
     return out
 
 
@@ -285,14 +298,21 @@ def _build_lux_choice_item(state_obj: State) -> dict[str, Any]:
 
 
 def area_illuminance_sensor_choices(
-    hass: HomeAssistant, area_id: str | None
+    hass: HomeAssistant,
+    area_id: str | None,
+    *,
+    latter_dev_ids: set[str] | frozenset[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Return illuminance (`lx`) sensor choices assigned to `area_id`."""
     if not area_id:
         return []
     idx = get_area_state_index(hass)
     ent_reg = er.async_get(hass)
-    latter_dev_ids = latter_bound_esphome_device_ids(hass)
+    resolved_latter_ids = (
+        latter_dev_ids
+        if latter_dev_ids is not None
+        else latter_bound_esphome_device_ids(hass)
+    )
     choices: list[dict[str, Any]] = []
     seen_eids: set[str] = set()
     for state_obj in sorted(
@@ -304,7 +324,7 @@ def area_illuminance_sensor_choices(
             or entry.disabled_by
             or entry.hidden_by
             or entry.entity_category is not None
-            or (entry.device_id and entry.device_id in latter_dev_ids)
+            or (entry.device_id and entry.device_id in resolved_latter_ids)
         ):
             continue
         attrs = state_obj.attributes
@@ -327,7 +347,11 @@ def area_illuminance_sensor_choices(
 
 
 def resolve_area_ambient_light(
-    hass: HomeAssistant, area_id: str | None
+    hass: HomeAssistant,
+    area_id: str | None,
+    *,
+    latter_dev_ids: set[str] | frozenset[str] | None = None,
+    lux_choices: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Resolve active Area illuminance reading and calibrated Protocol v3 `area_ambient_light` payload."""
     cfg = area_illuminance_settings(hass, area_id)
@@ -361,7 +385,13 @@ def resolve_area_ambient_light(
             if _parse_illuminance_state(st) is not None:
                 chosen_state = st
     else:
-        choices = area_illuminance_sensor_choices(hass, area_id)
+        choices = (
+            lux_choices
+            if lux_choices is not None
+            else area_illuminance_sensor_choices(
+                hass, area_id, latter_dev_ids=latter_dev_ids
+            )
+        )
         for item in choices:
             if item["available"]:
                 chosen_eid = str(item["entity_id"])

@@ -50,11 +50,44 @@ interface PinnedGridDragSession {
   targetRowSpan: number;
   valid: boolean;
   active: boolean;
+  dragEl: HTMLElement | null;
+  rafId: number | null;
+  pendingDx: number;
+  pendingDy: number;
 }
 
 const DRAG_THRESHOLD_PX = 6;
 const activeDragSessions = new WeakMap<StudioStore, PinnedGridDragSession>();
 const suppressClickUntil = new WeakMap<StudioStore, number>();
+
+export function shouldRequestGridDragUpdate(
+  prev: { targetCol: number; targetRow: number; valid: boolean },
+  next: { targetCol: number; targetRow: number; valid: boolean },
+  justActivated: boolean,
+): boolean {
+  return (
+    justActivated ||
+    next.targetCol !== prev.targetCol ||
+    next.targetRow !== prev.targetRow ||
+    next.valid !== prev.valid
+  );
+}
+
+function clearDragSession(store: StudioStore): PinnedGridDragSession | null {
+  const session = activeDragSessions.get(store) ?? null;
+  if (!session) return null;
+  activeDragSessions.delete(store);
+  if (session.rafId !== null && typeof cancelAnimationFrame === "function") {
+    cancelAnimationFrame(session.rafId);
+  }
+  session.rafId = null;
+  if (session.dragEl?.style) {
+    session.dragEl.style.setProperty("--drag-x", "0px");
+    session.dragEl.style.setProperty("--drag-y", "0px");
+  }
+  session.dragEl = null;
+  return session;
+}
 
 function clampInt(val: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, val));
@@ -189,7 +222,7 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
     dragSession && dragSession.active && dragSession.page === activePage ? dragSession : null;
 
   const selectPage = (nextPage: number, focusTabEl?: HTMLElement | null): void => {
-    activeDragSessions.delete(store);
+    clearDragSession(store);
     store.pinnedActivePage = clampInt(nextPage, 0, totalPages - 1);
     store.host.requestUpdate();
     if (focusTabEl) {
@@ -201,7 +234,7 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
 
   const addPage = (): void => {
     if (totalPages >= MAX_PINNED_GRID_PAGES) return;
-    activeDragSessions.delete(store);
+    clearDragSession(store);
     store.pinnedExtraPages = Math.max(0, store.pinnedExtraPages) + 1;
     store.pinnedActivePage = totalPages;
     store.host.requestUpdate();
@@ -245,7 +278,7 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
   };
 
   const removeTile = (tileIdx: number, title: string): void => {
-    activeDragSessions.delete(store);
+    clearDragSession(store);
     const packed = packLayoutToGrid(pinnedItems, cols, rows);
     const next = packed.filter((_, i) => i !== tileIdx);
     store.entity.savePinnedGridState(next);
@@ -290,6 +323,7 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
       // Headless environments may omit pointer capture.
     }
 
+    clearDragSession(store);
     activeDragSessions.set(store, {
       mode: "move",
       pointerId: ev.pointerId,
@@ -309,6 +343,10 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
       targetRowSpan: tile.rowSpan,
       valid: true,
       active: false,
+      dragEl: tileEl,
+      rafId: null,
+      pendingDx: 0,
+      pendingDy: 0,
     });
   };
 
@@ -319,16 +357,39 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
     const canvasEl = tileEl.closest(".pinned-grid-canvas") as HTMLElement | null;
     if (!canvasEl) return;
 
+    let justActivated = false;
     if (!session.active) {
       if (Math.hypot(ev.clientX - session.startX, ev.clientY - session.startY) < DRAG_THRESHOLD_PX) {
         return;
       }
       session.active = true;
+      justActivated = true;
+    }
+
+    session.dragEl = tileEl;
+    session.pendingDx = ev.clientX - session.startX;
+    session.pendingDy = ev.clientY - session.startY;
+    if (session.rafId === null) {
+      const applyDragOffset = (): void => {
+        session.rafId = null;
+        if (!session.active || !session.dragEl?.style) return;
+        session.dragEl.style.setProperty("--drag-x", `${session.pendingDx}px`);
+        session.dragEl.style.setProperty("--drag-y", `${session.pendingDy}px`);
+      };
+      if (typeof requestAnimationFrame === "function") {
+        session.rafId = requestAnimationFrame(applyDragOffset);
+      } else {
+        applyDragOffset();
+      }
     }
 
     const pCell = pointerCellFromEvent(ev, canvasEl, cols, rows);
     const nextCol = clampInt(pCell.col - session.grabOffsetCols, 0, cols - session.colSpan);
     const nextRow = clampInt(pCell.row - session.grabOffsetRows, 0, rows - session.rowSpan);
+    if (!justActivated && nextCol === session.targetCol && nextRow === session.targetRow) {
+      return;
+    }
+
     const sameSpot = nextCol === session.originCol && nextRow === session.originRow;
     const nextValid =
       sameSpot ||
@@ -344,10 +405,11 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
       ) !== null;
 
     if (
-      nextCol !== session.targetCol ||
-      nextRow !== session.targetRow ||
-      nextValid !== session.valid ||
-      session.active
+      shouldRequestGridDragUpdate(
+        session,
+        { targetCol: nextCol, targetRow: nextRow, valid: nextValid },
+        justActivated,
+      )
     ) {
       session.targetCol = nextCol;
       session.targetRow = nextRow;
@@ -361,9 +423,10 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
     cancelled: boolean,
     displayTitle: string,
   ): void => {
-    const session = activeDragSessions.get(store);
-    if (!session || session.mode !== "move" || session.pointerId !== ev.pointerId) return;
-    activeDragSessions.delete(store);
+    const existing = activeDragSessions.get(store);
+    if (!existing || existing.mode !== "move" || existing.pointerId !== ev.pointerId) return;
+    const session = clearDragSession(store);
+    if (!session) return;
     const tileEl = ev.currentTarget as HTMLElement;
     try {
       if (
@@ -417,6 +480,7 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
     } catch {
       // Headless environments may omit pointer capture.
     }
+    clearDragSession(store);
     activeDragSessions.set(store, {
       mode: "resize",
       pointerId: ev.pointerId,
@@ -436,6 +500,10 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
       targetRowSpan: tile.rowSpan,
       valid: true,
       active: true,
+      dragEl: null,
+      rafId: null,
+      pendingDx: 0,
+      pendingDy: 0,
     });
     store.host.requestUpdate();
   };
@@ -450,6 +518,10 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
     const pCell = pointerCellFromEvent(ev, canvasEl, cols, rows);
     const nextCs = clampInt(pCell.col - session.originCol + 1, 1, cols - session.originCol);
     const nextRs = clampInt(pCell.row - session.originRow + 1, 1, rows - session.originRow);
+    if (nextCs === session.targetColSpan && nextRs === session.targetRowSpan) {
+      return;
+    }
+
     const unchanged = nextCs === session.colSpan && nextRs === session.rowSpan;
     const nextValid =
       unchanged ||
@@ -482,9 +554,10 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
     cancelled: boolean,
     displayTitle: string,
   ): void => {
-    const session = activeDragSessions.get(store);
-    if (!session || session.mode !== "resize" || session.pointerId !== ev.pointerId) return;
-    activeDragSessions.delete(store);
+    const existing = activeDragSessions.get(store);
+    if (!existing || existing.mode !== "resize" || existing.pointerId !== ev.pointerId) return;
+    const session = clearDragSession(store);
+    if (!session) return;
     const handleEl = ev.currentTarget as HTMLElement;
     try {
       if (

@@ -199,6 +199,25 @@ class TestCalendarAgendaRecords(unittest.TestCase):
         self.assertIn("Area \\p 2\\s B\\\\1", packed.split("\x1f")[3])
         self.assertNotIn("Area \\\\p", packed.split("\x1f")[3])
 
+    def test_sanitize_v3_subfield_ascii_fast_path_parity(self) -> None:
+        """ASCII fast path must strip every ASCII control char (0x00-0x1F, 0x7F) identically to Unicode path."""
+        all_ctrl = "".join(chr(c) for c in range(0x20)) + "\x7f"
+        ascii_in = f"Hello{all_ctrl}World|a;b\\c"
+        self.assertEqual(
+            self.p.sanitize_v3_subfield(ascii_in),
+            "Hello World\\pa\\sb\\\\c",
+        )
+        # Verify mixed Unicode separators (\u2028, \u2029, \u00a0) + non-ASCII stay intact on slow path
+        unicode_in = "Café\u2028Line\u2029Two\u00a0|ok;yes\\no\x07end"
+        self.assertEqual(
+            self.p.sanitize_v3_subfield(unicode_in),
+            "Café Line Two \\pok\\syes\\\\no end",
+        )
+        self.assertEqual(
+            self.p.unescape_v3_subfield(self.p.sanitize_v3_subfield(unicode_in)),
+            "Café Line Two |ok;yes\\no end",
+        )
+
     def test_caps(self) -> None:
         events = [
             self.ev(2026, 11, 8, 8 + i, 0, summary="T" * 200, location="L" * 200) for i in range(9)

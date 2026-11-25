@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Iterable
 import logging
 import secrets
@@ -62,6 +63,7 @@ from .hub_registry import (
     get_system_config_lock,
     iter_coordinators,
     peek_domain_data,
+    prune_own_area_writes,
     register_hub_hooks,
 )
 from .hub_sync import attach_hub_sync_methods
@@ -127,24 +129,30 @@ async def async_ping_bound_devices(
     call_service: Callable[[str], Awaitable[None]],
     on_error: Callable[[str, Exception], None] | None = None,
 ) -> list[str]:
-    """Call `latter_ping` on every bound Device whose ESPHome action is registered."""
-    pinged: list[str] = []
+    """Call `latter_ping` concurrently on every bound Device whose ESPHome action is registered."""
+    services: list[str] = []
     seen: set[str] = set()
     for dev_id in esphome_device_ids:
         if not dev_id or dev_id in seen:
             continue
         seen.add(dev_id)
         service = resolve_service(dev_id, PING_ACTION)
-        if not service:
-            continue
+        if service:
+            services.append(service)
+    if not services:
+        return []
+
+    async def _ping_one(service: str) -> str | None:
         try:
             await call_service(service)
         except Exception as err:  # noqa: BLE001
             if on_error is not None:
                 on_error(service, err)
-            continue
-        pinged.append(service)
-    return pinged
+            return None
+        return service
+
+    results = await asyncio.gather(*(_ping_one(svc) for svc in services))
+    return [svc for svc in results if svc is not None]
 
 
 async def _async_ensure_global_store(hass: HomeAssistant) -> dict[str, Any]:
@@ -289,6 +297,7 @@ def _register_domain_bus_listeners(
         got_dev = dr.async_get(hass).async_get(dev_id)
         dev = got_dev if isinstance(got_dev, dr.DeviceEntry) else None
         own_writes = domain_data.own_area_writes
+        prune_own_area_writes(own_writes)
         if dev_id in own_writes:
             expected_area, write_ts = own_writes[dev_id]
             cur_area = str(dev.area_id or "").strip() if dev is not None else ""
@@ -469,6 +478,7 @@ async def _async_init_entry_coordinators(
 async def async_setup_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> bool:
     """Set up the Latter System hub entry and all configured Device subentries."""
     domain_data = get_domain_data(hass)
+    domain_data.bound_esphome_ids_cache = None
     await hass.async_add_executor_job(
         warm_timezone_cache,
         [str(getattr(getattr(hass, "config", None), "time_zone", "") or "")],
@@ -578,6 +588,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
         domain_data = peek_domain_data(hass)
         if domain_data is not None:
             _cancel_delayed_discovery_scan(domain_data)
+            domain_data.bound_esphome_ids_cache = None
         runtime = getattr(entry, "runtime_data", None)
         sys_obj = runtime if isinstance(runtime, LatterSystemHub) else get_latter_system(hass)
         if sys_obj is not None:
@@ -594,7 +605,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: LatterConfigEntry) -> b
             for other in hass.config_entries.async_entries(DOMAIN)
         )
         if not other_loaded:
+            if domain_data is not None:
+                domain_data.system_hub = None
+                domain_data.own_area_writes.clear()
             await async_unload_services(hass)
+        elif domain_data is not None and domain_data.system_hub is sys_obj:
+            domain_data.system_hub = None
     return bool(unload_ok)
 
 

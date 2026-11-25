@@ -61,6 +61,11 @@ export function resolveDescriptionId(opts: {
 }
 
 class AutoDescribeDirective extends Directive {
+  private wiredContainer: Element | null = null;
+  private wiredTarget: Element | null = null;
+  private wiredDescId = "";
+  private microtaskPending = false;
+
   constructor(partInfo: PartInfo) {
     super(partInfo);
     if (partInfo.type !== PartType.ELEMENT) {
@@ -73,18 +78,60 @@ class AutoDescribeDirective extends Directive {
   }
 
   override update(part: ElementPart, [descId]: [string]): typeof noChange {
-    if (descId && part.element) {
-      const container = part.element;
-      const apply = (): void => {
-        const target = container.querySelector(
-          "input:not([type='hidden']), select, textarea, [role='combobox']",
-        );
-        if (target && !target.hasAttribute("aria-describedby")) {
-          target.setAttribute("aria-describedby", descId);
+    const container = part.element;
+    if (!descId || !container) {
+      this.wiredContainer = null;
+      this.wiredTarget = null;
+      this.wiredDescId = "";
+      return noChange;
+    }
+
+    // Fast path: once wired on a connected container/control with unchanged ID, skip DOM query & microtask.
+    if (
+      this.wiredContainer === container &&
+      this.wiredDescId === descId &&
+      this.wiredTarget &&
+      this.wiredTarget.isConnected &&
+      container.contains(this.wiredTarget) &&
+      this.wiredTarget.hasAttribute("aria-describedby")
+    ) {
+      return noChange;
+    }
+
+    const apply = (): boolean => {
+      const target = container.querySelector(
+        "input:not([type='hidden']), select, textarea, [role='combobox']",
+      );
+      if (!target) return false;
+      const existingAttr = target.getAttribute("aria-describedby");
+      if (!existingAttr) {
+        target.setAttribute("aria-describedby", descId);
+      } else if (
+        this.wiredTarget === target &&
+        this.wiredDescId &&
+        existingAttr === this.wiredDescId &&
+        this.wiredDescId !== descId
+      ) {
+        target.setAttribute("aria-describedby", descId);
+      }
+      this.wiredContainer = container;
+      this.wiredTarget = target;
+      this.wiredDescId = descId;
+      return true;
+    };
+
+    if (apply()) {
+      return noChange;
+    }
+
+    if (!this.microtaskPending) {
+      this.microtaskPending = true;
+      queueMicrotask(() => {
+        this.microtaskPending = false;
+        if (container.isConnected) {
+          apply();
         }
-      };
-      apply();
-      queueMicrotask(apply);
+      });
     }
     return noChange;
   }

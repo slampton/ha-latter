@@ -856,27 +856,41 @@ async def test_ble_fabric_ibeacon_events_matcher_fallbacks_and_away_tick(
     fabric.rebind_fusion_sensor_listener()
     fabric._async_check_away_timeouts(datetime.now(tz=UTC))
 
-    # BluetoothCallbackMatcher TypeError fallback tiers (connectable -> empty -> manufacturer_id)
+    # Targeted Apple iBeacon BluetoothCallbackMatcher TypeError fallback tiers
+    # (manufacturer_id + manufacturer_data_start + connectable -> drop connectable -> manufacturer_id only)
     orig_matcher = bluetooth.BluetoothCallbackMatcher
+    seen_matcher_kwargs: list[dict[str, Any]] = []
 
     def _no_connectable(*args: Any, **kwargs: Any) -> Any:
+        seen_matcher_kwargs.append(dict(kwargs))
         if "connectable" in kwargs:
             raise TypeError("no connectable")
         return orig_matcher(*args, **kwargs)
 
     def _mfg_only(*args: Any, **kwargs: Any) -> Any:
-        if "connectable" in kwargs or not kwargs:
+        seen_matcher_kwargs.append(dict(kwargs))
+        if "connectable" in kwargs or "manufacturer_data_start" in kwargs:
             raise TypeError("mfg only")
         return orig_matcher(*args, **kwargs)
 
     with patch.object(bluetooth, "BluetoothCallbackMatcher", side_effect=_no_connectable):
         fabric._async_start_fabric()
         assert fabric._unsub_ble is not None
+        assert any(
+            kw.get("manufacturer_id") == APPLE_COMPANY_ID
+            and kw.get("manufacturer_data_start") == [0x02, 0x15]
+            for kw in seen_matcher_kwargs
+        )
         fabric._async_stop_fabric()
 
+    seen_matcher_kwargs.clear()
     with patch.object(bluetooth, "BluetoothCallbackMatcher", side_effect=_mfg_only):
         fabric._async_start_fabric()
         assert fabric._unsub_ble is not None
+        assert any(
+            kw == {"manufacturer_id": APPLE_COMPANY_ID}
+            for kw in seen_matcher_kwargs
+        )
         orphan_sensor_unsub = MagicMock()
         fabric._unsub_sensor_events = orphan_sensor_unsub
         fabric._async_stop_fabric()
@@ -1446,8 +1460,8 @@ async def test_ble_tracker_scoring_calibration_and_commit_edge_cases(
         hass, slug="score_unit", mac="aa:bb:cc:dd:ee:41", area_id="kitchen"
     )
     fabric = get_ble_fabric(hass)
-    survey_events: list[dict[str, Any]] = []
-    unsub_survey = fabric.register_survey_listener(lambda d: survey_events.append(d))
+    survey_events: list[Any] = []
+    unsub_survey = fabric.register_survey_listener(lambda t: survey_events.append(t))
 
     detected: list[tuple[str, str]] = []
     tracker = LatterNativeBleTracker(
@@ -1548,6 +1562,111 @@ async def test_ble_tracker_scoring_calibration_and_commit_edge_cases(
         tracker._evaluate_best_area(t_weak)
         assert tracker.current_area_id is None
         assert len(survey_events) >= 1
+        assert survey_events[-1] is tracker
     finally:
         tracker.async_stop()
         unsub_survey()
+
+
+async def test_ble_fabric_targeted_matchers_conditional_eddystone_and_rpa_pruning(
+    hass: Any, make_esphome_device: Any
+) -> None:
+    """Verify O(1) targeted Apple iBeacon + conditional Eddystone matchers and ESPHome RPA TTL pruning."""
+    await prepare_latter_dependencies(hass)
+    await ensure_bluetooth_manager(hass)
+    ensure_area(hass, "Kitchen", area_id="kitchen")
+    await seed_ble_proxies(
+        hass,
+        [("kit_proxy", "aa:bb:cc:00:00:22", "Kitchen Proxy", "kitchen")],
+    )
+
+    esp_dev, esp_mac = make_esphome_device(
+        hass, slug="rpa_unit", mac="aa:bb:cc:dd:ee:77", area_id="kitchen"
+    )
+    fabric = get_ble_fabric(hass)
+
+    ibeacon_tracker = LatterNativeBleTracker(
+        hass,
+        beacon_uuid=DEFAULT_BLE_BEACON_UUID,
+        device_slug="rpa_unit",
+        on_area_detected=lambda _a, _s: None,
+        esphome_device_id=esp_dev.id,
+        manifest_beacon={"uuid": DEFAULT_BLE_BEACON_UUID, "major": 1, "minor": 1},
+        subentry_id="sub_rpa_unit",
+    )
+    eddy_uid = "00112233445566778899aabbccddeeff"
+    eddy_tracker = LatterNativeBleTracker(
+        hass,
+        beacon_uuid="",
+        device_slug="eddy_tag",
+        on_area_detected=lambda _a, _s: None,
+        target_address=f"eddystone:{eddy_uid}",
+        subentry_id="sub_eddy_only",
+    )
+
+    ibeacon_tracker.async_start()
+    try:
+        # 1) Conditional Eddystone matcher stays unregistered while only iBeacon trackers run
+        assert fabric._unsub_ble is not None
+        assert fabric._unsub_eddystone is None
+        assert ibeacon_tracker.wants_eddystone_matcher is False
+
+        # Non-iBeacon Apple Continuity packet (prefix 0x10 0x05) is filtered out before fabric callback
+        from custom_components.latter.presence import ble_fabric as ble_fabric_mod
+
+        t0 = time.monotonic()
+        with patch.object(
+            ble_fabric_mod,
+            "_extract_adv_keys",
+            wraps=ble_fabric_mod._extract_adv_keys,
+        ) as parse_spy:
+            continuity_adv = make_ibeacon_service_info(
+                "",
+                rssi=-55,
+                source="AA:BB:CC:00:00:22",
+                obs_time=t0,
+                address="66:77:88:99:AA:BB",
+                connectable=False,
+                extra_mfg={APPLE_COMPANY_ID: b"\x10\x05\x01\x02\x03\x04"},
+            )
+            inject_ble_adv(hass, continuity_adv)
+            assert parse_spy.call_count == 0
+
+            # Real Apple iBeacon frame matches targeted matcher & dispatches in O(1)
+            inject_ble_adv(
+                hass,
+                make_ibeacon_service_info(
+                    DEFAULT_BLE_BEACON_UUID,
+                    rssi=-55,
+                    source="AA:BB:CC:00:00:22",
+                    obs_time=t0 + 0.1,
+                    address=esp_mac.upper(),
+                    major=1,
+                    minor=1,
+                ),
+            )
+            assert parse_spy.call_count >= 1
+            assert ibeacon_tracker.packets_seen >= 1
+            assert ibeacon_tracker.packets_seen == 1
+
+        # 2) Starting an Eddystone tracker registers the conditional Eddystone matcher; stopping removes it
+        assert eddy_tracker.wants_eddystone_matcher is True
+        eddy_tracker.async_start()
+        try:
+            assert fabric._unsub_eddystone is not None
+        finally:
+            eddy_tracker.async_stop()
+        assert fabric._unsub_eddystone is None
+
+        # 3) `_prune_expired_matched_ble_addresses` prunes stale RPAs on ESPHome devices while keeping bound MACs
+        bound_mac = esp_mac.upper()
+        stale_rpa = "55:44:33:22:11:00"
+        ibeacon_tracker._matched_ble_addresses = {
+            bound_mac: t0 - MATCHED_BLE_ADDRESS_TTL_SECONDS - 60.0,
+            stale_rpa: t0 - MATCHED_BLE_ADDRESS_TTL_SECONDS - 120.0,
+        }
+        ibeacon_tracker._prune_expired_matched_ble_addresses(t0)
+        assert bound_mac in ibeacon_tracker._matched_ble_addresses
+        assert stale_rpa not in ibeacon_tracker._matched_ble_addresses
+    finally:
+        ibeacon_tracker.async_stop()

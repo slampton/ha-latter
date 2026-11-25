@@ -39,7 +39,11 @@ from custom_components.latter.http.wallpaper_views import (
     LatterWallpaperProxyView,
     LatterWallpaperUploadView,
 )
-from custom_components.latter.hub_registry import get_global_config, peek_domain_data
+from custom_components.latter.hub_registry import (
+    get_global_config,
+    peek_domain_data,
+    register_studio_subscriber,
+)
 from custom_components.latter.media_cache import MAX_UPSTREAM_IMAGE_BYTES
 from custom_components.latter.wallpapers.models import MAX_WALLPAPER_UPLOAD_BYTES
 from custom_components.latter.wallpapers.store import (
@@ -412,15 +416,37 @@ async def test_wallpaper_upload_rbac_limits_and_proxy_views(
     )
     assert r_orig.status == 200
 
-    # Signed `/media` preview thumbnail security check
+    # Signed `/media` preview thumbnail security check (including large JPEG DCT draft downscale)
     media_dir = Path(hass.config.config_dir) / "media_test"
     media_dir.mkdir(parents=True, exist_ok=True)
-    (media_dir / "sample.jpg").write_bytes(jpeg_raw)
+    (media_dir / "sample.jpg").write_bytes(_make_jpeg_bytes(1280, 960))
     hass.config.media_dirs = {"local": str(media_dir)}
     m_url = sys_obj.url_signer.build_media_preview_url("local", "sample.jpg", 160, 160)
     r_media_ok = await wp_view.get(_make_get_request(m_url), "system")
     assert r_media_ok.status == 200
     assert r_media_ok.content_type == "image/jpeg"
+    with Image.open(io.BytesIO(r_media_ok.body)) as im_thumb:
+        assert im_thumb.size == (160, 160)
+
+    # System-scoped upload notifies Studio subscribers cleanly
+    studio_pushes: list[int] = []
+    unsub_studio = register_studio_subscriber(hass, lambda: studio_pushes.append(1))
+    try:
+        r_sys_up = await upload_view.post(
+            _MultipartRequest(
+                is_admin=True,
+                parts=[
+                    _MultipartPart("scope", text_val="system"),
+                    _MultipartPart("file", file_bytes=jpeg_raw, filename="sys_notify.jpg"),
+                ],
+            )
+        )
+    finally:
+        unsub_studio()
+    assert r_sys_up.status == 200
+    assert len(studio_pushes) == 1
+    sys_up_id = json.loads(r_sys_up.body.decode("utf-8"))["source_id"]
+    assert delete_photo(hass, sys_up_id) is True
 
     # Traversal attempt rejected (404)
     bad_m_sig = sys_obj.url_signer.sign_on_demand_resource(

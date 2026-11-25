@@ -58,7 +58,6 @@ from .ble_registry import (
     MATCHED_BLE_ADDRESS_TTL_SECONDS,
     SURVEY_RETENTION_SECONDS,
     WAKE_GAP_SECONDS,
-    clear_scanner_area_cache,
     coerce_uint16,
     current_ble_scanners,
     extract_adv_ref_power_dbm,
@@ -477,9 +476,11 @@ class LatterNativeBleTracker:
         should_hold_during_ble_sleep: Callable[[], bool] | None = None,
         initial_matched_addresses: Iterable[str] | None = None,
         on_address_matched: Callable[[str], None] | None = None,
+        subentry_id: str = "",
     ) -> None:
         """Initialize the native BLE spatial positioning tracker."""
         self.hass = hass
+        self.subentry_id = str(subentry_id or "").strip()
         self.beacon_uuid = str(beacon_uuid or "").strip()
         self._target_uuid_hex = normalize_uuid_hex(beacon_uuid)
         self._explicit_major: int | None = None
@@ -556,6 +557,24 @@ class LatterNativeBleTracker:
         return self._raw_slug
 
     @property
+    def wants_eddystone_matcher(self) -> bool:
+        """Return True when this tracker needs the Eddystone-UID service-data matcher."""
+        if self._target_eddystone_namespace_hex:
+            return True
+        t_low = self._target_address.lower()
+        if t_low.startswith("eddystone:"):
+            return True
+        return bool(
+            not self._esphome_device_id
+            and self._target_uuid_hex
+            and "." not in t_low
+            and "-" not in t_low
+            and not t_low.startswith(("ibeacon:", "bthome:"))
+            and self._explicit_major is None
+            and self._explicit_minor is None
+        )
+
+    @property
     def effective_ref_power_dbm(self) -> float:
         """Return configured 1 m reference power, entity TX power, advertisement power, or `-59.0` dBm."""
         for candidate in (self._configured_ref_power_dbm, self._entity_ref_power_dbm, self.detected_ref_power_dbm):
@@ -629,14 +648,21 @@ class LatterNativeBleTracker:
 
     @callback
     def _prune_expired_matched_ble_addresses(self, now_mono: float) -> bool:
-        """Evict expired rotating BLE addresses (RPAs) after TTL while keeping static MACs."""
-        if self._esphome_device_id or not self._matched_ble_addresses:
+        """Evict expired rotating BLE addresses (RPAs) after TTL while keeping static/bound/coprocessor MACs."""
+        if not self._matched_ble_addresses:
             return False
+        newest_addr = (
+            max(self._matched_ble_addresses, key=lambda k: self._matched_ble_addresses[k])
+            if self._esphome_device_id
+            else ""
+        )
         evicted = False
         for addr, ts in list(self._matched_ble_addresses.items()):
             if (now_mono - ts) <= MATCHED_BLE_ADDRESS_TTL_SECONDS:
                 continue
             if self._dynamic_target_mac_str and addr == self._dynamic_target_mac_str:
+                continue
+            if newest_addr and addr == newest_addr:
                 continue
             addr_int = mac_to_int(addr)
             if addr_int is not None and addr_int in self._target_mac_ints:
@@ -852,6 +878,8 @@ class LatterNativeBleTracker:
         ):
             fabric = get_active_ble_fabric(self.hass)
             if fabric is not None and fabric.has_tracker(self):
+                if self._target_uuid_hex != prev_uuid:
+                    fabric.sync_tracker_addresses()
                 fabric.seed_tracker_from_scanners_once(self)
 
     def _resolve_beacon_major_minor(self) -> tuple[int | None, int | None]:
@@ -1102,7 +1130,6 @@ class LatterNativeBleTracker:
     @callback
     def check_away_timeout(self, now_mono: float) -> None:
         """Transition tracker to Away if no BLE packet arrived within `_away_timeout_s`."""
-        self._seed_explicit_target_address()
         fabric = get_active_ble_fabric(self.hass)
         if self._prune_expired_matched_ble_addresses(now_mono) and fabric is not None:
             fabric.sync_tracker_addresses()
@@ -1155,7 +1182,6 @@ class LatterNativeBleTracker:
         self._scanner_states.clear()
         self._unmapped_rssi.clear()
         self._scanner_area_cache.clear()
-        clear_scanner_area_cache(self.hass)
         self._last_adv_ts_by_scanner.clear()
         self._awaiting_fresh_wake_lock = True
         self._wake_coalesce_until = now + WAKE_COALESCE_SECONDS if self.current_area_id else 0.0

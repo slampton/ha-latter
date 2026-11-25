@@ -60,7 +60,7 @@ async def test_studio_logs_gating_and_ble_survey_delta_stream(
     res_with_logs = conn.results[-1][1]
     assert len(res_with_logs.get("internal_logs", [])) >= 1
 
-    # Subscribe with survey_subentry_id -> emit_survey_delta pushes ble_survey_delta event!
+    # Subscribe with survey_subentry_id -> emit_survey_delta coalesces and pushes compact ble_survey_delta!
     await call_ws(
         hass,
         conn,
@@ -76,19 +76,29 @@ async def test_studio_logs_gating_and_ble_survey_delta_stream(
     assert coord._ble_tracker is not None
     conn.messages.clear()
     fabric.emit_survey_delta(coord._ble_tracker)
+    assert conn.messages == []
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=0.5))
+    await hass.async_block_till_done()
     delta_events = [
         m["event"]
         for m in conn.messages
         if m["event"].get("type") == "ble_survey_delta"
     ]
-    assert len(delta_events) >= 1
+    assert len(delta_events) == 1
+    assert delta_events[-1]["subentry_id"] == coord.subentry_id
+    assert delta_events[-1]["device_slug"] == coord.device_slug
     assert "ble_survey_rows" in delta_events[-1]
-    assert "ble_area_signatures" in delta_events[-1]
+    assert "ble_packets_seen" in delta_events[-1]
+    assert "ble_closest_proxy" in delta_events[-1]
+    assert "ble_area_signatures" not in delta_events[-1]
+    assert "area_presence_grid" not in delta_events[-1]
 
     # Unsubscribe cleans up listeners
     conn.subscriptions.pop(12)()
     conn.messages.clear()
     fabric.emit_survey_delta(coord._ble_tracker)
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
     assert conn.messages == []
 
     assert await hass.config_entries.async_unload(entry.entry_id) is True
@@ -569,10 +579,28 @@ async def test_v3_subscribe_diet_and_optimistic_concurrency(
         "system_wallpapers",
         "photo_collections",
         "ble_area_signatures",
+        "wallpapers",
+        "system_controls",
+        "discovered_latter_devices",
+        "ignored_latter_devices",
+        "locale_strings",
     ):
         assert omitted_key not in push_evt
 
-    # Isolated 1 Hz `LatterTimerRemainingSensor` tick does NOT emit a Studio `type: "state"` push!
+    # Irrelevant entity registry updates (e.g., icon-only change) are ignored and do NOT trigger push/catalog rebuild
+    from homeassistant.helpers import entity_registry as er
+
+    conn.messages.clear()
+    hass.bus.async_fire(
+        er.EVENT_ENTITY_REGISTRY_UPDATED,
+        {"action": "update", "entity_id": "sensor.unrelated", "changes": {"icon": "mdi:old"}},
+    )
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
+    assert conn.messages == []
+
+    # Timestamp-based `LatterTimerEndsSensor` updates timer state cleanly with NO 1 Hz `_unsub_timer_tick` loop!
     coord.handle_timer_alarm_state(
         timer_running=True,
         timer_paused=False,
@@ -580,9 +608,15 @@ async def test_v3_subscribe_diet_and_optimistic_concurrency(
         ringing=False,
     )
     await hass.async_block_till_done()
-    assert coord._unsub_timer_tick is not None
+    assert coord.timer_running is True
+    assert bool(coord.timer_ends_at_utc)
+    assert getattr(coord, "_unsub_timer_tick", None) is None
     conn.messages.clear()
-    coord._notify_timer_tick_listeners()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=2))
+    await hass.async_block_till_done()
+    # One debounced push from the initial timer start is allowed; verify steady-state produces zero 1 Hz ticks
+    conn.messages.clear()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=5))
     await hass.async_block_till_done()
     assert conn.messages == []
     coord.handle_timer_alarm_state(
@@ -592,6 +626,8 @@ async def test_v3_subscribe_diet_and_optimistic_concurrency(
         ringing=False,
     )
     conn.subscriptions.pop(10)()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
 
     # Scoped `survey_subentry_id` filters out other trackers and coalesces bursty deltas at 250 ms
     conn_survey = make_ws_connection(hass)
@@ -605,20 +641,31 @@ async def test_v3_subscribe_diet_and_optimistic_concurrency(
         studio_rev=STUDIO_REV,
     )
     conn_survey.messages.clear()
-    # Foreign tracker delta is ignored
+    # Foreign tracker delta is ignored (even after timer window)
     assert tag_coord._ble_tracker is not None
     fabric.emit_survey_delta(tag_coord._ble_tracker)
-    assert conn_survey.messages == []
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=0.5))
+    await hass.async_block_till_done()
+    assert [
+        m for m in conn_survey.messages if m["event"].get("type") == "ble_survey_delta"
+    ] == []
 
-    # Leading edge emits immediately; rapid follow-up within 250 ms coalesces without flooding
+    # Rapid burst does zero pre-coalesce work and emits a single compact `ble_survey_delta` after 250 ms
+    conn_survey.messages.clear()
     fabric.emit_survey_delta(coord._ble_tracker)
     fabric.emit_survey_delta(coord._ble_tracker)
+    assert conn_survey.messages == []
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=0.5))
+    await hass.async_block_till_done()
     deltas_now = [
         m["event"]
         for m in conn_survey.messages
         if m["event"].get("type") == "ble_survey_delta"
     ]
     assert len(deltas_now) == 1
+    assert "ble_survey_rows" in deltas_now[0]
+    assert "ble_area_signatures" not in deltas_now[0]
+    assert "area_presence_grid" not in deltas_now[0]
     conn_survey.subscriptions.pop(20)()
 
     # Optimistic concurrency (`expected_config_rev`) on System and Device saves

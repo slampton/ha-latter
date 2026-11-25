@@ -25,7 +25,7 @@ async def test_studio_rev_mismatch_on_all_read_and_mutation_endpoints(
     hass: Any, setup_latter_hub: Any
 ) -> None:
     """Verify mandatory studio_rev schema validation, non-admin rejection, and studio_rev_mismatch on all 9 WS endpoints."""
-    assert STUDIO_REV == 51
+    assert STUDIO_REV == 52
     entry, _sys_obj, coord = await setup_latter_hub(hass)
     ensure_area(hass, "Living Room", area_id="living_room")
 
@@ -422,5 +422,81 @@ async def test_device_actions_telemetry_and_dnd_entities(
     coord.alarm_ringing = True
     await dismiss_btn.async_press()
     assert coord.alarm_ringing is False
+
+    assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_save_device_config_group_change_plus_explicit_writes_once(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify switching `device_group` + explicit settings merges into ONE config write & ONE apply pass, with a slim command response."""
+    from unittest.mock import patch
+
+    entry, _sys_obj, coord = await setup_latter_hub(hass)
+    assert coord is not None
+    conn = make_ws_connection(hass)
+    orig_rev = coord.device_config_rev
+
+    orig_update = coord.update_device_config
+    orig_apply = coord.async_apply_options
+    update_calls = 0
+    apply_calls = 0
+
+    def _spy_update(*args: Any, **kwargs: Any) -> None:
+        nonlocal update_calls
+        update_calls += 1
+        orig_update(*args, **kwargs)
+
+    async def _spy_apply(*args: Any, **kwargs: Any) -> None:
+        nonlocal apply_calls
+        apply_calls += 1
+        await orig_apply(*args, **kwargs)
+
+    with (
+        patch.object(coord, "update_device_config", side_effect=_spy_update),
+        patch.object(coord, "async_apply_options", side_effect=_spy_apply),
+    ):
+        res = await call_ws(
+            hass,
+            conn,
+            70,
+            "latter/device/command",
+            command="save_device_config",
+            subentry_id=coord.subentry_id,
+            payload={
+                "config": {
+                    "device_group": "wall_panels",
+                    "day_brightness": 72,
+                },
+                "expected_config_rev": orig_rev,
+            },
+            studio_rev=STUDIO_REV,
+        )
+
+    assert not conn.errors
+    assert res is not None and res["success"] is True
+    assert update_calls == 1
+    assert apply_calls == 1
+    assert coord.device_config_rev == orig_rev + 1
+    assert coord.device_data.get("day_brightness") == 72
+    # Wall & Desk Panels baseline merged alongside explicit override
+    assert coord.device_data.get("wake_word_mode") == "Always On"
+
+    # Slim response omits unmutated heavy sections while preserving D-064 revisions & mutated sections
+    payload = res["result"]
+    assert payload["device_config_rev"] == orig_rev + 1
+    assert "system_config_rev" in payload
+    assert "system_controls" in payload
+    assert "wallpapers" in payload
+    for omitted in (
+        "discovered_ble_devices",
+        "system_wallpapers",
+        "photo_collections",
+        "ble_area_signatures",
+        "discovered_latter_devices",
+        "ignored_latter_devices",
+        "locale_strings",
+    ):
+        assert omitted not in payload
 
     assert await hass.config_entries.async_unload(entry.entry_id) is True

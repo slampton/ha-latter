@@ -21,9 +21,14 @@ from homeassistant.helpers.event import (
 
 from ..areas.registry import (
     area_illuminance_sensor_choices,
+    latter_bound_esphome_device_ids,
     resolve_area_ambient_light,
 )
-from ..hub_registry import get_domain_data, iter_coordinators
+from ..hub_registry import (
+    _is_irrelevant_registry_update,
+    get_domain_data,
+    iter_coordinators,
+)
 from .area_fusion import (
     area_fusion_sensor_choices,
     area_fusion_settings,
@@ -31,16 +36,16 @@ from .area_fusion import (
     get_tracked_fusion_entity_ids,
     invalidate_area_fusion_index,
 )
-from .ble_math import STALE_PROXY_SECONDS, safe_rssi_int
+from .ble_math import EDDYSTONE_UUID_PREFIX, STALE_PROXY_SECONDS, safe_rssi_int
 from .ble_registry import (
     APPLE_COMPANY_ID,
     AWAY_CHECK_INTERVAL_SECONDS,
+    IBEACON_PREFIX,
     SURVEY_RETENTION_SECONDS,
     clear_scanner_area_cache,
     coerce_uint16,
     current_ble_scanners,
     extract_adv_ref_power_dbm,
-    get_area_signatures_summary,
     get_ble_proxy_area_ids,
     get_ble_signature_area_ids,
     mac_to_int,
@@ -50,12 +55,74 @@ from .ble_registry import (
 )
 from .ble_tracker import LatterNativeBleTracker, register_ble_fabric_getter
 
+__all__ = [
+    "EDDYSTONE_SERVICE_DATA_UUID",
+    "LatterBleFabric",
+    "build_survey_delta_payload",
+    "get_all_areas_presence_summary",
+    "get_ble_fabric",
+]
+
 _LOGGER = logging.getLogger(__name__)
 
+EDDYSTONE_SERVICE_DATA_UUID: Final = "0000feaa-0000-1000-8000-00805f9b34fb"
 _MIN_VALID_RSSI_DBM: Final = -100
 _MAC_DISCOVERY_RETRY_S: Final = 30.0
 _PAIR_TUPLE_LEN: Final = 2
 _DEFAULT_FUSION_THRESHOLD_PCT: Final = 50
+_IBEACON_MIN_BYTES: Final = 20
+_EDDYSTONE_UID_MIN_BYTES: Final = 18
+_EDDYSTONE_FRAME_MASK: Final = 0xF0
+
+
+def build_survey_delta_payload(
+    tracker: Any, *, subentry_id: str = ""
+) -> dict[str, Any]:
+    """Build an on-demand `ble_survey_delta` payload for a single BLE tracker."""
+    resolved_sub = str(
+        subentry_id or getattr(tracker, "subentry_id", "") or ""
+    ).strip()
+    return {
+        "type": "ble_survey_delta",
+        "subentry_id": resolved_sub,
+        "device_slug": str(getattr(tracker, "raw_slug", "") or ""),
+        "ble_survey_rows": tracker.get_scanner_calibration_telemetry(),
+        "ble_packets_seen": int(getattr(tracker, "packets_seen", 0) or 0),
+        "ble_closest_proxy": str(getattr(tracker, "closest_scanner", "") or ""),
+    }
+
+
+def _extract_adv_keys(
+    address: str,
+    mfg_data: Mapping[int, bytes],
+    service_data: Mapping[str, bytes],
+) -> tuple[int | None, str, str, str]:
+    """Parse `(mac_int, ibeacon_uuid_hex, eddystone_uid_hex, eddystone_ns_hex)` once."""
+    adv_int = mac_to_int(address) if address else None
+    ibeacon_uuid = ""
+    apple_bytes = mfg_data.get(APPLE_COMPANY_ID)
+    if (
+        apple_bytes
+        and len(apple_bytes) >= _IBEACON_MIN_BYTES
+        and apple_bytes[:2] == IBEACON_PREFIX
+    ):
+        ibeacon_uuid = apple_bytes[2:18].hex().lower()
+
+    eddystone_uid = ""
+    eddystone_ns = ""
+    for svc_uuid, svc_bytes in service_data.items():
+        u_low = str(svc_uuid).lower()
+        if (
+            (u_low.startswith(EDDYSTONE_UUID_PREFIX) or u_low == "feaa")
+            and isinstance(svc_bytes, (bytes, bytearray))
+            and len(svc_bytes) >= _EDDYSTONE_UID_MIN_BYTES
+            and (svc_bytes[0] & _EDDYSTONE_FRAME_MASK) == 0x00
+        ):
+            raw_b = bytes(svc_bytes)
+            eddystone_uid = raw_b[2:18].hex().lower()
+            eddystone_ns = raw_b[2:12].hex().lower()
+            break
+    return adv_int, ibeacon_uuid, eddystone_uid, eddystone_ns
 
 
 def _ibeacon_event_matches_tracker(
@@ -163,9 +230,14 @@ class LatterBleFabric:
         """Initialize the shared BLE scanner fabric."""
         self.hass = hass
         self._trackers: list[LatterNativeBleTracker] = []
+        self._trackers_by_mac: dict[int, list[LatterNativeBleTracker]] = {}
+        self._trackers_by_ibeacon_uuid: dict[str, list[LatterNativeBleTracker]] = {}
+        self._trackers_by_eddystone: dict[str, list[LatterNativeBleTracker]] = {}
+        self._fallback_trackers: list[LatterNativeBleTracker] = []
         self._occupancy_listeners: list[Callable[[], None]] = []
-        self._survey_listeners: list[Callable[[dict[str, Any]], None]] = []
+        self._survey_listeners: list[tuple[Callable[[Any], None], str | None]] = []
         self._unsub_ble: Callable[[], None] | None = None
+        self._unsub_eddystone: Callable[[], None] | None = None
         self._unsub_registry_events: Callable[[], None] | None = None
         self._adv_unsubs: dict[str, Callable[[], None]] = {}
         self._unsub_away_timer: Callable[[], None] | None = None
@@ -218,8 +290,13 @@ class LatterBleFabric:
             set_scanner_area_cache_active(self.hass, False)
 
     @callback
-    def _invalidate_caches(self, _event: Any = None) -> None:
+    def _invalidate_caches(self, event: Any = None) -> None:
         """Invalidate scanner-to-Area caches, fusion index, and targeted fusion listeners."""
+        if event is not None and _is_irrelevant_registry_update(
+            str(getattr(event, "event_type", "") or ""),
+            getattr(event, "data", None),
+        ):
+            return
         clear_scanner_area_cache(self.hass)
         for tracker in self._trackers:
             tracker.invalidate_scanner_cache()
@@ -271,37 +348,35 @@ class LatterBleFabric:
 
     @callback
     def register_survey_listener(
-        self, listener: Callable[[dict[str, Any]], None]
+        self,
+        cb: Callable[[Any], None],
+        *,
+        subentry_id: str | None = None,
     ) -> Callable[[], None]:
-        """Register a Studio WebSocket listener for live `ble_survey_delta` telemetry."""
-        if listener not in self._survey_listeners:
-            self._survey_listeners.append(listener)
+        """Register a Studio WebSocket listener for live survey tracker updates."""
+        norm_sub = str(subentry_id).strip() if subentry_id else None
+        entry = (cb, norm_sub)
+        if entry not in self._survey_listeners:
+            self._survey_listeners.append(entry)
 
         @callback
         def _unsub() -> None:
-            if listener in self._survey_listeners:
-                self._survey_listeners.remove(listener)
+            if entry in self._survey_listeners:
+                self._survey_listeners.remove(entry)
 
         unsub: Callable[[], None] = _unsub
         return unsub
 
     @callback
     def emit_survey_delta(self, tracker: Any) -> None:
-        """Push a compact `ble_survey_delta` payload to active Studio site survey subscribers."""
+        """Notify active Studio survey listeners matching `tracker` with zero heavy payload work."""
         if not self._survey_listeners:
             return
-        payload = {
-            "device_slug": tracker.raw_slug,
-            "packets_seen": tracker.packets_seen,
-            "current_area_id": tracker.current_area_id or "",
-            "winning_rssi": tracker.winning_rssi,
-            "closest_scanner": tracker.closest_scanner,
-            "match_method": tracker.match_method,
-            "calibration": tracker.get_scanner_calibration_telemetry(),
-            "area_signatures": get_area_signatures_summary(self.hass),
-        }
-        for cb in list(self._survey_listeners):
-            cb(payload)
+        tracker_sub = str(getattr(tracker, "subentry_id", "") or "").strip()
+        for cb, filter_sub in list(self._survey_listeners):
+            if filter_sub is not None and tracker_sub != filter_sub:
+                continue
+            cb(tracker)
 
     @callback
     def _async_on_fusion_sensor_changed(
@@ -415,26 +490,78 @@ class LatterBleFabric:
         return result
 
     @callback
-    def sync_tracker_addresses(self) -> None:
-        """Subscribe directly to every advertisement for known tracker MACs."""
-        if self._unsub_ble is None:
-            return
-        wanted: set[str] = set()
+    def _rebuild_tracker_index(self) -> None:
+        """Rebuild O(1) lookup indices from active trackers."""
+        by_mac: dict[int, list[LatterNativeBleTracker]] = {}
+        by_uuid: dict[str, list[LatterNativeBleTracker]] = {}
+        by_eddy: dict[str, list[LatterNativeBleTracker]] = {}
+        fallback: list[LatterNativeBleTracker] = []
+
         for tracker in self._trackers:
-            wanted.update(mac.upper() for mac in tracker.target_macs_formatted if mac)
-            wanted.update(
-                matched.upper() for matched in tracker._matched_ble_addresses if matched
-            )
+            indexed = False
+            mac_ints: set[int] = set(tracker._target_mac_ints)
+            if tracker._dynamic_target_mac_int is not None:
+                mac_ints.add(tracker._dynamic_target_mac_int)
+            for matched_addr in tracker._matched_ble_addresses:
+                if (m_int := mac_to_int(matched_addr)) is not None:
+                    mac_ints.add(m_int)
+            for m_int in mac_ints:
+                by_mac.setdefault(m_int, []).append(tracker)
+                indexed = True
+            if tracker._target_uuid_hex:
+                by_uuid.setdefault(tracker._target_uuid_hex, []).append(tracker)
+                indexed = True
+                if tracker.wants_eddystone_matcher:
+                    by_eddy.setdefault(tracker._target_uuid_hex, []).append(tracker)
+            if tracker._target_eddystone_namespace_hex:
+                by_eddy.setdefault(
+                    tracker._target_eddystone_namespace_hex, []
+                ).append(tracker)
+                indexed = True
+            if not indexed:
+                fallback.append(tracker)
 
-        for stale_addr in list(self._adv_unsubs):
-            if stale_addr not in wanted:
-                unsub = self._adv_unsubs.pop(stale_addr, None)
-                if unsub is not None:
-                    unsub()
+        self._trackers_by_mac = by_mac
+        self._trackers_by_ibeacon_uuid = by_uuid
+        self._trackers_by_eddystone = by_eddy
+        self._fallback_trackers = fallback
 
-        missing = sorted(wanted - set(self._adv_unsubs))
-        if not missing:
+    @callback
+    def _sync_eddystone_matcher(self) -> None:
+        """Register the Eddystone-UID service-data matcher ONLY while an Eddystone tracker is active."""
+        want_eddystone = self._unsub_ble is not None and any(
+            t.wants_eddystone_matcher for t in self._trackers
+        )
+        if not want_eddystone:
+            if self._unsub_eddystone is not None:
+                self._unsub_eddystone()
+                self._unsub_eddystone = None
             return
+        if self._unsub_eddystone is not None:
+            return
+        try:
+            from homeassistant.components import bluetooth
+
+            try:
+                ed_matcher = bluetooth.BluetoothCallbackMatcher(
+                    service_data_uuid=EDDYSTONE_SERVICE_DATA_UUID,
+                    connectable=False,
+                )
+            except TypeError:
+                ed_matcher = bluetooth.BluetoothCallbackMatcher(
+                    service_data_uuid=EDDYSTONE_SERVICE_DATA_UUID,
+                )
+            self._unsub_eddystone = bluetooth.async_register_callback(
+                self.hass,
+                self._async_on_shared_ble_advertisement,
+                ed_matcher,
+                bluetooth.BluetoothScanningMode.PASSIVE,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Eddystone Bluetooth callback registration skipped: %s", err)
+
+    @callback
+    def _subscribe_missing_macs(self, missing: list[str]) -> None:
         try:
             from homeassistant.components import bluetooth
 
@@ -446,8 +573,38 @@ class LatterBleFabric:
                         self._async_on_raw_ble_advertisement,
                         addr,
                     )
+                return
+            for addr in missing:
+                self._adv_unsubs[addr] = bluetooth.async_register_callback(
+                    self.hass,
+                    self._async_on_shared_ble_advertisement,
+                    bluetooth.BluetoothCallbackMatcher(address=addr),
+                    bluetooth.BluetoothScanningMode.PASSIVE,
+                )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Raw BLE advertisement callback sync skipped: %s", err)
+
+    @callback
+    def sync_tracker_addresses(self) -> None:
+        """Refresh O(1) tracker indices, Eddystone matcher, and per-MAC advertisement callbacks."""
+        self._rebuild_tracker_index()
+        self._sync_eddystone_matcher()
+        if self._unsub_ble is None:
+            return
+        wanted: set[str] = {
+            mac.upper()
+            for tracker in self._trackers
+            for mac in (*tracker.target_macs_formatted, *tracker._matched_ble_addresses)
+            if mac
+        }
+        for stale_addr in list(self._adv_unsubs):
+            if stale_addr not in wanted and (
+                unsub := self._adv_unsubs.pop(stale_addr, None)
+            ) is not None:
+                unsub()
+        missing = sorted(wanted - set(self._adv_unsubs))
+        if missing:
+            self._subscribe_missing_macs(missing)
 
     @callback
     def register_tracker(self, tracker: Any) -> None:
@@ -473,7 +630,7 @@ class LatterBleFabric:
 
     @callback
     def _async_start_fabric(self) -> None:
-        """Start the shared passive Bluetooth callback and away-timeout timer."""
+        """Start targeted passive Bluetooth callbacks (Apple iBeacon + per-MAC + conditional Eddystone)."""
         self._ensure_registry_listeners()
         set_scanner_area_cache_active(self.hass, True)
         unsubs: list[Callable[[], None]] = []
@@ -481,14 +638,20 @@ class LatterBleFabric:
             from homeassistant.components import bluetooth
 
             try:
-                matcher = bluetooth.BluetoothCallbackMatcher(connectable=False)
+                matcher = bluetooth.BluetoothCallbackMatcher(
+                    manufacturer_id=APPLE_COMPANY_ID,
+                    manufacturer_data_start=[0x02, 0x15],
+                    connectable=False,
+                )
             except TypeError:
                 try:
-                    matcher = bluetooth.BluetoothCallbackMatcher()
-                except TypeError:
                     matcher = bluetooth.BluetoothCallbackMatcher(
                         manufacturer_id=APPLE_COMPANY_ID,
                         manufacturer_data_start=[0x02, 0x15],
+                    )
+                except TypeError:
+                    matcher = bluetooth.BluetoothCallbackMatcher(
+                        manufacturer_id=APPLE_COMPANY_ID,
                     )
             unsubs.append(
                 bluetooth.async_register_callback(
@@ -513,6 +676,7 @@ class LatterBleFabric:
                 u()
 
         self._unsub_ble = _unsub_combined
+        self._sync_eddystone_matcher()
         self._unsub_away_timer = async_track_time_interval(
             self.hass,
             self._async_check_away_timeouts,
@@ -521,21 +685,60 @@ class LatterBleFabric:
 
     @callback
     def _async_stop_fabric(self) -> None:
-        """Stop the shared Bluetooth callback, per-address raw callbacks, and away-timeout timer."""
+        """Stop the shared Bluetooth callbacks, per-address raw callbacks, and away-timeout timer."""
         clear_scanner_area_cache(self.hass)
         for unsub_adv in list(self._adv_unsubs.values()):
             unsub_adv()
         self._adv_unsubs.clear()
+        if self._unsub_eddystone is not None:
+            self._unsub_eddystone()
+            self._unsub_eddystone = None
         if self._unsub_ble is not None:
             self._unsub_ble()
             self._unsub_ble = None
         if self._unsub_away_timer is not None:
             self._unsub_away_timer()
             self._unsub_away_timer = None
+        self._trackers_by_mac.clear()
+        self._trackers_by_ibeacon_uuid.clear()
+        self._trackers_by_eddystone.clear()
+        self._fallback_trackers.clear()
         if not self._occupancy_listeners and self._unsub_sensor_events is not None:
             self._unsub_sensor_events()
             self._unsub_sensor_events = None
         self._maybe_stop_registry_listeners()
+
+    def _candidate_trackers_for_keys(
+        self,
+        adv_int: int | None,
+        ibeacon_uuid: str,
+        eddystone_uid: str = "",
+        eddystone_ns: str = "",
+    ) -> list[LatterNativeBleTracker]:
+        """Return deduplicated candidate trackers matching the parsed advertisement keys in O(1)."""
+        buckets = [
+            bucket
+            for bucket in (
+                self._trackers_by_mac.get(adv_int) if adv_int is not None else None,
+                self._trackers_by_ibeacon_uuid.get(ibeacon_uuid) if ibeacon_uuid else None,
+                self._trackers_by_eddystone.get(eddystone_uid) if eddystone_uid else None,
+                self._trackers_by_eddystone.get(eddystone_ns) if eddystone_ns else None,
+                self._fallback_trackers or None,
+            )
+            if bucket
+        ]
+        if not buckets:
+            return []
+        if len(buckets) == 1:
+            return list(buckets[0])
+        seen: set[int] = set()
+        out: list[LatterNativeBleTracker] = []
+        for bucket in buckets:
+            for trk in bucket:
+                if (tid := id(trk)) not in seen:
+                    seen.add(tid)
+                    out.append(trk)
+        return out
 
     def _bound_mac_owner_ids(self, adv_int: int | None) -> set[int]:
         """Return object IDs of registered trackers owning `adv_int` via static or dynamic MAC."""
@@ -565,11 +768,14 @@ class LatterBleFabric:
             return
         adv_addr = str(data.get("address") or data.get("mac") or "").strip().upper()
         adv_int = mac_to_int(adv_addr) if adv_addr else None
+        candidates = self._candidate_trackers_for_keys(adv_int, uuid_raw)
+        if not candidates:
+            return
         ev_major = coerce_uint16(data.get("major"))
         ev_minor = coerce_uint16(data.get("minor"))
         now_mono = time.monotonic()
         owner_ids = self._bound_mac_owner_ids(adv_int)
-        for tracker in list(self._trackers):
+        for tracker in candidates:
             allow_fallback = self._allow_fallback_for_tracker(tracker, adv_int, owner_ids)
             if _ibeacon_event_matches_tracker(
                 tracker,
@@ -590,10 +796,15 @@ class LatterBleFabric:
         self, service_info: object, change: object
     ) -> None:
         adv_addr = str(getattr(service_info, "address", "") or "").strip().upper()
-        adv_int = mac_to_int(adv_addr) if adv_addr else None
+        mfg_data: Mapping[int, bytes] = getattr(service_info, "manufacturer_data", {}) or {}
+        svc_data: Mapping[str, bytes] = getattr(service_info, "service_data", {}) or {}
+        adv_int, ib_uuid, ed_uid, ed_ns = _extract_adv_keys(adv_addr, mfg_data, svc_data)
+        candidates = self._candidate_trackers_for_keys(adv_int, ib_uuid, ed_uid, ed_ns)
+        if not candidates:
+            return
         owner_ids = self._bound_mac_owner_ids(adv_int)
         ambiguous_mac = len(owner_ids) > 1
-        for tracker in list(self._trackers):
+        for tracker in candidates:
             allow_fallback = self._allow_fallback_for_tracker(tracker, adv_int, owner_ids)
             tracker._async_on_ble_advertisement(
                 service_info,
@@ -607,26 +818,81 @@ class LatterBleFabric:
         if not self._trackers:
             return
         now_mono = time.monotonic()
+        trackers = list(self._trackers)
+        silent_trackers = [
+            tracker
+            for tracker in trackers
+            if tracker.packets_seen == 0
+            or (now_mono - tracker.last_packet_monotonic) > STALE_PROXY_SECONDS
+        ]
+        if silent_trackers:
+            self._poll_missed_advertisements(silent_trackers, now_mono)
         discovered_any = False
-        for tracker in list(self._trackers):
-            if (
-                tracker.packets_seen == 0
-                or (now_mono - tracker.last_packet_monotonic) > STALE_PROXY_SECONDS
-            ):
-                self.seed_tracker_from_scanners_once(tracker)
+        for tracker in trackers:
             tracker.check_away_timeout(now_mono)
             if tracker.maybe_discover_bound_macs(now_mono, _MAC_DISCOVERY_RETRY_S):
                 discovered_any = True
         if discovered_any:
             self.sync_tracker_addresses()
 
-    @callback
-    def seed_tracker_from_scanners_once(
-        self, tracker: Any, *, only_address: str = ""
+    def _ingest_scanner_pair_for_candidates(
+        self,
+        candidates: list[LatterNativeBleTracker],
+        addr_str: str,
+        adv_int: int | None,
+        pair: tuple[Any, Any],
+        obs_ctx: tuple[str, str, float | None, float],
     ) -> None:
-        """Seed `tracker` from current Bluetooth scanner state (optionally restricted to `only_address`)."""
+        source, scanner_name, last_ts, now_mono = obs_ctx
+        obs_mono = float(last_ts) if last_ts is not None else now_mono
+        is_stale = last_ts is not None and (now_mono - obs_mono) > SURVEY_RETENTION_SECONDS
+        ble_dev, adv_data = pair
+        mfg_data = getattr(adv_data, "manufacturer_data", {}) or {}
+        svc_data = getattr(adv_data, "service_data", {}) or {}
+        raw_rssi = getattr(adv_data, "rssi", None)
+        if raw_rssi is None:
+            raw_rssi = getattr(ble_dev, "rssi", None)
+        rssi_int = safe_rssi_int(raw_rssi)
+        owner_ids = self._bound_mac_owner_ids(adv_int)
+        ambiguous_mac = len(owner_ids) > 1
+        det_rp = extract_adv_ref_power_dbm(adv_data, mfg_data, svc_data)
+        for tracker in candidates:
+            allow_fallback = self._allow_fallback_for_tracker(tracker, adv_int, owner_ids)
+            if not tracker._matches_raw_adv(
+                addr_str,
+                mfg_data,
+                svc_data,
+                allow_ibeacon_fallback=allow_fallback,
+                ambiguous_bound_mac=ambiguous_mac,
+            ):
+                continue
+            tracker._record_matched_ble_address(addr_str, seed_scanners=False)
+            if is_stale or rssi_int is None or rssi_int <= _MIN_VALID_RSSI_DBM:
+                continue
+            if det_rp is not None:
+                tracker.detected_ref_power_dbm = det_rp
+            tracker._ingest_proxy_observation(
+                source,
+                rssi_int,
+                obs_mono,
+                scanner_name,
+                from_poll=last_ts is not None,
+            )
+
+    @callback
+    def _poll_missed_advertisements(
+        self,
+        silent_trackers: list[LatterNativeBleTracker],
+        now_mono: float,
+        *,
+        only_address: str = "",
+    ) -> None:
+        """Scan active Bluetooth scanners in ONE pass, dispatching only to `silent_trackers` in O(1)."""
+        if not silent_trackers:
+            return
         only_norm = only_address.strip().upper()
-        now_mono = time.monotonic()
+        silent_ids = {id(t) for t in silent_trackers}
+        unregistered = [t for t in silent_trackers if not self.has_tracker(t)]
         for scanner in current_ble_scanners(self.hass):
             source = str(getattr(scanner, "source", "") or "")
             if not source:
@@ -647,46 +913,39 @@ class LatterBleFabric:
                 addr_str = str(addr)
                 if only_norm and addr_str.strip().upper() != only_norm:
                     continue
-                ble_dev, adv_data = pair
+                _ble_dev, adv_data = pair
                 mfg_data = getattr(adv_data, "manufacturer_data", {}) or {}
                 svc_data = getattr(adv_data, "service_data", {}) or {}
-                adv_int = mac_to_int(addr_str)
-                owner_ids = self._bound_mac_owner_ids(adv_int)
-                allow_fallback = self._allow_fallback_for_tracker(
-                    tracker, adv_int, owner_ids
+                adv_int, ib_uuid, ed_uid, ed_ns = _extract_adv_keys(
+                    addr_str, mfg_data, svc_data
                 )
-                if not tracker._matches_raw_adv(
+                candidates = [
+                    t
+                    for t in self._candidate_trackers_for_keys(
+                        adv_int, ib_uuid, ed_uid, ed_ns
+                    )
+                    if id(t) in silent_ids
+                ]
+                if unregistered:
+                    candidates.extend(t for t in unregistered if t not in candidates)
+                if not candidates:
+                    continue
+                self._ingest_scanner_pair_for_candidates(
+                    candidates,
                     addr_str,
-                    mfg_data,
-                    svc_data,
-                    allow_ibeacon_fallback=allow_fallback,
-                    ambiguous_bound_mac=len(owner_ids) > 1,
-                ):
-                    continue
-                tracker._record_matched_ble_address(addr_str, seed_scanners=False)
-                det_rp = extract_adv_ref_power_dbm(adv_data, mfg_data, svc_data)
-                if det_rp is not None:
-                    tracker.detected_ref_power_dbm = det_rp
-                last_ts = timestamps.get(addr)
-                obs_mono = float(last_ts) if last_ts is not None else now_mono
-                if (
-                    last_ts is not None
-                    and (now_mono - obs_mono) > SURVEY_RETENTION_SECONDS
-                ):
-                    continue
-                raw_rssi = getattr(adv_data, "rssi", None)
-                if raw_rssi is None:
-                    raw_rssi = getattr(ble_dev, "rssi", None)
-                rssi_int = safe_rssi_int(raw_rssi)
-                if rssi_int is None or rssi_int <= _MIN_VALID_RSSI_DBM:
-                    continue
-                tracker._ingest_proxy_observation(
-                    source,
-                    rssi_int,
-                    obs_mono,
-                    scanner_name,
-                    from_poll=last_ts is not None,
+                    adv_int,
+                    pair,
+                    (source, scanner_name, timestamps.get(addr), now_mono),
                 )
+
+    @callback
+    def seed_tracker_from_scanners_once(
+        self, tracker: Any, *, only_address: str = ""
+    ) -> None:
+        """Seed `tracker` from current Bluetooth scanner state (optionally restricted to `only_address`)."""
+        self._poll_missed_advertisements(
+            [tracker], time.monotonic(), only_address=only_address
+        )
 
     _async_seed_tracker_from_scanners_once = seed_tracker_from_scanners_once
 
@@ -716,6 +975,7 @@ def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
         for coord in iter_coordinators(hass)
         if coord.device_slug
     }
+    latter_dev_ids = latter_bound_esphome_device_ids(hass)
 
     rows: list[dict[str, Any]] = []
     for area_entry in sorted(area_reg.async_list_areas(), key=lambda a: a.name.lower()):
@@ -723,7 +983,9 @@ def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
         has_proxy = area_entry.id in proxy_areas
         has_sig = area_entry.id in sig_areas
         has_sensors = len(occ["available_sensors"]) > 0
-        lux_choices = area_illuminance_sensor_choices(hass, area_entry.id)
+        lux_choices = area_illuminance_sensor_choices(
+            hass, area_entry.id, latter_dev_ids=latter_dev_ids
+        )
         if (
             not has_proxy
             and not has_sig
@@ -742,7 +1004,12 @@ def get_all_areas_presence_summary(hass: HomeAssistant) -> list[dict[str, Any]]:
             if fusion_sensors
             else occ["available_sensors"]
         )
-        ambient = resolve_area_ambient_light(hass, area_entry.id)
+        ambient = resolve_area_ambient_light(
+            hass,
+            area_entry.id,
+            latter_dev_ids=latter_dev_ids,
+            lux_choices=lux_choices,
+        )
         rows.append(
             {
                 "area_id": area_entry.id,

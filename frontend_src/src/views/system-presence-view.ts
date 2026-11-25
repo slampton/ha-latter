@@ -3,6 +3,7 @@
  * Area presence & sensors, walk-around BLE calibration, and advanced BLE settings.
  */
 
+import { guard } from "lit/directives/guard.js";
 import { renderCard, renderRangeRow, renderSettingsRow } from "../components/controls.js";
 import { focusSafe, html, live, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
@@ -18,19 +19,18 @@ import {
 
 const METERS_TO_FEET = 3.28084;
 
+function normalizeAreaFusionChoices(
+  row: AreaPresenceRow | undefined,
+): ReadonlyArray<{ entity_id: string; name: string }> {
+  const rawChoices = row?.fusion_sensor_choices ?? row?.available_sensors ?? [];
+  return rawChoices.map((s) => (typeof s === "string" ? { entity_id: s, name: s } : s));
+}
+
 export function renderSystemPresenceView(store: StudioStore): TemplateResult {
   const data = store.state;
   const sysCfg = data?.system_config;
   const unitLength = String(store.hass?.config?.unit_system?.length || "").toLowerCase();
   const isImperial = unitLength === "mi" || unitLength === "ft";
-  const rawRadiusM = Number(sysCfg?.ble_max_radius_m ?? 12);
-  const displayRadius = isImperial
-    ? Math.round(rawRadiusM * METERS_TO_FEET * 10) / 10
-    : rawRadiusM;
-  const rawVelMps = Number(sysCfg?.ble_max_velocity_mps ?? 3.5);
-  const displayVel = isImperial
-    ? Math.round(rawVelMps * METERS_TO_FEET * 10) / 10
-    : rawVelMps;
   const presenceRows = data?.live?.area_presence_grid || [];
   const signatures = data?.ble_area_signatures || [];
   const allDevs = data?.system_devices || [];
@@ -39,49 +39,10 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
   const surveyRows = activeSurveyDev?.ble_survey_rows || [];
   const packetsSeen = activeSurveyDev?.ble_packets_seen ?? 0;
 
-  const fusionModeOptions: ReadonlyArray<{ val: string; label: string }> = [
-    { val: "weighted", label: store.t("presence_sys.mode_weighted") },
-    { val: "any_or", label: store.t("presence_sys.mode_any_or") },
-    { val: "ble_only", label: store.t("presence_sys.mode_ble_only") },
-    { val: "ble_and_sensor", label: store.t("presence_sys.mode_both") },
-  ];
-
   const sigByArea = new Map<string, BleAreaSignatureSummary>();
   for (const sig of signatures) {
     if (sig.area_id) sigByArea.set(sig.area_id, sig);
   }
-  const rowByArea = new Map<string, AreaPresenceRow>();
-  for (const row of presenceRows) {
-    if (row.area_id) rowByArea.set(row.area_id, row);
-  }
-
-  const unifiedAreas: Array<{
-    areaId: string;
-    areaName: string;
-    row?: AreaPresenceRow;
-    sig?: BleAreaSignatureSummary;
-  }> = [];
-  for (const row of presenceRows) {
-    unifiedAreas.push({
-      areaId: row.area_id,
-      areaName: row.area_name,
-      row,
-      sig: sigByArea.get(row.area_id),
-    });
-  }
-  for (const sig of signatures) {
-    if (!rowByArea.has(sig.area_id)) {
-      unifiedAreas.push({
-        areaId: sig.area_id,
-        areaName: sig.area_name,
-        row: undefined,
-        sig,
-      });
-    }
-  }
-  unifiedAreas.sort((a, b) =>
-    a.areaName.localeCompare(b.areaName, undefined, { sensitivity: "base" }),
-  );
 
   const areaChoices: Array<{ area_id: string; area_name: string }> = signatures.length
     ? signatures.map((s) => ({ area_id: s.area_id, area_name: s.area_name }))
@@ -112,404 +73,489 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
     (r) => Boolean(r.is_fresh) && r.effective_rssi !== null && r.effective_rssi !== undefined,
   );
 
-  const hasAnyLuxSensor = unifiedAreas.some(
-    ({ row }) => (row?.illuminance_sensor_choices?.length || 0) > 0,
-  );
+  // Build stable guard keys so 4 Hz `ble_survey_delta` updates skip Area presence & Advanced BLE DOM diffing.
+  const hasAnyUnsignedPresenceRow = presenceRows.some((row) => !sigByArea.has(row.area_id));
+  const surveyAreaSetKey = hasAnyUnsignedPresenceRow
+    ? Array.from(new Set(surveyRows.map((sr) => sr.area_id).filter(Boolean)))
+        .sort()
+        .join(",")
+    : "";
+  const calibratingKey = store.groups.calibratingAllIlluminance
+    ? "*"
+    : store.groups.calibratingIlluminanceAreas.size > 0
+      ? Array.from(store.groups.calibratingIlluminanceAreas).sort().join(",")
+      : "";
+  const openFusionKey =
+    store.openFusionAreas.size > 0 ? Array.from(store.openFusionAreas).sort().join(",") : "";
+  const areaHandoffKey =
+    store.handoffTargetIds.size > 0 ? Array.from(store.handoffTargetIds).sort().join(",") : "";
+  const localeKey = `${unitLength}|${store.hass?.locale?.language || ""}|${store.hass?.locale?.number_format || ""}|${store.hass?.locale?.date_format || ""}|${store.hass?.locale?.time_format || ""}|${store.hass?.config?.time_zone || ""}`;
+
+  const renderAreaPresenceCard = (): TemplateResult => {
+    const fusionModeOptions: ReadonlyArray<{ val: string; label: string }> = [
+      { val: "weighted", label: store.t("presence_sys.mode_weighted") },
+      { val: "any_or", label: store.t("presence_sys.mode_any_or") },
+      { val: "ble_only", label: store.t("presence_sys.mode_ble_only") },
+      { val: "ble_and_sensor", label: store.t("presence_sys.mode_both") },
+    ];
+    const rowByArea = new Map<string, AreaPresenceRow>();
+    for (const row of presenceRows) {
+      if (row.area_id) rowByArea.set(row.area_id, row);
+    }
+    const unifiedAreas: Array<{
+      areaId: string;
+      areaName: string;
+      row?: AreaPresenceRow;
+      sig?: BleAreaSignatureSummary;
+    }> = [];
+    for (const row of presenceRows) {
+      unifiedAreas.push({
+        areaId: row.area_id,
+        areaName: row.area_name,
+        row,
+        sig: sigByArea.get(row.area_id),
+      });
+    }
+    for (const sig of signatures) {
+      if (!rowByArea.has(sig.area_id)) {
+        unifiedAreas.push({
+          areaId: sig.area_id,
+          areaName: sig.area_name,
+          row: undefined,
+          sig,
+        });
+      }
+    }
+    unifiedAreas.sort((a, b) =>
+      a.areaName.localeCompare(b.areaName, undefined, { sensitivity: "base" }),
+    );
+    const hasAnyLuxSensor = unifiedAreas.some(
+      ({ row }) => (row?.illuminance_sensor_choices?.length || 0) > 0,
+    );
+    const surveyAreaIds = hasAnyUnsignedPresenceRow
+      ? new Set(surveyRows.map((sr) => sr.area_id).filter(Boolean))
+      : null;
+
+    return renderCard({
+      id: "card-area-presence",
+      title: store.t("card.area_presence_sensors"),
+      subtitle: store.t("presence_sys.area_card_subtitle"),
+      headerActions: hasAnyLuxSensor
+        ? html`<button
+            type="button"
+            ?disabled=${store.groups.isCalibratingIlluminance()}
+            class="btn btn-secondary btn-compact"
+            @click=${() => void store.groups.calibrateAreaIlluminance()}
+          >
+            ${store.groups.calibratingAllIlluminance
+              ? store.t("presence_sys.calibrating_lux")
+              : store.t("presence_sys.calibrate_all_lux")}
+          </button>`
+        : nothing,
+      body: html`<div id="area-presence-grid-box" class="stack">
+        ${unifiedAreas.length
+          ? repeat(
+              unifiedAreas,
+              (item) => item.areaId,
+              ({ areaId, areaName, row, sig }) => {
+                const isOcc = Boolean(row?.is_occupied);
+                const hasConf =
+                  row?.confidence_pct !== null &&
+                  row?.confidence_pct !== undefined &&
+                  Number.isFinite(Number(row.confidence_pct));
+                const confStr = hasConf
+                  ? fmtPercent(Number(row?.confidence_pct), store.hass)
+                  : store.t("common.unknown");
+                const floorLabel = String(
+                  row?.floor_name || row?.floor_id || sig?.floor_id || "",
+                ).trim();
+                const hasBleProxy = sig
+                  ? Boolean(sig.has_ble_proxy)
+                  : Boolean(
+                      (row?.winning_rssi !== null && row?.winning_rssi !== undefined) ||
+                        surveyAreaIds?.has(areaId),
+                    );
+
+                const occList = row?.occupant_names || [];
+                const occNames = occList.length
+                  ? occList.join(", ")
+                  : isOcc
+                    ? store.t("presence_sys.occupied_sensor")
+                    : store.t("presence_sys.empty");
+                const parts: string[] = [occNames];
+                if (row?.winning_rssi !== null && row?.winning_rssi !== undefined) {
+                  const distPart =
+                    row.closest_distance_m !== null && row.closest_distance_m !== undefined
+                      ? ` (~${fmtDistance(row.closest_distance_m, store.hass, row.closest_distance_ft)})`
+                      : "";
+                  parts.push(
+                    store.t("presence_sys.ble_dbm", {
+                      rssi: fmtNumber(row.winning_rssi, store.hass, 0),
+                      distance: distPart,
+                    }),
+                  );
+                }
+                if (row?.match_method === "signature") {
+                  parts.push(store.t("presence_sys.signature_match"));
+                }
+                if (row?.active_sensors && row.active_sensors.length) {
+                  parts.push(
+                    row.active_sensors.length === 1
+                      ? store.t("presence_sys.active_sensors_one")
+                      : store.t("presence_sys.active_sensors_many", {
+                          count: row.active_sensors.length,
+                        }),
+                  );
+                } else if (row?.available_sensors && row.available_sensors.length) {
+                  parts.push(
+                    row.available_sensors.length === 1
+                      ? store.t("presence_sys.clear_sensors_one")
+                      : store.t("presence_sys.clear_sensors_many", {
+                          count: row.available_sensors.length,
+                        }),
+                  );
+                }
+                if (row?.unavailable_sensors && row.unavailable_sensors.length) {
+                  parts.push(
+                    row.unavailable_sensors.length === 1
+                      ? store.t("presence_sys.unavailable_sensors_one")
+                      : store.t("presence_sys.unavailable_sensors_many", {
+                          count: row.unavailable_sensors.length,
+                        }),
+                  );
+                }
+                if (sig?.has_signature && sig.captured_at) {
+                  parts.push(
+                    store.t("presence_sys.calibrated_meta", {
+                      when: fmtDateTime(sig.captured_at, store.hass),
+                      samples: fmtNumber(sig.sample_count, store.hass, 0),
+                    }),
+                  );
+                } else if (!hasBleProxy && !sig?.has_signature) {
+                  parts.push(store.t("presence_sys.calibrate_hint"));
+                }
+
+                const curMode = row?.fusion_mode || "weighted";
+                const luxDisplay = String(row?.illuminance_lux_display || "");
+                const luxAmbPct =
+                  row?.illuminance_ambient_pct !== null &&
+                  row?.illuminance_ambient_pct !== undefined
+                    ? Number(row.illuminance_ambient_pct)
+                    : null;
+                const areaBoxId = `area-box-${areaId}`;
+                const isAreaHandoff = store.isHandoffTarget(areaBoxId);
+                const isFusionOpen = store.openFusionAreas.has(areaId);
+
+                return html`<div id=${areaBoxId} class="area-presence-box${isAreaHandoff ? " handoff-active" : ""}">
+                  <div class="area-box-head">
+                    <h4 class="area-box-title">${areaName}</h4>
+                    <div class="area-box-actions">
+                      ${sig?.has_signature
+                        ? html`<button
+                            type="button"
+                            @click=${() =>
+                              store.groups.requestClearBleAreaSignature(areaId, areaName)}
+                            class="btn btn-text btn-compact"
+                          >
+                            ${store.t("presence_sys.clear_signature")}
+                          </button>`
+                        : nothing}
+                      ${bleDevs.length > 0
+                        ? html`<button
+                            type="button"
+                            @click=${() => store.groups.selectBleCalibrateArea(areaId, true)}
+                            class="btn btn-secondary btn-compact"
+                          >
+                            ${store.t("presence_sys.calibrate")}
+                          </button>`
+                        : nothing}
+                    </div>
+                  </div>
+
+                  <div class="area-box-badges">
+                    ${isOcc
+                      ? html`<span class="chip chip-success">${store.t("presence_sys.occupied_chip", { confidence: confStr })}</span>`
+                      : html`<span class="chip">${store.t("presence_sys.clear_chip")}</span>`}
+                    ${floorLabel ? html`<span class="chip">${floorLabel}</span>` : nothing}
+                    ${sig?.has_signature
+                      ? html`<span class="chip chip-primary">${sig.scanner_count === 1
+                          ? store.t("presence_sys.signature_proxies_one")
+                          : store.t("presence_sys.signature_proxies_many", {
+                              count: fmtNumber(sig.scanner_count, store.hass, 0),
+                            })}</span>`
+                      : hasBleProxy
+                        ? html`<span class="chip">${store.t("sys_overview.ble_proxy")}</span>`
+                        : html`<span class="chip chip-warning">${store.t("sys_overview.no_ble_proxy")}</span>`}
+                    ${luxDisplay && luxAmbPct !== null && Number.isFinite(luxAmbPct)
+                      ? html`<span class="chip"
+                          >${store.t("presence_sys.lux_chip", {
+                            lux: luxDisplay,
+                            level: fmtNumber(luxAmbPct, store.hass, 0),
+                          })}</span
+                        >`
+                      : nothing}
+                  </div>
+
+                  <div class="area-box-meta">${parts.join(" • ")}</div>
+
+                  ${renderSettingsRow({
+                    label: store.t("presence_sys.presence_mode"),
+                    control: html`<select
+                      aria-label=${store.t("presence_sys.presence_mode_aria", { area: areaName })}
+                      .value=${live(curMode)}
+                      @change=${(ev: Event) =>
+                        void store.groups.setAreaFusion(areaId, {
+                          mode: (ev.currentTarget as HTMLSelectElement).value,
+                        })}
+                    >
+                      ${fusionModeOptions.map(
+                        (m) =>
+                          html`<option value=${m.val} .selected=${live(m.val === curMode)}>
+                            ${m.label}
+                          </option>`,
+                      )}
+                    </select>`,
+                  })}
+
+                  <details
+                    ?open=${isFusionOpen}
+                    @toggle=${(ev: Event) => {
+                      const isOpen = (ev.currentTarget as HTMLDetailsElement).open;
+                      const wasOpen = store.openFusionAreas.has(areaId);
+                      if (wasOpen !== isOpen) {
+                        if (isOpen) store.openFusionAreas.add(areaId);
+                        else store.openFusionAreas.delete(areaId);
+                        store.host.requestUpdate();
+                      }
+                    }}
+                    class="sub-collapsible"
+                  >
+                    <summary>${store.t("presence_sys.sensor_threshold_drawer")}</summary>
+                    ${isFusionOpen
+                      ? (() => {
+                          const threshold = Number(row?.fusion_threshold_pct ?? 50);
+                          const chosen = row?.fusion_sensors || [];
+                          const choices = normalizeAreaFusionChoices(row);
+                          const luxChoices = row?.illuminance_sensor_choices || [];
+                          const luxEntity = String(row?.illuminance_entity || "auto");
+                          const luxResolvedName = String(
+                            row?.illuminance_resolved_name || row?.illuminance_resolved_entity || "",
+                          );
+                          const luxDark = Number(row?.illuminance_dark_lux ?? 0.5);
+                          const luxBright = Number(row?.illuminance_bright_lux ?? 40);
+                          const thresholdId = `fusion-threshold-${areaId}`;
+
+                          return html`<div class="card-content settings-list">
+                            ${renderRangeRow({
+                              id: thresholdId,
+                              label: store.t("presence_sys.occupied_at"),
+                              ariaLabel: store.t("presence_sys.occupied_at"),
+                              description:
+                                curMode === "weighted"
+                                  ? store.t("presence_sys.occupied_at_weighted_desc")
+                                  : store.t("presence_sys.occupied_at_other_desc"),
+                              value: threshold,
+                              min: 20,
+                              max: 95,
+                              step: 5,
+                              unit: "%",
+                              disabled: curMode !== "weighted",
+                              hass: store.hass,
+                              onCommit: (nextVal) =>
+                                void store.groups.setAreaFusion(areaId, {
+                                  threshold_pct: nextVal,
+                                }),
+                            })}
+                            ${renderSettingsRow({
+                              label: store.t("presence_sys.sensors_that_count"),
+                              description: chosen.length
+                                ? store.t("presence_sys.sensors_selected_desc", {
+                                    selected: chosen.length,
+                                    total: choices.length,
+                                  })
+                                : store.t("presence_sys.sensors_all_desc"),
+                              stacked: true,
+                              control: choices.length
+                                ? html`<div
+                                    role="group"
+                                    aria-label=${store.t("presence_sys.sensors_group_aria", {
+                                      area: areaName,
+                                    })}
+                                    class="pill-list"
+                                  >
+                                    ${choices.map((s) => {
+                                      const on = chosen.includes(s.entity_id);
+                                      const nextSensors = on
+                                        ? chosen.filter((x) => x !== s.entity_id)
+                                        : chosen.concat([s.entity_id]);
+                                      return html`<span class="pill ${on ? "enabled" : ""}">
+                                        <button
+                                          type="button"
+                                          aria-pressed=${String(on)}
+                                          title=${s.entity_id}
+                                          @click=${() =>
+                                            void store.groups.setAreaFusion(areaId, {
+                                              sensors: nextSensors,
+                                            })}
+                                          class="pill-toggle"
+                                        >
+                                          ${on ? "✓ " : ""}${s.name}
+                                        </button>
+                                      </span>`;
+                                    })}
+                                  </div>`
+                                : html`<p class="empty-state">
+                                    ${store.t("presence_sys.no_area_sensors")}
+                                  </p>`,
+                            })}
+                            ${luxChoices.length > 0 || luxEntity !== "auto"
+                              ? html`${renderSettingsRow({
+                                    label: store.t("presence_sys.ambient_sensor"),
+                                    control: html`<select
+                                      aria-label=${store.t("presence_sys.ambient_sensor_aria", {
+                                        area: areaName,
+                                      })}
+                                      .value=${live(luxEntity)}
+                                      @change=${(ev: Event) =>
+                                        void store.groups.setAreaIlluminance(areaId, {
+                                          entity_id: (ev.currentTarget as HTMLSelectElement).value,
+                                        })}
+                                    >
+                                      <option value="auto" .selected=${live(luxEntity === "auto")}>
+                                        ${luxResolvedName && luxEntity === "auto"
+                                          ? store.t("presence_sys.ambient_sensor_auto", {
+                                              sensor: luxResolvedName,
+                                            })
+                                          : store.t("presence_sys.ambient_sensor_auto_none")}
+                                      </option>
+                                      ${luxChoices.map(
+                                        (s) =>
+                                          html`<option
+                                            value=${s.entity_id}
+                                            .selected=${live(luxEntity === s.entity_id)}
+                                          >
+                                            ${s.name}${s.lux_display ? ` (${s.lux_display} lx)` : ""}
+                                          </option>`,
+                                      )}
+                                      <option value="disabled" .selected=${live(luxEntity === "disabled")}>
+                                        ${store.t("presence_sys.ambient_sensor_disabled")}
+                                      </option>
+                                    </select>`,
+                                  })}
+                                  ${luxEntity !== "disabled"
+                                    ? renderSettingsRow({
+                                        label: store.t("presence_sys.calibrate_lux_btn"),
+                                        description: store.t("presence_sys.ambient_calibration_desc"),
+                                        stacked: true,
+                                        control: html`<div class="lux-bounds-row">
+                                          <label class="lux-bound-field">
+                                            <span>${store.t("presence_sys.ambient_dark_lux")}</span>
+                                            <input
+                                              type="number"
+                                              class="lux-number-input"
+                                              min="0"
+                                              max="500"
+                                              step="0.1"
+                                              aria-label=${`${store.t("presence_sys.ambient_dark_lux")} (${areaName})`}
+                                              .value=${focusSafe(String(luxDark))}
+                                              @change=${(ev: Event) => {
+                                                const el = ev.currentTarget as HTMLInputElement;
+                                                const v = Number(el.value);
+                                                if (!Number.isFinite(v) || v < 0) {
+                                                  el.value = String(luxDark);
+                                                  return;
+                                                }
+                                                if (v >= luxBright) {
+                                                  el.value = String(luxDark);
+                                                  store.showToast(
+                                                    store.t("presence_sys.lux_bounds_error"),
+                                                    true,
+                                                  );
+                                                  return;
+                                                }
+                                                void store.groups.setAreaIlluminance(areaId, {
+                                                  dark_lux: v,
+                                                });
+                                              }}
+                                            />
+                                          </label>
+                                          <label class="lux-bound-field">
+                                            <span>${store.t("presence_sys.ambient_bright_lux")}</span>
+                                            <input
+                                              type="number"
+                                              class="lux-number-input"
+                                              min="0.5"
+                                              max="100000"
+                                              step="0.1"
+                                              aria-label=${`${store.t("presence_sys.ambient_bright_lux")} (${areaName})`}
+                                              .value=${focusSafe(String(luxBright))}
+                                              @change=${(ev: Event) => {
+                                                const el = ev.currentTarget as HTMLInputElement;
+                                                const v = Number(el.value);
+                                                if (!Number.isFinite(v) || v <= 0) {
+                                                  el.value = String(luxBright);
+                                                  return;
+                                                }
+                                                if (v <= luxDark) {
+                                                  el.value = String(luxBright);
+                                                  store.showToast(
+                                                    store.t("presence_sys.lux_bounds_error"),
+                                                    true,
+                                                  );
+                                                  return;
+                                                }
+                                                void store.groups.setAreaIlluminance(areaId, {
+                                                  bright_lux: v,
+                                                });
+                                              }}
+                                            />
+                                          </label>
+                                          <button
+                                            type="button"
+                                            ?disabled=${store.groups.isCalibratingIlluminance(areaId)}
+                                            class="btn btn-secondary btn-compact"
+                                            @click=${() =>
+                                              void store.groups.calibrateAreaIlluminance(areaId)}
+                                          >
+                                            ${store.groups.isCalibratingIlluminance(areaId)
+                                              ? store.t("presence_sys.calibrating_lux")
+                                              : store.t("presence_sys.calibrate_lux_btn")}
+                                          </button>
+                                        </div>`,
+                                      })
+                                    : nothing}`
+                              : nothing}
+                          </div>`;
+                        })()
+                      : nothing}
+                  </details>
+                </div>`;
+              },
+            )
+          : html`<p class="empty-state">
+              ${store.t("presence_sys.empty_areas")}
+            </p>`}
+      </div>`,
+    });
+  };
 
   return html`<section id="view-area_tracking">
     <div class="columns">
       <div class="column">
-        ${renderCard({
-          id: "card-area-presence",
-          title: store.t("card.area_presence_sensors"),
-          subtitle: store.t("presence_sys.area_card_subtitle"),
-          headerActions: hasAnyLuxSensor
-            ? html`<button
-                type="button"
-                ?disabled=${store.groups.isCalibratingIlluminance()}
-                class="btn btn-secondary btn-compact"
-                @click=${() => void store.groups.calibrateAreaIlluminance()}
-              >
-                ${store.groups.calibratingAllIlluminance
-                  ? store.t("presence_sys.calibrating_lux")
-                  : store.t("presence_sys.calibrate_all_lux")}
-              </button>`
-            : nothing,
-          body: html`<div id="area-presence-grid-box" class="stack">
-            ${unifiedAreas.length
-              ? repeat(
-                  unifiedAreas,
-                  (item) => item.areaId,
-                  ({ areaId, areaName, row, sig }) => {
-                    const isOcc = Boolean(row?.is_occupied);
-                    const hasConf =
-                      row?.confidence_pct !== null &&
-                      row?.confidence_pct !== undefined &&
-                      Number.isFinite(Number(row.confidence_pct));
-                    const confStr = hasConf
-                      ? fmtPercent(Number(row?.confidence_pct), store.hass)
-                      : store.t("common.unknown");
-                    const floorLabel = String(
-                      row?.floor_name || row?.floor_id || sig?.floor_id || "",
-                    ).trim();
-                    const hasBleProxy = sig
-                      ? Boolean(sig.has_ble_proxy)
-                      : Boolean(
-                          (row?.winning_rssi !== null && row?.winning_rssi !== undefined) ||
-                            surveyRows.some((sr) => sr.area_id === areaId),
-                        );
-
-                    const occList = row?.occupant_names || [];
-                    const occNames = occList.length
-                      ? occList.join(", ")
-                      : isOcc
-                        ? store.t("presence_sys.occupied_sensor")
-                        : store.t("presence_sys.empty");
-                    const parts: string[] = [occNames];
-                    if (row?.winning_rssi !== null && row?.winning_rssi !== undefined) {
-                      const distPart =
-                        row.closest_distance_m !== null && row.closest_distance_m !== undefined
-                          ? ` (~${fmtDistance(row.closest_distance_m, store.hass, row.closest_distance_ft)})`
-                          : "";
-                      parts.push(
-                        store.t("presence_sys.ble_dbm", {
-                          rssi: fmtNumber(row.winning_rssi, store.hass, 0),
-                          distance: distPart,
-                        }),
-                      );
-                    }
-                    if (row?.match_method === "signature") {
-                      parts.push(store.t("presence_sys.signature_match"));
-                    }
-                    if (row?.active_sensors && row.active_sensors.length) {
-                      parts.push(
-                        row.active_sensors.length === 1
-                          ? store.t("presence_sys.active_sensors_one")
-                          : store.t("presence_sys.active_sensors_many", {
-                              count: row.active_sensors.length,
-                            }),
-                      );
-                    } else if (row?.available_sensors && row.available_sensors.length) {
-                      parts.push(
-                        row.available_sensors.length === 1
-                          ? store.t("presence_sys.clear_sensors_one")
-                          : store.t("presence_sys.clear_sensors_many", {
-                              count: row.available_sensors.length,
-                            }),
-                      );
-                    }
-                    if (row?.unavailable_sensors && row.unavailable_sensors.length) {
-                      parts.push(
-                        row.unavailable_sensors.length === 1
-                          ? store.t("presence_sys.unavailable_sensors_one")
-                          : store.t("presence_sys.unavailable_sensors_many", {
-                              count: row.unavailable_sensors.length,
-                            }),
-                      );
-                    }
-                    if (sig?.has_signature && sig.captured_at) {
-                      parts.push(
-                        store.t("presence_sys.calibrated_meta", {
-                          when: fmtDateTime(sig.captured_at, store.hass),
-                          samples: fmtNumber(sig.sample_count, store.hass, 0),
-                        }),
-                      );
-                    } else if (!hasBleProxy && !sig?.has_signature) {
-                      parts.push(store.t("presence_sys.calibrate_hint"));
-                    }
-
-                    const curMode = row?.fusion_mode || "weighted";
-                    const threshold = Number(row?.fusion_threshold_pct ?? 50);
-                    const chosen = row?.fusion_sensors || [];
-                    const choices = row?.fusion_sensor_choices || [];
-                    const luxChoices = row?.illuminance_sensor_choices || [];
-                    const luxEntity = String(row?.illuminance_entity || "auto");
-                    const luxResolvedName = String(
-                      row?.illuminance_resolved_name || row?.illuminance_resolved_entity || "",
-                    );
-                    const luxDisplay = String(row?.illuminance_lux_display || "");
-                    const luxAmbPct =
-                      row?.illuminance_ambient_pct !== null &&
-                      row?.illuminance_ambient_pct !== undefined
-                        ? Number(row.illuminance_ambient_pct)
-                        : null;
-                    const luxDark = Number(row?.illuminance_dark_lux ?? 0.5);
-                    const luxBright = Number(row?.illuminance_bright_lux ?? 40);
-                    const thresholdId = `fusion-threshold-${areaId}`;
-                    const areaBoxId = `area-box-${areaId}`;
-                    const isAreaHandoff = store.isHandoffTarget(areaBoxId);
-
-                    return html`<div id=${areaBoxId} class="area-presence-box${isAreaHandoff ? " handoff-active" : ""}">
-                      <div class="area-box-head">
-                        <h4 class="area-box-title">${areaName}</h4>
-                        <div class="area-box-actions">
-                          ${sig?.has_signature
-                            ? html`<button
-                                type="button"
-                                @click=${() =>
-                                  store.groups.requestClearBleAreaSignature(areaId, areaName)}
-                                class="btn btn-text btn-compact"
-                              >
-                                ${store.t("presence_sys.clear_signature")}
-                              </button>`
-                            : nothing}
-                          ${bleDevs.length > 0
-                            ? html`<button
-                                type="button"
-                                @click=${() => store.groups.selectBleCalibrateArea(areaId, true)}
-                                class="btn btn-secondary btn-compact"
-                              >
-                                ${store.t("presence_sys.calibrate")}
-                              </button>`
-                            : nothing}
-                        </div>
-                      </div>
-
-                      <div class="area-box-badges">
-                        ${isOcc
-                          ? html`<span class="chip chip-success">${store.t("presence_sys.occupied_chip", { confidence: confStr })}</span>`
-                          : html`<span class="chip">${store.t("presence_sys.clear_chip")}</span>`}
-                        ${floorLabel ? html`<span class="chip">${floorLabel}</span>` : nothing}
-                        ${sig?.has_signature
-                          ? html`<span class="chip chip-primary">${sig.scanner_count === 1
-                              ? store.t("presence_sys.signature_proxies_one")
-                              : store.t("presence_sys.signature_proxies_many", {
-                                  count: fmtNumber(sig.scanner_count, store.hass, 0),
-                                })}</span>`
-                          : hasBleProxy
-                            ? html`<span class="chip">${store.t("sys_overview.ble_proxy")}</span>`
-                            : html`<span class="chip chip-warning">${store.t("sys_overview.no_ble_proxy")}</span>`}
-                        ${luxDisplay && luxAmbPct !== null && Number.isFinite(luxAmbPct)
-                          ? html`<span class="chip"
-                              >${store.t("presence_sys.lux_chip", {
-                                lux: luxDisplay,
-                                level: fmtNumber(luxAmbPct, store.hass, 0),
-                              })}</span
-                            >`
-                          : nothing}
-                      </div>
-
-                      <div class="area-box-meta">${parts.join(" • ")}</div>
-
-                      ${renderSettingsRow({
-                        label: store.t("presence_sys.presence_mode"),
-                        control: html`<select
-                          aria-label=${store.t("presence_sys.presence_mode_aria", { area: areaName })}
-                          .value=${live(curMode)}
-                          @change=${(ev: Event) =>
-                            void store.groups.setAreaFusion(areaId, {
-                              mode: (ev.currentTarget as HTMLSelectElement).value,
-                            })}
-                        >
-                          ${fusionModeOptions.map(
-                            (m) =>
-                              html`<option value=${m.val} .selected=${live(m.val === curMode)}>
-                                ${m.label}
-                              </option>`,
-                          )}
-                        </select>`,
-                      })}
-
-                      <details
-                        ?open=${store.openFusionAreas.has(areaId)}
-                        @toggle=${(ev: Event) => {
-                          const isOpen = (ev.currentTarget as HTMLDetailsElement).open;
-                          if (isOpen) store.openFusionAreas.add(areaId);
-                          else store.openFusionAreas.delete(areaId);
-                        }}
-                        class="sub-collapsible"
-                      >
-                        <summary>${store.t("presence_sys.sensor_threshold_drawer")}</summary>
-                        <div class="card-content settings-list">
-                          ${renderRangeRow({
-                            id: thresholdId,
-                            label: store.t("presence_sys.occupied_at"),
-                            ariaLabel: store.t("presence_sys.occupied_at"),
-                            description:
-                              curMode === "weighted"
-                                ? store.t("presence_sys.occupied_at_weighted_desc")
-                                : store.t("presence_sys.occupied_at_other_desc"),
-                            value: threshold,
-                            min: 20,
-                            max: 95,
-                            step: 5,
-                            unit: "%",
-                            disabled: curMode !== "weighted",
-                            hass: store.hass,
-                            onCommit: (nextVal) =>
-                              void store.groups.setAreaFusion(areaId, {
-                                threshold_pct: nextVal,
-                              }),
-                          })}
-                          ${renderSettingsRow({
-                            label: store.t("presence_sys.sensors_that_count"),
-                            description: chosen.length
-                              ? store.t("presence_sys.sensors_selected_desc", {
-                                  selected: chosen.length,
-                                  total: choices.length,
-                                })
-                              : store.t("presence_sys.sensors_all_desc"),
-                            stacked: true,
-                            control: choices.length
-                              ? html`<div
-                                  role="group"
-                                  aria-label=${store.t("presence_sys.sensors_group_aria", {
-                                    area: areaName,
-                                  })}
-                                  class="pill-list"
-                                >
-                                  ${choices.map((s) => {
-                                    const on = chosen.includes(s.entity_id);
-                                    const nextSensors = on
-                                      ? chosen.filter((x) => x !== s.entity_id)
-                                      : chosen.concat([s.entity_id]);
-                                    return html`<span class="pill ${on ? "enabled" : ""}">
-                                      <button
-                                        type="button"
-                                        aria-pressed=${String(on)}
-                                        title=${s.entity_id}
-                                        @click=${() =>
-                                          void store.groups.setAreaFusion(areaId, {
-                                            sensors: nextSensors,
-                                          })}
-                                        class="pill-toggle"
-                                      >
-                                        ${on ? "✓ " : ""}${s.name}
-                                      </button>
-                                    </span>`;
-                                  })}
-                                </div>`
-                              : html`<p class="empty-state">
-                                  ${store.t("presence_sys.no_area_sensors")}
-                                </p>`,
-                          })}
-                          ${luxChoices.length > 0 || luxEntity !== "auto"
-                            ? html`${renderSettingsRow({
-                                  label: store.t("presence_sys.ambient_sensor"),
-                                  control: html`<select
-                                    aria-label=${store.t("presence_sys.ambient_sensor_aria", {
-                                      area: areaName,
-                                    })}
-                                    .value=${live(luxEntity)}
-                                    @change=${(ev: Event) =>
-                                      void store.groups.setAreaIlluminance(areaId, {
-                                        entity_id: (ev.currentTarget as HTMLSelectElement).value,
-                                      })}
-                                  >
-                                    <option value="auto" .selected=${live(luxEntity === "auto")}>
-                                      ${luxResolvedName && luxEntity === "auto"
-                                        ? store.t("presence_sys.ambient_sensor_auto", {
-                                            sensor: luxResolvedName,
-                                          })
-                                        : store.t("presence_sys.ambient_sensor_auto_none")}
-                                    </option>
-                                    ${luxChoices.map(
-                                      (s) =>
-                                        html`<option
-                                          value=${s.entity_id}
-                                          .selected=${live(luxEntity === s.entity_id)}
-                                        >
-                                          ${s.name}${s.lux_display ? ` (${s.lux_display} lx)` : ""}
-                                        </option>`,
-                                    )}
-                                    <option value="disabled" .selected=${live(luxEntity === "disabled")}>
-                                      ${store.t("presence_sys.ambient_sensor_disabled")}
-                                    </option>
-                                  </select>`,
-                                })}
-                                ${luxEntity !== "disabled"
-                                  ? renderSettingsRow({
-                                      label: store.t("presence_sys.calibrate_lux_btn"),
-                                      description: store.t("presence_sys.ambient_calibration_desc"),
-                                      stacked: true,
-                                      control: html`<div class="lux-bounds-row">
-                                        <label class="lux-bound-field">
-                                          <span>${store.t("presence_sys.ambient_dark_lux")}</span>
-                                          <input
-                                            type="number"
-                                            class="lux-number-input"
-                                            min="0"
-                                            max="500"
-                                            step="0.1"
-                                            aria-label=${`${store.t("presence_sys.ambient_dark_lux")} (${areaName})`}
-                                            .value=${focusSafe(String(luxDark))}
-                                            @change=${(ev: Event) => {
-                                              const el = ev.currentTarget as HTMLInputElement;
-                                              const v = Number(el.value);
-                                              if (!Number.isFinite(v) || v < 0) {
-                                                el.value = String(luxDark);
-                                                return;
-                                              }
-                                              if (v >= luxBright) {
-                                                el.value = String(luxDark);
-                                                store.showToast(
-                                                  store.t("presence_sys.lux_bounds_error"),
-                                                  true,
-                                                );
-                                                return;
-                                              }
-                                              void store.groups.setAreaIlluminance(areaId, {
-                                                dark_lux: v,
-                                              });
-                                            }}
-                                          />
-                                        </label>
-                                        <label class="lux-bound-field">
-                                          <span>${store.t("presence_sys.ambient_bright_lux")}</span>
-                                          <input
-                                            type="number"
-                                            class="lux-number-input"
-                                            min="0.5"
-                                            max="100000"
-                                            step="0.1"
-                                            aria-label=${`${store.t("presence_sys.ambient_bright_lux")} (${areaName})`}
-                                            .value=${focusSafe(String(luxBright))}
-                                            @change=${(ev: Event) => {
-                                              const el = ev.currentTarget as HTMLInputElement;
-                                              const v = Number(el.value);
-                                              if (!Number.isFinite(v) || v <= 0) {
-                                                el.value = String(luxBright);
-                                                return;
-                                              }
-                                              if (v <= luxDark) {
-                                                el.value = String(luxBright);
-                                                store.showToast(
-                                                  store.t("presence_sys.lux_bounds_error"),
-                                                  true,
-                                                );
-                                                return;
-                                              }
-                                              void store.groups.setAreaIlluminance(areaId, {
-                                                bright_lux: v,
-                                              });
-                                            }}
-                                          />
-                                        </label>
-                                        <button
-                                          type="button"
-                                          ?disabled=${store.groups.isCalibratingIlluminance(areaId)}
-                                          class="btn btn-secondary btn-compact"
-                                          @click=${() =>
-                                            void store.groups.calibrateAreaIlluminance(areaId)}
-                                        >
-                                          ${store.groups.isCalibratingIlluminance(areaId)
-                                            ? store.t("presence_sys.calibrating_lux")
-                                            : store.t("presence_sys.calibrate_lux_btn")}
-                                        </button>
-                                      </div>`,
-                                    })
-                                  : nothing}`
-                            : nothing}
-                        </div>
-                      </details>
-                    </div>`;
-                  },
-                )
-              : html`<p class="empty-state">
-                  ${store.t("presence_sys.empty_areas")}
-                </p>`}
-          </div>`,
-        })}
+        ${guard(
+          [
+            presenceRows,
+            signatures,
+            bleDevs.length > 0,
+            calibratingKey,
+            openFusionKey,
+            areaHandoffKey,
+            surveyAreaSetKey,
+            store.localeOverlay,
+            localeKey,
+          ],
+          renderAreaPresenceCard,
+        )}
       </div>
 
       <div class="column">
@@ -670,10 +716,6 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                           const sigStyle = `--signal-pct:${pct}%`;
                           const offVal = Number(row.offset_db || 0);
                           const offTxt = `${offVal >= 0 ? "+" : ""}${fmtNumber(offVal, store.hass, 1)} dB`;
-                          const rawTxt =
-                            row.raw_rssi !== null && row.raw_rssi !== undefined
-                              ? `${fmtNumber(row.raw_rssi, store.hass, 0)} dBm`
-                              : store.t("common.unknown");
                           const effTxt =
                             row.effective_rssi !== null && row.effective_rssi !== undefined
                               ? `${fmtNumber(row.effective_rssi, store.hass, 0)} dBm`
@@ -691,6 +733,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                               ? store.t("presence_sys.trim_suffix", { offset: offTxt })
                               : "";
                           const metaText = `${effTxt}${distPart}${agePart}${trimPart}`;
+                          const isTrimOpen = Boolean(scannerSrc) && store.openProxyTrims.has(scannerSrc);
 
                           return html`<div class="signal-row ${row.is_winner ? "winner" : ""}">
                             <div class="signal-row-head">
@@ -711,55 +754,65 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                             </div>
                             ${scannerSrc
                               ? html`<details
-                                  ?open=${store.openProxyTrims.has(scannerSrc)}
+                                  ?open=${isTrimOpen}
                                   @toggle=${(ev: Event) => {
-                                    if ((ev.currentTarget as HTMLDetailsElement).open) {
-                                      store.openProxyTrims.add(scannerSrc);
-                                    } else {
-                                      store.openProxyTrims.delete(scannerSrc);
+                                    const isOpen = (ev.currentTarget as HTMLDetailsElement).open;
+                                    const wasOpen = store.openProxyTrims.has(scannerSrc);
+                                    if (wasOpen !== isOpen) {
+                                      if (isOpen) {
+                                        store.openProxyTrims.add(scannerSrc);
+                                      } else {
+                                        store.openProxyTrims.delete(scannerSrc);
+                                      }
+                                      store.host.requestUpdate();
                                     }
                                   }}
                                   class="sub-collapsible proxy-trim-details"
                                 >
                                   <summary>${store.t("presence_sys.antenna_trim")}</summary>
-                                  <div class="proxy-trim-body">
-                                    <span class="help-text">${store.t("presence_sys.antenna_trim_help", {
-                                      raw: rawTxt,
-                                      offset: offTxt,
-                                    })}</span>
-                                    <div class="input-action-row">
-                                      <button
-                                        type="button"
-                                        @click=${() =>
-                                          void store.groups.setBleScannerOffset(
-                                            scannerSrc,
-                                            offVal - 1,
-                                          )}
-                                        class="btn btn-secondary btn-compact"
-                                      >
-                                        ${store.t("presence_sys.minus_one_db")}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        @click=${() =>
-                                          void store.groups.setBleScannerOffset(
-                                            scannerSrc,
-                                            offVal + 1,
-                                          )}
-                                        class="btn btn-secondary btn-compact"
-                                      >
-                                        ${store.t("presence_sys.plus_one_db")}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        @click=${() =>
-                                          void store.groups.setBleScannerOffset(scannerSrc, 0)}
-                                        class="btn btn-text btn-compact"
-                                      >
-                                        ${store.t("action.reset")}
-                                      </button>
-                                    </div>
-                                  </div>
+                                  ${isTrimOpen
+                                    ? html`<div class="proxy-trim-body">
+                                        <span class="help-text">${store.t("presence_sys.antenna_trim_help", {
+                                          raw:
+                                            row.raw_rssi !== null && row.raw_rssi !== undefined
+                                              ? `${fmtNumber(row.raw_rssi, store.hass, 0)} dBm`
+                                              : store.t("common.unknown"),
+                                          offset: offTxt,
+                                        })}</span>
+                                        <div class="input-action-row">
+                                          <button
+                                            type="button"
+                                            @click=${() =>
+                                              void store.groups.setBleScannerOffset(
+                                                scannerSrc,
+                                                offVal - 1,
+                                              )}
+                                            class="btn btn-secondary btn-compact"
+                                          >
+                                            ${store.t("presence_sys.minus_one_db")}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            @click=${() =>
+                                              void store.groups.setBleScannerOffset(
+                                                scannerSrc,
+                                                offVal + 1,
+                                              )}
+                                            class="btn btn-secondary btn-compact"
+                                          >
+                                            ${store.t("presence_sys.plus_one_db")}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            @click=${() =>
+                                              void store.groups.setBleScannerOffset(scannerSrc, 0)}
+                                            class="btn btn-text btn-compact"
+                                          >
+                                            ${store.t("action.reset")}
+                                          </button>
+                                        </div>
+                                      </div>`
+                                    : nothing}
                                 </details>`
                               : nothing}
                           </div>`;
@@ -770,131 +823,165 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                       </p>`}`,
         })}
 
-        <details
-          id="card-advanced-ble-settings"
-          ?open=${store.advancedBleOpen}
-          @toggle=${(ev: Event) => {
-            store.advancedBleOpen = (ev.currentTarget as HTMLDetailsElement).open;
-          }}
-          class="card"
-        >
-          <summary class="card-header">
-            <div class="card-heading">
-              <h3 class="card-title">${store.t("card.advanced_ble")}</h3>
-              <p class="card-subtitle">
-                ${store.t("presence_sys.advanced_subtitle")}
-              </p>
-            </div>
-          </summary>
-          <div class="card-content settings-list">
-            ${renderSettingsRow({
-              forId: "sys-ble_away_timeout_s",
-              label: store.t("presence_sys.away_timeout"),
-              description: store.t("presence_sys.away_timeout_desc"),
-              control: html`<input
-                type="number"
-                id="sys-ble_away_timeout_s"
-                min="30"
-                max="900"
-                step="15"
-                .value=${focusSafe(String(sysCfg?.ble_away_timeout_s ?? 180))}
-                @change=${(ev: Event) => {
-                  const val = Number((ev.currentTarget as HTMLInputElement).value);
-                  if (Number.isFinite(val)) {
-                    store.entity.stageSystemSetting(
-                      "ble_away_timeout_s",
-                      Math.round(val),
-                      "sys-ble_away_timeout_s",
-                    );
-                  }
-                }}
-              />`,
-            })}
-            ${renderSettingsRow({
-              forId: "sys-ble_max_radius_m",
-              label: isImperial
-                ? store.t("presence_sys.max_radius_ft")
-                : store.t("presence_sys.max_radius"),
-              description: isImperial
-                ? store.t("presence_sys.max_radius_ft_desc")
-                : store.t("presence_sys.max_radius_desc"),
-              control: html`<input
-                type="number"
-                id="sys-ble_max_radius_m"
-                min=${isImperial ? "6.5" : "2"}
-                max=${isImperial ? "164" : "50"}
-                step=${isImperial ? "1" : "0.5"}
-                .value=${focusSafe(String(displayRadius))}
-                @change=${(ev: Event) => {
-                  const val = Number((ev.currentTarget as HTMLInputElement).value);
-                  if (Number.isFinite(val)) {
-                    const meters = isImperial
-                      ? Math.max(2, Math.min(50, Math.round((val / METERS_TO_FEET) * 100) / 100))
-                      : val;
-                    store.entity.stageSystemSetting(
-                      "ble_max_radius_m",
-                      meters,
-                      "sys-ble_max_radius_m",
-                    );
-                  }
-                }}
-              />`,
-            })}
-            ${renderSettingsRow({
-              forId: "sys-ble_max_velocity_mps",
-              label: isImperial
-                ? store.t("presence_sys.max_speed_fps")
-                : store.t("presence_sys.max_speed"),
-              description: isImperial
-                ? store.t("presence_sys.max_speed_fps_desc")
-                : store.t("presence_sys.max_speed_desc"),
-              control: html`<input
-                type="number"
-                id="sys-ble_max_velocity_mps"
-                min=${isImperial ? "1.5" : "0.5"}
-                max=${isImperial ? "49" : "15"}
-                step="0.5"
-                .value=${focusSafe(String(displayVel))}
-                @change=${(ev: Event) => {
-                  const val = Number((ev.currentTarget as HTMLInputElement).value);
-                  if (Number.isFinite(val)) {
-                    const mps = isImperial
-                      ? Math.max(0.5, Math.min(15, Math.round((val / METERS_TO_FEET) * 100) / 100))
-                      : val;
-                    store.entity.stageSystemSetting(
-                      "ble_max_velocity_mps",
-                      mps,
-                      "sys-ble_max_velocity_mps",
-                    );
-                  }
-                }}
-              />`,
-            })}
-            ${renderSettingsRow({
-              forId: "sys-ble_attenuation",
-              label: store.t("presence_sys.attenuation"),
-              description: store.t("presence_sys.attenuation_desc"),
-              control: html`<input
-                type="number"
-                id="sys-ble_attenuation"
-                min="1.5"
-                max="4.5"
-                step="0.1"
-                .value=${focusSafe(String(sysCfg?.ble_attenuation ?? 2.2))}
-                @change=${(ev: Event) => {
-                  const val = Number((ev.currentTarget as HTMLInputElement).value);
-                  if (Number.isFinite(val)) {
-                    store.entity.stageSystemSetting(
-                      "ble_attenuation",
-                      val,
-                      "sys-ble_attenuation",
-                    );
-                  }
-                }}
-              />`,
-            })}
-          </div>
-        </details>
+        ${guard(
+          [
+            store.advancedBleOpen,
+            sysCfg?.ble_away_timeout_s,
+            sysCfg?.ble_max_radius_m,
+            sysCfg?.ble_max_velocity_mps,
+            sysCfg?.ble_attenuation,
+            isImperial,
+            store.localeOverlay,
+          ],
+          () => {
+            const rawRadiusM = Number(sysCfg?.ble_max_radius_m ?? 12);
+            const displayRadius = isImperial
+              ? Math.round(rawRadiusM * METERS_TO_FEET * 10) / 10
+              : rawRadiusM;
+            const rawVelMps = Number(sysCfg?.ble_max_velocity_mps ?? 3.5);
+            const displayVel = isImperial
+              ? Math.round(rawVelMps * METERS_TO_FEET * 10) / 10
+              : rawVelMps;
+
+            return html`<details
+              id="card-advanced-ble-settings"
+              ?open=${store.advancedBleOpen}
+              @toggle=${(ev: Event) => {
+                const isOpen = (ev.currentTarget as HTMLDetailsElement).open;
+                if (store.advancedBleOpen !== isOpen) {
+                  store.advancedBleOpen = isOpen;
+                  store.host.requestUpdate();
+                }
+              }}
+              class="card"
+            >
+              <summary class="card-header">
+                <div class="card-heading">
+                  <h3 class="card-title">${store.t("card.advanced_ble")}</h3>
+                  <p class="card-subtitle">
+                    ${store.t("presence_sys.advanced_subtitle")}
+                  </p>
+                </div>
+              </summary>
+              ${store.advancedBleOpen
+                ? html`<div class="card-content settings-list">
+                    ${renderSettingsRow({
+                      forId: "sys-ble_away_timeout_s",
+                      label: store.t("presence_sys.away_timeout"),
+                      description: store.t("presence_sys.away_timeout_desc"),
+                      control: html`<input
+                        type="number"
+                        id="sys-ble_away_timeout_s"
+                        min="30"
+                        max="900"
+                        step="15"
+                        .value=${focusSafe(String(sysCfg?.ble_away_timeout_s ?? 180))}
+                        @change=${(ev: Event) => {
+                          const val = Number((ev.currentTarget as HTMLInputElement).value);
+                          if (Number.isFinite(val)) {
+                            store.entity.stageSystemSetting(
+                              "ble_away_timeout_s",
+                              Math.round(val),
+                              "sys-ble_away_timeout_s",
+                            );
+                          }
+                        }}
+                      />`,
+                    })}
+                    ${renderSettingsRow({
+                      forId: "sys-ble_max_radius_m",
+                      label: isImperial
+                        ? store.t("presence_sys.max_radius_ft")
+                        : store.t("presence_sys.max_radius"),
+                      description: isImperial
+                        ? store.t("presence_sys.max_radius_ft_desc")
+                        : store.t("presence_sys.max_radius_desc"),
+                      control: html`<input
+                        type="number"
+                        id="sys-ble_max_radius_m"
+                        min=${isImperial ? "6.5" : "2"}
+                        max=${isImperial ? "164" : "50"}
+                        step=${isImperial ? "1" : "0.5"}
+                        .value=${focusSafe(String(displayRadius))}
+                        @change=${(ev: Event) => {
+                          const val = Number((ev.currentTarget as HTMLInputElement).value);
+                          if (Number.isFinite(val)) {
+                            const meters = isImperial
+                              ? Math.max(
+                                  2,
+                                  Math.min(50, Math.round((val / METERS_TO_FEET) * 100) / 100),
+                                )
+                              : val;
+                            store.entity.stageSystemSetting(
+                              "ble_max_radius_m",
+                              meters,
+                              "sys-ble_max_radius_m",
+                            );
+                          }
+                        }}
+                      />`,
+                    })}
+                    ${renderSettingsRow({
+                      forId: "sys-ble_max_velocity_mps",
+                      label: isImperial
+                        ? store.t("presence_sys.max_speed_fps")
+                        : store.t("presence_sys.max_speed"),
+                      description: isImperial
+                        ? store.t("presence_sys.max_speed_fps_desc")
+                        : store.t("presence_sys.max_speed_desc"),
+                      control: html`<input
+                        type="number"
+                        id="sys-ble_max_velocity_mps"
+                        min=${isImperial ? "1.5" : "0.5"}
+                        max=${isImperial ? "49" : "15"}
+                        step="0.5"
+                        .value=${focusSafe(String(displayVel))}
+                        @change=${(ev: Event) => {
+                          const val = Number((ev.currentTarget as HTMLInputElement).value);
+                          if (Number.isFinite(val)) {
+                            const mps = isImperial
+                              ? Math.max(
+                                  0.5,
+                                  Math.min(15, Math.round((val / METERS_TO_FEET) * 100) / 100),
+                                )
+                              : val;
+                            store.entity.stageSystemSetting(
+                              "ble_max_velocity_mps",
+                              mps,
+                              "sys-ble_max_velocity_mps",
+                            );
+                          }
+                        }}
+                      />`,
+                    })}
+                    ${renderSettingsRow({
+                      forId: "sys-ble_attenuation",
+                      label: store.t("presence_sys.attenuation"),
+                      description: store.t("presence_sys.attenuation_desc"),
+                      control: html`<input
+                        type="number"
+                        id="sys-ble_attenuation"
+                        min="1.5"
+                        max="4.5"
+                        step="0.1"
+                        .value=${focusSafe(String(sysCfg?.ble_attenuation ?? 2.2))}
+                        @change=${(ev: Event) => {
+                          const val = Number((ev.currentTarget as HTMLInputElement).value);
+                          if (Number.isFinite(val)) {
+                            store.entity.stageSystemSetting(
+                              "ble_attenuation",
+                              val,
+                              "sys-ble_attenuation",
+                            );
+                          }
+                        }}
+                      />`,
+                    })}
+                  </div>`
+                : nothing}
+            </details>`;
+          },
+        )}
       </div>
     </div>
   </section>`;

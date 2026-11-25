@@ -40,7 +40,8 @@ from ..const import (
 )
 from ..coordinator import LatterCoordinator
 from ..groups.device_groups import (
-    async_apply_group_baseline_to_coordinators,
+    active_group_keys,
+    coordinator_supports_group_key,
     get_device_groups,
 )
 from ..hub_registry import get_latter_system
@@ -175,6 +176,92 @@ def _resolve_device_group_transition(
     return bool(new_grp_id != old_grp_id), new_grp_id, target_grp
 
 
+def _prepare_device_config_updates(
+    coordinator: LatterCoordinator,
+    raw_cfg: dict[str, Any],
+    current: dict[str, Any],
+    global_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    """Validate and normalize incoming `save_device_config` settings."""
+    updates = clean_device_settings(
+        raw_cfg,
+        current=current,
+        is_round_display=coordinator.is_round_display,
+        supports_hw_jpeg=coordinator.supports_hw_jpeg,
+        strict_traits=True,
+    )
+    validate_remote_group_choice(updates, global_cfg)
+    validate_device_camera_lists(updates, global_cfg)
+    _normalize_device_beacon_uuid_update(coordinator, updates)
+
+    try:
+        if CONF_ACTIVITY_SOURCES in updates:
+            updates[CONF_ACTIVITY_SOURCES] = normalize_activity_sources(
+                updates[CONF_ACTIVITY_SOURCES]
+            )
+    except ValueError as err:
+        raise SettingsScopeError(str(err)) from None
+
+    if (
+        CONF_WALLPAPER_CYCLE_MINUTES in updates
+        and updates[CONF_WALLPAPER_CYCLE_MINUTES] == 0
+        and CONF_WALLPAPER_SOURCE not in updates
+        and coordinator.current_wallpaper
+    ):
+        updates[CONF_WALLPAPER_SOURCE] = coordinator.current_wallpaper
+    return updates
+
+
+def _merge_group_baseline_for_device(
+    coordinator: LatterCoordinator,
+    current: dict[str, Any],
+    target_grp: dict[str, Any],
+    new_grp_id: str,
+    explicit_other_updates: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Merge `target_grp`'s active baseline with `explicit_other_updates` for one atomic save."""
+    dev_cfg = target_grp.get("device_config") or {}
+    baseline_raw: dict[str, Any] = {}
+    for key in active_group_keys(target_grp):
+        if (
+            key not in dev_cfg
+            or dev_cfg[key] is None
+            or not coordinator_supports_group_key(coordinator, key)
+        ):
+            continue
+        want_v = dev_cfg[key]
+        if (
+            key == "clock_face"
+            and want_v == "Modern Analog"
+            and not coordinator.is_round_display
+        ):
+            want_v = "Minimal Digital"
+        baseline_raw[key] = want_v
+
+    baseline_cleaned = (
+        clean_device_settings(
+            baseline_raw,
+            current=current,
+            is_round_display=coordinator.is_round_display,
+            supports_hw_jpeg=coordinator.supports_hw_jpeg,
+        )
+        if baseline_raw
+        else {}
+    )
+    combined: dict[str, Any] = {
+        **current,
+        **baseline_cleaned,
+        CONF_DEVICE_GROUP: new_grp_id,
+        **explicit_other_updates,
+    }
+    _strip_global_keys_from_device_cfg(combined)
+    wp_override = (
+        CONF_WALLPAPER_SOURCE in baseline_cleaned
+        or CONF_WALLPAPER_SOURCE in explicit_other_updates
+    )
+    return combined, wp_override
+
+
 async def _cmd_save_device_config(
     hass: HomeAssistant,
     coordinator: LatterCoordinator | None,
@@ -196,33 +283,9 @@ async def _cmd_save_device_config(
                 "Settings changed in another session; refreshed latest state.",
             )
         current = coordinator.device_data
-        updates = clean_device_settings(
-            raw_cfg,
-            current=current,
-            is_round_display=coordinator.is_round_display,
-            supports_hw_jpeg=coordinator.supports_hw_jpeg,
-            strict_traits=True,
+        updates = _prepare_device_config_updates(
+            coordinator, raw_cfg, current, global_cfg
         )
-        validate_remote_group_choice(updates, global_cfg)
-        validate_device_camera_lists(updates, global_cfg)
-        _normalize_device_beacon_uuid_update(coordinator, updates)
-
-        try:
-            if CONF_ACTIVITY_SOURCES in updates:
-                updates[CONF_ACTIVITY_SOURCES] = normalize_activity_sources(
-                    updates[CONF_ACTIVITY_SOURCES]
-                )
-        except ValueError as err:
-            raise SettingsScopeError(str(err)) from None
-
-        if (
-            CONF_WALLPAPER_CYCLE_MINUTES in updates
-            and updates[CONF_WALLPAPER_CYCLE_MINUTES] == 0
-            and CONF_WALLPAPER_SOURCE not in updates
-            and coordinator.current_wallpaper
-        ):
-            updates[CONF_WALLPAPER_SOURCE] = coordinator.current_wallpaper
-
         merged_device: dict[str, Any] = {**current, **updates}
         _strip_global_keys_from_device_cfg(merged_device)
         ma_link_changed = merged_device.get(CONF_MA_PLAYER_ENTITY, "") != current.get(
@@ -234,14 +297,20 @@ async def _cmd_save_device_config(
         explicit_other_updates = {
             k: v for k, v in updates.items() if k != CONF_DEVICE_GROUP
         }
-        if group_changed and target_grp is not None:
-            await async_apply_group_baseline_to_coordinators(
-                hass, target_grp, [coordinator]
+        if group_changed and target_grp is not None and not coordinator.is_ble_tag:
+            combined, wp_override = _merge_group_baseline_for_device(
+                coordinator, current, target_grp, new_grp_id, explicit_other_updates
             )
-            if explicit_other_updates:
-                post_baseline = {**coordinator.device_data, **explicit_other_updates}
-                _strip_global_keys_from_device_cfg(post_baseline)
-                coordinator.update_device_config(post_baseline, preserve_group=False)
+            if combined != current or wp_override:
+                if wp_override:
+                    wp_val = str(combined.get(CONF_WALLPAPER_SOURCE) or "").strip()
+                    coordinator.current_wallpaper = wp_val
+                    coordinator.set_configured_wallpaper_source(wp_val)
+                coordinator.update_device_config(
+                    combined,
+                    preserve_group=not bool(explicit_other_updates),
+                    defer_apply=True,
+                )
                 await coordinator.async_apply_options()
         elif merged_device != current or group_changed:
             coordinator.update_device_config(
@@ -249,6 +318,7 @@ async def _cmd_save_device_config(
                 preserve_group=bool(
                     CONF_DEVICE_GROUP in updates and new_grp_id == DEFAULT_DEVICE_GROUP
                 ),
+                defer_apply=True,
             )
             await coordinator.async_apply_options()
         if ma_link_changed:
@@ -342,6 +412,31 @@ async def _cmd_device_action(
     )
 
 
+def _clean_custom_photo_ids(
+    raw_photo_ids: Any, known_ids: set[str]
+) -> list[str]:
+    """Validate and deduplicate `photo_ids` for custom photo pool mode."""
+    if not isinstance(raw_photo_ids, list):
+        raise StudioCommandError("invalid_format", "photo_ids must be a list")
+    cleaned_ids: list[str] = []
+    for item in raw_photo_ids:
+        pid = str(item or "").strip()
+        if pid and pid not in cleaned_ids:
+            if pid not in known_ids:
+                raise StudioCommandError("not_allowed", f"Unknown photo '{pid}'")
+            cleaned_ids.append(pid)
+    if not cleaned_ids:
+        raise StudioCommandError(
+            "invalid_format", "Select at least one photo for custom mode"
+        )
+    if len(cleaned_ids) > MAX_CUSTOM_PHOTO_POOL:
+        raise StudioCommandError(
+            "invalid_format",
+            f"Custom photo pool cannot exceed {MAX_CUSTOM_PHOTO_POOL} photos",
+        )
+    return cleaned_ids
+
+
 def _validate_photo_pool_selection(
     body: dict[str, Any], *, target: str, mode: str
 ) -> tuple[str, str, list[str]]:
@@ -350,7 +445,6 @@ def _validate_photo_pool_selection(
     valid_collections = VIRTUAL_COLLECTION_IDS | known_collection_ids()
     source_id = str(body.get("source_id") or "").strip()
     collection_id = str(body.get("collection_id") or "").strip()
-    raw_photo_ids = body.get("photo_ids")
     cleaned_ids: list[str] = []
 
     if mode == "single":
@@ -365,23 +459,7 @@ def _validate_photo_pool_selection(
                 f"Unknown photo collection '{collection_id or '(empty)'}'",
             )
     elif mode == "custom":
-        if not isinstance(raw_photo_ids, list):
-            raise StudioCommandError("invalid_format", "photo_ids must be a list")
-        for item in raw_photo_ids:
-            pid = str(item or "").strip()
-            if pid and pid not in cleaned_ids:
-                if pid not in known_ids:
-                    raise StudioCommandError("not_allowed", f"Unknown photo '{pid}'")
-                cleaned_ids.append(pid)
-        if not cleaned_ids:
-            raise StudioCommandError(
-                "invalid_format", "Select at least one photo for custom mode"
-            )
-        if len(cleaned_ids) > MAX_CUSTOM_PHOTO_POOL:
-            raise StudioCommandError(
-                "invalid_format",
-                f"Custom photo pool cannot exceed {MAX_CUSTOM_PHOTO_POOL} photos",
-            )
+        cleaned_ids = _clean_custom_photo_ids(body.get("photo_ids"), known_ids)
     return source_id, collection_id, cleaned_ids
 
 

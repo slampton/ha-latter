@@ -37,7 +37,6 @@ async def _async_ensure_static_dir(hass: HomeAssistant) -> tuple[Path, str]:
 
     registered_prefixes = domain_data.studio_static_prefixes
     if versioned_prefix not in registered_prefixes:
-        registered_prefixes.add(versioned_prefix)
         await hass.http.async_register_static_paths(
             [
                 StaticPathConfig(
@@ -47,6 +46,7 @@ async def _async_ensure_static_dir(hass: HomeAssistant) -> tuple[Path, str]:
                 )
             ]
         )
+        registered_prefixes.add(versioned_prefix)
     return frontend_dir, versioned_prefix
 
 
@@ -54,6 +54,11 @@ async def async_register_studio_icon_module(hass: HomeAssistant) -> str | None:
     """Register `latter-icons.js` as a frontend extra module as early as possible (idempotent)."""
     domain_data = get_domain_data(hass)
     frontend_dir, versioned_prefix = await _async_ensure_static_dir(hass)
+    prev_icon_url = domain_data.studio_icon_js_url
+    if prev_icon_url and prev_icon_url.startswith(
+        f"{versioned_prefix}/{ICONS_MODULE}?v="
+    ):
+        return prev_icon_url
 
     try:
         icon_digest = await hass.async_add_executor_job(
@@ -66,9 +71,6 @@ async def async_register_studio_icon_module(hass: HomeAssistant) -> str | None:
         return None
 
     icon_url = f"{versioned_prefix}/{ICONS_MODULE}?v={icon_digest}"
-    prev_icon_url = domain_data.studio_icon_js_url
-    if prev_icon_url == icon_url:
-        return icon_url
     if prev_icon_url:
         try:
             frontend.remove_extra_js_url(hass, prev_icon_url)

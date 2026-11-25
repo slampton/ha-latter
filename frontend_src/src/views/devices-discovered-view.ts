@@ -17,6 +17,20 @@ const WEB_INSTALLER_URL = "https://slampton.github.io/esphome-latter-core/";
 const GETTING_STARTED_URL =
   "https://github.com/slampton/ha-latter/blob/main/docs/getting-started.md";
 
+export const DISCOVERED_BLE_PAGE_SIZE = 30;
+const bleVisibleLimitByStore = new WeakMap<StudioStore, number>();
+
+export function discoveredBleCandidateKey(
+  store: StudioStore,
+  c: DiscoveredBleCandidate,
+): string {
+  return (c.target_address || candidateTitle(store, c)).toLowerCase();
+}
+
+export function discoveredLatterDeviceKey(d: DiscoveredLatterDevice): string {
+  return d.esphome_device_id || d.node_name || d.title;
+}
+
 function candidateTitle(store: StudioStore, c: DiscoveredBleCandidate): string {
   return c.title || c.target_address || store.t("status.ble_tag");
 }
@@ -87,6 +101,10 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
     .slice()
     .sort((a, b) => compareBleCandidates(store, a, b, sortMode));
 
+  const visibleBleLimit = bleVisibleLimitByStore.get(store) ?? DISCOVERED_BLE_PAGE_SIZE;
+  const visibleBle = filteredBle.slice(0, visibleBleLimit);
+  const remainingBleCount = Math.max(0, filteredBle.length - visibleBle.length);
+
   const latterDraftGroups = store.discoveredLatterGroupDrafts;
   const latterDraftPersons = store.discoveredLatterPersonDrafts;
   const bleDraftPersons = store.discoveredBlePersonDrafts;
@@ -108,7 +126,7 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
           ${latterCandidates.length
             ? repeat(
                 latterCandidates,
-                (d, idx) => `${d.esphome_device_id || d.node_name}::${idx}`,
+                (d) => discoveredLatterDeviceKey(d),
                 (d) => {
                   const title =
                     d.title || d.node_name || store.t("discovered.default_latter_title");
@@ -228,7 +246,11 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
               class="sub-collapsible summary-row"
               ?open=${store.discoveredIgnoredOpen}
               @toggle=${(ev: Event) => {
-                store.discoveredIgnoredOpen = (ev.currentTarget as HTMLDetailsElement).open;
+                const isOpen = (ev.currentTarget as HTMLDetailsElement).open;
+                if (store.discoveredIgnoredOpen !== isOpen) {
+                  store.discoveredIgnoredOpen = isOpen;
+                  store.host.requestUpdate();
+                }
               }}
             >
               <summary>
@@ -241,38 +263,40 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                   <span class="summary-chevron" aria-hidden="true">▾</span>
                 </span>
               </summary>
-              <div class="card-content settings-list">
-                ${repeat(
-                  ignoredLatter,
-                  (d, idx) => `ignored::${d.esphome_device_id || d.node_name}::${idx}`,
-                  (d) => {
-                    const title =
-                      d.title || d.node_name || store.t("discovered.default_latter_title");
-                    const meta: string[] = [
-                      d.model_label || store.t("discovered.default_latter_model"),
-                    ];
-                    if (d.node_name) {
-                      meta.push(store.t("discovered.meta_node", { node: d.node_name }));
-                    }
-                    if (d.area_name) {
-                      meta.push(store.t("discovered.meta_area", { area: d.area_name }));
-                    }
-                    return renderSettingsRow({
-                      label: title,
-                      description: meta.join(" • "),
-                      control: html`<button
-                        type="button"
-                        aria-label=${store.t("discovered.restore_aria", { title })}
-                        @click=${() =>
-                          void store.tools.unignoreDiscoveredDevice(d.esphome_device_id, title)}
-                        class="btn btn-secondary btn-compact"
-                      >
-                        ${store.t("action.unignore")}
-                      </button>`,
-                    });
-                  },
-                )}
-              </div>
+              ${store.discoveredIgnoredOpen
+                ? html`<div class="card-content settings-list">
+                    ${repeat(
+                      ignoredLatter,
+                      (d) => `ignored::${discoveredLatterDeviceKey(d)}`,
+                      (d) => {
+                        const title =
+                          d.title || d.node_name || store.t("discovered.default_latter_title");
+                        const meta: string[] = [
+                          d.model_label || store.t("discovered.default_latter_model"),
+                        ];
+                        if (d.node_name) {
+                          meta.push(store.t("discovered.meta_node", { node: d.node_name }));
+                        }
+                        if (d.area_name) {
+                          meta.push(store.t("discovered.meta_area", { area: d.area_name }));
+                        }
+                        return renderSettingsRow({
+                          label: title,
+                          description: meta.join(" • "),
+                          control: html`<button
+                            type="button"
+                            aria-label=${store.t("discovered.restore_aria", { title })}
+                            @click=${() =>
+                              void store.tools.unignoreDiscoveredDevice(d.esphome_device_id, title)}
+                            class="btn btn-secondary btn-compact"
+                          >
+                            ${store.t("action.unignore")}
+                          </button>`,
+                        });
+                      },
+                    )}
+                  </div>`
+                : nothing}
             </details>`
           : nothing}`,
     })}
@@ -289,6 +313,7 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
           .value=${focusSafe(store.discoveredBleSearch)}
           @input=${(ev: Event) => {
             store.discoveredBleSearch = (ev.currentTarget as HTMLInputElement).value;
+            bleVisibleLimitByStore.delete(store);
             store.host.requestUpdate();
           }}
         />
@@ -300,6 +325,7 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
             const val = (ev.currentTarget as HTMLSelectElement).value;
             store.discoveredBleKindFilter =
               val === "tracker" || val === "named" ? val : "all";
+            bleVisibleLimitByStore.delete(store);
             store.host.requestUpdate();
           }}
         >
@@ -321,6 +347,7 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
             const val = (ev.currentTarget as HTMLSelectElement).value;
             store.discoveredBleSort =
               val === "rssi" || val === "area" ? val : "name";
+            bleVisibleLimitByStore.delete(store);
             store.host.requestUpdate();
           }}
         >
@@ -359,66 +386,107 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
               })}
             </p>`
           : nothing}
-        ${filteredBle.length
-          ? repeat(
-              filteredBle,
-              (c, idx) =>
-                `${(c.target_address || candidateTitle(store, c)).toLowerCase()}::${idx}`,
-              (c) => {
-                const title = candidateTitle(store, c);
-                const addr = c.target_address || "";
-                const addrKey = (addr || title).toLowerCase();
-                const curPerson = bleDraftPersons.get(addrKey) || "";
-                const kindLabel = c.kind || store.t("discovered.default_ble_kind");
-                const showAddr =
-                  Boolean(addr) && !kindLabel.toLowerCase().includes(addr.toLowerCase());
-                const meta = [kindLabel, ...(showAddr ? [addr] : [])];
-                if (c.rssi !== null && c.rssi !== undefined) {
-                  meta.push(`${fmtNumber(c.rssi, store.hass, 0)} dBm`);
-                }
-                if (c.area_name) {
-                  meta.push(store.t("discovered.meta_nearest_area", { area: c.area_name }));
-                }
+        ${visibleBle.length
+          ? html`${repeat(
+                visibleBle,
+                (c) => discoveredBleCandidateKey(store, c),
+                (c) => {
+                  const title = candidateTitle(store, c);
+                  const addr = c.target_address || "";
+                  const addrKey = (addr || title).toLowerCase();
+                  const curPerson = bleDraftPersons.get(addrKey) || "";
+                  const kindLabel = c.kind || store.t("discovered.default_ble_kind");
+                  const showAddr =
+                    Boolean(addr) && !kindLabel.toLowerCase().includes(addr.toLowerCase());
+                  const meta = [kindLabel, ...(showAddr ? [addr] : [])];
+                  if (c.rssi !== null && c.rssi !== undefined) {
+                    meta.push(`${fmtNumber(c.rssi, store.hass, 0)} dBm`);
+                  }
+                  if (c.area_name) {
+                    meta.push(store.t("discovered.meta_nearest_area", { area: c.area_name }));
+                  }
 
-                return renderSettingsRow({
-                  label: title,
-                  description: meta.join(" • "),
-                  control: html`<select
-                      aria-label=${store.t("discovered.person_select_aria", { title })}
-                      .value=${live(curPerson)}
-                      @change=${(ev: Event) => {
-                        bleDraftPersons.set(
-                          addrKey,
-                          (ev.currentTarget as HTMLSelectElement).value || "",
-                        );
-                        store.host.requestUpdate();
-                      }}
-                    >
-                      <option value="" .selected=${live(!curPerson)}>
-                        ${store.t("common.no_person")}
-                      </option>
-                      ${persons.map(
-                        (p) =>
-                          html`<option value=${p.id} .selected=${live(curPerson === p.id)}>
-                            ${p.name}
-                          </option>`,
-                      )}
-                    </select>
-                    <button
-                      type="button"
-                      @click=${() =>
-                        void store.tools.quickAdoptBleCandidate(
-                          title,
-                          addr,
-                          bleDraftPersons.get(addrKey) || "",
+                  return renderSettingsRow({
+                    label: title,
+                    description: meta.join(" • "),
+                    control: html`<select
+                        aria-label=${store.t("discovered.person_select_aria", { title })}
+                        .value=${live(curPerson)}
+                        @change=${(ev: Event) => {
+                          bleDraftPersons.set(
+                            addrKey,
+                            (ev.currentTarget as HTMLSelectElement).value || "",
+                          );
+                          store.host.requestUpdate();
+                        }}
+                      >
+                        <option value="" .selected=${live(!curPerson)}>
+                          ${store.t("common.no_person")}
+                        </option>
+                        ${persons.map(
+                          (p) =>
+                            html`<option value=${p.id} .selected=${live(curPerson === p.id)}>
+                              ${p.name}
+                            </option>`,
                         )}
-                      class="btn btn-secondary btn-compact"
-                    >
-                      ${store.t("action.adopt")}
-                    </button>`,
-                });
-              },
-            )
+                      </select>
+                      <button
+                        type="button"
+                        @click=${() =>
+                          void store.tools.quickAdoptBleCandidate(
+                            title,
+                            addr,
+                            bleDraftPersons.get(addrKey) || "",
+                          )}
+                        class="btn btn-secondary btn-compact"
+                      >
+                        ${store.t("action.adopt")}
+                      </button>`,
+                  });
+                },
+              )}
+              ${filteredBle.length > DISCOVERED_BLE_PAGE_SIZE
+                ? html`<div class="input-action-row">
+                    <span class="row-description">
+                      ${store.t("photos.page_status", {
+                        start: fmtNumber(1, store.hass, 0),
+                        end: fmtNumber(visibleBle.length, store.hass, 0),
+                        total: fmtNumber(filteredBle.length, store.hass, 0),
+                      })}
+                    </span>
+                    ${remainingBleCount > 0
+                      ? html`<button
+                          type="button"
+                          id="btn-discovered-ble-show-more"
+                          @click=${() => {
+                            bleVisibleLimitByStore.set(
+                              store,
+                              visibleBleLimit + DISCOVERED_BLE_PAGE_SIZE,
+                            );
+                            store.host.requestUpdate();
+                          }}
+                          class="btn btn-secondary btn-compact"
+                        >
+                          Show more (${store.t("sys_overview.plus_more", {
+                            count: fmtNumber(remainingBleCount, store.hass, 0),
+                          })})
+                        </button>`
+                      : nothing}
+                    ${visibleBleLimit > DISCOVERED_BLE_PAGE_SIZE
+                      ? html`<button
+                          type="button"
+                          id="btn-discovered-ble-show-fewer"
+                          @click=${() => {
+                            bleVisibleLimitByStore.delete(store);
+                            store.host.requestUpdate();
+                          }}
+                          class="btn btn-text btn-compact"
+                        >
+                          Show fewer
+                        </button>`
+                      : nothing}
+                  </div>`
+                : nothing}`
           : html`<p class="empty-state">
               ${bleCandidates.length
                 ? store.t("discovered.empty_ble_filtered")

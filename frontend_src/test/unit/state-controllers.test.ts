@@ -452,7 +452,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     assert.equal(store.currentViewId, "photos");
   });
 
-  it("constructs STUDIO_REV=51 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
+  it("constructs STUDIO_REV=52 WS payloads with snapshot-isolated saves and expected_config_rev", async () => {
     const { store, wsLog } = createHeadlessStore();
     store.applyRoute({ prefix: "/latter", path: "devices/sub_desk/overview" });
 
@@ -470,10 +470,10 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { do_not_disturb: true },
         expected_config_rev: 7,
       },
-      studio_rev: 51,
+      studio_rev: 52,
     });
 
-    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 51`
+    // System setting save on System scope sends `subentry_id: null` + `expected_config_rev` + `studio_rev: 52`
     wsLog.length = 0;
     store.applyRoute({ prefix: "/latter", path: "system/presence" });
     store.entity.stageSystemSetting("ble_away_timeout_s", 240, undefined, 60_000);
@@ -487,7 +487,7 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
         config: { ble_away_timeout_s: 240 },
         expected_config_rev: 3,
       },
-      studio_rev: 51,
+      studio_rev: 52,
     });
 
     // `version_mismatch` sets `studioRevMismatch = true`

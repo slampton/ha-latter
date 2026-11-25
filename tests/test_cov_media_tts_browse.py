@@ -1047,6 +1047,25 @@ async def test_tts_queue_assist_satellite_resolution_and_announcements(
         }
     ]
 
+    # 6. Fallback TTS announcements enable HA TTS audio caching (`cache=True`)
+    tts_calls: list[dict[str, Any]] = []
+    mock_service(hass, "tts", "speak", lambda call: tts_calls.append(dict(call.data)))
+    await tts_queue.async_announce_on_targets(
+        hass,
+        [generic_spk],
+        message="Front door bell",
+        tts_entity="tts.piper",
+        blocking=True,
+    )
+    assert tts_calls == [
+        {
+            "entity_id": "tts.piper",
+            "media_player_entity_id": [generic_spk],
+            "message": "Front door bell",
+            "cache": True,
+        }
+    ]
+
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 

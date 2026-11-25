@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import json
 import logging
-from typing import Any
+from typing import Any, Final
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
@@ -13,6 +13,8 @@ from homeassistant.helpers.storage import Store
 from ..const import STORAGE_KEY_PREFIX, STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
+
+RUNTIME_SAVE_DELAY_SECONDS: Final[float] = 45.0
 
 _RPC_RECEIVER_FACTORY: Callable[[HomeAssistant, Any], Any] | None = None
 
@@ -61,7 +63,9 @@ class LatterDeviceRuntime:
         if snap == self._last_persisted_snapshot:
             return
         self._last_persisted_snapshot = dict(snap)
-        self.store.async_delay_save(snapshot_builder, delay=1.5)
+        self.store.async_delay_save(
+            snapshot_builder, delay=RUNTIME_SAVE_DELAY_SECONDS
+        )
 
     async def async_flush(self, snapshot: dict[str, Any]) -> None:
         """Immediately persist a runtime snapshot to disk (used by pre-backup hook)."""

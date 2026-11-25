@@ -216,6 +216,12 @@ class V3Records(tuple[Sequence[Any], ...]):
         return result
 
 
+_ASCII_CTRL_TRANS: Final[dict[int, str]] = {
+    **{c: " " for c in range(_CTRL_MAX_ORD + 1)},
+    _DEL_ORD: " ",
+}
+
+
 def _is_control_or_sep_char(ch: str) -> bool:
     code = ord(ch)
     return code <= _CTRL_MAX_ORD or code == _DEL_ORD or unicodedata.category(ch) in ("Cc", "Zl", "Zp")
@@ -227,7 +233,11 @@ def sanitize_v3_subfield(val: object, max_len: int | None = None) -> str:
         return ""
     if isinstance(val, bool):
         return "1" if val else "0"
-    s = " ".join("".join(" " if _is_control_or_sep_char(ch) else ch for ch in str(val)).split())
+    text = str(val)
+    if text.isascii():
+        s = " ".join(text.translate(_ASCII_CTRL_TRANS).split())
+    else:
+        s = " ".join("".join(" " if _is_control_or_sep_char(ch) else ch for ch in text).split())
     if max_len is not None and len(s) > max_len:
         s = s[:max_len].rstrip()
     return s.replace("\\", "\\\\").replace("|", "\\p").replace(";", "\\s")

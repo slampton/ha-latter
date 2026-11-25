@@ -471,22 +471,46 @@ def attach_hub_sync_methods(sys_obj: LatterSystemHub) -> LatterSystemHub:
     return sys_obj
 
 
+async def async_save_global_config(
+    hass: HomeAssistant, updates: dict[str, Any]
+) -> tuple[dict[str, Any], set[str]]:
+    """Persist changed System config keys to `.storage/latter.site` and return `(global_cfg, changed_keys)`."""
+    domain_data = get_domain_data(hass)
+    global_cfg = domain_data.global_config
+    if not updates:
+        return global_cfg, set()
+    changed_keys = {k for k, v in updates.items() if global_cfg.get(k) != v}
+    if not changed_keys:
+        return global_cfg, set()
+    global_cfg.update(updates)
+    cur_rev = get_system_config_rev(hass)
+    global_cfg[CONF_SYSTEM_CONFIG_REV] = cur_rev + 1
+    store = domain_data.global_store
+    if store is not None:
+        await store.async_save(global_cfg)
+    return global_cfg, changed_keys
+
+
+async def async_broadcast_global_config(
+    hass: HomeAssistant, changed_keys: set[str]
+) -> None:
+    """Fan out System config updates concurrently across all loaded device coordinators."""
+    if not changed_keys:
+        return
+    coords = iter_coordinators(hass)
+    if len(coords) == 1:
+        await coords[0].async_on_global_config_updated(changed_keys)
+    elif coords:
+        await asyncio.gather(
+            *(coord.async_on_global_config_updated(changed_keys) for coord in coords)
+        )
+
+
 async def async_save_and_broadcast_global_config(
     hass: HomeAssistant, updates: dict[str, Any]
 ) -> dict[str, Any]:
     """Persist updates to `.storage/latter.site` and broadcast to all loaded device coordinators."""
-    domain_data = get_domain_data(hass)
-    global_cfg = domain_data.global_config
-    if not updates:
-        return global_cfg
-    changed_keys = {k for k, v in updates.items() if global_cfg.get(k) != v}
-    global_cfg.update(updates)
+    global_cfg, changed_keys = await async_save_global_config(hass, updates)
     if changed_keys:
-        cur_rev = get_system_config_rev(hass)
-        global_cfg[CONF_SYSTEM_CONFIG_REV] = cur_rev + 1
-    store = domain_data.global_store
-    if store is not None:
-        await store.async_save(global_cfg)
-    for coord in iter_coordinators(hass):
-        await coord.async_on_global_config_updated(changed_keys or set(updates.keys()))
+        await async_broadcast_global_config(hass, changed_keys)
     return global_cfg

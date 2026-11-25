@@ -505,7 +505,11 @@ async def test_timer_alarm_state_event_driven_and_boot_reset(
 
     assert hass.states.get(f"binary_sensor.{slug}_timer_active").state == "off"
     assert hass.states.get(f"binary_sensor.{slug}_alarm_ringing").state == "off"
-    assert int(hass.states.get(f"sensor.{slug}_timer_remaining").state) == 0
+    idle_timer = hass.states.get(f"sensor.{slug}_timer_ends")
+    assert idle_timer is not None
+    assert idle_timer.state == "unknown"
+    assert idle_timer.attributes["state"] == "idle"
+    assert idle_timer.attributes["paused_remaining_s"] == 0
 
     await async_dispatch_bound_rpc(
         hass,
@@ -514,14 +518,20 @@ async def test_timer_alarm_state_event_driven_and_boot_reset(
         {"timer_running": 1, "timer_paused": 0, "remaining_sec": 120, "ringing": 0},
     )
     assert hass.states.get(f"binary_sensor.{slug}_timer_active").state == "on"
-    assert int(hass.states.get(f"sensor.{slug}_timer_remaining").state) == 120
+    running_timer = hass.states.get(f"sensor.{slug}_timer_ends")
+    assert running_timer is not None
+    ends_dt = dt_util.parse_datetime(running_timer.state)
+    assert ends_dt is not None
+    assert running_timer.attributes["state"] == "running"
+    assert running_timer.attributes["paused_remaining_s"] == 0
+    assert coord.timer_ends_at_dt is not None
+    assert 118 <= coord.current_timer_remaining_sec <= 120
 
-    # Simulate 35s elapsed via per-instance anchor -> computed locally with zero Wi-Fi polling
+    # Simulate 35s elapsed via per-instance anchor -> computed locally with zero Wi-Fi polling or 1 Hz HA tick
     coord._timer_anchor_mono = time.monotonic() - 35.0
-    coord.async_update_listeners()
-    assert int(hass.states.get(f"sensor.{slug}_timer_remaining").state) == 85
+    assert coord.current_timer_remaining_sec == 85
 
-    # Pause freezes countdown, ringing sets alarm_ringing on
+    # Pause freezes countdown, clears timestamp (`unknown`), and ringing sets alarm_ringing on
     await async_dispatch_bound_rpc(
         hass,
         coord,
@@ -532,14 +542,25 @@ async def test_timer_alarm_state_event_driven_and_boot_reset(
     coord.async_update_listeners()
     assert hass.states.get(f"binary_sensor.{slug}_timer_active").state == "off"
     assert hass.states.get(f"binary_sensor.{slug}_alarm_ringing").state == "on"
-    assert int(hass.states.get(f"sensor.{slug}_timer_remaining").state) == 85
+    paused_timer = hass.states.get(f"sensor.{slug}_timer_ends")
+    assert paused_timer is not None
+    assert paused_timer.state == "unknown"
+    assert paused_timer.attributes["state"] == "paused"
+    assert paused_timer.attributes["paused_remaining_s"] == 85
+    assert coord.timer_ends_at_dt is None
+    assert coord.current_timer_remaining_sec == 85
 
     # Reboot (`is_new_boot`) clears stale timer and ringing state
     manifest_raw = json.dumps(coord.hardware_manifest)
     await coord.async_handle_device_hello("fresh_boot_99", manifest_raw)
     assert hass.states.get(f"binary_sensor.{slug}_timer_active").state == "off"
     assert hass.states.get(f"binary_sensor.{slug}_alarm_ringing").state == "off"
-    assert int(hass.states.get(f"sensor.{slug}_timer_remaining").state) == 0
+    reset_timer = hass.states.get(f"sensor.{slug}_timer_ends")
+    assert reset_timer is not None
+    assert reset_timer.state == "unknown"
+    assert reset_timer.attributes["state"] == "idle"
+    assert reset_timer.attributes["paused_remaining_s"] == 0
+    assert coord.timer_ends_at_dt is None
 
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
@@ -757,7 +778,8 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     assert coord.games_items_csv == "archery,bricks,drop_four"
     assert coord.device_group == "arcade_stations"
 
-    # 2) Stopwatch + Timer + Ringing live telemetry & 1 Hz local monotonic elapsed counter
+    # 2) Stopwatch + Timer + Ringing live telemetry & UTC anchor timestamp (zero 1 Hz HA timer tick!)
+    assert not hasattr(coord, "_unsub_timer_tick")
     await sys_obj.rpc_dispatcher.async_dispatch(
         coord,
         "timer_alarm_state",
@@ -771,7 +793,8 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
             "stopwatch_elapsed_sec": 15,
         },
     )
-    assert coord._unsub_timer_tick is not None
+    assert coord.timer_ends_at_dt is not None
+    assert coord.timer_ends_at_utc != ""
 
     shifted_anchor = time.monotonic() - 22.2
     coord._timer_anchor_mono = shifted_anchor
@@ -823,7 +846,7 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     ):
         assert display_live_key not in ble_live
 
-    # Pause stopwatch while timer stops -> 1 Hz tick unsubscribes and paused elapsed stays frozen
+    # Pause stopwatch while timer stops -> timestamp clears and paused elapsed stays frozen
     await async_dispatch_bound_rpc(
         hass,
         coord,
@@ -838,7 +861,8 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
             "stopwatch_elapsed_sec": 37,
         },
     )
-    assert coord._unsub_timer_tick is None
+    assert coord.timer_ends_at_dt is None
+    assert coord.timer_ends_at_utc == ""
     paused_anchor = time.monotonic() - 100.0
     coord._timer_anchor_mono = paused_anchor
     coord._stopwatch_anchor_mono = paused_anchor
@@ -860,9 +884,9 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
             "stopwatch_elapsed_sec": 37,
         },
     )
-    assert coord._unsub_timer_tick is None
     assert coord.stopwatch_started_at_utc != ""
     assert coord.timer_ends_at_utc == ""
+    assert coord.timer_ends_at_dt is None
 
     # 3) Contextual `device_action` commands: `dismiss_ringing`, `cancel_timer`, `reset_stopwatch`
     calls = get_service_calls(hass)
@@ -897,7 +921,7 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     assert coord.timer_paused is False
     assert coord.current_timer_remaining_sec == 0
     assert conn.results[-1][1]["live"]["timer_remaining_sec"] == 0
-    assert coord._unsub_timer_tick is None
+    assert coord.timer_ends_at_dt is None
 
     await call_ws(
         hass,
@@ -915,7 +939,7 @@ async def test_tools_games_prefs_and_stopwatch_live_device_actions(
     assert coord.current_stopwatch_elapsed_sec == 0
     assert conn.results[-1][1]["live"]["stopwatch_elapsed_sec"] == 0
     assert conn.results[-1][1]["live"]["stopwatch_started_at"] == ""
-    assert coord._unsub_timer_tick is None
+    assert coord.timer_ends_at_dt is None
 
     sent_cmds = [
         c.data.get("command")

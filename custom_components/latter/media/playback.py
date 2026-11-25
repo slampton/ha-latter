@@ -58,6 +58,7 @@ _LIBRARY_URI_PREFIX_LEN: Final[int] = 10
 _SPINUP_GUARD_S: Final[float] = 2.5
 _PLAY_GUARD_S: Final[float] = 2.5
 _COLD_RESUME_GUARD_S: Final[float] = 3.5
+_MAX_FAVORITE_OVERRIDES: Final[int] = 32
 _UNSET: Final = object()
 
 
@@ -346,6 +347,11 @@ def _sync_active_speaker_media_snapshot(coordinator: Any) -> None:
     ma_cid = str(snap.m_attrs.get("media_content_id") or "")
     if is_ephemeral_announcement_uri(local_cid):
         return
+    prev_track = (
+        coordinator.last_media_uri,
+        coordinator.last_media_title,
+        coordinator.last_media_artist,
+    )
     for cand in (ma_cid, local_cid):
         if cand and not is_ephemeral_announcement_uri(cand):
             coordinator.last_media_uri = cand
@@ -358,6 +364,15 @@ def _sync_active_speaker_media_snapshot(coordinator: Any) -> None:
         coordinator.last_media_duration = snap.duration
     if snap.position > 0:
         coordinator.last_media_position = snap.position
+    new_track = (
+        coordinator.last_media_uri,
+        coordinator.last_media_title,
+        coordinator.last_media_artist,
+    )
+    if (snap.state == STATE_PAUSED or new_track != prev_track) and hasattr(
+        coordinator, "sync_persisted_media_position"
+    ):
+        coordinator.sync_persisted_media_position()
 
 
 _SPEECH_MEDIA_TYPES: Final[frozenset[str]] = frozenset(
@@ -504,6 +519,11 @@ def bind_coordinator_speaker_listener(coordinator: Any) -> None:
         coordinator.cached_media_anchor = None
         coordinator.cached_media_payload = None
         _sync_active_speaker_media_snapshot(coordinator)
+        if (
+            new_state is None
+            or new_state.state in (STATE_PAUSED, STATE_IDLE, STATE_OFF, "stopped")
+        ) and hasattr(coordinator, "sync_persisted_media_position"):
+            coordinator.sync_persisted_media_position()
         _maybe_schedule_proactive_lyrics_push(coordinator, prev_lyr_key, new_state)
         if is_media_position_only_tick(old_state, new_state):
             coordinator.cached_media_payload = None
@@ -782,7 +802,8 @@ def resolve_effective_favorite(
         if (entry := overrides.get(k)) is not None:
             opt_val, snap_val = entry
             if raw_source_fav is not None and raw_source_fav != snap_val:
-                overrides.pop(k, None)
+                for drop_k in keys:
+                    overrides.pop(drop_k, None)
                 return bool(raw_source_fav)
             return bool(opt_val)
     return bool(raw_source_fav) if raw_source_fav is not None else False
@@ -868,9 +889,13 @@ async def _async_execute_favorite_toggle(
 
     raw_source_fav = resolve_raw_source_favorite(attrs, m_attrs, live_q_fav)
     target_fav = not resolve_effective_favorite(coordinator, title, artist, item_uri, raw_source_fav)
+    overrides = coordinator.media_favorite_overrides
     for k in (item_uri, f"{title.lower()}|{artist.lower()}" if title else ""):
         if k:
-            coordinator.media_favorite_overrides[k] = (target_fav, raw_source_fav)
+            overrides.pop(k, None)
+            overrides[k] = (target_fav, raw_source_fav)
+    while len(overrides) > _MAX_FAVORITE_OVERRIDES:
+        overrides.pop(next(iter(overrides)), None)
 
     mass = get_ma_mass_client(hass)
     handled = await _async_apply_mass_favorite_mutation(
@@ -1053,6 +1078,8 @@ async def _async_handle_group_or_transport_tail(
     if cmd in ("pause", "stop"):
         coordinator.transfer_hold_spinup_until = 0.0
         coordinator.resuming_guard_until = 0.0
+        if hasattr(coordinator, "sync_persisted_media_position"):
+            coordinator.sync_persisted_media_position()
     if svc_name := simple_services.get(cmd):
         await hass.services.async_call("media_player", svc_name, {ATTR_ENTITY_ID: cmd_target}, blocking=False)
     elif cmd == "clear_queue":

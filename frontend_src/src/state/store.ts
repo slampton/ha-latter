@@ -39,6 +39,7 @@ import {
   overlayPendingEntityStates,
 } from "./group-overlay.js";
 import { GroupsController } from "./groups-controller.js";
+import { clearPhotoImageCache, revokeAllStagedPhotoUploads } from "./photo-ops.js";
 import {
   applyRouteOp,
   applySectionHandoffOp,
@@ -453,6 +454,11 @@ export class StudioStore implements ReactiveController, StudioStoreContext {
       clearInterval(this.liveClockTimer);
       this.liveClockTimer = null;
     }
+    if (this.photoUploadModal.files.length > 0) {
+      revokeAllStagedPhotoUploads(this.photoUploadModal.files);
+      this.photoUploadModal = emptyPhotoUploadModalState();
+    }
+    clearPhotoImageCache();
     this.sub.detachConnectionListener();
     void this.entity.flushAllPendingSettings();
     this.teardownSubscription();

@@ -15,7 +15,7 @@ from .protocol_specs import (
 
 DOMAIN: Final = "latter"
 INTEGRATION_VERSION: Final = "3.0.0"
-STUDIO_REV: Final[int] = 51
+STUDIO_REV: Final[int] = 52
 if int(STUDIO_CONTRACT["studio_rev"]) != STUDIO_REV:
     raise RuntimeError("const.py STUDIO_REV is out of sync with studio_contract.json")
 

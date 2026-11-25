@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from http import HTTPStatus
 import io
 import logging
 import math
 from pathlib import Path
-from typing import TypedDict, Unpack
+from typing import Final, TypedDict, Unpack
 
 from aiohttp import BodyPartReader, MultipartReader, web
 from homeassistant.core import HomeAssistant
@@ -25,7 +27,11 @@ from ..const import (
     normalize_device_slug,
 )
 from ..coordinator import LatterCoordinator, resolve_coordinator
-from ..hub_registry import get_latter_system, iter_coordinators
+from ..hub_registry import (
+    get_latter_system,
+    iter_coordinators,
+    notify_studio_subscribers,
+)
 from ..media_cache import (
     _THUMB_LRU_CACHE,
     MAX_MULTIPART_PARTS,
@@ -33,13 +39,13 @@ from ..media_cache import (
     MAX_THUMB_CACHE_ENTRIES,
     THUMB_CACHE_MAX_DIM,
     TRANSCODE_SEMAPHORE,
+    ImageCacheKey,
     cache_for_dims,
     cache_get,
     cache_put,
     get_circular_mask_surfaces,
     validate_pil_image_dimensions,
 )
-from ..presence.ble_fabric import get_ble_fabric
 from ..studio.state_gates import find_by_subentry_id
 from ..wallpapers.media_import import resolve_media_path
 from ..wallpapers.models import (
@@ -63,6 +69,54 @@ _PREVIEW_MIN_DIM = 32
 _ORIG_MIN_EDGE = 64
 _ORIG_MAX_EDGE = 1600
 _WALLPAPER_DARKEN_FACTOR = 0.78
+_MAX_CONCURRENT_HTTP_TRANSCODES: Final[int] = 2
+
+_WALLPAPER_TRANSCODE_SEMAPHORE: Final[asyncio.Semaphore] = asyncio.Semaphore(
+    _MAX_CONCURRENT_HTTP_TRANSCODES
+)
+_INFLIGHT_TRANSCODES: dict[ImageCacheKey, asyncio.Future[bytes]] = {}
+
+
+def _consume_unretrieved_exception(fut: asyncio.Future[bytes]) -> None:
+    if not fut.cancelled():
+        fut.exception()
+
+
+def _fail_inflight_future(fut: asyncio.Future[bytes], err: BaseException) -> None:
+    if fut.done():
+        return
+    if isinstance(err, asyncio.CancelledError):
+        fut.cancel()
+    else:
+        fut.set_exception(err)
+
+
+async def _async_coalesced_transcode(
+    cache_key: ImageCacheKey,
+    produce: Callable[[], Awaitable[bytes]],
+) -> bytes:
+    """Coalesce duplicate concurrent transcodes and cap executor concurrency with a semaphore."""
+    loop = asyncio.get_running_loop()
+    existing = _INFLIGHT_TRANSCODES.get(cache_key)
+    if existing is not None and not existing.done() and existing.get_loop() is loop:
+        return await asyncio.shield(existing)
+
+    fut: asyncio.Future[bytes] = loop.create_future()
+    fut.add_done_callback(_consume_unretrieved_exception)
+    _INFLIGHT_TRANSCODES[cache_key] = fut
+    try:
+        async with _WALLPAPER_TRANSCODE_SEMAPHORE:
+            result = await produce()
+    except BaseException as err:
+        _fail_inflight_future(fut, err)
+        raise
+    else:
+        if not fut.done():
+            fut.set_result(result)
+        return result
+    finally:
+        if _INFLIGHT_TRANSCODES.get(cache_key) is fut:
+            _INFLIGHT_TRANSCODES.pop(cache_key, None)
 
 
 class _PhotoTranscodeOpts(TypedDict, total=False):
@@ -113,6 +167,34 @@ class _ParsedUploadForm:
     collection_id: str | None = None
 
 
+def _apply_photo_jpeg_draft(
+    img: Image.Image,
+    width: int,
+    height: int,
+    crop_zoom: float,
+    *,
+    original_aspect: bool,
+) -> None:
+    """Request libjpeg DCT downscale (`2x` target) before RGB decode for JPEG inputs."""
+    if img.format != "JPEG":
+        return
+    if original_aspect:
+        max_edge = max(
+            _ORIG_MIN_EDGE, min(_ORIG_MAX_EDGE, max(int(width), int(height)))
+        )
+        draft_dim = max_edge * 2
+        img.draft("RGB", (draft_dim, draft_dim))
+        return
+    zoom_scale = max(1.0, float(crop_zoom))
+    img.draft(
+        "RGB",
+        (
+            round(int(width) * zoom_scale) * 2,
+            round(int(height) * zoom_scale) * 2,
+        ),
+    )
+
+
 def _transcode_photo_to_baseline_jpeg(
     raw_bytes: bytes,
     width: int,
@@ -129,6 +211,9 @@ def _transcode_photo_to_baseline_jpeg(
 
     with TRANSCODE_SEMAPHORE, Image.open(io.BytesIO(raw_bytes)) as img:
         validate_pil_image_dimensions(img)
+        _apply_photo_jpeg_draft(
+            img, width, height, crop_zoom, original_aspect=original_aspect
+        )
         rgb = img.convert("RGB")
         if original_aspect:
             max_edge = max(_ORIG_MIN_EDGE, min(_ORIG_MAX_EDGE, max(int(width), int(height))))
@@ -163,29 +248,61 @@ def _transcode_photo_to_baseline_jpeg(
 
 def _transcode_media_preview_jpeg(file_path: Path, width: int, height: int) -> bytes:
     """Read an HA `/media` image (`<= 15 MB`), EXIF-transpose, and encode a thumbnail Baseline JPEG."""
-    size = file_path.stat().st_size
-    if size <= 0 or size > MAX_WALLPAPER_UPLOAD_BYTES:
-        raise ValueError("Media file exceeds 15 MB preview cap")
-    raw_bytes = file_path.read_bytes()
-    with TRANSCODE_SEMAPHORE, Image.open(io.BytesIO(raw_bytes)) as img:
-        validate_pil_image_dimensions(img)
-        rgb = ImageOps.exif_transpose(img).convert("RGB")
-        fitted = ImageOps.fit(
-            rgb,
-            (width, height),
-            method=Image.Resampling.LANCZOS,
-            centering=(0.5, 0.5),
-        )
-        out = io.BytesIO()
-        fitted.save(
-            out,
-            format="JPEG",
-            quality=80,
-            optimize=True,
-            progressive=False,
-            subsampling=2,
-        )
-        return out.getvalue()
+    with TRANSCODE_SEMAPHORE:
+        size = file_path.stat().st_size
+        if size <= 0 or size > MAX_WALLPAPER_UPLOAD_BYTES:
+            raise ValueError("Media file exceeds 15 MB preview cap")
+        raw_bytes = file_path.read_bytes()
+        with Image.open(io.BytesIO(raw_bytes)) as img:
+            validate_pil_image_dimensions(img)
+            if img.format == "JPEG":
+                draft_dim = max(int(width), int(height)) * 2
+                img.draft("RGB", (draft_dim, draft_dim))
+            rgb = ImageOps.exif_transpose(img).convert("RGB")
+            fitted = ImageOps.fit(
+                rgb,
+                (width, height),
+                method=Image.Resampling.LANCZOS,
+                centering=(0.5, 0.5),
+            )
+            out = io.BytesIO()
+            fitted.save(
+                out,
+                format="JPEG",
+                quality=80,
+                optimize=True,
+                progressive=False,
+                subsampling=2,
+            )
+            return out.getvalue()
+
+
+def _resolve_and_transcode_media_preview_sync(
+    media_dirs: Mapping[str, str] | None,
+    media_root: str,
+    media_path: str,
+    width: int,
+    height: int,
+) -> bytes:
+    """Resolve and validate a `/media` file off the event loop and transcode its thumbnail."""
+    resolved = resolve_media_path(media_dirs, media_root, media_path)
+    if resolved is None or not resolved.is_file():
+        raise FileNotFoundError("Media file not found")
+    return _transcode_media_preview_jpeg(resolved, width, height)
+
+
+def _read_and_transcode_photo_sync(
+    wp_root: Path,
+    wp_source: str,
+    width: int,
+    height: int,
+    **opts: Unpack[_PhotoTranscodeOpts],
+) -> bytes:
+    """Read a library original photo off the event loop and transcode inside the gated executor."""
+    raw_bytes = read_photo_bytes(wp_root, wp_source)
+    if not raw_bytes:
+        raise FileNotFoundError("Wallpaper source unreadable")
+    return _transcode_photo_to_baseline_jpeg(raw_bytes, width, height, **opts)
 
 
 def _render_preset_to_baseline_jpeg(
@@ -285,21 +402,26 @@ async def _async_serve_media_preview(
         return err_resp or web.Response(status=HTTPStatus.FORBIDDEN)
     width, height = dims
 
-    media_dirs = getattr(hass.config, "media_dirs", None)
-    resolved = await hass.async_add_executor_job(
-        resolve_media_path, media_dirs, media_root, media_path
-    )
-    if resolved is None or not resolved.is_file():
-        return web.Response(status=HTTPStatus.NOT_FOUND, text="Media file not found")
-
-    m_key = (f"media:{media_root}/{media_path}", width, height, False, 1.0)
+    m_key: ImageCacheKey = (f"media:{media_root}/{media_path}", width, height, False, 1.0)
     cached_m = cache_get(_THUMB_LRU_CACHE, m_key)
     if cached_m is not None:
         return _jpeg_response(cached_m, hit=True)
+
+    media_dirs = getattr(hass.config, "media_dirs", None)
     try:
-        jpeg_bytes = await hass.async_add_executor_job(
-            _transcode_media_preview_jpeg, resolved, width, height
+        jpeg_bytes = await _async_coalesced_transcode(
+            m_key,
+            lambda: hass.async_add_executor_job(
+                _resolve_and_transcode_media_preview_sync,
+                media_dirs,
+                media_root,
+                media_path,
+                width,
+                height,
+            ),
         )
+    except FileNotFoundError:
+        return web.Response(status=HTTPStatus.NOT_FOUND, text="Media file not found")
     except Exception as err:  # noqa: BLE001
         _LOGGER.debug("Media preview transcode failed: %s", err)
         return web.Response(
@@ -370,6 +492,7 @@ def _resolve_wallpaper_target(
 async def _async_render_wallpaper_source(
     hass: HomeAssistant,
     spec: _WallpaperTargetSpec,
+    cache_key: ImageCacheKey,
     darken_factor: float,
     *,
     is_night: bool,
@@ -377,16 +500,19 @@ async def _async_render_wallpaper_source(
     """Render a preset or transcode a photo library item into Baseline JPEG."""
     if spec.wp_source.startswith("preset:"):
         try:
-            jpeg_bytes = await hass.async_add_executor_job(
-                lambda: _render_preset_to_baseline_jpeg(
-                    spec.wp_source,
-                    spec.width,
-                    spec.height,
-                    circular_mask=(spec.is_circle and spec.mode_raw != "original"),
-                    darken=darken_factor,
-                    mode=spec.mode_raw,
-                    is_night=is_night,
-                )
+            jpeg_bytes = await _async_coalesced_transcode(
+                cache_key,
+                lambda: hass.async_add_executor_job(
+                    lambda: _render_preset_to_baseline_jpeg(
+                        spec.wp_source,
+                        spec.width,
+                        spec.height,
+                        circular_mask=(spec.is_circle and spec.mode_raw != "original"),
+                        darken=darken_factor,
+                        mode=spec.mode_raw,
+                        is_night=is_night,
+                    )
+                ),
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Wallpaper preset rendering failed: %s", err)
@@ -397,27 +523,29 @@ async def _async_render_wallpaper_source(
         return jpeg_bytes, None
 
     if parse_photo_source(spec.wp_source) is not None:
-        raw_bytes = await hass.async_add_executor_job(
-            read_photo_bytes, get_wallpaper_root(hass), spec.wp_source
-        )
-        if not raw_bytes:
-            return None, web.Response(
-                status=HTTPStatus.NOT_FOUND, text="Wallpaper source unreadable"
-            )
+        wp_root = get_wallpaper_root(hass)
         crop = get_photo_crop(spec.wp_source)
         try:
-            jpeg_bytes = await hass.async_add_executor_job(
-                lambda: _transcode_photo_to_baseline_jpeg(
-                    raw_bytes,
-                    spec.width,
-                    spec.height,
-                    circular_mask=(spec.is_circle and spec.mode_raw != "original"),
-                    darken=darken_factor,
-                    crop_x=crop.x,
-                    crop_y=crop.y,
-                    crop_zoom=crop.zoom,
-                    original_aspect=(spec.mode_raw == "original"),
-                )
+            jpeg_bytes = await _async_coalesced_transcode(
+                cache_key,
+                lambda: hass.async_add_executor_job(
+                    lambda: _read_and_transcode_photo_sync(
+                        wp_root,
+                        spec.wp_source,
+                        spec.width,
+                        spec.height,
+                        circular_mask=(spec.is_circle and spec.mode_raw != "original"),
+                        darken=darken_factor,
+                        crop_x=crop.x,
+                        crop_y=crop.y,
+                        crop_zoom=crop.zoom,
+                        original_aspect=(spec.mode_raw == "original"),
+                    )
+                ),
+            )
+        except FileNotFoundError:
+            return None, web.Response(
+                status=HTTPStatus.NOT_FOUND, text="Wallpaper source unreadable"
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Wallpaper Pillow processing failed: %s", err)
@@ -480,7 +608,7 @@ class LatterWallpaperProxyView(HomeAssistantView):
             return _jpeg_response(cached_bytes, hit=True)
 
         jpeg_bytes, render_err = await _async_render_wallpaper_source(
-            self.hass, spec, darken_factor, is_night=is_night
+            self.hass, spec, cache_key, darken_factor, is_night=is_night
         )
         if render_err is not None or jpeg_bytes is None:
             return render_err or web.Response(status=HTTPStatus.UNPROCESSABLE_ENTITY)
@@ -774,7 +902,7 @@ class LatterWallpaperUploadView(HomeAssistantView):
             )
         else:
             wallpapers = system_wallpapers
-            get_ble_fabric(self.hass).notify_occupancy_listeners()
+            notify_studio_subscribers(self.hass)
 
         photo_entry = next(
             (w for w in system_wallpapers if w.get("id") == source_id), saved_photo

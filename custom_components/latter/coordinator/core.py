@@ -169,10 +169,15 @@ from ..feeds import (
 )
 from ..groups.device_groups import resolve_effective_device_group
 from ..http.signing import UrlSigner
-from ..hub_registry import get_latter_system, iter_coordinators, peek_global_config
+from ..hub_registry import (
+    get_area_state_index,
+    get_latter_system,
+    iter_coordinators,
+    peek_global_config,
+)
 from ..identity import (
+    device_entities,
     esphome_service,
-    find_device_entity_by_suffix,
     get_bound_esphome_device,
     manifest_flag,
     manifest_has_audio,
@@ -298,7 +303,7 @@ _DISPLAY_SHAPE_MAP: dict[str, str] = {
     "none": "none",
 }
 _CAPABILITY_GATED_ENTITIES: tuple[tuple[str, str, str], ...] = (
-    ("sensor", "timer_remaining", "display"),
+    ("sensor", "timer_ends", "display"),
     ("binary_sensor", "timer_active", "display"),
     ("binary_sensor", "alarm_ringing", "display"),
     ("light", "screen", "display"),
@@ -347,6 +352,68 @@ def _parse_kb(val: Any) -> int | None:
         return None
 
 
+class _TaskReentrantLock:
+    """Asyncio lock re-entrant within the same `asyncio.Task`, mutually exclusive across tasks."""
+
+    def __init__(self) -> None:
+        self._lock = asyncio.Lock()
+        self._owner: asyncio.Task[Any] | None = None
+        self._depth: int = 0
+
+    def locked(self) -> bool:
+        return self._lock.locked()
+
+    async def acquire(self) -> bool:
+        cur_task = asyncio.current_task()
+        if cur_task is not None and self._owner is cur_task:
+            self._depth += 1
+            return True
+        await self._lock.acquire()
+        self._owner = cur_task
+        self._depth = 1
+        return True
+
+    def release(self) -> None:
+        self._depth -= 1
+        if self._depth <= 0:
+            self._depth = 0
+            self._owner = None
+            self._lock.release()
+
+    async def __aenter__(self) -> None:
+        await self.acquire()
+
+    async def __aexit__(self, _exc_type: Any, _exc: Any, _tb: Any) -> None:
+        self.release()
+
+
+_PRESENCE_OPTION_KEYS: tuple[str, ...] = (
+    CONF_NATIVE_BLE_TRACKING,
+    CONF_BLE_AUTO_SWITCH,
+    CONF_SYNC_DEVICE_AREA,
+    CONF_DEFAULT_AREA,
+    CONF_ASSIGNED_PERSON,
+    CONF_BLE_BEACON_UUID,
+    CONF_BLE_TARGET_ADDRESS,
+    CONF_BLE_CATEGORY,
+    CONF_BLE_REF_POWER,
+    CONF_AREA_FOLLOW_DWELL_S,
+)
+
+
+def _presence_options_changed(
+    prev_snap: Mapping[str, Any], new_snap: Mapping[str, Any]
+) -> bool:
+    """Return True when title or presence/BLE/Area subentry options changed."""
+    if prev_snap.get("title") != new_snap.get("title"):
+        return True
+    prev_data = prev_snap.get("data")
+    new_data = new_snap.get("data")
+    if not isinstance(prev_data, Mapping) or not isinstance(new_data, Mapping):
+        return True
+    return any(prev_data.get(k) != new_data.get(k) for k in _PRESENCE_OPTION_KEYS)
+
+
 class LatterCoordinator:
     """Pure push coordinator managing Protocol v3 domains, BLE presence, media, and Area state."""
 
@@ -366,9 +433,8 @@ class LatterCoordinator:
         self.subentry_id = subentry.subentry_id
         self.name = f"{DOMAIN}_{self.subentry_id}"
         self._listeners: dict[Callable[[], None], None] = {}
-        self._timer_tick_listeners: dict[Callable[[], None], None] = {}
         self._background_tasks: set[asyncio.Task[Any]] = set()
-        self.config_lock = asyncio.Lock()
+        self.config_lock = _TaskReentrantLock()
         self.device_config_rev = 1
         self._hmac_secret = secret_bytes
         self._runtime = LatterDeviceRuntime(hass, self.subentry_id)
@@ -376,6 +442,8 @@ class LatterCoordinator:
         self._packer = DomainPayloadPacker()
         self._area_follow = LatterAreaFollowController(hass)
         self._cached_esphome_device_id: str | None = None
+        self._bound_entities_cache: dict[str, tuple[er.RegistryEntry, ...]] | None = None
+        self._bound_entities_cache_key: tuple[str, int] | None = None
         self.rev = 1
         self._notify_debouncer: Debouncer[Coroutine[Any, Any, None]] = Debouncer(
             hass,
@@ -394,6 +462,7 @@ class LatterCoordinator:
         self._init_feeds_and_alerts()
         self._structural_snapshot = self._capture_structural_snapshot()
         self._applied_options_snapshot = self._capture_options_snapshot()
+        self._suppress_update_listener_apply: bool = False
 
     def _init_caches_and_timers(self) -> None:
         self._cached_media_payload: tuple[float, tuple[str | None, dict[str, Any]]] | None = None
@@ -409,6 +478,7 @@ class LatterCoordinator:
         self.timer_paused: bool = False
         self.timer_remaining_sec: int = 0
         self._timer_anchor_mono: float = 0.0
+        self.timer_ends_at_dt: datetime | None = None
         self.timer_ends_at_utc: str = ""
         self.stopwatch_running: bool = False
         self.stopwatch_paused: bool = False
@@ -416,7 +486,6 @@ class LatterCoordinator:
         self._stopwatch_anchor_mono: float = 0.0
         self.stopwatch_started_at_utc: str = ""
         self.alarm_ringing: bool = False
-        self._unsub_timer_tick: Callable[[], None] | None = None
         self._unsub_core_config: Callable[[], None] | None = None
         self._unsub_speaker_state: Callable[[], None] | None = None
         self._tracked_ma_counterpart: str | None = None
@@ -473,6 +542,7 @@ class LatterCoordinator:
         self.last_media_album: str = ""
         self.last_media_duration: float = 0.0
         self.last_media_position: float = 0.0
+        self._persisted_media_position: float = 0.0
         self._resuming_guard_until: float = 0.0
         self._local_needs_cold_resume: bool = True
         self._browsed_album_track_uris: list[str] = []
@@ -589,15 +659,14 @@ class LatterCoordinator:
         self._background_tasks.clear()
 
     @callback
+    def sync_persisted_media_position(self) -> None:
+        """Snapshot the current in-memory media position for `.storage` persistence."""
+        self._persisted_media_position = self.last_media_position
+
+    @callback
     def async_update_listeners(self) -> None:
         """Notify all registered push listeners."""
         for cb in list(self._listeners):
-            cb()
-
-    @callback
-    def _notify_timer_tick_listeners(self) -> None:
-        """Notify dedicated 1 Hz timer countdown listeners."""
-        for cb in list(self._timer_tick_listeners):
             cb()
 
     @callback
@@ -611,20 +680,6 @@ class LatterCoordinator:
         @callback
         def _remove() -> None:
             self._listeners.pop(update_callback, None)
-
-        unsub: Callable[[], None] = _remove
-        return unsub
-
-    @callback
-    def async_add_timer_tick_listener(
-        self, tick_callback: Callable[[], None]
-    ) -> Callable[[], None]:
-        """Register a dedicated 1 Hz timer countdown listener (`LatterTimerRemainingSensor` only)."""
-        self._timer_tick_listeners[tick_callback] = None
-
-        @callback
-        def _remove() -> None:
-            self._timer_tick_listeners.pop(tick_callback, None)
 
         unsub: Callable[[], None] = _remove
         return unsub
@@ -959,16 +1014,20 @@ class LatterCoordinator:
         *,
         bump_prefs_seq: bool = True,
         preserve_group: bool = False,
+        mark_applied: bool = False,
+        defer_apply: bool = False,
     ) -> None:
         """Persist updated subentry data and advance `prefs_seq` / `device_config_rev`."""
-        prev = self._live_subentry().data
+        live_sub = self._live_subentry()
+        prev = live_sub.data
         if not self.is_ble_tag and not preserve_group:
             eff_grp = resolve_effective_device_group(
                 self.hass, self, candidate_data=merged_data
             )
             if merged_data.get(CONF_DEVICE_GROUP) != eff_grp:
                 merged_data = {**merged_data, CONF_DEVICE_GROUP: eff_grp}
-        changed_pref_keys: list[str] = []
+        if dict(prev) == merged_data:
+            return
         if bump_prefs_seq:
             changed_pref_keys = self._compute_changed_pref_keys(prev, merged_data)
             if changed_pref_keys:
@@ -978,9 +1037,23 @@ class LatterCoordinator:
                 self._cached_prefs_payload = None
                 if "world_clocks" in changed_pref_keys:
                     self._cached_area_payload = None
-        self.hass.config_entries.async_update_subentry(
-            self.entry, self._live_subentry(), data=merged_data
-        )
+        if mark_applied:
+            self._applied_options_snapshot = {
+                "title": str(live_sub.title or ""),
+                "data": dict(merged_data),
+            }
+        prev_suppress = self._suppress_update_listener_apply
+        if defer_apply:
+            # Stay suppressed until the caller's `async_apply_options()` runs so concurrent
+            # batch updates on sibling subentries cannot trigger a duplicate listener apply.
+            self._suppress_update_listener_apply = True
+        try:
+            self.hass.config_entries.async_update_subentry(
+                self.entry, live_sub, data=merged_data
+            )
+        except Exception:
+            self._suppress_update_listener_apply = prev_suppress
+            raise
         if (
             prev.get(CONF_DOCK_ITEMS) != merged_data.get(CONF_DOCK_ITEMS)
             or prev.get(CONF_PINNED_ITEMS) != merged_data.get(CONF_PINNED_ITEMS)
@@ -1091,10 +1164,55 @@ class LatterCoordinator:
         )
         return self._cached_esphome_device_id
 
-    def device_entity(self, domain: str, *suffixes: str) -> str | None:
-        return find_device_entity_by_suffix(
-            self.hass, self.esphome_device_id, domain, suffixes
-        )
+    @callback
+    def invalidate_bound_entity_cache(self) -> None:
+        """Clear the cached bound ESPHome entity lookup map."""
+        self._bound_entities_cache = None
+        self._bound_entities_cache_key = None
+
+    def _bound_esphome_entities(self, domain: str) -> tuple[er.RegistryEntry, ...]:
+        esp_dev_id = self.esphome_device_id
+        if not esp_dev_id:
+            return ()
+        idx = get_area_state_index(self.hass)
+        if idx.started:
+            cache_key = (esp_dev_id, idx.registry_rev)
+            if (
+                self._bound_entities_cache is not None
+                and self._bound_entities_cache_key == cache_key
+            ):
+                return self._bound_entities_cache.get(domain, ())
+            by_domain: dict[str, list[er.RegistryEntry]] = {}
+            for entry in device_entities(self.hass, esp_dev_id):
+                by_domain.setdefault(entry.domain, []).append(entry)
+            self._bound_entities_cache = {
+                dom: tuple(items) for dom, items in by_domain.items()
+            }
+            self._bound_entities_cache_key = cache_key
+            return self._bound_entities_cache.get(domain, ())
+        return tuple(device_entities(self.hass, esp_dev_id, domain=domain))
+
+    def device_entity(
+        self,
+        domain: str,
+        *suffixes: str,
+        original_names: tuple[str, ...] = (),
+        unique_id_suffixes: tuple[str, ...] = (),
+    ) -> str | None:
+        entries = self._bound_esphome_entities(domain)
+        for sfx in suffixes:
+            for entry in entries:
+                if not sfx or entry.entity_id.endswith(sfx):
+                    return str(entry.entity_id)
+        for orig in original_names:
+            for entry in entries:
+                if (entry.original_name or "") == orig:
+                    return str(entry.entity_id)
+        for uid_sfx in unique_id_suffixes:
+            for entry in entries:
+                if uid_sfx and (entry.unique_id or "").endswith(uid_sfx):
+                    return str(entry.entity_id)
+        return None
 
     def device_state(self, domain: str, *suffixes: str) -> State | None:
         ent_id = self.device_entity(domain, *suffixes)
@@ -2643,6 +2761,7 @@ class LatterCoordinator:
             and entity_device_id == self.esphome_device_id
         )
         if changed or is_own_device:
+            self.invalidate_bound_entity_cache()
             self._cached_media_payload = None
             bind_coordinator_speaker_listener(self)
             if is_own_device:
@@ -2779,11 +2898,9 @@ class LatterCoordinator:
                 return str(tracked)
         if not self.esphome_device_id:
             return None
-        return find_device_entity_by_suffix(
-            self.hass,
-            self.esphome_device_id,
+        return self.device_entity(
             "sensor",
-            _RPC_OUTBOX_SUFFIXES,
+            *_RPC_OUTBOX_SUFFIXES,
             original_names=_RPC_OUTBOX_NAMES,
             unique_id_suffixes=_RPC_OUTBOX_UID_SUFFIXES,
         )
@@ -2822,12 +2939,7 @@ class LatterCoordinator:
             return False
         saw_conn_sensor = False
         for sfx in ("_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"):
-            ent_id = find_device_entity_by_suffix(
-                self.hass,
-                self.esphome_device_id,
-                "sensor",
-                (sfx,),
-            )
+            ent_id = self.device_entity("sensor", sfx)
             if not ent_id:
                 continue
             saw_conn_sensor = True
@@ -2854,13 +2966,7 @@ class LatterCoordinator:
             telem_ble = self.device_telemetry.get("ble_active")
             if isinstance(telem_ble, bool):
                 return not telem_ble
-            ble_ent_id = find_device_entity_by_suffix(
-                self.hass,
-                self.esphome_device_id,
-                "binary_sensor",
-                ("_ble_radio_active",),
-            )
-            ble_st = self.hass.states.get(ble_ent_id) if ble_ent_id else None
+            ble_st = self.device_state("binary_sensor", "_ble_radio_active")
             return bool(ble_st is not None and ble_st.state == "off")
         return bool(
             self._entered_hibernate
@@ -2880,13 +2986,7 @@ class LatterCoordinator:
         telem_ble = self.device_telemetry.get("ble_active")
         if isinstance(telem_ble, bool):
             return telem_ble
-        ble_ent_id = find_device_entity_by_suffix(
-            self.hass,
-            self.esphome_device_id,
-            "binary_sensor",
-            ("_ble_radio_active",),
-        )
-        ble_st = self.hass.states.get(ble_ent_id) if ble_ent_id else None
+        ble_st = self.device_state("binary_sensor", "_ble_radio_active")
         return bool(ble_st is not None and ble_st.state == "on")
 
     async def async_sync_presence_beacon(self, trigger: str = "options") -> None:
@@ -3316,8 +3416,12 @@ class LatterCoordinator:
             return {}
         prev_seq = self.prefs_seq
         if cleaned:
+            needs_apply = CONF_NATIVE_BLE_TRACKING in cleaned
             self.update_device_config(
-                {**self.device_data, **cleaned}, bump_prefs_seq=True
+                {**self.device_data, **cleaned},
+                bump_prefs_seq=True,
+                mark_applied=not needs_apply,
+                defer_apply=needs_apply,
             )
         if (force_bump and self.prefs_seq == prev_seq) or (
             min_next_seq is not None and self.prefs_seq < min_next_seq
@@ -3338,6 +3442,7 @@ class LatterCoordinator:
             await self.async_apply_options()
             self.async_update_listeners()
         else:
+            self._applied_options_snapshot = self._capture_options_snapshot()
             self.async_update_listeners()
             self.async_notify_listeners()
         return cleaned
@@ -3356,32 +3461,6 @@ class LatterCoordinator:
         )
 
     @callback
-    def _stop_timer_tick(self) -> None:
-        if self._unsub_timer_tick is not None:
-            self._unsub_timer_tick()
-            self._unsub_timer_tick = None
-
-    @callback
-    def _sync_timer_tick(self) -> None:
-        need_tick = self.timer_running and self.current_timer_remaining_sec > 0
-        if need_tick:
-            if self._unsub_timer_tick is None:
-
-                @callback
-                def _on_timer_tick(_now: datetime) -> None:
-                    if not (
-                        self.timer_running and self.current_timer_remaining_sec > 0
-                    ):
-                        self._stop_timer_tick()
-                    self._notify_timer_tick_listeners()
-
-                self._unsub_timer_tick = async_track_time_interval(
-                    self.hass, _on_timer_tick, timedelta(seconds=1)
-                )
-        else:
-            self._stop_timer_tick()
-
-    @callback
     def handle_timer_alarm_state(
         self,
         timer_running: bool,
@@ -3392,20 +3471,22 @@ class LatterCoordinator:
         stopwatch_paused: bool = False,
         stopwatch_elapsed_sec: int = 0,
     ) -> None:
-        """Update event-driven timer, stopwatch, and alarm state and manage the isolated 1 Hz tick."""
+        """Update event-driven timer, stopwatch, and alarm state without 1 Hz polling."""
         now_mono = time.monotonic()
         now_utc = dt_util.utcnow()
         self.timer_running = bool(timer_running)
         self.timer_paused = bool(timer_paused) and not self.timer_running
         self.timer_remaining_sec = max(0, int(remaining_sec or 0))
         self._timer_anchor_mono = now_mono
-        self.timer_ends_at_utc = (
-            (now_utc + timedelta(seconds=self.timer_remaining_sec)).isoformat(
-                timespec="seconds"
+        if self.timer_running and self.timer_remaining_sec > 0:
+            ends_dt = (now_utc + timedelta(seconds=self.timer_remaining_sec)).replace(
+                microsecond=0
             )
-            if self.timer_running and self.timer_remaining_sec > 0
-            else ""
-        )
+            self.timer_ends_at_dt = ends_dt
+            self.timer_ends_at_utc = ends_dt.isoformat(timespec="seconds")
+        else:
+            self.timer_ends_at_dt = None
+            self.timer_ends_at_utc = ""
         self.alarm_ringing = bool(ringing)
         self.stopwatch_running = bool(stopwatch_running)
         self.stopwatch_paused = bool(stopwatch_paused) and not self.stopwatch_running
@@ -3419,8 +3500,6 @@ class LatterCoordinator:
             else ""
         )
 
-        self._sync_timer_tick()
-        self._notify_timer_tick_listeners()
         self.async_update_listeners()
 
     async def async_set_screen_light(
@@ -3461,16 +3540,14 @@ class LatterCoordinator:
             self.timer_running = False
             self.timer_paused = False
             self.timer_remaining_sec = 0
+            self.timer_ends_at_dt = None
             self.timer_ends_at_utc = ""
-            self._sync_timer_tick()
-            self._notify_timer_tick_listeners()
             self.async_update_listeners()
         elif cmd == "reset_stopwatch":
             self.stopwatch_running = False
             self.stopwatch_paused = False
             self.stopwatch_elapsed_sec = 0
             self.stopwatch_started_at_utc = ""
-            self._sync_timer_tick()
             self.async_update_listeners()
 
     async def async_send_device_command(
@@ -3487,13 +3564,9 @@ class LatterCoordinator:
                 )
             return False
 
-        wifi_ent_id = find_device_entity_by_suffix(
-            self.hass,
-            self.esphome_device_id,
-            "sensor",
-            ("_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"),
+        wifi_st = self.device_state(
+            "sensor", "_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"
         )
-        wifi_st = self.hass.states.get(wifi_ent_id) if wifi_ent_id else None
         wifi_offline = wifi_st is not None and wifi_st.state == STATE_UNAVAILABLE
         svc = esphome_service(
             self.hass, self.esphome_device_id, "latter_device_command"
@@ -3976,11 +4049,12 @@ class LatterCoordinator:
         }
 
     def has_option_changes(self) -> bool:
+        if self._suppress_update_listener_apply:
+            return False
         return self._capture_options_snapshot() != self._applied_options_snapshot
 
     def _build_persisted_snapshot(self) -> dict[str, Any]:
         return {
-            "rev": self.rev,
             "alert_id": self.alert_id,
             "active_speaker": self.active_speaker,
             "last_speaker": self.last_speaker,
@@ -3994,7 +4068,7 @@ class LatterCoordinator:
             "last_media_artist": self.last_media_artist,
             "last_media_album": self.last_media_album,
             "last_media_duration": round(self.last_media_duration, 1),
-            "last_media_position": round(self.last_media_position, 1),
+            "last_media_position": round(self._persisted_media_position, 1),
             "last_device_health": self.last_device_health,
             "hello_manifest": self._runtime.hello_manifest,
             "last_boot_id": self._runtime.last_boot_id,
@@ -4026,6 +4100,7 @@ class LatterCoordinator:
         self.last_media_album = str(stored.get("last_media_album") or "")
         self.last_media_duration = float(stored.get("last_media_duration") or 0.0)
         self.last_media_position = float(stored.get("last_media_position") or 0.0)
+        self._persisted_media_position = self.last_media_position
 
     def _apply_stored_runtime(self, stored: dict[str, Any]) -> None:
         if not stored:
@@ -4066,6 +4141,7 @@ class LatterCoordinator:
 
     async def async_flush_runtime_state(self) -> None:
         """Flush persisted runtime state immediately before a Home Assistant backup."""
+        self.sync_persisted_media_position()
         await self._runtime.async_flush(self._build_persisted_snapshot())
 
     @callback
@@ -4234,48 +4310,58 @@ class LatterCoordinator:
 
     async def async_apply_options(self) -> None:
         """Apply updated subentry options in-place without reloading the config entry."""
-        new_conf_wp = str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip()
-        wp_pool = self.resolve_wallpaper_rotation_pool()
-        if new_conf_wp != self._configured_wallpaper_source or (
-            self.current_wallpaper and self.current_wallpaper not in wp_pool
-        ):
-            self._configured_wallpaper_source = new_conf_wp
-            self.current_wallpaper = (
-                new_conf_wp
-                if new_conf_wp in wp_pool
-                else (wp_pool[0] if wp_pool else "")
+        try:
+            prev_snap = self._applied_options_snapshot
+            new_snap = self._capture_options_snapshot()
+            self._applied_options_snapshot = new_snap
+            self._suppress_update_listener_apply = False
+            presence_changed = _presence_options_changed(prev_snap, new_snap)
+            self.invalidate_bound_entity_cache()
+            new_conf_wp = str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip()
+            wp_pool = self.resolve_wallpaper_rotation_pool()
+            if new_conf_wp != self._configured_wallpaper_source or (
+                self.current_wallpaper and self.current_wallpaper not in wp_pool
+            ):
+                self._configured_wallpaper_source = new_conf_wp
+                self.current_wallpaper = (
+                    new_conf_wp
+                    if new_conf_wp in wp_pool
+                    else (wp_pool[0] if wp_pool else "")
+                )
+                self.schedule_persist_runtime_state()
+            ss_pool = self.resolve_screensaver_photo_pool()
+            if self.current_screensaver_photo and self.current_screensaver_photo not in ss_pool:
+                self.current_screensaver_photo = ss_pool[0] if ss_pool else ""
+                self.schedule_persist_runtime_state()
+            self.doorbell_noise_reduction = normalize_noise_reduction(
+                self.get_opt(
+                    CONF_DOORBELL_NOISE_REDUCTION, DEFAULT_DOORBELL_NOISE_REDUCTION
+                )
             )
-            self.schedule_persist_runtime_state()
-        ss_pool = self.resolve_screensaver_photo_pool()
-        if self.current_screensaver_photo and self.current_screensaver_photo not in ss_pool:
-            self.current_screensaver_photo = ss_pool[0] if ss_pool else ""
-            self.schedule_persist_runtime_state()
-        self.doorbell_noise_reduction = normalize_noise_reduction(
-            self.get_opt(
-                CONF_DOORBELL_NOISE_REDUCTION, DEFAULT_DOORBELL_NOISE_REDUCTION
-            )
-        )
-        self.sync_ble_tracker()
-        self._apply_ble_and_area_option_changes()
+            self.sync_ble_tracker()
+            self._apply_ble_and_area_option_changes()
+            self._applied_options_snapshot = self._capture_options_snapshot()
 
-        target_def_spk = self._resolved_configured_default_speaker()
-        def_spk_changed = target_def_spk != self._configured_default_speaker
-        self._configured_default_speaker = target_def_spk
-        if (
-            target_def_spk
-            and target_def_spk != self.active_speaker
-            and (def_spk_changed or not self.active_speaker)
-        ):
-            self.last_speaker, self.active_speaker = self.active_speaker, target_def_spk
-            self.schedule_persist_runtime_state()
-        self._bind_all_listeners()
-        if self._rpc_receiver is not None:
-            self._rpc_receiver.rebind()
-        await self.async_push_beacon_uuid()
-        await self.async_sync_presence_beacon("options")
-        self._applied_options_snapshot = self._capture_options_snapshot()
-        get_ble_fabric(self.hass).notify_occupancy_listeners()
-        self.async_notify_listeners()
+            target_def_spk = self._resolved_configured_default_speaker()
+            def_spk_changed = target_def_spk != self._configured_default_speaker
+            self._configured_default_speaker = target_def_spk
+            if (
+                target_def_spk
+                and target_def_spk != self.active_speaker
+                and (def_spk_changed or not self.active_speaker)
+            ):
+                self.last_speaker, self.active_speaker = self.active_speaker, target_def_spk
+                self.schedule_persist_runtime_state()
+            self._bind_all_listeners()
+            if self._rpc_receiver is not None:
+                self._rpc_receiver.rebind()
+            await self.async_push_beacon_uuid()
+            await self.async_sync_presence_beacon("options")
+            if presence_changed:
+                get_ble_fabric(self.hass).notify_occupancy_listeners()
+            self.async_notify_listeners()
+        finally:
+            self._suppress_update_listener_apply = False
 
     async def async_on_global_config_updated(
         self, changed_keys: set[str] | None = None
@@ -4319,12 +4405,7 @@ class LatterCoordinator:
         if self._unsub_ble_radio_state is not None:
             self._unsub_ble_radio_state()
             self._unsub_ble_radio_state = None
-        ble_ent = find_device_entity_by_suffix(
-            self.hass,
-            self.esphome_device_id,
-            "binary_sensor",
-            ("_ble_radio_active",),
-        )
+        ble_ent = self.device_entity("binary_sensor", "_ble_radio_active")
         if not ble_ent:
             return
 
@@ -4422,6 +4503,7 @@ class LatterCoordinator:
                 should_hold_during_ble_sleep=self.is_ble_sleep_expected,
                 initial_matched_addresses=self._matched_ble_addresses,
                 on_address_matched=self._on_ble_address_matched,
+                subentry_id=self.subentry_id,
             )
             self._ble_tracker.async_start()
 
@@ -4431,6 +4513,7 @@ class LatterCoordinator:
         self._notify_debouncer.async_cancel()
         self.cancel_background_tasks()
         self._area_follow.cancel()
+        self.invalidate_bound_entity_cache()
         if not self.is_ble_tag:
             ir.async_delete_issue(
                 self.hass, DOMAIN, outdated_firmware_issue_id(self.subentry_id)
@@ -4456,7 +4539,6 @@ class LatterCoordinator:
             "_unsub_doorbell_ring_state",
             "_unsub_ble_radio_state",
             "_unsub_reconnect_post_delay",
-            "_unsub_timer_tick",
         ):
             if (unsub := getattr(self, attr, None)) is not None:
                 unsub()

@@ -22,7 +22,10 @@ from custom_components.latter.const import (
     derive_device_beacon_uuid,
 )
 from custom_components.latter.hub_registry import get_global_config
-from custom_components.latter.presence.ble_fabric import get_ble_fabric
+from custom_components.latter.presence.ble_fabric import (
+    build_survey_delta_payload,
+    get_ble_fabric,
+)
 from custom_components.latter.presence.ble_math import (
     CROSS_FLOOR_ATTENUATION_DB,
     RSSI_HYSTERESIS_DEADBAND_DBM,
@@ -74,9 +77,15 @@ async def test_ble_passive_matcher_rssi_hysteresis_and_cross_floor_penalty(
     tracker.update_manifest_beacon({"uuid": tracker.beacon_uuid, "major": 1, "minor": 1})
 
     occupancy_fires: list[int] = []
-    survey_deltas: list[dict[str, Any]] = []
+    survey_deltas: list[Any] = []
+    other_survey_deltas: list[Any] = []
     unsub_occ = fabric.register_occupancy_listener(lambda: occupancy_fires.append(1))
-    unsub_survey = fabric.register_survey_listener(lambda d: survey_deltas.append(d))
+    unsub_survey = fabric.register_survey_listener(
+        lambda t: survey_deltas.append(t), subentry_id=coord.subentry_id
+    )
+    unsub_other_survey = fabric.register_survey_listener(
+        lambda t: other_survey_deltas.append(t), subentry_id="unrelated_subentry"
+    )
 
     t0 = time.monotonic()
     # 1) Initial lock in living_room (floor_1) at -55 dBm delivered through real non-connectable scanner
@@ -91,6 +100,17 @@ async def test_ble_passive_matcher_rssi_hysteresis_and_cross_floor_penalty(
     initial_fires = len(occupancy_fires)
     assert initial_fires >= 1
     assert len(survey_deltas) >= 1
+    assert survey_deltas[-1] is tracker
+    assert other_survey_deltas == []
+    built_delta = build_survey_delta_payload(
+        survey_deltas[-1], subentry_id=coord.subentry_id
+    )
+    assert built_delta["subentry_id"] == coord.subentry_id
+    assert built_delta["ble_packets_seen"] >= 1
+    assert any(
+        r.get("area_id") == "living_room" and r.get("is_winner")
+        for r in built_delta["ble_survey_rows"]
+    )
 
     # 2) Sub-3.0 dBm RSSI jitter (-56 dBm, -54 dBm) in same confirmed_area -> ZERO occupancy callbacks!
     occupancy_fires.clear()
@@ -165,6 +185,7 @@ async def test_ble_passive_matcher_rssi_hysteresis_and_cross_floor_penalty(
 
     unsub_occ()
     unsub_survey()
+    unsub_other_survey()
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 

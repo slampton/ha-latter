@@ -71,6 +71,7 @@ from ..hub_registry import (
     get_system_config_lock,
     get_system_config_rev,
     iter_coordinators,
+    notify_studio_subscribers,
 )
 from ..hub_sync import (
     async_rotate_hub_hmac_secret,
@@ -354,6 +355,23 @@ def _apply_group_config_updates(
     return True
 
 
+def _replace_builtin_group_with_default(
+    groups: list[dict[str, Any]], g_id: str
+) -> dict[str, Any]:
+    """Reset built-in `g_id` in `groups` in place and return the reset entry."""
+    reset_grp = reset_builtin_group_entry(g_id)
+    if reset_grp is None:
+        raise StudioCommandError(
+            "not_allowed",
+            "Only built-in Device Groups can be reset to preset defaults",
+        )
+    for idx_g, existing_g in enumerate(groups):
+        if existing_g.get("id") == g_id:
+            groups[idx_g] = reset_grp
+            break
+    return reset_grp
+
+
 async def _cmd_update_group_baseline(
     hass: HomeAssistant,
     _coordinator: LatterCoordinator | None,
@@ -362,6 +380,7 @@ async def _cmd_update_group_baseline(
     _extra: dict[str, Any],
 ) -> None:
     g_id = str(body.get("group_id") or "").strip()
+    is_reset = body.get("reset_to_default") is True
     async with get_system_config_lock(hass):
         groups = get_device_groups(hass)
         grp = next((g for g in groups if g.get("id") == g_id), None)
@@ -373,42 +392,18 @@ async def _cmd_update_group_baseline(
             c for c in all_coords if not c.is_ble_tag and c.device_group == g_id
         ]
 
-        if body.get("reset_to_default") is True:
-            reset_grp = reset_builtin_group_entry(g_id)
-            if reset_grp is None:
+        if is_reset:
+            grp = _replace_builtin_group_with_default(groups, g_id)
+        else:
+            did_update = _apply_group_scope_and_seed(hass, grp, body, all_coords)
+            raw_updates = dict(body.get("config") or {})
+            if raw_updates and _apply_group_config_updates(grp, raw_updates, global_cfg):
+                did_update = True
+            if not did_update:
                 raise StudioCommandError(
-                    "not_allowed",
-                    "Only built-in Device Groups can be reset to preset defaults",
+                    "invalid_format",
+                    "Provide baseline settings, scope toggles, or a source Device to update the group",
                 )
-            for idx_g, existing_g in enumerate(groups):
-                if existing_g.get("id") == g_id:
-                    groups[idx_g] = reset_grp
-                    grp = reset_grp
-                    break
-            await async_save_and_broadcast_global_config(
-                hass, {CONF_DEVICE_GROUPS: groups}
-            )
-            if member_targets:
-                await async_apply_group_baseline_to_coordinators(
-                    hass, grp, member_targets
-                )
-            log_studio_event(
-                hass,
-                "INFO",
-                "studio",
-                f"Reset preset defaults for '{grp.get('name', g_id)}' ({len(member_targets)} Device(s))",
-            )
-            return
-
-        did_update = _apply_group_scope_and_seed(hass, grp, body, all_coords)
-        raw_updates = dict(body.get("config") or {})
-        if raw_updates and _apply_group_config_updates(grp, raw_updates, global_cfg):
-            did_update = True
-        if not did_update:
-            raise StudioCommandError(
-                "invalid_format",
-                "Provide baseline settings, scope toggles, or a source Device to update the group",
-            )
         await async_save_and_broadcast_global_config(
             hass, {CONF_DEVICE_GROUPS: groups}
         )
@@ -416,11 +411,12 @@ async def _cmd_update_group_baseline(
     if member_targets:
         await async_apply_group_baseline_to_coordinators(hass, grp, member_targets)
     await evaluate_bedtime_if_ready(hass)
+    verb = "Reset preset defaults" if is_reset else "Updated baseline"
     log_studio_event(
         hass,
         "INFO",
         "studio",
-        f"Updated baseline for '{grp.get('name', g_id)}' ({len(member_targets)} Device(s))",
+        f"{verb} for '{grp.get('name', g_id)}' ({len(member_targets)} Device(s))",
     )
 
 
@@ -529,7 +525,7 @@ async def _async_apply_batch_to_coordinator(
                 wp_val = str(merged.get(CONF_WALLPAPER_SOURCE) or "").strip()
                 coord.current_wallpaper = wp_val
                 coord.set_configured_wallpaper_source(wp_val)
-            coord.update_device_config(merged)
+            coord.update_device_config(merged, defer_apply=True)
             await coord.async_apply_options()
             coord.bind_wallpaper_cycle_timer()
             coord.bind_screensaver_cycle_timer()
@@ -548,8 +544,10 @@ async def _cmd_apply_batch_device_setting(
     all_coords = [c for c in all_coords_full if not c.is_ble_tag]
     filtered = _extract_batch_updates_payload(body, all_coords_full, global_cfg)
     targets = _select_batch_target_coordinators(hass, all_coords, raw_target)
-    for c in targets:
-        await _async_apply_batch_to_coordinator(c, filtered)
+    if targets:
+        await asyncio.gather(
+            *(_async_apply_batch_to_coordinator(c, filtered) for c in targets)
+        )
     await evaluate_bedtime_if_ready(hass)
 
 
@@ -602,7 +600,7 @@ async def _cmd_set_security_pin(
                 CONF_SECURITY_PIN_HASH: pin_hash,
             }
             merged_pin_cfg.pop(CONF_SECURITY_PIN, None)
-            target_coord.update_device_config(merged_pin_cfg)
+            target_coord.update_device_config(merged_pin_cfg, defer_apply=True)
             await target_coord.async_apply_options()
             target_coord.async_notify_listeners()
         log_studio_event(hass, "INFO", target_coord.device_slug, log_msg)
@@ -695,13 +693,11 @@ async def _cmd_send_announcement(
     )
 
 
-def _prune_coordinator_deleted_photos(
-    coord: LatterCoordinator, deleted_ids: set[str]
-) -> None:
-    """Prune `deleted_ids` from a single coordinator's wallpaper and screensaver pools."""
-    merged = dict(coord.device_data)
+def _prune_wallpaper_deleted_ids(
+    coord: LatterCoordinator, merged: dict[str, Any], deleted_ids: set[str]
+) -> bool:
+    """Prune `deleted_ids` from a coordinator's wallpaper pool, returning True when mutated."""
     changed = False
-
     wp_favs = [f for f in coord.wallpaper_favorites if f not in deleted_ids]
     if wp_favs != coord.wallpaper_favorites:
         merged[CONF_WALLPAPER_FAVORITES] = wp_favs
@@ -711,17 +707,24 @@ def _prune_coordinator_deleted_photos(
         merged[CONF_WALLPAPER_SOURCE] = ""
         coord.current_wallpaper = ""
         coord.set_configured_wallpaper_source("")
-        changed = True
-    elif coord.wallpaper_mode == "custom" and not wp_favs:
+        return True
+    if coord.wallpaper_mode == "custom" and not wp_favs:
         merged[CONF_WALLPAPER_MODE] = "off"
         merged[CONF_WALLPAPER_SOURCE] = ""
         merged[CONF_WALLPAPER_CYCLE_MINUTES] = 0
         coord.current_wallpaper = ""
-        changed = True
-    elif coord.current_wallpaper in deleted_ids or coord.wallpaper_source in deleted_ids:
+        return True
+    if coord.current_wallpaper in deleted_ids or coord.wallpaper_source in deleted_ids:
         coord.current_wallpaper = ""
-        changed = True
+        return True
+    return changed
 
+
+def _prune_screensaver_deleted_ids(
+    coord: LatterCoordinator, merged: dict[str, Any], deleted_ids: set[str]
+) -> bool:
+    """Prune `deleted_ids` from a coordinator's screensaver pool, returning True when mutated."""
+    changed = False
     ss_ids = [f for f in coord.screensaver_photo_ids if f not in deleted_ids]
     if ss_ids != coord.screensaver_photo_ids:
         merged[CONF_SCREENSAVER_PHOTO_IDS] = ss_ids
@@ -733,65 +736,86 @@ def _prune_coordinator_deleted_photos(
         merged[CONF_SCREENSAVER_PHOTO_MODE] = "off"
         merged[CONF_SCREENSAVER_PHOTO_SOURCE] = ""
         coord.current_screensaver_photo = ""
-        changed = True
-    elif (
+        return True
+    if (
         coord.current_screensaver_photo in deleted_ids
         or coord.screensaver_photo_source in deleted_ids
     ):
         coord.current_screensaver_photo = ""
-        changed = True
-
-    if changed:
-        if merged != coord.device_data:
-            coord.update_device_config(merged)
-        coord.bind_wallpaper_cycle_timer()
-        coord.bind_screensaver_cycle_timer()
-        coord.async_notify_listeners()
+        return True
+    return changed
 
 
-def _prune_deleted_photos_from_coordinators(
+async def _prune_coordinator_deleted_photos(
+    coord: LatterCoordinator, deleted_ids: set[str]
+) -> None:
+    """Prune `deleted_ids` from a single coordinator's wallpaper and screensaver pools under lock."""
+    async with coord.config_lock:
+        merged = dict(coord.device_data)
+        wp_changed = _prune_wallpaper_deleted_ids(coord, merged, deleted_ids)
+        ss_changed = _prune_screensaver_deleted_ids(coord, merged, deleted_ids)
+        if wp_changed or ss_changed:
+            if merged != coord.device_data:
+                coord.update_device_config(merged)
+            coord.bind_wallpaper_cycle_timer()
+            coord.bind_screensaver_cycle_timer()
+            coord.async_notify_listeners()
+
+
+async def _prune_deleted_photos_from_coordinators(
     hass: HomeAssistant, deleted_ids: set[str]
 ) -> None:
-    """Remove deleted photo IDs from all Devices' wallpaper & screensaver pools and re-seed active photos."""
+    """Remove deleted photo IDs from all Devices' wallpaper & screensaver pools under each lock."""
     if not deleted_ids:
         return
-    for coord in iter_coordinators(hass):
-        if not coord.is_ble_tag:
-            _prune_coordinator_deleted_photos(coord, deleted_ids)
+    targets = [c for c in iter_coordinators(hass) if not c.is_ble_tag]
+    if targets:
+        await asyncio.gather(
+            *(_prune_coordinator_deleted_photos(c, deleted_ids) for c in targets)
+        )
 
 
-def _prune_deleted_collection_from_coordinators(
-    hass: HomeAssistant, collection_id: str
+async def _prune_coordinator_deleted_collection(
+    coord: LatterCoordinator, collection_id: str
 ) -> None:
-    """Clear references to a deleted collection from all Devices' wallpaper & screensaver pools."""
-    for c in iter_coordinators(hass):
-        if c.is_ble_tag:
-            continue
-        merged = dict(c.device_data)
+    """Clear references to a deleted collection on a single coordinator under `config_lock`."""
+    async with coord.config_lock:
+        merged = dict(coord.device_data)
         changed = False
         if (
-            c.wallpaper_mode == "collection"
-            and c.wallpaper_collection == collection_id
+            coord.wallpaper_mode == "collection"
+            and coord.wallpaper_collection == collection_id
         ):
             merged[CONF_WALLPAPER_MODE] = "off"
             merged[CONF_WALLPAPER_COLLECTION] = ""
             merged[CONF_WALLPAPER_SOURCE] = ""
-            c.current_wallpaper = ""
-            c.set_configured_wallpaper_source("")
+            coord.current_wallpaper = ""
+            coord.set_configured_wallpaper_source("")
             changed = True
         if (
-            c.screensaver_photo_mode == "collection"
-            and c.screensaver_photo_collection == collection_id
+            coord.screensaver_photo_mode == "collection"
+            and coord.screensaver_photo_collection == collection_id
         ):
             merged[CONF_SCREENSAVER_PHOTO_MODE] = "off"
             merged[CONF_SCREENSAVER_PHOTO_COLLECTION] = ""
-            c.current_screensaver_photo = ""
+            coord.current_screensaver_photo = ""
             changed = True
         if changed:
-            c.update_device_config(merged)
-            c.bind_wallpaper_cycle_timer()
-            c.bind_screensaver_cycle_timer()
-            c.async_notify_listeners()
+            coord.update_device_config(merged)
+            coord.bind_wallpaper_cycle_timer()
+            coord.bind_screensaver_cycle_timer()
+            coord.async_notify_listeners()
+
+
+async def _prune_deleted_collection_from_coordinators(
+    hass: HomeAssistant, collection_id: str
+) -> None:
+    """Clear references to a deleted collection from all Devices' wallpaper & screensaver pools."""
+    targets = [c for c in iter_coordinators(hass) if not c.is_ble_tag]
+    if targets:
+        await asyncio.gather(
+            *(_prune_coordinator_deleted_collection(c, collection_id) for c in targets)
+        )
 
 
 def _rebind_collection_pool_coordinators(hass: HomeAssistant) -> None:
@@ -821,7 +845,7 @@ async def _cmd_create_photo_collection(
     except ValueError as err:
         raise StudioCommandError("invalid_format", str(err)) from err
     extra["collection"] = col
-    get_ble_fabric(hass).notify_occupancy_listeners()
+    notify_studio_subscribers(hass)
 
 
 async def _cmd_rename_photo_collection(
@@ -845,7 +869,7 @@ async def _cmd_rename_photo_collection(
         code = "not_found" if "Unknown collection" in str(err) else "invalid_format"
         raise StudioCommandError(code, str(err)) from err
     extra["collection"] = col
-    get_ble_fabric(hass).notify_occupancy_listeners()
+    notify_studio_subscribers(hass)
 
 
 async def _cmd_delete_photo_collection(
@@ -861,9 +885,9 @@ async def _cmd_delete_photo_collection(
     deleted = await hass.async_add_executor_job(delete_collection, hass, col_id)
     if not deleted:
         raise StudioCommandError("not_found", f"Unknown collection '{col_id}'")
-    _prune_deleted_collection_from_coordinators(hass, col_id)
+    await _prune_deleted_collection_from_coordinators(hass, col_id)
     extra["deleted_collection_id"] = col_id
-    get_ble_fabric(hass).notify_occupancy_listeners()
+    notify_studio_subscribers(hass)
 
 
 async def _cmd_update_photo_metadata(
@@ -912,7 +936,7 @@ async def _cmd_update_photo_metadata(
                 c.bind_wallpaper_cycle_timer()
                 c.bind_screensaver_cycle_timer()
                 c.async_notify_listeners()
-    get_ble_fabric(hass).notify_occupancy_listeners()
+    notify_studio_subscribers(hass)
 
 
 async def _cmd_bulk_update_photos(
@@ -946,11 +970,11 @@ async def _cmd_bulk_update_photos(
     except ValueError as err:
         raise StudioCommandError("invalid_format", str(err)) from err
     if res["deleted_ids"]:
-        _prune_deleted_photos_from_coordinators(hass, set(res["deleted_ids"]))
+        await _prune_deleted_photos_from_coordinators(hass, set(res["deleted_ids"]))
     elif res["updated"] > 0:
         _rebind_collection_pool_coordinators(hass)
     extra["bulk_result"] = res
-    get_ble_fabric(hass).notify_occupancy_listeners()
+    notify_studio_subscribers(hass)
 
 
 async def _cmd_delete_photo(
@@ -968,9 +992,9 @@ async def _cmd_delete_photo(
         raise StudioCommandError(
             "not_found", "That photo isn't a deletable custom photo"
         )
-    _prune_deleted_photos_from_coordinators(hass, {photo_id})
+    await _prune_deleted_photos_from_coordinators(hass, {photo_id})
     extra["deleted_photo_id"] = photo_id
-    get_ble_fabric(hass).notify_occupancy_listeners()
+    notify_studio_subscribers(hass)
 
 
 async def _cmd_browse_media_folder(
@@ -1052,7 +1076,7 @@ async def _cmd_import_media_photos(
     }
     if result["imported"] > 0:
         _rebind_collection_pool_coordinators(hass)
-    get_ble_fabric(hass).notify_occupancy_listeners()
+    notify_studio_subscribers(hass)
 
 
 async def _cmd_mint_camera_preview_url(

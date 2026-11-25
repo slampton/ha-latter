@@ -926,7 +926,7 @@ async def _async_speak_tts_on_fallbacks(
                 ATTR_ENTITY_ID: eff_tts,
                 "media_player_entity_id": fallback_speakers,
                 "message": message,
-                "cache": False,
+                "cache": True,
             },
             blocking=blocking,
         )

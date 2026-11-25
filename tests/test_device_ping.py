@@ -2,22 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 import unittest
 
 from custom_components.latter import PING_ACTION, async_ping_bound_devices
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-
-def _drive(coro):
-    """Run a coroutine whose awaits never suspend (the fakes below), without an event loop."""
-    try:
-        coro.send(None)
-    except StopIteration as stop:
-        return stop.value
-    coro.close()
-    raise AssertionError("coroutine suspended; the fakes must complete synchronously")
 
 
 class TestPingBoundDevices(unittest.TestCase):
@@ -37,7 +28,7 @@ class TestPingBoundDevices(unittest.TestCase):
             if service in failing:
                 raise RuntimeError("device dropped")
 
-        pinged = _drive(
+        pinged = asyncio.run(
             async_ping_bound_devices(
                 device_ids, resolve, call, lambda service, err: errors.append(service)
             )

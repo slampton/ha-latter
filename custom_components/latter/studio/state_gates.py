@@ -1,8 +1,9 @@
-"""Pure-stdlib Studio subscription content-digest gates, command scopes, and target guards."""
+"""Pure-stdlib Studio subscription token/digest gates, command scopes, and target guards."""
 
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Mapping
+from dataclasses import dataclass
 import hashlib
 import json
 from typing import Any, Final, Literal, Protocol
@@ -14,11 +15,29 @@ from ..protocol_specs import (
     SYSTEM_COMMANDS as SYSTEM_COMMANDS,
 )
 
+HASH_GATED_SECTIONS: Final[tuple[str, ...]] = (
+    "discovered_ble_devices",
+    "ble_area_signatures",
+    "discovered_latter_devices",
+    "ignored_latter_devices",
+)
+
 HEAVY_SUBSCRIPTION_SECTIONS: Final[tuple[str, ...]] = (
     "discovered_ble_devices",
     "system_wallpapers",
     "photo_collections",
     "ble_area_signatures",
+    "wallpapers",
+    "system_controls",
+    "discovered_latter_devices",
+    "ignored_latter_devices",
+    "locale_strings",
+    "pref_specs",
+    "world_clock_zones",
+)
+
+_STATIC_CATALOG_SECTIONS: Final[frozenset[str]] = frozenset(
+    {"pref_specs", "world_clock_zones"}
 )
 
 
@@ -37,6 +56,114 @@ class CatalogGate:
         """Return True once after a registry change, then False until the next one."""
         dirty, self._dirty = self._dirty, False
         return dirty
+
+
+@dataclass(frozen=True, slots=True)
+class SubscriptionTokenSnapshot:
+    """O(1) change-detection tokens for all heavy Studio subscription sections."""
+
+    wallpaper_token: int
+    hmac_secret: bytes
+    utc_day: int
+    system_config_rev: int
+    subentry_id: str
+    device_config_rev: int
+    active_wallpaper_id: str
+    display_shape: str
+    language: str
+    locales_loaded: bool
+    registry_rev: int
+    ble_dirty_rev: int
+    coordinator_ids: tuple[str, ...]
+    controls_signature: tuple[tuple[str, int, bool, bool, bool, str], ...]
+
+
+class SectionTokenGate:
+    """Per-subscription O(1) token gate deciding which heavy sections to skip before building."""
+
+    def __init__(self) -> None:
+        """Initialize empty sent-token map."""
+        self._sent_tokens: dict[str, Any] = {}
+
+    @staticmethod
+    def section_tokens(snap: SubscriptionTokenSnapshot) -> dict[str, Any]:
+        """Map every heavy subscription section to its O(1) invalidation token."""
+        reg_sys_tok = (snap.registry_rev, snap.system_config_rev, snap.coordinator_ids)
+        return {
+            "pref_specs": 1,
+            "world_clock_zones": 1,
+            "locale_strings": (snap.language, snap.locales_loaded),
+            "photo_collections": snap.wallpaper_token,
+            "system_wallpapers": (snap.wallpaper_token, snap.hmac_secret, snap.utc_day),
+            "wallpapers": (
+                snap.subentry_id,
+                snap.wallpaper_token,
+                snap.hmac_secret,
+                snap.utc_day,
+                snap.device_config_rev,
+                snap.active_wallpaper_id,
+                snap.display_shape,
+            ),
+            "discovered_latter_devices": reg_sys_tok,
+            "ignored_latter_devices": reg_sys_tok,
+            "discovered_ble_devices": (snap.ble_dirty_rev, snap.coordinator_ids),
+            "ble_area_signatures": (
+                snap.system_config_rev,
+                snap.ble_dirty_rev,
+                snap.registry_rev,
+            ),
+            "system_controls": (
+                snap.system_config_rev,
+                snap.wallpaper_token,
+                snap.controls_signature,
+            ),
+        }
+
+    def has_sent(self, key: str) -> bool:
+        """Return True if `key` has already been pushed on this subscription."""
+        return key in self._sent_tokens
+
+    def mark_dirty(self, *keys: str) -> None:
+        """Force the next live push to rebuild and resend `keys` (or all when empty)."""
+        if not keys:
+            self._sent_tokens.clear()
+            return
+        for key in keys:
+            self._sent_tokens.pop(key, None)
+
+    def record_initial(
+        self,
+        snap: SubscriptionTokenSnapshot,
+        payload: Mapping[str, Any],
+    ) -> None:
+        """Record baseline tokens for all sections present in the initial subscription payload."""
+        for key, token in self.section_tokens(snap).items():
+            if key in payload:
+                self._sent_tokens[key] = token
+
+    def compute_skip_sections(self, snap: SubscriptionTokenSnapshot) -> set[str]:
+        """Return heavy sections proven unchanged by O(1) tokens so they are skipped before build."""
+        return {
+            key
+            for key, token in self.section_tokens(snap).items()
+            if key in self._sent_tokens and self._sent_tokens[key] == token
+        }
+
+    def commit(
+        self,
+        snap: SubscriptionTokenSnapshot,
+        skipped: Collection[str],
+        payload_keys: Collection[str] | None = None,
+    ) -> None:
+        """Record tokens for sections built on this push (including hash-filtered unchanged sections)."""
+        for key, token in self.section_tokens(snap).items():
+            if key in skipped:
+                continue
+            if key in _STATIC_CATALOG_SECTIONS and (
+                payload_keys is None or key not in payload_keys
+            ):
+                continue
+            self._sent_tokens[key] = token
 
 
 class SectionHashGate:

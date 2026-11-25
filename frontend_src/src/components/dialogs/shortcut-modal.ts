@@ -49,6 +49,120 @@ import {
 
 const hoveredSpanByStore = new WeakMap<StudioStore, { w: number; h: number }>();
 
+export const SHORTCUT_ICON_SEARCH_DEBOUNCE_MS = 120;
+
+export interface ShortcutEntityCatalogEntry {
+  id: string;
+  name: string;
+  domain: string;
+  area_name?: string;
+  icon?: string;
+}
+
+const EMPTY_SHORTCUT_ENTITIES: ReadonlyArray<ShortcutEntityCatalogEntry> = [];
+
+let cachedDomainsCatalogRef: readonly ShortcutEntityCatalogEntry[] | null = null;
+let cachedAvailableDomains: string[] = [];
+
+let cachedEntityOptsCatalogRef: readonly ShortcutEntityCatalogEntry[] | null = null;
+let cachedEntityOptsDomainFilter = "";
+let cachedEntityOpts: ComboboxOptionItem[] = [];
+
+export function clearShortcutEntityOptionsCache(): void {
+  cachedDomainsCatalogRef = null;
+  cachedAvailableDomains = [];
+  cachedEntityOptsCatalogRef = null;
+  cachedEntityOptsDomainFilter = "";
+  cachedEntityOpts = [];
+}
+
+function getMemoizedAvailableDomains(
+  allEntities: readonly ShortcutEntityCatalogEntry[],
+): string[] {
+  if (cachedDomainsCatalogRef === allEntities) {
+    return cachedAvailableDomains;
+  }
+  cachedDomainsCatalogRef = allEntities;
+  cachedAvailableDomains = Array.from(new Set(allEntities.map((e) => e.domain))).sort();
+  return cachedAvailableDomains;
+}
+
+export function getMemoizedShortcutEntityOptions(
+  allEntities: readonly ShortcutEntityCatalogEntry[],
+  domainFilter: string,
+  formatState: (entityId: string) => string,
+): ComboboxOptionItem[] {
+  if (
+    cachedEntityOptsCatalogRef === allEntities &&
+    cachedEntityOptsDomainFilter === domainFilter
+  ) {
+    return cachedEntityOpts;
+  }
+  const filtered =
+    domainFilter === "all"
+      ? allEntities
+      : allEntities.filter((e) => e.domain === domainFilter);
+  const built: ComboboxOptionItem[] = filtered.map((e) => {
+    const stateLbl = formatState(e.id);
+    return {
+      id: e.id,
+      name: e.name,
+      domain: e.domain,
+      area_name: e.area_name,
+      icon: e.icon,
+      state_label: stateLbl || undefined,
+    };
+  });
+  cachedEntityOptsCatalogRef = allEntities;
+  cachedEntityOptsDomainFilter = domainFilter;
+  cachedEntityOpts = built;
+  return built;
+}
+
+interface IconSearchDebounceEntry {
+  timer: ReturnType<typeof setTimeout> | null;
+  committedQuery: string;
+}
+
+const iconSearchDebounceByStore = new WeakMap<StudioStore, IconSearchDebounceEntry>();
+
+export function cancelShortcutIconSearchDebounce(store: StudioStore): void {
+  const entry = iconSearchDebounceByStore.get(store);
+  if (!entry) return;
+  if (entry.timer !== null) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
+  entry.committedQuery = store.shortcutModal.iconSearch;
+}
+
+export function scheduleShortcutIconSearchDebounce(
+  store: StudioStore,
+  rawQuery: string,
+  delayMs = SHORTCUT_ICON_SEARCH_DEBOUNCE_MS,
+): void {
+  let entry = iconSearchDebounceByStore.get(store);
+  if (!entry) {
+    entry = { timer: null, committedQuery: store.shortcutModal.iconSearch };
+    iconSearchDebounceByStore.set(store, entry);
+  }
+  store.shortcutModal = {
+    ...store.shortcutModal,
+    iconSearch: rawQuery,
+  };
+  if (entry.timer !== null) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
+  entry.timer = setTimeout(() => {
+    entry.timer = null;
+    entry.committedQuery = store.shortcutModal.iconSearch;
+    if (store.shortcutModal.open && store.host.isConnected !== false) {
+      store.host.requestUpdate();
+    }
+  }, delayMs);
+}
+
 const ICON_STYLE_OPTIONS: ReadonlyArray<{
   value: MdiIconStyleFilter;
   labelKey: StudioTranslationKey;
@@ -166,6 +280,8 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
   };
 
   if (!scModal.open) {
+    cancelShortcutIconSearchDebounce(store);
+    clearShortcutEntityOptionsCache();
     return html`<dialog
       id="latter-shortcut-modal"
       aria-labelledby="latter-shortcut-title"
@@ -207,31 +323,27 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
     }
   }
 
-  const allShortcutEntities = store.state?.catalog?.shortcut_entities || [];
-  const availableDomains = Array.from(
-    new Set(allShortcutEntities.map((e) => e.domain)),
-  ).sort();
-  const domainFilteredEntities = allShortcutEntities.filter(
-    (e) => scModal.entityDomainFilter === "all" || e.domain === scModal.entityDomainFilter,
-  );
-  const comboboxOptions: ComboboxOptionItem[] = domainFilteredEntities.map((e) => {
-    const stateLbl = formatHaEntityState(store.hass, e.id);
-    return {
-      id: e.id,
-      name: e.name,
-      domain: e.domain,
-      area_name: e.area_name,
-      icon: e.icon,
-      state_label: stateLbl || undefined,
-    };
-  });
+  const isRouteTab = scModal.kind === "route";
+  const allShortcutEntities = store.state?.catalog?.shortcut_entities ?? EMPTY_SHORTCUT_ENTITIES;
+  const availableDomains = !isRouteTab ? getMemoizedAvailableDomains(allShortcutEntities) : [];
+  const comboboxOptions: ComboboxOptionItem[] = !isRouteTab
+    ? getMemoizedShortcutEntityOptions(
+        allShortcutEntities,
+        scModal.entityDomainFilter,
+        (entityId) => formatHaEntityState(store.hass, entityId),
+      )
+    : [];
 
   const selectedEntityObj =
-    allShortcutEntities.find((e) => e.id === scModal.entityTarget) || null;
+    !isRouteTab && scModal.entityTarget
+      ? allShortcutEntities.find((e) => e.id === scModal.entityTarget) || null
+      : null;
   const selectedEntityDomain = selectedEntityObj
     ? selectedEntityObj.domain
     : scModal.entityTarget.split(".", 1)[0] || "";
-  const availableEntityActions = SHORTCUT_DOMAIN_ACTIONS[selectedEntityDomain] || [];
+  const availableEntityActions = !isRouteTab
+    ? SHORTCUT_DOMAIN_ACTIONS[selectedEntityDomain] || []
+    : [];
 
   const effectiveRouteTarget = availableRoutes.some((r) => r.token === scModal.routeTarget)
     ? scModal.routeTarget
@@ -241,24 +353,33 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
     SHORTCUT_ROUTES_CATALOG.find((r) => r.token === effectiveRouteTarget);
 
   const autoDefaultLabel =
-    scModal.kind === "route"
+    isRouteTab
       ? selectedRouteSpec?.label || store.t("dialogs.sc_default_shortcut")
       : selectedEntityObj?.name ||
         scModal.entityTarget ||
         store.t("dialogs.sc_default_entity_action");
   const autoDefaultIcon =
-    scModal.kind === "route"
+    isRouteTab
       ? ROUTE_PREVIEW_ICONS[effectiveRouteTarget] || "mdi:apps"
       : selectedEntityObj?.icon || "mdi:flash";
 
+  const iconDebounceEntry = iconSearchDebounceByStore.get(store);
+  const activeIconSearchQuery =
+    iconDebounceEntry && iconDebounceEntry.timer !== null
+      ? iconDebounceEntry.committedQuery
+      : scModal.iconSearch;
+  if (iconDebounceEntry && iconDebounceEntry.timer === null) {
+    iconDebounceEntry.committedQuery = scModal.iconSearch;
+  }
+
   const selectedCustomIcon = normalizeMdiIconSlug(scModal.icon);
-  const typedSearchIcon = normalizeMdiIconSlug(scModal.iconSearch);
+  const typedSearchIcon = normalizeMdiIconSlug(activeIconSearchQuery);
   const previewIcon =
     selectedCustomIcon ||
     (isKnownMdiIcon(typedSearchIcon) ? typedSearchIcon : autoDefaultIcon);
-  const hasIconQuery = scModal.iconSearch.trim().length > 0;
+  const hasIconQuery = activeIconSearchQuery.trim().length > 0;
   const { items: filteredMdiIcons, totalMatches: mdiMatchCount } = getCachedMdiSearch(
-    scModal.iconSearch,
+    activeIconSearchQuery,
     scModal.iconStyleFilter,
   );
   const totalIconsText = fmtNumber(MDI_TOTAL_ICON_COUNT, store.hass, 0);
@@ -270,6 +391,7 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
   const activeAccentToken = scModal.accent || "default";
 
   const setIconStyleFilter = (nextFilter: MdiIconStyleFilter): void => {
+    cancelShortcutIconSearchDebounce(store);
     store.shortcutModal = { ...store.shortcutModal, iconStyleFilter: nextFilter };
     store.host.requestUpdate();
   };
@@ -321,8 +443,6 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
     ) as HTMLElement | null;
     setShortcutKind(nextKind, targetBtn);
   };
-
-  const isRouteTab = scModal.kind === "route";
 
   return html`<dialog
     id="latter-shortcut-modal"
@@ -537,11 +657,7 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
             .value=${focusSafe(scModal.iconSearch)}
             @input=${(ev: Event) => {
               const raw = (ev.currentTarget as HTMLInputElement).value;
-              store.shortcutModal = {
-                ...store.shortcutModal,
-                iconSearch: raw,
-              };
-              store.host.requestUpdate();
+              scheduleShortcutIconSearchDebounce(store, raw);
             }}
           />
           ${scModal.icon || scModal.iconSearch
@@ -553,6 +669,7 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
                     icon: "",
                     iconSearch: "",
                   };
+                  cancelShortcutIconSearchDebounce(store);
                   store.host.requestUpdate();
                 }}
                 class="btn btn-text btn-compact"

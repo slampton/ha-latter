@@ -6,42 +6,369 @@
  */
 
 import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
-import { isPhotoUploaded } from "../../state/photo-ops.js";
+import { isPhotoUploaded, registerPhotoImageEvictor } from "../../state/photo-ops.js";
 import type { StudioStore } from "../../state/store.js";
 import type { CropPreviewAspect, PhotoCrop } from "../../types.js";
 import {
   applyCanvasPanDelta,
+  computeCropSourceRect,
   cropPreviewCanvasSize,
   DEFAULT_PHOTO_CROP,
   normalizePhotoCrop,
-  paintCropCanvas,
 } from "../../utils/crop-math.js";
 import { fmtNumber } from "../../utils/format.js";
 
-const loadedImageCache = new Map<string, HTMLImageElement>();
-const MAX_CACHED_CROP_IMAGES = 32;
+export const MAX_PREVIEW_EDGE_PX = 1024;
+const MAX_CACHED_CROP_IMAGES = 16;
 
-function getOrLoadImage(url: string, onLoad: () => void): HTMLImageElement | null {
+type DrawablePhotoPreview = ImageBitmap | HTMLCanvasElement | HTMLImageElement;
+
+export interface CachedPhotoPreview {
+  source: DrawablePhotoPreview | null;
+  naturalWidth: number;
+  naturalHeight: number;
+  previewWidth: number;
+  previewHeight: number;
+  loadingImg: HTMLImageElement | null;
+  listeners: Set<() => void>;
+  disposed: boolean;
+}
+
+const loadedImageCache = new Map<string, CachedPhotoPreview>();
+const lastCanvasPaintSig = new WeakMap<HTMLCanvasElement, string>();
+const pendingCropRafs = new Map<
+  StudioStore,
+  { rafId: number; activeOnly: boolean; root: ShadowRoot }
+>();
+
+export function computeBoundedPreviewDims(
+  naturalWidth: number,
+  naturalHeight: number,
+  maxEdge = MAX_PREVIEW_EDGE_PX,
+): { width: number; height: number; downscaled: boolean } {
+  if (naturalWidth <= 0 || naturalHeight <= 0) {
+    return { width: 0, height: 0, downscaled: false };
+  }
+  const longest = Math.max(naturalWidth, naturalHeight);
+  if (longest <= maxEdge) {
+    return { width: naturalWidth, height: naturalHeight, downscaled: false };
+  }
+  const scale = maxEdge / longest;
+  return {
+    width: Math.max(1, Math.round(naturalWidth * scale)),
+    height: Math.max(1, Math.round(naturalHeight * scale)),
+    downscaled: true,
+  };
+}
+
+function releaseHtmlImage(img: HTMLImageElement): void {
+  img.onload = null;
+  img.onerror = null;
+  img.src = "";
+}
+
+function disposeCachedPreview(entry: CachedPhotoPreview): void {
+  entry.disposed = true;
+  entry.listeners.clear();
+  if (entry.loadingImg) {
+    releaseHtmlImage(entry.loadingImg);
+    entry.loadingImg = null;
+  }
+  const src = entry.source;
+  entry.source = null;
+  if (!src) return;
+  if (typeof (src as { close?: unknown }).close === "function") {
+    try {
+      (src as { close: () => void }).close();
+    } catch {
+      // Ignore bitmap close errors.
+    }
+    return;
+  }
+  if (typeof HTMLCanvasElement !== "undefined" && src instanceof HTMLCanvasElement) {
+    src.width = 0;
+    src.height = 0;
+    return;
+  }
+  if ("src" in src) {
+    releaseHtmlImage(src as HTMLImageElement);
+  }
+}
+
+export function evictLoadedPhotoImage(url: string): void {
+  if (!url) return;
+  const entry = loadedImageCache.get(url);
+  if (!entry) return;
+  loadedImageCache.delete(url);
+  disposeCachedPreview(entry);
+}
+
+export function clearLoadedPhotoImages(): void {
+  for (const entry of loadedImageCache.values()) {
+    disposeCachedPreview(entry);
+  }
+  loadedImageCache.clear();
+  for (const pending of pendingCropRafs.values()) {
+    if (typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(pending.rafId);
+    }
+  }
+  pendingCropRafs.clear();
+}
+
+export function getLoadedPhotoImageCacheSize(): number {
+  return loadedImageCache.size;
+}
+
+registerPhotoImageEvictor({
+  evict: evictLoadedPhotoImage,
+  clear: clearLoadedPhotoImages,
+});
+
+function notifyPreviewListeners(entry: CachedPhotoPreview): void {
+  const callbacks = Array.from(entry.listeners);
+  entry.listeners.clear();
+  for (const cb of callbacks) {
+    cb();
+  }
+}
+
+function finalizeDownscaleFallback(
+  url: string,
+  entry: CachedPhotoPreview,
+  img: HTMLImageElement,
+  natW: number,
+  natH: number,
+  dstW: number,
+  dstH: number,
+): void {
+  if (entry.disposed || loadedImageCache.get(url) !== entry) {
+    releaseHtmlImage(img);
+    entry.loadingImg = null;
+    return;
+  }
+  if (typeof document !== "undefined") {
+    const offscreen = document.createElement("canvas");
+    offscreen.width = dstW;
+    offscreen.height = dstH;
+    const ctx = offscreen.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(img, 0, 0, dstW, dstH);
+      releaseHtmlImage(img);
+      entry.loadingImg = null;
+      entry.source = offscreen;
+      entry.naturalWidth = natW;
+      entry.naturalHeight = natH;
+      entry.previewWidth = dstW;
+      entry.previewHeight = dstH;
+      notifyPreviewListeners(entry);
+      return;
+    }
+  }
+  // Headless / no-2d-context fallback: keep loaded image element bounded by eviction.
+  entry.loadingImg = null;
+  entry.source = img;
+  entry.naturalWidth = natW;
+  entry.naturalHeight = natH;
+  entry.previewWidth = natW;
+  entry.previewHeight = natH;
+  notifyPreviewListeners(entry);
+}
+
+export function getOrLoadPhotoPreview(
+  url: string,
+  onLoad: () => void,
+): CachedPhotoPreview | null {
   if (!url || typeof Image === "undefined") return null;
   const existing = loadedImageCache.get(url);
   if (existing) {
-    if (existing.complete && existing.naturalWidth > 0) {
+    if (existing.source && existing.previewWidth > 0 && existing.previewHeight > 0) {
       return existing;
+    }
+    if (!existing.disposed) {
+      existing.listeners.add(onLoad);
     }
     return null;
   }
   if (loadedImageCache.size >= MAX_CACHED_CROP_IMAGES) {
     const firstKey = loadedImageCache.keys().next().value;
-    if (firstKey) loadedImageCache.delete(firstKey);
+    if (firstKey) {
+      evictLoadedPhotoImage(firstKey);
+    }
   }
+  const entry: CachedPhotoPreview = {
+    source: null,
+    naturalWidth: 0,
+    naturalHeight: 0,
+    previewWidth: 0,
+    previewHeight: 0,
+    loadingImg: null,
+    listeners: new Set([onLoad]),
+    disposed: false,
+  };
+  loadedImageCache.set(url, entry);
+
   const img = new Image();
   img.crossOrigin = "anonymous";
-  img.onload = () => {
-    onLoad();
+  img.decoding = "async";
+  entry.loadingImg = img;
+
+  let handled = false;
+  const handleLoaded = (): void => {
+    if (handled) return;
+    handled = true;
+    img.onload = null;
+    if (entry.disposed || loadedImageCache.get(url) !== entry) {
+      releaseHtmlImage(img);
+      entry.loadingImg = null;
+      return;
+    }
+    const natW = img.naturalWidth;
+    const natH = img.naturalHeight;
+    if (natW <= 0 || natH <= 0) {
+      releaseHtmlImage(img);
+      entry.loadingImg = null;
+      return;
+    }
+    const dims = computeBoundedPreviewDims(natW, natH, MAX_PREVIEW_EDGE_PX);
+    if (!dims.downscaled) {
+      entry.loadingImg = null;
+      entry.source = img;
+      entry.naturalWidth = natW;
+      entry.naturalHeight = natH;
+      entry.previewWidth = natW;
+      entry.previewHeight = natH;
+      notifyPreviewListeners(entry);
+      return;
+    }
+
+    if (typeof createImageBitmap === "function") {
+      void createImageBitmap(img, {
+        resizeWidth: dims.width,
+        resizeHeight: dims.height,
+        resizeQuality: "medium",
+      })
+        .then((bitmap) => {
+          releaseHtmlImage(img);
+          entry.loadingImg = null;
+          if (entry.disposed || loadedImageCache.get(url) !== entry) {
+            try {
+              bitmap.close?.();
+            } catch {
+              // Ignore bitmap close errors.
+            }
+            return;
+          }
+          entry.source = bitmap;
+          entry.naturalWidth = natW;
+          entry.naturalHeight = natH;
+          entry.previewWidth = bitmap.width || dims.width;
+          entry.previewHeight = bitmap.height || dims.height;
+          notifyPreviewListeners(entry);
+        })
+        .catch(() => {
+          finalizeDownscaleFallback(url, entry, img, natW, natH, dims.width, dims.height);
+        });
+      return;
+    }
+
+    finalizeDownscaleFallback(url, entry, img, natW, natH, dims.width, dims.height);
+  };
+
+  img.onload = handleLoaded;
+  img.onerror = () => {
+    if (loadedImageCache.get(url) === entry) {
+      evictLoadedPhotoImage(url);
+    } else {
+      releaseHtmlImage(img);
+    }
   };
   img.src = url;
-  loadedImageCache.set(url, img);
-  return img.complete && img.naturalWidth > 0 ? img : null;
+  if (img.complete && img.naturalWidth > 0) {
+    handleLoaded();
+  }
+  return entry.source && entry.previewWidth > 0 ? entry : null;
+}
+
+function paintPreviewCropCanvas(
+  canvas: HTMLCanvasElement,
+  url: string,
+  preview: CachedPhotoPreview | null,
+  crop: PhotoCrop,
+  aspect: CropPreviewAspect,
+  showGuides: boolean,
+): boolean {
+  const w = canvas.width;
+  const h = canvas.height;
+  const sig = `${url}|${preview?.previewWidth ?? 0}x${preview?.previewHeight ?? 0}|${crop.x},${crop.y},${crop.zoom}|${aspect}|${showGuides ? 1 : 0}|${w}x${h}`;
+  if (lastCanvasPaintSig.get(canvas) === sig) {
+    return false;
+  }
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return false;
+  lastCanvasPaintSig.set(canvas, sig);
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#111111";
+  ctx.fillRect(0, 0, w, h);
+
+  if (preview?.source && preview.previewWidth > 0 && preview.previewHeight > 0) {
+    const rect = computeCropSourceRect(preview.previewWidth, preview.previewHeight, w, h, crop);
+    ctx.save();
+    if (aspect === "round") {
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
+      ctx.clip();
+    }
+    ctx.drawImage(preview.source, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, w, h);
+    ctx.restore();
+  }
+
+  if (!showGuides) return true;
+
+  ctx.save();
+  if (aspect === "square") {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w / 3, 0);
+    ctx.lineTo(w / 3, h);
+    ctx.moveTo((2 * w) / 3, 0);
+    ctx.lineTo((2 * w) / 3, h);
+    ctx.moveTo(0, h / 3);
+    ctx.lineTo(w, h / 3);
+    ctx.moveTo(0, (2 * h) / 3);
+    ctx.lineTo(w, (2 * h) / 3);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.65)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, Math.min(w, h) / 2 - 2, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (aspect === "round") {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, Math.min(w, h) / 2 - 1, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(w / 3, 0);
+    ctx.lineTo(w / 3, h);
+    ctx.moveTo((2 * w) / 3, 0);
+    ctx.lineTo((2 * w) / 3, h);
+    ctx.moveTo(0, h / 3);
+    ctx.lineTo(w, h / 3);
+    ctx.moveTo(0, (2 * h) / 3);
+    ctx.lineTo(w, (2 * h) / 3);
+    ctx.stroke();
+  }
+  ctx.restore();
+  return true;
 }
 
 const activeDragMap = new WeakMap<
@@ -49,32 +376,70 @@ const activeDragMap = new WeakMap<
   { pointerId: number; lastX: number; lastY: number }
 >();
 
-export function syncPhotoCropCanvases(renderRoot: ShadowRoot, store: StudioStore): void {
+function cancelCropPaintRaf(store: StudioStore): void {
+  const pending = pendingCropRafs.get(store);
+  if (!pending) return;
+  pendingCropRafs.delete(store);
+  if (typeof cancelAnimationFrame === "function") {
+    cancelAnimationFrame(pending.rafId);
+  }
+}
+
+function paintStudioCropCanvasesNow(
+  renderRoot: ShadowRoot,
+  store: StudioStore,
+  activeOnly: boolean,
+): void {
   // 1. Upload staging main crop canvas + filmstrip thumbs
   if (store.photoUploadModal.open && store.photoUploadModal.files.length > 0) {
     const modal = store.photoUploadModal;
     const active = modal.files[modal.activeIndex] || modal.files[0];
+    const onImageReady = (): void => {
+      if (store.photoUploadModal.open && store.host.isConnected) {
+        scheduleCropCanvasPaint(renderRoot, store, false);
+      }
+    };
     const mainCanvas = renderRoot.getElementById(
       "latter-upload-crop-canvas",
     ) as HTMLCanvasElement | null;
     if (mainCanvas && active) {
-      const img = getOrLoadImage(active.objectUrl, () => store.host.requestUpdate());
-      if (img && (active.width !== img.naturalWidth || active.height !== img.naturalHeight)) {
-        active.width = img.naturalWidth;
-        active.height = img.naturalHeight;
+      const preview = getOrLoadPhotoPreview(active.objectUrl, onImageReady);
+      if (
+        preview &&
+        (active.width !== preview.naturalWidth || active.height !== preview.naturalHeight)
+      ) {
+        active.width = preview.naturalWidth;
+        active.height = preview.naturalHeight;
       }
-      paintCropCanvas(mainCanvas, img, active.crop, modal.previewAspect, { showGuides: true });
+      paintPreviewCropCanvas(
+        mainCanvas,
+        active.objectUrl,
+        preview,
+        active.crop,
+        modal.previewAspect,
+        true,
+      );
     }
 
-    for (let i = 0; i < modal.files.length; i += 1) {
-      const staged = modal.files[i];
-      if (!staged) continue;
-      const thumbCanvas = renderRoot.getElementById(
-        `latter-upload-thumb-${staged.id}`,
+    if (activeOnly && active) {
+      const activeThumb = renderRoot.getElementById(
+        `latter-upload-thumb-${active.id}`,
       ) as HTMLCanvasElement | null;
-      if (!thumbCanvas) continue;
-      const img = getOrLoadImage(staged.objectUrl, () => store.host.requestUpdate());
-      paintCropCanvas(thumbCanvas, img, staged.crop, "square", { showGuides: false });
+      if (activeThumb) {
+        const preview = getOrLoadPhotoPreview(active.objectUrl, onImageReady);
+        paintPreviewCropCanvas(activeThumb, active.objectUrl, preview, active.crop, "square", false);
+      }
+    } else {
+      for (let i = 0; i < modal.files.length; i += 1) {
+        const staged = modal.files[i];
+        if (!staged) continue;
+        const thumbCanvas = renderRoot.getElementById(
+          `latter-upload-thumb-${staged.id}`,
+        ) as HTMLCanvasElement | null;
+        if (!thumbCanvas) continue;
+        const preview = getOrLoadPhotoPreview(staged.objectUrl, onImageReady);
+        paintPreviewCropCanvas(thumbCanvas, staged.objectUrl, preview, staged.crop, "square", false);
+      }
     }
   }
 
@@ -87,16 +452,66 @@ export function syncPhotoCropCanvases(renderRoot: ShadowRoot, store: StudioStore
     ) as HTMLCanvasElement | null;
     if (editCanvas && photo) {
       const srcUrl = photo.orig_url || photo.thumb_url || photo.preview_url || "";
-      const img = getOrLoadImage(srcUrl, () => store.host.requestUpdate());
-      paintCropCanvas(editCanvas, img, modal.crop, modal.previewAspect, { showGuides: true });
+      const preview = getOrLoadPhotoPreview(srcUrl, () => {
+        if (store.photoEditModal.open && store.host.isConnected) {
+          scheduleCropCanvasPaint(renderRoot, store, true);
+        }
+      });
+      paintPreviewCropCanvas(editCanvas, srcUrl, preview, modal.crop, modal.previewAspect, true);
     }
   }
+}
+
+function scheduleCropCanvasPaint(
+  renderRoot: ShadowRoot,
+  store: StudioStore,
+  activeOnly: boolean,
+): void {
+  const existing = pendingCropRafs.get(store);
+  if (existing) {
+    existing.root = renderRoot;
+    if (!activeOnly) existing.activeOnly = false;
+    return;
+  }
+  if (typeof requestAnimationFrame !== "function") {
+    paintStudioCropCanvasesNow(renderRoot, store, activeOnly);
+    return;
+  }
+  const entry = {
+    rafId: 0,
+    activeOnly,
+    root: renderRoot,
+  };
+  entry.rafId = requestAnimationFrame(() => {
+    pendingCropRafs.delete(store);
+    paintStudioCropCanvasesNow(entry.root, store, entry.activeOnly);
+  });
+  pendingCropRafs.set(store, entry);
+}
+
+export function syncPhotoCropCanvases(renderRoot: ShadowRoot, store: StudioStore): void {
+  const hasOpenCropper =
+    (store.photoUploadModal.open && store.photoUploadModal.files.length > 0) ||
+    (store.photoEditModal.open && Boolean(store.photoEditModal.photoId));
+  if (!hasOpenCropper) {
+    cancelCropPaintRaf(store);
+    return;
+  }
+  scheduleCropCanvasPaint(renderRoot, store, false);
+}
+
+function resolveElementShadowRoot(el: Element | null): ShadowRoot | null {
+  const root = el?.getRootNode?.();
+  return root && typeof (root as ShadowRoot).getElementById === "function"
+    ? (root as ShadowRoot)
+    : null;
 }
 
 function attachCropPointerHandlers(
   getCrop: () => PhotoCrop,
   getSourceDims: () => { width: number; height: number },
-  onCropChange: (next: PhotoCrop) => void,
+  onCropMove: (next: PhotoCrop, canvas: HTMLCanvasElement) => void,
+  onCropCommit: (canvas: HTMLCanvasElement) => void,
   disabled: boolean,
 ): {
   onPointerDown: (ev: Event) => void;
@@ -124,6 +539,7 @@ function attachCropPointerHandlers(
       if (!drag || drag.pointerId !== pev.pointerId) return;
       const dx = pev.clientX - drag.lastX;
       const dy = pev.clientY - drag.lastY;
+      if (dx === 0 && dy === 0) return;
       drag.lastX = pev.clientX;
       drag.lastY = pev.clientY;
       const rect = canvas.getBoundingClientRect();
@@ -139,15 +555,18 @@ function attachCropPointerHandlers(
         canvas.width,
         canvas.height,
       );
-      onCropChange(next);
+      onCropMove(next, canvas);
     },
     onPointerUp: (ev: Event) => {
       const pev = ev as PointerEvent;
       const canvas = pev.currentTarget as HTMLCanvasElement;
-      activeDragMap.delete(canvas);
+      const wasDragging = activeDragMap.delete(canvas);
       canvas.classList.remove("dragging");
       if (canvas.hasPointerCapture?.(pev.pointerId)) {
         canvas.releasePointerCapture(pev.pointerId);
+      }
+      if (wasDragging) {
+        onCropCommit(canvas);
       }
     },
   };
@@ -214,23 +633,57 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
 
   const updateActiveItem = (patch: Partial<{ name: string; crop: PhotoCrop }>): void => {
     if (!active) return;
-    const nextFiles = modal.files.map((item, idx) =>
-      idx === modal.activeIndex ? { ...item, ...patch } : item,
+    const nextFiles = store.photoUploadModal.files.map((item, idx) =>
+      idx === store.photoUploadModal.activeIndex ? { ...item, ...patch } : item,
     );
     store.photoUploadModal = { ...store.photoUploadModal, files: nextFiles };
     store.host.requestUpdate();
   };
 
+  const updateActiveCropLive = (nextCrop: PhotoCrop, sourceEl: Element | null): void => {
+    const curFiles = store.photoUploadModal.files;
+    const curActive = curFiles[store.photoUploadModal.activeIndex] || curFiles[0];
+    if (!curActive) return;
+    curActive.crop = nextCrop;
+    const root = resolveElementShadowRoot(sourceEl);
+    if (root) {
+      scheduleCropCanvasPaint(root, store, true);
+    } else {
+      updateActiveItem({ crop: nextCrop });
+    }
+  };
+
+  const commitActiveCrop = (sourceEl: Element | null): void => {
+    const curFiles = store.photoUploadModal.files;
+    const curActive = curFiles[store.photoUploadModal.activeIndex] || curFiles[0];
+    if (!curActive) return;
+    const root = resolveElementShadowRoot(sourceEl);
+    if (root) {
+      cancelCropPaintRaf(store);
+      paintStudioCropCanvasesNow(root, store, true);
+    }
+    updateActiveItem({ crop: { ...curActive.crop } });
+  };
+
   const ptr = attachCropPointerHandlers(
-    () => active?.crop || { ...DEFAULT_PHOTO_CROP },
     () => {
-      const cached = active?.objectUrl ? loadedImageCache.get(active.objectUrl) : null;
+      const curActive =
+        store.photoUploadModal.files[store.photoUploadModal.activeIndex] ||
+        store.photoUploadModal.files[0];
+      return curActive?.crop || { ...DEFAULT_PHOTO_CROP };
+    },
+    () => {
+      const curActive =
+        store.photoUploadModal.files[store.photoUploadModal.activeIndex] ||
+        store.photoUploadModal.files[0];
+      const cached = curActive?.objectUrl ? loadedImageCache.get(curActive.objectUrl) : null;
       return {
-        width: cached?.naturalWidth || active?.width || canvasSize.width,
-        height: cached?.naturalHeight || active?.height || canvasSize.height,
+        width: cached?.naturalWidth || curActive?.width || canvasSize.width,
+        height: cached?.naturalHeight || curActive?.height || canvasSize.height,
       };
     },
-    (nextCrop) => updateActiveItem({ crop: nextCrop }),
+    (nextCrop, canvas) => updateActiveCropLive(nextCrop, canvas),
+    (canvas) => commitActiveCrop(canvas),
     modal.uploading,
   );
 
@@ -375,11 +828,22 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
                   ?disabled=${modal.uploading}
                   .value=${live(String(active?.crop.zoom ?? 1))}
                   @input=${(ev: Event) => {
-                    const z = Number((ev.currentTarget as HTMLInputElement).value) || 1;
-                    updateActiveItem({
-                      crop: normalizePhotoCrop({ ...(active?.crop || DEFAULT_PHOTO_CROP), zoom: z }),
+                    const inputEl = ev.currentTarget as HTMLInputElement;
+                    const z = Number(inputEl.value) || 1;
+                    const curActive =
+                      store.photoUploadModal.files[store.photoUploadModal.activeIndex] ||
+                      store.photoUploadModal.files[0];
+                    const nextCrop = normalizePhotoCrop({
+                      ...(curActive?.crop || DEFAULT_PHOTO_CROP),
+                      zoom: z,
                     });
+                    const readout = inputEl.parentElement?.querySelector(".kv-value");
+                    if (readout) {
+                      readout.textContent = `${nextCrop.zoom.toFixed(2)}×`;
+                    }
+                    updateActiveCropLive(nextCrop, inputEl);
                   }}
+                  @change=${(ev: Event) => commitActiveCrop(ev.currentTarget as Element)}
                 />
                 <span class="kv-value">${(active?.crop.zoom ?? 1).toFixed(2)}×</span>
               </div>
@@ -641,8 +1105,27 @@ export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
   const collections = store.state?.photo_collections || [];
   const canvasSize = cropPreviewCanvasSize(modal.previewAspect);
 
+  const updateEditCropLive = (nextCrop: PhotoCrop, sourceEl: Element | null): void => {
+    store.photoEditModal = { ...store.photoEditModal, crop: nextCrop };
+    const root = resolveElementShadowRoot(sourceEl);
+    if (root) {
+      scheduleCropCanvasPaint(root, store, true);
+    } else {
+      store.host.requestUpdate();
+    }
+  };
+
+  const commitEditCrop = (sourceEl: Element | null): void => {
+    const root = resolveElementShadowRoot(sourceEl);
+    if (root) {
+      cancelCropPaintRaf(store);
+      paintStudioCropCanvasesNow(root, store, true);
+    }
+    store.host.requestUpdate();
+  };
+
   const ptr = attachCropPointerHandlers(
-    () => modal.crop,
+    () => store.photoEditModal.crop,
     () => {
       const srcUrl = photo?.orig_url || photo?.thumb_url || photo?.preview_url || "";
       const cached = srcUrl ? loadedImageCache.get(srcUrl) : null;
@@ -651,10 +1134,8 @@ export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
         height: cached?.naturalHeight || photo?.height || canvasSize.height,
       };
     },
-    (nextCrop) => {
-      store.photoEditModal = { ...store.photoEditModal, crop: nextCrop };
-      store.host.requestUpdate();
-    },
+    (nextCrop, canvas) => updateEditCropLive(nextCrop, canvas),
+    (canvas) => commitEditCrop(canvas),
     modal.busy || !uploaded,
   );
 
@@ -721,13 +1202,16 @@ export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
                     ?disabled=${modal.busy}
                     .value=${live(String(modal.crop.zoom))}
                     @input=${(ev: Event) => {
-                      const z = Number((ev.currentTarget as HTMLInputElement).value) || 1;
-                      store.photoEditModal = {
-                        ...store.photoEditModal,
-                        crop: normalizePhotoCrop({ ...modal.crop, zoom: z }),
-                      };
-                      store.host.requestUpdate();
+                      const inputEl = ev.currentTarget as HTMLInputElement;
+                      const z = Number(inputEl.value) || 1;
+                      const nextCrop = normalizePhotoCrop({ ...store.photoEditModal.crop, zoom: z });
+                      const readout = inputEl.parentElement?.querySelector(".kv-value");
+                      if (readout) {
+                        readout.textContent = `${nextCrop.zoom.toFixed(2)}×`;
+                      }
+                      updateEditCropLive(nextCrop, inputEl);
                     }}
+                    @change=${(ev: Event) => commitEditCrop(ev.currentTarget as Element)}
                   />
                   <span class="kv-value">${modal.crop.zoom.toFixed(2)}×</span>
                 </div>

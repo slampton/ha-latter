@@ -247,14 +247,11 @@ def _esphome_entry_for_device(
     hass: HomeAssistant, device: dr.DeviceEntry
 ) -> ConfigEntry[Any] | None:
     """Return the ESPHome config entry that owns `device`, or `None` if it isn't an ESPHome device."""
-    dev_reg = dr.async_get(hass)
-    for ce in hass.config_entries.async_entries("esphome"):
-        if any(
-            d.id == device.id
-            for d in dr.async_entries_for_config_entry(dev_reg, ce.entry_id)
-        ):
-            return ce
-    return None
+    ce_id = getattr(device, "config_entry_id", None)
+    if not ce_id:
+        return None
+    ce = hass.config_entries.async_get_entry(str(ce_id))
+    return ce if ce is not None and ce.domain == "esphome" else None
 
 
 def is_esphome_device(hass: HomeAssistant, device: dr.DeviceEntry) -> bool:

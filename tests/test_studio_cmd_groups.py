@@ -531,3 +531,123 @@ async def test_builtin_group_reset_preset_and_reload_normalization(
     reloaded_coord = entry.runtime_data.coordinators[sub.subentry_id]
     assert reloaded_coord.device_group == "wall_panels"
     assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_group_baseline_reset_releases_system_lock_and_batch_setting_parallelizes(
+    hass: Any, setup_latter_hub: Any, make_esphome_device: Any
+) -> None:
+    """Verify `reset_to_default=True` releases `system_config_lock` before awaiting coordinators and `apply_batch_device_setting` updates targets concurrently."""
+    import asyncio
+    from unittest.mock import patch
+
+    from custom_components.latter.groups.device_groups import (
+        async_apply_group_baseline_to_coordinators,
+    )
+    from custom_components.latter.hub_registry import get_system_config_lock
+    from custom_components.latter.studio import system_commands as sys_cmds
+
+    entry, _sys_obj, coord1 = await setup_latter_hub(hass)
+    assert coord1 is not None
+    conn = make_ws_connection(hass)
+
+    # Assign `coord1` to `handhelds` so its effective `device_group` matches `handhelds`
+    assign_res = await call_ws(
+        hass,
+        conn,
+        79,
+        "latter/device/command",
+        command="save_device_config",
+        subentry_id=coord1.subentry_id,
+        payload={"config": {"device_group": "handhelds"}},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    assert assign_res is not None and assign_res["success"] is True
+    assert coord1.device_group == "handhelds"
+
+    # 1) `update_group_baseline(..., reset_to_default=True)` releases `system_config_lock` BEFORE awaiting coordinators
+    lock_states: list[bool] = []
+
+    async def _spy_apply_baseline(h: Any, *args: Any, **kwargs: Any) -> Any:
+        lock_states.append(get_system_config_lock(h).locked())
+        return await async_apply_group_baseline_to_coordinators(h, *args, **kwargs)
+
+    with patch.object(
+        sys_cmds, "async_apply_group_baseline_to_coordinators", side_effect=_spy_apply_baseline
+    ):
+        res_reset = await call_ws(
+            hass,
+            conn,
+            80,
+            "latter/system/command",
+            command="update_group_baseline",
+            payload={"group_id": "handhelds", "reset_to_default": True},
+            studio_rev=STUDIO_REV,
+        )
+    assert not conn.errors
+    assert res_reset is not None and res_reset["success"] is True
+    assert lock_states == [False]
+
+    # 2) Adopt a 2nd Device and verify `apply_batch_device_setting` runs target updates concurrently
+    esp_dev2, _mac2 = make_esphome_device(
+        hass,
+        slug="kitchen_display",
+        mac="aa:bb:cc:dd:ee:02",
+        name="Kitchen Display",
+    )
+    add_res = await call_ws(
+        hass,
+        conn,
+        81,
+        "latter/system/command",
+        command="add_latter_device",
+        payload={"esphome_device_id": esp_dev2.id},
+        studio_rev=STUDIO_REV,
+    )
+    assert not conn.errors
+    assert add_res is not None and add_res["success"] is True
+    # `add_latter_device` reloads the System config entry, replacing `entry.runtime_data`
+    coord1 = entry.runtime_data.coordinators[coord1.subentry_id]
+    coord2 = entry.runtime_data.coordinators[add_res["result"]["adopted_subentry_id"]]
+
+    both_started = asyncio.Event()
+    in_flight = 0
+    orig_apply1 = coord1.async_apply_options
+    orig_apply2 = coord2.async_apply_options
+
+    async def _barrier_apply(orig: Any) -> Any:
+        nonlocal in_flight
+        in_flight += 1
+        if in_flight >= 2:
+            both_started.set()
+        await asyncio.wait_for(both_started.wait(), timeout=2.0)
+        return await orig()
+
+    async def _barrier1() -> Any:
+        return await _barrier_apply(orig_apply1)
+
+    async def _barrier2() -> Any:
+        return await _barrier_apply(orig_apply2)
+
+    with (
+        patch.object(coord1, "async_apply_options", new=_barrier1),
+        patch.object(coord2, "async_apply_options", new=_barrier2),
+    ):
+        batch_res = await call_ws(
+            hass,
+            conn,
+            82,
+            "latter/system/command",
+            command="apply_batch_device_setting",
+            payload={
+                "target": "all",
+                "config": {"glass_style": "Dark"},
+            },
+            studio_rev=STUDIO_REV,
+        )
+    assert not conn.errors
+    assert batch_res is not None and batch_res["success"] is True
+    assert in_flight == 2
+    assert coord1.device_data.get("glass_style") == "Dark"
+    assert coord2.device_data.get("glass_style") == "Dark"
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

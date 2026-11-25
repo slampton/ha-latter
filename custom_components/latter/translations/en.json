@@ -128,8 +128,8 @@
       "ble_distance": {
         "name": "BLE distance"
       },
-      "timer_remaining": {
-        "name": "Timer remaining"
+      "timer_ends": {
+        "name": "Timer ends"
       },
       "person_current_area": {
         "name": "{person_name} current area"

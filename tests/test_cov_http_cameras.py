@@ -92,7 +92,11 @@ from custom_components.latter.http.wallpaper_views import (
     _transcode_media_preview_jpeg,
     _transcode_photo_to_baseline_jpeg,
 )
-from custom_components.latter.hub_registry import get_domain_data, get_global_config
+from custom_components.latter.hub_registry import (
+    get_domain_data,
+    get_global_config,
+    register_studio_subscriber,
+)
 from custom_components.latter.media_cache import (
     MAX_MULTIPART_PARTS,
     MAX_UPSTREAM_IMAGE_BYTES,
@@ -446,10 +450,14 @@ def test_camera_transcode_edge_branches(monkeypatch: pytest.MonkeyPatch) -> None
             raise TypeError("size kwarg unsupported")
         return orig_load_default(*args)
 
-    with monkeypatch.context() as mp:
-        mp.setattr(transcode_mod.ImageFont, "load_default", _no_size_load_default)
-        fallback_font = _load_tile_font(16)
-        assert fallback_font is not None
+    _load_tile_font.cache_clear()
+    try:
+        with monkeypatch.context() as mp:
+            mp.setattr(transcode_mod.ImageFont, "load_default", _no_size_load_default)
+            fallback_font = _load_tile_font(16)
+            assert fallback_font is not None
+    finally:
+        _load_tile_font.cache_clear()
 
     # _draw_centered_line fallback when textbbox raises TypeError
     canvas = Image.new("RGB", (120, 80), (0, 0, 0))
@@ -836,6 +844,69 @@ async def test_wallpaper_views_proxy_and_upload_edge_branches(
         r_m_422 = await wp_view.get(_make_get_request(empty_m_url), "system")
         assert r_m_422.status == 422
 
+        # Singleflight coalescing + Semaphore(2) bounded concurrency for concurrent `/media` previews
+        import threading
+
+        for idx in range(5):
+            (media_dir / f"batch_{idx}.jpg").write_bytes(wide_jpeg)
+
+        orig_preview_fn = wallpaper_views._transcode_media_preview_jpeg
+        singleflight_calls = 0
+        sf_gate = threading.Event()
+        sf_entered = threading.Event()
+
+        def _gated_singleflight(fp: Path, w: int, h: int) -> bytes:
+            nonlocal singleflight_calls
+            singleflight_calls += 1
+            sf_entered.set()
+            sf_gate.wait(timeout=2.0)
+            return orig_preview_fn(fp, w, h)
+
+        sf_url = sys_obj.url_signer.build_media_preview_url("local", "batch_0.jpg", 160, 160)
+        with monkeypatch.context() as mp:
+            mp.setattr(wallpaper_views, "_transcode_media_preview_jpeg", _gated_singleflight)
+            t1 = asyncio.create_task(wp_view.get(_make_get_request(sf_url), "system"))
+            t2 = asyncio.create_task(wp_view.get(_make_get_request(sf_url), "system"))
+            t3 = asyncio.create_task(wp_view.get(_make_get_request(sf_url), "system"))
+            await asyncio.to_thread(sf_entered.wait, 2.0)
+            await asyncio.sleep(0.02)
+            sf_gate.set()
+            res_sf = await asyncio.gather(t1, t2, t3)
+        assert singleflight_calls == 1
+        assert all(r.status == 200 for r in res_sf)
+        assert res_sf[0].body == res_sf[1].body == res_sf[2].body
+
+        # Bounded concurrency: 4 distinct concurrent previews never exceed 2 simultaneous executor jobs
+        active_conc = 0
+        peak_conc = 0
+        conc_lock = threading.Lock()
+
+        def _tracked_preview(fp: Path, w: int, h: int) -> bytes:
+            nonlocal active_conc, peak_conc
+            with conc_lock:
+                active_conc += 1
+                peak_conc = max(peak_conc, active_conc)
+            try:
+                import time as _time
+
+                _time.sleep(0.03)
+                return orig_preview_fn(fp, w, h)
+            finally:
+                with conc_lock:
+                    active_conc -= 1
+
+        distinct_urls = [
+            sys_obj.url_signer.build_media_preview_url("local", f"batch_{i}.jpg", 160, 160)
+            for i in range(1, 5)
+        ]
+        with monkeypatch.context() as mp:
+            mp.setattr(wallpaper_views, "_transcode_media_preview_jpeg", _tracked_preview)
+            res_conc = await asyncio.gather(
+                *(wp_view.get(_make_get_request(u), "system") for u in distinct_urls)
+            )
+        assert all(r.status == 200 for r in res_conc)
+        assert peak_conc <= wallpaper_views._MAX_CONCURRENT_HTTP_TRANSCODES
+
         # Wallpaper proxy validation errors
         r_bad_mode = await wp_view.get(
             _make_get_request(
@@ -954,20 +1025,28 @@ async def test_wallpaper_views_proxy_and_upload_edge_branches(
         )
         assert r_404_slug.status == 404
 
-        # d) System-scoped upload with unknown field + nested MultipartReader skipped -> 200
+        # d) System-scoped upload with unknown field + nested MultipartReader skipped -> 200 + Studio notify
+        studio_notifies: list[int] = []
+        unsub_studio = register_studio_subscriber(
+            hass, lambda: studio_notifies.append(1)
+        )
         nested_stub = _NestedMultipartStub()
         ignored_part = _MultipartPart("ignored_meta", text_val="noop")
-        r_200_sys = await upload_view.post(
-            _MultipartRequestStub(
-                parts=[
-                    _MultipartPart("scope", text_val="system"),
-                    nested_stub,
-                    ignored_part,
-                    _MultipartPart("file", file_bytes=wide_jpeg, filename="sys.jpg"),
-                ]
+        try:
+            r_200_sys = await upload_view.post(
+                _MultipartRequestStub(
+                    parts=[
+                        _MultipartPart("scope", text_val="system"),
+                        nested_stub,
+                        ignored_part,
+                        _MultipartPart("file", file_bytes=wide_jpeg, filename="sys.jpg"),
+                    ]
+                )
             )
-        )
+        finally:
+            unsub_studio()
         assert r_200_sys.status == 200
+        assert len(studio_notifies) == 1
         assert nested_stub.released is True
         assert ignored_part.released is True
         body_sys = json.loads(r_200_sys.body.decode("utf-8"))
@@ -1030,6 +1109,16 @@ async def test_camera_views_snapshot_stream_grid_and_audio(
 
     p_gone = _FakeSubproc(raise_lookup=True)
     await _terminate_ffmpeg_process(p_gone, 0.05)  # type: ignore[arg-type]
+
+    # _terminate_ffmpeg_process guards ProcessLookupError raised during kill() after timeout
+    class _KillGoneSubproc(_FakeSubproc):
+        def kill(self) -> None:
+            raise ProcessLookupError("exited before kill")
+
+    p_kill_gone = _KillGoneSubproc(hang_terminate=True)
+    with monkeypatch.context() as mp:
+        mp.setattr(camera_views, "_PROC_KILL_WAIT_S", 0.02)
+        await _terminate_ffmpeg_process(p_kill_gone, 0.01)  # type: ignore[arg-type]
 
     # async_shutdown_doorbell_streams terminates tracked procs
     p_tracked = _FakeSubproc()
@@ -1392,6 +1481,84 @@ async def test_camera_views_snapshot_stream_grid_and_audio(
                 )
                 assert r_aborted.status == 200
                 assert err_proc.terminated is True
+
+            # Audio read timeout terminates wedged RTSP subprocess cleanly
+            stall_ev = asyncio.Event()
+            wedged_proc = _FakeSubproc([], stall_event=stall_ev)
+
+            async def _spawn_wedged(*_cmd: str, **_kw: Any) -> _FakeSubproc:
+                return wedged_proc
+
+            mp.setattr(asyncio, "create_subprocess_exec", _spawn_wedged)
+            mp.setattr(web.StreamResponse, "write", _rec_write)
+            mp.setattr(camera_views, "_AUDIO_READ_TIMEOUT_S", 0.02)
+            r_timeout = await _async_pipe_ffmpeg_audio(
+                _make_get_request(audio_url), cfg_rtsp, cmd_rtsp
+            )
+            assert r_timeout.status == 200
+            assert wedged_proc.terminated is True
+            assert coord.subentry_id not in camera_views._ACTIVE_DEVICE_STREAMS
+            stall_ev.set()
+
+            # Camera-switch self-deadlock regression: Device A switches while both audio slots are full
+            mp.setattr(camera_views, "_AUDIO_READ_TIMEOUT_S", 5.0)
+            stream1_stall = asyncio.Event()
+            stream1_started = asyncio.Event()
+
+            class _SwitchingSubproc(_FakeSubproc):
+                def terminate(self) -> None:
+                    super().terminate()
+                    stream1_stall.set()
+
+            proc_first = _SwitchingSubproc([b"fLaC"], stall_event=stream1_stall)
+            proc_second = _FakeSubproc([b"fLaC_new"])
+            spawn_iter = iter([proc_first, proc_second])
+
+            async def _spawn_switch(*_cmd: str, **_kw: Any) -> _FakeSubproc:
+                p = next(spawn_iter)
+                if p is proc_first:
+                    stream1_started.set()
+                return p
+
+            mp.setattr(asyncio, "create_subprocess_exec", _spawn_switch)
+            # Occupy 1 slot for another device; Device A occupies the 2nd slot
+            await camera_views._FFMPEG_STREAM_SEMAPHORE.acquire()
+            try:
+                t_first = asyncio.create_task(
+                    audio_view.get(_make_get_request(audio_url), coord.device_slug)
+                )
+                await asyncio.wait_for(stream1_started.wait(), timeout=1.0)
+                await asyncio.sleep(0.01)
+                assert camera_views._FFMPEG_STREAM_SEMAPHORE.locked() is True
+                # Device A switches cameras -> reaps proc_first BEFORE acquiring semaphore -> 200 (not 429!)
+                r_switched = await audio_view.get(
+                    _make_get_request(audio_url), coord.device_slug
+                )
+                assert r_switched.status == 200
+                assert proc_first.terminated is True
+                assert proc_second.terminated is True
+                await asyncio.wait_for(t_first, timeout=1.0)
+            finally:
+                camera_views._FFMPEG_STREAM_SEMAPHORE.release()
+
+            # Cached off-loop shutil.which lookup when ffmpeg manager raises
+            which_calls = 0
+
+            def _raise_mgr(_h: Any) -> Any:
+                raise RuntimeError("no ffmpeg manager")
+
+            def _spy_which(_bin: str) -> str:
+                nonlocal which_calls
+                which_calls += 1
+                return "/usr/local/bin/ffmpeg"
+
+            mp.setattr(ha_ffmpeg, "get_ffmpeg_manager", _raise_mgr)
+            mp.setattr(camera_views.shutil, "which", _spy_which)
+            mp.setattr(camera_views, "_FFMPEG_BIN_CHECKED", False)
+            mp.setattr(camera_views, "_CACHED_FFMPEG_BIN", None)
+            assert await camera_views._async_resolve_ffmpeg_binary(hass) == "/usr/local/bin/ffmpeg"
+            assert await camera_views._async_resolve_ffmpeg_binary(hass) == "/usr/local/bin/ffmpeg"
+            assert which_calls == 1
 
         # Silence WAV fallback when stream URL is disallowed
         streams["camera.porch"] = "file:///etc/passwd"
@@ -2061,5 +2228,24 @@ async def test_stream_hub_mjpeg_snapshot_waiter_and_grid_branches(
             assert inspect_jpeg_header(gf1)[1:] == (320, 240)
             assert inspect_jpeg_header(gf2)[1:] == (320, 240)
             await grid_gen.aclose()
+
+        # Grid producer error propagation & lock-missing unsubscribe fallback
+        err_prod = hub_mod._GridProducer(
+            key=(("camera.err",), 320, 240, 5, "contain", ("Err",)),
+            cams=("camera.err",),
+            labels=("Err",),
+            out_w=320,
+            out_h=240,
+            fps=5,
+            fit_mode="contain",
+            stale_after_s=5.0,
+        )
+        err_prod.publish_error(RuntimeError("grid compose failed"))
+        with pytest.raises(CameraFetchError, match="grid compose failed"):
+            await hub._async_wait_next_grid_frame(err_prod, 0.01)
+        tok = object()
+        err_prod.subscribers.add(tok)
+        await hub._async_unsubscribe_grid(err_prod, tok)
+        assert err_prod.closed is True
     finally:
         await hub.async_shutdown()

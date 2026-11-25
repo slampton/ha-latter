@@ -29,7 +29,7 @@ Latter spans **8 Home Assistant platforms** ([`sensor.py`](../../custom_componen
 | `button.<slug>_dismiss_alert` | `button` | Live (`radio_connected`) | Press *(display devices)* | Dismisses any active notification takeover or ringing timer/alarm alert (`dismiss_ringing` / `cancel_timer`) |
 | `button.<slug>_find_my_device` | `button` (`identify`, `config`) | Live (`radio_connected`) | Press *(speaker devices)* | Plays the Find My Device locator chime via `latter_device_command(command="find_my")` |
 | `binary_sensor.<slug>_timer_active` | `binary_sensor` (`running`) | Sleep-safe | `on` / `off` *(display devices)* | `paused`, `remaining_seconds` — event-driven via `timer_alarm_state` RPC |
-| `sensor.<slug>_timer_remaining` | `sensor` (`duration`, `s`) | Sleep-safe | Remaining seconds *(display devices)* | `running`, `paused` — ticked locally at 1 Hz in Home Assistant only while running (zero Wi-Fi polling) |
+| `sensor.<slug>_timer_ends` | `sensor` (`timestamp`) | Sleep-safe | UTC finish timestamp (`unknown` when idle/paused) *(display devices)* | `state` (`running` / `paused` / `idle`), `paused_remaining_s` — event-driven via `timer_alarm_state` RPC; Home Assistant dashboards render a live 1-second browser countdown with zero 1 Hz server or Recorder churn |
 | `binary_sensor.<slug>_alarm_ringing` | `binary_sensor` (`sound`) | Sleep-safe | `on` / `off` *(display devices)* | Asserts while an on-device alarm or timer chime is ringing (`timer_alarm_state` RPC) |
 | `select.<slug>_device_group` | `select` (`config`) | Sleep-safe | *Pocket Carry* · *Handhelds* · *Wearables* · *Wall & Desk Panels* · custom groups · *Custom* | Subentry Device Group preset selector; syncs active group baseline via `device_prefs` |
 | `select.<slug>_wake_word_mode` | `select` (`config`) | Sleep-safe | *Docked Only* · *Always On* · *Disabled* | Subentry wake-word policy *(mic-equipped devices)*; syncs via `device_prefs` |
@@ -42,10 +42,12 @@ Latter spans **8 Home Assistant platforms** ([`sensor.py`](../../custom_componen
 | Scope | Entity | State | Key Attributes |
 | :--- | :--- | :--- | :--- |
 | **Per Person** *(when a device has `Assigned Person`)* | `sensor.latter_system_<person>_current_area` | Area of that person's most recently heard device | `area_id`, `floor_id`, `floor_name`, `device_slug`, `distance_m`, `match_method` |
-| **Per Person** *(when Home Assistant Floors exist)* | `sensor.latter_system_<person>_current_floor` | Floor of that person's most recently heard device, `Away`, or `Unassigned` | `floor_id`, `floor_name`, `area_id`, `device_slug`, `distance_m`, `match_method` |
+| **Per Person** *(when Home Assistant Floors exist)* | `sensor.latter_system_<person>_current_floor` | Floor of that person's most recently heard device, `Away`, or `Unassigned` | `floor_id`, `floor_name`, `area_id`, `device_slug`, `match_method` |
 | **Per Person** *(`diagnostic`, disabled by default)* | `sensor.latter_system_<person>_ble_distance` | Meters (`UnitOfLength.METERS`) | Same as `sensor.latter_system_<person>_current_area` |
 | **Per Area** *(mapped BLE Areas)* | `binary_sensor.latter_system_<area>_occupancy` | `on` / `off` (`occupancy`) | `area_id`, `area_name`, `floor_id`, `fusion_mode`, `confidence_pct`, `ble_occupied`, `sensor_occupied`, `active_sensors`, `occupant_names`, `occupied_by`, `persons`, `closest_device`, `winning_rssi`, `closest_distance_m`, `tracker_count` |
 | **Per Area** | `sensor.latter_system_<area>_occupants` | Occupant summary, `Occupied (Sensor)`, or `Empty` | `area_id`, `area_name`, `is_occupied`, `occupant_count`, `occupant_names`, `occupied_by`, `persons` |
+
+> **Recorder & SD-card friendly by default:** Volatile RF attributes (`distance_m`, `rssi`, `raw_rssi`, `winning_rssi`, `closest_distance_m`, `confidence_pct`, `ref_power_dbm`) on the 6 enabled-by-default presence and occupancy entities remain live in Home Assistant's state machine, templates, automations, and Latter Studio, but are declared in `_unrecorded_attributes` so RSSI fluctuations never bloat `home-assistant_v2.db`. If you run on a Raspberry Pi microSD card and also want to exclude the hidden ESPHome RPC transport pipe from Recorder, add `entity_globs: ["sensor.*_system_rpc_outbox"]` under `recorder: exclude:` in `configuration.yaml`.
 
 → [How sensor fusion works](../presence.md#area-occupancy-and-sensor-fusion)
 

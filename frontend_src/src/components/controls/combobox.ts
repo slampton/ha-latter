@@ -156,13 +156,13 @@ export function renderEntityCombobox(opts: EntityComboboxOptions): TemplateResul
       : t("common.missing_suffix", { id: curVal }, opts.overlay)
     : "";
 
-  const { items: matchedItems, totalMatches } = matchComboboxOptions(
-    allOptions,
-    ui.open ? ui.query : "",
-    maxResults,
-  );
+  const matched = ui.open
+    ? matchComboboxOptions(allOptions, ui.query, maxResults)
+    : { items: [] as ComboboxOptionItem[], totalMatches: 0 };
+  const matchedItems = matched.items;
+  const totalMatches = matched.totalMatches;
   const clampedActiveIdx =
-    matchedItems.length > 0
+    ui.open && matchedItems.length > 0
       ? Math.max(0, Math.min(matchedItems.length - 1, ui.activeIndex))
       : -1;
 
@@ -207,7 +207,10 @@ export function renderEntityCombobox(opts: EntityComboboxOptions): TemplateResul
     if (opts.disabled || ui.open) return;
     ui.open = true;
     ui.query = "";
-    const curIdx = curVal ? matchedItems.findIndex((o) => o.id === curVal) : -1;
+    const cap = Math.max(1, maxResults);
+    const curIdx = curVal
+      ? allOptions.slice(0, cap).findIndex((o) => o.id === curVal)
+      : -1;
     ui.activeIndex = curIdx >= 0 ? curIdx : 0;
     notifyUi(sourceEl);
   };
@@ -241,7 +244,8 @@ export function renderEntityCombobox(opts: EntityComboboxOptions): TemplateResul
       if (!ui.open) {
         ui.open = true;
         ui.query = "";
-        ui.activeIndex = Math.max(0, matchedItems.length - 1);
+        const visibleCount = Math.min(allOptions.length, Math.max(1, maxResults));
+        ui.activeIndex = Math.max(0, visibleCount - 1);
         notifyUi(inp);
         return;
       }
@@ -358,57 +362,59 @@ export function renderEntityCombobox(opts: EntityComboboxOptions): TemplateResul
       aria-label=${opts.ariaLabel || t("combobox.placeholder", undefined, opts.overlay)}
       class="combobox-listbox${ui.open ? "" : " hidden"}"
     >
-      ${matchedItems.length === 0
-        ? html`<li role="presentation" class="combobox-empty">
-            ${t("combobox.no_matches", undefined, opts.overlay)}
-          </li>`
-        : repeat(
-            matchedItems,
-            (item) => item.id,
-            (item, idx) => {
-              const dom =
-                item.domain || (item.id.includes(".") ? (item.id.split(".", 1)[0] ?? "") : "");
-              const isSel = item.id === curVal;
-              const isAct = idx === clampedActiveIdx;
-              return html`<li
-                id=${optionDomId(idx)}
-                role="option"
-                aria-selected=${isSel ? "true" : "false"}
-                @pointerenter=${(ev: PointerEvent) => {
-                  if (ui.activeIndex !== idx) {
-                    ui.activeIndex = idx;
-                    notifyUi(ev.currentTarget as Element);
-                  }
-                }}
-                @pointerdown=${(ev: PointerEvent) => {
-                  ev.preventDefault();
-                  commitSelection(item.id, ev.currentTarget as Element);
-                }}
-                @click=${(ev: Event) => commitSelection(item.id, ev.currentTarget as Element)}
-                class="combobox-option${isAct ? " active" : ""}"
-              >
-                <div class="combobox-option-main">
-                  <span class="combobox-option-title">${item.name || item.id}</span>
-                  <span class="combobox-option-id">${item.id}</span>
-                </div>
-                <span class="combobox-option-chips">
-                  ${item.area_name ? html`<span class="chip">${item.area_name}</span>` : nothing}
-                  ${dom ? html`<span class="chip">${dom}</span>` : nothing}
-                  ${item.state_label
-                    ? html`<span class=${toneToChipClass(item.state_tone)}>${item.state_label}</span>`
-                    : nothing}
-                </span>
-              </li>`;
-            },
-          )}
-      ${totalMatches > matchedItems.length
-        ? html`<li role="presentation" class="combobox-footer">
-            ${t(
-              "combobox.showing_top",
-              { shown: matchedItems.length, total: totalMatches },
-              opts.overlay,
-            )}
-          </li>`
+      ${ui.open
+        ? html`${matchedItems.length === 0
+              ? html`<li role="presentation" class="combobox-empty">
+                  ${t("combobox.no_matches", undefined, opts.overlay)}
+                </li>`
+              : repeat(
+                  matchedItems,
+                  (item) => item.id,
+                  (item, idx) => {
+                    const dom =
+                      item.domain || (item.id.includes(".") ? (item.id.split(".", 1)[0] ?? "") : "");
+                    const isSel = item.id === curVal;
+                    const isAct = idx === clampedActiveIdx;
+                    return html`<li
+                      id=${optionDomId(idx)}
+                      role="option"
+                      aria-selected=${isSel ? "true" : "false"}
+                      @pointerenter=${(ev: PointerEvent) => {
+                        if (ui.activeIndex !== idx) {
+                          ui.activeIndex = idx;
+                          notifyUi(ev.currentTarget as Element);
+                        }
+                      }}
+                      @pointerdown=${(ev: PointerEvent) => {
+                        ev.preventDefault();
+                        commitSelection(item.id, ev.currentTarget as Element);
+                      }}
+                      @click=${(ev: Event) => commitSelection(item.id, ev.currentTarget as Element)}
+                      class="combobox-option${isAct ? " active" : ""}"
+                    >
+                      <div class="combobox-option-main">
+                        <span class="combobox-option-title">${item.name || item.id}</span>
+                        <span class="combobox-option-id">${item.id}</span>
+                      </div>
+                      <span class="combobox-option-chips">
+                        ${item.area_name ? html`<span class="chip">${item.area_name}</span>` : nothing}
+                        ${dom ? html`<span class="chip">${dom}</span>` : nothing}
+                        ${item.state_label
+                          ? html`<span class=${toneToChipClass(item.state_tone)}>${item.state_label}</span>`
+                          : nothing}
+                      </span>
+                    </li>`;
+                  },
+                )}
+            ${totalMatches > matchedItems.length
+              ? html`<li role="presentation" class="combobox-footer">
+                  ${t(
+                    "combobox.showing_top",
+                    { shown: matchedItems.length, total: totalMatches },
+                    opts.overlay,
+                  )}
+                </li>`
+              : nothing}`
         : nothing}
     </ul>
   </div>`;

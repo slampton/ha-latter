@@ -180,15 +180,21 @@ class TestViewLayout(unittest.TestCase):
         self.assertEqual(en_json["nav.back_managed"], "← Managed")
         self.assertNotIn("<span>&larr; All Devices</span>", ts_src)
 
-        view_fns = {
-            m.group(1): m.group(0)
-            for path in sorted((FRONTEND_SRC_DIR / "views").rglob("*.ts"))
-            if not path.name.endswith(".d.ts")
+        view_fns: dict[str, str] = {}
+        for path in sorted((FRONTEND_SRC_DIR / "views").rglob("*.ts")):
+            if path.name.endswith(".d.ts"):
+                continue
+            src = path.read_text(encoding="utf-8")
             for m in re.finditer(
                 r"(?:^|\n)(?:export\s+)?function (render\w+)\([\s\S]*?\n\}(?=\n|\Z)",
-                path.read_text(encoding="utf-8"),
-            )
-        }
+                src,
+            ):
+                view_fns[m.group(1)] = m.group(0)
+            for m in re.finditer(
+                r"(?:^|\n)  const (render\w+) = \([\s\S]*?\n  \};(?=\n|\Z)",
+                src,
+            ):
+                view_fns.setdefault(m.group(1), m.group(0))
 
         def section(view: str) -> str:
             start = views_ts.index(f'<section id="view-{view}"')
@@ -196,7 +202,7 @@ class TestViewLayout(unittest.TestCase):
             expanded: set[str] = set()
             for _ in range(3):
                 out = re.sub(
-                    r"(render\w+)\(",
+                    r"\b(render\w+)\b",
                     lambda m: (
                         f"{view_fns[m.group(1)]}\n{m.group(0)}"
                         if m.group(1) in view_fns and m.group(1) not in expanded and (expanded.add(m.group(1)) or True)
@@ -220,7 +226,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("TRACKER_KIND_TOKENS", ts_src)
         self.assertIn("ignoreDiscoveredDevice", discovered_view)
         self.assertIn("unignoreDiscoveredDevice", discovered_view)
-        self.assertEqual(latter_const.STUDIO_REV, 51)
+        self.assertEqual(latter_const.STUDIO_REV, 52)
         self.assertNotIn("hold_crown_power_off", ts_src)
         self.assertIn(f"const STUDIO_REV = {latter_const.STUDIO_REV};", ts_src)
         self.assertIn(".card.handoff-active", ts_src)
@@ -651,6 +657,133 @@ class TestActivityCard(unittest.TestCase):
         self.assertIn("store.entity.reorderActivitySources(", view)
         for label in ("Calendar", "Music Queue", "Stopwatch", "Alarms", "Timers"):
             self.assertIn(f'label: "{label}"', ts_src)
+
+
+class TestSectionTokenGateAndMemo(unittest.TestCase):
+    """Pure-Python unit tests for O(1) SectionTokenGate, slim command skips, and SharedSystemMemo."""
+
+    def _make_snap(self, **overrides: object) -> catalog_gate.SubscriptionTokenSnapshot:
+        base: dict[str, object] = {
+            "wallpaper_token": 1,
+            "hmac_secret": b"secret_a",
+            "utc_day": 20000,
+            "system_config_rev": 3,
+            "subentry_id": "sub_a",
+            "device_config_rev": 5,
+            "active_wallpaper_id": "preset:ocean_waves",
+            "display_shape": "circle",
+            "language": "en",
+            "locales_loaded": True,
+            "registry_rev": 0,
+            "ble_dirty_rev": 0,
+            "coordinator_ids": ("sub_a",),
+            "controls_signature": (("sub_a", 5, True, True, True, "preset:ocean_waves"),),
+        }
+        base.update(overrides)
+        return catalog_gate.SubscriptionTokenSnapshot(**base)  # type: ignore[arg-type]
+
+    def test_section_token_gate_invalidation_and_skip_matrix(self) -> None:
+        gate = catalog_gate.SectionTokenGate()
+        snap0 = self._make_snap()
+        init_payload: dict[str, list[object]] = {
+            k: [] for k in catalog_gate.HEAVY_SUBSCRIPTION_SECTIONS
+        }
+        gate.record_initial(snap0, init_payload)
+
+        # Unchanged snapshot skips every heavy section before build
+        self.assertEqual(
+            gate.compute_skip_sections(snap0),
+            set(catalog_gate.HEAVY_SUBSCRIPTION_SECTIONS),
+        )
+
+        # UTC day rollover & HMAC rotation invalidate only signed wallpaper catalogs
+        for changed in (self._make_snap(utc_day=20001), self._make_snap(hmac_secret=b"secret_b")):
+            skip = gate.compute_skip_sections(changed)
+            self.assertNotIn("system_wallpapers", skip)
+            self.assertNotIn("wallpapers", skip)
+            self.assertIn("photo_collections", skip)
+            self.assertIn("locale_strings", skip)
+            self.assertIn("pref_specs", skip)
+            self.assertIn("world_clock_zones", skip)
+
+        # Wallpaper snapshot token invalidates photo/wallpaper/controls only
+        wp_skip = gate.compute_skip_sections(self._make_snap(wallpaper_token=2))
+        for dirty in ("photo_collections", "system_wallpapers", "wallpapers", "system_controls"):
+            self.assertNotIn(dirty, wp_skip)
+        for clean in ("discovered_ble_devices", "ble_area_signatures", "locale_strings"):
+            self.assertIn(clean, wp_skip)
+
+        # Selected subentry / device rev / active wallpaper / shape changes invalidate wallpapers
+        for changed in (
+            self._make_snap(subentry_id="sub_b"),
+            self._make_snap(device_config_rev=6),
+            self._make_snap(active_wallpaper_id="preset:mars_crater"),
+            self._make_snap(display_shape="square"),
+        ):
+            self.assertNotIn("wallpapers", gate.compute_skip_sections(changed))
+
+        # Language or locale load flip invalidates locale_strings only
+        lang_skip = gate.compute_skip_sections(self._make_snap(language="es"))
+        self.assertNotIn("locale_strings", lang_skip)
+        self.assertIn("wallpapers", lang_skip)
+
+        # Commit records newly built sections so subsequent identical push skips them again
+        gate.commit(self._make_snap(language="es"), lang_skip, payload_keys=("locale_strings",))
+        self.assertIn("locale_strings", gate.compute_skip_sections(self._make_snap(language="es")))
+
+        # mark_dirty clears selective and all tokens
+        gate.mark_dirty("system_controls")
+        self.assertFalse(gate.has_sent("system_controls"))
+        self.assertTrue(gate.has_sent("locale_strings"))
+        gate.mark_dirty()
+        self.assertEqual(gate.compute_skip_sections(snap0), set())
+
+    def test_command_response_skip_sections_and_shared_memo(self) -> None:
+        from custom_components.latter.studio import commands as studio_cmds
+
+        # Non-wallpaper device config save skips wallpapers + unrelated heavy sections, keeps system_controls
+        skip_plain = studio_cmds._command_response_skip_sections(
+            "save_device_config", {"config": {"backlight": 80}}
+        )
+        self.assertNotIn("system_controls", skip_plain)
+        self.assertIn("wallpapers", skip_plain)
+        self.assertIn("system_wallpapers", skip_plain)
+        self.assertIn("discovered_ble_devices", skip_plain)
+        self.assertIn("locale_strings", skip_plain)
+
+        # Wallpaper or group device config save keeps wallpapers + system_controls
+        for key in ("wallpaper_source", "device_group", "wallpaper_favorites"):
+            skip_wp = studio_cmds._command_response_skip_sections(
+                "save_device_config", {"config": {key: "val"}}
+            )
+            self.assertNotIn("wallpapers", skip_wp)
+            self.assertNotIn("system_controls", skip_wp)
+
+        # Signature & photo commands keep only their mutated sections
+        self.assertNotIn(
+            "ble_area_signatures",
+            studio_cmds._command_response_skip_sections("capture_ble_area_signature", {}),
+        )
+        del_skip = studio_cmds._command_response_skip_sections("delete_photo", {})
+        for kept in ("photo_collections", "system_wallpapers", "wallpapers", "system_controls"):
+            self.assertNotIn(kept, del_skip)
+        self.assertIn("discovered_ble_devices", del_skip)
+
+        # SharedSystemMemo deduplicates identical event objects across concurrent tabs and respects TTL
+        memo = studio_cmds._SharedSystemMemo()
+        ev = object()
+        memo.record_registry_event(ev)
+        memo.record_registry_event(ev)
+        self.assertEqual(memo.registry_rev, 1)
+        self.assertEqual(memo.ble_dirty_rev, 1)
+
+        studio_cmds._memo_put(memo.system_cache, ("k",), 100.0, {"ok": True})
+        hit = studio_cmds._memo_get(memo.system_cache, ("k",), 100.02)
+        self.assertEqual(hit, {"ok": True})
+        self.assertIsNone(studio_cmds._memo_get(memo.system_cache, ("k",), 100.10))
+        memo.invalidate_if_populated()
+        self.assertEqual(memo.system_cache, {})
+        self.assertGreaterEqual(memo.generation, 2)
 
 
 if __name__ == "__main__":
