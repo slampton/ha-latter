@@ -72,6 +72,17 @@ With **Track the Area with BLE Proxies** enabled and one Area-assigned ESPHome B
 
 ---
 
+## Performance & System Requirements
+
+`ha-latter` is local-push (`iot_class: local_push`) with zero polling loops, zero 1 Hz background timers (`sensor.<slug>_timer_ends` uses `TIMESTAMP`), targeted O(1) Bluetooth matchers (unrelated neighborhood BLE traffic never enters Python), `_unrecorded_attributes` on volatile presence fields, 45 s debounced `.storage` writes, bounded image/camera concurrency, and a ~141 KB Brotli Latter Studio UI with hash-gated WebSocket updates.
+
+| Tier | Target Hardware | Recommended Scale | Camera Streaming Guidance |
+| :--- | :--- | :--- | :--- |
+| **Minimum** | **Home Assistant Green / Raspberry Pi 4** (2–4 GB RAM, quad-core ARM, eMMC/SD) | **1–8 Devices** (+ BLE tags, full BLE presence, audio/Sendspin, Studio) | **1–2 simultaneous camera views** (or 1 shared grid) using camera **sub-streams** (480p–720p, 2–5 fps) |
+| **Recommended** | **Raspberry Pi 5 / Intel N100 / Mini PC / VM** (4+ GB RAM, SSD) | **15+ Devices**, multi-tab Studio, large photo libraries, dense BLE proxy meshes | **Multiple concurrent camera streams & grids** without contention |
+
+---
+
 ## Quick Checks If Needed
 
 - **"Discovered: Latter" never appears:** confirm the device is online in the ESPHome integration (Latter rescans 5 seconds after device-registry updates, or reload ESPHome to trigger a scan). If the Latter hub is already set up, look under **Studio → Devices → Discovered** (and check any collapsed **Ignored** list).
