@@ -1755,12 +1755,14 @@ export const PREF_OPTION_LABELS: Readonly<Record<string, string>> = {
   "Fog / Mist (Night)": "Fog / mist (night)",
   "Rainy (Day)": "Rainy (day)",
   "Rainy (Night)": "Rainy (night)",
-  "Pouring / Heavy Rain": "Pouring / heavy rain",
+  "Pouring / Heavy Rain (Day)": "Pouring / heavy rain (day)",
+  "Pouring / Heavy Rain (Night)": "Pouring / heavy rain (night)",
   "Snow (Day)": "Snow (day)",
   "Snow (Night)": "Snow (night)",
   "Thunderstorm (Day)": "Thunderstorm (day)",
   "Thunderstorm (Night)": "Thunderstorm (night)",
-  Windy: "Windy",
+  "Windy (Day)": "Windy (day)",
+  "Windy (Night)": "Windy (night)",
 
   // Cameras & live video
   Grid: "Grid",

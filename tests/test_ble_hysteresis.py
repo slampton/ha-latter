@@ -303,20 +303,17 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     coord._apply_stored_runtime(snap)
     assert coord.is_roaming_device is True
 
-    # 5) Intentional BLE sleep (screen-off on Wi-Fi -> ble_radio_active == "off") holds last Area past 180s
-    for eid, suffix, init_state in (
-        ("sensor.pocket_assistant_wi_fi_signal", "Wi-Fi Signal", "-58"),
-        ("binary_sensor.pocket_assistant_ble_radio_active", "BLE Radio Active", "off"),
-    ):
-        register_entity(
-            hass,
-            eid,
-            platform="esphome",
-            config_entry_id="esp_entry_pocket_assistant",
-            device_id=coord.esphome_device_id,
-            original_name=suffix,
-        )
-        hass.states.async_set(eid, init_state)
+    # 5) Intentional BLE sleep (screen-off on Wi-Fi -> device_telemetry ble_active == False) holds last Area past 180s
+    register_entity(
+        hass,
+        "sensor.pocket_assistant_wi_fi_signal",
+        platform="esphome",
+        config_entry_id="esp_entry_pocket_assistant",
+        device_id=coord.esphome_device_id,
+        original_name="Wi-Fi Signal",
+    )
+    hass.states.async_set("sensor.pocket_assistant_wi_fi_signal", "-58")
+    coord.apply_device_telemetry({"link": {"state": "ok"}, "ble_active": False})
 
     t_hold = tracker.last_packet_monotonic + AWAY_TIMEOUT_SECONDS + 60.0
     tracker.check_away_timeout(t_hold)
@@ -333,10 +330,9 @@ async def test_static_ibeacon_roaming_wake_sticky_hot_swap_and_ble_sleep_hold(
     assert tracker.is_away is False
     assert coord.get_current_area_and_distance()[0] == "Bedroom"
 
-    # Whereas actively advertising unseen (ble_active == True via device_telemetry or ble_radio_active == "on") marks Away cleanly
+    # Whereas actively advertising unseen (ble_active == True via device_telemetry) marks Away cleanly
     hass.states.async_set("sensor.pocket_assistant_wi_fi_signal", "-60")
     coord.apply_device_telemetry({"link": {"state": "ok"}, "ble_active": True, "int_ram_free_kb": 120})
-    hass.states.async_set("binary_sensor.pocket_assistant_ble_radio_active", "on")
     await hass.async_block_till_done()
     tracker.check_away_timeout(t_hold + 120.0)
     assert tracker.is_away is True
@@ -420,7 +416,6 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
         original_name="Wi-Fi Signal",
     )
     hass.states.async_set("sensor.remote_assistant_wi_fi_signal", "-62")
-    hass.states.async_set("binary_sensor.remote_assistant_ble_radio_active", "off")
 
     assert await async_setup_component(hass, DOMAIN, {}) is True
     entry = add_mock_entry(
@@ -469,11 +464,12 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
     assert snap["matched_ble_addresses"] == [c6_ble_mac]
 
     # 2) Screen-off BLE sleep > 180s MUST NOT evict C6 BLE MAC or unsubscribe per-address callback
+    coord.apply_device_telemetry({"link": {"state": "ok"}, "ble_active": False})
     tracker.check_away_timeout(t0 + AWAY_TIMEOUT_SECONDS + 90.0)
     assert tracker.is_away is False
     assert c6_ble_mac in fabric._adv_unsubs
 
-    # 3) Even if tracker was previously Away, reboot (`device_hello`) + `BLE Radio Active -> on` 4s later
+    # 3) Even if tracker was previously Away, reboot (`device_hello`) + `ble_active: True` telemetry 4s later
     #    holds sticky Garage instead of flipping to Away / Unassigned before BLE packets arrive
     tracker.is_away = True
     await coord.async_handle_device_hello(
@@ -482,7 +478,7 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
         '"display":1,"touch":1,"audio":1,"mic":1,"spk":1,"imu":0,"battery":1,"stationary":0,"wearable":0,'
         f'"beacon":{{"uuid":"4C415454-4552-434F-5245-000000000220","major":1,"minor":4}},"core_rev":{MIN_FIRMWARE_CORE_REV}}}',
     )
-    hass.states.async_set("binary_sensor.remote_assistant_ble_radio_active", "on")
+    coord.apply_device_telemetry({"link": {"state": "ok"}, "ble_active": True})
     await hass.async_block_till_done()
     assert tracker.is_away is False
     assert coord.is_device_away() is False

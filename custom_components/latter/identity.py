@@ -429,18 +429,6 @@ def get_ignored_discovered_device_ids(hass: HomeAssistant) -> set[str]:
     return {str(x).strip() for x in raw_list if str(x or "").strip()}
 
 
-def _has_ble_beacon_entity_or_manifest(
-    hass: HomeAssistant, dev: dr.DeviceEntry, manifest: Mapping[str, Any]
-) -> bool:
-    if isinstance(manifest.get("beacon"), Mapping):
-        return True
-    ent_reg = er.async_get(hass)
-    return any(
-        e.entity_id.endswith("_ble_radio_active")
-        for e in er.async_entries_for_device(ent_reg, dev.id)
-    )
-
-
 def get_discovered_latter_devices(
     hass: HomeAssistant, *, only_ignored: bool = False
 ) -> list[dict[str, Any]]:
@@ -478,7 +466,7 @@ def get_discovered_latter_devices(
             manifest,
             esp_area_id=esp_area_id,
             has_native_slots=bool(esphome_service(hass, dev.id, "latter_set_slots")),
-            has_ble_beacon=_has_ble_beacon_entity_or_manifest(hass, dev, manifest),
+            has_ble_beacon=isinstance(manifest.get("beacon"), Mapping),
         )
         raw_model = str(dev.model or "").strip()
         model_label = humanize_device_model_label(

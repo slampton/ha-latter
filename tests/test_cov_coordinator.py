@@ -1069,14 +1069,7 @@ async def test_telemetry_prefs_timer_commands_v3_transport_and_target_matching(
     assert wx_mock.await_count == 1
     assert cal_mock.await_count == 1
 
-    # 17) `_bind_ble_radio_listener` ignores attribute-only updates with unchanged state
-    ble_radio_eid = f"binary_sensor.{slug}_ble_radio_active"
-    hass.states.async_set(ble_radio_eid, "off", {"seq": 1})
-    await hass.async_block_till_done()
-    hass.states.async_set(ble_radio_eid, "off", {"seq": 2})
-    await hass.async_block_till_done()
-
-    # 18) `_on_ble_address_matched` blank & duplicate head address early returns
+    # 17) `_on_ble_address_matched` blank & duplicate head address early returns
     coord._on_ble_address_matched("   ")
     coord._on_ble_address_matched("aa:bb:cc:11:22:33")
     before_list = list(coord._matched_ble_addresses)

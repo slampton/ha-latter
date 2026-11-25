@@ -1301,12 +1301,6 @@ async def test_hub_registry_and_identity_edge_cases(
         == {}
     )
 
-    # Manifest beacon dict detection (line 476)
-    assert (
-        identity_mod._has_ble_beacon_entity_or_manifest(hass, esp_dev, {"beacon": {"uuid": "abc"}})
-        is True
-    )
-
     assert await hass.config_entries.async_unload(entry.entry_id) is True
 
 

@@ -31,7 +31,6 @@ from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import (
     async_call_later,
-    async_track_state_change_event,
     async_track_time_interval,
 )
 from homeassistant.util import dt as dt_util
@@ -497,7 +496,6 @@ class LatterCoordinator:
         self._unsub_wallpaper_timer: Callable[[], None] | None = None
         self._unsub_screensaver_timer: Callable[[], None] | None = None
         self._unsub_doorbell_ring_state: Callable[[], None] | None = None
-        self._unsub_ble_radio_state: Callable[[], None] | None = None
         self._unsub_reconnect_post_delay: Callable[[], None] | None = None
         self._transport_reconnect_sync_mono: float = 0.0
 
@@ -1301,7 +1299,6 @@ class LatterCoordinator:
             isinstance(hw.get("beacon"), dict)
             or hw.get("minor") is not None
             or self.device_telemetry.get("ble_active") is not None
-            or bool(self.device_entity("binary_sensor", "_ble_radio_active"))
         )
 
     @property
@@ -2764,8 +2761,6 @@ class LatterCoordinator:
             self.invalidate_bound_entity_cache()
             self._cached_media_payload = None
             bind_coordinator_speaker_listener(self)
-            if is_own_device:
-                self._bind_ble_radio_listener()
             try:
                 async_audit_coordinator_health(self.hass, self)
             except Exception as err:  # noqa: BLE001
@@ -2964,10 +2959,7 @@ class LatterCoordinator:
             return False
         if self.is_device_online():
             telem_ble = self.device_telemetry.get("ble_active")
-            if isinstance(telem_ble, bool):
-                return not telem_ble
-            ble_st = self.device_state("binary_sensor", "_ble_radio_active")
-            return bool(ble_st is not None and ble_st.state == "off")
+            return isinstance(telem_ble, bool) and not telem_ble
         return bool(
             self._entered_hibernate
             and int(self.hardware_manifest.get("battery", 0) or 0) == 1
@@ -2983,11 +2975,7 @@ class LatterCoordinator:
             return True
         if not self.is_device_online():
             return not self.is_ble_sleep_expected()
-        telem_ble = self.device_telemetry.get("ble_active")
-        if isinstance(telem_ble, bool):
-            return telem_ble
-        ble_st = self.device_state("binary_sensor", "_ble_radio_active")
-        return bool(ble_st is not None and ble_st.state == "on")
+        return self.device_telemetry.get("ble_active") is True
 
     async def async_sync_presence_beacon(self, trigger: str = "options") -> None:
         _ = trigger
@@ -4401,29 +4389,6 @@ class LatterCoordinator:
         self.async_notify_listeners()
 
     @callback
-    def _bind_ble_radio_listener(self) -> None:
-        if self._unsub_ble_radio_state is not None:
-            self._unsub_ble_radio_state()
-            self._unsub_ble_radio_state = None
-        ble_ent = self.device_entity("binary_sensor", "_ble_radio_active")
-        if not ble_ent:
-            return
-
-        @callback
-        def _on_ble_radio_change(event: Event[Any]) -> None:
-            old_st: State | None = event.data.get("old_state")
-            new_st: State | None = event.data.get("new_state")
-            if new_st is None or (old_st is not None and new_st.state == old_st.state):
-                return
-            if new_st.state == "on" and self._ble_tracker is not None:
-                self._ble_tracker.note_ble_radio_active(time.monotonic())
-            self.async_notify_listeners()
-
-        self._unsub_ble_radio_state = async_track_state_change_event(
-            self.hass, [ble_ent], _on_ble_radio_change
-        )
-
-    @callback
     def _on_ble_address_matched(self, addr: str) -> None:
         norm = str(addr or "").strip().upper()
         if not norm:
@@ -4443,7 +4408,6 @@ class LatterCoordinator:
         bind_coordinator_speaker_listener(self)
         bind_coordinator_area_listeners(self)
         bind_coordinator_doorbell_listener(self)
-        self._bind_ble_radio_listener()
         self.bind_wallpaper_cycle_timer()
         self.bind_screensaver_cycle_timer()
 
@@ -4537,7 +4501,6 @@ class LatterCoordinator:
             "_unsub_wallpaper_timer",
             "_unsub_screensaver_timer",
             "_unsub_doorbell_ring_state",
-            "_unsub_ble_radio_state",
             "_unsub_reconnect_post_delay",
         ):
             if (unsub := getattr(self, attr, None)) is not None:

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
 
 from ..config_defaults import (
     DEFAULT_DEVICE_GROUPS as DEFAULT_DEVICE_GROUPS,
@@ -818,14 +818,10 @@ def detect_hardware_defaults(
     manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Auto-detect group, area, and roaming BLE capability from the device's hardware manifest."""
-    ent_reg = er.async_get(hass)
     dev_id = dev.id if dev is not None else None
     eff_manifest = manifest if manifest is not None else read_device_hardware_manifest(hass, dev_id)
     has_native_slots = bool(esphome_service(hass, dev_id, "latter_set_slots"))
-    has_ble_beacon = isinstance(eff_manifest.get("beacon"), dict) or (
-        dev is not None
-        and any(e.entity_id.endswith("_ble_radio_active") for e in er.async_entries_for_device(ent_reg, dev.id))
-    )
+    has_ble_beacon = isinstance(eff_manifest.get("beacon"), dict)
     esp_area = str(dev.area_id or "").strip() if dev is not None else ""
     return compute_hardware_defaults(
         eff_manifest,

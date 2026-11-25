@@ -651,7 +651,7 @@ async def test_first_class_floor_entities_gated_on_configured_floors(
 
     # 4) Both devices transition to `Away` -> `current_floor` sensors report `Away`!
     pocket_coord = entry.runtime_data.coordinators["sub_pocket"]
-    hass.states.async_set("binary_sensor.pocket_assistant_ble_radio_active", "on")
+    pocket_coord.apply_device_telemetry({"link": {"state": "ok"}, "ble_active": True})
     assert pocket_coord.ble_tracker is not None
     pocket_coord.ble_tracker.check_away_timeout(t0 + AWAY_TIMEOUT_SECONDS + 30.0)
     watch_coord.ble_tracker.check_away_timeout(t0 + AWAY_TIMEOUT_SECONDS + 30.0)

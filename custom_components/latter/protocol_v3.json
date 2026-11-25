@@ -2506,12 +2506,14 @@
         "Fog / Mist (Night)",
         "Rainy (Day)",
         "Rainy (Night)",
-        "Pouring / Heavy Rain",
+        "Pouring / Heavy Rain (Day)",
+        "Pouring / Heavy Rain (Night)",
         "Snow (Day)",
         "Snow (Night)",
         "Thunderstorm (Day)",
         "Thunderstorm (Night)",
-        "Windy"
+        "Windy (Day)",
+        "Windy (Night)"
       ],
       "min": null,
       "max": null,

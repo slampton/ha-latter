@@ -650,17 +650,6 @@ def seed_esphome_device(
     )
     hass.states.async_set(rpc_eid, "")
 
-    beacon_eid = f"binary_sensor.{slug}_ble_radio_active"
-    register_entity(
-        hass,
-        beacon_eid,
-        platform="esphome",
-        config_entry=esp_entry,
-        device_id=dev.id,
-        original_name="BLE Radio Active",
-    )
-    hass.states.async_set(beacon_eid, "off")
-
     if with_speaker:
         spk_eid = f"media_player.{slug}_music"
         register_entity(
