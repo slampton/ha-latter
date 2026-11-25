@@ -185,6 +185,7 @@ from ..identity import (
     manifest_has_imu,
     manifest_has_mic,
     manifest_has_speaker,
+    manifest_has_touch,
     manifest_is_roaming,
     manifest_is_round,
     manifest_is_wearable,
@@ -1269,6 +1270,10 @@ class LatterCoordinator:
         return not self.is_ble_tag and manifest_has_display(self.hardware_manifest)
 
     @property
+    def has_touch(self) -> bool:
+        return not self.is_ble_tag and manifest_has_touch(self.hardware_manifest)
+
+    @property
     def has_mic(self) -> bool:
         return not self.is_ble_tag and manifest_has_mic(self.hardware_manifest)
 
@@ -1797,7 +1802,18 @@ class LatterCoordinator:
 
     @property
     def art_dimensions(self) -> tuple[int, int]:
-        return self._scaled_media_dimensions()
+        """Compute bounded square 1:1 album-art dimensions (`art_edge` or `min(w, h)`)."""
+        hw = self.hardware_manifest
+        try:
+            raw_edge = int(hw.get("art_edge") or 0)
+        except (ValueError, TypeError):
+            raw_edge = 0
+        if raw_edge >= _MIN_MEDIA_DIM:
+            edge = min(WALLPAPER_MAX_DIM, raw_edge)
+            return edge, edge
+        width, height = self._scaled_media_dimensions()
+        edge = min(width, height)
+        return edge, edge
 
     @property
     def wallpaper_dimensions(self) -> tuple[int, int]:
@@ -1856,7 +1872,7 @@ class LatterCoordinator:
     def build_camera_snapshot_url(
         self, camera_entity_id: str | None = None, cache_bust: str = ""
     ) -> str:
-        width, height = self.art_dimensions
+        width, height = self.wallpaper_dimensions
         return self._url_signer.build_camera_snapshot_url(
             self.device_slug,
             (camera_entity_id or self.camera_entity or "").strip(),
@@ -1869,7 +1885,7 @@ class LatterCoordinator:
     def build_camera_allowlist_snapshot_url(
         self, camera_entity_id: str | None = None, cache_bust: str = ""
     ) -> str:
-        width, height = self.art_dimensions
+        width, height = self.wallpaper_dimensions
         return self._url_signer.build_camera_allowlist_snapshot_url(
             self.device_slug,
             self.visible_camera_entities,

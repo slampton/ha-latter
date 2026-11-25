@@ -61,11 +61,23 @@ test.describe("System Overview, Presence, Shared Entities & Photos E2E", () => {
   test("manages D-075 Area-Aware Ambient Light, 7-day Recorder auto-calibration, occupancy mode & BLE handoff", async ({
     page,
   }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(err.message));
     const ctrl = await mountStudio(page, { path: "/latter/system/presence" });
 
     const studioBox = page.locator("#area-box-harbor_studio");
     await expect(studioBox).toBeVisible();
     await expect(studioBox).toContainText("18.5 lx (64%)");
+
+    // Open Sensor & threshold settings drawer while mode is `weighted` to test range slider live input + commit
+    await studioBox.locator("details.sub-collapsible > summary").click();
+    const threshSlider = studioBox.locator("#fusion-threshold-harbor_studio");
+    await threshSlider.fill("65");
+    await threshSlider.dispatchEvent("input");
+    await threshSlider.dispatchEvent("change");
+    await expect(
+      studioBox.locator(".settings-row", { hasText: "Occupied at" }).locator(".kv-value"),
+    ).toHaveText("65%");
 
     // Change occupancy fusion mode on Harbor Studio -> sends `set_area_fusion`
     const modeSelect = studioBox.locator('select[aria-label*="Harbor Studio"]').first();
@@ -79,8 +91,7 @@ test.describe("System Overview, Presence, Shared Entities & Photos E2E", () => {
       ),
     ).toBe(true);
 
-    // Open Sensor & threshold settings drawer and test D-075 Ambient Light bounds + 7-day calibration
-    await studioBox.locator("details.sub-collapsible > summary").click();
+    // Test D-075 Ambient Light bounds + 7-day calibration
     const darkInput = studioBox.locator('input.lux-number-input').nth(0);
     const brightInput = studioBox.locator('input.lux-number-input').nth(1);
     await expect(darkInput).toHaveValue("0.8");
@@ -119,6 +130,7 @@ test.describe("System Overview, Presence, Shared Entities & Photos E2E", () => {
     await studioBox.getByRole("button", { name: "Calibrate", exact: true }).click();
     await expect(page.locator("#ble-calibrate-target-box")).toHaveClass(/handoff-active/);
     await expect(page.locator("#ble-calibrate-area-select")).toHaveValue("harbor_studio");
+    expect(pageErrors).toEqual([]);
   });
 
   test("configures D-074 Broadcast speakers & phrases and D-073 Camera options modal in Shared entities", async ({
@@ -183,6 +195,9 @@ test.describe("System Overview, Presence, Shared Entities & Photos E2E", () => {
   test("renders D-072 Photo library pagination, crop editor, multipart XHR upload, and HA Media import", async ({
     page,
   }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(err.message));
+
     const ctrl = await mountStudio(page, {
       path: "/latter/system/photos",
       customizeHub: (hub) => {
@@ -203,44 +218,77 @@ test.describe("System Overview, Presence, Shared Entities & Photos E2E", () => {
     await expect(page.locator(".photo-tile")).toHaveCount(PHOTO_LIBRARY_PAGE_SIZE);
     await expect(page.locator("#btn-photos-next-page")).toBeVisible();
 
+    // Uncategorized excludes built-in defaults (Day & Night Sky has collections: []) and counts strictly user photos
+    const uncatBtn = page.locator("[data-collection-filter='__uncategorized__']");
+    await expect(uncatBtn).toContainText(`(${PHOTO_LIBRARY_PAGE_SIZE})`);
+    await uncatBtn.click();
+    await expect(page.locator(".photo-tile[data-photo-id='preset:day_night_sky']")).toHaveCount(0);
+    await expect(page.locator(".photo-tile[data-photo-id='photo:extra_0']")).toHaveCount(1);
+
     // Filter to Coastal collection -> shows Forest Mountains + Harbor Sunset
     await page.locator("[data-collection-filter='col_coastal']").click();
     await expect(page.locator(".photo-tile")).toHaveCount(2);
 
-    // Click Harbor Sunset -> opens Photo Editor & Crop modal with real <canvas>
+    // Click Harbor Sunset -> opens Photo Editor & Crop modal, drags zoom slider, resets crop, and saves cleanly
     await page.locator(".photo-tile-thumb-btn").nth(1).click();
     const editModal = page.locator("#latter-photo-edit-modal");
     await expect(editModal).toBeVisible();
     await expect(page.locator("#latter-edit-crop-canvas")).toBeVisible();
+    const editZoom = editModal.locator("#edit-crop-zoom");
+    await editZoom.fill("2.1");
+    await editZoom.dispatchEvent("input");
+    await editZoom.dispatchEvent("change");
+    await expect(editModal.locator(".crop-zoom-control .kv-value")).toHaveText("2.10×");
+    await editModal.locator("#btn-edit-reset-crop").click();
+    await expect(editModal.locator(".crop-zoom-control .kv-value")).toHaveText("1.00×");
     await editModal.getByRole("button", { name: "Save" }).click();
     expect(ctrl.wsCalls.some((m) => m.command === "update_photo_metadata")).toBe(true);
 
-    // Open Upload modal, stage a PNG file, create an inline collection, and upload via Bearer XHR
+    // Open Upload modal, stage 5 files, zoom/frame each, remove the 4th, select others, and upload 4 via Bearer XHR
     await page.getByRole("button", { name: "Upload photos" }).click();
     const uploadModal = page.locator("#latter-photo-upload-modal");
     await expect(uploadModal).toBeVisible();
+    const pngBuf = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "base64",
+    );
     await uploadModal.locator("input[type='file']").setInputFiles([
-      {
-        name: "bay_sunrise.png",
-        mimeType: "image/png",
-        buffer: Buffer.from(
-          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-          "base64",
-        ),
-      },
-      {
-        name: "harbor_dusk.png",
-        mimeType: "image/png",
-        buffer: Buffer.from(
-          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-          "base64",
-        ),
-      },
+      { name: "bay_sunrise.png", mimeType: "image/png", buffer: pngBuf },
+      { name: "harbor_dusk.png", mimeType: "image/png", buffer: pngBuf },
+      { name: "cypress_trail.png", mimeType: "image/png", buffer: pngBuf },
+      { name: "foggy_pier.png", mimeType: "image/png", buffer: pngBuf },
+      { name: "golden_bluff.png", mimeType: "image/png", buffer: pngBuf },
     ]);
     await expect(page.locator("#latter-upload-crop-canvas")).toBeVisible();
-    await uploadModal.getByRole("button", { name: /Upload all/ }).click();
+    await expect(uploadModal.locator(".crop-filmstrip-item")).toHaveCount(5);
+    await expect(uploadModal.locator("#btn-upload-submit-all")).toContainText("Upload all (5)");
+
+    // Zoom & recenter each of the 5 staged photos (regression: live zoom readout must never clobber Lit markers)
+    const uploadZoom = uploadModal.locator("#upload-crop-zoom");
+    const zoomSteps = ["1.35", "1.6", "1.85", "2.1", "1.5"];
+    for (let i = 0; i < 5; i += 1) {
+      await uploadModal.locator(".crop-filmstrip-btn").nth(i).click();
+      await uploadZoom.fill(zoomSteps[i]!);
+      await uploadZoom.dispatchEvent("input");
+      await uploadZoom.dispatchEvent("change");
+    }
+    await expect(uploadModal.locator("#upload-photo-name")).toHaveValue("golden bluff");
+
+    // Delete the 4th staged photo (`foggy pier`, index 3) -> disappears immediately, count drops to 4, selection keeps working
+    await uploadModal.locator(".crop-filmstrip-remove").nth(3).click();
+    await expect(uploadModal.locator(".crop-filmstrip-item")).toHaveCount(4);
+    await expect(uploadModal.locator("#btn-upload-submit-all")).toContainText("Upload all (4)");
+    await expect(uploadModal.locator("#upload-photo-name")).toHaveValue("golden bluff");
+    await expect(uploadModal.locator(".crop-zoom-control .kv-value")).toHaveText("1.50×");
+
+    // Remaining photos remain selectable for further editing with their saved zoom preserved
+    await uploadModal.locator(".crop-filmstrip-btn").nth(1).click();
+    await expect(uploadModal.locator("#upload-photo-name")).toHaveValue("harbor dusk");
+    await expect(uploadModal.locator(".crop-zoom-control .kv-value")).toHaveText("1.60×");
+
+    await uploadModal.locator("#btn-upload-submit-all").click();
     await expect(uploadModal).toBeHidden();
-    expect(ctrl.uploadedForms).toHaveLength(2);
+    expect(ctrl.uploadedForms).toHaveLength(4);
     expect(ctrl.uploadedForms[0]?.authHeader).toBe("Bearer e2e-admin-bearer-token");
 
     // Open Import from Media modal, navigate into CoastalTrips, select all, and import
@@ -253,5 +301,6 @@ test.describe("System Overview, Presence, Shared Entities & Photos E2E", () => {
     await page.locator("#btn-media-import-confirm").click();
     await expect(importModal).toBeHidden();
     expect(ctrl.wsCalls.some((m) => m.command === "import_media_photos")).toBe(true);
+    expect(pageErrors).toEqual([]);
   });
 });

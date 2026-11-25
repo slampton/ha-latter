@@ -132,6 +132,7 @@ _FLOAT_EPSILON: Final = 1e-4
 
 _CAPABILITY_ATTRS: Final[dict[str, tuple[tuple[str, bool], ...]]] = {
     "display": (("has_display", True),),
+    "touch": (("has_display", True), ("has_touch", True)),
     "display_imu": (("has_display", True), ("has_imu", True)),
     "display_battery": (("has_display", True), ("has_battery", True)),
     "hw_jpeg": (("has_display", True), ("supports_hw_jpeg", False)),

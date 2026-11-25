@@ -60,6 +60,8 @@ export function isCatalogItemSupported(
       return caps.has_display !== false && caps.has_imu !== false;
     case "display":
       return caps.has_display !== false;
+    case "touch":
+      return caps.has_display !== false && caps.has_touch !== false;
     case "display_or_audio":
       return caps.has_display !== false || caps.has_audio !== false;
     case "battery":

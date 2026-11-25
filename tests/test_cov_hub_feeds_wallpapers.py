@@ -1160,6 +1160,9 @@ async def test_hub_registry_and_identity_edge_cases(
     assert identity_mod.manifest_flag({"w": True}, "w") is None
     assert identity_mod.manifest_flag({"w": [1]}, "w") is None
     assert identity_mod.manifest_is_round({"display": 0, "shape": "circle"}) is False
+    assert identity_mod.manifest_is_round({"display": 1, "shape": "rect"}) is False
+    assert identity_mod.manifest_is_round({"display": 1, "shape": "square"}) is False
+    assert identity_mod.manifest_is_round({"display": 1, "shape": "circle"}) is True
     headless_vc = identity_mod.manifest_video_caps({"display": 0, "w": 466, "h": 466})
     assert (headless_vc["max_w"], headless_vc["max_h"]) == (0, 0)
 

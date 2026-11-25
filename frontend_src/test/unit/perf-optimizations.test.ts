@@ -35,7 +35,14 @@ import {
   type ReactiveControllerHost,
   type TemplateResult,
 } from "../../src/lib/lit.js";
+import {
+  VIRTUAL_COLLECTION_ALL,
+  VIRTUAL_COLLECTION_DEFAULTS,
+  VIRTUAL_COLLECTION_UNCATEGORIZED,
+  VIRTUAL_COLLECTION_UPLOADS,
+} from "../../src/constants.js";
 import { STUDIO_REV } from "../../src/protocol-schema.js";
+import { filterLibraryPhotos, resolvePoolPhotos } from "../../src/state/photo-ops.js";
 import { StudioStore } from "../../src/state/store.js";
 import type {
   AreaPresenceRow,
@@ -560,6 +567,26 @@ describe("Phase 3 Latter Studio frontend performance optimizations", () => {
       // Direct eviction helper handles missing URLs safely
       evictLoadedPhotoImage("blob:nonexistent");
       assert.equal(getLoadedPhotoImageCacheSize(), 0);
+
+      // removeStagedUpload preserves the active photo when removing an earlier item
+      const batch = [1, 2, 3, 4, 5].map(
+        (n) => new File([new Uint8Array(8)], `trip_${n}.jpg`, { type: "image/jpeg" }),
+      );
+      store.entity.stageUploadFiles(batch);
+      store.photoUploadModal = { ...store.photoUploadModal, activeIndex: 3 };
+      // Removing index 1 (before activeIndex 3) keeps trip 4 selected at new index 2
+      store.entity.removeStagedUpload(1);
+      assert.equal(store.photoUploadModal.activeIndex, 2);
+      assert.equal(store.photoUploadModal.files[2]?.name, "trip 4");
+      // Removing active index 2 selects the next item (trip 5) at index 2
+      store.entity.removeStagedUpload(2);
+      assert.equal(store.photoUploadModal.activeIndex, 2);
+      assert.equal(store.photoUploadModal.files[2]?.name, "trip 5");
+      // Removing last active item clamps to new last item (trip 3)
+      store.entity.removeStagedUpload(2);
+      assert.equal(store.photoUploadModal.activeIndex, 1);
+      assert.equal(store.photoUploadModal.files[1]?.name, "trip 3");
+      store.hostDisconnected();
     } finally {
       clearLoadedPhotoImages();
       globalThis.Image = origImage;
@@ -567,6 +594,78 @@ describe("Phase 3 Latter Studio frontend performance optimizations", () => {
       URL.createObjectURL = origCreateObjectUrl;
       URL.revokeObjectURL = origRevokeObjectUrl;
     }
+  });
+
+  it("excludes built-in defaults from Uncategorized in lockstep with backend pools.py", () => {
+    const library = [
+      {
+        id: "preset:day_night_sky",
+        name: "Day & Night Sky",
+        kind: "dynamic_preset" as const,
+        source_kind: "dynamic_preset" as const,
+        deletable: false,
+        collections: [],
+      },
+      {
+        id: "preset:forest_mountains",
+        name: "Forest Mountains",
+        kind: "preset" as const,
+        source_kind: "preset" as const,
+        deletable: false,
+        collections: [],
+      },
+      {
+        id: "preset:ocean_waves",
+        name: "Ocean Waves",
+        kind: "preset" as const,
+        source_kind: "preset" as const,
+        deletable: false,
+        collections: ["col_coastal"],
+      },
+      {
+        id: "photo:sorted_1",
+        name: "Harbor Sunset",
+        kind: "uploaded" as const,
+        source_kind: "upload" as const,
+        deletable: true,
+        collections: ["col_coastal"],
+      },
+      {
+        id: "photo:unsorted_upload",
+        name: "Backyard Patio",
+        kind: "uploaded" as const,
+        source_kind: "upload" as const,
+        deletable: true,
+        collections: [],
+      },
+      {
+        id: "photo:unsorted_media",
+        name: "Redwood Trail",
+        kind: "uploaded" as const,
+        source_kind: "media_import" as const,
+        deletable: true,
+        collections: [],
+      },
+    ];
+
+    assert.deepEqual(
+      filterLibraryPhotos(library, VIRTUAL_COLLECTION_UNCATEGORIZED, "").map((p) => p.id),
+      ["photo:unsorted_upload", "photo:unsorted_media"],
+    );
+    assert.deepEqual(
+      resolvePoolPhotos(library, "collection", "", VIRTUAL_COLLECTION_UNCATEGORIZED, []).map(
+        (p) => p.id,
+      ),
+      ["photo:unsorted_upload", "photo:unsorted_media"],
+    );
+    // Built-in defaults stay under All, Defaults, and any explicit user collection they are tagged in
+    assert.equal(filterLibraryPhotos(library, VIRTUAL_COLLECTION_ALL, "").length, 6);
+    assert.equal(filterLibraryPhotos(library, VIRTUAL_COLLECTION_DEFAULTS, "").length, 3);
+    assert.equal(filterLibraryPhotos(library, VIRTUAL_COLLECTION_UPLOADS, "").length, 3);
+    assert.deepEqual(
+      filterLibraryPhotos(library, "col_coastal", "").map((p) => p.id),
+      ["preset:ocean_waves", "photo:sorted_1"],
+    );
   });
 
   it("gates pinned grid drag re-renders strictly on activation or target/validity transitions", () => {

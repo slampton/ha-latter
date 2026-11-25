@@ -4,7 +4,7 @@
  */
 
 import { t } from "../../i18n/index.js";
-import { html, nothing, repeat, type TemplateResult } from "../../lib/lit.js";
+import { html, live, nothing, repeat, type TemplateResult } from "../../lib/lit.js";
 
 interface ActiveDragSession {
   listId: string;
@@ -254,7 +254,13 @@ export function renderSortableList<T>(opts: SortableListOptions<T>): TemplateRes
       ${typeof opts.emptyState === "string"
         ? html`<p class="empty-state">${opts.emptyState}</p>`
         : opts.emptyState || nothing}
-      <span data-sortable-live role="status" aria-live="polite" class="sr-only">${liveMsg}</span>
+      <span
+      data-sortable-live
+      role="status"
+      aria-live="polite"
+      class="sr-only"
+      .textContent=${live(liveMsg)}
+    ></span>
     </div>`;
   }
 
@@ -387,7 +393,13 @@ export function renderSortableList<T>(opts: SortableListOptions<T>): TemplateRes
         </div>`;
       },
     )}
-    <span data-sortable-live role="status" aria-live="polite" class="sr-only">${liveMsg}</span>
+    <span
+      data-sortable-live
+      role="status"
+      aria-live="polite"
+      class="sr-only"
+      .textContent=${live(liveMsg)}
+    ></span>
   </div>`;
 }
 
@@ -533,6 +545,12 @@ export function renderPillList(opts: PillListOptions): TemplateResult {
         </button>
       </span>`,
     )}
-    <span data-sortable-live role="status" aria-live="polite" class="sr-only">${liveMsg}</span>
+    <span
+      data-sortable-live
+      role="status"
+      aria-live="polite"
+      class="sr-only"
+      .textContent=${live(liveMsg)}
+    ></span>
   </div>`;
 }

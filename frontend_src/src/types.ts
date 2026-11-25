@@ -402,6 +402,7 @@ export interface DeviceConfig {
 
 export interface DeviceCapabilities {
   has_display?: boolean;
+  has_touch?: boolean;
   has_imu?: boolean;
   is_round?: boolean;
   has_battery?: boolean;

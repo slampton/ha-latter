@@ -100,7 +100,7 @@ export function filterLibraryPhotos(
     } else if (filterCollection === VIRTUAL_COLLECTION_UPLOADS) {
       if (!isPhotoUploaded(p)) return false;
     } else if (filterCollection === VIRTUAL_COLLECTION_UNCATEGORIZED) {
-      if ((p.collections || []).length > 0) return false;
+      if (!isPhotoUploaded(p) || (p.collections || []).length > 0) return false;
     } else if (filterCollection && filterCollection !== VIRTUAL_COLLECTION_ALL) {
       if (!(p.collections || []).includes(filterCollection)) return false;
     }
@@ -272,7 +272,11 @@ export function removeStagedUploadOp(store: StudioStoreContext, index: number): 
   const removed = files[index];
   if (removed) revokeStagedUrls([removed]);
   const next = files.filter((_, i) => i !== index);
-  const nextActive = Math.min(store.photoUploadModal.activeIndex, Math.max(0, next.length - 1));
+  const prevActive = store.photoUploadModal.activeIndex;
+  const nextActive =
+    index < prevActive
+      ? Math.max(0, prevActive - 1)
+      : Math.min(prevActive, Math.max(0, next.length - 1));
   store.photoUploadModal = {
     ...store.photoUploadModal,
     files: next,

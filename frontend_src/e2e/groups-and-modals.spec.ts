@@ -86,6 +86,8 @@ test.describe("Device Groups, Non-Detaching DND & WAI-ARIA Modals E2E", () => {
   test("operates WAI-ARIA Entity Combobox keyboard filtering/Escape/Enter and Sortable List reordering", async ({
     page,
   }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(err.message));
     const ctrl = await mountStudio(page, { path: "/latter/devices/sub_desk/interface" });
 
     // 1. WAI-ARIA 1.2 Entity Combobox inside Add Shortcut modal
@@ -131,6 +133,12 @@ test.describe("Device Groups, Non-Detaching DND & WAI-ARIA Modals E2E", () => {
     await expect
       .poll(() => ctrl.wsCalls.some((m) => m.command === "save_device_config"))
       .toBe(true);
+    // Reorder a second time to confirm the polite live region stays intact across Lit updates
+    await dockContainer.locator("button[data-move-dir='prev']").nth(1).click();
+    await expect(
+      dockContainer.locator("[data-sortable-index] .shortcut-item-title").nth(0),
+    ).toHaveText(firstTitleBefore!);
+    expect(pageErrors).toEqual([]);
   });
 
   test("filters MDI icons by weight, searches smart-home synonyms, styles shortcut badges, and passes axe WCAG 2.2 AA in light and dark themes", async ({

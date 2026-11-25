@@ -19,7 +19,7 @@ STUDIO_REV: Final[int] = 52
 if int(STUDIO_CONTRACT["studio_rev"]) != STUDIO_REV:
     raise RuntimeError("const.py STUDIO_REV is out of sync with studio_contract.json")
 
-MIN_FIRMWARE_CORE_REV: Final = 2026112404
+MIN_FIRMWARE_CORE_REV: Final = 2026112501
 PLATFORMS: Final[tuple[str, ...]] = (
     "sensor",
     "binary_sensor",

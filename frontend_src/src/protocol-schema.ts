@@ -285,7 +285,7 @@ export interface DevicePrefSpecItem {
 
 export const DEVICE_PREF_SPECS_CATALOG: ReadonlyArray<DevicePrefSpecItem> = [
   {key: "wake_word_mode", label: "Wake word mode", domain: "select", default: "Docked Only", section: "audio", group_tier: "behavior", options: ["Docked Only", "Always On", "Disabled"], min: null, max: null, step: null, unit: "", capability: "mic" },
-  {key: "tap_to_wake", label: "Tap to wake", domain: "select", default: "Docked Only", section: "power", group_tier: "behavior", options: ["Single Tap", "Double Tap", "Docked Only", "Disabled"], min: null, max: null, step: null, unit: "", capability: "display" },
+  {key: "tap_to_wake", label: "Tap to wake", domain: "select", default: "Docked Only", section: "power", group_tier: "behavior", options: ["Single Tap", "Double Tap", "Docked Only", "Disabled"], min: null, max: null, step: null, unit: "", capability: "touch" },
   {key: "pickup_to_wake", label: "Pickup to wake", domain: "select", default: "Docked Only", section: "power", group_tier: "behavior", options: ["Always On", "Docked Only", "Disabled"], min: null, max: null, step: null, unit: "", capability: "display_imu" },
   {key: "battery_screen_timeout", label: "Battery screen timeout", domain: "select", default: "30s", section: "power", group_tier: "behavior", options: ["10s", "15s", "30s", "1 min", "2 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display_battery" },
   {key: "docked_idle_timeout", label: "Docked idle timeout", domain: "select", default: "1 min", section: "display", group_tier: "behavior", options: ["10s", "15s", "30s", "1 min", "2 min", "5 min", "Never"], min: null, max: null, step: null, unit: "", capability: "display" },

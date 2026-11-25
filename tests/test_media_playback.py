@@ -340,22 +340,36 @@ async def test_desk_720x720_native_album_art_dimensions_and_http_proxy(
         "contract": 3,
         "w": 1280,
         "h": 800,
-        "shape": "square",
+        "shape": "rect",
+        "art_edge": 800,
         "display": 1,
     }
-    assert coord.art_dimensions == (1280, 800)
+    assert coord.art_dimensions == (800, 800)
     assert coord.wallpaper_dimensions == (1280, 800)
 
-    # Oversized 1920x1200 manifest scales proportionally to WALLPAPER_MAX_DIM=1280 (1280x800)
+    # 320x480 portrait Remote gets square 320x320 album art and 320x480 full wallpaper
+    coord._runtime.hello_manifest = {
+        "v": 2,
+        "contract": 3,
+        "w": 320,
+        "h": 480,
+        "shape": "rect",
+        "art_edge": 320,
+        "display": 1,
+    }
+    assert coord.art_dimensions == (320, 320)
+    assert coord.wallpaper_dimensions == (320, 480)
+
+    # Oversized 1920x1200 manifest scales wallpaper to 1280x800 and square album art to 800x800
     coord._runtime.hello_manifest = {
         "v": 2,
         "contract": 3,
         "w": 1920,
         "h": 1200,
-        "shape": "square",
+        "shape": "rect",
         "display": 1,
     }
-    assert coord.art_dimensions == (1280, 800)
+    assert coord.art_dimensions == (800, 800)
     assert coord.wallpaper_dimensions == (1280, 800)
 
     # Restore 720x720 Desk manifest and verify signed art_url + HTTP baseline JPEG output

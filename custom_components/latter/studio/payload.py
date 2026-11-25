@@ -478,6 +478,7 @@ class StudioDeviceCapabilities(TypedDict):
     """Capability traits exposed to Studio for the selected Device."""
 
     has_display: bool
+    has_touch: bool
     has_imu: bool
     is_round: bool
     has_battery: bool
@@ -2253,6 +2254,7 @@ def _build_device_capabilities(
     """Build capability flags for the targeted `coordinator`."""
     return {
         "has_display": coordinator.has_display,
+        "has_touch": coordinator.has_touch,
         "has_imu": coordinator.has_imu,
         "is_round": coordinator.is_round_display,
         "has_battery": coordinator.has_battery,

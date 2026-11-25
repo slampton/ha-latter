@@ -5,7 +5,7 @@
  * - Zero non-`--*` inline styles; canvas image cache scoped to WeakMap / bounded Map
  */
 
-import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
+import { focusSafe, html, live, nothing, repeat, type TemplateResult } from "../../lib/lit.js";
 import { isPhotoUploaded, registerPhotoImageEvictor } from "../../state/photo-ops.js";
 import type { StudioStore } from "../../state/store.js";
 import type { CropPreviewAspect, PhotoCrop } from "../../types.js";
@@ -845,7 +845,10 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
                   }}
                   @change=${(ev: Event) => commitActiveCrop(ev.currentTarget as Element)}
                 />
-                <span class="kv-value">${(active?.crop.zoom ?? 1).toFixed(2)}×</span>
+                <span
+                  class="kv-value"
+                  .textContent=${live(`${(active?.crop.zoom ?? 1).toFixed(2)}×`)}
+                ></span>
               </div>
               <button
                 type="button"
@@ -874,7 +877,9 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
 
           ${modal.files.length > 1
             ? html`<div class="crop-filmstrip" role="list">
-                ${modal.files.map(
+                ${repeat(
+                  modal.files,
+                  (item) => item.id,
                   (item, idx) => html`<div
                     role="listitem"
                     class="crop-filmstrip-item ${idx === modal.activeIndex ? "active" : ""}"
@@ -1213,7 +1218,10 @@ export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
                     }}
                     @change=${(ev: Event) => commitEditCrop(ev.currentTarget as Element)}
                   />
-                  <span class="kv-value">${modal.crop.zoom.toFixed(2)}×</span>
+                  <span
+                    class="kv-value"
+                    .textContent=${live(`${modal.crop.zoom.toFixed(2)}×`)}
+                  ></span>
                 </div>
                 <button
                   type="button"

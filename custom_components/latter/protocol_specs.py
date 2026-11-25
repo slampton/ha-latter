@@ -81,6 +81,7 @@ DEVICE_ENTITY_VERBS: Final[frozenset[str]] = frozenset(
 PrefDomain = Literal["select", "switch", "number", "text"]
 PrefCapability = Literal[
     "display",
+    "touch",
     "display_imu",
     "display_battery",
     "display_or_audio",

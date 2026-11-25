@@ -488,16 +488,18 @@ async def test_wallpaper_upload_rbac_limits_and_proxy_views(
     with Image.open(io.BytesIO(r_wp_720_default.body)) as img_720_def:
         assert img_720_def.size == (720, 720)
 
-    # 1280x800 landscape tablet manifest passes HMAC validation (`_DEFAULT_MAX_DIM=1920`) and scales under `WALLPAPER_MAX_DIM=1280`
+    # 1280x800 landscape tablet manifest gets square 800x800 album art and 1280x800 wallpaper
     coord._runtime.hello_manifest = {
         "v": 2,
         "contract": 3,
         "w": 1280,
         "h": 800,
-        "shape": "square",
+        "shape": "rect",
+        "art_edge": 800,
         "display": 1,
     }
-    assert coord.art_dimensions == (1280, 800)
+    assert coord.display_shape == "square"
+    assert coord.art_dimensions == (800, 800)
     assert coord.wallpaper_dimensions == (1280, 800)
     wp_1280_url = coord.build_wallpaper_url()
     assert "w=1280&h=800&shape=square&mode=wallpaper" in wp_1280_url
@@ -506,12 +508,21 @@ async def test_wallpaper_upload_rbac_limits_and_proxy_views(
     with Image.open(io.BytesIO(r_wp_1280.body)) as img_1280:
         assert img_1280.size == (1280, 800)
 
+    # 320x480 portrait Remote gets square 320x320 album art and 320x480 wallpaper;
     # 1024x600 stays native; 1920x1200 and 1920x1920 scale proportionally down to WALLPAPER_MAX_DIM=1280
-    coord._runtime.hello_manifest = {"v": 2, "contract": 3, "w": 1024, "h": 600, "shape": "square", "display": 1}
+    coord._runtime.hello_manifest = {
+        "v": 2, "contract": 3, "w": 320, "h": 480, "shape": "rect", "art_edge": 320, "display": 1
+    }
+    assert coord.art_dimensions == (320, 320)
+    assert coord.wallpaper_dimensions == (320, 480)
+    coord._runtime.hello_manifest = {"v": 2, "contract": 3, "w": 1024, "h": 600, "shape": "rect", "display": 1}
+    assert coord.art_dimensions == (600, 600)
     assert coord.wallpaper_dimensions == (1024, 600)
-    coord._runtime.hello_manifest = {"v": 2, "contract": 3, "w": 1920, "h": 1200, "shape": "square", "display": 1}
+    coord._runtime.hello_manifest = {"v": 2, "contract": 3, "w": 1920, "h": 1200, "shape": "rect", "display": 1}
+    assert coord.art_dimensions == (800, 800)
     assert coord.wallpaper_dimensions == (1280, 800)
     coord._runtime.hello_manifest = {"v": 2, "contract": 3, "w": 1920, "h": 1920, "shape": "square", "display": 1}
+    assert coord.art_dimensions == (1280, 1280)
     assert coord.wallpaper_dimensions == (1280, 1280)
 
     assert delete_photo(hass, uploaded_src) is True

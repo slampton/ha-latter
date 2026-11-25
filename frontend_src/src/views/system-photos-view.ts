@@ -37,7 +37,9 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
 
   const defaultsCount = allPhotos.filter((p) => !isPhotoUploaded(p)).length;
   const uploadedCount = allPhotos.filter((p) => isPhotoUploaded(p)).length;
-  const uncategorizedCount = allPhotos.filter((p) => (p.collections || []).length === 0).length;
+  const uncategorizedCount = allPhotos.filter(
+    (p) => isPhotoUploaded(p) && (p.collections || []).length === 0,
+  ).length;
 
   const activeFilter =
     store.photosFilterCollection === VIRTUAL_COLLECTION_ALL ||

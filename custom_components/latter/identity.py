@@ -125,6 +125,11 @@ def manifest_has_display(manifest: Mapping[str, Any]) -> bool:
     return manifest_flag(manifest, "display") != 0
 
 
+def manifest_has_touch(manifest: Mapping[str, Any]) -> bool:
+    """Return False when the manifest reports `display == 0` or `touch == 0`."""
+    return manifest_has_display(manifest) and manifest_flag(manifest, "touch") != 0
+
+
 def manifest_has_mic(manifest: Mapping[str, Any]) -> bool:
     """Return False when the manifest reports `mic == 0`, or omits `mic` with `audio == 0`."""
     mic_flag = manifest_flag(manifest, "mic")
@@ -167,7 +172,7 @@ def manifest_is_round(manifest: Mapping[str, Any]) -> bool:
     """Return True when the hardware display shape is circular."""
     if not manifest_has_display(manifest):
         return False
-    return str(manifest.get("shape") or "circle").strip().lower() != "square"
+    return str(manifest.get("shape") or "circle").strip().lower() == "circle"
 
 
 def manifest_video_caps(manifest: Mapping[str, Any]) -> dict[str, Any]:

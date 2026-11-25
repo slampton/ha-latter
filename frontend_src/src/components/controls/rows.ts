@@ -227,7 +227,7 @@ export function renderRangeControl(opts: RangeControlOptions): TemplateResult {
     }
   };
 
-  return html`<span class="kv-value">${initialText}</span>
+  return html`<span class="kv-value" .textContent=${live(initialText)}></span>
     <input
       type="range"
       id=${opts.id || nothing}

@@ -1968,7 +1968,7 @@
       "min": null,
       "max": null,
       "step": null,
-      "capability": "display"
+      "capability": "touch"
     },
     {
       "key": "pickup_to_wake",
