@@ -375,6 +375,11 @@ class _BaseLatterSensor(SensorEntity):
         )
 
     @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Accept in-place entity_id renames without tearing down subscriptions."""
+        super().async_entity_id_changed(old_entity_id)
+
+    @callback
     def _handle_coordinator_update(self) -> None:
         """Write updated state to Home Assistant."""
         self.async_write_ha_state()
@@ -577,6 +582,11 @@ class _BaseLatterPersonSensor(SensorEntity):
         self.sync_coordinator_listeners(iter_coordinators(self.hass), notify=False)
 
     @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Accept in-place entity_id renames without tearing down subscriptions."""
+        super().async_entity_id_changed(old_entity_id)
+
+    @callback
     def _handle_person_update(self) -> None:
         """Write updated person location/distance state to Home Assistant."""
         self._cached_person = resolve_person_area_and_distance(
@@ -744,6 +754,11 @@ class LatterAreaOccupantsSensor(SensorEntity):
         self.async_on_remove(
             fabric.register_occupancy_listener(self._handle_occupancy_update)
         )
+
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Accept in-place entity_id renames without tearing down subscriptions."""
+        super().async_entity_id_changed(old_entity_id)
 
     @callback
     def _handle_occupancy_update(self) -> None:

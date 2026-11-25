@@ -220,6 +220,11 @@ class LatterAreaOccupancyBinarySensor(BinarySensorEntity):
         )
 
     @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Accept in-place entity_id renames without tearing down subscriptions."""
+        super().async_entity_id_changed(old_entity_id)
+
+    @callback
     def _handle_occupancy_update(self) -> None:
         """Push updated occupancy state to Home Assistant."""
         self._cached_occ = get_ble_fabric(self.hass).get_area_occupancy(self._area_id)
@@ -277,6 +282,11 @@ class _BaseLatterDeviceBinarySensor(BinarySensorEntity):
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
+
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Accept in-place entity_id renames without tearing down subscriptions."""
+        super().async_entity_id_changed(old_entity_id)
 
     @callback
     def _handle_coordinator_update(self) -> None:

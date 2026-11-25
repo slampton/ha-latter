@@ -94,6 +94,11 @@ class LatterScreenLight(LightEntity):
         )
 
     @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Accept in-place entity_id renames without tearing down subscriptions."""
+        super().async_entity_id_changed(old_entity_id)
+
+    @callback
     def _handle_coordinator_update(self) -> None:
         """Write updated screen state to Home Assistant."""
         self.async_write_ha_state()

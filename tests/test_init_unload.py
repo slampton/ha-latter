@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.const import EntityCategory
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
+from homeassistant.helpers.entity import _entity_class_requires_readd
 from homeassistant.setup import async_setup_component
 
 from custom_components.latter import (
@@ -103,6 +104,8 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
         for ent in entities:
             assert ent.has_entity_name is True
             assert ent.translation_key
+            assert _entity_class_requires_readd(type(ent)) is False
+            ent.async_entity_id_changed(ent.entity_id or f"{p_name}.old_entity")
             _ = ent.device_info
             ent.async_write_ha_state()
 
