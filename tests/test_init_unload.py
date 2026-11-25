@@ -85,7 +85,9 @@ async def test_setup_platforms_occupants_cap_and_clean_unload(
     assert len(get_extra_js_urls(hass)) == 1
 
     # Verify all entity platforms populated states and enforce _attr_has_entity_name = True
-    assert coord.get_device_info()["manufacturer"] == "Latter"
+    dev_info = coord.get_device_info()
+    assert dev_info.manufacturer == "Latter"
+    assert dev_info.via_device_id == coord.esphome_device_id
     for p_name in (
         "sensor",
         "binary_sensor",
@@ -221,9 +223,11 @@ async def test_device_removal_guards_and_update_listener(
     assert sys_dev is not None
     assert await async_remove_config_entry_device(hass, entry, sys_dev) is False
 
+    active_idents = coord.get_device_info().identifiers
+    assert isinstance(active_idents, set)
     active_latter_dev = dev_reg.async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers=coord.get_device_info()["identifiers"],
+        identifiers=active_idents,
         name="Pocket Assistant",
     )
     assert await async_remove_config_entry_device(hass, entry, active_latter_dev) is False
@@ -350,10 +354,12 @@ async def test_esphome_device_and_entity_rename_sync_and_heal(
     esp_dev_id = coord.esphome_device_id
     assert esp_dev_id is not None
     dev_info = coord.get_device_info()
+    assert isinstance(dev_info.identifiers, set)
+    assert isinstance(dev_info.name, str)
     latter_dev_before = dev_reg.async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers=dev_info["identifiers"],
-        name=dev_info["name"],
+        identifiers=dev_info.identifiers,
+        name=dev_info.name,
         via_device_id=esp_dev_id,
     )
     assert latter_dev_before.name == "Pocket Assistant"

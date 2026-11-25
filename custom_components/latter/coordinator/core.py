@@ -1221,12 +1221,17 @@ class LatterCoordinator:
     def url_signer(self) -> UrlSigner:
         return self._url_signer
 
-    def get_device_info(self) -> DeviceInfo:
-        esp_dev_id = self.esphome_device_id
+    @property
+    def device_identifiers(self) -> set[tuple[str, str]]:
+        """Return canonical Device Registry identifiers for this bound Latter Device."""
         mac = self.device_mac
         ident_key = dr.format_mac(mac) if mac else self.subentry_id
+        return {(DOMAIN, ident_key)}
+
+    def get_device_info(self) -> DeviceInfo:
+        esp_dev_id = self.esphome_device_id
         info = DeviceInfo(
-            identifiers={(DOMAIN, ident_key)},
+            identifiers=self.device_identifiers,
             name=self.device_title,
             manufacturer="Latter",
             model="Latter ESPHome Companion Middleware",
@@ -1234,7 +1239,7 @@ class LatterCoordinator:
             configuration_url=f"homeassistant://latter/devices/{self.subentry_id}",
         )
         if esp_dev_id:
-            info["via_device_id"] = esp_dev_id
+            info.via_device_id = esp_dev_id
         return info
 
     @property
@@ -2636,7 +2641,7 @@ class LatterCoordinator:
 
     def _find_latter_device_entry(self) -> dr.DeviceEntry | None:
         dev_reg = dr.async_get(self.hass)
-        idents = self.get_device_info()["identifiers"]
+        idents = self.device_identifiers
         esp_id = self.esphome_device_id
         for dev in dr.async_entries_for_config_entry(dev_reg, self.entry.entry_id):
             if (DOMAIN, "system") in dev.identifiers:

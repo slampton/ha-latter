@@ -2748,7 +2748,7 @@ def build_studio_state_payload(
         hass, coordinator, skip_wallpapers=("wallpapers" in skip_sections)
     )
     sec_ids = present_section_ids(esphome_inspector.get("sections"))
-    latter_idents = coordinator.get_device_info()["identifiers"]
+    latter_idents = coordinator.device_identifiers
     latter_dev = None
     get_by_ident = getattr(dev_reg, "async_get_device_by_identifier", None)
     if callable(get_by_ident):

@@ -270,7 +270,7 @@ def _handle_device_registry_update_for_coordinators(
             coord.async_sync_ha_device_name()
         if area_changed and (
             dev.id == coord.esphome_device_id
-            or bool(dev.identifiers & coord.get_device_info()["identifiers"])
+            or bool(dev.identifiers & coord.device_identifiers)
             or (
                 coord.esphome_device_id
                 and dev.via_device_id == coord.esphome_device_id
@@ -652,6 +652,6 @@ async def async_remove_config_entry_device(
     sys_obj = getattr(config_entry, "runtime_data", None)
     if isinstance(sys_obj, LatterSystemHub):
         for coord in sys_obj.coordinators.values():
-            active_identifiers.update(coord.get_device_info().get("identifiers", set()))
+            active_identifiers.update(coord.device_identifiers)
 
     return not bool(device_entry.identifiers & active_identifiers)

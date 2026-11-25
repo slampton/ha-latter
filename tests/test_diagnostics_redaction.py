@@ -55,9 +55,11 @@ async def test_diagnostics_redacts_secrets_pins_ble_uuids_macs_and_signed_urls(
 
     # Verify per-device diagnostics for both bound display device and System service device
     dev_reg = dr.async_get(hass)
+    latter_idents = coord.get_device_info().identifiers
+    assert isinstance(latter_idents, set)
     latter_dev = dev_reg.async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers=coord.get_device_info()["identifiers"],
+        identifiers=latter_idents,
         name="Pocket Assistant",
     )
     dev_diag = await async_get_device_diagnostics(hass, entry, latter_dev)

@@ -171,9 +171,11 @@ async def test_device_and_ble_tag_subentry_flows_and_hardware_replacement(
     hass.states.async_set("person.alex", "home", {"friendly_name": "Alex"})
     hass.states.async_set("person.sam", "home", {"friendly_name": "Sam"})
 
+    latter_idents = coord.get_device_info().identifiers
+    assert isinstance(latter_idents, set)
     latter_dev = dev_reg.async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers=coord.get_device_info()["identifiers"],
+        identifiers=latter_idents,
         name="Pocket Assistant",
     )
 
