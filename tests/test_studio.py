@@ -554,26 +554,46 @@ class TestViewLayout(unittest.TestCase):
         self.assertNotIn("brand-logo", studio_js)
 
     def test_brand_images_are_valid_png(self) -> None:
-        sizes = {}
+        raw_by_name: dict[str, bytes] = {}
+        sizes: dict[str, int] = {}
         for name in (
             "icon.png",
             "icon@2x.png",
             "dark_icon.png",
             "dark_icon@2x.png",
-            "logo.png",
-            "logo@2x.png",
-            "dark_logo.png",
-            "dark_logo@2x.png",
         ):
             data = (LATTER_DIR / "brand" / name).read_bytes()
             self.assertTrue(data.startswith(b"\x89PNG\r\n\x1a\n"), name)
             self.assertNotIn(b"\xef\xbf\xbd", data[:64], name)
             self.assertEqual(data[25], 6, f"{name} must be RGBA (color type 6) with transparent background")
+            raw_by_name[name] = data
             sizes[name] = int.from_bytes(data[16:20], "big")
         self.assertEqual((sizes["icon.png"], sizes["icon@2x.png"]), (256, 512))
         self.assertEqual((sizes["dark_icon.png"], sizes["dark_icon@2x.png"]), (256, 512))
-        self.assertEqual((sizes["logo.png"], sizes["logo@2x.png"]), (256, 512))
-        self.assertEqual((sizes["dark_logo.png"], sizes["dark_logo@2x.png"]), (256, 512))
+        self.assertNotEqual(raw_by_name["icon.png"], raw_by_name["dark_icon.png"])
+        self.assertNotEqual(raw_by_name["icon@2x.png"], raw_by_name["dark_icon@2x.png"])
+
+        # Hassfest [BRAND_IMAGES]: reject logo assets that duplicate the fallback icon bytes.
+        for logo_name, icon_name in (
+            ("logo.png", "icon.png"),
+            ("logo@2x.png", "icon@2x.png"),
+            ("dark_logo.png", "dark_icon.png"),
+            ("dark_logo@2x.png", "dark_icon@2x.png"),
+        ):
+            logo_path = LATTER_DIR / "brand" / logo_name
+            if logo_path.exists():
+                logo_data = logo_path.read_bytes()
+                self.assertTrue(logo_data.startswith(b"\x89PNG\r\n\x1a\n"), logo_name)
+                self.assertEqual(
+                    logo_data[25],
+                    6,
+                    f"{logo_name} must be RGBA (color type 6) with transparent background",
+                )
+                self.assertNotEqual(
+                    logo_data,
+                    raw_by_name[icon_name],
+                    f"{logo_name} must not duplicate {icon_name}",
+                )
 
     def test_native_popups_follow_ha_dark_mode(self) -> None:
         ts_src = _read_frontend_ts()
