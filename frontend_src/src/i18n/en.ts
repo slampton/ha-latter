@@ -1462,8 +1462,7 @@ export const EN_STRINGS = {
   "dev_power.card_bedtime": "Bedtime mode",
   "dev_power.card_bedtime_subtitle":
     "Turns off or dims the display overnight and silences non-critical notification chimes.",
-  "dev_power.card_power_battery": "Power & battery",
-  "dev_power.empty": "No sleep or battery entities reported by this Device.",
+  "dev_power.empty": "No sleep or bedtime settings reported by this Device.",
 
   // Device -> Presence (D-032 / D-066)
   "dev_presence.card_area_tracking": "Area tracking",
@@ -1508,6 +1507,7 @@ export const EN_STRINGS = {
   "dev_tools.firmware_core": "Firmware core",
   "dev_tools.firmware_status": "Firmware status",
   "dev_tools.wifi_signal": "Wi-Fi signal",
+  "dev_tools.battery": "Battery",
   "dev_tools.ip_address": "IP address",
   "dev_tools.mac_address": "MAC address",
   "dev_tools.diagnostics_file_label": "Diagnostics file",

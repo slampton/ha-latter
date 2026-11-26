@@ -40,6 +40,7 @@ import type {
 import { renderDeviceDisplayView } from "../../src/views/device-display-view.js";
 import { renderDeviceInterfaceView } from "../../src/views/device-interface-view.js";
 import { renderDeviceOverviewView } from "../../src/views/device-overview-view.js";
+import { renderDevicePowerView } from "../../src/views/device-power-view.js";
 import {
   DEV_TELEMETRY_REFRESH_DEBOUNCE_MS,
   handleDeveloperTelemetryDrawerToggle,
@@ -51,6 +52,28 @@ import {
   renderGroupBaselineDrawer,
 } from "../../src/views/groups/group-baseline-drawer.js";
 import { renderSystemOverviewView } from "../../src/views/system-overview-view.js";
+
+function flattenTemplate(node: unknown): string {
+  if (node === null || node === undefined || node === nothing) return "";
+  if (typeof node === "string" || typeof node === "number" || typeof node === "boolean") {
+    return String(node);
+  }
+  if (Array.isArray(node)) return node.map(flattenTemplate).join("");
+  if (typeof node === "object") {
+    const tpl = node as { strings?: readonly string[]; values?: readonly unknown[] };
+    if (Array.isArray(tpl.strings)) {
+      let out = "";
+      for (let i = 0; i < tpl.strings.length; i += 1) {
+        out += tpl.strings[i] ?? "";
+        if (Array.isArray(tpl.values) && i < tpl.values.length) {
+          out += flattenTemplate(tpl.values[i]);
+        }
+      }
+      return out;
+    }
+  }
+  return "";
+}
 
 interface HeadlessStoreHarness {
   store: StudioStore;
@@ -1317,28 +1340,6 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
   });
 
   it("renders grouped Home screen element toggles, conditional tap actions, and display_battery gating (D-085)", () => {
-    const flattenTemplate = (node: unknown): string => {
-      if (node === null || node === undefined || node === nothing) return "";
-      if (typeof node === "string" || typeof node === "number" || typeof node === "boolean") {
-        return String(node);
-      }
-      if (Array.isArray(node)) return node.map(flattenTemplate).join("");
-      if (typeof node === "object") {
-        const tpl = node as { strings?: readonly string[]; values?: readonly unknown[] };
-        if (Array.isArray(tpl.strings)) {
-          let out = "";
-          for (let i = 0; i < tpl.strings.length; i += 1) {
-            out += tpl.strings[i] ?? "";
-            if (Array.isArray(tpl.values) && i < tpl.values.length) {
-              out += flattenTemplate(tpl.values[i]);
-            }
-          }
-          return out;
-        }
-      }
-      return "";
-    };
-
     // 1. Battery display shows all 5 new controls + Home elements / Background subsections + "None" option
     const { store: battStore } = createHeadlessStore({
       capabilities: { has_display: true, has_battery: true, is_round: true },
@@ -1420,5 +1421,115 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
       renderGroupBaselineDrawer(battStore, pocketGroup, [], [deskMember]),
     );
     assert.ok(pocketGrpHtml.includes("Show battery"));
+  });
+
+  it("deduplicates Wi-Fi Signal in Device Tools and keeps Device Power settings-only with battery telemetry in Tools", () => {
+    const { store } = createHeadlessStore({
+      capabilities: { has_display: true, has_battery: true, has_power: true },
+      system_devices: [
+        {
+          subentry_id: "sub_desk",
+          kind: "device",
+          device_slug: "mobile_assistant",
+          title: "Mobile Assistant",
+          is_online: true,
+          is_current: true,
+          wifi_rssi: -58,
+          battery_level: 84,
+          is_charging: true,
+        } as SystemDeviceEntry,
+      ],
+      esphome: {
+        device: { node_name: "mobile-assistant", mac: "AA:BB:CC:DD:EE:FF" },
+        sections: [
+          {
+            id: "network",
+            title: "Network & diagnostics",
+            items: [
+              {
+                entity_id: "sensor.mobile_assistant_wi_fi_signal",
+                key: "",
+                domain: "sensor",
+                name: "Wi-Fi Signal",
+                state: "-58",
+                unit: "dBm",
+                device_class: "signal_strength",
+                category: "diagnostic",
+              },
+              {
+                entity_id: "sensor.mobile_assistant_system_wi_fi_signal",
+                key: "system_wi_fi_signal",
+                domain: "sensor",
+                name: "System Wi-Fi Signal",
+                state: "-58",
+                unit: "dBm",
+                device_class: "signal_strength",
+                category: "diagnostic",
+              },
+              {
+                entity_id: "sensor.mobile_assistant_uptime",
+                key: "",
+                domain: "sensor",
+                name: "Uptime",
+                state: "420",
+                unit: "s",
+                device_class: "duration",
+                category: "diagnostic",
+              },
+            ],
+          },
+          {
+            id: "battery",
+            title: "Battery & power",
+            items: [
+              {
+                entity_id: "sensor.mobile_assistant_battery_level",
+                key: "",
+                domain: "sensor",
+                name: "Battery Level",
+                state: "84",
+                unit: "%",
+                device_class: "battery",
+                category: "diagnostic",
+              },
+              {
+                entity_id: "sensor.mobile_assistant_battery_voltage",
+                key: "",
+                domain: "sensor",
+                name: "Battery Voltage",
+                state: "4.12",
+                unit: "V",
+                device_class: "voltage",
+                category: "diagnostic",
+              },
+              {
+                entity_id: "sensor.mobile_assistant_battery_charge_state",
+                key: "",
+                domain: "sensor",
+                name: "Battery Charge State",
+                state: "Charging",
+                unit: "",
+                device_class: "",
+                category: "diagnostic",
+              },
+            ],
+          },
+        ],
+      } as StudioStatePayload["esphome"],
+    });
+
+    const toolsHtml = flattenTemplate(renderDeviceToolsView(store));
+    const wifiOccurrences = toolsHtml.match(/Wi-Fi signal|Wi-Fi Signal|System Wi-Fi Signal/g) || [];
+    assert.equal(wifiOccurrences.length, 1);
+    assert.ok(toolsHtml.includes("diag-battery-row"));
+    assert.ok(toolsHtml.includes("4.12 V"));
+    assert.ok(toolsHtml.includes("Charging"));
+    assert.ok(toolsHtml.includes("Battery Voltage"));
+    assert.ok(toolsHtml.includes("Uptime"));
+
+    const powerHtml = flattenTemplate(renderDevicePowerView(store));
+    assert.equal(powerHtml.includes("Power & battery"), false);
+    assert.equal(powerHtml.includes("Battery Voltage"), false);
+    assert.equal(powerHtml.includes("Battery Level"), false);
   });
 });

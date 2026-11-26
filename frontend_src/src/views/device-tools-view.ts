@@ -23,7 +23,7 @@ import type {
   EspHomeEntityItem,
   HomeAssistant,
 } from "../types.js";
-import { fmtNumber } from "../utils/format.js";
+import { fmtNumber, fmtPercent } from "../utils/format.js";
 
 export interface DiagnosticsTelemetryRow {
   label: string;
@@ -50,6 +50,8 @@ function isInternalNetworkBlobEntity(it: EspHomeEntityItem): boolean {
 
 const SUMMARY_DUPLICATE_KEYS = new Set([
   "wifi_signal",
+  "wi_fi_signal",
+  "system_wi_fi_signal",
   "ip_address",
   "mac_address",
   "firmware_version",
@@ -58,6 +60,7 @@ const SUMMARY_DUPLICATE_KEYS = new Set([
 ]);
 
 function isSummaryDuplicateNetworkEntity(it: EspHomeEntityItem): boolean {
+  if (it.domain === "sensor" && it.device_class === "signal_strength") return true;
   if (it.key && SUMMARY_DUPLICATE_KEYS.has(it.key)) return true;
   return Array.from(SUMMARY_DUPLICATE_KEYS).some((k) => it.entity_id.endsWith(`_${k}`));
 }
@@ -254,6 +257,7 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
 
   const networkItems = store.entity.getSectionItems("network");
   const developerItems = store.entity.getSectionItems("developer");
+  const batteryItems = store.entity.getSectionItems("battery");
 
   const networkControlItems = networkItems.filter((it) =>
     INTERACTIVE_ENTITY_DOMAINS.has(it.domain),
@@ -264,13 +268,19 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
       !isInternalNetworkBlobEntity(it) &&
       !isSummaryDuplicateNetworkEntity(it),
   );
+  const batteryControlItems = batteryItems.filter((it) =>
+    INTERACTIVE_ENTITY_DOMAINS.has(it.domain),
+  );
+  const batterySensorItems = batteryItems.filter(
+    (it) => !INTERACTIVE_ENTITY_DOMAINS.has(it.domain),
+  );
 
-  const findNetworkState = (key: string): string => {
-    const match = networkItems.find(
-      (it) => it.key === key || it.entity_id.endsWith(`_${key}`),
-    );
+  const findSectionState = (items: readonly EspHomeEntityItem[], key: string): string => {
+    const match = items.find((it) => it.key === key || it.entity_id.endsWith(`_${key}`));
     return isValidTelemetryState(match?.state) ? String(match?.state).trim() : "";
   };
+  const findNetworkState = (key: string): string => findSectionState(networkItems, key);
+  const findBatteryState = (key: string): string => findSectionState(batteryItems, key);
 
   const winRow = (curDevEntry?.ble_survey_rows || []).find((r) => r.is_winner);
   let signalText = store.t("common.unknown");
@@ -278,7 +288,10 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
     if (curDevEntry?.wifi_rssi !== null && curDevEntry?.wifi_rssi !== undefined) {
       signalText = `${fmtNumber(curDevEntry.wifi_rssi, store.hass, 0)} dBm`;
     } else {
-      const rawWifi = findNetworkState("wifi_signal");
+      const rawWifi =
+        findNetworkState("wi_fi_signal") ||
+        findNetworkState("system_wi_fi_signal") ||
+        findNetworkState("wifi_signal");
       if (rawWifi) {
         signalText = Number.isFinite(Number(rawWifi))
           ? `${fmtNumber(Number(rawWifi), store.hass, 0)} dBm`
@@ -288,6 +301,39 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
   } else if (winRow && winRow.effective_rssi !== null) {
     signalText = `${fmtNumber(winRow.effective_rssi, store.hass, 0)} dBm`;
   }
+
+  const hasBattery = Boolean(
+    data?.capabilities?.has_battery || curDevEntry?.has_battery || batterySensorItems.length,
+  );
+  const rawBattLevelState = findBatteryState("battery_level");
+  const rawBattLevel =
+    curDevEntry?.battery_level !== null &&
+    curDevEntry?.battery_level !== undefined &&
+    Number.isFinite(Number(curDevEntry.battery_level))
+      ? Number(curDevEntry.battery_level)
+      : rawBattLevelState !== "" && Number.isFinite(Number(rawBattLevelState))
+        ? Number(rawBattLevelState)
+        : null;
+  const batteryParts: string[] = [];
+  if (rawBattLevel !== null) {
+    batteryParts.push(fmtPercent(rawBattLevel, store.hass));
+  }
+  const rawBattVolt = findBatteryState("battery_voltage");
+  if (rawBattVolt !== "" && Number.isFinite(Number(rawBattVolt))) {
+    batteryParts.push(`${fmtNumber(Number(rawBattVolt), store.hass, 2)} V`);
+  }
+  const rawChargeState = findBatteryState("battery_charge_state");
+  if (rawChargeState) {
+    batteryParts.push(rawChargeState);
+  } else if (curDevEntry?.is_charging) {
+    batteryParts.push(store.t("status.charging"));
+  } else if (curDevEntry?.is_usb_connected) {
+    batteryParts.push(store.t("status.plugged_in"));
+  } else if (rawBattLevel !== null) {
+    batteryParts.push(store.t("status.on_battery"));
+  }
+  const batterySummaryText =
+    batteryParts.length > 0 ? batteryParts.join(" • ") : store.t("common.unknown");
 
   const rawSw = String(
     live.device_sw_version || esp?.device?.sw_version || findNetworkState("firmware_version") || "",
@@ -405,6 +451,12 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                           <strong><code>${macStr}</code></strong>
                         </div>`
                       : nothing}
+                    ${hasBattery
+                      ? html`<div id="diag-battery-row" class="kv-row">
+                          <span>${store.t("dev_tools.battery")}</span>
+                          <strong>${batterySummaryText}</strong>
+                        </div>`
+                      : nothing}
                     ${extraNetworkSensorItems.map((it) => renderDeviceEntityRow(store, it))}`}
             </div>
             <div class="settings-list">
@@ -481,10 +533,12 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                         </button>`,
                       })}
                       ${devControlItems.map((it) => renderDeviceEntityRow(store, it))}
+                      ${batteryControlItems.map((it) => renderDeviceEntityRow(store, it))}
                     </div>
-                    ${devSensorItems.length || runtimeRows.length
+                    ${devSensorItems.length || batterySensorItems.length || runtimeRows.length
                       ? html`<div class="kv-list">
                           ${devSensorItems.map((it) => renderDeviceEntityRow(store, it))}
+                          ${batterySensorItems.map((it) => renderDeviceEntityRow(store, it))}
                           ${runtimeRows.map(
                             (row) => html`<div class="kv-row">
                               <span>${row.label}</span>

@@ -484,9 +484,11 @@ class TestViewLayout(unittest.TestCase):
         power_src = _read_frontend_ts("views/device-power-view.ts")
         start = power_src.index('<section id="view-power"')
         power = power_src[start:power_src.index("</section>", start)]
-        self.assertEqual(power.count('<div class="card" data-entity-card>'), 2)
+        self.assertEqual(power.count('<div class="card" data-entity-card>'), 1)
         self.assertIn("sleepItems.length", power)
-        self.assertIn("batteryItems.length", power)
+        self.assertNotIn("batteryItems", power_src)
+        tools_src = _read_frontend_ts("views/device-tools-view.ts")
+        self.assertIn('getSectionItems("battery")', tools_src)
 
     def test_home_sun_and_moon_switches_in_home_section(self) -> None:
         self.assertEqual(

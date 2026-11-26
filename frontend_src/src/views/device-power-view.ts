@@ -1,6 +1,6 @@
 /**
  * Device Power View (`power`, `D-014`, `D-027`, `D-036`, `D-066`, `D-068`):
- * Sleep & wake controls, Bedtime mode, and Power & battery telemetry.
+ * Sleep & wake settings and Bedtime mode configuration (battery telemetry lives under Device → Tools).
  */
 
 import {
@@ -74,9 +74,8 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
     return true;
   });
 
-  const batteryItems = store.entity.getSectionItems("battery");
   const sleepItems = [...sleepPrefs, ...sleepEntities];
-  const allEmpty = !sleepItems.length && !bedtimePrefs.length && !batteryItems.length;
+  const allEmpty = !sleepItems.length && !bedtimePrefs.length;
 
   return html`<section id="view-power">
     ${renderDeviceOfflineBanner(store)}
@@ -95,7 +94,7 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
             </div>`
           : allEmpty
             ? renderCard({
-                title: store.t("dev_power.card_power_battery"),
+                title: store.t("view.power"),
                 body: html`<p class="empty-state">${store.t("dev_power.empty")}</p>`,
               })
             : nothing}
@@ -109,16 +108,6 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
               contentClass: "settings-list",
               body: html`${bedtimePrefs.map((p) => renderPrefControlRow(store, p))}`,
             })
-          : nothing}
-        ${batteryItems.length
-          ? html`<div class="card" data-entity-card>
-              <div class="card-header">
-                <h2 class="card-title">${store.t("dev_power.card_power_battery")}</h2>
-              </div>
-              <div class="card-content settings-list">
-                ${batteryItems.map((it) => renderDeviceEntityRow(store, it))}
-              </div>
-            </div>`
           : nothing}
       </div>
     </div>
