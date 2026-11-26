@@ -466,3 +466,229 @@ async def test_push_browse_slots_preserves_long_album_and_artist_names_up_to_120
     assert pushed_slots[0]["slots"].split(RECORD_SEP)[0].split(FIELD_SEP)[0] == long_bio
 
     assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+@pytest.mark.asyncio
+async def test_lyrics_client_1_6_0_slim_queue_provider_bypass_and_bio_hydration(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Mirror live HA 2026.11.3 (`music-assistant-client==1.6.0`) + MA Server `2.10.13` (`schema_version=65`)."""
+    ma_browse.clear_browse_cache()
+    ma_lyrics.clear_lyrics_cache()
+    entry, _sys_obj, _coord = await setup_latter_hub(hass)
+    ma_entry, _ = _seed_music_assistant(hass, with_runtime_mass=False)
+
+    send_commands: list[tuple[str, dict[str, Any]]] = []
+    get_item_calls: list[str] = []
+    get_track_calls: list[tuple[str, str]] = []
+    get_queue_calls = 0
+
+    async def _send_command(command: str, **kwargs: Any) -> Any:
+        send_commands.append((command, kwargs))
+        if command == "metadata/get_track_lyrics":
+            trk = kwargs.get("track") or {}
+            # Server returns JSON list (not tuple) and skips library tracks within 30d refresh
+            if trk.get("provider") == "library" and trk.get("item_id") == "44":
+                return [None, "[00:14.20]Hey Gloria"]
+            if trk.get("provider") == "library" and trk.get("item_id") == "99":
+                return [None, None]
+            if trk.get("provider") == "tidal--37riBsf4" and trk.get("item_id") == "2795989":
+                return ["Plain Gloria", "[00:21.50]From Tidal provider track"]
+        return [None, None]
+
+    async def _get_item_by_uri(uri: str) -> dict[str, Any]:
+        get_item_calls.append(uri)
+        if uri == "library://track/44":
+            return {
+                "item_id": "44",
+                "provider": "library",
+                "uri": uri,
+                "name": "¡Viva La Gloria!",
+                "media_type": "track",
+            }
+        if uri == "library://track/99":
+            return {
+                "item_id": "99",
+                "provider": "library",
+                "uri": uri,
+                "name": "American Idiot",
+                "media_type": "track",
+                "provider_mappings": [
+                    {
+                        "provider_instance": "library",
+                        "item_id": "99",
+                        "available": True,
+                        "priority": 100,
+                    },
+                    {
+                        "provider_instance": "offline_prov",
+                        "item_id": "0",
+                        "available": False,
+                        "priority": 90,
+                    },
+                    {
+                        "provider_instance": "tidal--37riBsf4",
+                        "item_id": "2795989",
+                        "available": True,
+                        "priority": 50,
+                    },
+                ],
+            }
+        if uri == "library://artist/16":
+            return {
+                "item_id": "16",
+                "provider": "library",
+                "uri": uri,
+                "name": "Green Day",
+                "metadata": {"description": "American rock band formed in Berkeley."},
+            }
+        if uri == "library://album/3":
+            return {
+                "item_id": "3",
+                "provider": "library",
+                "uri": uri,
+                "name": "21st Century Breakdown",
+                "year": 2009,
+                "metadata": {"description": "Eighth studio album by Green Day."},
+            }
+        return {}
+
+    async def _get_track(item_id: str, provider_instance_id_or_domain: str) -> dict[str, Any]:
+        get_track_calls.append((item_id, provider_instance_id_or_domain))
+        return {
+            "item_id": item_id,
+            "provider": provider_instance_id_or_domain,
+            "uri": f"{provider_instance_id_or_domain}://track/{item_id}",
+            "name": "American Idiot",
+            "media_type": "track",
+            "metadata": {},
+        }
+
+    # 1. `music-assistant-client==1.6.0` has NO `mass.metadata.get_track_lyrics`
+    mem_queue_obj: dict[str, Any] = {"item": None}
+    mass_1_6 = SimpleNamespace(
+        player_queues=SimpleNamespace(get=lambda _qid: mem_queue_obj["item"]),
+        players=SimpleNamespace(get=lambda _uid: None),
+        metadata=SimpleNamespace(),
+        music=SimpleNamespace(
+            get_item_by_uri=_get_item_by_uri,
+            get_track=_get_track,
+        ),
+        send_command=_send_command,
+    )
+    ma_entry.runtime_data = SimpleNamespace(mass=mass_1_6)
+
+    queue_resp_item: dict[str, Any] = {
+        "media_type": "track",
+        "uri": "library://track/44",
+        "name": "¡Viva La Gloria!",
+    }
+
+    def _slim_get_queue(_call: Any) -> dict[str, Any]:
+        nonlocal get_queue_calls
+        get_queue_calls += 1
+        return {"media_player.ma_pocket": {"current_item": {"media_item": queue_resp_item}}}
+
+    mock_service(
+        hass,
+        "music_assistant",
+        "get_queue",
+        _slim_get_queue,
+        supports_response=SupportsResponse.ONLY,
+    )
+    mock_service(
+        hass,
+        "music_assistant",
+        "get_library",
+        lambda call: (
+            {
+                "items": [
+                    {
+                        "media_type": call.data.get("media_type"),
+                        "uri": "library://artist/16"
+                        if call.data.get("media_type") == "artist"
+                        else "library://album/3",
+                        "name": "Green Day"
+                        if call.data.get("media_type") == "artist"
+                        else "21st Century Breakdown",
+                    }
+                ]
+            }
+            if call.data.get("media_type") in ("artist", "album")
+            else {"items": []}
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    tkey, synced, lines = await ma_lyrics.async_fetch_track_lyrics(
+        hass, "media_player.ma_pocket", "¡Viva La Gloria!|Green Day|21st Century Breakdown"
+    )
+    assert tkey == "¡Viva La Gloria!|Green Day"
+    assert synced is True
+    assert lines == [{"t_ms": 14200, "text": "Hey Gloria"}]
+    assert "library://track/44" in get_item_calls
+    assert any(cmd == "metadata/get_track_lyrics" for cmd, _ in send_commands)
+
+    # 2. Slim `get_library` artist & album rows hydrate via `get_item_by_uri` for `bio`
+    bio_rows = await ma_lyrics.browse_track_lyrics_or_bio(
+        hass,
+        ma_entry.entry_id,
+        "media_player.ma_pocket",
+        "bio",
+        "¡Viva La Gloria!|Green Day|21st Century Breakdown",
+        "",
+    )
+    bio_texts = [r["name"] for r in bio_rows]
+    assert "Release: 2009" in bio_texts
+    assert "Eighth studio album by Green Day." in bio_texts
+    assert "American rock band formed in Berkeley." in bio_texts
+
+    # 3. MA 2.10.13 library 30-day skip bypasses via `provider_mappings` -> `get_track` -> `metadata/get_track_lyrics`
+    ma_lyrics.clear_lyrics_cache()
+    queue_resp_item = {
+        "media_type": "track",
+        "uri": "library://track/99",
+        "name": "American Idiot",
+    }
+    tkey2, synced2, lines2 = await ma_lyrics.async_fetch_track_lyrics(
+        hass, "media_player.ma_pocket", "American Idiot|Green Day|American Idiot"
+    )
+    assert tkey2 == "American Idiot|Green Day"
+    assert synced2 is True
+    assert lines2 == [{"t_ms": 21500, "text": "From Tidal provider track"}]
+    assert ("2795989", "tidal--37riBsf4") in get_track_calls
+
+    # 4. Full in-memory `player_queues.get(qid)` fast path skips `get_queue` & `get_item_by_uri`
+    ma_lyrics.clear_lyrics_cache()
+    q_calls_before = get_queue_calls
+    item_calls_before = len(get_item_calls)
+    mem_queue_obj["item"] = SimpleNamespace(
+        current_item=SimpleNamespace(
+            media_item={
+                "item_id": "55",
+                "provider": "library",
+                "uri": "library://track/55",
+                "name": "Basket Case",
+                "metadata": {"lrc_lyrics": "[00:04.00]Do you have the time"},
+            }
+        )
+    )
+    tkey3, synced3, lines3 = await ma_lyrics.async_fetch_track_lyrics(
+        hass, "media_player.ma_pocket", "Basket Case|Green Day|Dookie"
+    )
+    assert tkey3 == "Basket Case|Green Day"
+    assert synced3 is True
+    assert lines3 == [{"t_ms": 4000, "text": "Do you have the time"}]
+    assert get_queue_calls == q_calls_before
+    assert len(get_item_calls) == item_calls_before
+
+    # 5. Stale queue title conflict does NOT leak Basket Case's lyrics onto a different track
+    tkey4, synced4, lines4 = await ma_lyrics.async_fetch_track_lyrics(
+        hass, "media_player.ma_pocket", "Completely Different Song|Other Artist"
+    )
+    assert tkey4 == "Completely Different Song|Other Artist"
+    assert synced4 is False
+    assert lines4 == []
+
+    ma_lyrics.clear_lyrics_cache()
+    assert await hass.config_entries.async_unload(entry.entry_id) is True

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 import logging
 import math
 import re
@@ -53,6 +53,12 @@ _ITEM_DICT_ATTRS: Final[tuple[str, ...]] = (
     "uri",
     "item_id",
     "provider",
+    "provider_instance",
+    "provider_domain",
+    "provider_mappings",
+    "stream_details",
+    "available",
+    "priority",
     "media_type",
     "media_content_id",
     "media_content_type",
@@ -315,6 +321,24 @@ def _extract_release_year(obj: Any) -> int | None:
     return None
 
 
+def _strip_title_tags(title: str) -> str:
+    clean = re.sub(
+        r"\s*[\(\[][^\)\]]*(?:remaster|edition|version|mix|live|deluxe|mono|stereo)[^\)\]]*[\)\]]",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    ).strip()
+    return (
+        re.sub(
+            r"\s*-\s*.*(?:remaster|edition|version|mix|live|deluxe).*$",
+            "",
+            clean,
+            flags=re.IGNORECASE,
+        ).strip()
+        or title.strip()
+    )
+
+
 def _normalize_search_metadata(
     hass: HomeAssistant,
     speaker: str,
@@ -333,21 +357,7 @@ def _normalize_search_metadata(
         artist = artist or cur_artist or fallback_artist
         album = album or cur_album or fallback_album
 
-    clean_title = re.sub(
-        r"\s*[\(\[][^\)\]]*(?:remaster|edition|version|mix|live|deluxe|mono|stereo)[^\)\]]*[\)\]]",
-        "",
-        title,
-        flags=re.IGNORECASE,
-    ).strip()
-    clean_title = (
-        re.sub(
-            r"\s*-\s*.*(?:remaster|edition|version|mix|live|deluxe).*$",
-            "",
-            clean_title,
-            flags=re.IGNORECASE,
-        ).strip()
-        or title.strip()
-    )
+    clean_title = _strip_title_tags(title)
     clean_album = (
         re.sub(
             r"\s*[\(\[][^\)\]]*(?:remaster|edition|version|deluxe|expanded)[^\)\]]*[\)\]]",
@@ -361,12 +371,163 @@ def _normalize_search_metadata(
     return title.strip(), artist.strip(), album.strip(), clean_title, clean_album, cache_key
 
 
+def _parse_ma_lyrics_response(res: Any) -> str:
+    if isinstance(res, (tuple, list)):
+        plain_str = str(res[0] or "").strip() if len(res) >= 1 else ""
+        lrc_str = str(res[1] or "").strip() if len(res) >= _FRAC_TWO_DIGITS else ""
+        return lrc_str or plain_str
+    return res.strip() if isinstance(res, str) else ""
+
+
+def _is_full_ma_item(item: dict[str, Any] | None) -> bool:
+    return bool(item and item.get("item_id") and item.get("provider"))
+
+
+def _titles_conflict(requested_clean: str, candidate_name: str) -> bool:
+    req_norm = " ".join(
+        re.sub(r"[^\w\s]", "", _strip_title_tags(requested_clean).lower()).split()
+    )
+    cand_norm = " ".join(
+        re.sub(r"[^\w\s]", "", _strip_title_tags(candidate_name).lower()).split()
+    )
+    return bool(
+        req_norm
+        and cand_norm
+        and req_norm not in cand_norm
+        and cand_norm not in req_norm
+    )
+
+
+async def _hydrate_ma_item_by_uri(mass: Any, uri: str) -> dict[str, Any] | None:
+    if mass is None or "://" not in uri:
+        return None
+    get_by_uri = getattr(getattr(mass, "music", None), "get_item_by_uri", None)
+    send_cmd = getattr(mass, "send_command", None)
+    try:
+        if callable(get_by_uri):
+            raw = await get_by_uri(uri)
+        elif callable(send_cmd):
+            raw = await send_cmd("music/item_by_uri", uri=uri)
+        else:
+            return None
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("MA item hydration failed for %s: %s", uri, err)
+        return None
+    d = extract_item_dict(raw)
+    return d or None
+
+
+def _extract_provider_track_ref(item: dict[str, Any]) -> tuple[str, str] | None:
+    raw_mappings = item.get("provider_mappings")
+    if not isinstance(raw_mappings, Iterable) or isinstance(
+        raw_mappings, (str, bytes, dict)
+    ):
+        return None
+    candidates: list[tuple[int, str, str]] = []
+    for mapping in raw_mappings:
+        md = extract_item_dict(mapping)
+        if md.get("available") is False:
+            continue
+        prov_inst = str(
+            md.get("provider_instance") or md.get("provider_domain") or ""
+        ).strip()
+        item_id = str(md.get("item_id") or "").strip()
+        if not prov_inst or prov_inst == "library" or not item_id:
+            continue
+        candidates.append((safe_int(md.get("priority"), 0), prov_inst, item_id))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda row: row[0], reverse=True)
+    return candidates[0][1], candidates[0][2]
+
+
+async def _fetch_provider_track_dict(
+    mass: Any, provider_instance: str, item_id: str
+) -> dict[str, Any] | None:
+    if mass is None or not provider_instance or not item_id:
+        return None
+    get_track = getattr(getattr(mass, "music", None), "get_track", None)
+    send_cmd = getattr(mass, "send_command", None)
+    try:
+        if callable(get_track):
+            raw = await get_track(item_id, provider_instance)
+        elif callable(send_cmd):
+            raw = await send_cmd(
+                "music/tracks/get",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance,
+            )
+        else:
+            return None
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug(
+            "MA provider track fetch failed (%s/%s): %s",
+            provider_instance,
+            item_id,
+            err,
+        )
+        return None
+    d = extract_item_dict(raw)
+    return d or None
+
+
+async def _call_ma_get_track_lyrics(mass: Any, track_item: dict[str, Any]) -> str:
+    get_lyr = getattr(getattr(mass, "metadata", None), "get_track_lyrics", None)
+    if callable(get_lyr):
+        try:
+            return _parse_ma_lyrics_response(await get_lyr(track_item))
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("mass.metadata.get_track_lyrics skipped: %s", err)
+
+    send_cmd = getattr(mass, "send_command", None)
+    if callable(send_cmd):
+        try:
+            return _parse_ma_lyrics_response(
+                await send_cmd("metadata/get_track_lyrics", track=track_item)
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("mass.send_command('metadata/get_track_lyrics') skipped: %s", err)
+    return ""
+
+
+async def _hydrate_if_slim(
+    mass: Any, item: dict[str, Any]
+) -> dict[str, Any]:
+    if _is_full_ma_item(item):
+        return item
+    uri = str(item.get("uri") or "").strip()
+    if not uri or (hydrated := await _hydrate_ma_item_by_uri(mass, uri)) is None:
+        return item
+    if item.get("metadata") and not hydrated.get("metadata"):
+        hydrated["metadata"] = item["metadata"]
+    if item.get("year") and not hydrated.get("year"):
+        hydrated["year"] = item["year"]
+    return hydrated
+
+
 async def _read_current_queue_media_item(
     hass: HomeAssistant, speaker: str
 ) -> dict[str, Any] | None:
     ma_target = resolve_ma_counterpart_entity(hass, speaker)
     if not ma_target:
         return None
+
+    mass = get_ma_mass_client(hass)
+    mem_dict: dict[str, Any] | None = None
+    pqs = getattr(mass, "player_queues", None) if mass is not None else None
+    if pqs is not None and hasattr(pqs, "get"):
+        qid = resolve_ma_queue_id_sync(hass, ma_target, mass) or ma_target
+        try:
+            q_obj = pqs.get(qid)
+            cur_obj = getattr(q_obj, "current_item", None) if q_obj is not None else None
+            m_obj = getattr(cur_obj, "media_item", None) if cur_obj is not None else None
+            if m_obj is not None:
+                mem_dict = extract_item_dict(m_obj)
+        except (AttributeError, KeyError, TypeError, ValueError, RuntimeError) as err:
+            _LOGGER.debug("Reading in-memory queue media_item for %s skipped: %s", qid, err)
+
+    if _is_full_ma_item(mem_dict):
+        return mem_dict
 
     if hass.services.has_service("music_assistant", "get_queue"):
         try:
@@ -381,54 +542,119 @@ async def _read_current_queue_media_item(
             if isinstance(q_data, dict) and (cur_item := q_data.get("current_item")) is not None:
                 m_item = extract_item_dict(cur_item).get("media_item")
                 if m_item is not None:
-                    return extract_item_dict(m_item)
+                    return await _hydrate_if_slim(mass, extract_item_dict(m_item))
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("music_assistant.get_queue metadata lookup failed: %s", err)
 
-    mass = get_ma_mass_client(hass)
-    pqs = getattr(mass, "player_queues", None) if mass is not None else None
-    if pqs is not None and hasattr(pqs, "get"):
-        qid = resolve_ma_queue_id_sync(hass, ma_target, mass) or ma_target
-        try:
-            q_obj = pqs.get(qid)
-            cur_obj = getattr(q_obj, "current_item", None) if q_obj is not None else None
-            m_obj = getattr(cur_obj, "media_item", None) if cur_obj is not None else None
-            if m_obj is not None:
-                return extract_item_dict(m_obj)
-        except (AttributeError, KeyError, TypeError, ValueError, RuntimeError) as err:
-            _LOGGER.debug("Reading in-memory queue media_item for %s skipped: %s", qid, err)
+    if mem_dict is not None:
+        return await _hydrate_if_slim(mass, mem_dict)
     return None
+
+
+def _pick_better_lyrics(current: str, candidate: str) -> str:
+    if not candidate:
+        return current
+    if not current or _LRC_TAG_RE.search(candidate):
+        return candidate
+    return current
 
 
 async def _fetch_local_ma_controller_lyrics(
     hass: HomeAssistant, media_item: dict[str, Any] | None
 ) -> str:
-    if not media_item:
+    if not media_item or (mass := get_ma_mass_client(hass)) is None:
         return ""
+
+    track_item = dict(media_item)
+    best = ""
+    if (
+        not _is_full_ma_item(track_item)
+        and (uri := str(track_item.get("uri") or "").strip())
+        and (hydrated := await _hydrate_ma_item_by_uri(mass, uri)) is not None
+    ):
+        track_item = hydrated
+        hyd_lyr, _ = _extract_meta_strings(track_item)
+        if hyd_lyr and _LRC_TAG_RE.search(hyd_lyr):
+            return hyd_lyr
+        best = hyd_lyr
+
+    best = _pick_better_lyrics(best, await _call_ma_get_track_lyrics(mass, track_item))
+    if (
+        (not best or not _LRC_TAG_RE.search(best))
+        and str(track_item.get("provider") or "") == "library"
+        and (prov_ref := _extract_provider_track_ref(track_item)) is not None
+        and (
+            prov_track := await _fetch_provider_track_dict(
+                mass, prov_ref[0], prov_ref[1]
+            )
+        )
+        is not None
+    ):
+        prov_meta_lyr, _ = _extract_meta_strings(prov_track)
+        best = _pick_better_lyrics(best, prov_meta_lyr)
+        if not best or not _LRC_TAG_RE.search(best):
+            best = _pick_better_lyrics(
+                best, await _call_ma_get_track_lyrics(mass, prov_track)
+            )
+    return best
+
+
+async def _fetch_ma_library_items(
+    hass: HomeAssistant,
+    config_entry_id: str | None,
+    media_type: str,
+    search: str,
+    limit: int,
+) -> list[dict[str, Any]]:
     mass = get_ma_mass_client(hass)
-    get_lyr = getattr(getattr(mass, "metadata", None), "get_track_lyrics", None)
-    if not callable(get_lyr):
-        return ""
-    try:
-        res = await get_lyr(media_item)
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.debug("mass.metadata.get_track_lyrics skipped: %s", err)
-        return ""
-    if isinstance(res, tuple):
-        plain_str = str(res[0] or "").strip() if len(res) >= 1 else ""
-        lrc_str = str(res[1] or "").strip() if len(res) >= _FRAC_TWO_DIGITS else ""
-        return lrc_str or plain_str
-    return res.strip() if isinstance(res, str) else ""
+    music = getattr(mass, "music", None) if mass is not None else None
+    method_name = {
+        "track": "get_library_tracks",
+        "artist": "get_library_artists",
+        "album": "get_library_albums",
+    }.get(media_type, "")
+    if method_name and callable(fn := getattr(music, method_name, None)):
+        try:
+            res = await fn(search=search, limit=limit)
+            if (
+                isinstance(res, Sequence)
+                and not isinstance(res, (str, bytes))
+                and res
+            ):
+                return [extract_item_dict(x) for x in res]
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("mass.music.%s(%r) failed: %s", method_name, search, err)
+    if not config_entry_id:
+        return []
+    return await call_ma_get_library(
+        hass, config_entry_id, media_type, search=search, limit=limit
+    )
+
+
+def _artist_match_rank(trk: dict[str, Any], artist_lower: str) -> int:
+    trk_artist = extract_artist_name(trk).strip().lower()
+    if not trk_artist:
+        return 1
+    if artist_lower in trk_artist or trk_artist in artist_lower:
+        return 0
+    return 2
 
 
 async def _search_library_track_lyrics(
-    hass: HomeAssistant, config_entry_id: str | None, clean_title: str, seed_lyrics: str
+    hass: HomeAssistant,
+    config_entry_id: str | None,
+    clean_title: str,
+    seed_lyrics: str,
+    *,
+    artist: str = "",
 ) -> tuple[str, dict[str, Any] | None]:
     if not config_entry_id or (seed_lyrics and "[" in seed_lyrics) or not clean_title:
         return seed_lyrics, None
-    tracks = await call_ma_get_library(
-        hass, config_entry_id, "track", search=clean_title, limit=10
+    tracks = await _fetch_ma_library_items(
+        hass, config_entry_id, "track", clean_title, 10
     )
+    if artist_lower := artist.strip().lower():
+        tracks.sort(key=lambda trk: _artist_match_rank(trk, artist_lower))
     raw_lyrics = seed_lyrics
     fallback_plain = seed_lyrics
     matched_track: dict[str, Any] | None = None
@@ -484,16 +710,40 @@ async def async_fetch_track_lyrics(
     raw_album_bio = ""
     release_year: int | None = None
     if (m_item := await _read_current_queue_media_item(hass, speaker)) is not None:
-        raw_lyrics, raw_album_bio = _extract_meta_strings(m_item)
-        release_year = _extract_release_year(m_item)
+        cand_name = str(m_item.get("name") or m_item.get("title") or "")
+        if _titles_conflict(clean_title, cand_name):
+            m_item = None
+        else:
+            raw_lyrics, raw_album_bio = _extract_meta_strings(m_item)
+            release_year = _extract_release_year(m_item)
 
     raw_lyrics, matched_track = await _search_library_track_lyrics(
-        hass, get_ma_config_entry_id(hass), clean_title, raw_lyrics
+        hass, get_ma_config_entry_id(hass), clean_title, raw_lyrics, artist=artist
     )
+    if m_item is None and matched_track is not None:
+        _, meta_bio = _extract_meta_strings(matched_track)
+        raw_album_bio = raw_album_bio or meta_bio
+        if release_year is None:
+            release_year = _extract_release_year(matched_track)
+
     if not raw_lyrics or not _LRC_TAG_RE.search(raw_lyrics):
-        ctrl_lyr = await _fetch_local_ma_controller_lyrics(hass, m_item or matched_track)
-        if ctrl_lyr and (not raw_lyrics or _LRC_TAG_RE.search(ctrl_lyr)):
-            raw_lyrics = ctrl_lyr
+        raw_lyrics = _pick_better_lyrics(
+            raw_lyrics,
+            await _fetch_local_ma_controller_lyrics(hass, m_item or matched_track),
+        )
+        if (
+            (not raw_lyrics or not _LRC_TAG_RE.search(raw_lyrics))
+            and m_item is not None
+            and matched_track is not None
+            and (
+                matched_track.get("uri") != m_item.get("uri")
+                or not _is_full_ma_item(m_item)
+            )
+        ):
+            raw_lyrics = _pick_better_lyrics(
+                raw_lyrics,
+                await _fetch_local_ma_controller_lyrics(hass, matched_track),
+            )
 
     synced, parsed_lines = parse_lrc_lyrics(raw_lyrics, max_lines=MAX_LYRIC_LINES)
     cache_entry = cache_put(cache_key)
@@ -526,19 +776,29 @@ async def _fetch_library_artist_album_bio(
     if not config_entry_id:
         return raw_artist_bio, raw_album_bio, release_year
 
+    mass = get_ma_mass_client(hass)
     if artist:
-        for ar_obj in await call_ma_get_library(
-            hass, config_entry_id, "artist", search=artist, limit=5
-        ):
+        ar_items = await _fetch_ma_library_items(
+            hass, config_entry_id, "artist", artist, 5
+        )
+        for ar_obj in ar_items:
             _, desc = _extract_meta_strings(ar_obj)
             if desc:
                 raw_artist_bio = desc
                 break
+        if (
+            not raw_artist_bio
+            and ar_items
+            and (uri := str(ar_items[0].get("uri") or "").strip())
+            and (hyd_ar := await _hydrate_ma_item_by_uri(mass, uri)) is not None
+        ):
+            _, raw_artist_bio = _extract_meta_strings(hyd_ar)
 
     if (not raw_album_bio or release_year is None) and clean_album:
-        for al_obj in await call_ma_get_library(
-            hass, config_entry_id, "album", search=clean_album, limit=5
-        ):
+        al_items = await _fetch_ma_library_items(
+            hass, config_entry_id, "album", clean_album, 5
+        )
+        for al_obj in al_items:
             if release_year is None:
                 release_year = _extract_release_year(al_obj)
             _, desc = _extract_meta_strings(al_obj)
@@ -546,6 +806,17 @@ async def _fetch_library_artist_album_bio(
                 raw_album_bio = desc
             if raw_album_bio and release_year is not None:
                 break
+        if (
+            (not raw_album_bio or release_year is None)
+            and al_items
+            and (uri := str(al_items[0].get("uri") or "").strip())
+            and (hyd_al := await _hydrate_ma_item_by_uri(mass, uri)) is not None
+        ):
+            if release_year is None:
+                release_year = _extract_release_year(hyd_al)
+            _, desc = _extract_meta_strings(hyd_al)
+            if desc and not raw_album_bio:
+                raw_album_bio = desc
     return raw_artist_bio, raw_album_bio, release_year
 
 

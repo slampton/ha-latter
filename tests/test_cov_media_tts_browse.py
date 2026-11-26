@@ -2099,3 +2099,199 @@ async def test_lyrics_push_missing_service_failure_and_multichunk(
     )
 
     assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_lyrics_schema_fallback_send_command_and_artist_disambiguation(
+    hass: Any,
+) -> None:
+    """Cover `InvalidServerVersion` fallback, `send_command` item/track hydration, and artist matching."""
+    ma_lyrics.clear_lyrics_cache()
+    try:
+        # 1. `InvalidServerVersion` (e.g. `require_schema=101`) falls back to `send_command`
+        async def _raise_schema(_track: Any) -> Any:
+            raise RuntimeError("require_schema=101 unsupported on schema 65")
+
+        send_calls: list[tuple[str, dict[str, Any]]] = []
+
+        async def _send_cmd(command: str, **kwargs: Any) -> Any:
+            send_calls.append((command, kwargs))
+            if command == "music/item_by_uri":
+                return {
+                    "item_id": "77",
+                    "provider": "library",
+                    "uri": kwargs["uri"],
+                    "name": "Track Seventy Seven",
+                    "provider_mappings": [
+                        {"provider_instance": "tidal--1", "item_id": "t77", "priority": 20}
+                    ],
+                }
+            if command == "music/tracks/get":
+                return {
+                    "item_id": kwargs["item_id"],
+                    "provider": kwargs["provider_instance_id_or_domain"],
+                    "name": "Track Seventy Seven",
+                    "metadata": {"lrc_lyrics": "[00:08.00]From music/tracks/get"},
+                }
+            if command == "metadata/get_track_lyrics":
+                return [None, None]
+            return None
+
+        async def _get_lib_tracks(search: str = "", limit: int = 10) -> list[dict[str, Any]]:
+            _ = limit
+            if search == "Same Name":
+                return [
+                    {
+                        "item_id": "1",
+                        "provider": "library",
+                        "uri": "library://track/1",
+                        "name": "Same Name",
+                        "artists": [{"name": "Wrong Band"}],
+                        "metadata": {"lrc_lyrics": "[00:01.00]Wrong lyrics"},
+                    },
+                    {
+                        "item_id": "2",
+                        "provider": "library",
+                        "uri": "library://track/2",
+                        "name": "Same Name",
+                        "artists": [{"name": "Target Band"}],
+                        "metadata": {"lrc_lyrics": "[00:02.00]Right lyrics"},
+                    },
+                ]
+            if search == "Fallback Trigger":
+                raise RuntimeError("get_library_tracks temporary failure")
+            return []
+
+        ma_ent = "media_player.ma_fallback_cov"
+        ma_entry = _seed_ma_player(
+            hass,
+            ma_entity=ma_ent,
+            queue_id="ma_q_fallback",
+            mac="aa:bb:cc:dd:ee:72",
+            entry_id="entry_ma_fallback",
+            state="idle",
+            mass_client=SimpleNamespace(
+                player_queues=SimpleNamespace(get=lambda _qid: None),
+                metadata=SimpleNamespace(get_track_lyrics=_raise_schema),
+                music=SimpleNamespace(get_library_tracks=_get_lib_tracks),
+                send_command=_send_cmd,
+            ),
+        )
+
+        # `send_command` fallback for `music/item_by_uri`, `metadata/get_track_lyrics`, and `music/tracks/get`
+        assert (
+            await ma_lyrics._fetch_local_ma_controller_lyrics(
+                hass, {"uri": "library://track/77", "name": "Track Seventy Seven"}
+            )
+            == "[00:08.00]From music/tracks/get"
+        )
+        assert [c[0] for c in send_calls] == [
+            "music/item_by_uri",
+            "metadata/get_track_lyrics",
+            "music/tracks/get",
+        ]
+
+        # Artist disambiguation in `mass.music.get_library_tracks`
+        lyr, matched = await ma_lyrics._search_library_track_lyrics(
+            hass, ma_entry.entry_id, "Same Name", "", artist="Target Band"
+        )
+        assert lyr == "[00:02.00]Right lyrics"
+        assert matched is not None and matched["item_id"] == "2"
+
+        # `get_library_tracks` failure falls back cleanly to `music_assistant.get_library`
+        mock_service(
+            hass,
+            "music_assistant",
+            "get_library",
+            lambda _call: {
+                "items": [
+                    {
+                        "name": "Fallback Trigger",
+                        "artists": [{"name": "Other"}],
+                        "metadata": {},
+                    },
+                    {
+                        "name": "Fallback Trigger",
+                        "artists": [],
+                        "metadata": {"lyrics": "Fallback plain"},
+                    },
+                ]
+            },
+            supports_response=SupportsResponse.ONLY,
+        )
+        fb_lyr, _ = await ma_lyrics._search_library_track_lyrics(
+            hass, ma_entry.entry_id, "Fallback Trigger", "", artist="NoMatch"
+        )
+        assert fb_lyr == "Fallback plain"
+
+        # Helper unit edge cases: `_parse_ma_lyrics_response`, `_extract_provider_track_ref`, `_pick_better_lyrics`
+        assert ma_lyrics._parse_ma_lyrics_response(["plain", "[00:01.00]synced"]) == "[00:01.00]synced"
+        assert ma_lyrics._parse_ma_lyrics_response(123) == ""
+        assert ma_lyrics._extract_provider_track_ref({"provider_mappings": "bad"}) is None
+        assert ma_lyrics._pick_better_lyrics("plain", "") == "plain"
+        assert ma_lyrics._pick_better_lyrics("plain", "other plain") == "plain"
+        assert ma_lyrics._pick_better_lyrics("plain", "[00:03.00]lrc") == "[00:03.00]lrc"
+        assert await ma_lyrics._hydrate_ma_item_by_uri(None, "library://track/1") is None
+        assert await ma_lyrics._hydrate_ma_item_by_uri(SimpleNamespace(), "library://track/1") is None
+        assert await ma_lyrics._fetch_provider_track_dict(None, "tidal", "1") is None
+        assert await ma_lyrics._fetch_provider_track_dict(SimpleNamespace(), "tidal", "1") is None
+        assert await ma_lyrics._call_ma_get_track_lyrics(SimpleNamespace(), {}) == ""
+
+        # Exception branches on `send_command` hydration / track fetch / lyrics call
+        async def _always_fail(_command: str, **_kwargs: Any) -> Any:
+            raise RuntimeError("ws error")
+
+        fail_mass = SimpleNamespace(send_command=_always_fail)
+        assert await ma_lyrics._hydrate_ma_item_by_uri(fail_mass, "library://track/1") is None
+        assert await ma_lyrics._fetch_provider_track_dict(fail_mass, "tidal", "1") is None
+        assert await ma_lyrics._call_ma_get_track_lyrics(fail_mass, {"item_id": "1", "provider": "tidal"}) == ""
+
+        # `async_fetch_track_lyrics` distinct `matched_track` controller fallback when queue item fails
+        ma_entry.runtime_data = SimpleNamespace(
+            mass=SimpleNamespace(
+                player_queues=SimpleNamespace(
+                    get=lambda _qid: SimpleNamespace(
+                        current_item=SimpleNamespace(
+                            media_item={"name": "Distinct Song", "uri": "tidal://track/1"}
+                        )
+                    )
+                ),
+                music=SimpleNamespace(
+                    get_library_tracks=lambda search="", limit=10: _async_return(
+                        [
+                            {
+                                "item_id": "88",
+                                "provider": "library",
+                                "uri": "library://track/88",
+                                "name": "Distinct Song",
+                                "artists": [{"name": "Target Band"}],
+                                "provider_mappings": [
+                                    {"provider_instance": "tidal--1", "item_id": "t88", "priority": 10}
+                                ],
+                            }
+                        ]
+                    ),
+                    get_track=lambda item_id, prov: _async_return(
+                        {
+                            "item_id": item_id,
+                            "provider": prov,
+                            "name": "Distinct Song",
+                            "metadata": {"lrc_lyrics": "[00:09.00]Matched fallback"},
+                        }
+                    ),
+                ),
+                send_command=_always_fail,
+            )
+        )
+        tkey_d, synced_d, lines_d = await ma_lyrics.async_fetch_track_lyrics(
+            hass, ma_ent, "Distinct Song|Target Band"
+        )
+        assert tkey_d == "Distinct Song|Target Band"
+        assert synced_d is True
+        assert lines_d == [{"t_ms": 9000, "text": "Matched fallback"}]
+    finally:
+        clear_ma_counterpart_cache(hass)
+        ma_lyrics.clear_lyrics_cache()
+
+
+async def _async_return(val: Any) -> Any:
+    return val
