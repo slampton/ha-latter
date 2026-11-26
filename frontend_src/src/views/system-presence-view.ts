@@ -9,6 +9,7 @@ import { focusSafe, html, live, nothing, repeat, type TemplateResult } from "../
 import type { StudioStore } from "../state/store.js";
 import type { AreaPresenceRow, BleAreaSignatureSummary } from "../types.js";
 import {
+  compareLocaleText,
   fmtAgo,
   fmtDateTime,
   fmtDistance,
@@ -126,9 +127,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
         });
       }
     }
-    unifiedAreas.sort((a, b) =>
-      a.areaName.localeCompare(b.areaName, undefined, { sensitivity: "base" }),
-    );
+    unifiedAreas.sort((a, b) => compareLocaleText(a.areaName, b.areaName, store.hass));
     const hasAnyLuxSensor = unifiedAreas.some(
       ({ row }) => (row?.illuminance_sensor_choices?.length || 0) > 0,
     );
@@ -248,7 +247,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
 
                 return html`<div id=${areaBoxId} class="area-presence-box${isAreaHandoff ? " handoff-active" : ""}">
                   <div class="area-box-head">
-                    <h4 class="area-box-title">${areaName}</h4>
+                    <h3 class="area-box-title">${areaName}</h3>
                     <div class="area-box-actions">
                       ${sig?.has_signature
                         ? html`<button
@@ -568,6 +567,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
               ? html`<button
                   type="button"
                   id="btn-toggle-ble-stream"
+                  aria-pressed=${String(store.bleLiveStreamActive)}
                   @click=${() => store.groups.toggleBleLiveStream(!store.bleLiveStreamActive)}
                   class="btn btn-secondary btn-compact"
                 >
@@ -701,7 +701,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                     })}
                   </div>
 
-                  <div class="subsection-title">${store.t("presence_sys.nearby_proxies")}</div>
+                  <h3 class="subsection-title">${store.t("presence_sys.nearby_proxies")}</h3>
                   ${surveyRows.length
                     ? repeat(
                         surveyRows,
@@ -749,7 +749,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
                               </span>
                               <span class="signal-meta">${metaText}</span>
                             </div>
-                            <div class="signal-track">
+                            <div class="signal-track" aria-hidden="true">
                               <div class="signal-fill" style=${sigStyle}></div>
                             </div>
                             ${scannerSrc
@@ -857,7 +857,7 @@ export function renderSystemPresenceView(store: StudioStore): TemplateResult {
             >
               <summary class="card-header">
                 <div class="card-heading">
-                  <h3 class="card-title">${store.t("card.advanced_ble")}</h3>
+                  <span class="card-title">${store.t("card.advanced_ble")}</span>
                   <p class="card-subtitle">
                     ${store.t("presence_sys.advanced_subtitle")}
                   </p>

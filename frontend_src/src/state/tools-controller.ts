@@ -99,6 +99,8 @@ export class ToolsController implements ToolsControllerContract {
       );
       this.store.devicePinDraft = "";
       this.store.systemPinDraft = "";
+      this.store.showDevicePin = false;
+      this.store.showSystemPin = false;
       if (res) this.store.ingestPayload(res, false);
       this.store.showToast("Saved security PIN");
     } catch (err) {
@@ -123,6 +125,8 @@ export class ToolsController implements ToolsControllerContract {
       );
       this.store.devicePinDraft = "";
       this.store.systemPinDraft = "";
+      this.store.showDevicePin = false;
+      this.store.showSystemPin = false;
       if (res) this.store.ingestPayload(res, false);
       this.store.showToast("Cleared security PIN");
     } catch (err) {

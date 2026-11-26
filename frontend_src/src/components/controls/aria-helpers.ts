@@ -178,13 +178,130 @@ export function renderTrashIconButton(ariaLabel: string, onRemove: () => void): 
   </button>`;
 }
 
+export function isImeSafeEnter(ev: KeyboardEvent): boolean {
+  return ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229;
+}
+
+export function handleRadioGroupArrowKey<T extends string>(
+  ev: KeyboardEvent,
+  values: readonly T[],
+  current: T,
+  onSelect: (next: T) => void,
+  focusSelector?: (next: T) => string,
+): void {
+  if (
+    ev.key !== "ArrowLeft" &&
+    ev.key !== "ArrowRight" &&
+    ev.key !== "ArrowUp" &&
+    ev.key !== "ArrowDown" &&
+    ev.key !== "Home" &&
+    ev.key !== "End"
+  ) {
+    return;
+  }
+  if (values.length === 0) return;
+  ev.preventDefault();
+
+  const curTarget = ev.currentTarget as HTMLElement | null;
+  const isRtl =
+    (ev.key === "ArrowLeft" || ev.key === "ArrowRight") &&
+    curTarget &&
+    typeof getComputedStyle === "function" &&
+    getComputedStyle(curTarget).direction === "rtl";
+
+  const curIdx = Math.max(0, values.indexOf(current));
+  let nextIdx = curIdx;
+  if (ev.key === "Home") {
+    nextIdx = 0;
+  } else if (ev.key === "End") {
+    nextIdx = values.length - 1;
+  } else {
+    const moveBack =
+      ev.key === "ArrowUp" ||
+      (!isRtl && ev.key === "ArrowLeft") ||
+      (isRtl && ev.key === "ArrowRight");
+    nextIdx = moveBack
+      ? (curIdx - 1 + values.length) % values.length
+      : (curIdx + 1) % values.length;
+  }
+
+  const nextVal = values[nextIdx];
+  if (nextVal === undefined) return;
+  onSelect(nextVal);
+  const groupEl = curTarget?.closest('[role="radiogroup"]') ?? curTarget?.parentElement;
+  if (!groupEl) return;
+  const selector = focusSelector ? focusSelector(nextVal) : "";
+  requestAnimationFrame(() => {
+    const nextBtn = (
+      selector
+        ? groupEl.querySelector(selector)
+        : groupEl.querySelectorAll<HTMLElement>('[role="radio"]')[nextIdx]
+    ) as HTMLElement | null;
+    nextBtn?.focus();
+  });
+}
+
+const dialogPointerDownOutside = new WeakMap<HTMLDialogElement, boolean>();
+
+function isPointOutsideDialog(dlg: HTMLDialogElement, x: number, y: number): boolean {
+  const rect = dlg.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return false;
+  return x < rect.left || x > rect.right || y < rect.top || y > rect.bottom;
+}
+
+export function createDialogBackdropHandlers(
+  onClose: () => void,
+  isBusy?: () => boolean,
+): {
+  onPointerDown: (ev: Event) => void;
+  onClick: (ev: Event) => void;
+} {
+  return {
+    onPointerDown: (ev: Event) => {
+      const dlg = ev.currentTarget as HTMLDialogElement | null;
+      const pev = ev as PointerEvent;
+      if (!dlg) return;
+      dialogPointerDownOutside.set(
+        dlg,
+        ev.target === dlg && isPointOutsideDialog(dlg, pev.clientX, pev.clientY),
+      );
+    },
+    onClick: (ev: Event) => {
+      const dlg = ev.currentTarget as HTMLDialogElement | null;
+      if (!dlg || isBusy?.()) return;
+      const mev = ev as MouseEvent;
+      const startedOutside = dialogPointerDownOutside.has(dlg)
+        ? dialogPointerDownOutside.get(dlg) === true
+        : true;
+      dialogPointerDownOutside.delete(dlg);
+      if (
+        startedOutside &&
+        ev.target === dlg &&
+        isPointOutsideDialog(dlg, mev.clientX, mev.clientY)
+      ) {
+        onClose();
+      }
+    },
+  };
+}
+
+export function renderExternalLinkHint(srLabel: string): TemplateResult {
+  return html`<svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      class="external-link-icon"
+    >
+      <path d="M14,3V5H17.59L7.76,14.83L9.17,16.24L19,6.41V10H21V3M19,19H5V5H12V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19Z" />
+    </svg><span class="sr-only"> (${srLabel})</span>`;
+}
+
 export function renderSortHeader(
   store: StudioStore,
   field: "title" | "model" | "area" | "group" | "status",
   label: string,
 ): TemplateResult {
   const isActive = store.deviceSortField === field;
-  const ariaSort = isActive ? (store.deviceSortAsc ? "ascending" : "descending") : "none";
+  const ariaSort = isActive ? (store.deviceSortAsc ? "ascending" : "descending") : nothing;
   const indicator = isActive ? (store.deviceSortAsc ? " ▲" : " ▼") : "";
   const onSort = (): void => {
     if (store.deviceSortField === field) {
@@ -195,7 +312,7 @@ export function renderSortHeader(
     }
     store.host.requestUpdate();
   };
-  return html`<th aria-sort=${ariaSort}>
+  return html`<th scope="col" aria-sort=${ariaSort}>
     <button type="button" @click=${onSort} class="sort-btn">${label}<span aria-hidden="true">${indicator}</span></button>
   </th>`;
 }

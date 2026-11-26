@@ -9,28 +9,32 @@ import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/l
 import type { StudioStore } from "../../state/store.js";
 import { fmtNumber } from "../../utils/format.js";
 import { renderSvgIcon } from "../controls.js";
+import { createDialogBackdropHandlers } from "../controls/aria-helpers.js";
 
 const ICON_FOLDER =
   "M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z";
 
 export function renderMediaImportDialog(store: StudioStore): TemplateResult {
   const modal = store.mediaImportModal;
-  const close = (): void => store.entity.closeMediaImportModal();
-  const onBackdropClick = (ev: Event): void => {
-    if (ev.target === ev.currentTarget && !modal.importing) {
-      close();
+  const close = (): void => {
+    if (store.mediaImportModal.open && !store.mediaImportModal.importing) {
+      store.entity.closeMediaImportModal();
     }
   };
+  const backdrop = createDialogBackdropHandlers(close, () => store.mediaImportModal.importing);
 
   if (!modal.open) {
     return html`<dialog
       id="latter-media-import-modal"
       aria-labelledby="latter-media-import-title"
+      closedby=${modal.importing ? "none" : "any"}
       @cancel=${(ev: Event) => {
         if (modal.importing) ev.preventDefault();
         else close();
       }}
-      @click=${onBackdropClick}
+      @close=${close}
+      @pointerdown=${backdrop.onPointerDown}
+      @click=${backdrop.onClick}
       class="studio-dialog photo-dialog"
     >
       ${nothing}
@@ -71,18 +75,21 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-media-import-modal"
     aria-labelledby="latter-media-import-title"
+    closedby=${modal.importing ? "none" : "any"}
     @cancel=${(ev: Event) => {
       if (modal.importing) ev.preventDefault();
       else close();
     }}
-    @click=${onBackdropClick}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog photo-dialog"
   >
     <div class="dialog-body">
       <div class="dialog-header-row">
-        <h3 id="latter-media-import-title" class="dialog-title">
+        <h1 id="latter-media-import-title" class="dialog-title">
           ${store.t("media_import.title")}
-        </h3>
+        </h1>
         ${modal.roots.length > 1
           ? html`<select
               id="media-import-root-select"
@@ -113,7 +120,7 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
         : nothing}
 
       ${modal.roots.length > 0
-        ? html`<div class="media-breadcrumbs" aria-label=${store.t("media_import.root_label")}>
+        ? html`<nav class="media-breadcrumbs" aria-label=${store.t("media_import.root_label")}>
             ${modal.parentSubpath !== null
               ? html`<button
                   type="button"
@@ -129,6 +136,7 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
             <button
               type="button"
               ?disabled=${modal.loading || modal.importing || !modal.subpath}
+              aria-current=${!modal.subpath ? "page" : nothing}
               @click=${() => void store.entity.browseMediaFolder(modal.root, "")}
               class="btn btn-text btn-compact"
             >
@@ -141,6 +149,7 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
                 <button
                   type="button"
                   ?disabled=${modal.loading || modal.importing || isLast}
+                  aria-current=${isLast ? "page" : nothing}
                   @click=${() => void store.entity.browseMediaFolder(modal.root, targetSub)}
                   class="btn btn-text btn-compact"
                 >
@@ -160,7 +169,7 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
                     : store.t("media_import.select_all_folder")}
                 </button>`
               : nothing}
-          </div>`
+          </nav>`
         : nothing}
 
       <div class="media-scroll-area">
@@ -191,25 +200,25 @@ export function renderMediaImportDialog(store: StudioStore): TemplateResult {
                         ${modal.images.map((img) => {
                           const isSelected = selectedSet.has(img.relpath);
                           return html`<div class="photo-tile ${isSelected ? "selected" : ""}">
-                            <input
-                              type="checkbox"
-                              aria-label=${img.name}
-                              ?disabled=${img.too_large || modal.importing}
-                              .checked=${live(isSelected)}
-                              @change=${() => toggleImagePath(img.relpath)}
-                              class="photo-tile-check"
-                            />
                             <button
                               type="button"
+                              aria-label=${img.name}
+                              aria-pressed=${isSelected ? "true" : "false"}
                               ?disabled=${img.too_large || modal.importing}
                               @click=${() => toggleImagePath(img.relpath)}
                               class="photo-tile-thumb-btn"
                             >
+                              <span class="photo-tile-check-badge" aria-hidden="true">
+                                ${isSelected ? "✓" : ""}
+                              </span>
                               ${img.thumb_url
                                 ? html`<img
                                     src=${img.thumb_url}
-                                    alt=${img.name}
+                                    alt=""
                                     loading="lazy"
+                                    decoding="async"
+                                    width="180"
+                                    height="180"
                                     class="photo-tile-img"
                                   />`
                                 : nothing}

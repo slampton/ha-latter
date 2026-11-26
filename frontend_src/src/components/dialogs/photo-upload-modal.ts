@@ -17,6 +17,11 @@ import {
   normalizePhotoCrop,
 } from "../../utils/crop-math.js";
 import { fmtNumber } from "../../utils/format.js";
+import {
+  createDialogBackdropHandlers,
+  handleRadioGroupArrowKey,
+  isImeSafeEnter,
+} from "../controls/aria-helpers.js";
 
 export const MAX_PREVIEW_EDGE_PX = 1024;
 const MAX_CACHED_CROP_IMAGES = 16;
@@ -572,6 +577,51 @@ function attachCropPointerHandlers(
   };
 }
 
+function handleCropCanvasKeyDown(
+  ev: KeyboardEvent,
+  getCrop: () => PhotoCrop,
+  getDims: () => { width: number; height: number },
+  updateLive: (nextCrop: PhotoCrop, sourceEl: Element) => void,
+  commit: (sourceEl: Element) => void,
+  announceReset: () => void,
+  announcePan: () => void,
+  disabled: boolean,
+): void {
+  if (disabled) return;
+  const canvas = ev.currentTarget as HTMLCanvasElement;
+  if (ev.key === "Home" || ev.key === "0") {
+    ev.preventDefault();
+    const cur = getCrop();
+    updateLive({ ...DEFAULT_PHOTO_CROP, zoom: cur.zoom }, canvas);
+    commit(canvas);
+    announceReset();
+    return;
+  }
+  const step = ev.shiftKey ? 24 : 8;
+  let dx = 0;
+  let dy = 0;
+  if (ev.key === "ArrowLeft") dx = step;
+  else if (ev.key === "ArrowRight") dx = -step;
+  else if (ev.key === "ArrowUp") dy = step;
+  else if (ev.key === "ArrowDown") dy = -step;
+  else return;
+  ev.preventDefault();
+  const cur = getCrop();
+  const dims = getDims();
+  const next = applyCanvasPanDelta(
+    cur,
+    dx,
+    dy,
+    dims.width,
+    dims.height,
+    canvas.width,
+    canvas.height,
+  );
+  updateLive(next, canvas);
+  commit(canvas);
+  announcePan();
+}
+
 function renderAspectSwitcher(
   store: StudioStore,
   aspect: CropPreviewAspect,
@@ -585,6 +635,13 @@ function renderAspectSwitcher(
   return html`<div
     role="radiogroup"
     aria-label=${store.t("photo_edit.aspect_aria")}
+    @keydown=${(ev: KeyboardEvent) =>
+      handleRadioGroupArrowKey(
+        ev,
+        options.map((o) => o.id),
+        aspect,
+        onSelect,
+      )}
     class="segmented"
   >
     ${options.map(
@@ -592,6 +649,7 @@ function renderAspectSwitcher(
         type="button"
         role="radio"
         aria-checked=${aspect === opt.id ? "true" : "false"}
+        tabindex=${aspect === opt.id ? "0" : "-1"}
         @click=${() => onSelect(opt.id)}
         class=${aspect === opt.id ? "active" : ""}
       >
@@ -604,22 +662,31 @@ function renderAspectSwitcher(
 export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
   const modal = store.photoUploadModal;
   const uploadBusy = Boolean(modal.uploading || modal.creatingCollection);
-  const close = (): void => store.entity.closePhotoUploadModal();
-  const onBackdropClick = (ev: Event): void => {
-    if (ev.target === ev.currentTarget && !uploadBusy) {
-      close();
+  const close = (): void => {
+    if (
+      store.photoUploadModal.open &&
+      !store.photoUploadModal.uploading &&
+      !store.photoUploadModal.creatingCollection
+    ) {
+      store.entity.closePhotoUploadModal();
     }
   };
+  const backdrop = createDialogBackdropHandlers(close, () =>
+    Boolean(store.photoUploadModal.uploading || store.photoUploadModal.creatingCollection),
+  );
 
   if (!modal.open) {
     return html`<dialog
       id="latter-photo-upload-modal"
       aria-labelledby="latter-photo-upload-title"
+      closedby=${uploadBusy ? "none" : "any"}
       @cancel=${(ev: Event) => {
         if (uploadBusy) ev.preventDefault();
         else close();
       }}
-      @click=${onBackdropClick}
+      @close=${close}
+      @pointerdown=${backdrop.onPointerDown}
+      @click=${backdrop.onClick}
       class="studio-dialog photo-dialog"
     >
       ${nothing}
@@ -629,7 +696,6 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
   const collections = store.state?.photo_collections || [];
   const active = modal.files[modal.activeIndex] || modal.files[0] || null;
   const canvasSize = cropPreviewCanvasSize(modal.previewAspect);
-  const pctStyle = `--upload-pct:${modal.currentPercent}%`;
 
   const updateActiveItem = (patch: Partial<{ name: string; crop: PhotoCrop }>): void => {
     if (!active) return;
@@ -737,18 +803,21 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-photo-upload-modal"
     aria-labelledby="latter-photo-upload-title"
+    closedby=${uploadBusy ? "none" : "any"}
     @cancel=${(ev: Event) => {
       if (uploadBusy) ev.preventDefault();
       else close();
     }}
-    @click=${onBackdropClick}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog photo-dialog"
   >
     <div class="dialog-body">
       <div class="dialog-header-row">
-        <h3 id="latter-photo-upload-title" class="dialog-title">
+        <h1 id="latter-photo-upload-title" class="dialog-title">
           ${store.t("photo_upload.title")}
-        </h3>
+        </h1>
         ${modal.files.length > 0 && !modal.uploading
           ? html`<button
               type="button"
@@ -772,17 +841,10 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
       />
 
       ${modal.files.length === 0
-        ? html`<div
+        ? html`<button
+            type="button"
             id="photo-upload-dropzone"
-            role="button"
-            tabindex="0"
             @click=${onTriggerFilePicker}
-            @keydown=${(ev: KeyboardEvent) => {
-              if (ev.key === "Enter" || ev.key === " ") {
-                ev.preventDefault();
-                onTriggerFilePicker(ev);
-              }
-            }}
             @dragover=${onDragOver}
             @dragleave=${onDragLeave}
             @drop=${onDrop}
@@ -791,7 +853,7 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
             <strong>${store.t("photo_upload.dropzone_title")}</strong>
             <span class="row-description">${store.t("photo_upload.dropzone_hint")}</span>
             <span class="btn btn-primary btn-compact">${store.t("photo_upload.choose_files")}</span>
-          </div>`
+          </button>`
         : html`<div
             class="crop-stage-wrap"
             @dragover=${onDragOver}
@@ -805,12 +867,41 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
 
             <canvas
               id="latter-upload-crop-canvas"
+              tabindex="0"
+              aria-label=${store.t("photo_edit.crop_canvas_aria")}
               width=${String(canvasSize.width)}
               height=${String(canvasSize.height)}
               @pointerdown=${ptr.onPointerDown}
               @pointermove=${ptr.onPointerMove}
               @pointerup=${ptr.onPointerUp}
               @pointercancel=${ptr.onPointerUp}
+              @keydown=${(ev: KeyboardEvent) =>
+                handleCropCanvasKeyDown(
+                  ev,
+                  () => {
+                    const curActive =
+                      store.photoUploadModal.files[store.photoUploadModal.activeIndex] ||
+                      store.photoUploadModal.files[0];
+                    return curActive?.crop || { ...DEFAULT_PHOTO_CROP };
+                  },
+                  () => {
+                    const curActive =
+                      store.photoUploadModal.files[store.photoUploadModal.activeIndex] ||
+                      store.photoUploadModal.files[0];
+                    const cached = curActive?.objectUrl
+                      ? loadedImageCache.get(curActive.objectUrl)
+                      : null;
+                    return {
+                      width: cached?.naturalWidth || curActive?.width || canvasSize.width,
+                      height: cached?.naturalHeight || curActive?.height || canvasSize.height,
+                    };
+                  },
+                  updateActiveCropLive,
+                  commitActiveCrop,
+                  () => store.announcePolite(store.t("photo_edit.crop_centered")),
+                  () => store.announcePolite(store.t("photo_edit.crop_panned")),
+                  modal.uploading,
+                )}
               class="crop-canvas ${modal.previewAspect === "round" ? "round" : ""}"
             ></canvas>
 
@@ -825,6 +916,7 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
                   min="1"
                   max="3"
                   step="0.05"
+                  aria-valuetext=${`${(active?.crop.zoom ?? 1).toFixed(2)}×`}
                   ?disabled=${modal.uploading}
                   .value=${live(String(active?.crop.zoom ?? 1))}
                   @input=${(ev: Event) => {
@@ -983,7 +1075,7 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
                       store.host.requestUpdate();
                     }}
                     @keydown=${(ev: KeyboardEvent) => {
-                      if (ev.key === "Enter") {
+                      if (isImeSafeEnter(ev)) {
                         ev.preventDefault();
                         void store.entity.createUploadCollection();
                       } else if (ev.key === "Escape") {
@@ -1040,16 +1132,12 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
                     })}
                   </span>
                 </div>
-                <div
-                  role="progressbar"
+                <progress
                   aria-label=${store.t("wp_gallery.upload_progress_aria")}
-                  aria-valuenow=${String(modal.currentPercent)}
-                  aria-valuemin="0"
-                  aria-valuemax="100"
+                  max="100"
+                  value=${String(modal.currentPercent)}
                   class="upload-progress"
-                >
-                  <div class="upload-progress-fill" style=${pctStyle}></div>
-                </div>
+                ></progress>
               </div>`
             : nothing}`}
 
@@ -1078,12 +1166,12 @@ export function renderPhotoUploadDialog(store: StudioStore): TemplateResult {
 
 export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
   const modal = store.photoEditModal;
-  const close = (): void => store.entity.closePhotoEditModal();
-  const onBackdropClick = (ev: Event): void => {
-    if (ev.target === ev.currentTarget && !modal.busy) {
-      close();
+  const close = (): void => {
+    if (store.photoEditModal.open && !store.photoEditModal.busy) {
+      store.entity.closePhotoEditModal();
     }
   };
+  const backdrop = createDialogBackdropHandlers(close, () => store.photoEditModal.busy);
 
   const onCancel = (ev: Event): void => {
     if (modal.busy) {
@@ -1097,8 +1185,11 @@ export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
     return html`<dialog
       id="latter-photo-edit-modal"
       aria-labelledby="latter-photo-edit-title"
+      closedby=${modal.busy ? "none" : "any"}
       @cancel=${onCancel}
-      @click=${onBackdropClick}
+      @close=${close}
+      @pointerdown=${backdrop.onPointerDown}
+      @click=${backdrop.onClick}
       class="studio-dialog photo-dialog"
     >
       ${nothing}
@@ -1156,15 +1247,18 @@ export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-photo-edit-modal"
     aria-labelledby="latter-photo-edit-title"
+    closedby=${modal.busy ? "none" : "any"}
     @cancel=${onCancel}
-    @click=${onBackdropClick}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog photo-dialog"
   >
     <div class="dialog-body">
       <div class="dialog-header-row">
-        <h3 id="latter-photo-edit-title" class="dialog-title">
+        <h1 id="latter-photo-edit-title" class="dialog-title">
           ${store.t("photo_edit.title")}
-        </h3>
+        </h1>
         ${photo?.width && photo?.height
           ? html`<span class="chip">
               ${store.t("photo_edit.dimensions_meta", {
@@ -1184,12 +1278,32 @@ export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
 
               <canvas
                 id="latter-edit-crop-canvas"
+                tabindex="0"
+                aria-label=${store.t("photo_edit.crop_canvas_aria")}
                 width=${String(canvasSize.width)}
                 height=${String(canvasSize.height)}
                 @pointerdown=${ptr.onPointerDown}
                 @pointermove=${ptr.onPointerMove}
                 @pointerup=${ptr.onPointerUp}
                 @pointercancel=${ptr.onPointerUp}
+                @keydown=${(ev: KeyboardEvent) =>
+                  handleCropCanvasKeyDown(
+                    ev,
+                    () => store.photoEditModal.crop,
+                    () => {
+                      const srcUrl = photo?.orig_url || photo?.thumb_url || photo?.preview_url || "";
+                      const cached = srcUrl ? loadedImageCache.get(srcUrl) : null;
+                      return {
+                        width: cached?.naturalWidth || photo?.width || canvasSize.width,
+                        height: cached?.naturalHeight || photo?.height || canvasSize.height,
+                      };
+                    },
+                    updateEditCropLive,
+                    commitEditCrop,
+                    () => store.announcePolite(store.t("photo_edit.crop_centered")),
+                    () => store.announcePolite(store.t("photo_edit.crop_panned")),
+                    modal.busy || !uploaded,
+                  )}
                 class="crop-canvas ${modal.previewAspect === "round" ? "round" : ""}"
               ></canvas>
 
@@ -1204,6 +1318,7 @@ export function renderPhotoEditDialog(store: StudioStore): TemplateResult {
                     min="1"
                     max="3"
                     step="0.05"
+                    aria-valuetext=${`${modal.crop.zoom.toFixed(2)}×`}
                     ?disabled=${modal.busy}
                     .value=${live(String(modal.crop.zoom))}
                     @input=${(ev: Event) => {

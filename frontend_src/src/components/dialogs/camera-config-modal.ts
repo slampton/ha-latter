@@ -10,12 +10,7 @@ import type { StudioStore } from "../../state/store.js";
 import type { CameraConfig, CatalogChoice } from "../../types.js";
 import { entityLabel } from "../../utils/format.js";
 import { renderSettingsRow, renderSwitchRow } from "../controls.js";
-
-function bindBackdropClose(ev: Event, closeFn: () => void): void {
-  if (ev.target === ev.currentTarget) {
-    closeFn();
-  }
-}
+import { createDialogBackdropHandlers } from "../controls/aria-helpers.js";
 
 export function resolveEffectiveCameraConfig(
   store: StudioStore,
@@ -99,14 +94,22 @@ export function saveCameraConfigModal(store: StudioStore): void {
 
 export function renderCameraConfigDialog(store: StudioStore): TemplateResult {
   const m = store.cameraConfigModal;
-  const close = (): void => closeCameraConfigModal(store);
+  const close = (): void => {
+    if (store.cameraConfigModal.open) {
+      closeCameraConfigModal(store);
+    }
+  };
+  const backdrop = createDialogBackdropHandlers(close);
 
   if (!m.open || !m.cameraId) {
     return html`<dialog
       id="latter-camera-config-modal"
       aria-labelledby="latter-cam-cfg-title"
+      closedby="any"
       @cancel=${close}
-      @click=${(ev: Event) => bindBackdropClose(ev, close)}
+      @close=${close}
+      @pointerdown=${backdrop.onPointerDown}
+      @click=${backdrop.onClick}
       class="studio-dialog"
     >
       ${nothing}
@@ -126,15 +129,18 @@ export function renderCameraConfigDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-camera-config-modal"
     aria-labelledby="latter-cam-cfg-title"
+    closedby="any"
     @cancel=${close}
-    @click=${(ev: Event) => bindBackdropClose(ev, close)}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog"
   >
     <div class="dialog-body">
       <div class="dialog-header-row">
-        <h3 id="latter-cam-cfg-title" class="dialog-title">
+        <h1 id="latter-cam-cfg-title" class="dialog-title">
           ${store.t("shared.cam_cfg_title")}
-        </h3>
+        </h1>
       </div>
       <p class="dialog-text">${haName} (${m.cameraId})</p>
 

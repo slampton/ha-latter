@@ -19,8 +19,13 @@ import {
   tPrefLabel,
   tPrefOption,
 } from "../../src/i18n/index.js";
+import {
+  createDialogBackdropHandlers,
+  isImeSafeEnter,
+} from "../../src/components/controls/aria-helpers.js";
 import type { HomeAssistant } from "../../src/types.js";
 import {
+  compareLocaleText,
   defaultLocaleTimeFormat,
   entityLabel,
   fmtAgo,
@@ -290,5 +295,95 @@ describe("i18n catalogs, UTF-8 byte bounds, locale formatters & telemetry parser
     );
     assert.equal(formatHaEntityState(repairHass, "lock.front_entry"), "Locked");
     assert.equal(formatHaEntityState(null, "lock.missing"), "—");
+  });
+
+  it("sorts naturally with Intl.Collator and validates IME-safe Enter & dialog backdrop dismissal", () => {
+    const unsorted = ["Light 10", "light 2", "Alpha", "beta"];
+    assert.deepEqual(
+      unsorted.toSorted((a, b) => compareLocaleText(a, b, { locale: { language: "en" } } as HomeAssistant)),
+      ["Alpha", "beta", "light 2", "Light 10"],
+    );
+
+    assert.equal(isImeSafeEnter({ key: "Enter", isComposing: false } as KeyboardEvent), true);
+    assert.equal(isImeSafeEnter({ key: "Enter", isComposing: true } as KeyboardEvent), false);
+    assert.equal(isImeSafeEnter({ key: "Enter", keyCode: 229 } as KeyboardEvent), false);
+    assert.equal(isImeSafeEnter({ key: "a", isComposing: false } as KeyboardEvent), false);
+
+    let closedCount = 0;
+    let busy = false;
+    const handlers = createDialogBackdropHandlers(() => {
+      closedCount += 1;
+    }, () => busy);
+    const dlg = {
+      getBoundingClientRect: () => ({
+        left: 100,
+        right: 300,
+        top: 100,
+        bottom: 300,
+        width: 200,
+        height: 200,
+      }),
+    } as unknown as Element;
+
+    // Click inside dialog box -> no close
+    handlers.onPointerDown({
+      target: dlg,
+      currentTarget: dlg,
+      clientX: 150,
+      clientY: 150,
+    } as unknown as PointerEvent);
+    handlers.onClick({
+      target: dlg,
+      currentTarget: dlg,
+      clientX: 150,
+      clientY: 150,
+    } as unknown as MouseEvent);
+    assert.equal(closedCount, 0);
+
+    // Drag from inside dialog out to backdrop -> no close
+    handlers.onPointerDown({
+      target: dlg,
+      currentTarget: dlg,
+      clientX: 150,
+      clientY: 150,
+    } as unknown as PointerEvent);
+    handlers.onClick({
+      target: dlg,
+      currentTarget: dlg,
+      clientX: 10,
+      clientY: 10,
+    } as unknown as MouseEvent);
+    assert.equal(closedCount, 0);
+
+    // Pointerdown & click both outside on backdrop -> closes when not busy
+    handlers.onPointerDown({
+      target: dlg,
+      currentTarget: dlg,
+      clientX: 10,
+      clientY: 10,
+    } as unknown as PointerEvent);
+    handlers.onClick({
+      target: dlg,
+      currentTarget: dlg,
+      clientX: 10,
+      clientY: 10,
+    } as unknown as MouseEvent);
+    assert.equal(closedCount, 1);
+
+    // Busy blocks backdrop close
+    busy = true;
+    handlers.onPointerDown({
+      target: dlg,
+      currentTarget: dlg,
+      clientX: 10,
+      clientY: 10,
+    } as unknown as PointerEvent);
+    handlers.onClick({
+      target: dlg,
+      currentTarget: dlg,
+      clientX: 10,
+      clientY: 10,
+    } as unknown as MouseEvent);
+    assert.equal(closedCount, 1);
   });
 });

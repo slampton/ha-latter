@@ -26,7 +26,7 @@ export const CONTROL_STYLES = css`
     min-inline-size: 0;
   }
   .row-label { font-weight: var(--studio-weight-regular); }
-  .row-description { line-height: normal; }
+  .row-description { line-height: var(--studio-line-height); text-wrap: pretty; }
   .settings-row-control {
     display: flex;
     align-items: center;
@@ -142,7 +142,12 @@ export const CONTROL_STYLES = css`
     border-radius: 50%;
     background: var(--studio-switch-thumb);
     box-shadow: var(--studio-switch-thumb-shadow);
-    transition: transform 0.15s ease, background-color 0.15s ease;
+    transition: background-color 0.15s ease;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .switch::after {
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
   }
   .switch:checked {
     background: var(--studio-switch-on-track);
@@ -305,6 +310,16 @@ export const CONTROL_STYLES = css`
   .btn-icon:hover:not(:disabled) { background: var(--studio-hover); }
   .btn-icon.danger { color: var(--studio-error); }
   .btn-icon svg { inline-size: 20px; block-size: 20px; fill: currentColor; }
+  .external-link-icon {
+    inline-size: 14px;
+    block-size: 14px;
+    fill: currentColor;
+    flex-shrink: 0;
+  }
+  .pin-toggle-btn {
+    min-inline-size: var(--studio-control-height-compact);
+    min-block-size: var(--studio-control-height-compact);
+  }
 
   .quick-action-grid {
     display: grid;
@@ -500,6 +515,7 @@ export const CONTROL_STYLES = css`
     line-height: 1;
     cursor: grab;
     touch-action: none;
+    -webkit-user-select: none;
     user-select: none;
     flex-shrink: 0;
   }
@@ -568,6 +584,28 @@ export const CONTROL_STYLES = css`
     .settings-row-control input[type="search"],
     .settings-row-control input[type="password"] {
       inline-size: 100%;
+    }
+  }
+  @media (pointer: coarse) {
+    select,
+    input[type="text"],
+    input[type="search"],
+    input[type="number"],
+    input[type="time"],
+    input[type="password"],
+    textarea {
+      font-size:var(--studio-input-font-size);
+    }
+    .btn-icon,
+    .combobox-clear,
+    .btn-compact,
+    .pill-move,
+    .pill-toggle,
+    .drag-handle,
+    .collection-chip-action,
+    .crop-filmstrip-remove {
+      min-inline-size: var(--studio-control-height-compact);
+      min-block-size: var(--studio-control-height-compact);
     }
   }
   @media (max-width: 480px) {

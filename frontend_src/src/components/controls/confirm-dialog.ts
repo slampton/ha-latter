@@ -4,6 +4,7 @@
 
 import { t } from "../../i18n/index.js";
 import { html, nothing, type TemplateResult } from "../../lib/lit.js";
+import { createDialogBackdropHandlers } from "./aria-helpers.js";
 
 export interface ConfirmDialogOptions {
   id: string;
@@ -64,29 +65,31 @@ export function renderConfirmDialog(opts: ConfirmDialogOptions): TemplateResult 
       : "");
 
   const isBusy = Boolean(opts.busy);
-
-  const onBackdropClick = (ev: Event): void => {
-    if (ev.target === ev.currentTarget && !isBusy) {
-      opts.onCancel();
-    }
-  };
+  const backdrop = createDialogBackdropHandlers(opts.onCancel, () => isBusy);
 
   return html`<dialog
     id=${opts.id}
     aria-labelledby=${titleId}
     aria-describedby=${descId}
+    closedby=${isBusy ? "none" : "any"}
     @cancel=${(ev: Event) => {
       ev.preventDefault();
       if (!isBusy) {
         opts.onCancel();
       }
     }}
-    @click=${onBackdropClick}
+    @close=${() => {
+      if (opts.open && !isBusy) {
+        opts.onCancel();
+      }
+    }}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog confirm-dialog"
   >
     <div class="dialog-body">
       <div class="dialog-header-row">
-        <h3 id=${titleId} class="dialog-title">${opts.title}</h3>
+        <h1 id=${titleId} class="dialog-title">${opts.title}</h1>
         ${blastText
           ? html`<span class="chip ${isDanger ? "chip-warning" : "chip-primary"} confirm-blast-badge">
               ${blastText}
@@ -110,6 +113,7 @@ export function renderConfirmDialog(opts: ConfirmDialogOptions): TemplateResult 
         <div class="dialog-actions-end">
           <button
             type="button"
+            ?autofocus=${isDanger}
             ?disabled=${isBusy}
             @click=${opts.onCancel}
             class="btn btn-secondary"

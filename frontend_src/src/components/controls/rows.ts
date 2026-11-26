@@ -31,7 +31,7 @@ export interface CardRenderOptions {
 }
 
 export function renderCard(opts: CardRenderOptions): TemplateResult {
-  const headingEl = opts.heading ?? html`<h3 class="card-title">${opts.title || ""}</h3>`;
+  const headingEl = opts.heading ?? html`<h2 class="card-title">${opts.title || ""}</h2>`;
   const headerInner =
     opts.subtitle || (opts.headerActions && opts.headerActions !== nothing)
       ? html`<div class="card-heading">

@@ -8,6 +8,7 @@
  */
 
 import { renderCard } from "../components/controls.js";
+import { isImeSafeEnter } from "../components/controls/aria-helpers.js";
 import {
   PHOTO_LIBRARY_PAGE_SIZE,
   VIRTUAL_COLLECTION_ALL,
@@ -122,6 +123,8 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
         <button
           type="button"
           id="btn-photos-new-collection"
+          aria-expanded=${String(store.photosNewCollectionOpen)}
+          aria-controls="photos-new-collection-bar"
           @click=${() => {
             store.photosNewCollectionOpen = !store.photosNewCollectionOpen;
             if (!store.photosNewCollectionOpen) store.photosNewCollectionName = "";
@@ -144,7 +147,7 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
                   store.photosNewCollectionName = (ev.currentTarget as HTMLInputElement).value;
                 }}
                 @keydown=${(ev: KeyboardEvent) => {
-                  if (ev.key === "Enter") {
+                  if (isImeSafeEnter(ev)) {
                     ev.preventDefault();
                     void store.entity.createPhotoCollection(store.photosNewCollectionName);
                   } else if (ev.key === "Escape") {
@@ -208,7 +211,7 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
                     store.photosRenamingCollectionName = (ev.currentTarget as HTMLInputElement).value;
                   }}
                   @keydown=${(ev: KeyboardEvent) => {
-                    if (ev.key === "Enter") {
+                    if (isImeSafeEnter(ev)) {
                       ev.preventDefault();
                       void store.entity.renamePhotoCollection(
                         col.id,
@@ -281,7 +284,7 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
         </div>
 
         <div class="photo-toolbar">
-          <div class="photo-toolbar-start">
+          <search class="photo-toolbar-start">
             <input
               type="search"
               id="input-photos-search"
@@ -295,11 +298,12 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
               }}
               class="photo-search-input"
             />
-          </div>
+          </search>
           <div class="photo-toolbar-end">
             <button
               type="button"
               id="btn-photos-toggle-select"
+              aria-pressed=${String(store.photosSelectMode)}
               @click=${() => {
                 store.photosSelectMode = !store.photosSelectMode;
                 if (!store.photosSelectMode) {
@@ -452,28 +456,26 @@ export function renderSystemPhotosView(store: StudioStore): TemplateResult {
                     data-photo-id=${photo.id}
                     class="photo-tile ${isSelected ? "selected" : ""}"
                   >
-                    ${store.photosSelectMode
-                      ? html`<input
-                          type="checkbox"
-                          aria-label=${store.t("photos.select_photo_aria", {
-                            name: photo.name || photo.id,
-                          })}
-                          .checked=${live(isSelected)}
-                          @change=${() => toggleSelectPhoto(photo.id)}
-                          class="photo-tile-check"
-                        />`
-                      : nothing}
                     <button
                       type="button"
                       aria-label=${badgeLabel ? `${tileBaseAria}, ${badgeLabel}` : tileBaseAria}
+                      aria-pressed=${store.photosSelectMode ? (isSelected ? "true" : "false") : nothing}
                       @click=${onTileClick}
                       class="photo-tile-thumb-btn"
                     >
+                      ${store.photosSelectMode
+                        ? html`<span class="photo-tile-check-badge" aria-hidden="true">
+                            ${isSelected ? "✓" : ""}
+                          </span>`
+                        : nothing}
                       ${thumbSrc
                         ? html`<img
                             src=${thumbSrc}
-                            alt=${photo.name || photo.id}
+                            alt=""
                             loading="lazy"
+                            decoding="async"
+                            width="180"
+                            height="180"
                             class="photo-tile-img"
                           />`
                         : nothing}

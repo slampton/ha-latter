@@ -8,10 +8,11 @@
  */
 
 import { renderCard, renderSettingsRow } from "../components/controls.js";
+import { renderExternalLinkHint } from "../components/controls/aria-helpers.js";
 import { focusSafe, html, live, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { DiscoveredBleCandidate, DiscoveredLatterDevice } from "../types.js";
-import { entityLabel, fmtNumber } from "../utils/format.js";
+import { compareLocaleText, entityLabel, fmtNumber } from "../utils/format.js";
 
 const WEB_INSTALLER_URL = "https://slampton.github.io/esphome-latter-core/";
 const GETTING_STARTED_URL =
@@ -56,14 +57,14 @@ function compareBleCandidates(
     const bArea = String(b.area_name || "").trim();
     if (Boolean(aArea) !== Boolean(bArea)) return aArea ? -1 : 1;
     if (aArea && bArea) {
-      const areaCmp = aArea.localeCompare(bArea, undefined, { sensitivity: "base" });
+      const areaCmp = compareLocaleText(aArea, bArea, store.hass);
       if (areaCmp !== 0) return areaCmp;
     }
   }
 
-  const nameCmp = aTitle.localeCompare(bTitle, undefined, { sensitivity: "base" });
+  const nameCmp = compareLocaleText(aTitle, bTitle, store.hass);
   if (nameCmp !== 0) return nameCmp;
-  return aAddr.localeCompare(bAddr);
+  return compareLocaleText(aAddr, bAddr, store.hass);
 }
 
 export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult {
@@ -98,8 +99,7 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
         .toLowerCase();
       return haystack.includes(query);
     })
-    .slice()
-    .sort((a, b) => compareBleCandidates(store, a, b, sortMode));
+    .toSorted((a, b) => compareBleCandidates(store, a, b, sortMode));
 
   const visibleBleLimit = bleVisibleLimitByStore.get(store) ?? DISCOVERED_BLE_PAGE_SIZE;
   const visibleBle = filteredBle.slice(0, visibleBleLimit);
@@ -227,7 +227,9 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                     rel="noopener noreferrer"
                     class="btn btn-secondary btn-compact"
                   >
-                    ${store.t("discovered.web_installer")}
+                    ${store.t("discovered.web_installer")}${renderExternalLinkHint(
+                      store.t("shell.opens_new_tab"),
+                    )}
                   </a>
                   <a
                     href=${GETTING_STARTED_URL}
@@ -235,7 +237,9 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                     rel="noopener noreferrer"
                     class="btn btn-text btn-compact"
                   >
-                    ${store.t("discovered.getting_started")}
+                    ${store.t("discovered.getting_started")}${renderExternalLinkHint(
+                      store.t("shell.opens_new_tab"),
+                    )}
                   </a>
                 </div>
               </div>`}
@@ -305,18 +309,20 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
       id: "card-discovered-ble",
       handoffActive: store.isHandoffTarget("card-discovered-ble"),
       title: store.t("discovered.bluetooth_devices"),
-      headerActions: html`<input
-          type="search"
-          id="discovered-ble-search"
-          aria-label=${store.t("discovered.search_ble_aria")}
-          placeholder=${store.t("discovered.search_ble_placeholder")}
-          .value=${focusSafe(store.discoveredBleSearch)}
-          @input=${(ev: Event) => {
-            store.discoveredBleSearch = (ev.currentTarget as HTMLInputElement).value;
-            bleVisibleLimitByStore.delete(store);
-            store.host.requestUpdate();
-          }}
-        />
+      headerActions: html`<search>
+          <input
+            type="search"
+            id="discovered-ble-search"
+            aria-label=${store.t("discovered.search_ble_aria")}
+            placeholder=${store.t("discovered.search_ble_placeholder")}
+            .value=${focusSafe(store.discoveredBleSearch)}
+            @input=${(ev: Event) => {
+              store.discoveredBleSearch = (ev.currentTarget as HTMLInputElement).value;
+              bleVisibleLimitByStore.delete(store);
+              store.host.requestUpdate();
+            }}
+          />
+        </search>
         <select
           id="discovered-ble-filter"
           aria-label=${store.t("discovered.filter_ble_aria")}
@@ -467,9 +473,9 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                           }}
                           class="btn btn-secondary btn-compact"
                         >
-                          Show more (${store.t("sys_overview.plus_more", {
+                          ${store.t("discovered.show_more", {
                             count: fmtNumber(remainingBleCount, store.hass, 0),
-                          })})
+                          })}
                         </button>`
                       : nothing}
                     ${visibleBleLimit > DISCOVERED_BLE_PAGE_SIZE
@@ -482,7 +488,7 @@ export function renderDevicesDiscoveredView(store: StudioStore): TemplateResult 
                           }}
                           class="btn btn-text btn-compact"
                         >
-                          Show fewer
+                          ${store.t("discovered.show_fewer")}
                         </button>`
                       : nothing}
                   </div>`

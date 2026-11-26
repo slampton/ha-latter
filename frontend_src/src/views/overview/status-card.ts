@@ -215,7 +215,7 @@ export function renderOverviewStatusCard(
 
   return renderCard({
     id: "card-device-status",
-    heading: html`<h3 class="card-title">${store.t("card.status")}</h3>`,
+    heading: html`<h2 class="card-title">${store.t("card.status")}</h2>`,
     headerActions: html`<span id="st-status-chip" class=${statusChipClass}>
       <span class=${statusDotClass} aria-hidden="true"></span>${statusLabel}
     </span>`,

@@ -190,37 +190,6 @@ export class LatterStudio extends LitElement {
     }
   }
 
-  private _onScopeTabKeyDown(ev: KeyboardEvent): void {
-    if (
-      ev.key !== "ArrowLeft" &&
-      ev.key !== "ArrowRight" &&
-      ev.key !== "Home" &&
-      ev.key !== "End"
-    ) {
-      return;
-    }
-    ev.preventDefault();
-    const currentIsDevice = this.store.currentScope === "device";
-    let nextScope: "device" | "system";
-    if (ev.key === "Home") {
-      nextScope = "device";
-    } else if (ev.key === "End") {
-      nextScope = "system";
-    } else {
-      nextScope = currentIsDevice ? "system" : "device";
-    }
-
-    if (nextScope === "device") {
-      this.store.openDevicesLanding();
-      const btn = this.renderRoot.querySelector("#tab-scope-device") as HTMLButtonElement | null;
-      btn?.focus();
-    } else {
-      this.store.setScope("system");
-      const btn = this.renderRoot.querySelector("#tab-scope-system") as HTMLButtonElement | null;
-      btn?.focus();
-    }
-  }
-
   protected override updated(_changedProperties: PropertyValues): void {
     const root = this.renderRoot as ShadowRoot;
     syncStudioDialogs(root, this.store);
@@ -229,11 +198,27 @@ export class LatterStudio extends LitElement {
     ) as HTMLDialogElement | null;
     syncDialogElement(confirmDlg, this.store.confirmModal.open);
 
+    const toastEl = root.getElementById("studio-toast") as HTMLElement | null;
+    if (toastEl && typeof toastEl.showPopover === "function") {
+      try {
+        if (!toastEl.matches(":popover-open")) {
+          toastEl.showPopover();
+        }
+      } catch {
+        // Ignore if toast element is not currently connected to the top layer.
+      }
+    }
+
+    const titleText = this.store.pageSubtitle
+      ? `${this.store.pageTitle} — ${this.store.pageSubtitle}`
+      : this.store.pageTitle;
+    const nextDocTitle = titleText ? `${titleText} — Latter Studio` : "Latter Studio";
+    if (document.title !== nextDocTitle) {
+      document.title = nextDocTitle;
+    }
+
     const routeKey = `${this.store.currentScope}|${this.store.currentViewId}|${this.store.activeSubentryId}`;
     if (this._lastRouteHeadingKey && this._lastRouteHeadingKey !== routeKey) {
-      const titleText = this.store.pageSubtitle
-        ? `${this.store.pageTitle} — ${this.store.pageSubtitle}`
-        : this.store.pageTitle;
       this.store.announcePolite(titleText);
       const activeEl = root.activeElement as HTMLElement | null;
       if (activeEl && activeEl.classList?.contains("nav-btn")) {
@@ -299,32 +284,48 @@ export class LatterStudio extends LitElement {
     const discoveredActive = isDeviceScope && this.store.currentViewId === "discovered_devices";
 
     return html`<aside class="sidebar">
-      <div role="tablist" aria-label=${this.store.t("nav.scope_label")} class="scope-tabs">
-        <button
-          type="button"
+      <nav aria-label=${this.store.t("nav.scope_label")} class="scope-tabs">
+        <a
           id="tab-scope-device"
-          role="tab"
-          aria-selected=${isDeviceScope ? "true" : "false"}
-          tabindex=${isDeviceScope ? "0" : "-1"}
-          @click=${() => this.store.openDevicesLanding()}
-          @keydown=${(ev: KeyboardEvent) => this._onScopeTabKeyDown(ev)}
+          href="/latter/devices"
+          aria-current=${isDeviceScope ? "true" : nothing}
+          @click=${(ev: MouseEvent) => {
+            if (
+              ev.button === 0 &&
+              !ev.metaKey &&
+              !ev.ctrlKey &&
+              !ev.shiftKey &&
+              !ev.altKey
+            ) {
+              ev.preventDefault();
+              this.store.openDevicesLanding();
+            }
+          }}
           class="scope-tab ${isDeviceScope ? "active" : ""}"
         >
           ${this.store.t("nav.devices")}
-        </button>
-        <button
-          type="button"
+        </a>
+        <a
           id="tab-scope-system"
-          role="tab"
-          aria-selected=${!isDeviceScope ? "true" : "false"}
-          tabindex=${!isDeviceScope ? "0" : "-1"}
-          @click=${() => this.store.setScope("system")}
-          @keydown=${(ev: KeyboardEvent) => this._onScopeTabKeyDown(ev)}
+          href="/latter/system/overview"
+          aria-current=${!isDeviceScope ? "true" : nothing}
+          @click=${(ev: MouseEvent) => {
+            if (
+              ev.button === 0 &&
+              !ev.metaKey &&
+              !ev.ctrlKey &&
+              !ev.shiftKey &&
+              !ev.altKey
+            ) {
+              ev.preventDefault();
+              this.store.setScope("system");
+            }
+          }}
           class="scope-tab ${!isDeviceScope ? "active" : ""}"
         >
           ${this.store.t("nav.system")}
-        </button>
-      </div>
+        </a>
+      </nav>
 
       ${!isDeviceScope
         ? html`<nav
@@ -411,6 +412,20 @@ export class LatterStudio extends LitElement {
       @keydown=${(ev: KeyboardEvent) => this._onRootKeyDown(ev)}
       class="studio-root ${isInitialLoading ? "is-loading" : ""}"
     >
+      <a
+        href="#main-content"
+        class="skip-link"
+        @click=${(ev: Event) => {
+          ev.preventDefault();
+          const root = this.renderRoot as ShadowRoot;
+          (
+            root.getElementById("unified-page-title") ??
+            root.getElementById("main-content")
+          )?.focus();
+        }}
+      >
+        ${this.store.t("shell.skip_to_main")}
+      </a>
       <div
         id="studio-live-polite"
         role="status"
@@ -475,6 +490,9 @@ export class LatterStudio extends LitElement {
         ${this._renderSidebar()}
 
         <main
+          id="main-content"
+          tabindex="-1"
+          aria-busy=${isInitialLoading || isDevicePendingPayload ? "true" : nothing}
           class="main-area"
           @focusin=${(ev: FocusEvent) => this.store.onMainFocusIn(ev)}
           @focusout=${(ev: FocusEvent) => this._onMainFocusOut(ev)}
@@ -486,7 +504,7 @@ export class LatterStudio extends LitElement {
             </h1>
 
             ${isInitialLoading
-              ? html`<div id="studio-loading" role="status" class="loading-state">
+              ? html`<div id="studio-loading" class="loading-state">
                   ${this.store.t("shell.loading")}
                 </div>`
               : nothing}
@@ -505,7 +523,7 @@ export class LatterStudio extends LitElement {
               : nothing}
 
             ${isDevicePendingPayload
-              ? html`<div id="studio-device-loading" role="status" class="loading-state">
+              ? html`<div id="studio-device-loading" class="loading-state">
                   ${this.store.t("shell.loading_device")}
                 </div>`
               : data
@@ -537,7 +555,13 @@ export class LatterStudio extends LitElement {
       })}
 
       ${this.store.toastMessage
-        ? html`<div class="toast ${this.store.toastIsError ? "error" : ""}">
+        ? html`<div
+            id="studio-toast"
+            popover="manual"
+            role="status"
+            aria-live="polite"
+            class="toast ${this.store.toastIsError ? "error" : ""}"
+          >
             <span>${this.store.toastMessage}</span>
             ${this.store.toastIsError
               ? html`<button

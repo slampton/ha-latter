@@ -266,8 +266,25 @@ export function runStaticGuardrails(frontendDir, metafile, bundleText, mdiBundle
       }
     }
 
-    if (/<h2[^>]*class="[^"]*card-title/.test(item.text)) {
-      errors.push(`[STUDIO HEADINGS] ${item.label} uses <h2 class="card-title">; use <h3 class="card-title">`);
+    if (/<h[3-6][^>]*class="[^"]*card-title/.test(item.text)) {
+      errors.push(
+        `[STUDIO HEADINGS] ${item.label} uses <h3..h6 class="card-title">; use <h2 class="card-title">`,
+      );
+    }
+
+    if (/<summary\b[^>]*>(?:(?!<\/summary>)[\s\S])*?<h[1-6]\b/.test(item.text)) {
+      errors.push(
+        `[STUDIO HEADINGS] ${item.label} nests a heading element inside <summary>; use <span class="card-title">`,
+      );
+    }
+
+    if (
+      item.relFromFrontend.startsWith("src/components/dialogs/") &&
+      /\btarget\s*===\s*[A-Za-z_$][\w$.]*currentTarget\b/.test(item.text)
+    ) {
+      errors.push(
+        `[STUDIO DIALOGS] ${item.label} uses target === currentTarget for dialog dismissal; use createDialogBackdropHandlers()`,
+      );
     }
   }
 

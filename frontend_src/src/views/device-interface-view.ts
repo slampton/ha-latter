@@ -544,7 +544,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
       <div class="column">
         ${renderCard({
           id: "card-home-screen",
-          heading: html`<h3 class="card-title">${store.t("card.home_screen")}</h3>`,
+          heading: html`<h2 class="card-title">${store.t("card.home_screen")}</h2>`,
           contentClass: "settings-list",
           body: html`${renderSwitchRow({
               id: "cfg-home_screen_enabled",
@@ -626,9 +626,9 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
               ? renderInlineClockFaceRow()
               : nothing}
             ${homeScreenEnabled
-              ? html`<div class="subsection-title">
+              ? html`<h3 class="subsection-title">
                     ${store.t("dev_interface.section_home_elements")}
-                  </div>
+                  </h3>
                   ${renderSwitchRow({
                     id: "cfg-home_show_time",
                     label: store.tPrefLabel("home_show_time"),
@@ -779,9 +779,9 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                         }),
                       })
                     : nothing}
-                  <div class="subsection-title">
+                  <h3 class="subsection-title">
                     ${store.t("dev_interface.section_home_background")}
-                  </div>
+                  </h3>
                   ${renderSwitchRow({
                     id: "cfg-weather_background",
                     label: store.tPrefLabel("weather_background"),
@@ -819,7 +819,7 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
         ${homeScreenEnabled
           ? renderCard({
               id: "card-app-dock",
-              heading: html`<h3 class="card-title">${store.t("card.app_dock")}</h3>`,
+              heading: html`<h2 class="card-title">${store.t("card.app_dock")}</h2>`,
               contentClass: "stack",
               body: html`<p class="row-description">
                   ${store.t("dev_interface.app_dock_desc")}
@@ -936,9 +936,9 @@ export function renderDeviceInterfaceView(store: StudioStore): TemplateResult {
                       role="group"
                       aria-label=${store.t("dev_interface.hidden_from_dock")}
                     >
-                      <div class="subsection-title">
+                      <h3 class="subsection-title">
                         ${store.t("dev_interface.hidden_from_dock")}
-                      </div>
+                      </h3>
                       ${repeat(
                         hiddenNativeApps,
                         (tok) => tok,

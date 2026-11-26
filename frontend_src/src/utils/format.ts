@@ -32,6 +32,7 @@ const MAX_FORMATTER_CACHE = 64;
 const NUMBER_FMT_CACHE = new Map<string, Intl.NumberFormat>();
 const REL_TIME_FMT_CACHE = new Map<string, Intl.RelativeTimeFormat>();
 const DATE_TIME_FMT_CACHE = new Map<string, Intl.DateTimeFormat>();
+const COLLATOR_CACHE = new Map<string, Intl.Collator>();
 
 function setBoundedCache<V>(cache: Map<string, V>, key: string, val: V): V {
   if (cache.size >= MAX_FORMATTER_CACHE) {
@@ -51,6 +52,26 @@ function getLocaleObj(hass: HomeAssistant | null | undefined): HassLocaleInfo | 
 export function hassLanguage(hass: HomeAssistant | null | undefined): string {
   const navLang = typeof navigator !== "undefined" ? navigator.language : "";
   return String(getLocaleObj(hass)?.language || hass?.language || navLang || "en");
+}
+
+export function compareLocaleText(
+  a: string | null | undefined,
+  b: string | null | undefined,
+  hass?: HomeAssistant | null,
+): number {
+  const sa = String(a ?? "");
+  const sb = String(b ?? "");
+  const locale = hassLanguage(hass);
+  let collator = COLLATOR_CACHE.get(locale);
+  if (!collator) {
+    try {
+      collator = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
+    } catch {
+      collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    }
+    setBoundedCache(COLLATOR_CACHE, locale, collator);
+  }
+  return collator.compare(sa, sb);
 }
 
 function resolveNumberLocaleAndGrouping(

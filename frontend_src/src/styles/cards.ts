@@ -44,6 +44,7 @@ export const CARD_STYLES = css`
     font-weight: var(--studio-weight-regular);
     letter-spacing: var(--studio-card-title-tracking);
     line-height: var(--studio-line-height-condensed);
+    text-wrap: balance;
   }
   .card-subtitle, .row-description, .help-text {
     color: var(--studio-text-secondary);
@@ -77,8 +78,13 @@ export const CARD_STYLES = css`
   details.card > summary::-webkit-details-marker { display: none; }
   details.card > summary::after {
     content: "▾";
+    content: "▾" / "";
     color: var(--studio-text-secondary);
-    transition: transform 0.15s ease;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    details.card > summary::after {
+      transition: transform 0.15s ease;
+    }
   }
   details.card[open] > summary::after { transform: rotate(180deg); }
   details.card[open] > summary { border-block-end: 1px solid var(--studio-divider); }

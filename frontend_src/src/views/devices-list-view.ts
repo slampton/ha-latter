@@ -10,7 +10,7 @@ import { renderCard, renderSortHeader } from "../components/controls.js";
 import { html, live, nothing, repeat, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { DeviceStatusCode, SystemDeviceEntry } from "../types.js";
-import { entityLabel } from "../utils/format.js";
+import { compareLocaleText, entityLabel } from "../utils/format.js";
 
 function effectiveStatusCode(d: SystemDeviceEntry): DeviceStatusCode {
   if (d.status_code) return d.status_code;
@@ -127,19 +127,19 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
     return true;
   });
 
-  filtered.sort((a, b) => {
+  const sorted = filtered.toSorted((a, b) => {
     let cmp = 0;
     if (store.deviceSortField === "status") {
       cmp = statusRankByCode(effectiveStatusCode(a)) - statusRankByCode(effectiveStatusCode(b));
-      if (cmp === 0) cmp = (a.title || "").localeCompare(b.title || "");
+      if (cmp === 0) cmp = compareLocaleText(a.title || "", b.title || "", store.hass);
     } else if (store.deviceSortField === "model") {
-      cmp = (a.model_label || "").localeCompare(b.model_label || "");
+      cmp = compareLocaleText(a.model_label || "", b.model_label || "", store.hass);
     } else if (store.deviceSortField === "area") {
-      cmp = (a.area_label || "").localeCompare(b.area_label || "");
+      cmp = compareLocaleText(a.area_label || "", b.area_label || "", store.hass);
     } else if (store.deviceSortField === "group") {
-      cmp = (a.device_group_name || "").localeCompare(b.device_group_name || "");
+      cmp = compareLocaleText(a.device_group_name || "", b.device_group_name || "", store.hass);
     } else {
-      cmp = (a.title || "").localeCompare(b.title || "");
+      cmp = compareLocaleText(a.title || "", b.title || "", store.hass);
     }
     return store.deviceSortAsc ? cmp : -cmp;
   });
@@ -185,9 +185,17 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
               ${store.t("devices.open_area_presence")}
             </button>`
         : nothing,
-      body: filtered.length
-        ? html`<div class="table-wrap">
+      body: sorted.length
+        ? html`<div
+            class="table-wrap"
+            tabindex="0"
+            role="region"
+            aria-labelledby="devices-table-caption"
+          >
             <table class="data-table">
+              <caption id="devices-table-caption" class="sr-only">
+                ${cardHeadingTitle}
+              </caption>
               <thead>
                 <tr>
                   ${renderSortHeader(store, "title", store.t("devices.col_device"))}
@@ -195,12 +203,14 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
                   ${renderSortHeader(store, "area", store.t("devices.col_area"))}
                   ${renderSortHeader(store, "group", store.t("devices.col_group"))}
                   ${renderSortHeader(store, "status", store.t("devices.col_status"))}
-                  <th><span class="sort-btn" aria-hidden="true"></span></th>
+                  <th scope="col">
+                    <span class="sr-only">${store.t("devices.col_actions")}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 ${repeat(
-                  filtered,
+                  sorted,
                   (d) => d.subentry_id,
                   (d) => {
                     const code = effectiveStatusCode(d);
@@ -230,18 +240,6 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
                       ev.stopPropagation();
                       void store.switchSystemDevice(d.subentry_id);
                     };
-                    const onLinkKeydown = (ev: KeyboardEvent): void => {
-                      if (
-                        ev.key === " " &&
-                        !ev.metaKey &&
-                        !ev.ctrlKey &&
-                        !ev.shiftKey &&
-                        !ev.altKey
-                      ) {
-                        ev.preventDefault();
-                        void store.switchSystemDevice(d.subentry_id);
-                      }
-                    };
                     const onRowClick = (ev: MouseEvent): void => {
                       if (ev.defaultPrevented || ev.button !== 0 || ev.shiftKey || ev.altKey) {
                         return;
@@ -261,9 +259,9 @@ export function renderDevicesListView(store: StudioStore): TemplateResult {
                       void store.switchSystemDevice(d.subentry_id);
                     };
                     return html`<tr @click=${onRowClick}>
-                      <td class="col-name">
-                        <a href=${href} @click=${onLinkClick} @keydown=${onLinkKeydown}>${d.title}</a>
-                      </td>
+                      <th scope="row" class="col-name">
+                        <a href=${href} @click=${onLinkClick}>${d.title}</a>
+                      </th>
                       <td>${d.model_label || store.t("common.unknown")}</td>
                       <td>${d.area_label || store.t("common.unknown")}</td>
                       <td>${grpCell}</td>

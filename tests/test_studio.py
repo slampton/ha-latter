@@ -125,8 +125,9 @@ class TestPayloadDiet(unittest.TestCase):
             'id="dash-sdk-rev"',
             'id="dash-node-name"',
             "<span>Now Playing</span>",
-            '<h3 class="card-title">Now</h3>',
-            '<h3 class="card-title">Device Status</h3>',
+            '<h2 class="card-title">Now</h2>',
+            '<h2 class="card-title">Device Status</h2>',
+            '<h3 class="card-title">',
         ):
             self.assertNotIn(gone, ts_src)
 
@@ -643,7 +644,8 @@ class TestActivityCard(unittest.TestCase):
         iface_src = _read_frontend_ts("views/device-interface-view.ts")
         fn_start = iface_src.index("function renderDeviceInterfaceView(")
         view = iface_src[iface_src.index('<section id="view-interface"', fn_start):iface_src.index("</section>", fn_start)]
-        self.assertNotIn('<h3 class="card-title">Activity Card</h3>', view)
+        self.assertNotIn('<h2 class="card-title">Activity Card</h2>', view)
+        self.assertNotIn('<h3 class="card-title">', view)
         self.assertLess(
             view.index('store.t("card.home_screen")'),
             view.index('id: "cfg-activity_card"'),

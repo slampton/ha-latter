@@ -699,7 +699,7 @@ async function buildBundles(frontendDir) {
     bundle: true,
     write: false,
     format: "esm",
-    target: "es2022",
+    target: "es2023",
     minify: true,
     banner: { js: AUTO_GEN_BANNER },
   });
@@ -772,7 +772,7 @@ async function buildBundles(frontendDir) {
     bundle: true,
     write: false,
     format: "esm",
-    target: "es2022",
+    target: "es2023",
     minify: true,
     metafile: true,
     banner: { js: AUTO_GEN_BANNER },

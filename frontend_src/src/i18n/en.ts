@@ -16,6 +16,9 @@ export const EN_STRINGS = {
   "shell.retry": "Retry",
   "shell.saved_status": "Saved",
   "shell.dismiss_toast": "Dismiss notification",
+  "shell.skip_to_main": "Skip to main content",
+  "shell.opens_new_tab": "opens in new tab",
+  "shell.notifications_label": "Notifications",
 
   "nav.scope_label": "Scope",
   "nav.devices": "Devices",
@@ -90,6 +93,8 @@ export const EN_STRINGS = {
   "action.remove_item": "Remove {item}",
   "action.edit_item": "Edit {item}",
   "action.configure_item": "Configure {item}",
+  "action.show_pin": "Show PIN",
+  "action.hide_pin": "Hide PIN",
 
   "common.none_option": "— None —",
   "common.none_configured": "None configured",
@@ -697,6 +702,7 @@ export const EN_STRINGS = {
   "tools_sys.refresh_logs": "Refresh logs",
   "tools_sys.copy_logs": "Copy logs",
   "tools_sys.clear_logs": "Clear logs",
+  "tools_sys.logs_output_aria": "System and Device logs",
   "tools_sys.backup_subtitle":
     "Export or restore non-secret System and Device settings as portable JSON bundles.",
   "tools_sys.export_scope": "Export scope",
@@ -762,6 +768,7 @@ export const EN_STRINGS = {
   "dialogs.pinned_add_tile": "Add tile",
   "dialogs.pinned_tile_count": "{count} of {max} tiles",
   "dialogs.pinned_confirm_badge_title": "Requires confirmation tap",
+  "dialogs.pinned_confirm_required": "Confirmation required",
   "dialogs.pinned_confirm_mode": "Confirm",
   "dialogs.pinned_one_tap_mode": "1-tap",
   "dialogs.pinned_empty":
@@ -1015,7 +1022,11 @@ export const EN_STRINGS = {
   "photo_edit.name_label": "Photo name",
   "photo_edit.name_placeholder": "Enter a photo name…",
   "photo_edit.crop_hint":
-    "Drag to pan and use the slider to zoom. Originals are kept intact so every display shape stays sharp.",
+    "Drag or use arrow keys to pan and use the slider to zoom. Originals are kept intact so every display shape stays sharp.",
+  "photo_edit.crop_canvas_aria":
+    "Photo crop preview. Use arrow keys to pan, Shift with arrow keys for larger steps, or Home to center.",
+  "photo_edit.crop_centered": "Crop centered",
+  "photo_edit.crop_panned": "Crop position {x}%, {y}%",
   "photo_edit.aspect_aria": "Preview display shape",
   "photo_edit.aspect_square": "Square + circle",
   "photo_edit.aspect_round": "Round",
@@ -1143,11 +1154,13 @@ export const EN_STRINGS = {
 
   // Device list & discovered devices (D-041 / D-066)
   "devices.inventory_heading": "Inventory",
+  "devices.table_caption": "Managed devices",
   "devices.col_device": "Device",
   "devices.col_model": "Model",
   "devices.col_area": "Area",
   "devices.col_group": "Group",
   "devices.col_status": "Status",
+  "devices.col_actions": "Open",
   "devices.filter_aria": "Filter managed Devices by category",
   "devices.all": "All Devices",
   "devices.online": "Online Devices",
@@ -1201,6 +1214,8 @@ export const EN_STRINGS = {
     "List updates paused ({count} shown). Select Resume list to refresh.",
   "discovered.empty_ble_filtered": "No Bluetooth devices match this filter.",
   "discovered.empty_ble_none": "No unadopted Bluetooth devices nearby.",
+  "discovered.show_more": "Show more ({more})",
+  "discovered.show_fewer": "Show fewer",
   "discovered.adopted_toast": "Adopted \"{title}\"",
   "discovered.ignored_toast": "Ignored \"{title}\"",
   "discovered.restored_toast": "Restored \"{title}\" to discovered list",

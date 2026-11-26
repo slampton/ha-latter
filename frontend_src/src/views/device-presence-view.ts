@@ -131,6 +131,10 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
                   <input
                     type="text"
                     id="cfg-ble_target_address"
+                    spellcheck="false"
+                    autocorrect="off"
+                    autocapitalize="none"
+                    aria-describedby="ble-target-addr-help"
                     placeholder=${store.t("dev_presence.target_addr_placeholder")}
                     .value=${focusSafe(String(cfg.ble_target_address || ""))}
                     @change=${(ev: Event) =>
@@ -140,7 +144,9 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
                         "cfg-ble_target_address",
                       )}
                   />
-                  <span class="help-text">${store.t("dev_presence.target_addr_help")}</span>
+                  <span id="ble-target-addr-help" class="help-text">
+                    ${store.t("dev_presence.target_addr_help")}
+                  </span>
                 </div>
                 <div class="stacked-field">
                   <label for="cfg-ble_ref_power">
@@ -152,6 +158,7 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
                     min="-90"
                     max="-30"
                     step="1"
+                    aria-describedby="ble-ref-power-help"
                     placeholder=${refPowerPlaceholder}
                     .value=${focusSafe(refPowerValue)}
                     @change=${(ev: Event) => {
@@ -174,7 +181,9 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
                       }
                     }}
                   />
-                  <span class="help-text">${store.t("dev_presence.ref_power_help")}</span>
+                  <span id="ble-ref-power-help" class="help-text">
+                    ${store.t("dev_presence.ref_power_help")}
+                  </span>
                 </div>
                 ${showCompanionPowerTip
                   ? html`<div id="ble-companion-power-tip" class="alert">
@@ -207,6 +216,9 @@ export function renderDevicePresenceView(store: StudioStore): TemplateResult {
                       <input
                         type="text"
                         id="cfg-ble_beacon_uuid"
+                        spellcheck="false"
+                        autocorrect="off"
+                        autocapitalize="none"
                         placeholder=${store.t("dev_presence.ibeacon_uuid_placeholder")}
                         .value=${focusSafe(String(cfg.ble_beacon_uuid || ""))}
                         @change=${(ev: Event) =>

@@ -8,6 +8,7 @@
 import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import { hsvToHex, hsvToRgbJS, isValidHexColor } from "../../utils/format.js";
+import { createDialogBackdropHandlers } from "../controls/aria-helpers.js";
 
 function paintHsvColorWheel(canvas: HTMLCanvasElement): void {
   const ctx = canvas.getContext("2d");
@@ -109,17 +110,18 @@ export function syncColorWheelCanvas(renderRoot: ShadowRoot, store: StudioStore)
 export function renderColorWheelDialog(store: StudioStore): TemplateResult {
   const modal = store.colorWheelModal;
 
-  const onBackdropClick = (ev: Event): void => {
-    if (ev.target === ev.currentTarget && !modal.busy) {
+  const close = (): void => {
+    if (store.colorWheelModal.open && !store.colorWheelModal.busy) {
       store.tools.closeColorWheelModal();
     }
   };
+  const backdrop = createDialogBackdropHandlers(close, () => store.colorWheelModal.busy);
 
   const onCancel = (ev: Event): void => {
     if (modal.busy) {
       ev.preventDefault();
     } else {
-      store.tools.closeColorWheelModal();
+      close();
     }
   };
 
@@ -127,8 +129,11 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
     return html`<dialog
       id="latter-cw-modal"
       aria-labelledby="latter-cw-title"
+      closedby=${modal.busy ? "none" : "any"}
       @cancel=${onCancel}
-      @click=${onBackdropClick}
+      @close=${close}
+      @pointerdown=${backdrop.onPointerDown}
+      @click=${backdrop.onClick}
       class="studio-dialog"
     >
       ${nothing}
@@ -203,12 +208,15 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-cw-modal"
     aria-labelledby="latter-cw-title"
+    closedby=${modal.busy ? "none" : "any"}
     @cancel=${onCancel}
-    @click=${onBackdropClick}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog"
   >
     <div class="dialog-body">
-      <h3 id="latter-cw-title" class="dialog-title">${store.t("dialogs.cw_title")}</h3>
+      <h1 id="latter-cw-title" class="dialog-title">${store.t("dialogs.cw_title")}</h1>
       <div class="color-wheel" aria-hidden="true">
         <canvas
           id="latter-cw-canvas"
@@ -234,6 +242,9 @@ export function renderColorWheelDialog(store: StudioStore): TemplateResult {
           aria-label=${store.t("dialogs.cw_hex_aria")}
           placeholder="#RRGGBB"
           maxlength="7"
+          spellcheck="false"
+          autocorrect="off"
+          autocapitalize="none"
           .value=${focusSafe(modal.hex)}
           @input=${onCwHexInput}
         />

@@ -30,6 +30,7 @@ import {
   resolveTileGridLayout,
   sanitizePinnedPageTitle,
 } from "../../utils/tile-grid.js";
+import { isImeSafeEnter } from "../controls/aria-helpers.js";
 
 interface PinnedGridDragSession {
   mode: "move" | "resize";
@@ -724,7 +725,17 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
     }
   }
 
-  return html`<div class="pinned-grid-editor">
+  return html`<div
+    class="pinned-grid-editor"
+    @keydown=${(ev: KeyboardEvent) => {
+      if (ev.key === "Escape" && activeDragSessions.has(store)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        clearDragSession(store);
+        store.host.requestUpdate();
+      }
+    }}
+  >
     <p class="row-description">${store.t("dialogs.pinned_desc")}</p>
 
     <div class="pinned-page-bar">
@@ -742,6 +753,7 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
             id=${`pinned-page-tab-${pIdx}`}
             role="tab"
             aria-selected=${isSelected ? "true" : "false"}
+            aria-controls="pinned-grid-tabpanel"
             tabindex=${isSelected ? "0" : "-1"}
             @click=${() => selectPage(pIdx)}
             @keydown=${(ev: KeyboardEvent) => onPageTabKeyDown(ev, pIdx)}
@@ -767,65 +779,70 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
       </div>
     </div>
 
-    <div class="pinned-page-controls">
-      <div class="stacked-field pinned-page-title-field">
-        <label for="pinned-page-title-input">
-          ${store.t("dialogs.pinned_page_title_label")}
-        </label>
-        <input
-          type="text"
-          id="pinned-page-title-input"
-          maxlength=${String(PINNED_PAGE_TITLE_MAX)}
-          placeholder=${store.t("dialogs.pinned_page_title_placeholder")}
-          .value=${focusSafe(currentTitle)}
-          @change=${(ev: Event) => commitPageTitle((ev.currentTarget as HTMLInputElement).value)}
-          @keydown=${(ev: KeyboardEvent) => {
-            if (ev.key === "Enter" && !ev.isComposing) {
-              ev.preventDefault();
-              commitPageTitle((ev.currentTarget as HTMLInputElement).value);
-            }
-          }}
-        />
-      </div>
-      ${totalPages > 1
-        ? html`<button
-            type="button"
-            id="btn-pinned-delete-page"
-            @click=${requestDeleteActivePage}
-            class="btn btn-danger btn-compact"
-          >
-            ${store.t("dialogs.pinned_delete_page")}
-          </button>`
-        : nothing}
-    </div>
-
-    ${resolved.hasReflow
-      ? html`<div id="pinned-reflow-banner" role="status" class="alert alert-info pinned-reflow-banner">
-          <div class="alert-body">
-            <span>${store.t("dialogs.pinned_reflow_notice", { cols, rows })}</span>
-          </div>
-          <button
-            type="button"
-            id="btn-pinned-pack-grid"
-            @click=${() => {
-              const packed = packLayoutToGrid(pinnedItems, cols, rows);
-              store.entity.savePinnedGridState(packed);
-              store.announcePolite(store.t("dialogs.pinned_packed_status"));
-            }}
-            class="btn btn-secondary btn-compact"
-          >
-            ${store.t("dialogs.pinned_pack_to_grid")}
-          </button>
-        </div>`
-      : nothing}
-
     <div
-      id="pinned-grid-canvas"
-      role="region"
-      aria-label=${store.t("dialogs.pinned_grid_aria", { page: activePageLabel })}
-      style="--grid-cols: ${cols}; --grid-rows: ${rows};"
-      class="pinned-grid-canvas ${isRound ? "is-round" : ""}"
+      id="pinned-grid-tabpanel"
+      role="tabpanel"
+      aria-labelledby=${`pinned-page-tab-${activePage}`}
     >
+      <div class="pinned-page-controls">
+        <div class="stacked-field pinned-page-title-field">
+          <label for="pinned-page-title-input">
+            ${store.t("dialogs.pinned_page_title_label")}
+          </label>
+          <input
+            type="text"
+            id="pinned-page-title-input"
+            maxlength=${String(PINNED_PAGE_TITLE_MAX)}
+            placeholder=${store.t("dialogs.pinned_page_title_placeholder")}
+            .value=${focusSafe(currentTitle)}
+            @change=${(ev: Event) => commitPageTitle((ev.currentTarget as HTMLInputElement).value)}
+            @keydown=${(ev: KeyboardEvent) => {
+              if (isImeSafeEnter(ev)) {
+                ev.preventDefault();
+                commitPageTitle((ev.currentTarget as HTMLInputElement).value);
+              }
+            }}
+          />
+        </div>
+        ${totalPages > 1
+          ? html`<button
+              type="button"
+              id="btn-pinned-delete-page"
+              @click=${requestDeleteActivePage}
+              class="btn btn-danger btn-compact"
+            >
+              ${store.t("dialogs.pinned_delete_page")}
+            </button>`
+          : nothing}
+      </div>
+
+      ${resolved.hasReflow
+        ? html`<div id="pinned-reflow-banner" role="status" class="alert alert-info pinned-reflow-banner">
+            <div class="alert-body">
+              <span>${store.t("dialogs.pinned_reflow_notice", { cols, rows })}</span>
+            </div>
+            <button
+              type="button"
+              id="btn-pinned-pack-grid"
+              @click=${() => {
+                const packed = packLayoutToGrid(pinnedItems, cols, rows);
+                store.entity.savePinnedGridState(packed);
+                store.announcePolite(store.t("dialogs.pinned_packed_status"));
+              }}
+              class="btn btn-secondary btn-compact"
+            >
+              ${store.t("dialogs.pinned_pack_to_grid")}
+            </button>
+          </div>`
+        : nothing}
+
+      <div
+        id="pinned-grid-canvas"
+        role="region"
+        aria-label=${store.t("dialogs.pinned_grid_aria", { page: activePageLabel })}
+        style="--grid-cols: ${cols}; --grid-rows: ${rows};"
+        class="pinned-grid-canvas ${isRound ? "is-round" : ""}"
+      >
       ${allCells.map(
         (cell) => html`<div
           aria-hidden="true"
@@ -890,6 +907,8 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
             @pointermove=${onTilePointerMove}
             @pointerup=${(ev: PointerEvent) => finishMovePointer(ev, false, info.displayTitle)}
             @pointercancel=${(ev: PointerEvent) => finishMovePointer(ev, true, info.displayTitle)}
+            @lostpointercapture=${(ev: PointerEvent) =>
+              finishMovePointer(ev, true, info.displayTitle)}
             @click=${(ev: MouseEvent) => {
               const targetEl = ev.target as HTMLElement | null;
               if (targetEl?.closest("button, .pinned-tile-resize-handle")) return;
@@ -913,6 +932,7 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
                       class="pinned-tile-confirm-badge"
                     >
                       <ha-icon .icon=${"mdi:shield-check"} aria-hidden="true"></ha-icon>
+                      <span class="sr-only">${store.t("dialogs.pinned_confirm_required")}</span>
                     </span>`
                   : nothing}
               </div>
@@ -964,6 +984,8 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
               @pointerup=${(ev: PointerEvent) => finishResizePointer(ev, false, info.displayTitle)}
               @pointercancel=${(ev: PointerEvent) =>
                 finishResizePointer(ev, true, info.displayTitle)}
+              @lostpointercapture=${(ev: PointerEvent) =>
+                finishResizePointer(ev, true, info.displayTitle)}
               @click=${(ev: Event) => ev.stopPropagation()}
               @keydown=${(ev: KeyboardEvent) =>
                 onResizeHandleKeyDown(ev, tile, tileKey, info.displayTitle)}
@@ -980,6 +1002,7 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
             class="pinned-grid-ghost ${activeGhost.valid ? "valid" : "invalid"}"
           ></div>`
         : nothing}
+    </div>
     </div>
 
     ${pinnedItems.length === 0

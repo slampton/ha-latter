@@ -179,6 +179,8 @@ export class StudioStore implements ReactiveController, StudioStoreContext {
   // Device Security & Time UI draft state
   devicePinDraft = "";
   systemPinDraft = "";
+  showDevicePin = false;
+  showSystemPin = false;
   pinBusy = false;
   worldClockNewLabel = "";
   worldClockNewZone = "";

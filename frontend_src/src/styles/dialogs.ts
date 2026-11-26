@@ -19,7 +19,11 @@ export const DIALOG_STYLES = css`
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-  dialog.studio-dialog::backdrop { background: var(--studio-scrim); }
+  dialog.studio-dialog::backdrop {
+    background: var(--studio-scrim);
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
   dialog.studio-dialog.confirm-dialog {
     inline-size: min(480px, calc(100vw - 32px));
   }
@@ -39,6 +43,7 @@ export const DIALOG_STYLES = css`
     font-size:var(--studio-font-card-title);
     font-weight: var(--studio-weight-regular);
     line-height: var(--studio-line-height-condensed);
+    text-wrap: balance;
   }
   .dialog-text { color: var(--studio-text-secondary); }
   .dialog-actions {
@@ -70,6 +75,9 @@ export const DIALOG_STYLES = css`
     inline-size: min(680px, calc(100vw - 32px));
   }
   .crop-dropzone {
+    inline-size: 100%;
+    font: inherit;
+    color: inherit;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -110,6 +118,10 @@ export const DIALOG_STYLES = css`
   }
   .crop-canvas.dragging {
     cursor: grabbing;
+  }
+  .crop-canvas:focus-visible {
+    outline: 2px solid var(--studio-primary);
+    outline-offset: 2px;
   }
   .crop-canvas.round {
     border-radius: 50%;
@@ -181,8 +193,8 @@ export const DIALOG_STYLES = css`
     position: absolute;
     inset-block-start: -6px;
     inset-inline-end: -6px;
-    inline-size: 24px;
-    block-size: 24px;
+    min-inline-size: 24px;
+    min-block-size: 24px;
     border-radius: var(--studio-radius-pill);
     border: 1px solid var(--studio-divider);
     background: var(--studio-surface);
@@ -524,7 +536,7 @@ export const DIALOG_STYLES = css`
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    block-size: var(--studio-control-height);
+    min-block-size: var(--studio-control-height);
     border: 1px solid transparent;
     border-radius: var(--studio-radius-control);
     background: transparent;
@@ -576,7 +588,9 @@ export const DIALOG_STYLES = css`
   .pinned-page-tabs {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-padding-inline: var(--studio-space-1);
     gap: var(--studio-space-1);
     min-inline-size: 0;
     flex: 1 1 auto;

@@ -16,7 +16,7 @@ import {
 } from "../../domain/alarms.js";
 import { html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
-import { fmtNumber, formatClockHhMm } from "../../utils/format.js";
+import { compareLocaleText, fmtNumber, formatClockHhMm } from "../../utils/format.js";
 
 export function renderOverviewTimersAlarmsCard(
   store: StudioStore,
@@ -75,7 +75,7 @@ export function renderOverviewTimersAlarmsCard(
   const alarmRinging = Boolean(liveData.alarm_ringing);
   const enabledAlarmSlots = alarmSlots
     .filter((s) => s.enabled)
-    .sort((a, b) => a.time.localeCompare(b.time));
+    .toSorted((a, b) => compareLocaleText(a.time, b.time, store.hass));
   const is24h = isDeviceTime24h(store);
   const nextEnabledSlot = enabledAlarmSlots[0];
   const alarmsSummaryLabel = nextEnabledSlot

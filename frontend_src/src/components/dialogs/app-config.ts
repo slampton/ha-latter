@@ -24,6 +24,7 @@ import {
   isCatalogItemSupported,
   type StudioStore,
 } from "../../state/store.js";
+import { createDialogBackdropHandlers } from "../controls/aria-helpers.js";
 import type { ConfigurableAppId, DeviceCapabilities } from "../../types.js";
 import { defaultLocaleTimeFormat, entityLabel } from "../../utils/format.js";
 import {
@@ -571,7 +572,7 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
   }
 
   return html`<div class="dialog-body">
-    <h3 id="latter-app-config-title" class="dialog-title">${title}</h3>
+    <h1 id="latter-app-config-title" class="dialog-title">${title}</h1>
     ${body}
     <div class="dialog-actions">
       ${extraAction}
@@ -588,19 +589,22 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
 }
 
 export function renderAppConfigDialog(store: StudioStore): TemplateResult {
-  const close = (): void => store.entity.closeAppConfigModal();
-  const onBackdropClick = (ev: Event): void => {
-    if (ev.target === ev.currentTarget) {
-      close();
+  const close = (): void => {
+    if (store.appConfigModal.open) {
+      store.entity.closeAppConfigModal();
     }
   };
+  const backdrop = createDialogBackdropHandlers(close);
   const isPinnedGrid = store.appConfigModal.open && store.appConfigModal.app === "pinned";
 
   return html`<dialog
     id="latter-app-config-modal"
     aria-labelledby="latter-app-config-title"
+    closedby="any"
     @cancel=${close}
-    @click=${onBackdropClick}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog ${isPinnedGrid ? "grid-editor-dialog" : "shortcut-dialog"}"
   >
     ${store.appConfigModal.open ? renderAppConfigModalBody(store) : nothing}

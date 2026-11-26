@@ -21,6 +21,7 @@ export const TOKEN_STYLES = css`
     --studio-font-body: var(--ha-font-size-m, 14px);
     --studio-font-secondary: var(--ha-font-size-s, 12px);
     --studio-font-caption: var(--ha-font-size-s, 12px);
+    --studio-input-font-size: inherit;
     --studio-weight-regular: var(--ha-font-weight-normal, 400);
     --studio-weight-medium: var(--ha-font-weight-medium, 500);
     --studio-line-height: var(--ha-line-height-normal, 1.6);
@@ -202,8 +203,9 @@ export const TOKEN_STYLES = css`
     -webkit-tap-highlight-color: transparent;
     color-scheme: light;
     scrollbar-color: var(--studio-scrollbar-thumb) transparent;
-    scrollbar-width: thin;
+    scroll-padding-block-start: calc(var(--studio-header-height) + var(--studio-space-4));
   }
+  :host([hidden]) { display: none; }
 
   :host([dark]) {
     --studio-bg: var(--primary-background-color, #111111);
@@ -312,7 +314,7 @@ export const TOKEN_STYLES = css`
     flex-direction: column;
     background: var(--studio-bg);
   }
-  h2, h3, h4, p { margin: 0; }
+  h1, h2, h3, h4, p { margin: 0; }
   code, .mono {
     font-family: var(--studio-font-code);
     font-size:var(--studio-font-secondary);
@@ -359,11 +361,99 @@ export const TOKEN_STYLES = css`
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
+    :host { scroll-behavior: auto; }
+  }
+
+  @media (prefers-contrast: more) {
+    :host {
+      --studio-scrollbar-thumb: CanvasText;
+    }
+  }
+
+  @media (pointer: coarse) {
+    :host {
+      --studio-input-font-size: max(1rem, 1em);
+      --studio-control-height-compact: 44px;
+      --studio-grid-tile-action-size: 44px;
+      --studio-grid-resize-size: 44px;
+      --studio-span-cell-size: 44px;
+    }
+  }
+
+  @media (forced-colors: active) {
+    select:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    button:focus-visible,
+    a:focus-visible,
+    summary:focus-visible,
+    [tabindex]:focus-visible {
+      outline: 2px solid Highlight;
+      outline-offset: 2px;
+    }
+    .scope-tab.active,
+    .nav-btn.active,
+    .segmented button[aria-checked="true"],
+    .pinned-page-tab.active,
+    .pinned-page-tab[aria-selected="true"],
+    .collection-chip-wrap.active,
+    .pill.enabled,
+    .photo-tile.selected,
+    .photo-picker-item.selected,
+    .crop-filmstrip-item.active,
+    .accent-pill-btn[aria-checked="true"],
+    .mdi-picker-btn.selected,
+    .combobox-option[aria-selected="true"],
+    .span-matrix-cell.selected {
+      outline: 2px solid Highlight;
+      outline-offset: -2px;
+      border-color: Highlight;
+    }
+    .switch {
+      border-color: ButtonText;
+    }
+    .switch::after {
+      border: 2px solid ButtonText;
+      background: ButtonText;
+    }
+    .switch:checked {
+      border-color: Highlight;
+    }
+    .switch:checked::after {
+      border-color: Highlight;
+      background: Highlight;
+    }
+    .swatch,
+    .accent-swatch-dot {
+      forced-color-adjust: none;
+    }
+    .signal-track,
+    .upload-progress {
+      border: 1px solid CanvasText;
+    }
+    .signal-fill,
+    .upload-progress-fill,
+    .upload-progress::-webkit-progress-value,
+    .upload-progress::-moz-progress-bar {
+      forced-color-adjust: none;
+      background: Highlight;
+    }
+    .status-dot {
+      border: 2px solid CanvasText;
+    }
+    .status-dot.online,
+    .status-dot.update {
+      border-color: Highlight;
+    }
+    .pill.drag-over-before,
+    .pill.drag-over-after,
+    .sortable-row.dragging,
+    .pill.dragging {
+      outline: 2px solid Highlight;
+    }
+    dialog.studio-dialog,
+    .toast {
+      border: 2px solid CanvasText;
     }
   }
 `;

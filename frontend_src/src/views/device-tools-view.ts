@@ -336,7 +336,7 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
         ${renderCard({
           id: "card-device-diagnostics",
           handoffActive: store.isHandoffTarget("card-device-diagnostics"),
-          heading: html`<h3 class="card-title">${store.t("card.diagnostics")}</h3>`,
+          heading: html`<h2 class="card-title">${store.t("card.diagnostics")}</h2>`,
           contentClass: "stack",
           body: html`${networkControlItems.length
               ? html`<div class="settings-list">
@@ -543,7 +543,7 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                           : store.t("status.pin_not_set")}
                       </span>
                       <input
-                        type="password"
+                        type=${store.showDevicePin ? "text" : "password"}
                         id="dev-security-pin-input"
                         inputmode="numeric"
                         pattern="[0-9]*"
@@ -558,6 +558,23 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                           store.host.requestUpdate();
                         }}
                       />
+                      <button
+                        type="button"
+                        id="btn-toggle-dev-pin"
+                        aria-pressed=${String(store.showDevicePin)}
+                        aria-label=${store.showDevicePin
+                          ? store.t("action.hide_pin")
+                          : store.t("action.show_pin")}
+                        @click=${() => {
+                          store.showDevicePin = !store.showDevicePin;
+                          store.host.requestUpdate();
+                        }}
+                        class="btn btn-secondary btn-compact pin-toggle-btn"
+                      >
+                        ${store.showDevicePin
+                          ? store.t("action.hide_pin")
+                          : store.t("action.show_pin")}
+                      </button>
                       <button
                         type="button"
                         ?disabled=${store.pinBusy || !store.devicePinDraft.trim()}
@@ -581,7 +598,7 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
               })}
               ${renderCard({
                 id: "card-replace-hardware",
-                heading: html`<h3 class="card-title">${store.t("card.replace_hardware")}</h3>`,
+                heading: html`<h2 class="card-title">${store.t("card.replace_hardware")}</h2>`,
                 contentClass: "stack",
                 body: html`<p class="row-description">
                     ${store.t("card.replace_hardware_body")}
@@ -608,7 +625,7 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
           : nothing}
 
         ${renderCard({
-          heading: html`<h3 class="card-title">${store.t("card.danger_zone")}</h3>`,
+          heading: html`<h2 class="card-title">${store.t("card.danger_zone")}</h2>`,
           danger: true,
           contentClass: "settings-list",
           body: html`${renderSettingsRow({

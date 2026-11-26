@@ -7,7 +7,7 @@ import { t, tPrefLabel, tPrefOption } from "../../i18n/index.js";
 import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import type { CatalogChoice, DevicePrefItem, EspHomeEntityItem } from "../../types.js";
-import { entityLabel, fmtNumber } from "../../utils/format.js";
+import { compareLocaleText, entityLabel, fmtNumber } from "../../utils/format.js";
 import {
   isDeviceTime24h,
   renderSelectOptions,
@@ -469,13 +469,14 @@ function renderQuickActionIcon(kind: QuickActionKind): TemplateResult {
 export function sortQuickActionButtons(
   items: readonly EspHomeEntityItem[],
 ): EspHomeEntityItem[] {
-  return [...items].sort((a, b) => {
+  return items.toSorted((a, b) => {
     const ra = QUICK_ACTION_RANK[quickActionKind(a)];
     const rb = QUICK_ACTION_RANK[quickActionKind(b)];
     if (ra !== rb) return ra - rb;
-    return `${a.name || ""} ${a.entity_id}`
-      .toLowerCase()
-      .localeCompare(`${b.name || ""} ${b.entity_id}`.toLowerCase());
+    return compareLocaleText(
+      `${a.name || ""} ${a.entity_id}`,
+      `${b.name || ""} ${b.entity_id}`,
+    );
   });
 }
 

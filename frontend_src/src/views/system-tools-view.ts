@@ -5,6 +5,10 @@
  */
 
 import { renderCard, renderSettingsRow } from "../components/controls.js";
+import {
+  handleRadioGroupArrowKey,
+  renderExternalLinkHint,
+} from "../components/controls/aria-helpers.js";
 import { STUDIO_REV } from "../constants.js";
 import { focusSafe, html, live, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
@@ -39,20 +43,6 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
     : store.t("common.unknown");
   const studioRev = `rev ${String(sysInfo?.studio_rev ?? STUDIO_REV)}`;
 
-  const onAnnounceRadioKey = (ev: Event): void => {
-    const kev = ev as KeyboardEvent;
-    if (kev.key !== "ArrowLeft" && kev.key !== "ArrowRight") return;
-    kev.preventDefault();
-    const nextMode = store.announceMode === "notify" ? "broadcast" : "notify";
-    store.announceMode = nextMode;
-    store.host.requestUpdate();
-    const group = (kev.currentTarget as HTMLElement).parentElement;
-    const nextBtn = group?.querySelector(
-      `[data-mode="${nextMode}"]`,
-    ) as HTMLButtonElement | null;
-    nextBtn?.focus();
-  };
-
   return html`<section id="view-system_tools">
     <div class="columns">
       <div class="column">
@@ -61,9 +51,20 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
           title: store.t("card.notifications_announcements"),
           subtitle: store.t("tools_sys.announce_subtitle"),
           contentClass: "stack",
-          body: html`<div
+            body: html`<div
               role="radiogroup"
               aria-label=${store.t("tools_sys.announce_mode_aria")}
+              @keydown=${(ev: KeyboardEvent) =>
+                handleRadioGroupArrowKey(
+                  ev,
+                  ["notify", "broadcast"] as const,
+                  store.announceMode,
+                  (next) => {
+                    store.announceMode = next;
+                    store.host.requestUpdate();
+                  },
+                  (next) => `[data-mode="${next}"]`,
+                )}
               class="segmented"
             >
               <button
@@ -75,7 +76,6 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                   store.announceMode = "notify";
                   store.host.requestUpdate();
                 }}
-                @keydown=${onAnnounceRadioKey}
                 role="radio"
               >
                 ${store.t("tools_sys.screen_notification")}
@@ -89,7 +89,6 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                   store.announceMode = "broadcast";
                   store.host.requestUpdate();
                 }}
-                @keydown=${onAnnounceRadioKey}
                 role="radio"
               >
                 ${store.t("tools_sys.voice_broadcast")}
@@ -289,7 +288,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
         >
           <summary class="card-header">
             <div class="card-heading">
-              <h3 class="card-title">${store.t("card.system_device_logs")}</h3>
+              <span class="card-title">${store.t("card.system_device_logs")}</span>
             </div>
           </summary>
           <div class="card-content stack">
@@ -351,7 +350,12 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                 ${store.t("action.open_ha_logs")}
               </button>
             </div>
-            <pre class="log-output">${store.tools.formatVisibleLogs()}</pre>
+            <pre
+              tabindex="0"
+              role="region"
+              aria-label=${store.t("tools_sys.logs_output_aria")}
+              class="log-output"
+            >${store.tools.formatVisibleLogs()}</pre>
           </div>
         </details>
       </div>
@@ -469,7 +473,7 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                     : store.t("status.pin_not_set")}
                 </span>
                 <input
-                  type="password"
+                  type=${store.showSystemPin ? "text" : "password"}
                   id="sys-security-pin-input"
                   inputmode="numeric"
                   pattern="[0-9]*"
@@ -484,6 +488,21 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
                     store.host.requestUpdate();
                   }}
                 />
+                <button
+                  type="button"
+                  id="btn-toggle-sys-pin"
+                  aria-pressed=${String(store.showSystemPin)}
+                  aria-label=${store.showSystemPin
+                    ? store.t("action.hide_pin")
+                    : store.t("action.show_pin")}
+                  @click=${() => {
+                    store.showSystemPin = !store.showSystemPin;
+                    store.host.requestUpdate();
+                  }}
+                  class="btn btn-secondary btn-compact pin-toggle-btn"
+                >
+                  ${store.showSystemPin ? store.t("action.hide_pin") : store.t("action.show_pin")}
+                </button>
                 <button
                   type="button"
                   id="btn-save-security-pin"
@@ -531,7 +550,9 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
               rel="noopener noreferrer"
               class="btn btn-text"
             >
-              ${store.t("support.documentation")}
+              ${store.t("support.documentation")}${renderExternalLinkHint(
+                store.t("shell.opens_new_tab"),
+              )}
             </a>
             <a
               href=${ISSUES_URL}
@@ -539,7 +560,9 @@ export function renderSystemToolsView(store: StudioStore): TemplateResult {
               rel="noopener noreferrer"
               class="btn btn-text"
             >
-              ${store.t("support.report_issue")}
+              ${store.t("support.report_issue")}${renderExternalLinkHint(
+                store.t("shell.opens_new_tab"),
+              )}
             </a>`,
           body: html`<div class="kv-list">
               <div class="kv-row">

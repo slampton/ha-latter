@@ -1,6 +1,6 @@
 /**
  * Playwright E2E tests for Devices table & per-Device views (`D-071`–`D-077`):
- * - `Devices` list row click, Ctrl-click `_blank`, keyboard `Tab`/`Enter`/`Space`, & `Discovered` ignore/restore
+ * - `Devices` list row click, Ctrl-click `_blank`, keyboard `Tab`/`Enter`, & `Discovered` ignore/restore
  * - `Device -> Overview` (`Status` tiles, `Do not disturb` sleep-safe vs offline disabled quick actions)
  * - `Device -> Display` (`Ambient Light` live status, `Photo Frame` picker filtering `dynamic_preset`)
  * - `Device -> Interface` (24-item App Dock live switch sync, lazy `latter-studio-mdi.js` 7,447-icon load,
@@ -12,7 +12,7 @@ import { expect, test } from "@playwright/test";
 import { mountStudio } from "./studio-harness.js";
 
 test.describe("Devices List & Per-Device Views E2E", () => {
-  test("supports row click, Ctrl-click new tab, keyboard Enter/Space, and Discovered ignore/restore", async ({
+  test("supports row click, Ctrl-click new tab, keyboard Enter, and Discovered ignore/restore", async ({
     page,
   }) => {
     const ctrl = await mountStudio(page, { path: "/latter" });
@@ -34,14 +34,14 @@ test.describe("Devices List & Per-Device Views E2E", () => {
     await expect(page.locator("#view-dashboard")).toBeVisible();
     expect(new URL(page.url()).pathname).toBe("/latter/devices/sub_desk/overview");
 
-    // Return to Managed via sidebar back link and navigate via keyboard Space on link
+    // Return to Managed via sidebar back link and navigate via keyboard Enter on link
     await page.locator("#nav-scope-device .nav-back-btn").click();
     await expect(page.locator("#view-select_device_prompt")).toBeVisible();
     const pocketLink = page
       .locator("table.data-table tbody tr", { hasText: "Pocket Assistant" })
       .locator("a");
     await pocketLink.focus();
-    await page.keyboard.press("Space");
+    await page.keyboard.press("Enter");
     await expect(page.locator("#view-dashboard")).toBeVisible();
     await expect(page.locator("#unified-page-title")).toContainText("Pocket Assistant");
 

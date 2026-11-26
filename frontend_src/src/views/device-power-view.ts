@@ -86,7 +86,7 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
         ${sleepItems.length
           ? html`<div class="card" data-entity-card>
               <div class="card-header">
-                <h3 class="card-title">${store.t("dev_power.card_sleep_wake")}</h3>
+                <h2 class="card-title">${store.t("dev_power.card_sleep_wake")}</h2>
               </div>
               <div class="card-content settings-list">
                 ${sleepPrefs.map((p) => renderPrefControlRow(store, p))}
@@ -113,7 +113,7 @@ export function renderDevicePowerView(store: StudioStore): TemplateResult {
         ${batteryItems.length
           ? html`<div class="card" data-entity-card>
               <div class="card-header">
-                <h3 class="card-title">${store.t("dev_power.card_power_battery")}</h3>
+                <h2 class="card-title">${store.t("dev_power.card_power_battery")}</h2>
               </div>
               <div class="card-content settings-list">
                 ${batteryItems.map((it) => renderDeviceEntityRow(store, it))}

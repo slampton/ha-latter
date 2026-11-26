@@ -290,7 +290,7 @@ export function renderBatchControlsCard(
       return nothing;
     }
     return html`<div class="settings-list">
-      <div class="subsection-title">${store.t("batch.copy_lists_title")}</div>
+      <h3 class="subsection-title">${store.t("batch.copy_lists_title")}</h3>
       ${renderSettingsRow({
         label: store.t("batch.template_device"),
         description: store.t("batch.template_device_desc", { target: selectedTargetName }),

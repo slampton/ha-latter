@@ -4,6 +4,7 @@
 
 import { t } from "../../i18n/index.js";
 import { focusSafe, html, live, nothing, repeat, type TemplateResult } from "../../lib/lit.js";
+import { compareLocaleText } from "../../utils/format.js";
 
 export interface ComboboxOptionItem {
   id: string;
@@ -126,8 +127,8 @@ export function matchComboboxOptions(
   scored.sort(
     (a, b) =>
       a.rank - b.rank ||
-      a.labelLow.localeCompare(b.labelLow) ||
-      a.item.id.localeCompare(b.item.id),
+      compareLocaleText(a.labelLow, b.labelLow) ||
+      compareLocaleText(a.item.id, b.item.id),
   );
 
   return {

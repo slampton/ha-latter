@@ -5,13 +5,33 @@
 import { css } from "../lib/lit.js";
 
 export const LAYOUT_STYLES = css`
+  .skip-link {
+    position: fixed;
+    inset-block-start: -100px;
+    inset-inline-start: var(--studio-space-3);
+    z-index: 60;
+    padding-block: var(--studio-space-2);
+    padding-inline: var(--studio-space-4);
+    border-radius: var(--studio-radius-pill);
+    background: var(--studio-btn-accent-bg);
+    color: var(--studio-btn-accent-text);
+    font-weight: var(--studio-weight-medium);
+    text-decoration: none;
+    box-shadow: var(--studio-overlay-shadow);
+  }
+  .skip-link:focus-visible {
+    inset-block-start: var(--studio-space-2);
+    outline: 2px solid var(--studio-primary);
+    outline-offset: 2px;
+  }
+
   header.latter-top-titlebar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--studio-space-3);
-    height: var(--studio-header-height);
-    padding-block: 0;
+    min-block-size: var(--studio-header-height);
+    padding-block: var(--studio-space-1);
     padding-inline: var(--studio-space-3);
     background: var(--studio-header-bg);
     color: var(--studio-header-text);
@@ -69,6 +89,9 @@ export const LAYOUT_STYLES = css`
     border-radius: var(--studio-radius-control);
   }
   .scope-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: var(--studio-control-height-compact);
     border: none;
     border-radius: var(--studio-radius-control);
@@ -76,6 +99,7 @@ export const LAYOUT_STYLES = css`
     color: var(--studio-text-secondary);
     font: inherit;
     font-weight: var(--studio-weight-medium);
+    text-decoration: none;
     cursor: pointer;
   }
   .scope-tab.active {
@@ -162,6 +186,7 @@ export const LAYOUT_STYLES = css`
     gap: var(--studio-space-2);
     font-size:var(--studio-font-title);
     font-weight: var(--studio-weight-regular);
+    text-wrap: balance;
   }
   .page-subtitle {
     color: var(--studio-text-secondary);
@@ -202,12 +227,10 @@ export const LAYOUT_STYLES = css`
     .nav-list {
       flex-direction: row;
       overflow-x: auto;
-      scrollbar-width: none;
+      scroll-padding-inline: var(--studio-space-2);
+      padding-block: var(--studio-space-1);
       padding-inline: var(--studio-space-1);
-      -webkit-mask-image: var(--studio-nav-scroll-mask);
-      mask-image: var(--studio-nav-scroll-mask);
     }
-    .nav-list::-webkit-scrollbar { display: none; }
     .nav-btn {
       inline-size: auto;
       border: 1px solid var(--studio-divider);
@@ -217,6 +240,9 @@ export const LAYOUT_STYLES = css`
     .content-wrap {
       padding-block: var(--studio-space-4) var(--studio-space-5);
       padding-inline: var(--studio-space-3);
+    }
+    :host {
+      scroll-padding-block-start: calc(var(--studio-header-height) + var(--studio-space-5) * 4);
     }
   }
 `;

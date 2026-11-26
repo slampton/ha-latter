@@ -21,15 +21,19 @@ import {
 } from "../../state/photo-ops.js";
 import type { StudioStore } from "../../state/store.js";
 import { fmtNumber } from "../../utils/format.js";
+import {
+  createDialogBackdropHandlers,
+  handleRadioGroupArrowKey,
+} from "../controls/aria-helpers.js";
 
 export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
   const modal = store.photoPickerModal;
-  const close = (): void => store.entity.closePhotoPickerModal();
-  const onBackdropClick = (ev: Event): void => {
-    if (ev.target === ev.currentTarget && !modal.busy) {
-      close();
+  const close = (): void => {
+    if (store.photoPickerModal.open && !store.photoPickerModal.busy) {
+      store.entity.closePhotoPickerModal();
     }
   };
+  const backdrop = createDialogBackdropHandlers(close, () => store.photoPickerModal.busy);
 
   const onCancel = (ev: Event): void => {
     if (modal.busy) {
@@ -43,8 +47,11 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
     return html`<dialog
       id="latter-photo-picker-modal"
       aria-labelledby="latter-photo-picker-title"
+      closedby=${modal.busy ? "none" : "any"}
       @cancel=${onCancel}
-      @click=${onBackdropClick}
+      @close=${close}
+      @pointerdown=${backdrop.onPointerDown}
+      @click=${backdrop.onClick}
       class="studio-dialog photo-dialog"
     >
       ${nothing}
@@ -122,13 +129,16 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-photo-picker-modal"
     aria-labelledby="latter-photo-picker-title"
+    closedby=${modal.busy ? "none" : "any"}
     @cancel=${onCancel}
-    @click=${onBackdropClick}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog photo-dialog"
   >
     <div class="dialog-body">
       <div class="dialog-header-row">
-        <h3 id="latter-photo-picker-title" class="dialog-title">${title}</h3>
+        <h1 id="latter-photo-picker-title" class="dialog-title">${title}</h1>
         <button
           type="button"
           id="btn-picker-quick-upload"
@@ -143,6 +153,17 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
       <div
         role="radiogroup"
         aria-label=${store.t("photo_picker.mode_aria")}
+        @keydown=${(ev: KeyboardEvent) =>
+          handleRadioGroupArrowKey(
+            ev,
+            ["photos", "collection"] as const,
+            modal.mode,
+            (next) => {
+              store.photoPickerModal = { ...store.photoPickerModal, mode: next };
+              store.host.requestUpdate();
+            },
+            (next) => `#btn-picker-mode-${next}`,
+          )}
         class="segmented"
       >
         <button
@@ -150,6 +171,7 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
           id="btn-picker-mode-photos"
           role="radio"
           aria-checked=${modal.mode === "photos" ? "true" : "false"}
+          tabindex=${modal.mode === "photos" ? "0" : "-1"}
           @click=${() => {
             store.photoPickerModal = { ...store.photoPickerModal, mode: "photos" };
             store.host.requestUpdate();
@@ -163,6 +185,7 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
           id="btn-picker-mode-collection"
           role="radio"
           aria-checked=${modal.mode === "collection" ? "true" : "false"}
+          tabindex=${modal.mode === "collection" ? "0" : "-1"}
           @click=${() => {
             store.photoPickerModal = { ...store.photoPickerModal, mode: "collection" };
             store.host.requestUpdate();
@@ -201,7 +224,7 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
                   </option>`,
                 )}
               </select>
-            </div>
+            </search>
             <div class="photo-pool-preview">
               ${collectionPreviewPhotos.length > 0
                 ? html`<div class="photo-pool-thumbs">
@@ -210,6 +233,9 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
                         src=${p.thumb_url || p.preview_url || ""}
                         alt=${p.name || p.id}
                         loading="lazy"
+                        decoding="async"
+                        width="48"
+                        height="48"
                         class="photo-pool-thumb ${shapeClass}"
                       />`,
                     )}
@@ -230,7 +256,7 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
             </div>
           </div>`
         : html`<div class="stack">
-            <div class="photo-toolbar">
+            <search class="photo-toolbar">
               <input
                 type="search"
                 id="photo-picker-search"
@@ -272,7 +298,7 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
                   </option>`,
                 )}
               </select>
-            </div>
+            </search>
 
             <div class="photo-toolbar">
               <span class="row-description">${store.t("photo_picker.custom_hint")}</span>
@@ -317,6 +343,9 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
                             src=${thumbSrc}
                             alt=${photo.name || photo.id}
                             loading="lazy"
+                            decoding="async"
+                            width="56"
+                            height="56"
                             class="photo-picker-thumb ${shapeClass}"
                           />`
                         : html`<div class="photo-picker-thumb ${shapeClass}" aria-hidden="true"></div>`}

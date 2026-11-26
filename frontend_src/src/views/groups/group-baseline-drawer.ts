@@ -1064,7 +1064,7 @@ export function renderGroupBaselineDrawer(
 
       ${latterDevices.length
         ? html`<div class="settings-list">
-            <div class="subsection-title">${store.t("groups.copy_from_device")}</div>
+            <h3 class="subsection-title">${store.t("groups.copy_from_device")}</h3>
             ${renderSettingsRow({
               label: store.t("groups.source_device"),
               description: store.t("groups.source_device_desc"),

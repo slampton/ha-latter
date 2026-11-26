@@ -72,7 +72,7 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
                       />
                     </div>
                   </div>
-                  <div class="pill-list">
+                  <div role="group" aria-label=${store.t("groups.card_title")} class="pill-list">
                     <span class="pill ${store.newGroupIncludeDisplay ? "enabled" : ""}">
                       <button
                         type="button"
@@ -171,7 +171,7 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
                       >
                         <div class="area-box-head">
                           <div class="area-box-heading">
-                            <h4 class="area-box-title">${g.name}</h4>
+                            <h3 class="area-box-title">${g.name}</h3>
                             <span class="chip ${members.length ? "chip-primary" : ""}">
                               ${members.length === 1
                                 ? store.t("groups.members_one")
@@ -237,7 +237,7 @@ export function renderSystemGroupsView(store: StudioStore): TemplateResult {
               <div id="group-box-custom" class="area-presence-box">
                 <div class="area-box-head">
                   <div class="area-box-heading">
-                    <h4 class="area-box-title">${store.t("groups.custom_summary_title")}</h4>
+                    <h3 class="area-box-title">${store.t("groups.custom_summary_title")}</h3>
                     <span class="chip ${customMembers.length ? "chip-primary" : ""}">
                       ${customMembers.length === 1
                         ? store.t("groups.members_one")

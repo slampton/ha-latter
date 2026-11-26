@@ -89,7 +89,7 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
     <div class="columns">
       <div class="column">
         ${renderCard({
-          heading: html`<h3 class="card-title">${store.t("dev_audio.card_voice_wake")}</h3>`,
+          heading: html`<h2 class="card-title">${store.t("dev_audio.card_voice_wake")}</h2>`,
           contentClass: "settings-list",
           body: html`${wwModePref ? renderPrefControlRow(store, wwModePref) : nothing}
             ${voicePrimary.map((it) => renderDeviceEntityRow(store, it))}
@@ -141,9 +141,9 @@ export function renderDeviceAudioView(store: StudioStore): TemplateResult {
 
       <div class="column">
         ${renderCard({
-          heading: html`<h3 class="card-title">
+          heading: html`<h2 class="card-title">
             ${store.t("dev_audio.card_sound_playback")}
-          </h3>`,
+          </h2>`,
           contentClass: "settings-list",
           body: html`${renderSelectRow({
               id: "cfg-default_speaker",

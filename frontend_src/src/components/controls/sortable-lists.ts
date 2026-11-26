@@ -13,10 +13,17 @@ interface ActiveDragSession {
   fromIndex: number;
   overIndex: number;
   insertAfter: boolean;
+  onKeyCancel?: (ev: KeyboardEvent) => void;
 }
 
 let activeDrag: ActiveDragSession | null = null;
 const SORTABLE_LIVE_STATUS = new Map<string, string>();
+
+function detachDragKeyCancel(session: ActiveDragSession | null): void {
+  if (session?.onKeyCancel && typeof globalThis.removeEventListener === "function") {
+    globalThis.removeEventListener("keydown", session.onKeyCancel, true);
+  }
+}
 
 function announceReorder(
   listId: string,
@@ -69,6 +76,26 @@ function attachDragHandleHandlers(opts: {
   overlay?: Readonly<Record<string, string>> | null;
   onReorder: (fromIndex: number, toIndex: number) => void;
 }) {
+  const cancelSession = (handleEl: HTMLElement | null, pointerId: number): void => {
+    if (!activeDrag || activeDrag.listId !== opts.listId || activeDrag.pointerId !== pointerId) {
+      return;
+    }
+    const session = activeDrag;
+    activeDrag = null;
+    detachDragKeyCancel(session);
+    const listEl = handleEl?.closest("[data-sortable-list]") as HTMLElement | null;
+    if (handleEl) {
+      try {
+        if (typeof handleEl.hasPointerCapture === "function" && handleEl.hasPointerCapture(pointerId)) {
+          handleEl.releasePointerCapture(pointerId);
+        }
+      } catch {
+        // Ignore release errors.
+      }
+    }
+    clearDragDomClasses(listEl);
+  };
+
   const onPointerDown = (ev: PointerEvent): void => {
     if (ev.button !== 0 || opts.total <= 1) return;
     const handle = ev.currentTarget as HTMLElement;
@@ -76,10 +103,23 @@ function attachDragHandleHandlers(opts: {
     const listEl = handle.closest("[data-sortable-list]") as HTMLElement | null;
     if (!rowEl || !listEl) return;
     ev.preventDefault();
+    if (activeDrag) {
+      detachDragKeyCancel(activeDrag);
+    }
     try {
       handle.setPointerCapture(ev.pointerId);
     } catch {
       // Headless test environments may omit setPointerCapture.
+    }
+    const onKeyCancel = (kev: KeyboardEvent): void => {
+      if (kev.key === "Escape") {
+        kev.preventDefault();
+        kev.stopPropagation();
+        cancelSession(handle, ev.pointerId);
+      }
+    };
+    if (typeof globalThis.addEventListener === "function") {
+      globalThis.addEventListener("keydown", onKeyCancel, true);
     }
     activeDrag = {
       listId: opts.listId,
@@ -88,6 +128,7 @@ function attachDragHandleHandlers(opts: {
       fromIndex: opts.idx,
       overIndex: opts.idx,
       insertAfter: false,
+      onKeyCancel,
     };
     clearDragDomClasses(listEl);
     rowEl.classList.add("dragging");
@@ -157,6 +198,7 @@ function attachDragHandleHandlers(opts: {
     }
     const session = activeDrag;
     activeDrag = null;
+    detachDragKeyCancel(session);
     const handle = ev.currentTarget as HTMLElement;
     const listEl = handle.closest("[data-sortable-list]") as HTMLElement | null;
     try {
@@ -306,11 +348,11 @@ export function renderSortableList<T>(opts: SortableListOptions<T>): TemplateRes
                 type="button"
                 tabindex="-1"
                 aria-hidden="true"
-                title=${t("action.drag_reorder", { item: label }, opts.overlay)}
                 @pointerdown=${drag.onPointerDown}
                 @pointermove=${drag.onPointerMove}
                 @pointerup=${drag.onPointerUp}
                 @pointercancel=${drag.onPointerCancel}
+                @lostpointercapture=${drag.onPointerCancel}
                 class="drag-handle"
               >
                 ≡
@@ -460,11 +502,11 @@ export function renderPillList(opts: PillListOptions): TemplateResult {
                 type="button"
                 tabindex="-1"
                 aria-hidden="true"
-                title=${t("action.drag_reorder", { item: item.label }, opts.overlay)}
                 @pointerdown=${drag.onPointerDown}
                 @pointermove=${drag.onPointerMove}
                 @pointerup=${drag.onPointerUp}
                 @pointercancel=${drag.onPointerCancel}
+                @lostpointercapture=${drag.onPointerCancel}
                 class="drag-handle"
               >
                 ≡

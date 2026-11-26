@@ -11,7 +11,7 @@ import { renderCard, renderSvgIcon } from "../components/controls.js";
 import { html, nothing, type TemplateResult } from "../lib/lit.js";
 import type { StudioStore } from "../state/store.js";
 import type { AreaPresenceRow, BleAreaSignatureSummary, SystemDeviceEntry } from "../types.js";
-import { fmtNumber, issueMessage } from "../utils/format.js";
+import { compareLocaleText, fmtNumber, issueMessage } from "../utils/format.js";
 
 const SYS_ICON_DEVICES =
   "M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z";
@@ -335,7 +335,7 @@ export function renderSystemOverviewView(store: StudioStore): TemplateResult {
     const aDev = a.stationedTitles.length + a.roamingHereTitles.length;
     const bDev = b.stationedTitles.length + b.roamingHereTitles.length;
     if (aDev > 0 !== bDev > 0) return aDev > 0 ? -1 : 1;
-    return a.areaName.localeCompare(b.areaName, undefined, { sensitivity: "base" });
+    return compareLocaleText(a.areaName, b.areaName, store.hass);
   });
 
   const totalAreas = areaEntries.length;

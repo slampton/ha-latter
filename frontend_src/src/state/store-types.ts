@@ -483,6 +483,8 @@ export interface StudioStoreContext {
 
   devicePinDraft: string;
   systemPinDraft: string;
+  showDevicePin: boolean;
+  showSystemPin: boolean;
   pinBusy: boolean;
   worldClockNewLabel: string;
   worldClockNewZone: string;

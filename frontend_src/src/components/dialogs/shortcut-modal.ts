@@ -41,6 +41,7 @@ import {
   resolveDeviceGridDims,
   resolveTileGridLayout,
 } from "../../utils/tile-grid.js";
+import { createDialogBackdropHandlers } from "../controls/aria-helpers.js";
 import {
   type ComboboxOptionItem,
   renderEntityCombobox,
@@ -271,13 +272,12 @@ function humanizeMdiIconLabel(slug: string): string {
 
 export function renderShortcutDialog(store: StudioStore): TemplateResult {
   const scModal = store.shortcutModal;
-  const close = (): void => store.entity.closeShortcutModal();
-
-  const onBackdropClick = (ev: Event): void => {
-    if (ev.target === ev.currentTarget) {
-      close();
+  const close = (): void => {
+    if (store.shortcutModal.open) {
+      store.entity.closeShortcutModal();
     }
   };
+  const backdrop = createDialogBackdropHandlers(close);
 
   if (!scModal.open) {
     cancelShortcutIconSearchDebounce(store);
@@ -285,8 +285,11 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
     return html`<dialog
       id="latter-shortcut-modal"
       aria-labelledby="latter-shortcut-title"
+      closedby="any"
       @cancel=${close}
-      @click=${onBackdropClick}
+      @close=${close}
+      @pointerdown=${backdrop.onPointerDown}
+      @click=${backdrop.onClick}
       class="studio-dialog shortcut-dialog"
     >
       ${nothing}
@@ -447,12 +450,15 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-shortcut-modal"
     aria-labelledby="latter-shortcut-title"
+    closedby="any"
     @cancel=${close}
-    @click=${onBackdropClick}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog shortcut-dialog"
   >
     <div class="dialog-body">
-      <h3 id="latter-shortcut-title" class="dialog-title">${scTitle}</h3>
+      <h1 id="latter-shortcut-title" class="dialog-title">${scTitle}</h1>
 
       <div role="tablist" aria-label=${store.t("dialogs.sc_type_aria")} class="scope-tabs">
         <button
@@ -953,6 +959,14 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
                         aria-pressed=${isCurrent ? "true" : "false"}
                         @mouseenter=${() => {
                           hoveredSpanByStore.set(store, { w, h });
+                          store.host.requestUpdate();
+                        }}
+                        @focus=${() => {
+                          hoveredSpanByStore.set(store, { w, h });
+                          store.host.requestUpdate();
+                        }}
+                        @blur=${() => {
+                          hoveredSpanByStore.delete(store);
                           store.host.requestUpdate();
                         }}
                         @click=${() => {

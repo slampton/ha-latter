@@ -328,7 +328,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
         ${hasScreensaverCard
           ? renderCard({
               id: "card-screensaver",
-              heading: html`<h3 class="card-title">${store.t("card.screensaver")}</h3>`,
+              heading: html`<h2 class="card-title">${store.t("card.screensaver")}</h2>`,
               contentClass: "stack",
               body: html`<div class="settings-list">
                   ${ssModePref ? renderPrefControlRow(store, ssModePref) : nothing}
@@ -346,6 +346,9 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                                   src=${src}
                                   alt=""
                                   loading="lazy"
+                                  decoding="async"
+                                  width="48"
+                                  height="48"
                                   class="photo-pool-thumb ${shapeClass}"
                                 />`,
                               )}
@@ -461,9 +464,9 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
 
         ${voiceVisualPref
           ? renderCard({
-              heading: html`<h3 class="card-title">
+              heading: html`<h2 class="card-title">
                 ${store.t("dev_display.card_voice_assistant")}
-              </h3>`,
+              </h2>`,
               contentClass: "settings-list",
               body: renderPrefControlRow(store, voiceVisualPref),
             })
@@ -472,7 +475,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
         ${visibleBrightnessPrefs.length
           ? renderCard({
               id: "card-brightness",
-              heading: html`<h3 class="card-title">${store.t("card.brightness")}</h3>`,
+              heading: html`<h2 class="card-title">${store.t("card.brightness")}</h2>`,
               subtitle: bedtimeActive
                 ? store.t("dev_display.bedtime_brightness_override_note")
                 : ambientBrightnessSubtitle,
@@ -492,7 +495,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
 
       <div class="column">
         ${renderCard({
-          heading: html`<h3 class="card-title">${store.t("card.colors")}</h3>`,
+          heading: html`<h2 class="card-title">${store.t("card.colors")}</h2>`,
           contentClass: "settings-list",
           body: html`${colorProfilePref ? renderPrefControlRow(store, colorProfilePref) : nothing}
             ${renderSettingsRow({
@@ -563,7 +566,7 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
 
         ${renderCard({
           id: "card-device-wallpapers",
-          heading: html`<h3 class="card-title">${store.t("card.wallpapers")}</h3>`,
+          heading: html`<h2 class="card-title">${store.t("card.wallpapers")}</h2>`,
           subtitle: store.t("dev_display.wallpapers_subtitle"),
           headerActions: html`<button
             type="button"
@@ -582,6 +585,9 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
                         src=${src}
                         alt=""
                         loading="lazy"
+                        decoding="async"
+                        width="48"
+                        height="48"
                         class="photo-pool-thumb ${shapeClass}"
                       />`,
                     )}

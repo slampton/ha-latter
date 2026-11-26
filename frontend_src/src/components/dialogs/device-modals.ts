@@ -9,12 +9,7 @@
 import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import { renderSelectOptions, renderSwitchRow } from "../controls.js";
-
-function bindBackdropClose(ev: Event, closeFn: () => void, busy = false): void {
-  if (!busy && ev.target === ev.currentTarget) {
-    closeFn();
-  }
-}
+import { createDialogBackdropHandlers } from "../controls/aria-helpers.js";
 
 function guardDialogCancel(ev: Event, closeFn: () => void, busy = false): void {
   if (busy) {
@@ -26,14 +21,22 @@ function guardDialogCancel(ev: Event, closeFn: () => void, busy = false): void {
 
 export function renderRemoveDeviceDialog(store: StudioStore): TemplateResult {
   const rm = store.removeModal;
-  const close = (): void => store.tools.closeRemoveDeviceModal();
+  const close = (): void => {
+    if (store.removeModal.open && !store.removeModal.busy) {
+      store.tools.closeRemoveDeviceModal();
+    }
+  };
+  const backdrop = createDialogBackdropHandlers(close, () => store.removeModal.busy);
 
   if (!rm.open) {
     return html`<dialog
       id="latter-rm-modal"
       aria-labelledby="latter-rm-title"
+      closedby=${rm.busy ? "none" : "any"}
       @cancel=${(ev: Event) => guardDialogCancel(ev, close, rm.busy)}
-      @click=${(ev: Event) => bindBackdropClose(ev, close, rm.busy)}
+      @close=${close}
+      @pointerdown=${backdrop.onPointerDown}
+      @click=${backdrop.onClick}
       class="studio-dialog confirm-dialog"
     >
       ${nothing}
@@ -46,15 +49,18 @@ export function renderRemoveDeviceDialog(store: StudioStore): TemplateResult {
     id="latter-rm-modal"
     aria-labelledby="latter-rm-title"
     aria-describedby="latter-rm-desc"
+    closedby=${rm.busy ? "none" : "any"}
     @cancel=${(ev: Event) => guardDialogCancel(ev, close, rm.busy)}
-    @click=${(ev: Event) => bindBackdropClose(ev, close, rm.busy)}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog confirm-dialog"
   >
     <div class="dialog-body">
       <div class="dialog-header-row">
-        <h3 id="latter-rm-title" class="dialog-title">
+        <h1 id="latter-rm-title" class="dialog-title">
           ${store.t("confirm.remove_device.title", { title: devTitle })}
-        </h3>
+        </h1>
         <span class="chip chip-warning confirm-blast-badge">
           ${store.t("confirm.blast_radius_one")}
         </span>
@@ -72,7 +78,13 @@ export function renderRemoveDeviceDialog(store: StudioStore): TemplateResult {
           ${store.t("action.download_backup_first")}
         </button>
         <div class="dialog-actions-end">
-          <button type="button" ?disabled=${rm.busy} @click=${close} class="btn btn-secondary">
+          <button
+            type="button"
+            autofocus
+            ?disabled=${rm.busy}
+            @click=${close}
+            class="btn btn-secondary"
+          >
             ${store.t("action.cancel")}
           </button>
           <button
@@ -91,14 +103,22 @@ export function renderRemoveDeviceDialog(store: StudioStore): TemplateResult {
 
 export function renderResetDeviceDialog(store: StudioStore): TemplateResult {
   const rs = store.resetModal;
-  const close = (): void => store.tools.closeResetDeviceModal();
+  const close = (): void => {
+    if (store.resetModal.open && !store.resetModal.busy) {
+      store.tools.closeResetDeviceModal();
+    }
+  };
+  const backdrop = createDialogBackdropHandlers(close, () => store.resetModal.busy);
 
   if (!rs.open) {
     return html`<dialog
       id="latter-reset-modal"
       aria-labelledby="latter-reset-title"
+      closedby=${rs.busy ? "none" : "any"}
       @cancel=${(ev: Event) => guardDialogCancel(ev, close, rs.busy)}
-      @click=${(ev: Event) => bindBackdropClose(ev, close, rs.busy)}
+      @close=${close}
+      @pointerdown=${backdrop.onPointerDown}
+      @click=${backdrop.onClick}
       class="studio-dialog confirm-dialog"
     >
       ${nothing}
@@ -109,15 +129,18 @@ export function renderResetDeviceDialog(store: StudioStore): TemplateResult {
     id="latter-reset-modal"
     aria-labelledby="latter-reset-title"
     aria-describedby="latter-reset-desc"
+    closedby=${rs.busy ? "none" : "any"}
     @cancel=${(ev: Event) => guardDialogCancel(ev, close, rs.busy)}
-    @click=${(ev: Event) => bindBackdropClose(ev, close, rs.busy)}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog confirm-dialog"
   >
     <div class="dialog-body">
       <div class="dialog-header-row">
-        <h3 id="latter-reset-title" class="dialog-title">
+        <h1 id="latter-reset-title" class="dialog-title">
           ${store.t("confirm.reset_device.title")}
-        </h3>
+        </h1>
         <span class="chip chip-warning confirm-blast-badge">
           ${store.t("confirm.blast_radius_one")}
         </span>
@@ -159,7 +182,13 @@ export function renderResetDeviceDialog(store: StudioStore): TemplateResult {
           ${store.t("action.download_backup_first")}
         </button>
         <div class="dialog-actions-end">
-          <button type="button" ?disabled=${rs.busy} @click=${close} class="btn btn-secondary">
+          <button
+            type="button"
+            autofocus
+            ?disabled=${rs.busy}
+            @click=${close}
+            class="btn btn-secondary"
+          >
             ${store.t("action.cancel")}
           </button>
           <button
@@ -179,14 +208,22 @@ export function renderResetDeviceDialog(store: StudioStore): TemplateResult {
 
 export function renderAddBleDialog(store: StudioStore): TemplateResult {
   const modal = store.addBleModal;
-  const close = (): void => store.tools.closeAddBleModal();
+  const close = (): void => {
+    if (store.addBleModal.open && !store.addBleModal.busy) {
+      store.tools.closeAddBleModal();
+    }
+  };
+  const backdrop = createDialogBackdropHandlers(close, () => store.addBleModal.busy);
 
   if (!modal.open) {
     return html`<dialog
       id="latter-add-dev-modal"
       aria-labelledby="latter-add-dev-title"
+      closedby=${modal.busy ? "none" : "any"}
       @cancel=${(ev: Event) => guardDialogCancel(ev, close, modal.busy)}
-      @click=${(ev: Event) => bindBackdropClose(ev, close, modal.busy)}
+      @close=${close}
+      @pointerdown=${backdrop.onPointerDown}
+      @click=${backdrop.onClick}
       class="studio-dialog"
     >
       ${nothing}
@@ -199,12 +236,15 @@ export function renderAddBleDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-add-dev-modal"
     aria-labelledby="latter-add-dev-title"
+    closedby=${modal.busy ? "none" : "any"}
     @cancel=${(ev: Event) => guardDialogCancel(ev, close, modal.busy)}
-    @click=${(ev: Event) => bindBackdropClose(ev, close, modal.busy)}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog"
   >
     <div class="dialog-body">
-      <h3 id="latter-add-dev-title" class="dialog-title">${store.t("dialogs.ble_title")}</h3>
+      <h1 id="latter-add-dev-title" class="dialog-title">${store.t("dialogs.ble_title")}</h1>
       <p class="dialog-text">${store.t("dialogs.ble_body")}</p>
       <div class="stacked-field">
         <label for="ble-candidate-picker">${store.t("dialogs.ble_discovered_label")}</label>
@@ -249,6 +289,9 @@ export function renderAddBleDialog(store: StudioStore): TemplateResult {
           type="text"
           id="ble-custom-addr"
           placeholder=${store.t("dialogs.ble_addr_placeholder")}
+          spellcheck="false"
+          autocorrect="off"
+          autocapitalize="none"
           .value=${focusSafe(modal.address)}
           @input=${(ev: Event) => {
             store.addBleModal = {
@@ -294,14 +337,22 @@ export function renderAddBleDialog(store: StudioStore): TemplateResult {
 
 export function renderSaveGroupDialog(store: StudioStore): TemplateResult {
   const modal = store.saveGroupModal;
-  const close = (): void => store.groups.closeSaveGroupModal();
+  const close = (): void => {
+    if (store.saveGroupModal.open && !store.saveGroupModal.busy) {
+      store.groups.closeSaveGroupModal();
+    }
+  };
+  const backdrop = createDialogBackdropHandlers(close, () => Boolean(store.saveGroupModal.busy));
 
   if (!modal.open) {
     return html`<dialog
       id="latter-save-group-modal"
       aria-labelledby="latter-save-group-title"
+      closedby=${modal.busy ? "none" : "any"}
       @cancel=${(ev: Event) => guardDialogCancel(ev, close, Boolean(modal.busy))}
-      @click=${(ev: Event) => bindBackdropClose(ev, close, Boolean(modal.busy))}
+      @close=${close}
+      @pointerdown=${backdrop.onPointerDown}
+      @click=${backdrop.onClick}
       class="studio-dialog"
     >
       ${nothing}
@@ -311,14 +362,17 @@ export function renderSaveGroupDialog(store: StudioStore): TemplateResult {
   return html`<dialog
     id="latter-save-group-modal"
     aria-labelledby="latter-save-group-title"
+    closedby=${modal.busy ? "none" : "any"}
     @cancel=${(ev: Event) => guardDialogCancel(ev, close, Boolean(modal.busy))}
-    @click=${(ev: Event) => bindBackdropClose(ev, close, Boolean(modal.busy))}
+    @close=${close}
+    @pointerdown=${backdrop.onPointerDown}
+    @click=${backdrop.onClick}
     class="studio-dialog"
   >
     <div class="dialog-body">
-      <h3 id="latter-save-group-title" class="dialog-title">
+      <h1 id="latter-save-group-title" class="dialog-title">
         ${store.t("dialogs.save_group_title")}
-      </h3>
+      </h1>
       <p class="dialog-text">${store.t("dialogs.save_group_body")}</p>
       <div class="stacked-field">
         <label for="save-group-name">${store.t("groups.group_name")}</label>

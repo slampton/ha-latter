@@ -230,6 +230,8 @@ export function onActiveDeviceChangedOp(
 
   if (cleanPrev !== cleanNext) {
     store.devicePinDraft = "";
+    store.showDevicePin = false;
+    store.showSystemPin = false;
     store.worldClockNewLabel = "";
     store.worldClockNewZone = "";
     store.worldClockRowKeys = [];
