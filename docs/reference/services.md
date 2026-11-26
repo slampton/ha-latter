@@ -86,8 +86,8 @@ Bound ESPHome displays emit compact chunked frames on `sensor.<node>_system_rpc_
 | | `intercom_broadcast` | Bound-device counterpart of `latter.intercom_broadcast` from the Home Hub **Broadcast** tab. |
 | | `doorbell_intercom` | Controls live camera audio (`listen_start` \| `listen_stop` \| `listen_toggle`), TTS `talk_message` / `quick_reply`, `set_noise_reduction`, and `select_camera`. |
 
-### Session-Key PIN Unwrapping & Perimeter Security (`services/rpc_security.py`)
+### Session-Key PIN Unwrapping & Perimeter Security (`services/rpc_dispatcher.py` & `protocol_policy.py`)
 
-- **Authenticated `v1:` PIN Envelopes & Lockout:** PINs entered on the touch keypad (`4–12` digits) are wrapped with the Device's per-boot session key (`v1:<nonce>:<cipher>:<hmac>`) before crossing `System: RPC Outbox`, unwrapped in constant time by `unwrap_rpc_pin_code`, and guarded by `PinLockoutTracker` (`5` consecutive failures trigger `60 s` exponential backoff).
+- **Authenticated `v1:` PIN Envelopes & Lockout:** PINs entered on the touch keypad (`4–12` digits) are wrapped with the Device's per-boot session key (`v1:<key_id>:<nonce_hex8>:<ct_hex>:<mac_hex32>`) before crossing `System: RPC Outbox`, unwrapped in constant time by `unwrap_rpc_pin_code`, and guarded by `PinLockoutTracker` (`5` consecutive failures trigger `60 s` exponential backoff).
 - **Home Assistant Alarm Panels with a Code (`alarm_caps`):** when the target `alarm_control_panel` defines `code_format`, `disarm` (and `arm_*` when `code_arm_required` is true) validates `code` and passes it straight through to Home Assistant's alarm service. Arming is never blocked by `security_pin_policy: block`.
 - **Locks, Garage/Gate Covers & Code-Less Alarms:** opening actions (`unlock`/`open`, opening garage/gate/door covers, and `disarm` on code-less alarms) enforce the calling Device's Studio **Perimeter security policy** (`allow`, `require_pin`, or `block`; `auto` resolves to `require_pin` on stationary panels or when an HA alarm code exists), verifying `code` in constant time against the PBKDF2-HMAC-SHA256 Device security PIN (falling back to the System security PIN).

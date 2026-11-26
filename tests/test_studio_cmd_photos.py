@@ -162,7 +162,10 @@ async def test_studio_commands_photo_library_pools_and_media_import(
     assert coord.screensaver_shuffle is True
     assert coord.screensaver_cycle_minutes == 5
     assert coord._unsub_screensaver_timer is not None
-    assert ss_pool_state["live"]["screensaver_pool_count"] == 2
+    assert ss_pool_state["config"]["screensaver_photo_ids"] == [
+        "preset:ocean_waves",
+        dev_wp_id,
+    ]
     _, area_attrs_ss = coord.get_area_context_payload()
     assert "mode=screensaver" in area_attrs_ss["screensaver_photo_url"]
     assert (
@@ -222,7 +225,10 @@ async def test_studio_commands_photo_library_pools_and_media_import(
     assert coord.wallpaper_cycle_minutes == 5
     assert coord.wallpaper_source == "preset:ocean_waves"
     assert coord._unsub_wallpaper_timer is not None
-    assert rot_state["live"]["wallpaper_pool_count"] == 2
+    assert rot_state["config"]["wallpaper_favorites"] == [
+        "preset:ocean_waves",
+        "preset:mars_crater",
+    ]
 
     await _sys_cmd(
         "bulk_update_photos",

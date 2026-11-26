@@ -39,7 +39,7 @@ class TestShortcutPolicy(unittest.TestCase):
                     "badge_style": "inverted",
                     "accent": "primary",
                 },
-                {"kind": "route", "target": "settings:root"},
+                {"kind": "route", "target": "not:a_route"},
                 {
                     "kind": "entity",
                     "target": "scene.evening",
@@ -132,7 +132,7 @@ class TestShortcutPolicy(unittest.TestCase):
         )
         for key in ("dock_items", "pinned_items", "pinned_page_titles"):
             self.assertIn(key, settings.DEVICE_SETTING_KEYS)
-            self.assertIn(key, groups.GROUP_APPEARANCE_DEVICE_KEYS)
+            self.assertIn(key, groups.GROUP_INTERFACE_DEVICE_KEYS)
             self.assertIn(key, backup.DEVICE_CONFIG_EXPORT_KEYS)
         self.assertNotIn("dock_apps", read_py_tree("coordinator"))
         self.assertNotIn("set_dock_apps", read_py_tree("services"))

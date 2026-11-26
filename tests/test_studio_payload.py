@@ -72,7 +72,7 @@ class TestEntitySections(unittest.TestCase):
             "config",
             translation_key=key,
             device_object_prefixes=("latter_desk_display", "desk_display"),
-        )[0]
+        )
 
     def test_assist_satellite_entities_are_voice(self) -> None:
         self.assertEqual(
@@ -133,7 +133,7 @@ class TestEntitySections(unittest.TestCase):
                 "",
                 "config",
                 device_object_prefixes=("desk_assistant",),
-            )[0]
+            )
             sections.setdefault(sec, []).append({"entity_id": ent})
         payload_sections = [
             {"id": sid, "title": sid, "items": items} for sid, items in sections.items()
@@ -145,7 +145,7 @@ class TestEntitySections(unittest.TestCase):
         )
         payload_src = read_py_tree("studio/payload.py")
         self.assertIn('sec_ids = present_section_ids(esphome_inspector.get("sections"))', payload_src)
-        self.assertIn('("sleep" in sec_ids)', payload_src)
+        self.assertNotIn('("sleep" in sec_ids)', payload_src)
         self.assertIn('("battery" in sec_ids)', payload_src)
         self.assertNotIn('s.get("count"', payload_src)
 
@@ -175,7 +175,7 @@ class TestEntitySections(unittest.TestCase):
                 "signal_strength",
                 "diagnostic",
                 device_object_prefixes=("desk_display",),
-            )[0],
+            ),
             "network",
         )
         self.assertEqual(
@@ -186,7 +186,7 @@ class TestEntitySections(unittest.TestCase):
                 "timestamp",
                 "diagnostic",
                 device_object_prefixes=("desk_display",),
-            )[0],
+            ),
             "network",
         )
         self.assertEqual(
@@ -394,12 +394,13 @@ async def test_build_studio_state_payload_device_ble_tag_and_system_scopes(
 async def test_studio_payload_skip_sections_and_single_pass_optimizations(
     hass: Any, setup_latter_hub: Any
 ) -> None:
-    """Verify skip_sections omits all 11 heavy sections without HMAC-signing catalogs, computes device_group once per device, and caches BLE tag model lookups."""
+    """Verify skip_sections omits all 9 heavy sections without HMAC-signing catalogs, computes device_group once per device, and caches BLE tag model lookups."""
     from unittest.mock import patch
 
     from custom_components.latter.const import (
         CONF_SCREENSAVER_PHOTO_IDS,
         CONF_WALLPAPER_FAVORITES,
+        CONF_WALLPAPER_MODE,
         CONF_WALLPAPER_SOURCE,
     )
     from custom_components.latter.studio import payload as payload_mod
@@ -411,6 +412,7 @@ async def test_studio_payload_skip_sections_and_single_pass_optimizations(
     coord.update_device_config(
         {
             **coord.device_data,
+            CONF_WALLPAPER_MODE: "single",
             CONF_WALLPAPER_SOURCE: "preset:ocean_waves",
             CONF_WALLPAPER_FAVORITES: ["preset:ocean_waves", "missing_photo_id"],
             CONF_SCREENSAVER_PHOTO_IDS: ["preset:ocean_waves", "missing_ss_id"],
@@ -418,7 +420,7 @@ async def test_studio_payload_skip_sections_and_single_pass_optimizations(
     )
     coord.current_wallpaper = "preset:ocean_waves"
 
-    # 1) Skipping all 11 heavy sections omits them, skips list_wallpaper_catalog entirely,
+    # 1) Skipping all 9 heavy sections omits them, skips list_wallpaper_catalog entirely,
     #    yet still computes active thumb URL and cleans favorite/screensaver ID lists.
     with patch.object(
         payload_mod, "list_wallpaper_catalog", side_effect=AssertionError("should not be called")

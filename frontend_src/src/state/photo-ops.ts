@@ -1,6 +1,6 @@
 /**
  * Photo Library, Collections, Non-Destructive Crop, HA Media Import, & Device Photo Pool
- * operations (`D-072`, `STUDIO_REV = 39`).
+ * operations (`D-072`, `STUDIO_REV = 52`).
  */
 
 import { formatWsError } from "../api/ws-client.js";
@@ -333,7 +333,7 @@ export async function uploadAllStagedPhotosOp(store: StudioStoreContext): Promis
           store.host.requestUpdate();
         },
       });
-      const createdId = res.photo_id || res.source_id || res.photo?.id || "";
+      const createdId = res.photo_id || res.photo?.id || "";
       if (createdId) uploadedIds.push(createdId);
       if (store.state) {
         if (res.system_wallpapers) {

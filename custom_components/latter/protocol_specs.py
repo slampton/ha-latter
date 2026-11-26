@@ -797,7 +797,7 @@ def default_dock_items() -> list[ShortcutItemDict]:
     out: list[ShortcutItemDict] = []
     for raw in DEFAULT_DOCK_ROUTES.split(","):
         tok = raw.strip().lower()
-        if tok in SHORTCUT_ROUTE_MAP and tok != "settings:root":
+        if tok in SHORTCUT_ROUTE_MAP:
             out.append(
                 {
                     "kind": "route",
@@ -885,8 +885,6 @@ def _normalize_route_shortcut(
     raw: Mapping[str, object], *, is_dock: bool, strict: bool
 ) -> ShortcutItemDict | None:
     target = str(raw.get("target") or "").strip().lower()
-    if is_dock and target in ("settings:root", "app:settings"):
-        return None
     spec = SHORTCUT_ROUTE_MAP.get(target)
     if spec is None:
         if strict:

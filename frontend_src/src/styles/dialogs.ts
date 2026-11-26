@@ -307,7 +307,6 @@ export const DIALOG_STYLES = css`
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .shortcut-item-row,
   .dock-row {
     display: flex;
     align-items: center;
@@ -317,8 +316,6 @@ export const DIALOG_STYLES = css`
     border: 1px solid var(--studio-divider);
     border-radius: var(--studio-radius-control);
     background: var(--studio-input-bg);
-  }
-  .dock-row {
     flex-wrap: wrap;
   }
   .dock-row .shortcut-item-info {
@@ -329,13 +326,10 @@ export const DIALOG_STYLES = css`
     white-space: normal;
     overflow-wrap: anywhere;
   }
-  .shortcut-item-row.shortcut-item-locked,
   .dock-row.shortcut-item-locked {
     border-style: dashed;
     background: transparent;
   }
-  .shortcut-item-row.shortcut-item-locked .shortcut-icon-badge,
-  .shortcut-item-row.shortcut-item-hidden .shortcut-icon-badge,
   .dock-row.shortcut-item-locked .shortcut-icon-badge,
   .dock-row.shortcut-item-hidden .shortcut-icon-badge {
     background: var(--studio-surface-alt);

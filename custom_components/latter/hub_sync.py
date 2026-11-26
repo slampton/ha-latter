@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from datetime import datetime, timedelta
-import secrets
 import time
 from typing import Any
 
@@ -38,7 +37,6 @@ from .http.signing import UrlSigner
 from .hub_registry import (
     LatterSystemHub,
     get_domain_data,
-    get_system_config_lock,
     get_system_config_rev,
     iter_coordinators,
     register_hub_hooks,
@@ -46,7 +44,6 @@ from .hub_registry import (
 from .protocol_codec import V3Records
 
 _SKY_TRACKED_ENTITIES: tuple[str, ...] = ("sun.sun", "sensor.moon_phase", "sensor.moon")
-_HMAC_SECRET_BYTES = 32
 _HOURS_PER_DAY = 24
 _DEFAULT_BEDTIME_START_HOUR = 22
 _DEFAULT_BEDTIME_END_HOUR = 7
@@ -128,25 +125,6 @@ def _spawn_hub_task(sys_obj: LatterSystemHub, coro: Any, name: str) -> None:
     task = sys_obj.hass.async_create_task(coro, name)
     rt.background_tasks.add(task)
     task.add_done_callback(rt.background_tasks.discard)
-
-
-async def async_rotate_hub_hmac_secret(sys_obj: LatterSystemHub) -> None:
-    """Mint a fresh 256-bit HMAC signing secret, persist it, and republish all signed URLs."""
-    _get_feed_runtime(sys_obj)
-    new_hex = secrets.token_hex(_HMAC_SECRET_BYTES)
-    new_secret = bytes.fromhex(new_hex)
-    async with get_system_config_lock(sys_obj.hass):
-        sys_obj.hmac_secret = new_secret
-        signer = UrlSigner(sys_obj.hass, "system", new_secret)
-        sys_obj.url_signer = signer
-        await signer.async_prime_lan_base_url()
-        get_domain_data(sys_obj.hass).hmac_secret = new_secret
-        global_cfg = sys_obj.live_global_config()
-        global_cfg["hmac_secret_hex"] = new_hex
-        await sys_obj.store.async_save(global_cfg)
-    for coord in list(sys_obj.coordinators.values()):
-        coord.update_hmac_secret(new_secret)
-        coord.force_republish_all_domains()
 
 
 def _seed_bedtime_schedule_trackers(

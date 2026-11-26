@@ -187,11 +187,6 @@ GROUP_INTERFACE_DEVICE_KEYS: Final[tuple[str, ...]] = (
     *tuple(s.key for s in DEVICE_PREF_SPECS if s.group_tier == "interface"),
 )
 
-GROUP_APPEARANCE_DEVICE_KEYS: Final[tuple[str, ...]] = (
-    *GROUP_DISPLAY_DEVICE_KEYS,
-    *GROUP_INTERFACE_DEVICE_KEYS,
-)
-
 GROUP_ALL_DEVICE_KEYS: Final[tuple[str, ...]] = (
     *GROUP_BEHAVIOR_DEVICE_KEYS,
     *GROUP_DISPLAY_DEVICE_KEYS,
@@ -352,11 +347,7 @@ def _resolve_display_key_value(data: Mapping[str, Any], key: str) -> tuple[bool,
     val: Any = None
     if key == CONF_WALLPAPER_MODE:
         raw_wm = str(data.get(CONF_WALLPAPER_MODE) or "").strip().lower()
-        val = (
-            raw_wm
-            if raw_wm in ("off", "single", "collection", "custom")
-            else ("single" if str(data.get(CONF_WALLPAPER_SOURCE) or "").strip() else DEFAULT_WALLPAPER_MODE)
-        )
+        val = raw_wm if raw_wm in ("off", "single", "collection", "custom") else DEFAULT_WALLPAPER_MODE
     elif key in (CONF_WALLPAPER_SOURCE, CONF_SCREENSAVER_PHOTO_SOURCE):
         val = str(data.get(key) or "").strip()
     elif key == CONF_WALLPAPER_COLLECTION:
@@ -599,11 +590,7 @@ def device_matches_group_baseline(
     grp_id = str(
         group_id
         if group_id is not None
-        else (
-            dev_data.get("device_group")
-            or getattr(coordinator, "raw_device_group", "")
-            or DEFAULT_DEVICE_GROUP
-        )
+        else (dev_data.get("device_group") or DEFAULT_DEVICE_GROUP)
     ).strip()
     if not grp_id or grp_id == DEFAULT_DEVICE_GROUP:
         return False
@@ -652,7 +639,6 @@ def resolve_effective_device_group(
 
 
 def seed_group_baseline_from_coordinator(
-    _hass: HomeAssistant,
     group: dict[str, Any],
     coordinator: Any,
     *,
@@ -718,10 +704,7 @@ def _apply_wallpaper_override_and_timers(coord: Any, merged: Mapping[str, Any], 
     if wp_override:
         wp_val = str(merged.get(CONF_WALLPAPER_SOURCE) or "").strip()
         coord.current_wallpaper = wp_val
-        if hasattr(coord, "set_configured_wallpaper_source"):
-            coord.set_configured_wallpaper_source(wp_val)
-        else:
-            coord.configured_wallpaper_source = wp_val
+        coord.set_configured_wallpaper_source(wp_val)
 
 
 async def _async_apply_group_to_single_coord_locked(
@@ -753,13 +736,10 @@ async def _async_apply_group_to_single_coord_locked(
         _apply_wallpaper_override_and_timers(coord, merged, wp_override=wp_override)
         coord.update_device_config(merged, preserve_group=True, defer_apply=True)
         await coord.async_apply_options()
-        if hasattr(coord, "bind_wallpaper_cycle_timer"):
-            coord.bind_wallpaper_cycle_timer()
-        if hasattr(coord, "bind_screensaver_cycle_timer"):
-            coord.bind_screensaver_cycle_timer()
+        coord.bind_wallpaper_cycle_timer()
+        coord.bind_screensaver_cycle_timer()
         applied_count = len(cleaned)
-    if hasattr(coord, "async_update_listeners"):
-        coord.async_update_listeners()
+    coord.async_update_listeners()
     coord.async_notify_listeners()
     return applied_count
 
@@ -782,7 +762,6 @@ async def _async_apply_group_to_single_coord(
 
 
 async def async_apply_group_baseline_to_coordinators(
-    _hass: HomeAssistant,
     group: dict[str, Any],
     targets: list[Any],
 ) -> dict[str, int]:

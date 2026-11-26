@@ -60,6 +60,7 @@ from custom_components.latter.const import (
     CONF_SYSTEM_CONFIG_REV,
     CONF_WALLPAPER_CYCLE_MINUTES,
     CONF_WALLPAPER_FAVORITES,
+    CONF_WALLPAPER_MODE,
     CONF_WALLPAPER_SOURCE,
     CONF_WEATHER_ENTITY,
     DEFAULT_BLE_CATEGORY,
@@ -126,9 +127,9 @@ async def test_hub_sync_helpers_rotation_listeners_and_fallbacks(
     finally:
         hub_registry._HUB_HOOKS.url_signer_factory = orig_factory
 
-    # Rotate hub HMAC secret (lines 144-158)
+    # Rotate hub HMAC secret
     old_secret = sys_obj.hmac_secret
-    await hub_sync.async_rotate_hub_hmac_secret(sys_obj)
+    await sys_obj.async_rotate_hmac_secret()
     assert sys_obj.hmac_secret != old_secret
     assert hub_registry.get_domain_data(hass).hmac_secret == sys_obj.hmac_secret
     assert sys_obj.config["hmac_secret_hex"] == sys_obj.hmac_secret.hex()
@@ -606,7 +607,7 @@ async def test_wallpapers_store_models_and_pools_edge_cases(
         wp_store._PHOTO_LIBRARY_SNAPSHOT = wp_models.PhotoLibrarySnapshot(
             photo_order=("photo:missing_9999",)
         )
-        catalog = wp_pools.list_wallpaper_catalog(hass, "pocket", "", [])
+        catalog = wp_pools.list_wallpaper_catalog(hass, "pocket", "")
         assert all(item["id"] != "photo:missing_9999" for item in catalog)
         assert wp_pools.resolve_photo_pool("collection", "", "", [], include_dynamic=True) == []
         assert wp_pools.resolve_photo_pool("collection", "", "col_unknown", [], include_dynamic=True) == []
@@ -954,6 +955,7 @@ async def test_device_groups_and_config_defaults_edge_cases(
                     CONF_DEVICE_SLUG: "pocket_dev",
                     CONF_DEFAULT_AREA: "living_room",
                     CONF_DEFAULT_SPEAKER: "media_player.pocket_dev_music",
+                    CONF_WALLPAPER_MODE: "single",
                     CONF_WALLPAPER_SOURCE: "preset:forest_mountains",
                     CONF_DEVICE_CUSTOM_COLOR: "#112233",
                 },
@@ -1047,7 +1049,7 @@ async def test_device_groups_and_config_defaults_edge_cases(
         "include_interface": True,
         "device_config": {},
     }
-    device_groups.seed_group_baseline_from_coordinator(hass, seeded_sq, square_coord)
+    device_groups.seed_group_baseline_from_coordinator(seeded_sq, square_coord)
     seeded_pk: dict[str, Any] = {
         "id": "pk_display_grp",
         "name": "Pocket Display",
@@ -1055,7 +1057,7 @@ async def test_device_groups_and_config_defaults_edge_cases(
         "include_interface": False,
         "device_config": {},
     }
-    device_groups.seed_group_baseline_from_coordinator(hass, seeded_pk, pocket_coord)
+    device_groups.seed_group_baseline_from_coordinator(seeded_pk, pocket_coord)
     assert seeded_pk["device_config"][CONF_WALLPAPER_SOURCE] == "preset:forest_mountains"
     assert seeded_pk["device_config"][CONF_DEVICE_CUSTOM_COLOR] == "#112233"
 
@@ -1088,16 +1090,19 @@ async def test_device_groups_and_config_defaults_edge_cases(
     )
     assert sq_updates["clock_face"] == "Minimal Digital"
 
-    # _apply_wallpaper_override_and_timers fallback attribute assignment (line 715)
-    plain_target = SimpleNamespace(current_wallpaper="", configured_wallpaper_source="")
+    # _apply_wallpaper_override_and_timers invokes set_configured_wallpaper_source
+    recorded_wp: list[str] = []
+    plain_target = SimpleNamespace(
+        current_wallpaper="", set_configured_wallpaper_source=recorded_wp.append
+    )
     device_groups._apply_wallpaper_override_and_timers(
         plain_target, {CONF_WALLPAPER_SOURCE: "preset:ocean_waves"}, wp_override=True
     )
-    assert plain_target.configured_wallpaper_source == "preset:ocean_waves"
+    assert recorded_wp == ["preset:ocean_waves"]
 
     # async_apply_group_baseline_to_coordinators skips BLE tag (771) and raises if cleaner drops all settings (734)
     apply_res = await device_groups.async_apply_group_baseline_to_coordinators(
-        hass, seeded_pk, [tag_coord, pocket_coord]
+        seeded_pk, [tag_coord, pocket_coord]
     )
     assert apply_res["updated_devices"] == 1
 
@@ -1105,7 +1110,7 @@ async def test_device_groups_and_config_defaults_edge_cases(
         mp.setattr(device_groups, "clean_device_settings", lambda *_a, **_kw: {})
         bad_grp = {**seeded_pk, "device_config": {**seeded_pk["device_config"], "alert_volume": 45}}
         with pytest.raises(ValueError, match="no valid device settings"):
-            await device_groups.async_apply_group_baseline_to_coordinators(hass, bad_grp, [pocket_coord])
+            await device_groups.async_apply_group_baseline_to_coordinators(bad_grp, [pocket_coord])
 
     # async_reset_device edge cases:
     # 1) BLE tag options-only reset (lines 898-901)
@@ -1195,8 +1200,7 @@ async def test_hub_registry_and_identity_edge_cases(
     sys_obj.config[CONF_SYSTEM_CONFIG_REV] = "corrupt_rev"
     assert hub_registry.get_system_config_rev(hass) == 1
 
-    # Unhooked fallback paths on LatterSystemHub (lines 602-621, 641)
-    unsub_calls: list[str] = []
+    # Unhooked fallback paths on LatterSystemHub
     orig_cleanup_hook = hub_registry._HUB_HOOKS.cleanup_feeds
     orig_cal_hook = hub_registry._HUB_HOOKS.refresh_calendar
     try:
@@ -1206,16 +1210,7 @@ async def test_hub_registry_and_identity_edge_cases(
         assert cal_rows == sys_obj.calendar_raw_rows
 
         hub_registry._HUB_HOOKS.cleanup_feeds = None
-        sys_obj._unsub_weather_state = lambda: unsub_calls.append("w")
-        sys_obj._unsub_sky_state = lambda: unsub_calls.append("s")
-        sys_obj._unsub_forecast_timer = lambda: unsub_calls.append("f")
-        sys_obj._unsub_calendar_timer = lambda: unsub_calls.append("c")
-        sys_obj._unsub_bedtime_timer = lambda: unsub_calls.append("b")
-        sys_obj._unsub_core_config = lambda: unsub_calls.append("cfg")
         sys_obj.async_cleanup_feeds()
-        assert len(unsub_calls) == 6
-        assert sys_obj.weather_loaded is False
-        assert sys_obj.calendar_loaded is False
     finally:
         hub_registry._HUB_HOOKS.cleanup_feeds = orig_cleanup_hook
         hub_registry._HUB_HOOKS.refresh_calendar = orig_cal_hook

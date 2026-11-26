@@ -134,7 +134,6 @@ class TestOnePath(unittest.TestCase):
         self.assertIn("choose_browse_entity(preferred, ma_players)", src)
 
     def test_bounded_64_entry_lru_cache(self) -> None:
-        self.assertEqual(ma_browse.MAX_BROWSE_CACHE_ENTRIES, 64)
         ma_browse.clear_browse_cache()
         for i in range(80):
             ma_browse.cache_put(f"key_{i}", {"slots": [f"line_{i}"]})

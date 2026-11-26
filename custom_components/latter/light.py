@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import LatterCoordinator
-from .hub_registry import LatterSystemHub, get_latter_system
+from .hub_registry import LatterSystemHub
 
 PARALLEL_UPDATES = 0
 _MAX_HA_BRIGHTNESS = 255
@@ -26,12 +26,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up `light.<device_slug>_screen` for each display Device subentry."""
-    runtime = getattr(entry, "runtime_data", None)
-    if isinstance(runtime, LatterSystemHub):
-        coordinators: list[LatterCoordinator] = list(runtime.coordinators.values())
-    else:
-        sys_obj = get_latter_system(hass)
-        coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
+    coordinators: list[LatterCoordinator] = list(entry.runtime_data.coordinators.values())
 
     for coordinator in coordinators:
         if coordinator.is_ble_tag or not coordinator.has_display:

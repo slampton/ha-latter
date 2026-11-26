@@ -426,11 +426,7 @@ class LatterBleFabric:
             return self._batch_occ_cache[area_id]
 
         area_reg = ar.async_get(self.hass)
-        area_obj = (
-            area_reg.async_get(area_id) if hasattr(area_reg, "async_get") else None
-        )
-        if area_obj is None:
-            area_obj = area_reg.async_get_area(area_id)
+        area_obj = area_reg.async_get_area(area_id)
         floor_id = getattr(area_obj, "floor_id", None) if area_obj else None
 
         resolved_coords: Mapping[str, Any]
@@ -899,9 +895,7 @@ class LatterBleFabric:
                 continue
             scanner_name = str(getattr(scanner, "name", "") or source)
             timestamps: dict[str, float] = (
-                getattr(scanner, "discovered_device_timestamps", None)
-                or getattr(scanner, "timestamps", None)
-                or {}
+                getattr(scanner, "discovered_device_timestamps", None) or {}
             )
             dev_adv_map: dict[str, tuple[Any, Any]] = (
                 getattr(scanner, "discovered_devices_and_advertisement_data", None)
@@ -946,8 +940,6 @@ class LatterBleFabric:
         self._poll_missed_advertisements(
             [tracker], time.monotonic(), only_address=only_address
         )
-
-    _async_seed_tracker_from_scanners_once = seed_tracker_from_scanners_once
 
 
 def get_ble_fabric(hass: HomeAssistant) -> LatterBleFabric:

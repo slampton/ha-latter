@@ -214,7 +214,6 @@ export const ROUTE_PREVIEW_ICONS: Readonly<Record<string, string>> = {
   "games:blocks": "mdi:toy-brick",
   "games:snake": "mdi:snake",
   "games:drop_four": "mdi:dots-grid",
-  "settings:root": "mdi:cog",
   "settings:display": "mdi:brightness-6",
   "settings:sleep": "mdi:power-sleep",
   "settings:sound": "mdi:volume-high",

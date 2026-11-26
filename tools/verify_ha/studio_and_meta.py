@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ast
 import gzip
+import importlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -35,8 +37,8 @@ TEXT_EXTS: Final[frozenset[str]] = frozenset(
     {".py", ".json", ".yaml", ".yml", ".js", ".ts", ".mjs", ".md", ".toml"}
 )
 
-MIN_CORE_REV_FLOOR: Final = 2026112402
-MIN_STUDIO_REV_FLOOR: Final = 49
+MIN_CORE_REV_FLOOR: Final = 2026112501
+MIN_STUDIO_REV_FLOOR: Final = 52
 MIN_OPEN_ARGS: Final = 2
 
 BANNED_MOCK_SHIMS: Final[tuple[str, ...]] = (
@@ -153,7 +155,46 @@ def scan_repo_files(
     return parsed_latter_trees
 
 
-def _check_icons_json(icons_path: Path, failures: list[str]) -> None:
+def _check_entity_icons_parity(
+    icons_data: dict[str, object],
+    strings_entity: object,
+    failures: list[str],
+) -> None:
+    icons_entity = icons_data.get("entity")
+    if not isinstance(icons_entity, dict) or not isinstance(strings_entity, dict):
+        failures.append(
+            "[HASSFEST ICONS] icons.json['entity'] and strings.json['entity'] must both be JSON objects"
+        )
+        return
+    missing_plats = sorted(set(strings_entity.keys()) - set(icons_entity.keys()))
+    extra_plats = sorted(set(icons_entity.keys()) - set(strings_entity.keys()))
+    if missing_plats or extra_plats:
+        failures.append(
+            "[HASSFEST ICONS] icons.json['entity'] platforms mismatch strings.json['entity']: "
+            f"missing={missing_plats}, extra={extra_plats}"
+        )
+    for platform in sorted(set(strings_entity.keys()) & set(icons_entity.keys())):
+        s_plat = strings_entity[platform]
+        i_plat = icons_entity[platform]
+        if not isinstance(s_plat, dict) or not isinstance(i_plat, dict):
+            failures.append(
+                f"[HASSFEST ICONS] platform {platform!r} must be a JSON object in both strings.json and icons.json"
+            )
+            continue
+        missing_keys = sorted(set(s_plat.keys()) - set(i_plat.keys()))
+        extra_keys = sorted(set(i_plat.keys()) - set(s_plat.keys()))
+        if missing_keys or extra_keys:
+            failures.append(
+                f"[HASSFEST ICONS] icons.json['entity'][{platform!r}] keys mismatch "
+                f"strings.json: missing={missing_keys}, extra={extra_keys}"
+            )
+
+
+def _check_icons_json(
+    icons_path: Path,
+    strings_entity: object,
+    failures: list[str],
+) -> None:
     if not icons_path.is_file():
         failures.append("[HASSFEST ICONS] custom_components/latter/icons.json is missing")
         return
@@ -168,6 +209,7 @@ def _check_icons_json(icons_path: Path, failures: list[str]) -> None:
         _check_hassfest_keys(
             icons_data, "custom_components/latter/icons.json", "", failures
         )
+        _check_entity_icons_parity(icons_data, strings_entity, failures)
         svc_icons = icons_data.get("services")
         expected_svcs = {
             "notify",
@@ -185,6 +227,7 @@ def _check_icons_json(icons_path: Path, failures: list[str]) -> None:
 
 def _check_strings_and_icons(latter_dir: Path, failures: list[str]) -> set[str]:
     exception_keys: set[str] = set()
+    strings_entity: object = None
     strings_path = latter_dir / "strings.json"
     en_path = latter_dir / "translations" / "en.json"
     if not strings_path.is_file() or not en_path.is_file():
@@ -207,6 +250,7 @@ def _check_strings_and_icons(latter_dir: Path, failures: list[str]) -> set[str]:
         except ValueError:
             strings_data = None
         if isinstance(strings_data, dict):
+            strings_entity = strings_data.get("entity")
             exc_dict = strings_data.get("exceptions")
             if isinstance(exc_dict, dict):
                 exception_keys = set(exc_dict.keys())
@@ -214,7 +258,7 @@ def _check_strings_and_icons(latter_dir: Path, failures: list[str]) -> set[str]:
                 strings_data, "custom_components/latter/strings.json", "", failures
             )
 
-    _check_icons_json(latter_dir / "icons.json", failures)
+    _check_icons_json(latter_dir / "icons.json", strings_entity, failures)
     return exception_keys
 
 
@@ -253,6 +297,7 @@ def check_translations_and_quality(
             "common-modules:",
             "config-flow:",
             "diagnostics:",
+            "icon-translations:",
             "repair-issues:",
             "runtime-data:",
             "strict-typing: done",
@@ -262,6 +307,13 @@ def check_translations_and_quality(
             for req_rule in req_rules
             if req_rule not in qtxt
         )
+        if not re.search(
+            r"(?m)^\s*icon-translations:\s*(?:done\b|\r?\n\s+status:\s*done\b)",
+            qtxt,
+        ):
+            failures.append(
+                "[HA QUALITY] quality_scale.yaml must mark icon-translations as done"
+            )
     if not (latter_dir / "py.typed").is_file():
         failures.append("[HA QUALITY] custom_components/latter/py.typed marker is missing")
     hacs_path = root / "hacs.json"
@@ -517,6 +569,38 @@ def _check_studio_xhr_and_css(
                 failures.append(f"[STUDIO TOKENS] {rel} uses color literal outside :host")
 
 
+def _check_brotli_sibling(
+    root: Path,
+    js_bundle: Path,
+    raw_bytes: bytes,
+    failures: list[str],
+) -> None:
+    br_sibling = js_bundle.with_name(f"{js_bundle.name}.br")
+    rel_br = br_sibling.relative_to(root).as_posix()
+    if not br_sibling.is_file():
+        failures.append(f"[STUDIO BROTLI] {rel_br} is missing")
+        return
+    br_bytes = br_sibling.read_bytes()
+    if not (0 < len(br_bytes) < len(raw_bytes)):
+        failures.append(
+            f"[STUDIO BROTLI] {rel_br} size ({len(br_bytes)}) must satisfy "
+            f"0 < len(br) < len(raw) ({len(raw_bytes)})"
+        )
+        return
+    if importlib.util.find_spec("brotli") is not None:
+        brotli_mod = importlib.import_module("brotli")
+        brotli_err = getattr(brotli_mod, "error", OSError)
+        try:
+            decompressed_br = brotli_mod.decompress(br_bytes)
+        except (brotli_err, OSError, ValueError) as exc:
+            failures.append(f"[STUDIO BROTLI] {rel_br} invalid brotli archive: {exc}")
+        else:
+            if decompressed_br != raw_bytes:
+                failures.append(
+                    f"[STUDIO BROTLI] {rel_br} does not match {js_bundle.name} byte-for-byte"
+                )
+
+
 def _check_studio_bundles_and_gzip(
     root: Path,
     studio_js: Path,
@@ -540,20 +624,22 @@ def _check_studio_bundles_and_gzip(
     for js_bundle in (studio_js, studio_mdi_js):
         if not js_bundle.is_file():
             continue
+        raw_bytes = js_bundle.read_bytes()
         gz_sibling = js_bundle.with_name(f"{js_bundle.name}.gz")
         rel_gz = gz_sibling.relative_to(root).as_posix()
         if not gz_sibling.is_file():
             failures.append(f"[STUDIO GZIP] {rel_gz} is missing")
-            continue
-        try:
-            decompressed = gzip.decompress(gz_sibling.read_bytes())
-        except OSError as exc:
-            failures.append(f"[STUDIO GZIP] {rel_gz} invalid gzip archive: {exc}")
         else:
-            if decompressed != js_bundle.read_bytes():
-                failures.append(
-                    f"[STUDIO GZIP] {rel_gz} does not match {js_bundle.name} byte-for-byte"
-                )
+            try:
+                decompressed = gzip.decompress(gz_sibling.read_bytes())
+            except OSError as exc:
+                failures.append(f"[STUDIO GZIP] {rel_gz} invalid gzip archive: {exc}")
+            else:
+                if decompressed != raw_bytes:
+                    failures.append(
+                        f"[STUDIO GZIP] {rel_gz} does not match {js_bundle.name} byte-for-byte"
+                    )
+        _check_brotli_sibling(root, js_bundle, raw_bytes, failures)
 
 
 def _check_studio_artifacts(root: Path, failures: list[str]) -> None:

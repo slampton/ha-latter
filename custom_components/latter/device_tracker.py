@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import LatterCoordinator
-from .hub_registry import LatterSystemHub, get_latter_system
+from .hub_registry import LatterSystemHub
 from .presence.ble_fabric import get_ble_fabric
 
 PARALLEL_UPDATES = 0
@@ -25,12 +25,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up `device_tracker.<device_slug>` entities for each Latter device and BLE tag subentry."""
-    runtime = getattr(entry, "runtime_data", None)
-    if isinstance(runtime, LatterSystemHub):
-        coordinators: list[LatterCoordinator] = list(runtime.coordinators.values())
-    else:
-        sys_obj = get_latter_system(hass)
-        coordinators = list(sys_obj.coordinators.values()) if sys_obj else []
+    coordinators: list[LatterCoordinator] = list(entry.runtime_data.coordinators.values())
 
     for coordinator in coordinators:
         async_add_entities(
@@ -86,7 +81,6 @@ class LatterBleDeviceTracker(TrackerEntity):
         if not self.coordinator.is_ble_tag and self.coordinator.esphome_device_id:
             wifi_ent_id = self.coordinator.device_entity(
                 "sensor",
-                "_system_wi_fi_signal",
                 "_wi_fi_signal",
                 "_ip_address",
             )

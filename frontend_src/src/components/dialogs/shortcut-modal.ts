@@ -41,7 +41,10 @@ import {
   resolveDeviceGridDims,
   resolveTileGridLayout,
 } from "../../utils/tile-grid.js";
-import { createDialogBackdropHandlers } from "../controls/aria-helpers.js";
+import {
+  createDialogBackdropHandlers,
+  handleRadioGroupArrowKey,
+} from "../controls/aria-helpers.js";
 import {
   type ComboboxOptionItem,
   renderEntityCombobox,
@@ -222,46 +225,6 @@ function getCachedMdiSearch(
   return result;
 }
 
-function handleRadioGroupKeyDown<T extends string>(
-  ev: KeyboardEvent,
-  values: ReadonlyArray<T>,
-  current: T,
-  onSelect: (nextVal: T) => void,
-  idPrefix: string,
-): void {
-  if (
-    ev.key !== "ArrowLeft" &&
-    ev.key !== "ArrowRight" &&
-    ev.key !== "ArrowUp" &&
-    ev.key !== "ArrowDown" &&
-    ev.key !== "Home" &&
-    ev.key !== "End"
-  ) {
-    return;
-  }
-  ev.preventDefault();
-  const curIdx = Math.max(0, values.indexOf(current));
-  let nextIdx = curIdx;
-  if (ev.key === "Home") {
-    nextIdx = 0;
-  } else if (ev.key === "End") {
-    nextIdx = values.length - 1;
-  } else if (ev.key === "ArrowLeft" || ev.key === "ArrowUp") {
-    nextIdx = (curIdx - 1 + values.length) % values.length;
-  } else {
-    nextIdx = (curIdx + 1) % values.length;
-  }
-  const nextVal = values[nextIdx];
-  if (nextVal === undefined) return;
-  onSelect(nextVal);
-  const groupEl = (ev.currentTarget as HTMLElement).parentElement;
-  const targetId = `#${idPrefix}${nextVal || "default"}`;
-  requestAnimationFrame(() => {
-    const nextBtn = groupEl?.querySelector(targetId) as HTMLElement | null;
-    nextBtn?.focus();
-  });
-}
-
 function humanizeMdiIconLabel(slug: string): string {
   const clean = slug.startsWith("mdi:") ? slug.slice(4) : slug;
   const words = clean.replace(/[-_]+/g, " ").trim();
@@ -309,7 +272,7 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
   const devCaps = store.state?.capabilities;
   const availableRoutes = SHORTCUT_ROUTES_CATALOG.filter((r) => {
     if (!scIsDock && r.dockOnly) return false;
-    if (scIsDock && (r.token === "settings:root" || NATIVE_DOCK_APP_TOKENS.includes(r.token))) {
+    if (scIsDock && NATIVE_DOCK_APP_TOKENS.includes(r.token)) {
       return false;
     }
     return isCatalogItemSupported(r, devCaps);
@@ -729,12 +692,12 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
                 tabindex=${checked ? "0" : "-1"}
                 @click=${() => setIconStyleFilter(opt.value)}
                 @keydown=${(ev: KeyboardEvent) =>
-                  handleRadioGroupKeyDown(
+                  handleRadioGroupArrowKey(
                     ev,
                     iconStyleValues,
                     scModal.iconStyleFilter,
                     setIconStyleFilter,
-                    "shortcut-icon-style-",
+                    (v) => `#shortcut-icon-style-${v}`,
                   )}
               >
                 ${store.t(opt.labelKey)}
@@ -790,12 +753,12 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
               tabindex=${checked ? "0" : "-1"}
               @click=${() => setBadgeStyleToken(item.token)}
               @keydown=${(ev: KeyboardEvent) =>
-                handleRadioGroupKeyDown(
+                handleRadioGroupArrowKey(
                   ev,
                   badgeStyleTokens,
                   activeBadgeStyleToken,
                   setBadgeStyleToken,
-                  "shortcut-badge-style-",
+                  (v) => `#shortcut-badge-style-${v || "default"}`,
                 )}
             >
               ${lblKey ? store.t(lblKey) : item.label}
@@ -825,12 +788,12 @@ export function renderShortcutDialog(store: StudioStore): TemplateResult {
               tabindex=${checked ? "0" : "-1"}
               @click=${() => setAccentToken(item.token)}
               @keydown=${(ev: KeyboardEvent) =>
-                handleRadioGroupKeyDown(
+                handleRadioGroupArrowKey(
                   ev,
                   accentTokens,
                   activeAccentToken,
                   setAccentToken,
-                  "shortcut-accent-",
+                  (v) => `#shortcut-accent-${v || "default"}`,
                 )}
               class="accent-pill-btn"
             >

@@ -403,8 +403,7 @@ function quickActionKind(item: EspHomeEntityItem): QuickActionKind {
   if (
     item.device_class === "restart" ||
     nameLow.includes("restart") ||
-    idTail.endsWith("_restart_device") ||
-    idTail.endsWith("_restart")
+    idTail.endsWith("_actions_restart_device")
   ) {
     return "restart";
   }

@@ -45,7 +45,6 @@ from ..groups.device_groups import (
     get_device_groups,
 )
 from ..hub_registry import get_latter_system
-from ..hub_sync import async_evaluate_hub_bedtime_schedules
 from ..identity import device_entities
 from ..media.linking import async_refresh_ma_link
 from ..presence.ble_registry import normalize_uuid_hex
@@ -54,6 +53,7 @@ from ..wallpapers.models import VIRTUAL_COLLECTION_IDS
 from ..wallpapers.pools import known_collection_ids, known_wallpaper_ids
 from .payload import StudioCommandError, log_studio_event
 from .settings_cleaners import (
+    MAX_PHOTO_POOL_IDS,
     SettingsScopeError,
     clean_device_settings,
     system_settings_view,
@@ -65,7 +65,6 @@ from .state_gates import (
     checked_entity_verb,
 )
 
-MAX_CUSTOM_PHOTO_POOL: Final = 200
 _OPT_STR_MAX_LEN: Final = 128
 
 CommandHandler = Callable[
@@ -78,10 +77,7 @@ async def evaluate_bedtime_if_ready(hass: HomeAssistant) -> None:
     """Re-evaluate hub bedtime schedules when `LatterSystemHub` is initialized."""
     sys_obj = get_latter_system(hass)
     if sys_obj is not None:
-        if hasattr(sys_obj, "async_evaluate_bedtime_schedules"):
-            await sys_obj.async_evaluate_bedtime_schedules()
-        else:
-            await async_evaluate_hub_bedtime_schedules(sys_obj)
+        await sys_obj.async_evaluate_bedtime_schedules()
 
 
 def validate_remote_group_choice(
@@ -429,10 +425,10 @@ def _clean_custom_photo_ids(
         raise StudioCommandError(
             "invalid_format", "Select at least one photo for custom mode"
         )
-    if len(cleaned_ids) > MAX_CUSTOM_PHOTO_POOL:
+    if len(cleaned_ids) > MAX_PHOTO_POOL_IDS:
         raise StudioCommandError(
             "invalid_format",
-            f"Custom photo pool cannot exceed {MAX_CUSTOM_PHOTO_POOL} photos",
+            f"Custom photo pool cannot exceed {MAX_PHOTO_POOL_IDS} photos",
         )
     return cleaned_ids
 
@@ -636,7 +632,7 @@ DEVICE_COMMAND_HANDLERS: dict[str, CommandHandler] = {
 __all__ = [
     "DEVICE_COMMAND_HANDLERS",
     "DEVICE_COMMAND_SCHEMAS",
-    "MAX_CUSTOM_PHOTO_POOL",
+    "MAX_PHOTO_POOL_IDS",
     "CommandHandler",
     "_cmd_device_action",
     "_cmd_esphome_entity_action",

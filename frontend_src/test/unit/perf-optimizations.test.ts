@@ -6,7 +6,7 @@
  * - `shortcut-modal.ts` entity option memoization & 120 ms MDI search debounce
  * - `combobox.ts` closed-state lazy listbox rendering
  * - `devices-discovered-view.ts` stable repeat keys & BLE pagination cap
- * - `system-presence-view.ts` lazy `<details>` drawers & `available_sensors` fallback
+ * - `system-presence-view.ts` lazy `<details>` drawers & typed `fusion_sensor_choices`
  * - `build.mjs` safe `html`/`css` template-literal whitespace minifier
  */
 
@@ -144,6 +144,10 @@ function createHarness(initialPayload?: Partial<StudioStatePayload>): {
       confidence_pct: 92,
       occupant_names: ["Alex"],
       available_sensors: ["binary_sensor.kitchen_motion", "binary_sensor.kitchen_mmwave"],
+      fusion_sensor_choices: [
+        { entity_id: "binary_sensor.kitchen_motion", name: "Kitchen Motion" },
+        { entity_id: "binary_sensor.kitchen_mmwave", name: "Kitchen mmWave" },
+      ],
       fusion_mode: "weighted",
       fusion_threshold_pct: 50,
       fusion_sensors: ["binary_sensor.kitchen_motion"],
@@ -790,7 +794,7 @@ describe("Phase 3 Latter Studio frontend performance optimizations", () => {
     assert.equal(discHtml.includes(`Beacon ${String(DISCOVERED_BLE_PAGE_SIZE + 1).padStart(2, "0")}`), false);
     assert.equal(discHtml.includes("btn-discovered-ble-show-more"), true);
 
-    // System presence view skips collapsed <details> bodies and supports available_sensors fallback
+    // System presence view skips collapsed <details> bodies and renders typed fusion_sensor_choices
     store.openFusionAreas.clear();
     store.openProxyTrims.clear();
     store.advancedBleOpen = false;
@@ -799,7 +803,7 @@ describe("Phase 3 Latter Studio frontend performance optimizations", () => {
     assert.equal(collapsedPresence.includes("sys-ble_away_timeout_s"), false);
     assert.equal(collapsedPresence.includes("proxy-trim-body"), false);
 
-    // Opening fusion drawer mounts threshold & falls back cleanly to available_sensors
+    // Opening fusion drawer mounts threshold & typed fusion_sensor_choices
     store.openFusionAreas.add("kitchen");
     store.openProxyTrims.add("proxy_kitchen");
     store.advancedBleOpen = true;

@@ -74,7 +74,7 @@ export interface WsErrorLike {
 export function isStudioRevMismatchError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const code = String((err as WsErrorLike).code || "");
-  return code === "studio_rev_mismatch" || code === "version_mismatch";
+  return code === "studio_rev_mismatch";
 }
 
 export function isConflictError(err: unknown): boolean {
@@ -101,7 +101,6 @@ export interface UploadWallpaperResult {
   ok: boolean;
   photo_id?: string;
   filename?: string;
-  source_id?: string;
   photo?: PhotoItem;
   photo_collections?: PhotoCollection[];
   wallpapers?: PhotoItem[];
@@ -465,7 +464,6 @@ export class StudioWsClient {
         ok: true,
         photo_id: body?.photo_id ? String(body.photo_id) : undefined,
         filename: body?.filename ? String(body.filename) : undefined,
-        source_id: body?.source_id ? String(body.source_id) : undefined,
         photo:
           body?.photo && typeof body.photo === "object"
             ? (body.photo as PhotoItem)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import hashlib
 import hmac
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, PropertyMock, patch
 
@@ -1361,10 +1362,13 @@ async def test_areas_registry_curation_catalogs_and_sync_edges(hass: Any) -> Non
     assert len(hub_sum["thermostats"]) == 1
     assert hub_sum["thermostats"][0]["area_id"] == "office"
 
-    # get_available_home_categories intercom branches (lines 276, 285-289)
+    # get_available_home_categories intercom branches (coordinator effective_broadcast_speakers & global config)
     assert (
         get_available_home_categories(
-            {"entity_id": ""}, {"intercom_available": True}, home_categories="intercom"
+            {"entity_id": ""},
+            {},
+            home_categories="intercom",
+            coordinator=SimpleNamespace(effective_broadcast_speakers=["media_player.hall"]),
         )
         == "intercom"
     )

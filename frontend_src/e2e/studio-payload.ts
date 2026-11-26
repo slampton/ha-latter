@@ -4,10 +4,6 @@
  * Separated from `studio-fixtures.ts` to keep fixture definitions and payload assembly modular.
  */
 
-import {
-  DEVICE_PREF_SPECS_CATALOG,
-  WORLD_CLOCK_ZONES_CATALOG,
-} from "../src/protocol-schema.js";
 import type {
   SharedControlItem,
   StudioStatePayload,
@@ -141,7 +137,7 @@ export function buildPayloadFromHub(
     internal_logs: includeLogs
       ? [
           {
-            timestamp: "2026-11-21T19:00:00Z",
+            ts: "2026-11-21T19:00:00Z",
             level: "INFO",
             source: "coordinator",
             message: "Synchronized Protocol v3 payload for desk_assistant",
@@ -257,8 +253,6 @@ export function buildPayloadFromHub(
         },
       ],
     },
-    pref_specs: [...DEVICE_PREF_SPECS_CATALOG],
-    world_clock_zones: [...WORLD_CLOCK_ZONES_CATALOG],
     capabilities: structuredClone(rec.capabilities),
     config: structuredClone(rec.config),
     device_prefs: buildDevicePrefsForRecord(rec),

@@ -30,19 +30,6 @@ _MIN_CLIMATE_STEP_TEMP: Final = 5
 _DEFAULT_CLIMATE_BASE_TEMP: Final = 20
 _LEVEL_STEP: Final = 10
 
-_ALARM_ACTION_ALIASES: Final[dict[str, str]] = {
-    "disarm": "disarm",
-    "alarm_disarm": "disarm",
-    "arm_home": "arm_home",
-    "alarm_arm_home": "arm_home",
-    "arm_away": "arm_away",
-    "alarm_arm_away": "arm_away",
-    "arm_night": "arm_night",
-    "alarm_arm_night": "arm_night",
-    "arm_vacation": "arm_vacation",
-    "alarm_arm_vacation": "arm_vacation",
-}
-
 _ALARM_SERVICE_MAP: Final[dict[str, str]] = {
     "arm_home": "alarm_arm_home",
     "arm_away": "alarm_arm_away",
@@ -685,8 +672,7 @@ async def async_execute_area_action(
     raise_on_missing: bool = False,
 ) -> None:
     """Execute a normalized Area, Home Hub, or light color/kelvin action."""
-    raw_action = str(action or "").strip().lower()
-    norm_action = _ALARM_ACTION_ALIASES.get(raw_action, raw_action)
+    norm_action = str(action or "").strip().lower()
     entity_id, state_obj = _resolve_target_state(hass, entity_id.strip(), norm_action)
 
     if state_obj is None:

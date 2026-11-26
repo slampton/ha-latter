@@ -169,14 +169,14 @@ class TestWallpaperUploadBearerAuth(unittest.TestCase):
             });
             const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "crater.png", { type: "image/png" });
             const progress = [];
-            nextResponses = [{ status: 200, body: { ok: true, source_id: "upload:_system/crater_1a2b3c.jpg" } }];
+            nextResponses = [{ status: 200, body: { ok: true, photo_id: "upload:_system/crater_1a2b3c.jpg" } }];
             const sysRes = await client.uploadWallpaperMultipart({
               scope: "system",
               file,
               onProgress: (p) => progress.push(p),
             });
             auth.expired = true;
-            nextResponses = [{ status: 200, body: { ok: true, source_id: "upload:desk/crater_1a2b3c.jpg" } }];
+            nextResponses = [{ status: 200, body: { ok: true, photo_id: "upload:desk/crater_1a2b3c.jpg" } }];
             const devRes = await client.uploadWallpaperMultipart({
               scope: "device",
               subentryId: "sub_desk",
@@ -184,7 +184,7 @@ class TestWallpaperUploadBearerAuth(unittest.TestCase):
             });
             nextResponses = [
               { status: 401, body: null },
-              { status: 200, body: { ok: true, source_id: "upload:_system/retry_ok.jpg" } },
+              { status: 200, body: { ok: true, photo_id: "upload:_system/retry_ok.jpg" } },
             ];
             const skewRes = await client.uploadWallpaperMultipart({ scope: "system", file });
             nextResponses = [{ status: 401, body: null }, { status: 401, body: null }];
@@ -202,9 +202,9 @@ class TestWallpaperUploadBearerAuth(unittest.TestCase):
         self.assertEqual(got["wsCalls"], [])
         self.assertEqual(got["refreshCalls"], 3)
         self.assertEqual(got["progress"], [50, 100])
-        self.assertEqual(got["sysRes"]["source_id"], "upload:_system/crater_1a2b3c.jpg")
-        self.assertEqual(got["devRes"]["source_id"], "upload:desk/crater_1a2b3c.jpg")
-        self.assertEqual(got["skewRes"]["source_id"], "upload:_system/retry_ok.jpg")
+        self.assertEqual(got["sysRes"]["photo_id"], "upload:_system/crater_1a2b3c.jpg")
+        self.assertEqual(got["devRes"]["photo_id"], "upload:desk/crater_1a2b3c.jpg")
+        self.assertEqual(got["skewRes"]["photo_id"], "upload:_system/retry_ok.jpg")
         self.assertEqual(got["persistentErr"], "Wallpaper upload failed (HTTP 401)")
         self.assertEqual(len(got["xhrLog"]), 6)
 
@@ -329,11 +329,6 @@ class TestStudioInteractiveFlows(unittest.TestCase):
                 stopwatch_running: true,
                 stopwatch_started_at: "2026-11-18T22:58:55Z",
               },
-              pref_specs: [
-                { key: "bedtime_active", label: "Bedtime mode", section: "power", group_tier: null, domain: "switch", default: false, options: [] },
-                { key: "bedtime_display", label: "Idle display in bedtime", section: "power", group_tier: "behavior", domain: "select", default: "Screen Off", options: ["Screen Off", "Ambient Clock"] },
-                { key: "sync_device_area", label: "Voice Follows Me", section: "audio", group_tier: "behavior", domain: "switch", default: false, options: [] },
-              ],
               device_groups: [
                 { id: "pocket_carry", name: "Pocket Carry", description: "Compact displays", builtin: true, device_config: { sync_device_area: false } },
               ],

@@ -495,13 +495,13 @@ class TestViewLayout(unittest.TestCase):
             entity_sections.classify_esphome_entity_section(
                 "switch.pocket_home_sun", "Home: Sun", "switch", "", "config"
             ),
-            ("other", None),
+            "other",
         )
         self.assertEqual(
             entity_sections.classify_esphome_entity_section(
                 "switch.pocket_home_moon", "Home: Moon", "switch", "", "config"
             ),
-            ("other", None),
+            "other",
         )
         ts_src = _read_frontend_ts()
         self.assertIn('"weather_background"', ts_src)
@@ -656,7 +656,7 @@ class TestActivityCard(unittest.TestCase):
         )
         self.assertIn("activity_card", backup.DEVICE_CONFIG_EXPORT_KEYS)
         self.assertIn("activity_sources", backup.DEVICE_CONFIG_EXPORT_KEYS)
-        self.assertIn("activity_sources", groups.GROUP_APPEARANCE_DEVICE_KEYS)
+        self.assertIn("activity_sources", groups.GROUP_INTERFACE_DEVICE_KEYS)
         ctx_src = read_py_tree("areas")
         self.assertIn("*activity_payload(", ctx_src)
         self.assertIn("coordinator.activity_card_enabled, coordinator.activity_sources_csv", ctx_src)
@@ -727,8 +727,6 @@ class TestSectionTokenGateAndMemo(unittest.TestCase):
             self.assertNotIn("wallpapers", skip)
             self.assertIn("photo_collections", skip)
             self.assertIn("locale_strings", skip)
-            self.assertIn("pref_specs", skip)
-            self.assertIn("world_clock_zones", skip)
 
         # Wallpaper snapshot token invalidates photo/wallpaper/controls only
         wp_skip = gate.compute_skip_sections(self._make_snap(wallpaper_token=2))

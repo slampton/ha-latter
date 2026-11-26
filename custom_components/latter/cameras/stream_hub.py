@@ -127,23 +127,8 @@ class LatterCameraStreamHub:
         self._subscribe_locks: dict[str, asyncio.Lock] = {}
         self._grid_producers: dict[_GridProducerKey, _GridProducer] = {}
         self._grid_locks: dict[_GridProducerKey, asyncio.Lock] = {}
-        self._stream_source_cache: dict[str, tuple[float, str | None]] = {}
         self._ffmpeg_bin_checked: bool = False
         self._cached_ffmpeg_bin: str | None = None
-
-    @property
-    def active_ingest_count(self) -> int:
-        """Return the number of currently active `_CameraIngest` entries."""
-        return len(self._ingests)
-
-    @property
-    def active_grid_producer_count(self) -> int:
-        """Return the number of currently active shared `_GridProducer` compositors."""
-        return len(self._grid_producers)
-
-    def get_ingest(self, entity_id: str) -> _CameraIngest | None:
-        """Return the active `_CameraIngest` for `entity_id`, if any."""
-        return self._ingests.get(entity_id)
 
     async def _async_resolve_ffmpeg_binary(self) -> str | None:
         try:
@@ -163,19 +148,10 @@ class LatterCameraStreamHub:
             from homeassistant.components import camera as ha_camera
 
             url = await ha_camera.async_get_stream_source(self.hass, entity_id)
-            result = str(url).strip() if url else None
+            return (str(url).strip() or None) if url else None
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("camera.async_get_stream_source(%s) failed: %s", entity_id, err)
-            result = None
-        self._stream_source_cache[entity_id] = (time.monotonic(), result)
-        return result
-
-    async def async_get_cached_stream_source(self, entity_id: str, *, ttl_s: float = 60.0) -> str | None:
-        """Return a cached stream source URL if fresh, else probe `camera.async_get_stream_source`."""
-        cached = self._stream_source_cache.get(entity_id)
-        if cached is not None and (time.monotonic() - cached[0]) <= ttl_s:
-            return cached[1]
-        return await self._async_get_stream_source(entity_id)
+            return None
 
     async def _async_terminate_proc(self, proc: asyncio.subprocess.Process | None) -> None:
         if proc is None or proc.returncode is not None:
@@ -308,7 +284,6 @@ class LatterCameraStreamHub:
         self._ingests.clear()
         for ingest in ingests:
             await self._async_stop_ingest(ingest)
-        self._stream_source_cache.clear()
         self._subscribe_locks.clear()
 
     async def _async_prime_snapshot(

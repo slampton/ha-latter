@@ -18,7 +18,6 @@ import {
 } from "./dialogs/color-wheel.js";
 import {
   renderAddBleDialog,
-  renderRemoveDeviceDialog,
   renderResetDeviceDialog,
   renderSaveGroupDialog,
 } from "./dialogs/device-modals.js";
@@ -35,7 +34,6 @@ export { renderAppConfigModalBody };
 
 export function syncStudioDialogs(renderRoot: ShadowRoot, store: StudioStore): void {
   const pairs: Array<[string, boolean]> = [
-    ["latter-rm-modal", store.removeModal.open],
     ["latter-reset-modal", store.resetModal.open],
     ["latter-add-dev-modal", store.addBleModal.open],
     ["latter-cw-modal", store.colorWheelModal.open],
@@ -73,7 +71,6 @@ export function syncStudioDialogs(renderRoot: ShadowRoot, store: StudioStore): v
 
 export function renderStudioDialogs(store: StudioStore): TemplateResult {
   return html`
-    ${renderRemoveDeviceDialog(store)}
     ${renderResetDeviceDialog(store)}
     ${renderAddBleDialog(store)}
     ${renderColorWheelDialog(store)}

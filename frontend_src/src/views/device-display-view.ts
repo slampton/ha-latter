@@ -264,14 +264,11 @@ export function renderDeviceDisplayView(store: StudioStore): TemplateResult {
     true,
   );
 
-  const wpRawMode = String(cfg.wallpaper_mode || "");
   const wpSingleSource = String(cfg.wallpaper_source || "");
   const wpCollection = String(cfg.wallpaper_collection || "");
   const wpCustomIds = Array.isArray(cfg.wallpaper_favorites) ? cfg.wallpaper_favorites : [];
   const wpCycle = Number(cfg.wallpaper_cycle_minutes || 0);
-  const wpMode =
-    wpRawMode ||
-    (wpSingleSource ? "single" : wpCustomIds.length > 0 && wpCycle > 0 ? "custom" : "off");
+  const wpMode = String(cfg.wallpaper_mode || "off");
 
   const wpPoolPhotos = resolvePoolPhotos(
     allPhotos,

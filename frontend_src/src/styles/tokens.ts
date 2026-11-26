@@ -183,8 +183,9 @@ export const TOKEN_STYLES = css`
     --studio-grid-empty-hover-bg: color-mix(in srgb, var(--studio-primary) 8%, var(--studio-input-bg));
     --studio-span-cell-size: 28px;
     --studio-span-cell-radius: 6px;
+    --studio-nav-scroll-mask-dir: to right;
     --studio-nav-scroll-mask: linear-gradient(
-      to right,
+      var(--studio-nav-scroll-mask-dir),
       transparent 0,
       #000000 12px,
       #000000 calc(100% - 16px),
@@ -303,6 +304,9 @@ export const TOKEN_STYLES = css`
     --studio-error: var(--error-color, #db4437);
     --studio-info: var(--info-color, #039be5);
     color-scheme: dark;
+  }
+  :host(:dir(rtl)) {
+    --studio-nav-scroll-mask-dir: to left;
   }
 
   * { box-sizing: border-box; }
@@ -432,7 +436,6 @@ export const TOKEN_STYLES = css`
       border: 1px solid CanvasText;
     }
     .signal-fill,
-    .upload-progress-fill,
     .upload-progress::-webkit-progress-value,
     .upload-progress::-moz-progress-bar {
       forced-color-adjust: none;

@@ -1,5 +1,5 @@
 /**
- * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 49`).
+ * TypeScript domain & Home Assistant panel types for Latter Studio (`STUDIO_REV = 52`).
  */
 
 import type {
@@ -261,7 +261,6 @@ export interface SystemDeviceEntry {
 export interface IssueItem {
   issue_id?: string;
   kind?: string;
-  key?: string;
   severity?: "error" | "warning" | "critical" | "info" | string;
   subentry_id?: string;
   device_title?: string;
@@ -470,7 +469,6 @@ export interface PhotoItem {
   preview_url?: string;
   orig_url?: string;
   active?: boolean;
-  favorite?: boolean;
   deletable?: boolean;
   kind?: "preset" | "dynamic_preset" | "uploaded" | "upload" | string;
   scope?: "device" | "system" | string;
@@ -624,7 +622,6 @@ export interface DeviceGroup {
 
 interface LogEntry {
   ts?: number | string;
-  timestamp?: string;
   level?: string;
   source?: string;
   message?: string;
@@ -651,8 +648,6 @@ export interface LiveDeviceTelemetry {
   active_area_name?: string;
   active_area_lux_display?: string;
   active_area_ambient_pct?: number | null;
-  active_area_illuminance_entity?: string;
-  active_area_illuminance_name?: string;
   ma_link_matched?: boolean;
   ble_closest_proxy?: string;
   ble_detected_ref_power?: number | null;
@@ -664,11 +659,7 @@ export interface LiveDeviceTelemetry {
   fw_update_entity?: string;
   fw_update_available?: boolean;
   effective_security_pin_policy?: string;
-  has_security_pin?: boolean;
   is_ble_sleep_expected?: boolean;
-  radio_connected?: boolean;
-  display_power_state?: number;
-  display_brightness_pct?: number;
   screensaver_active?: boolean;
   telemetry?: DeviceRuntimeTelemetry | null;
   timer_running?: boolean;
@@ -682,10 +673,7 @@ export interface LiveDeviceTelemetry {
   alarm_ringing?: boolean;
   active_wallpaper_id?: string;
   active_wallpaper_thumb_url?: string;
-  wallpaper_pool_count?: number;
-  active_screensaver_photo_id?: string;
   active_screensaver_photo_thumb_url?: string;
-  screensaver_pool_count?: number;
 }
 
 interface QuickActionPayloadItem {
@@ -735,8 +723,6 @@ export interface StudioStatePayload {
   photo_collections?: PhotoCollection[];
   system_wallpapers: PhotoItem[];
   catalog?: EntityCatalog;
-  pref_specs?: DevicePrefSpecItem[];
-  world_clock_zones?: WorldClockZoneItem[];
   capabilities: DeviceCapabilities;
   config: DeviceConfig;
   device_prefs: DevicePrefItem[];

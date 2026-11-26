@@ -1,5 +1,5 @@
 /**
- * Device & Group Lifecycle Modals (`#latter-rm-modal`, `#latter-reset-modal`,
+ * Device & Group Lifecycle Modals (`#latter-reset-modal`,
  * `#latter-add-dev-modal`, `#latter-save-group-modal`).
  * - Short-circuits closed `<dialog>` shells
  * - Inline "Download backup first" + explicit consequence text on Remove & Reset
@@ -17,88 +17,6 @@ function guardDialogCancel(ev: Event, closeFn: () => void, busy = false): void {
   } else {
     closeFn();
   }
-}
-
-export function renderRemoveDeviceDialog(store: StudioStore): TemplateResult {
-  const rm = store.removeModal;
-  const close = (): void => {
-    if (store.removeModal.open && !store.removeModal.busy) {
-      store.tools.closeRemoveDeviceModal();
-    }
-  };
-  const backdrop = createDialogBackdropHandlers(close, () => store.removeModal.busy);
-
-  if (!rm.open) {
-    return html`<dialog
-      id="latter-rm-modal"
-      aria-labelledby="latter-rm-title"
-      closedby=${rm.busy ? "none" : "any"}
-      @cancel=${(ev: Event) => guardDialogCancel(ev, close, rm.busy)}
-      @close=${close}
-      @pointerdown=${backdrop.onPointerDown}
-      @click=${backdrop.onClick}
-      class="studio-dialog confirm-dialog"
-    >
-      ${nothing}
-    </dialog>`;
-  }
-
-  const devTitle = rm.title || "Device";
-
-  return html`<dialog
-    id="latter-rm-modal"
-    aria-labelledby="latter-rm-title"
-    aria-describedby="latter-rm-desc"
-    closedby=${rm.busy ? "none" : "any"}
-    @cancel=${(ev: Event) => guardDialogCancel(ev, close, rm.busy)}
-    @close=${close}
-    @pointerdown=${backdrop.onPointerDown}
-    @click=${backdrop.onClick}
-    class="studio-dialog confirm-dialog"
-  >
-    <div class="dialog-body">
-      <div class="dialog-header-row">
-        <h1 id="latter-rm-title" class="dialog-title">
-          ${store.t("confirm.remove_device.title", { title: devTitle })}
-        </h1>
-        <span class="chip chip-warning confirm-blast-badge">
-          ${store.t("confirm.blast_radius_one")}
-        </span>
-      </div>
-      <p id="latter-rm-desc" class="dialog-text">
-        ${store.t("confirm.remove_device.body", { title: devTitle })}
-      </p>
-      <div class="dialog-actions with-secondary">
-        <button
-          type="button"
-          ?disabled=${rm.busy || !rm.subentryId}
-          @click=${() => void store.tools.exportBackup(rm.subentryId)}
-          class="btn btn-text btn-compact"
-        >
-          ${store.t("action.download_backup_first")}
-        </button>
-        <div class="dialog-actions-end">
-          <button
-            type="button"
-            autofocus
-            ?disabled=${rm.busy}
-            @click=${close}
-            class="btn btn-secondary"
-          >
-            ${store.t("action.cancel")}
-          </button>
-          <button
-            type="button"
-            ?disabled=${rm.busy}
-            @click=${() => void store.tools.confirmRemoveDevice()}
-            class="btn btn-danger-filled"
-          >
-            ${store.t("confirm.remove_device.confirm")}
-          </button>
-        </div>
-      </div>
-    </div>
-  </dialog>`;
 }
 
 export function renderResetDeviceDialog(store: StudioStore): TemplateResult {

@@ -35,7 +35,6 @@ from .lyrics import (
 _LOGGER = logging.getLogger(__name__)
 
 ARTIST_SEPARATOR: Final = " - "
-MAX_BROWSE_CACHE_ENTRIES: Final[int] = 64
 NO_MA_PLAYER_TEXT: Final = "No Music Assistant player to browse with"
 _UNKNOWN_YEAR_SORT_FALLBACK: Final[int] = 9999
 _MUSIC_SUFFIX_LEN: Final[int] = 6

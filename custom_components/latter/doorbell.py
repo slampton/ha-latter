@@ -178,7 +178,7 @@ def _spawn_coordinator_task(
         task: asyncio.Task[Any] = create_fn(coro, task_name)
         return task
     entry = getattr(coordinator, "entry", None)
-    if entry is not None and hasattr(entry, "async_create_background_task"):
+    if entry is not None:
         task = entry.async_create_background_task(hass, coro, task_name)
         return task
     fallback_task: asyncio.Task[Any] = hass.async_create_task(coro, task_name)

@@ -58,6 +58,9 @@
       "device_group": {
         "default": "mdi:shape-outline"
       },
+      "glass_style": {
+        "default": "mdi:opacity"
+      },
       "wake_word_mode": {
         "default": "mdi:account-voice"
       }

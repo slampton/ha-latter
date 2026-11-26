@@ -73,10 +73,7 @@ from ..hub_registry import (
     iter_coordinators,
     notify_studio_subscribers,
 )
-from ..hub_sync import (
-    async_rotate_hub_hmac_secret,
-    async_save_and_broadcast_global_config,
-)
+from ..hub_sync import async_save_and_broadcast_global_config
 from ..identity import (
     bound_elsewhere,
     device_entities,
@@ -229,7 +226,7 @@ async def _cmd_create_device_group(
             ),
         }
         if source_coord is not None:
-            seed_group_baseline_from_coordinator(hass, new_group, source_coord)
+            seed_group_baseline_from_coordinator(new_group, source_coord)
 
         groups.append(new_group)
         await async_save_and_broadcast_global_config(
@@ -319,7 +316,7 @@ def _apply_group_scope_and_seed(
                     "invalid_format", "copy_keys contains no supported group keys"
                 )
         seed_group_baseline_from_coordinator(
-            hass, grp, source_coord, only_keys=only_keys
+            grp, source_coord, only_keys=only_keys
         )
         did_update = True
     return did_update
@@ -409,7 +406,7 @@ async def _cmd_update_group_baseline(
         )
 
     if member_targets:
-        await async_apply_group_baseline_to_coordinators(hass, grp, member_targets)
+        await async_apply_group_baseline_to_coordinators(grp, member_targets)
     await evaluate_bedtime_if_ready(hass)
     verb = "Reset preset defaults" if is_reset else "Updated baseline"
     log_studio_event(
@@ -561,10 +558,7 @@ async def _cmd_rotate_signing_key(
     sys_obj = get_latter_system(hass)
     if sys_obj is None:
         raise StudioCommandError("not_ready", "Latter System is not initialized")
-    if hasattr(sys_obj, "async_rotate_hmac_secret"):
-        await sys_obj.async_rotate_hmac_secret()
-    else:
-        await async_rotate_hub_hmac_secret(sys_obj)
+    await sys_obj.async_rotate_hmac_secret()
     log_studio_event(hass, "INFO", "system", "Rotated HTTP resource signing key")
 
 

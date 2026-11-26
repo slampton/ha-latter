@@ -75,7 +75,7 @@ rules:
   exception-translations: done
   icon-translations:
     status: done
-    comment: All entity platforms and all 6 public services declare icons in icons.json.
+    comment: All 22 entity translation keys across 8 platforms and all 6 public services declare icons in icons.json.
   reconfiguration-flow:
     status: done
     comment: Device and BLE Tag subentries implement async_step_reconfigure for in-place hardware rebind and reconfiguration, while config_panel_domain routes hub Configure directly to Latter Studio (/latter).

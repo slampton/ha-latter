@@ -380,7 +380,7 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
         area_id="garage",
         stationary=0,
     )
-    # Compact persisted device_hello manifest has top-level `minor` (no nested `beacon` dict)
+    # Persisted device_hello manifest uses canonical nested `beacon` dict
     await seed_device_hello_manifest(
         hass,
         "sub_remote_p4",
@@ -403,7 +403,7 @@ async def test_coprocessor_ble_mac_persists_across_sleep_and_ble_radio_wake_grac
             "ips": 1,
             "chip": "ESP32-P4",
             "psram_mb": 32,
-            "minor": 4,
+            "beacon": {"major": 1, "minor": 4},
             "core_rev": MIN_FIRMWARE_CORE_REV,
         },
     )

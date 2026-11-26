@@ -99,19 +99,6 @@ _MAX_CALENDAR_FETCH_DAYS = 60
 _DEFAULT_CALENDAR_FETCH_DAYS = 30
 _ALARM_VERBS = ("arm_home", "arm_away", "arm_night", "arm_vacation", "disarm")
 
-_ALARM_ACTION_ALIASES: dict[str, str] = {
-    "disarm": "disarm",
-    "alarm_disarm": "disarm",
-    "arm_home": "arm_home",
-    "alarm_arm_home": "arm_home",
-    "arm_away": "arm_away",
-    "alarm_arm_away": "arm_away",
-    "arm_night": "arm_night",
-    "alarm_arm_night": "arm_night",
-    "arm_vacation": "arm_vacation",
-    "alarm_arm_vacation": "arm_vacation",
-}
-
 _ALARM_ARM_VERBS: frozenset[str] = frozenset(
     {"arm_home", "arm_away", "arm_night", "arm_vacation"}
 )
@@ -332,8 +319,7 @@ async def async_enforce_perimeter_security_policy(
 ) -> None:
     """Enforce the Device's Perimeter Security Policy and PIN lockout on sensitive opening actions."""
     hass = coord.hass
-    raw_act = action.strip().lower()
-    act = _ALARM_ACTION_ALIASES.get(raw_act, raw_act)
+    act = action.strip().lower()
     resolved_ent = entity_id.strip()
     if resolved_ent == "home_hub.alarm" or (
         not resolved_ent and act in _ALL_ALARM_VERBS
@@ -627,7 +613,6 @@ class LatterRpcDispatcher:
             ]
         elif mode_norm not in (
             "speakers",
-            "lyrics",
             "lyrics_fetch",
             "bio",
             "track_info",
@@ -678,10 +663,6 @@ class LatterRpcDispatcher:
                 queue_offset = 0
                 items = await self._fetch_music_browse_items(coord, data, mode, 0)
             total_items_override = self._resolve_active_queue_total(speaker, items)
-        if mode_norm == "lyrics":
-            await async_fetch_and_push_music_lyrics(
-                self.hass, coord, req_id=0, speaker=speaker, search=search
-            )
         self._sync_browsed_album_uris(coord, mode_norm, items)
         if not items and mode != "speakers":
             queue_offset = 0
@@ -740,7 +721,7 @@ class LatterRpcDispatcher:
                 active_area_id=coord.active_area_id,
                 local_speaker=local_speaker,
             )
-            slot_mode = "area_areas"
+            slot_mode = "areas"
         elif mode == "home":
             items = get_home_wide_entities(
                 self.hass,
@@ -782,7 +763,7 @@ class LatterRpcDispatcher:
         raw_entity_id = str(data.get("entity_id") or "").strip()
         raw_action_wire = str(data.get("action") or "").strip()
         raw_action = raw_action_wire.lower()
-        action = _ALARM_ACTION_ALIASES.get(raw_action, raw_action)
+        action = raw_action
 
         raw_code = data.get("code")
         code = (

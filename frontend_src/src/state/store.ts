@@ -246,7 +246,6 @@ export class StudioStore implements ReactiveController, StudioStoreContext {
 
   // Modal states
   confirmModal: ConfirmModalState = emptyConfirmModalState();
-  removeModal = { open: false, subentryId: "", title: "", busy: false };
   resetModal = { open: false, deviceSettings: true, latterOptions: true, busy: false };
   addBleModal = {
     open: false,
@@ -600,9 +599,7 @@ export class StudioStore implements ReactiveController, StudioStoreContext {
 
   get hasConfiguredSecurityPin(): boolean {
     return Boolean(
-      this.state?.config?.has_security_pin ??
-        this.state?.live?.has_security_pin ??
-        this.state?.has_security_pin,
+      this.state?.config?.has_security_pin ?? this.state?.has_security_pin,
     );
   }
 

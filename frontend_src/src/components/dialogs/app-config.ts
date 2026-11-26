@@ -145,8 +145,7 @@ export function renderAppConfigModalBody(store: StudioStore): TemplateResult | t
   const data = store.state;
   const cfg = data?.config || {};
   const caps = data?.capabilities;
-  const titleKey = APP_MODAL_TITLE_KEYS[app];
-  const title = titleKey ? store.t(titleKey) : store.t("dialogs.app_fallback");
+  const title = store.t(APP_MODAL_TITLE_KEYS[app]);
 
   let body: TemplateResult;
   let extraAction: TemplateResult | typeof nothing = nothing;

@@ -13,13 +13,7 @@ import type { DeviceStatusCode, SystemDeviceEntry } from "../types.js";
 import { compareLocaleText, entityLabel } from "../utils/format.js";
 
 function effectiveStatusCode(d: SystemDeviceEntry): DeviceStatusCode {
-  if (d.status_code) return d.status_code;
-  const lbl = String(d.status_label || "").trim().toLowerCase();
-  if (lbl.includes("update")) return "update";
-  if (lbl === "away") return "away";
-  if (lbl === "scanning") return "scanning";
-  if (lbl === "online" || d.is_online) return "online";
-  return "offline";
+  return d.status_code || "offline";
 }
 
 function statusRankByCode(code: DeviceStatusCode): number {

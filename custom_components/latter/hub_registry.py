@@ -544,23 +544,12 @@ class LatterSystemHub:
         )
         self.coordinators: dict[str, Any] = {}
 
-        self._unsub_weather_state: Callable[[], None] | None = None
-        self._unsub_sky_state: Callable[[], None] | None = None
-        self._unsub_forecast_timer: Callable[[], None] | None = None
-        self._unsub_calendar_timer: Callable[[], None] | None = None
-        self._unsub_bedtime_timer: Callable[[], None] | None = None
-        self._unsub_core_config: Callable[[], None] | None = None
-        self._bedtime_sched_trackers: dict[str, tuple[bool, int, int, bool]] = {}
-        self._tracked_weather_entity: str | None = None
-
         self.weather_snapshot: tuple[V3Records, dict[str, Any]] | None = None
         self.weather_loaded: bool = False
-        self._weather_last_fetch_mono: float = 0.0
 
         self.calendar_records: V3Records = V3Records()
         self.calendar_raw_rows: list[dict[str, Any]] = []
         self.calendar_loaded: bool = False
-        self._calendar_last_fetch_mono: float = 0.0
 
     @property
     def url_signer(self) -> Any:
@@ -643,27 +632,6 @@ class LatterSystemHub:
         """Unsubscribe System-level weather and calendar listeners/timers on unload."""
         if _HUB_HOOKS.cleanup_feeds is not None:
             _HUB_HOOKS.cleanup_feeds(self)
-            return
-        for unsub in (
-            self._unsub_weather_state,
-            self._unsub_sky_state,
-            self._unsub_forecast_timer,
-            self._unsub_calendar_timer,
-            self._unsub_bedtime_timer,
-            self._unsub_core_config,
-        ):
-            if unsub is not None:
-                unsub()
-        self._unsub_weather_state = None
-        self._unsub_sky_state = None
-        self._unsub_forecast_timer = None
-        self._unsub_calendar_timer = None
-        self._unsub_bedtime_timer = None
-        self._unsub_core_config = None
-        self._bedtime_sched_trackers.clear()
-        self._tracked_weather_entity = None
-        self.weather_loaded = False
-        self.calendar_loaded = False
 
     async def async_evaluate_bedtime_schedules(
         self, *, now: datetime | None = None

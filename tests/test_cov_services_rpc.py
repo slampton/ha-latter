@@ -881,7 +881,7 @@ async def test_rpc_dispatcher_perimeter_media_browse_area_and_palette_edges(
         for p in slot_pushes
     )
 
-    # mode="lyrics" triggers async_fetch_and_push_music_lyrics
+    # mode="lyrics_fetch" triggers async_fetch_and_push_music_lyrics
     lyric_pushes: list[dict[str, Any]] = []
     mock_service(
         hass,
@@ -890,7 +890,7 @@ async def test_rpc_dispatcher_perimeter_media_browse_area_and_palette_edges(
         lambda call: lyric_pushes.append(dict(call.data)),
     )
     await dispatcher.async_dispatch(
-        coord, RPC_MUSIC_BROWSE, {"mode": "lyrics", "search": "Blue Train"}
+        coord, RPC_MUSIC_BROWSE, {"mode": "lyrics_fetch", "search": "Blue Train"}
     )
     assert coord.lyrics_watch_active is True
     assert len(lyric_pushes) >= 1

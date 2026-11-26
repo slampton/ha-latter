@@ -11,7 +11,6 @@ import { DEVICE_PREF_SPECS_MAP, GAMES_ITEMS_CATALOG } from "../../src/constants.
 import { nothing, type ReactiveController, type ReactiveControllerHost } from "../../src/lib/lit.js";
 import {
   DEFAULT_GAMES_ITEMS,
-  DEVICE_PREF_SPECS_CATALOG,
   STUDIO_REV,
 } from "../../src/protocol-schema.js";
 import {
@@ -300,7 +299,6 @@ function createHeadlessStore(initialPayload?: Partial<StudioStatePayload>): Head
       doorbell_noise_reduction: "strong",
     },
     system_wallpapers: [],
-    pref_specs: [...DEVICE_PREF_SPECS_CATALOG],
     capabilities: { has_display: true, has_audio: true, has_voice: true, has_power: true, hw_jpeg: true },
     config: {
       device_slug: "desk_assistant",
@@ -513,11 +511,11 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
       studio_rev: 52,
     });
 
-    // `version_mismatch` sets `studioRevMismatch = true`
+    // `studio_rev_mismatch` sets `studioRevMismatch = true`
     store.ws.setHass({
       callWS: async () => {
         const err = new Error("Outdated Studio");
-        (err as Error & { code?: string }).code = "version_mismatch";
+        (err as Error & { code?: string }).code = "studio_rev_mismatch";
         throw err;
       },
     } as unknown as HomeAssistant);
@@ -1451,16 +1449,6 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
                 key: "",
                 domain: "sensor",
                 name: "Wi-Fi Signal",
-                state: "-58",
-                unit: "dBm",
-                device_class: "signal_strength",
-                category: "diagnostic",
-              },
-              {
-                entity_id: "sensor.mobile_assistant_system_wi_fi_signal",
-                key: "system_wi_fi_signal",
-                domain: "sensor",
-                name: "System Wi-Fi Signal",
                 state: "-58",
                 unit: "dBm",
                 device_class: "signal_strength",

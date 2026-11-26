@@ -204,7 +204,7 @@ DEVICE_SETTING_KEYS: Final[tuple[str, ...]] = (
 )
 
 PHOTO_POOL_MODES: Final[tuple[str, ...]] = ("off", "single", "collection", "custom")
-MAX_PHOTO_POOL_IDS: Final = 100
+MAX_PHOTO_POOL_IDS: Final = 200
 MAX_LIST_ITEMS: Final = 10
 MAX_THERMOSTATS: Final = 8
 MAX_LOCKS: Final = 8

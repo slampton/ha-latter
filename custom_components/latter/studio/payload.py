@@ -122,7 +122,6 @@ from ..protocol_specs import (
     HOME_CATEGORIES_CATALOG,
     SHORTCUT_SUPPORTED_DOMAINS,
     TOOLS_ITEMS_CATALOG,
-    WORLD_CLOCK_ZONES,
     humanize_device_model_label,
     resolve_device_pref_value,
 )
@@ -152,7 +151,6 @@ _MAX_SYSLOG_MSG_CHARS: Final = 600
 _MUSIC_SUFFIX_LEN: Final = 6
 _SHARED_SECTION_FALLBACK_ORDER: Final = 99
 _DEFAULT_BLE_REF_POWER_DBM: Final = -59
-_DEFAULT_BRIGHTNESS_PCT: Final = 80
 
 STUDIO_BULK_CONTROL_DOMAINS: Final[frozenset[str]] = frozenset(
     {"select", "switch", "number"}
@@ -213,7 +211,6 @@ _BLE_GENERIC_MODEL_LABELS: Final[frozenset[str]] = frozenset(
     {"BLE beacon or tag", "Private BLE (phone or watch)"}
 )
 _CONN_SENSOR_SUFFIXES: Final[tuple[str, ...]] = (
-    "_system_wi_fi_signal",
     "_wi_fi_signal",
     "_ip_address",
 )
@@ -502,23 +499,6 @@ class StudioLinksPayload(TypedDict):
     entry_id: str
     esphome_device_id: str
     latter_device_id: str
-
-
-class StudioPrefSpecItem(TypedDict):
-    """Serialized `DevicePrefSpec` entry for Studio runtime consumers."""
-
-    key: str
-    label: str
-    domain: str
-    default: Any
-    section: str
-    group_tier: str | None
-    options: list[str]
-    min: int | float | None
-    max: int | float | None
-    step: int | float | None
-    unit: str
-    capability: str | None
 
 
 class _ControlExtraOpts(TypedDict, total=False):
@@ -948,27 +928,6 @@ def build_quick_actions_payload(
     ]
 
 
-def build_pref_specs_catalog() -> list[dict[str, Any]]:
-    """Serialize canonical `DevicePrefSpec` metadata for Studio runtime consumers."""
-    return [
-        {
-            "key": spec.key,
-            "label": spec.label,
-            "domain": spec.domain,
-            "default": spec.default,
-            "section": spec.section,
-            "group_tier": spec.group_tier,
-            "options": list(spec.options),
-            "min": spec.min_val,
-            "max": spec.max_val,
-            "step": spec.step,
-            "unit": spec.unit,
-            "capability": spec.capability,
-        }
-        for spec in DEVICE_PREF_SPECS
-    ]
-
-
 def build_issues(
     hass: HomeAssistant, coords: list[LatterCoordinator]
 ) -> list[dict[str, str]]:
@@ -1211,7 +1170,7 @@ def _build_wallpaper_option_pairs(
 ) -> tuple[list[str], dict[str, str]]:
     """Build `(options, option_labels)` for the shared System Wallpaper select."""
     sys_wps = list_wallpaper_catalog(
-        hass, "system", "", [], sign_resource=None, display_shape="square"
+        hass, "system", "", sign_resource=None, display_shape="square"
     )
     wp_opts: list[str] = [""]
     wp_labels: dict[str, str] = {"": "None (Weather / Solid)"}
@@ -1544,10 +1503,6 @@ def _extract_volume_overrides_map(hass: HomeAssistant) -> dict[str, str]:
                 tgt = str(ov.get("target") or "").strip()
                 if spk and tgt:
                     vol_overrides_map[spk] = tgt
-    elif isinstance(raw_vol_ov, dict):
-        for k, v in raw_vol_ov.items():
-            if k and v:
-                vol_overrides_map[str(k).strip()] = str(v).strip()
     return vol_overrides_map
 
 
@@ -1661,10 +1616,8 @@ def _append_media_player_catalog_entry(
 def build_entity_catalog(
     hass: HomeAssistant,
     coordinator: LatterCoordinator | None,
-    all_coords: list[LatterCoordinator] | None = None,
 ) -> dict[str, Any]:
     """Build the entity pickers for Studio using `AreaStateIndex` (zero full-state scans)."""
-    _ = all_coords
     area_reg = ar.async_get(hass)
     ent_reg = er.async_get(hass)
     areas_list = [
@@ -2085,9 +2038,7 @@ def _build_system_device_item(
         "battery_level": _parse_rounded_sensor_int(_state("sensor", "_battery_level")),
         "is_charging": bool(c_chg_st and c_chg_st.state == "on"),
         "is_usb_connected": bool(c_usb_st and c_usb_st.state == "on"),
-        "wifi_rssi": _parse_rounded_sensor_int(
-            _state("sensor", "_system_wi_fi_signal", "_wi_fi_signal")
-        ),
+        "wifi_rssi": _parse_rounded_sensor_int(_state("sensor", "_wi_fi_signal")),
         "ip_address": c_ip_val,
         "has_ble": c_has_ble,
         "ble_tracked": bool(coord.is_ble_tag or coord.native_ble_tracking_enabled),
@@ -2150,7 +2101,6 @@ def _populate_optional_system_sections(
             hass,
             "system",
             "",
-            [],
             sign_resource=sign_fn,
             display_shape="square",
         )
@@ -2262,7 +2212,6 @@ def _build_device_capabilities(
         and (
             coordinator.has_display
             or coordinator.has_battery
-            or ("sleep" in sec_ids)
             or ("battery" in sec_ids)
         ),
         "has_voice": not coordinator.is_ble_tag
@@ -2272,7 +2221,6 @@ def _build_device_capabilities(
             and (
                 coordinator.has_audio
                 or bool(local_spk_id)
-                or ("sound" in sec_ids)
                 or ("music" in sec_ids)
             )
         ),
@@ -2463,7 +2411,6 @@ def _build_device_live_payload(
     presence_grid: list[dict[str, Any]],
     *,
     lookup: _DeviceEntityLookup | None = None,
-    is_online: bool | None = None,
 ) -> dict[str, Any]:
     """Build the `live` telemetry and status dictionary for the selected Device."""
     all_esp_items: list[dict[str, Any]] = [
@@ -2488,8 +2435,6 @@ def _build_device_live_payload(
     ]
     fw_update_entity = _select_primary_fw_update_entity(update_items)
 
-    wp_pool = coordinator.resolve_wallpaper_rotation_pool()
-    ss_pool = coordinator.resolve_screensaver_photo_pool()
     active_wp_id = coordinator.wallpaper_source
     active_ss_id = coordinator.screensaver_photo_source
     active_wp_thumb, active_ss_thumb = _resolve_active_photo_thumb_urls(
@@ -2517,15 +2462,10 @@ def _build_device_live_payload(
     live: dict[str, Any] = {
         "active_wallpaper_id": active_wp_id,
         "active_wallpaper_thumb_url": active_wp_thumb,
-        "wallpaper_pool_count": len(wp_pool),
-        "active_screensaver_photo_id": active_ss_id,
         "active_screensaver_photo_thumb_url": active_ss_thumb,
-        "screensaver_pool_count": len(ss_pool),
         "active_area_name": active_area_name,
         "active_area_lux_display": active_ambient["lux_display"],
         "active_area_ambient_pct": active_ambient["ambient_pct"],
-        "active_area_illuminance_entity": active_ambient["resolved_entity"],
-        "active_area_illuminance_name": active_ambient["resolved_name"],
         "ma_link_matched": bool(
             local_ma_id
             or not local_spk_id
@@ -2549,30 +2489,11 @@ def _build_device_live_payload(
         "fw_update_entity": fw_update_entity,
         "fw_update_available": any(it.get("state") == "on" for it in update_items),
         "effective_security_pin_policy": coordinator.security_pin_policy,
-        "has_security_pin": coordinator.has_security_pin,
         "is_ble_sleep_expected": bool(coordinator.is_ble_sleep_expected()),
     }
     if not coordinator.is_ble_tag:
-        online_fallback = (
-            is_online
-            if is_online is not None
-            else is_coordinator_online_for_studio(hass, coordinator, lookup=lookup)
-        )
         live.update(
             {
-                "radio_connected": bool(
-                    getattr(coordinator, "radio_connected", online_fallback)
-                ),
-                "display_power_state": int(
-                    getattr(coordinator, "display_power_state", 0)
-                ),
-                "display_brightness_pct": int(
-                    getattr(
-                        coordinator,
-                        "display_brightness_pct",
-                        _DEFAULT_BRIGHTNESS_PCT,
-                    )
-                ),
                 "screensaver_active": bool(
                     getattr(coordinator, "screensaver_active", False)
                 ),
@@ -2612,7 +2533,6 @@ def _resolve_device_wallpapers_and_pools(
             hass,
             coordinator.device_slug,
             coordinator.wallpaper_source,
-            coordinator.wallpaper_favorites,
             sign_resource=coordinator.sign_payload_resource,
             display_shape=coordinator.display_shape,
         )
@@ -2715,12 +2635,8 @@ def build_studio_state_payload(
         base["catalog"] = (
             dict(catalog_override)
             if catalog_override is not None
-            else build_entity_catalog(hass, coordinator, all_coords=all_coords)
+            else build_entity_catalog(hass, coordinator)
         )
-        if "pref_specs" not in skip_sections:
-            base["pref_specs"] = build_pref_specs_catalog()
-        if "world_clock_zones" not in skip_sections:
-            base["world_clock_zones"] = list(WORLD_CLOCK_ZONES)
     presence_grid = (
         presence_grid_override
         if presence_grid_override is not None
@@ -2749,24 +2665,19 @@ def build_studio_state_payload(
     )
     sec_ids = present_section_ids(esphome_inspector.get("sections"))
     latter_idents = coordinator.device_identifiers
-    latter_dev = None
-    get_by_ident = getattr(dev_reg, "async_get_device_by_identifier", None)
-    if callable(get_by_ident):
-        for ident in latter_idents:
-            latter_dev = get_by_ident(ident, coordinator.entry.entry_id)
-            if latter_dev is not None:
-                break
-    else:
-        latter_dev = next(
-            (
-                d
-                for d in dr.async_entries_for_config_entry(
-                    dev_reg, coordinator.entry.entry_id
+    latter_dev = next(
+        (
+            dev
+            for ident in latter_idents
+            if (
+                dev := dev_reg.async_get_device_by_identifier(
+                    ident, coordinator.entry.entry_id
                 )
-                if d.identifiers & latter_idents
-            ),
-            None,
-        )
+            )
+            is not None
+        ),
+        None,
+    )
     sel_grp, sel_ble_cat, sel_online = _extract_selected_device_meta(
         base.get("system_devices"), target_sub_id
     )
@@ -2804,7 +2715,6 @@ def build_studio_state_payload(
             wallpapers_catalog,
             presence_grid,
             lookup=sel_lookup,
-            is_online=sel_online,
         ),
     }
     if wallpapers_catalog is not None:
@@ -2824,7 +2734,6 @@ __all__ = [
     "StudioIssueItem",
     "StudioLinksPayload",
     "StudioLogEntry",
-    "StudioPrefSpecItem",
     "StudioQuickActionItem",
     "StudioSharedControlItem",
     "StudioSharedControlTarget",
@@ -2836,7 +2745,6 @@ __all__ = [
     "build_device_prefs_payload",
     "build_entity_catalog",
     "build_issues",
-    "build_pref_specs_catalog",
     "build_quick_actions_payload",
     "build_speaker_volume_payload",
     "build_studio_state_payload",

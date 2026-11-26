@@ -152,7 +152,7 @@ async def test_rtsp_tier_1_ingest_fanout_and_zero_copy(
         assert p_frame == frame_a
         assert len(spawned) == 1
         assert transcode_calls == []
-        assert hub.get_ingest("camera.front_door").source_tier == "rtsp"
+        assert hub._ingests["camera.front_door"].source_tier == "rtsp"
 
         # Secondary smaller subscriber reuses the SAME single FFmpeg ingest and downscales via Pillow
         s_frame = await anext(gen_secondary)
@@ -165,7 +165,7 @@ async def test_rtsp_tier_1_ingest_fanout_and_zero_copy(
         await gen_secondary.aclose()
         # Idle teardown stops FFmpeg cleanly after idle_timeout_s
         await asyncio.sleep(0.18)
-        assert hub.active_ingest_count == 0
+        assert len(hub._ingests) == 0
         assert spawned[0].terminated is True
     finally:
         await hub.async_shutdown()
@@ -190,7 +190,7 @@ async def test_mjpeg_tier2_fallback_when_no_rtsp(
         chunk = await anext(chunks_gen)
         assert chunk.startswith(b"--latterframe\r\n")
         assert f"Content-Length: {len(raw_frame)}\r\n\r\n".encode("ascii") in chunk
-        assert hub.get_ingest("camera.garage").source_tier == "mjpeg"
+        assert hub._ingests["camera.garage"].source_tier == "mjpeg"
         await chunks_gen.aclose()
     finally:
         await hub.async_shutdown()
@@ -214,7 +214,7 @@ async def test_snapshot_tier3_fallback_when_no_rtsp_or_mjpeg(
         assert frame.startswith(b"\xff\xd8")
         w, h = _jpeg_size(frame)
         assert w % 16 == 0 and h % 16 == 0 and w <= 320 and h <= 240
-        assert hub.get_ingest("camera.cloud_cam").source_tier == "snapshot"
+        assert hub._ingests["camera.cloud_cam"].source_tier == "snapshot"
         await gen.aclose()
     finally:
         await hub.async_shutdown()
@@ -339,13 +339,13 @@ async def test_video_semaphore_cap_and_shutdown_cleanup(
             await anext(g)
             gens.append(g)
 
-        assert hub.active_ingest_count == 2
+        assert len(hub._ingests) == 2
 
         # A second subscriber on an existing camera succeeds without consuming another slot
         g_shared = hub.async_iter_stream_frames("camera.c1", 160, 128, fps=5)
         await anext(g_shared)
         gens.append(g_shared)
-        assert hub.active_ingest_count == 2
+        assert len(hub._ingests) == 2
 
         # A 3rd distinct camera exceeds max_concurrent_ingests=2
         images["camera.c3"] = make_jpeg_bytes(320, 240)
@@ -355,7 +355,7 @@ async def test_video_semaphore_cap_and_shutdown_cleanup(
 
         # Shutdown tears down all ingests and releases semaphore slots
         await hub.async_shutdown()
-        assert hub.active_ingest_count == 0
+        assert len(hub._ingests) == 0
         for g in gens:
             await g.aclose()
 
@@ -444,7 +444,7 @@ async def test_cold_rtsp_snapshot_primer_and_lru_idle_eviction(
         await gen1.aclose()
         await asyncio.sleep(0.02)
         # Ingest #1 is warm and idle in its 10s window
-        assert hub.active_ingest_count == 1
+        assert len(hub._ingests) == 1
 
         # Subscribing to camera #2 immediately evicts idle camera #1 instead of raising CameraIngestLimitError
         gen2 = hub.async_iter_stream_frames(
@@ -452,8 +452,8 @@ async def test_cold_rtsp_snapshot_primer_and_lru_idle_eviction(
         )
         frame2 = await asyncio.wait_for(anext(gen2), timeout=1.0)
         assert frame2.startswith(b"\xff\xd8")
-        assert hub.get_ingest("camera.slow_rtsp") is None
-        assert hub.get_ingest("camera.cam_two") is not None
+        assert "camera.slow_rtsp" not in hub._ingests
+        assert "camera.cam_two" in hub._ingests
         await gen2.aclose()
     finally:
         await hub.async_shutdown()
@@ -519,11 +519,11 @@ async def test_offline_stream_fast_fail_grid_429_and_rtsp_fallback(
             await anext(g_flaky)
             # Wait briefly for dead RTSP retries to exhaust and fall back to Tier 3 snapshot
             for _ in range(30):
-                ing = hub.get_ingest("camera.flaky")
+                ing = hub._ingests.get("camera.flaky")
                 if ing is not None and ing.source_tier == "snapshot":
                     break
                 await orig_sleep(0.01)
-            assert hub.get_ingest("camera.flaky").source_tier == "snapshot"
+            assert hub._ingests["camera.flaky"].source_tier == "snapshot"
             await g_flaky.aclose()
     finally:
         await hub.async_shutdown()
@@ -588,7 +588,7 @@ async def test_grid_shared_producer_and_dirty_frame_skip(
         f1, f2, f3 = await asyncio.gather(anext(gen1), anext(gen2), anext(gen3))
         assert f1 == f2 == f3
         assert _jpeg_size(f1) == (800, 480)
-        assert hub.active_grid_producer_count == 1
+        assert len(hub._grid_producers) == 1
         assert compose_calls == 1
 
         # Wait across multiple 15-FPS ticks with unchanged tile seqs -> dirty-frame skip keeps count at 1
@@ -610,8 +610,8 @@ async def test_grid_shared_producer_and_dirty_frame_skip(
 
         await gen1.aclose()
         await gen2.aclose()
-        assert hub.active_grid_producer_count == 1
+        assert len(hub._grid_producers) == 1
         await gen3.aclose()
-        assert hub.active_grid_producer_count == 0
+        assert len(hub._grid_producers) == 0
     finally:
         await hub.async_shutdown()

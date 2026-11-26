@@ -227,6 +227,7 @@ export const LAYOUT_STYLES = css`
     .nav-list {
       flex-direction: row;
       overflow-x: auto;
+      mask-image: var(--studio-nav-scroll-mask);
       scroll-padding-inline: var(--studio-space-2);
       padding-block: var(--studio-space-1);
       padding-inline: var(--studio-space-1);

@@ -298,10 +298,7 @@ def get_home_hub_summary(
 def _is_intercom_available(
     hass: HomeAssistant | None,
     coordinator: Any,
-    hub_info: Mapping[str, Any],
 ) -> bool:
-    if hub_info.get("intercom_available"):
-        return True
     if coordinator is not None:
         eff_speakers = getattr(coordinator, "effective_broadcast_speakers", None)
         if isinstance(eff_speakers, (list, tuple)):
@@ -334,7 +331,7 @@ def get_available_home_categories(
     intercom_ok = (
         has_intercom
         if has_intercom is not None
-        else _is_intercom_available(hass, coordinator, hub_info)
+        else _is_intercom_available(hass, coordinator)
     )
     ordered: list[str] = []
     for tok in configured:

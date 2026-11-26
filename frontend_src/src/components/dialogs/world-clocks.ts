@@ -15,6 +15,7 @@ import {
 import { focusSafe, html, live, nothing, type TemplateResult } from "../../lib/lit.js";
 import type { StudioStore } from "../../state/store.js";
 import { defaultLocaleTimeFormat } from "../../utils/format.js";
+import { isImeSafeEnter } from "../controls/aria-helpers.js";
 import {
   renderSelectRow,
   renderSettingsRow,
@@ -32,16 +33,10 @@ export {
 
 const TEXT_INPUT_DEBOUNCE_MS = 600;
 
-function isImeSafeEnter(ev: KeyboardEvent): boolean {
-  return ev.key === "Enter" && !ev.isComposing && ev.keyCode !== 229;
-}
-
 export function renderTimeAppConfigBody(store: StudioStore): TemplateResult {
   const data = store.state;
   const cfg = data?.config || {};
-  const zonesCatalog = data?.world_clock_zones?.length
-    ? data.world_clock_zones
-    : WORLD_CLOCK_ZONES_CATALOG;
+  const zonesCatalog = WORLD_CLOCK_ZONES_CATALOG;
   const knownZoneSet = new Set(zonesCatalog.map((z) => z.iana));
 
   const localClockLabelPref = store.entity.getPref("local_clock_label");

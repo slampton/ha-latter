@@ -12,6 +12,7 @@ from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
     entity_registry as er,
+    floor_registry as fr,
 )
 
 from ..const import CONF_BLE_AREA_SIGNATURES
@@ -124,8 +125,6 @@ def int_to_mac(mac_int: int) -> str:
 def _get_floor_registry(hass: HomeAssistant) -> Any | None:
     """Return Home Assistant's `FloorRegistry` when available."""
     try:
-        from homeassistant.helpers import floor_registry as fr
-
         return fr.async_get(hass)
     except Exception as err:  # noqa: BLE001
         _LOGGER.debug("FloorRegistry lookup unavailable: %s", err)
@@ -135,7 +134,7 @@ def _get_floor_registry(hass: HomeAssistant) -> Any | None:
 def has_configured_floors(hass: HomeAssistant) -> bool:
     """Return True if Home Assistant has any configured Floor entries or Area floor assignments."""
     floor_reg = _get_floor_registry(hass)
-    if floor_reg is not None and hasattr(floor_reg, "async_list_floors"):
+    if floor_reg is not None:
         try:
             if list(floor_reg.async_list_floors()):
                 return True
@@ -154,7 +153,7 @@ def resolve_floor_info(hass: HomeAssistant, floor_id: str | None) -> tuple[str, 
     if not clean_id:
         return "", ""
     floor_reg = _get_floor_registry(hass)
-    if floor_reg is not None and hasattr(floor_reg, "async_get_floor"):
+    if floor_reg is not None:
         try:
             floor_entry = floor_reg.async_get_floor(clean_id)
             if floor_entry is not None:

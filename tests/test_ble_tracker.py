@@ -1088,7 +1088,7 @@ async def test_identical_p4_c6_devices_isolated_by_derived_uuid_and_suppressed_f
         "ips": 1,
         "chip": "ESP32-P4",
         "psram_mb": 32,
-        "minor": 4,
+        "beacon": {"major": 1, "minor": 4},
         "core_rev": MIN_FIRMWARE_CORE_REV,
     }
     for sub_id in ("sub_r1", "sub_r2"):

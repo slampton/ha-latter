@@ -500,7 +500,6 @@ async def async_fetch_track_lyrics(
     if parsed_lines:
         cache_entry.pop("lyrics_miss_until", None)
         cache_entry["lyrics_payload"] = {"synced": synced, "lines": parsed_lines}
-        cache_entry["lyrics"] = [str(row["text"]) for row in parsed_lines]
         if raw_album_bio and "bio" not in cache_entry:
             bio_seed = [
                 *( [f"Artist: {artist}"] if artist else [] ),
@@ -600,7 +599,6 @@ def _format_and_cache_bio_lines(
         if parsed_lines:
             cache_entry.pop("lyrics_miss_until", None)
             cache_entry["lyrics_payload"] = {"synced": synced, "lines": parsed_lines}
-            cache_entry["lyrics"] = [str(row["text"]) for row in parsed_lines]
     return bio_lines
 
 

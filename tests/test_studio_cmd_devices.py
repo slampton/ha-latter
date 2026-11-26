@@ -300,7 +300,7 @@ async def test_device_actions_telemetry_and_dnd_entities(
 ) -> None:
     """Verify `device_action` verbs, `device_telemetry` -> Studio `live.telemetry`, and Screen/Screensaver/DND/Dismiss entities."""
     entry, sys_obj, coord = await setup_latter_hub(hass)
-    wifi_eid = f"sensor.{coord.device_slug}_system_wi_fi_signal"
+    wifi_eid = f"sensor.{coord.device_slug}_wi_fi_signal"
     register_entity(
         hass,
         wifi_eid,

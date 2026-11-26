@@ -182,8 +182,7 @@ export class EntityController implements EntityControllerContract {
   }
 
   getPrefSpec(key: string): DevicePrefSpecItem | undefined {
-    const fromPayload = this.store.state?.pref_specs?.find((s) => s.key === key);
-    return fromPayload ?? DEVICE_PREF_SPECS_MAP[key];
+    return DEVICE_PREF_SPECS_MAP[key];
   }
 
   getSectionItems(sectionId: string): EspHomeEntityItem[] {

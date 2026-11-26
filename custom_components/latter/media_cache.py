@@ -28,7 +28,6 @@ type ImageCacheKey = tuple[str, int, int, bool, float]
 
 _IMAGE_CACHE_LOCK: Final = threading.Lock()
 TRANSCODE_SEMAPHORE: Final = threading.BoundedSemaphore(4)
-_TRANSCODE_SEMAPHORE: Final = TRANSCODE_SEMAPHORE
 
 _ARTWORK_LRU_CACHE: OrderedDict[ImageCacheKey, bytes] = OrderedDict()
 _THUMB_LRU_CACHE: OrderedDict[ImageCacheKey, bytes] = OrderedDict()

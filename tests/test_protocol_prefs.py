@@ -610,10 +610,19 @@ class TestShortcutsProtocolAndPolicy(unittest.TestCase):
             self.assertEqual(lenient["badge_style"], "")
             self.assertEqual(lenient["accent"], "")
 
-        # Settings route is stripped on dock (always rendered last by firmware)
-        self.assertIsNone(
-            studio_scope.normalize_shortcut_item({"kind": "route", "target": "settings:root"}, is_dock=True)
-        )
+        # Legacy settings:root / app:settings routes are rejected on dock (strict=True) or dropped (strict=False)
+        for bad_settings in ("settings:root", "app:settings"):
+            with self.assertRaises(ValueError):
+                studio_scope.normalize_shortcut_item(
+                    {"kind": "route", "target": bad_settings}, is_dock=True
+                )
+            self.assertIsNone(
+                studio_scope.normalize_shortcut_item(
+                    {"kind": "route", "target": bad_settings},
+                    is_dock=True,
+                    strict=False,
+                )
+            )
         # app:pinned is dock_only — rejected inside Pinned App
         with self.assertRaises(ValueError):
             studio_scope.normalize_shortcut_item({"kind": "route", "target": "app:pinned"}, is_dock=False)

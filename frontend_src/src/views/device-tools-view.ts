@@ -45,13 +45,12 @@ function isValidTelemetryState(val: unknown): val is string {
 }
 
 function isInternalNetworkBlobEntity(it: EspHomeEntityItem): boolean {
-  return it.key === "rpc_outbox" || it.entity_id.endsWith("_rpc_outbox");
+  return it.key === "rpc_outbox" || it.entity_id.endsWith("_system_rpc_outbox");
 }
 
 const SUMMARY_DUPLICATE_KEYS = new Set([
   "wifi_signal",
   "wi_fi_signal",
-  "system_wi_fi_signal",
   "ip_address",
   "mac_address",
   "firmware_version",
@@ -290,7 +289,6 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
     } else {
       const rawWifi =
         findNetworkState("wi_fi_signal") ||
-        findNetworkState("system_wi_fi_signal") ||
         findNetworkState("wifi_signal");
       if (rawWifi) {
         signalText = Number.isFinite(Number(rawWifi))
@@ -699,7 +697,7 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
               control: html`<button
                 type="button"
                 @click=${() =>
-                  store.tools.openRemoveDeviceModal(
+                  store.tools.requestRemoveDevice(
                     store.activeSubentryId,
                     data?.title || cfg.device_slug || store.t("devices.col_device"),
                   )}

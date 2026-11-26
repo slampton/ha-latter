@@ -797,7 +797,6 @@ async def _async_apply_uploaded_wallpaper(
     coord.async_notify_listeners()
     coord_slug = coord.device_slug
     coord_wp_src = coord.wallpaper_source
-    coord_wp_favs = list(coord.wallpaper_favorites)
     coord_signer = coord.sign_payload_resource
     coord_shape = coord.display_shape
     catalog: list[dict[str, object]] = await hass.async_add_executor_job(
@@ -805,7 +804,6 @@ async def _async_apply_uploaded_wallpaper(
             hass,
             coord_slug,
             coord_wp_src,
-            coord_wp_favs,
             sign_resource=coord_signer,
             display_shape=coord_shape,
         )
@@ -887,7 +885,6 @@ class LatterWallpaperUploadView(HomeAssistantView):
                 self.hass,
                 "system",
                 "",
-                [],
                 sign_resource=sys_signer,
                 display_shape="square",
             )
@@ -912,7 +909,6 @@ class LatterWallpaperUploadView(HomeAssistantView):
                 "ok": True,
                 "photo_id": source_id,
                 "filename": out_filename,
-                "source_id": source_id,
                 "photo": photo_entry,
                 "photo_collections": photo_collections,
                 "wallpapers": wallpapers,

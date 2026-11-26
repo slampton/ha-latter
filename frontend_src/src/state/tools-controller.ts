@@ -2,7 +2,7 @@
  * `store.tools` Controller (`ToolsController`, `D-064`, `D-066`):
  * - Shared confirmation dialog orchestration (`confirmModal`, `openConfirm`, `closeConfirm`, `runConfirmedAction`)
  * - Security PIN, HMAC signing key rotation, System & Device diagnostics, & Support version copy
- * - Modals (`colorWheelModal.painted`, `removeModal`, `resetModal`, `addBleModal`)
+ * - Modals (`colorWheelModal.painted`, `resetModal`, `addBleModal`)
  * - Discovered `adopt` (with post-adopt jump to `adopted_subentry_id`) + `ignore` / `unignore`
  * - Announcements, strict v3 backup/restore, & timezone-formatted System/Device logs
  */
@@ -337,22 +337,6 @@ export class ToolsController implements ToolsControllerContract {
 
   // ---------- Remove & Reset Device Modals ----------
 
-  openRemoveDeviceModal(subentryId: string, title: string): void {
-    if (!subentryId) return;
-    this.store.removeModal = {
-      open: true,
-      subentryId,
-      title: title || "Device",
-      busy: false,
-    };
-    this.store.host.requestUpdate();
-  }
-
-  closeRemoveDeviceModal(): void {
-    this.store.removeModal = { ...this.store.removeModal, open: false, busy: false };
-    this.store.host.requestUpdate();
-  }
-
   async removeDeviceById(subentryId: string): Promise<void> {
     const subId = String(subentryId || "").trim();
     if (!subId) return;
@@ -363,7 +347,6 @@ export class ToolsController implements ToolsControllerContract {
         { subentry_id: subId },
         this.store.activeSubentryId || null,
       );
-      this.closeRemoveDeviceModal();
       if (this.store.activeSubentryId === subId) {
         this.store.onActiveDeviceChanged(subId, "", { discardPrevPending: true });
         this.store.currentScope = "device";
@@ -375,19 +358,6 @@ export class ToolsController implements ToolsControllerContract {
     } catch (err) {
       this.store.showToast(formatWsError(err, "Could not remove Device"), true);
       throw err;
-    }
-  }
-
-  async confirmRemoveDevice(): Promise<void> {
-    const subId = this.store.removeModal.subentryId;
-    if (!subId) return;
-    this.store.removeModal = { ...this.store.removeModal, busy: true };
-    this.store.host.requestUpdate();
-    try {
-      await this.removeDeviceById(subId);
-    } catch {
-      this.store.removeModal = { ...this.store.removeModal, busy: false };
-      this.store.host.requestUpdate();
     }
   }
 
@@ -829,7 +799,7 @@ export class ToolsController implements ToolsControllerContract {
     if (!filtered.length) return "No events logged yet.";
     return filtered
       .map((e) => {
-        const rawTs = e.timestamp ?? e.ts ?? "";
+        const rawTs = e.ts ?? "";
         const formattedTs = rawTs !== "" ? fmtDateTime(rawTs, this.store.hass) : "";
         const lvl = String(e.level || "INFO").toUpperCase();
         const src = String(e.source || "latter");

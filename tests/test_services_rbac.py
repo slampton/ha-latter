@@ -43,10 +43,7 @@ from custom_components.latter.const import (
 )
 from custom_components.latter.hub_registry import get_global_config
 from custom_components.latter.media import browse as _browse_mod, lyrics as _lyrics_mod
-from custom_components.latter.media.browse import (
-    MAX_BROWSE_CACHE_ENTRIES,
-    clear_browse_cache,
-)
+from custom_components.latter.media.browse import clear_browse_cache
 from custom_components.latter.media.linking import (
     clear_ma_counterpart_cache,
     resolve_ma_counterpart_entity,
@@ -236,7 +233,6 @@ async def test_all_domain_services_ma_link_and_browse_lru(
     """Exercise device_hello, media/MA container fallback, volume override, music_browse, and area_browse/area_action."""
     # Verify bounded 64-entry LRU cache on browse lyrics/bio
     clear_browse_cache()
-    assert MAX_BROWSE_CACHE_ENTRIES == 64
     cache_dict = (
         vars(_lyrics_mod).get("BROWSE_LYRICS_BIO_CACHE")
         if "BROWSE_LYRICS_BIO_CACHE" in vars(_lyrics_mod)

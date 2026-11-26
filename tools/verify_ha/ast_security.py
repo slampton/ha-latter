@@ -22,6 +22,8 @@ EXPECTED_PUBLIC_SERVICES: Final[frozenset[str]] = frozenset(
 
 REQUIRED_REDACTED_KEYS: Final[frozenset[str]] = frozenset(
     {
+        "alert_camera_url",
+        "art_url",
         "ble_beacon_uuid",
         "ble_target_address",
         "camera_snapshot_url",
@@ -33,6 +35,7 @@ REQUIRED_REDACTED_KEYS: Final[frozenset[str]] = frozenset(
         "security_pin",
         "security_pin_hash",
         "system_ble_uuid",
+        "wallpaper_url",
     }
 )
 
@@ -441,11 +444,25 @@ def _check_hass_data_and_entity_naming(
                 )
 
 
+def _is_dead_alias(target_name: str, value_name: str, defined_defs: set[str]) -> bool:
+    if target_name.startswith("_") and not target_name.startswith("__"):
+        return (
+            target_name[1:] == value_name
+            or target_name.removeprefix("_async_") == value_name
+            or value_name in defined_defs
+        )
+    return (
+        not target_name.startswith("_")
+        and not value_name.startswith("_")
+        and value_name in defined_defs
+    )
+
+
 def _check_no_dead_private_aliases(
     parsed_trees: dict[str, ast.Module],
     failures: list[str],
 ) -> None:
-    """Forbid dead `_foo = foo` module-level and class-level compatibility aliases."""
+    """Forbid dead `_foo = foo`, `_async_foo = foo`, and public same-scope def/class aliases."""
     for rel, tree in sorted(parsed_trees.items()):
         scopes: list[tuple[str, list[ast.stmt]]] = [("", tree.body)]
         scopes.extend(
@@ -454,6 +471,11 @@ def _check_no_dead_private_aliases(
             if isinstance(node, ast.ClassDef)
         )
         for prefix, stmts in scopes:
+            defined_defs = {
+                n.name
+                for n in stmts
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            }
             for stmt in stmts:
                 if (
                     isinstance(stmt, ast.Assign)
@@ -463,11 +485,7 @@ def _check_no_dead_private_aliases(
                 ):
                     target_name = stmt.targets[0].id
                     value_name = stmt.value.id
-                    if (
-                        target_name.startswith("_")
-                        and not target_name.startswith("__")
-                        and target_name[1:] == value_name
-                    ):
+                    if _is_dead_alias(target_name, value_name, defined_defs):
                         failures.append(
                             f"[NO DEAD ALIASES] {rel}:{stmt.lineno} defines forbidden "
                             f"alias {prefix}{target_name} = {value_name}"

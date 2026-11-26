@@ -358,7 +358,7 @@ async def test_wallpaper_upload_rbac_limits_and_proxy_views(
     assert r_200_dev.status == 200
     body_dev = json.loads(r_200_dev.body.decode("utf-8"))
     assert body_dev["ok"] is True
-    uploaded_src = body_dev["source_id"]
+    uploaded_src = body_dev["photo_id"]
     assert uploaded_src.startswith("photo:")
     assert body_dev["photo"]["name"] == "Golden Sunset"
     assert body_dev["photo"]["crop"] == {"x": 0.3, "y": 0.7, "zoom": 1.5}
@@ -445,7 +445,7 @@ async def test_wallpaper_upload_rbac_limits_and_proxy_views(
         unsub_studio()
     assert r_sys_up.status == 200
     assert len(studio_pushes) == 1
-    sys_up_id = json.loads(r_sys_up.body.decode("utf-8"))["source_id"]
+    sys_up_id = json.loads(r_sys_up.body.decode("utf-8"))["photo_id"]
     assert delete_photo(hass, sys_up_id) is True
 
     # Traversal attempt rejected (404)

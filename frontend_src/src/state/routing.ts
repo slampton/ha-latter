@@ -244,7 +244,6 @@ export function onActiveDeviceChangedOp(
     store.shortcutModal = { ...store.shortcutModal, open: false };
     store.saveGroupModal = { ...store.saveGroupModal, open: false, busy: false };
     store.resetModal = { ...store.resetModal, open: false, busy: false };
-    store.removeModal = { ...store.removeModal, open: false, busy: false };
     store.returnToPinnedModal = false;
     store.clearHandoffTargets();
   }

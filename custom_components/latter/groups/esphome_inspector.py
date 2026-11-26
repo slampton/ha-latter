@@ -135,12 +135,12 @@ def classify_esphome_entity_section(
     entity_category: str | None,
     translation_key: str | None = None,
     device_object_prefixes: tuple[str, ...] = (),
-) -> tuple[str, str | None]:
-    """Classify an ESPHome entity into a focused section; returns `(section_id, None)`."""
+) -> str:
+    """Classify an ESPHome entity into a focused section ID."""
     if domain == "assist_satellite" or (
         domain == "select" and (translation_key or "") in ASSIST_SATELLITE_TRANSLATION_KEYS
     ):
-        return "voice", None
+        return "voice"
 
     ent_suffix = entity_id.split(".", 1)[-1].lower()
     for prefix in device_object_prefixes:
@@ -148,14 +148,13 @@ def classify_esphome_entity_section(
             ent_suffix = ent_suffix[len(prefix) + 1 :]
             break
 
-    sec_id = _classify_by_domain_and_keywords(
+    return _classify_by_domain_and_keywords(
         domain,
         device_class.lower(),
         entity_category,
         friendly_name.strip().lower(),
         ent_suffix,
     )
-    return sec_id, None
 
 
 def present_section_ids(sections: object) -> set[str]:
@@ -224,7 +223,7 @@ def _format_entity_item(
 
     dev_class = str(attrs.get("device_class") or entry.original_device_class or "")
     cat = entry.entity_category
-    sec_id, _ = classify_esphome_entity_section(
+    sec_id = classify_esphome_entity_section(
         entry.entity_id,
         clean_name,
         entry.domain,

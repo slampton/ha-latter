@@ -349,8 +349,6 @@ export class SubscriptionController {
     const mergedStudioRev = incoming.studio_rev ?? prev?.studio_rev;
     const mergedHasSecurityPin = incoming.has_security_pin ?? prev?.has_security_pin;
     const mergedCatalog = incoming.catalog ?? prev?.catalog;
-    const mergedPrefSpecs = incoming.pref_specs ?? prev?.pref_specs;
-    const mergedWorldClockZones = incoming.world_clock_zones ?? prev?.world_clock_zones;
     const mergedSystemWallpapers =
       incoming.system_wallpapers ?? prev?.system_wallpapers ?? [];
     const mergedPhotoCollections =
@@ -394,8 +392,6 @@ export class SubscriptionController {
         wallpapers: mergedWallpapers,
         ble_area_signatures: mergedBleSignatures,
         catalog: mergedCatalog,
-        pref_specs: mergedPrefSpecs,
-        world_clock_zones: mergedWorldClockZones,
         internal_logs: mergedLogs,
         device_prefs: incoming.device_prefs || [],
       };
@@ -440,8 +436,6 @@ export class SubscriptionController {
         photo_collections: mergedPhotoCollections,
         system_wallpapers: mergedSystemWallpapers,
         catalog: mergedCatalog,
-        pref_specs: mergedPrefSpecs,
-        world_clock_zones: mergedWorldClockZones,
         subentry_id: keepPrevDevice ? prev.subentry_id : "",
         title: keepPrevDevice ? prev.title : "",
         device_config_rev: keepPrevDevice ? prev.device_config_rev : 0,
@@ -506,8 +500,6 @@ export class SubscriptionController {
       wallpapers: mergedWallpapers,
       ble_area_signatures: mergedBleSignatures,
       catalog: mergedCatalog,
-      pref_specs: mergedPrefSpecs,
-      world_clock_zones: mergedWorldClockZones,
       internal_logs: mergedLogs,
       device_prefs: incoming.device_prefs || [],
     };

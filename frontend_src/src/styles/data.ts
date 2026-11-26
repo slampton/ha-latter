@@ -465,12 +465,6 @@ export const DATA_STYLES = css`
     transition: inline-size 0.25s ease, width 0.25s ease;
   }
   .signal-fill.low { background: var(--studio-error); }
-  .upload-progress-fill {
-    inline-size: var(--upload-pct, 0%);
-    block-size: 100%;
-    background: var(--studio-primary);
-    transition: inline-size 0.15s ease, width 0.15s ease;
-  }
 
   /* Photo Library, Collection Filter Strip, Bulk Toolbar & Compact Pool Previews (D-072) */
   .photo-upload-status {
@@ -814,6 +808,10 @@ export const DATA_STYLES = css`
     padding-inline: var(--studio-space-4);
     border-radius: var(--studio-radius-field);
     background: var(--studio-info-tint);
+  }
+  .alert-info {
+    background: var(--studio-info-tint);
+    border: 1px solid var(--studio-info);
   }
   .alert-error { background: var(--studio-error-tint); }
   .alert-warning { background: var(--studio-warning-tint); }

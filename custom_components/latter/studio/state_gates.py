@@ -32,12 +32,6 @@ HEAVY_SUBSCRIPTION_SECTIONS: Final[tuple[str, ...]] = (
     "discovered_latter_devices",
     "ignored_latter_devices",
     "locale_strings",
-    "pref_specs",
-    "world_clock_zones",
-)
-
-_STATIC_CATALOG_SECTIONS: Final[frozenset[str]] = frozenset(
-    {"pref_specs", "world_clock_zones"}
 )
 
 
@@ -90,8 +84,6 @@ class SectionTokenGate:
         """Map every heavy subscription section to its O(1) invalidation token."""
         reg_sys_tok = (snap.registry_rev, snap.system_config_rev, snap.coordinator_ids)
         return {
-            "pref_specs": 1,
-            "world_clock_zones": 1,
             "locale_strings": (snap.language, snap.locales_loaded),
             "photo_collections": snap.wallpaper_token,
             "system_wallpapers": (snap.wallpaper_token, snap.hmac_secret, snap.utc_day),
@@ -156,12 +148,9 @@ class SectionTokenGate:
         payload_keys: Collection[str] | None = None,
     ) -> None:
         """Record tokens for sections built on this push (including hash-filtered unchanged sections)."""
+        _ = payload_keys
         for key, token in self.section_tokens(snap).items():
             if key in skipped:
-                continue
-            if key in _STATIC_CATALOG_SECTIONS and (
-                payload_keys is None or key not in payload_keys
-            ):
                 continue
             self._sent_tokens[key] = token
 

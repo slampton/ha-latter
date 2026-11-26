@@ -568,9 +568,9 @@ async def test_group_baseline_reset_releases_system_lock_and_batch_setting_paral
     # 1) `update_group_baseline(..., reset_to_default=True)` releases `system_config_lock` BEFORE awaiting coordinators
     lock_states: list[bool] = []
 
-    async def _spy_apply_baseline(h: Any, *args: Any, **kwargs: Any) -> Any:
-        lock_states.append(get_system_config_lock(h).locked())
-        return await async_apply_group_baseline_to_coordinators(h, *args, **kwargs)
+    async def _spy_apply_baseline(*args: Any, **kwargs: Any) -> Any:
+        lock_states.append(get_system_config_lock(hass).locked())
+        return await async_apply_group_baseline_to_coordinators(*args, **kwargs)
 
     with patch.object(
         sys_cmds, "async_apply_group_baseline_to_coordinators", side_effect=_spy_apply_baseline

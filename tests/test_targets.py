@@ -259,7 +259,6 @@ class BleDeviceTrackerAndPersonTests(unittest.TestCase):
         self.assertIn("sys_obj.async_cleanup_feeds()", init_src)
 
     def test_canonical_module_exports(self) -> None:
-        self.assertEqual(media_browse.MAX_BROWSE_CACHE_ENTRIES, 64)
         self.assertTrue(callable(vars(media_lyrics).get("_resolve_speaker_playing_metadata") or vars(media_lyrics).get("browse_track_lyrics_or_bio") or vars(media_browse).get("_resolve_speaker_playing_metadata")))
         self.assertTrue(callable(media_playback.async_execute_volume_action))
         self.assertTrue(callable(media_playback.async_play_media_with_ma_fallback))

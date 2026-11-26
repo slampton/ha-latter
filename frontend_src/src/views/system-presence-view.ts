@@ -23,8 +23,7 @@ const METERS_TO_FEET = 3.28084;
 function normalizeAreaFusionChoices(
   row: AreaPresenceRow | undefined,
 ): ReadonlyArray<{ entity_id: string; name: string }> {
-  const rawChoices = row?.fusion_sensor_choices ?? row?.available_sensors ?? [];
-  return rawChoices.map((s) => (typeof s === "string" ? { entity_id: s, name: s } : s));
+  return row?.fusion_sensor_choices ?? [];
 }
 
 export function renderSystemPresenceView(store: StudioStore): TemplateResult {

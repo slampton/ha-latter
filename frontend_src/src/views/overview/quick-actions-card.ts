@@ -38,7 +38,7 @@ function canonicalActionCommand(item: EspHomeEntityItem): string {
   if (tail === "hibernate" || tail.endsWith("_hibernate_device") || tail.endsWith("_hibernate")) {
     return "hibernate";
   }
-  if (tail === "restart" || tail.endsWith("_restart_device") || tail.endsWith("_restart")) {
+  if (tail === "restart" || tail.endsWith("_actions_restart_device")) {
     return "restart";
   }
   return "";

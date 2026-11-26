@@ -290,8 +290,8 @@ _BLE_AWAY_MIN_S = 30
 _BLE_AWAY_MAX_S = 900
 _DWELL_MIN_S = 3
 _DWELL_MAX_S = 60
-_RPC_OUTBOX_SUFFIXES: tuple[str, ...] = ("_system_rpc_outbox", "_rpc_outbox")
-_RPC_OUTBOX_NAMES: tuple[str, ...] = ("System: RPC Outbox", "RPC Outbox")
+_RPC_OUTBOX_SUFFIXES: tuple[str, ...] = ("_system_rpc_outbox",)
+_RPC_OUTBOX_NAMES: tuple[str, ...] = ("System: RPC Outbox",)
 _RPC_OUTBOX_UID_SUFFIXES: tuple[str, ...] = ("/text_sensor/System: RPC Outbox",)
 _MIN_ALERT_DURATION_S = 2
 _RECONNECT_SYNC_DEDUP_S = 5.0
@@ -639,12 +639,9 @@ class LatterCoordinator:
         self, coro: Coroutine[Any, Any, Any], name: str
     ) -> asyncio.Task[Any]:
         """Spawn a tracked background task cancelled automatically on `async_cleanup()`."""
-        if hasattr(self.entry, "async_create_background_task"):
-            task: asyncio.Task[Any] = self.entry.async_create_background_task(
-                self.hass, coro, name
-            )
-        else:
-            task = self.hass.async_create_task(coro, name)
+        task: asyncio.Task[Any] = self.entry.async_create_background_task(
+            self.hass, coro, name
+        )
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
         return task
@@ -1307,7 +1304,6 @@ class LatterCoordinator:
             return True
         return (
             isinstance(hw.get("beacon"), dict)
-            or hw.get("minor") is not None
             or self.device_telemetry.get("ble_active") is not None
         )
 
@@ -1939,8 +1935,6 @@ class LatterCoordinator:
         raw = str(self.get_opt(CONF_WALLPAPER_MODE, "") or "").strip().lower()
         if raw in ("off", "single", "collection", "custom"):
             return raw
-        if str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip():
-            return "single"
         return DEFAULT_WALLPAPER_MODE
 
     @property
@@ -1952,10 +1946,6 @@ class LatterCoordinator:
     @property
     def configured_wallpaper_source(self) -> str:
         return str(self.get_opt(CONF_WALLPAPER_SOURCE, "") or "").strip()
-
-    @configured_wallpaper_source.setter
-    def configured_wallpaper_source(self, value: str) -> None:
-        self._configured_wallpaper_source = str(value or "").strip()
 
     @callback
     def set_configured_wallpaper_source(self, value: str) -> None:
@@ -2954,7 +2944,7 @@ class LatterCoordinator:
         if self.is_ble_tag or self.is_rpc_outbox_unavailable():
             return False
         saw_conn_sensor = False
-        for sfx in ("_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"):
+        for sfx in ("_wi_fi_signal", "_ip_address"):
             ent_id = self.device_entity("sensor", sfx)
             if not ent_id:
                 continue
@@ -3363,12 +3353,9 @@ class LatterCoordinator:
         if parsed is not None:
             if self._ble_tracker is not None:
                 manifest_beacon = parsed.get("beacon")
-                if not isinstance(manifest_beacon, dict) and parsed.get("minor") is not None:
-                    manifest_beacon = {
-                        "major": parsed.get("major", 1),
-                        "minor": parsed["minor"],
-                    }
-                self._ble_tracker.update_manifest_beacon(manifest_beacon)
+                self._ble_tracker.update_manifest_beacon(
+                    manifest_beacon if isinstance(manifest_beacon, dict) else None
+                )
             self._apply_device_health(parsed, str(boot_id or "").strip())
             self._sync_outdated_firmware_issue()
             self.reconcile_capability_entities()
@@ -3573,9 +3560,7 @@ class LatterCoordinator:
                 )
             return False
 
-        wifi_st = self.device_state(
-            "sensor", "_system_wi_fi_signal", "_wi_fi_signal", "_ip_address"
-        )
+        wifi_st = self.device_state("sensor", "_wi_fi_signal", "_ip_address")
         wifi_offline = wifi_st is not None and wifi_st.state == STATE_UNAVAILABLE
         svc = esphome_service(
             self.hass, self.esphome_device_id, "latter_device_command"
@@ -3602,9 +3587,7 @@ class LatterCoordinator:
                         ) from err
                     return False
             if cmd == "restart" and (
-                restart_ent := self.device_entity(
-                    "button", "_actions_restart_device", "_restart_device"
-                )
+                restart_ent := self.device_entity("button", "_actions_restart_device")
             ):
                 rst_st = self.hass.states.get(restart_ent)
                 if rst_st is None or rst_st.state != STATE_UNAVAILABLE:
@@ -4114,7 +4097,6 @@ class LatterCoordinator:
     def _apply_stored_runtime(self, stored: dict[str, Any]) -> None:
         if not stored:
             return
-        self.rev = max(1, int(stored.get("rev") or 1))
         self.alert_id = max(0, int(stored.get("alert_id") or 0))
         self._apply_stored_media_and_visuals(stored)
         saved_health = stored.get("last_device_health")
@@ -4465,11 +4447,6 @@ class LatterCoordinator:
         if self._ble_tracker is None:
             hw_manifest = self.hardware_manifest
             manifest_beacon = hw_manifest.get("beacon")
-            if not isinstance(manifest_beacon, dict) and hw_manifest.get("minor") is not None:
-                manifest_beacon = {
-                    "major": hw_manifest.get("major", 1),
-                    "minor": hw_manifest["minor"],
-                }
             self._ble_tracker = LatterNativeBleTracker(
                 hass=self.hass,
                 beacon_uuid=self.ble_beacon_uuid,
@@ -4484,7 +4461,9 @@ class LatterCoordinator:
                 away_timeout_s=float(self.ble_away_timeout_s),
                 target_address=self.ble_target_address,
                 esphome_device_id=self.esphome_device_id,
-                manifest_beacon=manifest_beacon,
+                manifest_beacon=(
+                    manifest_beacon if isinstance(manifest_beacon, dict) else None
+                ),
                 should_hold_during_ble_sleep=self.is_ble_sleep_expected,
                 initial_matched_addresses=self._matched_ble_addresses,
                 on_address_matched=self._on_ble_address_matched,

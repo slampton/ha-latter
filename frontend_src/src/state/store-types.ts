@@ -545,7 +545,6 @@ export interface StudioStoreContext {
   logFilter: string;
 
   confirmModal: ConfirmModalState;
-  removeModal: { open: boolean; subentryId: string; title: string; busy: boolean };
   resetModal: {
     open: boolean;
     deviceSettings: boolean;

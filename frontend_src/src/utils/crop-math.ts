@@ -1,6 +1,6 @@
 /**
  * Pure non-destructive focal-point crop math shared by Photo Upload, Photo Editor,
- * and preview thumbnails (`D-072`). Mirrors `wallpapers.py:crop_and_fit_image()`.
+ * and preview thumbnails (`D-072`). Mirrors `wallpapers/models.py:compute_crop_box()`.
  */
 
 export interface PhotoCrop {

@@ -118,7 +118,7 @@ CONF_IGNORED_DISCOVERED_DEVICES: Final = "ignored_discovered_devices"
 CONF_SYSTEM_CONFIG_REV: Final = "system_config_rev"
 
 # Active Device Preference Keys imported directly by integration modules
-# (full 65-key catalog lives canonically in `protocol_specs.DEVICE_PREF_KEYS`)
+# (full 70-key catalog lives canonically in `protocol_specs.DEVICE_PREF_KEYS`)
 CONF_DO_NOT_DISTURB: Final = "do_not_disturb"
 CONF_WORLD_CLOCKS: Final = "world_clocks"
 CONF_MUSIC_AUTO_OPEN: Final = "music_auto_open"

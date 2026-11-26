@@ -49,7 +49,6 @@ _LOGGER = logging.getLogger(__name__)
 VOLUME_SET_FLAG: Final[int] = 4
 VOLUME_MUTE_FLAG: Final[int] = 8
 VOLUME_STEP_FLAG: Final[int] = 1024
-VOLUME_FEATURE_FLAGS: Final[int] = VOLUME_SET_FLAG | VOLUME_MUTE_FLAG | VOLUME_STEP_FLAG
 
 _DEFAULT_NUMBER_MIDPOINT: Final[float] = 50.0
 _DEFAULT_NUMBER_MAX: Final[float] = 100.0

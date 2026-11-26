@@ -61,10 +61,7 @@ def _parse_dimensions_and_shape(
         width, height = default_w, default_h
 
     if default_circle is None:
-        is_circle = (
-            request.query.get("mask") == "circle"
-            or request.query.get("shape") == "circle"
-        )
+        is_circle = request.query.get("shape") == "circle"
     else:
         is_circle = default_circle
         if request.query.get("shape") in ("circle", "square"):

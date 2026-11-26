@@ -224,7 +224,7 @@ export function renderPhotoPickerDialog(store: StudioStore): TemplateResult {
                   </option>`,
                 )}
               </select>
-            </search>
+            </div>
             <div class="photo-pool-preview">
               ${collectionPreviewPhotos.length > 0
                 ? html`<div class="photo-pool-thumbs">

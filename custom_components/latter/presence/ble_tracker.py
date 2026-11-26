@@ -1329,8 +1329,6 @@ class LatterNativeBleTracker:
         )
         return rows
 
-    get_area_calibration_telemetry = get_scanner_calibration_telemetry
-
     def capture_area_signature(self) -> dict[str, dict[str, float | int]]:
         """Capture normalized 1 m-equivalent multi-scanner RSSI vector across recent scanners (`<= 15 s`)."""
         now = time.monotonic()

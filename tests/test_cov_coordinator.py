@@ -263,15 +263,10 @@ async def test_core_pure_helpers_and_option_fallbacks(
     ):
         assert coord._initial_brightness_pct() == 80
 
-    # `create_background_task` fallback when `entry` lacks `async_create_background_task`
-    orig_entry = coord.entry
-    try:
-        coord.entry = SimpleNamespace(entry_id=orig_entry.entry_id)  # type: ignore[assignment]
-        fallback_task = coord.create_background_task(asyncio.sleep(0), "fallback_cov_task")
-        await fallback_task
-        assert fallback_task.done()
-    finally:
-        coord.entry = orig_entry
+    # `create_background_task` uses `entry.async_create_background_task`
+    bg_task = coord.create_background_task(asyncio.sleep(0), "cov_bg_task")
+    await bg_task
+    assert bg_task.done()
 
     # `replace_area_listener_unsubs` partial update & no-arg full clear
     unsub_log: list[str] = []
@@ -384,7 +379,7 @@ async def test_wallpaper_and_screensaver_pools_timers_and_apply_options(
     entry, sys_obj, coord = await setup_latter_hub(hass, with_device=True, with_ble_tag=True)
     ble_coord = next(c for c in sys_obj.coordinators.values() if c.is_ble_tag)
 
-    # `wallpaper_mode` fallback to `"single"` when mode empty and source configured
+    # `wallpaper_mode` defaults to `"off"` when mode empty even if source is populated
     _update_subentry_fields(
         hass,
         entry,
@@ -396,12 +391,12 @@ async def test_wallpaper_and_screensaver_pools_timers_and_apply_options(
             CONF_SCREENSAVER_CYCLE_MINUTES: "bad_mins",
         },
     )
-    assert coord.wallpaper_mode == "single"
+    assert coord.wallpaper_mode == "off"
     assert coord.wallpaper_cycle_minutes == 0
     assert coord.screensaver_cycle_minutes == DEFAULT_SCREENSAVER_CYCLE_MINUTES
 
-    # `configured_wallpaper_source` property setter
-    coord.configured_wallpaper_source = "preset:ocean_waves"
+    # `set_configured_wallpaper_source` records configured source
+    coord.set_configured_wallpaper_source("preset:ocean_waves")
     assert coord._configured_wallpaper_source == "preset:ocean_waves"
 
     # `wallpaper_source` fallback to `cfg_src` then `pool[0]`
@@ -950,7 +945,7 @@ async def test_telemetry_prefs_timer_commands_v3_transport_and_target_matching(
 
     rst_ent = register_entity(
         hass,
-        f"button.{slug}_restart_device",
+        f"button.{slug}_actions_restart_device",
         platform="esphome",
         device_id=coord.esphome_device_id,
         config_entry_id=f"esp_entry_{slug}",

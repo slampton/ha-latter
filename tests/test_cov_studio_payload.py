@@ -704,7 +704,7 @@ async def test_payload_device_system_catalog_online_and_edge_branches(
         translation_placeholders={"reason": "watchdog"},
     )
 
-    # 3. Volume overrides extraction (both list-of-dicts and legacy dict mapping)
+    # 3. Volume overrides extraction (strictly list-of-dicts)
     global_cfg = get_global_config(hass)
     global_cfg["volume_overrides"] = [
         {"speaker": "media_player.wall_panel_music", "target": "number.avr_vol"},
@@ -714,13 +714,8 @@ async def test_payload_device_system_catalog_online_and_edge_branches(
     assert payload_mod._extract_volume_overrides_map(hass) == {
         "media_player.wall_panel_music": "number.avr_vol"
     }
-    global_cfg["volume_overrides"] = {
-        "media_player.wall_panel_music": "number.avr_vol",
-        "": "number.skip",
-    }
-    assert payload_mod._extract_volume_overrides_map(hass) == {
-        "media_player.wall_panel_music": "number.avr_vol"
-    }
+    global_cfg["volume_overrides"] = "invalid"
+    assert payload_mod._extract_volume_overrides_map(hass) == {}
 
     # 4. Screensaver active quick action, square pref coercions, MA default_speaker canonicalization,
     #    malformed battery sensor int, project_firmware update check, and catalog remotes/calendars

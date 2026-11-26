@@ -97,11 +97,9 @@ _SECONDS_PER_DAY: Final = 86400
 
 _EXCLUDED_STATUS_WATCH_SUFFIXES: Final[tuple[str, ...]] = (
     "_system_rpc_outbox",
-    "_rpc_outbox",
 )
 
 _STUDIO_STATUS_WATCH_SUFFIXES: Final[tuple[str, ...]] = (
-    "_system_wi_fi_signal",
     "_wi_fi_signal",
     "_ip_address",
     "_battery_level",
@@ -181,8 +179,6 @@ _WALLPAPER_CONFIG_KEYS: Final[frozenset[str]] = frozenset(
 _RESTORE_OR_RESET_SKIP_SECTIONS: Final[frozenset[str]] = frozenset(
     {
         "locale_strings",
-        "pref_specs",
-        "world_clock_zones",
         "discovered_ble_devices",
         "discovered_latter_devices",
         "ignored_latter_devices",
@@ -473,9 +469,7 @@ def _build_shared_subscribe_payload(
     """Build a subscription state payload sharing System/Catalog sections across concurrent tabs."""
     now = time.monotonic()
     sys_skip = frozenset(
-        s
-        for s in skip_sections
-        if s not in ("wallpapers", "pref_specs", "world_clock_zones")
+        s for s in skip_sections if s != "wallpapers"
     )
     sys_key = (
         memo.generation,
@@ -542,7 +536,7 @@ def _build_shared_subscribe_payload(
                 memo.catalog_cache,
                 cat_key,
                 now,
-                build_entity_catalog(hass, target, all_coords=all_coords),
+                build_entity_catalog(hass, target),
             )
 
     return build_studio_state_payload(

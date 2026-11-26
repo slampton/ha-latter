@@ -1050,7 +1050,7 @@ async def test_wallpaper_views_proxy_and_upload_edge_branches(
         assert nested_stub.released is True
         assert ignored_part.released is True
         body_sys = json.loads(r_200_sys.body.decode("utf-8"))
-        created_photo_ids.append(body_sys["source_id"])
+        created_photo_ids.append(body_sys["photo_id"])
         assert body_sys["wallpapers"] == body_sys["system_wallpapers"]
 
         # e) Valid explicit `device_slug` resolves coordinator and binds wallpaper -> 200
@@ -1064,8 +1064,8 @@ async def test_wallpaper_views_proxy_and_upload_edge_branches(
         )
         assert r_200_slug.status == 200
         body_slug = json.loads(r_200_slug.body.decode("utf-8"))
-        created_photo_ids.append(body_slug["source_id"])
-        assert coord.wallpaper_source == body_slug["source_id"]
+        created_photo_ids.append(body_slug["photo_id"])
+        assert coord.wallpaper_source == body_slug["photo_id"]
     finally:
         for pid in created_photo_ids:
             delete_photo(hass, pid)
@@ -1664,24 +1664,19 @@ async def test_stream_hub_rtsp_and_lifecycle_branches(
             )
             assert await hub._async_resolve_ffmpeg_binary() == "/opt/bin/ffmpeg"
 
-        # 2) _async_get_stream_source error path & async_get_cached_stream_source hit/miss
-        probe_calls = 0
-
+        # 2) _async_get_stream_source error, whitespace-empty, and valid URL paths
         async def _flaky_source(_h: Any, eid: str) -> str | None:
-            nonlocal probe_calls
-            probe_calls += 1
             if eid == "camera.err_src":
                 raise RuntimeError("source error")
-            return "rtsp://10.0.0.5/live"
+            if eid == "camera.blank_src":
+                return "   "
+            return "  rtsp://10.0.0.5/live  "
 
         with monkeypatch.context() as mp:
             mp.setattr(ha_camera, "async_get_stream_source", _flaky_source)
-            assert await hub.async_get_cached_stream_source("camera.err_src") is None
-            assert await hub.async_get_cached_stream_source("camera.ok_src") == "rtsp://10.0.0.5/live"
-            count_after_first = probe_calls
-            # Cached hit does not re-probe
-            assert await hub.async_get_cached_stream_source("camera.ok_src", ttl_s=60.0) == "rtsp://10.0.0.5/live"
-            assert probe_calls == count_after_first
+            assert await hub._async_get_stream_source("camera.err_src") is None
+            assert await hub._async_get_stream_source("camera.blank_src") is None
+            assert await hub._async_get_stream_source("camera.ok_src") == "rtsp://10.0.0.5/live"
 
         # 3) _async_terminate_proc timeout->kill & ProcessLookupError
         with monkeypatch.context() as mp:

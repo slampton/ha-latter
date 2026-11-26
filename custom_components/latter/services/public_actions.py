@@ -379,15 +379,7 @@ def _remove_service_if_present(hass: HomeAssistant, service: str) -> None:
     """Remove a single public action from `hass.services` when registered."""
     if not hass.services.has_service(DOMAIN, service):
         return
-    remove_fn = getattr(hass.services, "async_remove", None)
-    if callable(remove_fn):
-        remove_fn(DOMAIN, service)
-        return
-    raw_services = getattr(hass.services, "_services", None)
-    if isinstance(raw_services, dict):
-        dom_map = raw_services.get(DOMAIN)
-        if isinstance(dom_map, dict):
-            dom_map.pop(service, None)
+    hass.services.async_remove(DOMAIN, service)
 
 
 async def async_unload_services(hass: HomeAssistant) -> None:

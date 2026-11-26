@@ -386,7 +386,7 @@ export function entityLabel(rawName: string | null | undefined): string {
 }
 
 export function issueMessage(issue: IssueItem, hass?: HomeAssistant | null): string {
-  const kind = String(issue.kind || issue.key || "");
+  const kind = String(issue.kind || "");
   return localizeRepairIssue(
     hass,
     kind,

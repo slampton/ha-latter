@@ -372,9 +372,6 @@ export function normalizeShortcutArray(raw: unknown, isDock: boolean): ShortcutI
     const kind = String(rec.kind || "").trim().toLowerCase();
     if (kind === "route") {
       const target = String(rec.target || "").trim().toLowerCase();
-      if (isDock && (target === "settings:root" || target === "app:settings")) {
-        continue;
-      }
       const spec = knownRoutes.get(target);
       if (!spec || (!isDock && spec.dockOnly)) continue;
       const dedupKey = `route|${target}|`;
@@ -520,7 +517,7 @@ export function openShortcutModalOp(
     : null;
   const compatibleRoutes = SHORTCUT_ROUTES_CATALOG.filter((r) => {
     if (!isDock && r.dockOnly) return false;
-    if (isDock && (r.token === "settings:root" || NATIVE_DOCK_APP_TOKENS.includes(r.token))) {
+    if (isDock && NATIVE_DOCK_APP_TOKENS.includes(r.token)) {
       return false;
     }
     return isCatalogItemSupported(r, caps);
@@ -686,7 +683,7 @@ export function saveShortcutModalOp(store: StudioStoreContext): void {
     if (
       !spec ||
       (!isDock && spec.dockOnly) ||
-      (isDock && (routeTok === "settings:root" || NATIVE_DOCK_APP_TOKENS.includes(routeTok))) ||
+      (isDock && NATIVE_DOCK_APP_TOKENS.includes(routeTok)) ||
       !isCatalogItemSupported(spec, store.state?.capabilities)
     ) {
       store.showToast("Select an app or page to pin", true);

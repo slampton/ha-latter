@@ -1718,7 +1718,9 @@ def test_lyrics_pure_parsers_extractors_and_bio_formatting() -> None:
         assert cached["bio_fallback"] == ["Unknown Track by Unknown Artist"]
         assert cached["bio_miss_until"] > 0
         assert cached["lyrics_payload"]["synced"] is True
-        assert cached["lyrics"] == ["Cached from bio"]
+        assert [row["text"] for row in cached["lyrics_payload"]["lines"]] == [
+            "Cached from bio"
+        ]
     finally:
         ma_lyrics.clear_lyrics_cache()
 

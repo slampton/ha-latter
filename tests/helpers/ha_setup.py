@@ -565,7 +565,7 @@ def build_test_manifest(
         "stationary": stationary,
         "wearable": wearable,
         "ips": 1 if display else 0,
-        "minor": minor,
+        "beacon": {"major": 1, "minor": minor},
         "core_rev": core_rev,
     }
     if extra:

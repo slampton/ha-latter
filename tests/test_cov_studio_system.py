@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -45,7 +46,7 @@ from custom_components.latter.studio.commands import (
 )
 from custom_components.latter.studio.device_commands import (
     DEVICE_COMMAND_SCHEMAS,
-    MAX_CUSTOM_PHOTO_POOL,
+    MAX_PHOTO_POOL_IDS,
     _cmd_device_action,
     _cmd_esphome_entity_action,
     _cmd_save_device_config,
@@ -231,14 +232,13 @@ async def test_state_gates_panel_and_pure_studio_helpers(
     assert coord_slots == {}
     assert extra_slots == []
 
-    # 4) device_commands.py pure & fallback paths (80, 169, 254-262, 278, 308, 351, 363, 454, 494, 499-503)
-    sentinel_sys = object()
+    # 4) device_commands.py pure & direct hub delegation paths
     bedtime_mock = AsyncMock()
+    sentinel_sys = SimpleNamespace(async_evaluate_bedtime_schedules=bedtime_mock)
     with monkeypatch.context() as mp:
         mp.setattr(device_commands, "get_latter_system", lambda _h: sentinel_sys)
-        mp.setattr(device_commands, "async_evaluate_hub_bedtime_schedules", bedtime_mock)
         await evaluate_bedtime_if_ready(hass)
-    bedtime_mock.assert_awaited_once_with(sentinel_sys)
+    bedtime_mock.assert_awaited_once_with()
 
     for fn in (
         _cmd_save_device_config,
@@ -263,7 +263,7 @@ async def test_state_gates_panel_and_pure_studio_helpers(
         )
     assert exc_pool_type.value.code == "invalid_format"
 
-    fake_ids = [f"photo:item_{i:03d}" for i in range(MAX_CUSTOM_PHOTO_POOL + 1)]
+    fake_ids = [f"photo:item_{i:03d}" for i in range(MAX_PHOTO_POOL_IDS + 1)]
     with monkeypatch.context() as mp:
         mp.setattr(
             device_commands,
@@ -289,11 +289,11 @@ async def test_state_gates_panel_and_pure_studio_helpers(
     assert exc_rot_none.value.code == "not_ready"
 
     rotate_mock = AsyncMock()
+    rotate_sys = SimpleNamespace(async_rotate_hmac_secret=rotate_mock)
     with monkeypatch.context() as mp:
-        mp.setattr(system_commands, "get_latter_system", lambda _h: sentinel_sys)
-        mp.setattr(system_commands, "async_rotate_hub_hmac_secret", rotate_mock)
+        mp.setattr(system_commands, "get_latter_system", lambda _h: rotate_sys)
         await _cmd_rotate_signing_key(hass, None, {}, {}, {})
-    rotate_mock.assert_awaited_once_with(sentinel_sys)
+    rotate_mock.assert_awaited_once_with()
 
     hass.states.async_set("camera.driveway", "idle")
     with pytest.raises(StudioCommandError) as exc_cam_not_ready:

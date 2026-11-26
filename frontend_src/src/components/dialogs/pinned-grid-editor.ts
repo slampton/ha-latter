@@ -917,7 +917,7 @@ export function renderPinnedGridEditor(store: StudioStore): TemplateResult {
             }}
             @keydown=${(ev: KeyboardEvent) =>
               onTileKeyDown(ev, tile, tileKey, info.displayTitle)}
-            class="${tileVisualClass(tile.item)}${isBeingDragged ? " is-dragging" : ""}${showSpan ? " is-multi-span" : ""}"
+            class="${tileVisualClass(tile.item)}${isBeingDragged ? " is-dragging" : ""}"
           >
             <div class="pinned-tile-top-bar">
               <div class="pinned-tile-meta-badges">

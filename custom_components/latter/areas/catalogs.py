@@ -249,9 +249,7 @@ def get_area_available_domains(
     present_types = {str(it.get("type") or "") for it in all_items}
     ordered: list[str] = []
     for tok in configured:
-        if tok == "scene" and ("scene" in present_types or "script" in present_types):
-            ordered.append("scene")
-        elif tok in ("light", "cover", "fan", "climate") and tok in present_types:
+        if tok in ("scene", "light", "cover", "fan", "climate") and tok in present_types:
             ordered.append(tok)
         elif tok == "switch" and (
             "switch" in present_types or "input_boolean" in present_types

@@ -18,7 +18,6 @@ export const EN_STRINGS = {
   "shell.dismiss_toast": "Dismiss notification",
   "shell.skip_to_main": "Skip to main content",
   "shell.opens_new_tab": "opens in new tab",
-  "shell.notifications_label": "Notifications",
 
   "nav.scope_label": "Scope",
   "nav.devices": "Devices",
@@ -76,7 +75,6 @@ export const EN_STRINGS = {
   "action.restore_backup": "Restore backup",
   "action.download_diagnostics": "Download diagnostics",
   "action.add_custom_shortcut": "Add custom shortcut",
-  "action.add_pinned_item": "Add pinned item",
   "action.reset_default_dock": "Reset default dock",
   "action.save_custom_group": "Save custom group",
   "action.save_group": "Save group",
@@ -89,7 +87,6 @@ export const EN_STRINGS = {
   "action.move_down": "Move {item} down",
   "action.move_earlier": "Move {item} earlier",
   "action.move_later": "Move {item} later",
-  "action.drag_reorder": "Drag to reorder {item}",
   "action.remove_item": "Remove {item}",
   "action.edit_item": "Edit {item}",
   "action.configure_item": "Configure {item}",
@@ -741,11 +738,9 @@ export const EN_STRINGS = {
   "dialogs.app_clock": "Clock face",
   "dialogs.app_tools": "Tools",
   "dialogs.app_games": "Games",
-  "dialogs.app_fallback": "Configure app",
   "dialogs.pinned_label": "Pinned shortcuts",
   "dialogs.pinned_desc":
     "Arrange Home Assistant quick actions and Latter routes onto visual tile pages. Drag tiles to move or resize, or select an empty cell to add one.",
-  "dialogs.pinned_aria": "Pinned app shortcuts",
   "dialogs.pinned_page_slot": "Page {page}",
   "dialogs.pinned_pages_aria": "Pinned pages",
   "dialogs.pinned_add_page": "Add page",
@@ -769,8 +764,6 @@ export const EN_STRINGS = {
   "dialogs.pinned_tile_count": "{count} of {max} tiles",
   "dialogs.pinned_confirm_badge_title": "Requires confirmation tap",
   "dialogs.pinned_confirm_required": "Confirmation required",
-  "dialogs.pinned_confirm_mode": "Confirm",
-  "dialogs.pinned_one_tap_mode": "1-tap",
   "dialogs.pinned_empty":
     "No pinned tiles configured yet. The Pinned icon stays hidden on the App Dock until you add at least one tile.",
   "dialogs.home_cats_label": "Home categories",
@@ -1154,7 +1147,6 @@ export const EN_STRINGS = {
 
   // Device list & discovered devices (D-041 / D-066)
   "devices.inventory_heading": "Inventory",
-  "devices.table_caption": "Managed devices",
   "devices.col_device": "Device",
   "devices.col_model": "Model",
   "devices.col_area": "Area",

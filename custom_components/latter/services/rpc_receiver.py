@@ -31,8 +31,8 @@ _HEADER_PARTS_COUNT: int = 3
 _MAX_BOOT_ID_HEX_LEN: int = 16
 _HEX_CHARS: frozenset[str] = frozenset("0123456789abcdefABCDEF")
 
-RPC_OUTBOX_SUFFIXES: tuple[str, ...] = ("_system_rpc_outbox", "_rpc_outbox")
-RPC_OUTBOX_ORIGINAL_NAMES: tuple[str, ...] = ("System: RPC Outbox", "RPC Outbox")
+RPC_OUTBOX_SUFFIXES: tuple[str, ...] = ("_system_rpc_outbox",)
+RPC_OUTBOX_ORIGINAL_NAMES: tuple[str, ...] = ("System: RPC Outbox",)
 RPC_OUTBOX_UNIQUE_ID_SUFFIXES: tuple[str, ...] = ("/text_sensor/System: RPC Outbox",)
 
 

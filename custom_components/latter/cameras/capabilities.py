@@ -30,9 +30,9 @@ def _resolve_platform_and_stream_kind(
     cam_ent: str,
     target_platform: str,
     attrs: Mapping[str, Any],
-    stream_flags: tuple[bool, bool],
+    *,
+    has_stream: bool,
 ) -> str:
-    has_stream, has_mjpeg_stream = stream_flags
     platform = target_platform.lower()
     if not platform and cam_ent:
         ent_entry = er.async_get(hass).async_get(cam_ent)
@@ -40,7 +40,7 @@ def _resolve_platform_and_stream_kind(
             platform = str(ent_entry.platform or "").lower()
     if has_stream:
         return "rtsp"
-    if has_mjpeg_stream or platform == "mjpeg" or bool(attrs.get("mjpeg_url")):
+    if platform == "mjpeg" or bool(attrs.get("mjpeg_url")):
         return "mjpeg"
     return "snapshot"
 
@@ -99,8 +99,6 @@ def resolve_camera_capabilities(
     carousel_entities: Collection[str] | None = None,
     volume_overrides: Mapping[str, str] | None = None,
     camera_config: Mapping[str, Any] | None = None,
-    stream_source: str | None = None,
-    has_mjpeg_stream: bool = False,
 ) -> dict[str, Any]:
     """Compute Protocol v3 camera `caps` bitmask and Studio capability metadata synchronously."""
     cam_ent = (camera_entity_id or "").strip()
@@ -128,7 +126,7 @@ def resolve_camera_capabilities(
         supported_features = int(attrs.get("supported_features") or 0)
     except (TypeError, ValueError):
         supported_features = 0
-    has_stream = bool(stream_source) or bool(supported_features & _CAMERA_FEATURE_STREAM)
+    has_stream = bool(supported_features & _CAMERA_FEATURE_STREAM)
     has_talkback = bool(door_speaker)
 
     doorbell_cams = (
@@ -147,7 +145,7 @@ def resolve_camera_capabilities(
         cam_ent,
         str(target_info.get("platform") or ""),
         attrs,
-        (has_stream, has_mjpeg_stream),
+        has_stream=has_stream,
     )
 
     cfg = camera_config if isinstance(camera_config, Mapping) else {}

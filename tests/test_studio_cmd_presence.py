@@ -303,7 +303,6 @@ async def test_studio_commands_security_pin_secrecy_and_presence_calibration(
             assert conn.errors[-1][1] == "invalid_format"
             conn.errors.clear()
         assert state_after_pin["config"]["has_security_pin"] is True
-        assert state_after_pin["live"]["has_security_pin"] is True
 
         # System set_security_pin + rotate_signing_key
         await _sys_cmd("set_security_pin", {"pin": "1357"})
@@ -548,8 +547,6 @@ async def test_v3_subscribe_diet_and_optimistic_concurrency(
     initial_evt = conn.messages[0]["event"]
     assert initial_evt["type"] == "state"
     assert "catalog" in initial_evt
-    assert "pref_specs" in initial_evt
-    assert "world_clock_zones" in initial_evt
     assert "system_wallpapers" in initial_evt
     assert "photo_collections" in initial_evt
     assert "ble_area_signatures" in initial_evt
@@ -573,8 +570,6 @@ async def test_v3_subscribe_diet_and_optimistic_concurrency(
     push_evt = state_pushes[-1]
     for omitted_key in (
         "catalog",
-        "pref_specs",
-        "world_clock_zones",
         "discovered_ble_devices",
         "system_wallpapers",
         "photo_collections",

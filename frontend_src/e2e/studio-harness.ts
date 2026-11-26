@@ -279,7 +279,6 @@ function handleMockWsCall(hub: MockHubState, msg: Record<string, unknown>): unkn
       const targetSub = String(payload.subentry_id || "");
       if (targetSub && hub.devices[targetSub]) {
         hub.devices[targetSub]!.config.has_security_pin = Boolean(pinVal);
-        hub.devices[targetSub]!.live.has_security_pin = Boolean(pinVal);
       } else {
         hub.hasSecurityPin = Boolean(pinVal);
       }

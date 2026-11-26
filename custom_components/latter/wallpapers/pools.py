@@ -59,7 +59,6 @@ def _serialize_photo_item(
     rec: PhotoRecord,
     *,
     active: bool,
-    favorite: bool,
     thumb_url: str,
     orig_url: str,
 ) -> dict[str, Any]:
@@ -69,7 +68,6 @@ def _serialize_photo_item(
         "filename": rec.filename,
         "kind": "uploaded",
         "active": active,
-        "favorite": favorite,
         "deletable": True,
         "thumb_url": thumb_url,
         "orig_url": orig_url,
@@ -87,7 +85,6 @@ def list_wallpaper_catalog(
     hass: HomeAssistant,
     device_slug: str,
     active_source: str,
-    favorites: Sequence[str],
     *,
     sign_resource: Callable[[str], str] | None = None,
     display_shape: str = "circle",
@@ -95,7 +92,6 @@ def list_wallpaper_catalog(
     """Return built-in default presets + shared custom photos with signed Studio URLs & metadata."""
     _ = hass
     snap = get_photo_library_snapshot()
-    fav_set = set(favorites or ())
     items: list[dict[str, Any]] = []
     slug = normalize_device_slug(device_slug or "system")
     wp_shape = "square" if display_shape == "square" else "circle"
@@ -130,7 +126,6 @@ def list_wallpaper_catalog(
                 "name": preset["name"],
                 "kind": preset["kind"],
                 "active": pid == active_source,
-                "favorite": pid in fav_set,
                 "deletable": False,
                 "thumb_url": _build_thumb_url(pid, mode=thumb_mode),
                 "orig_url": "",
@@ -151,7 +146,6 @@ def list_wallpaper_catalog(
             _serialize_photo_item(
                 rec,
                 active=(pid == active_source),
-                favorite=(pid in fav_set),
                 thumb_url=_build_thumb_url(pid, mode="screensaver", crop_tag=rec.crop.crop_hash()),
                 orig_url=_build_orig_url(pid),
             )

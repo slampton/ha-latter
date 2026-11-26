@@ -147,9 +147,7 @@ async def async_pre_backup(hass: HomeAssistant) -> None:
             await domain_data.global_store.async_save(domain_data.global_config)
 
     for coord in iter_coordinators(hass):
-        flush_fn = getattr(coord, "async_flush_runtime_state", None)
-        if callable(flush_fn):
-            await flush_fn()
+        await coord.async_flush_runtime_state()
 
 
 async def async_post_backup(hass: HomeAssistant) -> None:
@@ -292,19 +290,15 @@ async def _async_apply_device_snapshot_to_coordinator(
 
     async with coord.config_lock:
         coord.update_device_config(merged)
-    sync_ble = getattr(coord, "sync_ble_tracker", None)
-    if callable(sync_ble):
-        sync_ble()
+    coord.sync_ble_tracker()
 
     if dev_snap.get("active_area_id"):
         coord.active_area_id = str(dev_snap["active_area_id"])
     if isinstance(dev_snap.get("active_remote_slot"), int):
         coord.active_remote_slot = max(1, min(_MAX_REMOTE_SLOTS, int(dev_snap["active_remote_slot"])))
 
-    if hasattr(coord, "bind_wallpaper_cycle_timer"):
-        coord.bind_wallpaper_cycle_timer()
-    if hasattr(coord, "bind_screensaver_cycle_timer"):
-        coord.bind_screensaver_cycle_timer()
+    coord.bind_wallpaper_cycle_timer()
+    coord.bind_screensaver_cycle_timer()
     coord.schedule_persist_runtime_state()
     coord.async_notify_listeners()
     return 0
