@@ -310,13 +310,13 @@ async def test_camera_capabilities_edge_branches(hass: Any) -> None:
     register_entity(hass, "camera.mjpeg_reg", platform="mjpeg")
     assert (
         _resolve_platform_and_stream_kind(
-            hass, "camera.mjpeg_reg", "", {}, (False, False)
+            hass, "camera.mjpeg_reg", "", {}, has_stream=False
         )
         == "mjpeg"
     )
     assert (
         _resolve_platform_and_stream_kind(
-            hass, "camera.unregistered", "", {}, (False, False)
+            hass, "camera.unregistered", "", {}, has_stream=False
         )
         == "snapshot"
     )
