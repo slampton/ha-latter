@@ -922,7 +922,7 @@
           "name": "volume_step_size",
           "cpp_enum": "VOLUME_STEP_SIZE",
           "type": "u16",
-          "description": "Rotary/button volume increment step percentage (1..10)"
+          "description": "Local built-in speaker volume increment step percentage (1..10); remote speakers use native volume_up/volume_down"
         },
         {
           "index": 42,

@@ -186,19 +186,29 @@ async def _async_execute_media_player_volume(
     resolved_lvl: float | None,
 ) -> bool:
     can_set, can_mute, can_step = _parse_volume_feature_flags(state_obj)
-    supports_vol_set = bool(
-        can_set
-        and state_obj is not None
-        and safe_opt_float(state_obj.attributes.get("volume_level")) is not None
+    cur_lvl = (
+        safe_opt_float(state_obj.attributes.get("volume_level"))
+        if state_obj is not None
+        else None
     )
     svc_name = ""
     svc_data: dict[str, Any] = {ATTR_ENTITY_ID: vol_target}
-    if norm_action in ("up", "down") and resolved_lvl is not None and supports_vol_set:
-        svc_name = "volume_set"
-        svc_data["volume_level"] = round(resolved_lvl, 2)
-    elif norm_action in ("up", "down"):
+    if norm_action in ("up", "down"):
         if can_step:
             svc_name = "volume_up" if norm_action == "up" else "volume_down"
+        elif can_set and cur_lvl is not None:
+            step_delta = (
+                _DEFAULT_STEP_FRACTION
+                if norm_action == "up"
+                else -_DEFAULT_STEP_FRACTION
+            )
+            target_lvl = (
+                resolved_lvl
+                if resolved_lvl is not None
+                else max(0.0, min(1.0, cur_lvl + step_delta))
+            )
+            svc_name = "volume_set"
+            svc_data["volume_level"] = round(target_lvl, 2)
     elif norm_action == "mute":
         if can_mute:
             is_muted = bool(state_obj.attributes.get("is_volume_muted", False)) if state_obj else False

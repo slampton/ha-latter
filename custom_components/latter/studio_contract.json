@@ -1050,7 +1050,7 @@
       "unit": "%"
     },
     "volume_step_size": {
-      "label": "Volume step size",
+      "label": "Local volume step",
       "section": "audio",
       "group_tier": "behavior",
       "unit": "%"

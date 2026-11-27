@@ -1319,7 +1319,7 @@
   "pref.ww_sens_alexa": "Alexa sensitivity",
   "pref.wake_screen_on_assist": "Wake screen on Assist",
   "pref.alert_volume": "Alert volume",
-  "pref.volume_step_size": "Volume step size",
+  "pref.volume_step_size": "Local volume step",
   "pref.game_sound_effects": "Game sound effects",
   "pref.ble_beacon_mode": "BLE beacon mode",
   "pref.weather_sim_condition": "Weather simulation",

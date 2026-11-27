@@ -168,22 +168,10 @@ def _compute_climate_step_level(state_obj: State, action: str) -> int:
 async def _execute_media_step(
     hass: HomeAssistant, state_obj: State, action: str
 ) -> None:
-    raw_v = state_obj.attributes.get("volume_level")
-    step_lvl: float | None = None
-    if raw_v is not None:
-        try:
-            f_val = float(raw_v)
-            if math.isfinite(f_val):
-                base_v = round(f_val * 100)
-                delta = _LEVEL_STEP if action == "step_up" else -_LEVEL_STEP
-                step_lvl = float(max(0, min(100, base_v + delta)))
-        except (TypeError, ValueError):
-            step_lvl = None
     await async_execute_volume_action(
         hass,
         state_obj.entity_id,
         "up" if action == "step_up" else "down",
-        volume_pct=step_lvl,
     )
 
 

@@ -44,6 +44,8 @@ from custom_components.latter.media.linking import (
 )
 from custom_components.latter.media.lyrics import clear_lyrics_cache
 from custom_components.latter.media.playback import (
+    VOLUME_SET_FLAG,
+    VOLUME_STEP_FLAG,
     _async_apply_mass_favorite_mutation,
     async_execute_volume_action,
     execute_coordinator_media_command,
@@ -1172,3 +1174,70 @@ async def test_linking_hub_peers_pending_sendspin_cache_and_healing(
     finally:
         clear_ma_counterpart_cache(hass)
         assert await hass.config_entries.async_unload(entry.entry_id) is True
+
+
+async def test_playback_volume_step_prefers_native_over_set(hass: Any) -> None:
+    """Verify up/down prefer native volume_up/volume_down and fall back to volume_set only when step is unsupported."""
+    mp_up_calls = mock_service(hass, "media_player", "volume_up")
+    mp_down_calls = mock_service(hass, "media_player", "volume_down")
+    mp_set_calls = mock_service(hass, "media_player", "volume_set")
+
+    # AVR / MA speaker supporting both VOLUME_SET and VOLUME_STEP: up/down must use native step
+    hass.states.async_set(
+        "media_player.marantz_avr",
+        STATE_PLAYING,
+        {
+            "volume_level": 0.40,
+            "supported_features": VOLUME_SET_FLAG | VOLUME_STEP_FLAG,
+        },
+    )
+    assert await async_execute_volume_action(hass, "media_player.marantz_avr", "up") is True
+    assert (
+        await async_execute_volume_action(
+            hass, "media_player.marantz_avr", "up", volume_pct=45
+        )
+        is True
+    )
+    assert await async_execute_volume_action(hass, "media_player.marantz_avr", "down") is True
+    assert (
+        await async_execute_volume_action(
+            hass, "media_player.marantz_avr", "set", volume_pct=52
+        )
+        is True
+    )
+    await hass.async_block_till_done()
+    assert len(mp_up_calls) == 2
+    assert len(mp_down_calls) == 1
+    assert [c.data for c in mp_set_calls] == [
+        {"entity_id": "media_player.marantz_avr", "volume_level": 0.52}
+    ]
+
+    mp_up_calls.clear()
+    mp_down_calls.clear()
+    mp_set_calls.clear()
+
+    # VOLUME_SET-only speaker omitting VOLUME_STEP: up/down fall back to +/-5% or explicit volume_pct
+    hass.states.async_set(
+        "media_player.set_only_spk",
+        STATE_PLAYING,
+        {
+            "volume_level": 0.40,
+            "supported_features": VOLUME_SET_FLAG,
+        },
+    )
+    assert await async_execute_volume_action(hass, "media_player.set_only_spk", "up") is True
+    assert await async_execute_volume_action(hass, "media_player.set_only_spk", "down") is True
+    assert (
+        await async_execute_volume_action(
+            hass, "media_player.set_only_spk", "up", volume_pct=65
+        )
+        is True
+    )
+    await hass.async_block_till_done()
+    assert mp_up_calls == []
+    assert mp_down_calls == []
+    assert [c.data for c in mp_set_calls] == [
+        {"entity_id": "media_player.set_only_spk", "volume_level": 0.45},
+        {"entity_id": "media_player.set_only_spk", "volume_level": 0.35},
+        {"entity_id": "media_player.set_only_spk", "volume_level": 0.65},
+    ]

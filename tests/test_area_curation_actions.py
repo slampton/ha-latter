@@ -271,7 +271,7 @@ async def test_context_builder_curated_entities_and_area_actions(
         "select": ("select_option",),
         "number": ("set_value",),
         "update": ("install",),
-        "media_player": ("volume_set", "media_play_pause"),
+        "media_player": ("volume_set", "volume_up", "volume_down", "media_play_pause"),
     }.items():
         for s_name in svcs:
             mock_service(hass, svc_dom, s_name)
@@ -324,6 +324,7 @@ async def test_context_builder_curated_entities_and_area_actions(
     assert ("climate", "set_hvac_mode") in called_pairs
     assert ("climate", "set_temperature") in called_pairs
     assert ("vacuum", "return_to_base") in called_pairs
+    assert ("media_player", "volume_up") in called_pairs
     assert ("lock", "open") in called_pairs
     assert ("alarm_control_panel", "alarm_arm_home") in called_pairs
 

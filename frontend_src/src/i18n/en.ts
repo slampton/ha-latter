@@ -1603,7 +1603,7 @@ export const PREF_LABELS: Readonly<Record<string, string>> = {
   ww_sens_alexa: "Alexa sensitivity",
   wake_screen_on_assist: "Wake screen on Assist",
   alert_volume: "Alert volume",
-  volume_step_size: "Volume step size",
+  volume_step_size: "Local volume step",
   game_sound_effects: "Game sound effects",
   ble_beacon_mode: "BLE beacon mode",
   weather_sim_condition: "Weather simulation",
