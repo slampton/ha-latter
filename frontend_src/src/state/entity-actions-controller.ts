@@ -105,6 +105,7 @@ export class EntityController implements EntityControllerContract {
   private readonly store: StudioStoreContext;
   private readonly saves: SettingsSaveController;
   private readonly cameraPreviewCache = new Map<string, { url: string; expiresAtMs: number }>();
+  private readonly pendingDeviceActions = new Set<string>();
 
   readonly tokenLists: Readonly<Record<TokenListKey, TokenListOps>>;
 
@@ -292,6 +293,13 @@ export class EntityController implements EntityControllerContract {
     );
   }
 
+  isDeviceActionPending(action: string): boolean {
+    const targetSubentryId = this.store.activeSubentryId;
+    const cleanAction = String(action || "").trim().toLowerCase();
+    if (!targetSubentryId || !cleanAction) return false;
+    return this.pendingDeviceActions.has(`${targetSubentryId}:${cleanAction}`);
+  }
+
   async runDeviceAction(action: string, toastMessage?: string): Promise<boolean> {
     const targetSubentryId = this.store.activeSubentryId;
     const cleanAction = String(action || "").trim().toLowerCase();
@@ -300,6 +308,10 @@ export class EntityController implements EntityControllerContract {
       this.store.showToast(`Unsupported Device action: ${cleanAction}`, true);
       return false;
     }
+    const pendingKey = `${targetSubentryId}:${cleanAction}`;
+    if (this.pendingDeviceActions.has(pendingKey)) return false;
+    this.pendingDeviceActions.add(pendingKey);
+    this.store.host.requestUpdate();
     try {
       const res = await this.store.ws.runDeviceCommand(targetSubentryId, "device_action", {
         action: cleanAction,
@@ -314,6 +326,9 @@ export class EntityController implements EntityControllerContract {
     } catch (err) {
       this.store.showToast(formatWsError(err, "Device action failed"), true);
       return false;
+    } finally {
+      this.pendingDeviceActions.delete(pendingKey);
+      this.store.host.requestUpdate();
     }
   }
 

@@ -968,6 +968,30 @@ describe("group-overlay, URL routing, StudioStore & BatchController pure state",
     await new Promise<void>((r) => setTimeout(r, 0));
     assert.equal(wsLog.length, 3);
     assert.equal(wsLog[2]?.subentry_id, "sub_desk");
+  });
+
+  it("deduplicates concurrent identical runDeviceAction calls while pending", async () => {
+    const { store, wsLog } = createHeadlessStore();
+    store.applyRoute({ prefix: "/latter", path: "devices/sub_desk/tools" });
+    let releaseCmd!: () => void;
+    const origRun = store.ws.runDeviceCommand.bind(store.ws);
+    store.ws.runDeviceCommand = async (...args) => {
+      await new Promise<void>((r) => {
+        releaseCmd = r;
+      });
+      return await origRun(...args);
+    };
+
+    const p1 = store.entity.runDeviceAction("set_profiler_on");
+    assert.equal(store.entity.isDeviceActionPending("set_profiler_on"), true);
+    const p2 = store.entity.runDeviceAction("set_profiler_on");
+    assert.equal(await p2, false);
+    assert.equal(wsLog.length, 0);
+
+    releaseCmd();
+    assert.equal(await p1, true);
+    assert.equal(wsLog.length, 1);
+    assert.equal(store.entity.isDeviceActionPending("set_profiler_on"), false);
     assert.equal(store.toastMessage, "");
 
     // Verify rendered `<details class="sub-collapsible">` wires `@toggle` accurately for online vs offline Devices

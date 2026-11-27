@@ -505,7 +505,10 @@ export function renderDeviceToolsView(store: StudioStore): TemplateResult {
                         id: "dev-telemetry-profiler",
                         label: store.t("dev_tools.profiler_label"),
                         description: store.t("dev_tools.profiler_desc"),
-                        disabled: isOffline,
+                        disabled:
+                          isOffline ||
+                          store.entity.isDeviceActionPending("set_profiler_on") ||
+                          store.entity.isDeviceActionPending("set_profiler_off"),
                         checked: profilerOn,
                         onChange: (checked) =>
                           void store.entity.runDeviceAction(

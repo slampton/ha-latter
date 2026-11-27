@@ -425,6 +425,7 @@ export interface EntityControllerContract {
   savePinnedGridState(nextItems: ShortcutItem[], nextTitles?: Record<string, string>): void;
   applyDeviceCustomColor(hex: string, switchColorProfile?: boolean): void;
   clearCameraPreviewCache(): void;
+  isDeviceActionPending(action: string): boolean;
 }
 
 export interface GroupsControllerContract {
