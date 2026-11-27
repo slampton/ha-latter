@@ -16,6 +16,7 @@
   ],
   "codeowners": ["@slampton"],
   "config_flow": true,
+  "connectivity": ["bluetooth", "esphome"],
   "dependencies": ["frontend", "http", "network", "panel_custom", "websocket_api"],
   "documentation": "https://github.com/slampton/ha-latter",
   "integration_type": "hub",

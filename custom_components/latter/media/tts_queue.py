@@ -296,6 +296,7 @@ async def _async_try_ma_play_media(
     req: tuple[str | list[str], str, str],
     *,
     radio_mode: bool,
+    start_item: str | None = None,
 ) -> bool:
     media_id, eff_type, norm_enqueue = req
     if not ma_target or not hass.services.has_service("music_assistant", "play_media"):
@@ -303,12 +304,14 @@ async def _async_try_ma_play_media(
     ma_st = hass.states.get(ma_target)
     if ma_st is not None and ma_st.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
         return False
+    clean_start_item = (start_item or "").strip() if isinstance(media_id, str) else ""
     payload: dict[str, Any] = {
         ATTR_ENTITY_ID: ma_target,
         "media_id": media_id,
         **({"media_type": eff_type} if eff_type else {}),
         **({"enqueue": norm_enqueue} if norm_enqueue else {}),
         **({"radio_mode": True} if radio_mode else {}),
+        **({"start_item": clean_start_item} if clean_start_item else {}),
     }
     try:
         await hass.services.async_call("music_assistant", "play_media", payload, blocking=True)
@@ -341,6 +344,7 @@ async def async_play_media_with_ma_fallback(
     media_type: str | None = None,
     enqueue: str | None = None,
     radio_mode: bool = False,
+    start_item: str | None = None,
 ) -> None:
     """Play media via Music Assistant, expanding full artist/album containers without track caps."""
     if isinstance(media_id, list):
@@ -364,7 +368,12 @@ async def async_play_media_with_ma_fallback(
     norm_enqueue = raw_enq if raw_enq in VALID_MA_ENQUEUE_MODES else ""
 
     if await _async_try_ma_play_media(
-        hass, target_spk, ma_target, (media_id, eff_type, norm_enqueue), radio_mode=radio_mode
+        hass,
+        target_spk,
+        ma_target,
+        (media_id, eff_type, norm_enqueue),
+        radio_mode=radio_mode,
+        start_item=start_item,
     ):
         return
     if is_esphome_sendspin:

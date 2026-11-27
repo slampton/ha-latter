@@ -1106,6 +1106,24 @@ async def _async_handle_group_or_transport_tail(
         await _async_execute_join_command(hass, cmd_target, ma_target, group_members)
 
 
+def _resolve_podcast_start_item(
+    coordinator: Any,
+    media_id: str,
+    media_type: str | None,
+    *,
+    radio_mode: bool,
+) -> str | None:
+    """Start podcast container playback at the latest episode unless configured Oldest on Top."""
+    if radio_mode:
+        return None
+    eff_type = (media_type or "").strip().lower() or parse_media_uri_type(media_id)
+    if eff_type != "podcast":
+        return None
+    get_pref = getattr(coordinator, "get_device_pref", None)
+    pod_sort = str(get_pref("podcast_sort_order") or "").strip().lower() if callable(get_pref) else ""
+    return None if pod_sort == "oldest on top" else "latest"
+
+
 async def _async_execute_play_slot_command(
     coordinator: Any,
     target_spk: str,
@@ -1126,6 +1144,9 @@ async def _async_execute_play_slot_command(
         remaining = browsed_uris[browsed_uris.index(media_id) :]
         if len(remaining) > 1:
             play_payload_id = remaining
+    start_item = _resolve_podcast_start_item(
+        coordinator, media_id, media_type, radio_mode=radio_mode
+    )
     await async_play_media_with_ma_fallback(
         coordinator.hass,
         target_spk,
@@ -1133,6 +1154,7 @@ async def _async_execute_play_slot_command(
         media_type=media_type,
         enqueue=enqueue,
         radio_mode=radio_mode,
+        start_item=start_item,
     )
 
 

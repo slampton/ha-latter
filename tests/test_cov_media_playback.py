@@ -1241,3 +1241,113 @@ async def test_playback_volume_step_prefers_native_over_set(hass: Any) -> None:
         {"entity_id": "media_player.set_only_spk", "volume_level": 0.35},
         {"entity_id": "media_player.set_only_spk", "volume_level": 0.65},
     ]
+
+
+async def test_playback_podcast_start_item_respects_sort_pref(
+    hass: Any, setup_latter_hub: Any
+) -> None:
+    """Verify podcast container playback passes `start_item='latest'` unless Oldest on Top."""
+    entry, _sys, coord = await setup_latter_hub(hass)
+    assert coord is not None
+    ma_calls: list[dict[str, Any]] = []
+    try:
+        _seed_ma_player(
+            hass,
+            entry_id="entry_ma_pod_start",
+            ma_entity="media_player.ma_pocket",
+            queue_id="ma_queue_pocket",
+            mac="aa:bb:cc:dd:ee:01",
+            state=STATE_IDLE,
+        )
+        clear_ma_counterpart_cache(hass)
+        mock_service(
+            hass,
+            "music_assistant",
+            "play_media",
+            lambda call: ma_calls.append(dict(call.data)),
+        )
+
+        # Default Newest on Top: explicit podcast and URI-inferred podcast start at latest
+        await execute_coordinator_media_command(
+            coord,
+            "play_media",
+            media_id="library://podcast/10",
+            media_type="podcast",
+            enqueue="play",
+        )
+        await execute_coordinator_media_command(
+            coord,
+            "play_media",
+            media_id="library://podcast/10",
+            media_type=None,
+            enqueue="replace",
+        )
+        # Radio mode or individual episode omits start_item
+        await execute_coordinator_media_command(
+            coord,
+            "play_media",
+            media_id="library://podcast/10",
+            media_type="podcast",
+            radio_mode=True,
+        )
+        await execute_coordinator_media_command(
+            coord,
+            "play_media",
+            media_id="library://podcast_episode/42",
+            media_type="podcast_episode",
+            enqueue="play",
+        )
+
+        # Oldest on Top: omits start_item so Music Assistant plays chronologically
+        hass.config_entries.async_update_subentry(
+            entry,
+            coord.subentry,
+            data={**coord.subentry.data, "podcast_sort_order": "Oldest on Top"},
+        )
+        await execute_coordinator_media_command(
+            coord,
+            "play_media",
+            media_id="library://podcast/10",
+            media_type="podcast",
+            enqueue="play",
+        )
+        await hass.async_block_till_done()
+
+        assert ma_calls == [
+            {
+                "entity_id": "media_player.ma_pocket",
+                "media_id": "library://podcast/10",
+                "media_type": "podcast",
+                "enqueue": "play",
+                "start_item": "latest",
+            },
+            {
+                "entity_id": "media_player.ma_pocket",
+                "media_id": "library://podcast/10",
+                "media_type": "podcast",
+                "enqueue": "replace",
+                "start_item": "latest",
+            },
+            {
+                "entity_id": "media_player.ma_pocket",
+                "media_id": "library://podcast/10",
+                "media_type": "podcast",
+                "radio_mode": True,
+            },
+            {
+                "entity_id": "media_player.ma_pocket",
+                "media_id": "library://podcast_episode/42",
+                "media_type": "podcast_episode",
+                "enqueue": "play",
+            },
+            {
+                "entity_id": "media_player.ma_pocket",
+                "media_id": "library://podcast/10",
+                "media_type": "podcast",
+                "enqueue": "play",
+            },
+        ]
+    finally:
+        clear_ma_counterpart_cache(hass)
+        await flush_debouncers(hass)
+        assert await hass.config_entries.async_unload(entry.entry_id) is True

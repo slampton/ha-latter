@@ -4,10 +4,12 @@ Turnkey Home Assistant integration and **Latter Studio** control plane for ESPHo
 
 Most ESPHome display projects hardcode entity IDs into YAML—a renamed light, a new speaker, or carrying a handheld into another Area means editing YAML and reflashing. Latter keeps that mapping in Home Assistant instead: every device knows which Area it is in, and Latter pushes the right controls, media, weather, agenda, and images to it live at runtime.
 
+<!-- ha-marketplace:exclude-start -->
 [![Validate](https://github.com/slampton/ha-latter/actions/workflows/validate.yml/badge.svg)](https://github.com/slampton/ha-latter/actions/workflows/validate.yml)
 [![Release](https://img.shields.io/github/v/release/slampton/ha-latter)](https://github.com/slampton/ha-latter/releases)
 [![Home Assistant 2026.11+](https://img.shields.io/badge/Home%20Assistant-2026.11%2B-41BDF5)](https://www.home-assistant.io)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
+<!-- ha-marketplace:exclude-end -->
 
 | Repository | Runs on | Responsibility |
 | :--- | :--- | :--- |

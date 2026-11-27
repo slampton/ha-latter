@@ -496,6 +496,46 @@ async def test_tts_queue_play_media_container_expansion_and_validation(hass: Any
         assert len(ha_calls) == 1
         assert ha_calls[0]["entity_id"] == ma_ent
         assert ha_calls[0]["media_content_id"] == "library://album/67"
+
+        # 3e. `start_item` is forwarded for single string URIs and omitted when blank or a list
+        ma_calls.clear()
+        mock_service(
+            hass,
+            "music_assistant",
+            "play_media",
+            lambda call: ma_calls.append(dict(call.data)),
+        )
+        await tts_queue.async_play_media_with_ma_fallback(
+            hass, spk, "library://podcast/10", media_type="podcast", start_item=" latest "
+        )
+        await tts_queue.async_play_media_with_ma_fallback(
+            hass, spk, "library://podcast/10", media_type="podcast", start_item="   "
+        )
+        await tts_queue.async_play_media_with_ma_fallback(
+            hass,
+            spk,
+            ["library://track/1", "library://track/2"],
+            media_type="track",
+            start_item="latest",
+        )
+        assert ma_calls == [
+            {
+                "entity_id": ma_ent,
+                "media_id": "library://podcast/10",
+                "media_type": "podcast",
+                "start_item": "latest",
+            },
+            {
+                "entity_id": ma_ent,
+                "media_id": "library://podcast/10",
+                "media_type": "podcast",
+            },
+            {
+                "entity_id": ma_ent,
+                "media_id": ["library://track/1", "library://track/2"],
+                "media_type": "track",
+            },
+        ]
     finally:
         clear_ma_counterpart_cache(hass)
 
